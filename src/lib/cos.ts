@@ -13,18 +13,45 @@ const _ulogWarn = (...args: unknown[]) => cosLogger.warn(...args)
 const _ulogError = (...args: unknown[]) => cosLogger.error(...args)
 
 // ==================== 存储类型配置 ====================
-// STORAGE_TYPE: 'cos' | 'local'
+// STORAGE_TYPE: 'cos' | 'local' | 'r2'
 // - cos: 使用腾讯云COS（需要配置COS_SECRET_ID等）
 // - local: 使用本地文件存储（适合内网部署）
+// - r2: 使用Cloudflare R2（需要配置R2_*环境变量）
 const STORAGE_TYPE = process.env.STORAGE_TYPE || 'cos'
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './data/uploads'
 
 // 日志标识
 const isLocalStorage = STORAGE_TYPE === 'local'
+const isR2Storage = STORAGE_TYPE === 'r2'
 if (isLocalStorage) {
   _ulogInfo(`[Storage] 使用本地存储模式，目录: ${UPLOAD_DIR}`)
+} else if (isR2Storage) {
+  _ulogInfo(`[Storage] 使用R2云存储模式`)
 } else {
   _ulogInfo(`[Storage] 使用COS云存储模式`)
+}
+
+// R2 配置（仅在R2模式下使用）
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL || ''
+
+// R2 S3 客户端（懒加载）
+let r2Client: import('@aws-sdk/client-s3').S3Client | null = null
+let R2_BUCKET = ''
+
+async function getR2Client() {
+  if (r2Client) return r2Client
+  const { S3Client } = await import('@aws-sdk/client-s3')
+  const accountId = process.env.R2_ACCOUNT_ID!
+  r2Client = new S3Client({
+    region: 'auto',
+    endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+  })
+  R2_BUCKET = process.env.R2_BUCKET_NAME!
+  return r2Client
 }
 
 // COS 超时和重试配置
@@ -130,7 +157,7 @@ let cos: COS | null = null
 let BUCKET = ''
 let REGION = ''
 
-if (!isLocalStorage) {
+if (!isLocalStorage && !isR2Storage) {
   cos = new COS({
     SecretId: process.env.COS_SECRET_ID!,
     SecretKey: process.env.COS_SECRET_KEY!,
@@ -146,6 +173,9 @@ if (!isLocalStorage) {
 export function getCOSClient() {
   if (isLocalStorage) {
     throw new Error('本地存储模式下不支持获取COS客户端')
+  }
+  if (isR2Storage) {
+    throw new Error('R2存储模式下不支持获取COS客户端')
   }
   return cos!
 }
@@ -171,6 +201,54 @@ export async function uploadToCOS(buffer: Buffer, key: string, maxRetries: numbe
       _ulogError(`[Local上传] 失败: ${key}`, errorInfo.message)
       throw new Error(`本地存储上传失败: ${key}`)
     }
+  }
+
+  // ==================== R2云存储模式 ====================
+  if (isR2Storage) {
+    const { PutObjectCommand } = await import('@aws-sdk/client-s3')
+    const client = await getR2Client()
+    let lastError: unknown = null
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          _ulogInfo(`[R2上传] 第 ${attempt}/${maxRetries} 次尝试上传: ${key}`)
+        }
+
+        await client.send(new PutObjectCommand({
+          Bucket: R2_BUCKET,
+          Key: key,
+          Body: buffer,
+        }))
+
+        if (attempt > 1) {
+          _ulogInfo(`[R2上传] 第 ${attempt} 次尝试成功: ${key}`)
+        }
+        return key
+
+      } catch (error: unknown) {
+        const errorInfo = extractErrorInfo(error)
+        lastError = error
+
+        const errorDetails = {
+          attempt,
+          maxRetries,
+          key,
+          errorCode: errorInfo.code,
+          errorMessage: errorInfo.message,
+        }
+        _ulogError(`[R2上传] 第 ${attempt}/${maxRetries} 次尝试失败:`, JSON.stringify(errorDetails, null, 2))
+
+        if (attempt < maxRetries) {
+          const delayMs = COS_RETRY_DELAY_BASE_MS * Math.pow(2, attempt - 1)
+          _ulogInfo(`[R2上传] 等待 ${delayMs / 1000} 秒后重试...`)
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+        }
+      }
+    }
+
+    _ulogError(`[R2上传] 所有 ${maxRetries} 次重试都失败: ${key}`)
+    throw lastError || new Error(`R2上传失败: ${key}`)
   }
 
   // ==================== COS云存储模式 ====================
@@ -257,6 +335,23 @@ export async function deleteCOSObject(key: string): Promise<void> {
     return
   }
 
+  // ==================== R2云存储模式 ====================
+  if (isR2Storage) {
+    try {
+      const { DeleteObjectCommand } = await import('@aws-sdk/client-s3')
+      const client = await getR2Client()
+      await client.send(new DeleteObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: key,
+      }))
+      _ulogInfo(`[R2删除] 成功: ${key}`)
+    } catch (error: unknown) {
+      const errorInfo = extractErrorInfo(error)
+      _ulogError(`[R2删除] 失败: ${key}`, errorInfo.message)
+    }
+    return
+  }
+
   // ==================== COS云存储模式 ====================
   return new Promise((resolve, reject) => {
     cos!.deleteObject(
@@ -311,6 +406,43 @@ export async function deleteCOSObjects(keys: string[]): Promise<{ success: numbe
     }
 
     _ulogInfo(`[Local] 删除完成: 成功 ${success}, 失败 ${failed}`)
+    return { success, failed }
+  }
+
+  // ==================== R2云存储模式 ====================
+  if (isR2Storage) {
+    _ulogInfo(`[R2] 准备删除 ${validKeys.length} 个文件`)
+    const { DeleteObjectsCommand } = await import('@aws-sdk/client-s3')
+    const client = await getR2Client()
+
+    const batchSize = 1000
+    let success = 0
+    let failed = 0
+
+    for (let i = 0; i < validKeys.length; i += batchSize) {
+      const batch = validKeys.slice(i, i + batchSize)
+      try {
+        const result = await client.send(new DeleteObjectsCommand({
+          Bucket: R2_BUCKET,
+          Delete: {
+            Objects: batch.map(key => ({ Key: key })),
+            Quiet: false,
+          },
+        }))
+        const deletedCount = result.Deleted?.length || 0
+        const errorCount = result.Errors?.length || 0
+        success += deletedCount
+        failed += errorCount
+        if (errorCount > 0) {
+          _ulogWarn('[R2] 部分文件删除失败:', result.Errors)
+        }
+      } catch (error) {
+        _ulogError('[R2] 批量删除异常:', error)
+        failed += batch.length
+      }
+    }
+
+    _ulogInfo(`[R2] 删除完成: 成功 ${success}, 失败 ${failed}`)
     return { success, failed }
   }
 
@@ -373,6 +505,11 @@ export function extractCOSKey(urlOrKey: string | null | undefined): string | nul
   // 🔧 本地模式修复：处理 /api/files/xxx 格式的本地 URL
   if (urlOrKey.startsWith('/api/files/')) {
     return decodeURIComponent(urlOrKey.replace('/api/files/', ''))
+  }
+
+  // 🔧 R2模式：处理 R2 公开 URL，提取 key
+  if (R2_PUBLIC_URL && urlOrKey.startsWith(R2_PUBLIC_URL)) {
+    return urlOrKey.slice(R2_PUBLIC_URL.length + 1) // +1 for the '/'
   }
 
   // 如果已经是纯 Key（不包含 http 且不是相对路径），直接返回
@@ -604,6 +741,12 @@ export function getSignedUrl(key: string, _expires: number = SIGNED_URL_EXPIRES_
   if (isLocalStorage) {
     // 返回API路由路径，由文件服务API提供访问
     return `/api/files/${encodeURIComponent(key)}`
+  }
+
+  // ==================== R2云存储模式 ====================
+  if (isR2Storage) {
+    // 公开bucket，无需签名，直接返回公开URL
+    return `${R2_PUBLIC_URL}/${key}`
   }
 
   // ==================== COS云存储模式 ====================
