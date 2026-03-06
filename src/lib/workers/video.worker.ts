@@ -6,16 +6,18 @@ import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress, withTaskLifecycle } from './shared'
 import {
   assertTaskActive,
+  ensureImageWithinKieAILimits,
   getProjectModels,
   resolveLipSyncVideoSource,
   resolveVideoSourceFromGeneration,
   toSignedUrlIfCos,
   uploadVideoSourceToCos,
 } from './utils'
-import { normalizeToBase64ForGeneration } from '@/lib/media/outbound-image'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
+import { handleMultiShotVideoTask } from './handlers/multi-shot-video-handler'
+import { handleVideoEditorRenderTask } from './handlers/video-editor-render'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
@@ -89,18 +91,29 @@ async function generateVideoForPanel(
   const firstLastCustomPrompt = typeof firstLastFramePayload?.customPrompt === 'string' ? firstLastFramePayload.customPrompt : null
   const persistedFirstLastPrompt = firstLastFramePayload ? panel.firstLastFramePrompt : null
   const customPrompt = typeof payload.customPrompt === 'string' ? payload.customPrompt : null
-  const prompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.videoPrompt || panel.description
+  let prompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.videoPrompt || panel.description
   if (!prompt) {
     throw new Error(`Panel ${panel.id} has no video prompt`)
+  }
+
+  // 将 srtSegment 中的对白附加到 prompt（根据 includeDialogue 开关决定）
+  const includeDialogue = generationOptions.includeDialogue !== false
+  delete generationOptions.includeDialogue
+  if (includeDialogue && panel.srtSegment && typeof panel.srtSegment === 'string') {
+    const dialogue = panel.srtSegment.trim()
+    if (dialogue) {
+      prompt = `${prompt}\n\n角色台词：${dialogue}`
+    }
+  } else if (!includeDialogue) {
+    prompt = `${prompt}\n\nNo dialogue, no narration, no voiceover.`
   }
 
   const sourceImageUrl = toSignedUrlIfCos(panel.imageUrl, 3600)
   if (!sourceImageUrl) {
     throw new Error(`Panel ${panel.id} image url invalid`)
   }
-  const sourceImageBase64 = await normalizeToBase64ForGeneration(sourceImageUrl)
 
-  let lastFrameImageBase64: string | undefined
+  let lastFrameImageUrl: string | undefined
   const generationMode: VideoGenerationMode = firstLastFramePayload ? 'firstlastframe' : 'normal'
   const requestedGenerateAudio = typeof generationOptions.generateAudio === 'boolean'
     ? generationOptions.generateAudio
@@ -126,25 +139,34 @@ async function generateVideoForPanel(
         Number(firstLastFramePayload.lastFramePanelIndex),
       )
       if (lastPanel?.imageUrl) {
-        const lastFrameUrl = toSignedUrlIfCos(lastPanel.imageUrl, 3600)
-        if (lastFrameUrl) {
-          lastFrameImageBase64 = await normalizeToBase64ForGeneration(lastFrameUrl)
-        }
+        lastFrameImageUrl = toSignedUrlIfCos(lastPanel.imageUrl, 3600) || undefined
       }
+    }
+  }
+
+  // KieAI 图片尺寸限制：超过 4096px 或 10MB 会被拒绝
+  const parsedModel = parseModelKeyStrict(model)
+  const isKieAI = parsedModel?.provider === 'kieai' || parsedModel?.provider === 'kieai-kling'
+  let finalImageUrl = sourceImageUrl
+  let finalLastFrameUrl = lastFrameImageUrl
+  if (isKieAI) {
+    finalImageUrl = await ensureImageWithinKieAILimits(sourceImageUrl, panel.id)
+    if (lastFrameImageUrl) {
+      finalLastFrameUrl = await ensureImageWithinKieAILimits(lastFrameImageUrl, panel.id)
     }
   }
 
   const generatedVideo = await resolveVideoSourceFromGeneration(job, {
     userId: job.data.userId,
     modelId: model,
-    imageUrl: sourceImageBase64,
+    imageUrl: finalImageUrl,
     options: {
       prompt,
       ...(projectVideoRatio ? { aspectRatio: projectVideoRatio } : {}),
       ...generationOptions,
       generationMode,
       ...(typeof requestedGenerateAudio === 'boolean' ? { generateAudio: requestedGenerateAudio } : {}),
-      ...(lastFrameImageBase64 ? { lastFrameImageUrl: lastFrameImageBase64 } : {}),
+      ...(finalLastFrameUrl ? { lastFrameImageUrl: finalLastFrameUrl } : {}),
     },
   })
 
@@ -282,6 +304,10 @@ async function processVideoTask(job: Job<TaskJobData>) {
       return await handleVideoPanelTask(job)
     case TASK_TYPE.LIP_SYNC:
       return await handleLipSyncTask(job)
+    case TASK_TYPE.VIDEO_MULTI_SHOT:
+      return await handleMultiShotVideoTask(job)
+    case TASK_TYPE.VIDEO_EDITOR_RENDER:
+      return await handleVideoEditorRenderTask(job)
     default:
       throw new Error(`Unsupported video task type: ${job.data.type}`)
   }

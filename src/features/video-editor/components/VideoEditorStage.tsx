@@ -2,7 +2,7 @@
 import { logError as _ulogError } from '@/lib/logging/core'
 import { useTranslations } from 'next-intl'
 
-import React from 'react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useEditorState } from '../hooks/useEditorState'
 import { useEditorActions } from '../hooks/useEditorActions'
@@ -11,6 +11,13 @@ import { calculateTimelineDuration, framesToTime } from '../utils/time-utils'
 import { RemotionPreview } from './Preview'
 import { Timeline } from './Timeline'
 import { TransitionPicker, TransitionType } from './TransitionPicker'
+
+interface RenderState {
+    status: 'pending' | 'rendering' | 'completed' | 'failed' | null
+    progress: number
+    outputUrl: string | null
+    taskId: string | null
+}
 
 interface VideoEditorStageProps {
     projectId: string
@@ -21,7 +28,7 @@ interface VideoEditorStageProps {
 
 /**
  * 视频编辑器主页面
- * 
+ *
  * 布局:
  * ┌──────────────────────────────────────────────────────────┐
  * │ Toolbar (返回 | 保存 | 导出)                              │
@@ -56,7 +63,47 @@ export function VideoEditorStage({
         markSaved
     } = useEditorState({ episodeId, initialProject })
 
-    const { saveProject, startRender } = useEditorActions({ projectId, episodeId })
+    const { saveProject, startRender, getRenderStatus } = useEditorActions({ projectId, episodeId })
+
+    const [renderState, setRenderState] = useState<RenderState>({
+        status: null,
+        progress: 0,
+        outputUrl: null,
+        taskId: null,
+    })
+    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+    const stopPolling = useCallback(() => {
+        if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+        }
+    }, [])
+
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => stopPolling()
+    }, [stopPolling])
+
+    const pollRenderStatus = useCallback((editorProjectId: string) => {
+        stopPolling()
+        pollingRef.current = setInterval(async () => {
+            try {
+                const data = await getRenderStatus(editorProjectId)
+                setRenderState(prev => ({
+                    ...prev,
+                    status: data.status,
+                    progress: data.progress ?? 0,
+                    outputUrl: data.outputUrl ?? null,
+                }))
+                if (data.status === 'completed' || data.status === 'failed') {
+                    stopPolling()
+                }
+            } catch {
+                // Continue polling on transient errors
+            }
+        }, 3000)
+    }, [getRenderStatus, stopPolling])
 
     const totalDuration = calculateTimelineDuration(project.timeline)
     const totalTime = framesToTime(totalDuration, project.config.fps)
@@ -74,16 +121,123 @@ export function VideoEditorStage({
     }
 
     const handleExport = async () => {
+        if (isRendering) return
         try {
-            await startRender(project.id)
-            alert(t('editor.alert.exportStarted'))
+            // Save project first to ensure latest data is persisted
+            await saveProject(project)
+            markSaved()
+
+            const result = await startRender(project.id)
+            setRenderState({
+                status: 'pending',
+                progress: 0,
+                outputUrl: null,
+                taskId: result.taskId,
+            })
+            pollRenderStatus(project.id)
         } catch (error) {
             _ulogError('Export failed:', error)
             alert(t('editor.alert.exportFailed'))
         }
     }
 
+    const handleCancelRender = () => {
+        stopPolling()
+        setRenderState({ status: null, progress: 0, outputUrl: null, taskId: null })
+    }
+
+    const isRendering = renderState.status === 'pending' || renderState.status === 'rendering'
+    const isCompleted = renderState.status === 'completed' && renderState.outputUrl
+
     const selectedClip = project.timeline.find(c => c.id === timelineState.selectedClipId)
+
+    const renderExportButton = () => {
+        if (isCompleted) {
+            return (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <a
+                        href={renderState.outputUrl!}
+                        download
+                        className="glass-btn-base glass-btn-tone-success px-4 py-2"
+                        style={{ textDecoration: 'none' }}
+                    >
+                        {t('editor.toolbar.download')}
+                    </a>
+                    <button
+                        onClick={() => setRenderState({ status: null, progress: 0, outputUrl: null, taskId: null })}
+                        className="glass-btn-base glass-btn-ghost px-2 py-2"
+                        title={t('editor.toolbar.dismissRender')}
+                    >
+                        <AppIcon name="close" className="w-4 h-4" />
+                    </button>
+                </div>
+            )
+        }
+
+        if (isRendering) {
+            return (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '6px 16px',
+                        background: 'var(--glass-bg-surface-strong)',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                    }}>
+                        <div style={{
+                            width: '120px',
+                            height: '6px',
+                            background: 'var(--glass-bg-muted)',
+                            borderRadius: '3px',
+                            overflow: 'hidden',
+                        }}>
+                            <div style={{
+                                width: `${renderState.progress}%`,
+                                height: '100%',
+                                background: 'var(--glass-accent-from)',
+                                borderRadius: '3px',
+                                transition: 'width 0.3s ease',
+                            }} />
+                        </div>
+                        <span style={{ color: 'var(--glass-text-secondary)', minWidth: '36px' }}>
+                            {renderState.progress}%
+                        </span>
+                    </div>
+                    <button
+                        onClick={handleCancelRender}
+                        className="glass-btn-base glass-btn-ghost px-2 py-2"
+                        title={t('editor.toolbar.cancelRender')}
+                    >
+                        <AppIcon name="close" className="w-4 h-4" />
+                    </button>
+                </div>
+            )
+        }
+
+        if (renderState.status === 'failed') {
+            return (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button
+                        onClick={handleExport}
+                        className="glass-btn-base glass-btn-tone-danger px-4 py-2"
+                    >
+                        {t('editor.toolbar.retryExport')}
+                    </button>
+                </div>
+            )
+        }
+
+        return (
+            <button
+                onClick={handleExport}
+                className="glass-btn-base glass-btn-tone-success px-4 py-2"
+            >
+                {t('editor.toolbar.export')}
+            </button>
+        )
+    }
 
     return (
         <div className="video-editor-stage" style={{
@@ -122,12 +276,7 @@ export function VideoEditorStage({
                     {isDirty ? t('editor.toolbar.saveDirty') : t('editor.toolbar.saved')}
                 </button>
 
-                <button
-                    onClick={handleExport}
-                    className="glass-btn-base glass-btn-tone-success px-4 py-2"
-                >
-                    {t('editor.toolbar.export')}
-                </button>
+                {renderExportButton()}
             </div>
 
             {/* Main Content */}

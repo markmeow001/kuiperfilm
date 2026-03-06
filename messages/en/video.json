@@ -39,6 +39,7 @@
     "unknownShotType": "Unknown",
     "correspondingText": "Corresponding Text",
     "generateVideo": "Generate Video",
+    "includeDialogue": "Include Dialogue",
     "selectModel": "Select Video Model",
     "selectVoice": "Select voice to use:",
     "willAutoPad": "(will auto-pad)",
@@ -148,7 +149,11 @@
       "back": "← Back",
       "saveDirty": "Save *",
       "saved": "Saved",
-      "export": "Export Video"
+      "export": "Export Video",
+      "download": "Download MP4",
+      "dismissRender": "Dismiss",
+      "cancelRender": "Cancel",
+      "retryExport": "Retry Export"
     },
     "left": {
       "title": "Media Library",

@@ -74,6 +74,8 @@ export const TASK_TYPE = {
   ASSET_HUB_AI_MODIFY_CHARACTER: 'asset_hub_ai_modify_character',
   ASSET_HUB_AI_MODIFY_LOCATION: 'asset_hub_ai_modify_location',
   ASSET_HUB_REFERENCE_TO_CHARACTER: 'asset_hub_reference_to_character',
+  VIDEO_MULTI_SHOT: 'video_multi_shot',
+  VIDEO_EDITOR_RENDER: 'video_editor_render',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

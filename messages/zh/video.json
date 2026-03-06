@@ -39,6 +39,7 @@
     "unknownShotType": "未知景别",
     "correspondingText": "对应原文",
     "generateVideo": "生成视频",
+    "includeDialogue": "包含对白",
     "selectModel": "选择视频模型",
     "selectVoice": "选择要使用的配音：",
     "willAutoPad": "(将自动填充)",
@@ -148,7 +149,11 @@
       "back": "← 返回",
       "saveDirty": "保存 *",
       "saved": "已保存",
-      "export": "导出视频"
+      "export": "导出视频",
+      "download": "下载 MP4",
+      "dismissRender": "关闭",
+      "cancelRender": "取消",
+      "retryExport": "重新导出"
     },
     "left": {
       "title": "素材库",

@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     'http://192.168.31.218:3000',
     'http://192.168.31.*:3000',
   ],
+  serverExternalPackages: ['@remotion/bundler', '@remotion/renderer'],
 };
 
 export default withNextIntl(nextConfig);

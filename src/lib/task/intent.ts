@@ -59,6 +59,8 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.ASSET_HUB_AI_MODIFY_CHARACTER]: 'modify',
   [TASK_TYPE.ASSET_HUB_AI_MODIFY_LOCATION]: 'modify',
   [TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER]: 'process',
+  [TASK_TYPE.VIDEO_MULTI_SHOT]: 'generate',
+  [TASK_TYPE.VIDEO_EDITOR_RENDER]: 'process',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {
