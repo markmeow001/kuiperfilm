@@ -21,12 +21,14 @@ export interface WorkspaceStageRuntimeValue {
   isConfirmingAssets: boolean
   videoRatio: string | null | undefined
   artStyle: string | null | undefined
+  targetDuration: number | undefined
   videoModel: string | null | undefined
   capabilityOverrides: CapabilitySelections
   userVideoModels: WorkspaceStageVideoModelOption[]
   onNovelTextChange: (value: string) => Promise<void>
   onVideoRatioChange: (value: string) => Promise<void>
   onArtStyleChange: (value: string) => Promise<void>
+  onTargetDurationChange: (value: number) => Promise<void>
   onRunStoryToScript: () => Promise<void>
   onClipUpdate: (clipId: string, data: unknown) => Promise<void>
   onOpenAssetLibrary: () => void
@@ -54,6 +56,7 @@ export interface WorkspaceStageRuntimeValue {
   ) => Promise<void>
   onUpdatePanelVideoModel: (storyboardId: string, panelIndex: number, model: string) => Promise<void>
   onOpenAssetLibraryForCharacter: (characterId?: string | null, refreshAssets?: boolean) => void
+  onEnterEditor: () => void
 }
 
 const WorkspaceStageRuntimeContext = createContext<WorkspaceStageRuntimeValue | null>(null)

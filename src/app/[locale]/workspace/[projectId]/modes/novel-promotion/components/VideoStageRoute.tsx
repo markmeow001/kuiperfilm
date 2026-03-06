@@ -39,6 +39,7 @@ export default function VideoStageRoute() {
           ? runtime.onOpenAssetLibraryForCharacter(characterId, false)
           : runtime.onOpenAssetLibrary()
       }
+      onEnterEditor={() => runtime.onStageChange('editor')}
     />
   )
 }

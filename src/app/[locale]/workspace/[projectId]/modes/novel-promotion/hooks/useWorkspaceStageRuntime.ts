@@ -13,6 +13,7 @@ interface UseWorkspaceStageRuntimeParams {
   isConfirmingAssets: boolean
   videoRatio: string | undefined
   artStyle: string | undefined
+  targetDuration: number | undefined
   videoModel: string | undefined
   capabilityOverrides: CapabilitySelections
   userVideoModels: Array<{
@@ -61,6 +62,7 @@ export function useWorkspaceStageRuntime({
   isConfirmingAssets,
   videoRatio,
   artStyle,
+  targetDuration,
   videoModel,
   capabilityOverrides,
   userVideoModels,
@@ -89,12 +91,14 @@ export function useWorkspaceStageRuntime({
     isConfirmingAssets,
     videoRatio,
     artStyle,
+    targetDuration,
     videoModel,
     capabilityOverrides,
     userVideoModels: resolvedUserVideoModels,
     onNovelTextChange: (value) => handleUpdateEpisode('novelText', value),
     onVideoRatioChange: (value) => handleUpdateConfig('videoRatio', value),
     onArtStyleChange: (value) => handleUpdateConfig('artStyle', value),
+    onTargetDurationChange: (value) => handleUpdateConfig('targetDuration', value),
     onRunStoryToScript: () => runWithRebuildConfirm('storyToScript', runStoryToScriptFlow),
     onClipUpdate: (clipId, data) => {
       if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -110,8 +114,10 @@ export function useWorkspaceStageRuntime({
     onUpdateVideoPrompt: handleUpdateVideoPrompt,
     onUpdatePanelVideoModel: handleUpdatePanelVideoModel,
     onOpenAssetLibraryForCharacter: (characterId, refreshAssets) => openAssetLibrary(characterId, refreshAssets),
+    onEnterEditor: () => handleStageChange('editor'),
   }), [
     artStyle,
+    targetDuration,
     assetsLoading,
     handleGenerateAllVideos,
     handleGenerateVideo,
