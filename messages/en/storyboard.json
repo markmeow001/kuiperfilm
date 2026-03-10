@@ -115,6 +115,8 @@
         "shotTypePlaceholder": "Overhead medium shot...",
         "cameraMovePlaceholder": "Slow push, static...",
         "videoPromptPlaceholder": "Prompt for video generation...",
+        "safeRewrite": "Safe Rewrite",
+        "rewriting": "Rewriting...",
         "sceneDescriptionPlaceholder": "Describe subject, composition, lighting, and mood",
         "selectCharacter": "Select Character",
         "selectLocation": "Select Location",

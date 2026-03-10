@@ -115,6 +115,8 @@
         "shotTypePlaceholder": "俯拍中景...",
         "cameraMovePlaceholder": "缓推、固定...",
         "videoPromptPlaceholder": "用于视频生成的提示词...",
+        "safeRewrite": "安全改写",
+        "rewriting": "改写中...",
         "sceneDescriptionPlaceholder": "描述画面主体、构图、光线、情绪",
         "selectCharacter": "选择角色",
         "selectLocation": "选择场景",

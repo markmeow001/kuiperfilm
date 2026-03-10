@@ -111,6 +111,25 @@ export default function ImageSectionActionButtons({
               <span>{t('image.upload')}</span>
             </button>
 
+            {imageUrl && (
+              <button
+                onClick={() => {
+                  const a = document.createElement('a')
+                  a.href = imageUrl
+                  a.download = `panel-${panelId}.png`
+                  a.target = '_blank'
+                  a.rel = 'noopener noreferrer'
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                }}
+                className="glass-btn-base glass-btn-secondary flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] transition-all active:scale-95"
+                title={t('common.download')}
+              >
+                <AppIcon name="download" className="w-2.5 h-2.5" />
+              </button>
+            )}
+
             {previousImageUrl && onUndo && (
               <>
                 <div className="w-px h-3 bg-[var(--glass-stroke-base)]" />

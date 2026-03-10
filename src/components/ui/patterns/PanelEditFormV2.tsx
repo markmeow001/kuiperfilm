@@ -1,5 +1,7 @@
 'use client'
 
+import { useState, useCallback } from 'react'
+import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import type { PanelEditData } from '@/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/PanelEditForm'
 import {
@@ -13,6 +15,7 @@ import { AppIcon } from '@/components/ui/icons'
 
 export interface PanelEditFormV2Props {
   panelData: PanelEditData
+  projectId?: string
   isSaving?: boolean
   saveStatus?: 'idle' | 'saving' | 'error'
   saveErrorMessage?: string | null
@@ -27,6 +30,7 @@ export interface PanelEditFormV2Props {
 
 export default function PanelEditFormV2({
   panelData,
+  projectId,
   isSaving = false,
   saveStatus = 'idle',
   saveErrorMessage = null,
@@ -39,6 +43,38 @@ export default function PanelEditFormV2({
   uiMode = 'flow'
 }: PanelEditFormV2Props) {
   const t = useTranslations('storyboard')
+  const params = useParams<{ projectId?: string }>()
+  const resolvedProjectId = projectId || params?.projectId
+  const [isRewriting, setIsRewriting] = useState(false)
+
+  const handleSafeRewrite = useCallback(async () => {
+    if (!resolvedProjectId || isRewriting) return
+    const desc = panelData.description
+    const vp = panelData.videoPrompt
+    if (!desc && !vp) return
+
+    setIsRewriting(true)
+    try {
+      const res = await fetch(`/api/novel-promotion/${resolvedProjectId}/safe-rewrite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(desc ? { description: desc } : {}),
+          ...(vp ? { videoPrompt: vp } : {}),
+        }),
+      })
+      if (!res.ok) throw new Error('rewrite failed')
+      const data = await res.json()
+      const updates: Partial<PanelEditData> = {}
+      if (data.description) updates.description = data.description
+      if (data.videoPrompt) updates.videoPrompt = data.videoPrompt
+      onUpdate(updates)
+    } catch {
+      // silently fail
+    } finally {
+      setIsRewriting(false)
+    }
+  }, [resolvedProjectId, panelData.description, panelData.videoPrompt, isRewriting, onUpdate])
 
   return (
     <div className={`ui-pattern-form ui-pattern-form-${uiMode} space-y-2`}>
@@ -92,7 +128,23 @@ export default function PanelEditFormV2({
         </GlassField>
       ) : null}
 
-      <GlassField label={t('panel.sceneDescription')}>
+      <GlassField
+        label={t('panel.sceneDescription')}
+        actions={
+          resolvedProjectId ? (
+            <button
+              type="button"
+              onClick={handleSafeRewrite}
+              disabled={isRewriting || (!panelData.description && !panelData.videoPrompt)}
+              className="inline-flex h-6 items-center gap-1 px-1.5 text-[10px] text-[var(--glass-text-tertiary)] hover:text-[var(--glass-tone-info-fg)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title={t('panel.safeRewrite')}
+            >
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              <span>{isRewriting ? t('panel.rewriting') : t('panel.safeRewrite')}</span>
+            </button>
+          ) : undefined
+        }
+      >
         <GlassTextarea
           density="compact"
           rows={2}
