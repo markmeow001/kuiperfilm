@@ -40,11 +40,12 @@ export default function ImageSectionActionButtons({
     if (file) {
       onUploadPanelImage(panelId, file)
     }
-    // Reset input so same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
+
+  const iconBtnClass = 'glass-btn-base glass-btn-secondary flex items-center justify-center w-6 h-6 rounded-md text-[10px] transition-all active:scale-95'
 
   return (
     <>
@@ -57,12 +58,11 @@ export default function ImageSectionActionButtons({
       />
       <div className={`absolute bottom-1.5 left-1/2 -translate-x-1/2 z-20 transition-opacity ${isSubmittingPanelImageTask ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
         <div className="relative glass-surface-modal border border-[var(--glass-stroke-base)] rounded-lg p-0.5">
+          {/* 主要操作：重新生成 */}
           <div className="flex items-center gap-0.5">
             <button
               onClick={() => {
                 _ulogInfo('[ImageSection] 🔄 左下角重新生成按钮被点击')
-                _ulogInfo('[ImageSection] isSubmittingPanelImageTask:', isSubmittingPanelImageTask)
-                _ulogInfo('[ImageSection] 将传递 force:', isSubmittingPanelImageTask)
                 triggerPulse()
                 onRegeneratePanelImage(panelId, 1, isSubmittingPanelImageTask)
               }}
@@ -82,35 +82,31 @@ export default function ImageSectionActionButtons({
 
             <div className="w-px h-3 bg-[var(--glass-stroke-base)]" />
 
+            {/* 次要操作：純圖標按鈕 */}
             <button
               onClick={onOpenAIDataModal}
-              className={`glass-btn-base glass-btn-secondary flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] transition-all active:scale-95 ${isSubmittingPanelImageTask || isModifying ? 'opacity-75' : ''}`}
+              className={`${iconBtnClass} ${isSubmittingPanelImageTask || isModifying ? 'opacity-75' : ''}`}
               title={t('aiData.viewData')}
             >
-              <AppIcon name="chart" className="w-2.5 h-2.5" />
-              <span>{t('aiData.viewData')}</span>
+              <AppIcon name="chart" className="w-3 h-3" />
             </button>
             {imageUrl && (
               <button
                 onClick={onOpenEditModal}
-                className={`glass-btn-base glass-btn-secondary flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] transition-all active:scale-95 ${isSubmittingPanelImageTask || isModifying ? 'opacity-75' : ''}`}
+                className={`${iconBtnClass} ${isSubmittingPanelImageTask || isModifying ? 'opacity-75' : ''}`}
+                title={t('image.editImage')}
               >
-                <span>{t('image.editImage')}</span>
+                <AppIcon name="edit" className="w-3 h-3" />
               </button>
             )}
-
-            <div className="w-px h-3 bg-[var(--glass-stroke-base)]" />
-
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isSubmittingPanelImageTask || isModifying}
-              className={`glass-btn-base glass-btn-secondary flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] transition-all active:scale-95 disabled:opacity-50`}
+              className={`${iconBtnClass} disabled:opacity-50`}
               title={t('image.upload')}
             >
-              <AppIcon name="upload" className="w-2.5 h-2.5" />
-              <span>{t('image.upload')}</span>
+              <AppIcon name="upload" className="w-3 h-3" />
             </button>
-
             {imageUrl && (
               <button
                 onClick={() => {
@@ -123,23 +119,22 @@ export default function ImageSectionActionButtons({
                   a.click()
                   document.body.removeChild(a)
                 }}
-                className="glass-btn-base glass-btn-secondary flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] transition-all active:scale-95"
+                className={iconBtnClass}
                 title={t('common.download')}
               >
-                <AppIcon name="download" className="w-2.5 h-2.5" />
+                <AppIcon name="download" className="w-3 h-3" />
               </button>
             )}
-
             {previousImageUrl && onUndo && (
               <>
                 <div className="w-px h-3 bg-[var(--glass-stroke-base)]" />
                 <button
                   onClick={() => onUndo(panelId)}
                   disabled={isSubmittingPanelImageTask}
-                  className="glass-btn-base glass-btn-secondary flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] transition-all active:scale-95 disabled:opacity-50"
+                  className={`${iconBtnClass} disabled:opacity-50`}
                   title={t('assets.image.undo')}
                 >
-                  <span>{t('assets.image.undo')}</span>
+                  <AppIcon name="undo" className="w-3 h-3" />
                 </button>
               </>
             )}
