@@ -212,18 +212,34 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
     },
     projectData,
   })
-  const contextJson = JSON.stringify(promptContext, null, 2)
-  const prompt = buildPanelPrompt({
+  // Use compact JSON for models with prompt length limits (e.g. Flux 3000 chars)
+  const isLengthLimited = modelKey.startsWith('flux-kontext')
+  const contextJson = isLengthLimited
+    ? JSON.stringify(promptContext)
+    : JSON.stringify(promptContext, null, 2)
+  let prompt = buildPanelPrompt({
     locale: job.data.locale,
     aspectRatio,
     styleText: artStyle || '与参考图风格一致',
     sourceText: panel.srtSegment || panel.description || '',
     contextJson,
   })
+
+  // Truncate prompt for models with length limits
+  const PROMPT_MAX_LENGTH = 2900 // leave margin for Flux's 3000 char limit
+  if (isLengthLimited && prompt.length > PROMPT_MAX_LENGTH) {
+    logger.warn({
+      message: 'prompt exceeds length limit, truncating',
+      details: { originalLength: prompt.length, maxLength: PROMPT_MAX_LENGTH },
+    })
+    prompt = prompt.substring(0, PROMPT_MAX_LENGTH)
+  }
+
   logger.info({
     message: 'panel image prompt resolved',
     details: {
       promptLength: prompt.length,
+      truncated: isLengthLimited && prompt.length >= PROMPT_MAX_LENGTH,
     },
   })
 

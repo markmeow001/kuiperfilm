@@ -129,8 +129,8 @@ export const ART_STYLES = [
     value: 'realistic',
     label: '写实风格',
     preview: '实',
-    promptZh: '真实电影级画面质感，真实现实场景，色彩饱满通透，画面干净精致，真实感渲染',
-    promptEn: 'Realistic cinematic look, real-world scene fidelity, rich transparent colors, clean and refined image quality.'
+    promptZh: '严格写实摄影风格，禁止任何卡通、漫画、插画、动漫元素。必须像真实相机拍摄的照片或电影截图。真实人体比例和面部结构，真实皮肤毛孔与纹理，真实光影与环境反射，真实景深与镜头虚化效果，真实材质质感（布料、金属、皮肤、毛发），8K超高清画质，电影级调色',
+    promptEn: 'Strictly photorealistic style. ABSOLUTELY NO cartoon, comic, illustration, anime, or stylized elements. Must look like a real photograph or movie screenshot. Real human proportions and facial structure, real skin pores and texture, realistic lighting with natural shadows and reflections, real depth of field and lens bokeh, realistic material textures (fabric, metal, skin, hair), 8K ultra HD quality, cinematic color grading.'
   },
   {
     value: 'cyberpunk',
