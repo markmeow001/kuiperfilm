@@ -92,6 +92,58 @@ export function buildStoryboardJson(storyboards: PersistedStoryboard[]) {
   return JSON.stringify(rows, null, 2)
 }
 
+export async function persistSingleClipStoryboard(
+  episodeId: string,
+  clipEntry: ClipPanelsResult,
+): Promise<PersistedStoryboard> {
+  return await prisma.$transaction(async (tx) => {
+    const storyboard = await tx.novelPromotionStoryboard.create({
+      data: {
+        clipId: clipEntry.clipId,
+        episodeId,
+        panelCount: clipEntry.finalPanels.length,
+      },
+      select: { id: true, clipId: true },
+    })
+
+    const persistedPanels: PersistedStoryboard['panels'] = []
+    for (let i = 0; i < clipEntry.finalPanels.length; i += 1) {
+      const panel = clipEntry.finalPanels[i]
+      const created = await tx.novelPromotionPanel.create({
+        data: {
+          storyboardId: storyboard.id,
+          panelIndex: i,
+          panelNumber: panel.panel_number || i + 1,
+          shotType: panel.shot_type || '中景',
+          cameraMove: panel.camera_move || '固定',
+          description: panel.description || null,
+          videoPrompt: panel.video_prompt || null,
+          location: panel.location || null,
+          characters: panel.characters ? JSON.stringify(panel.characters) : null,
+          srtSegment: panel.source_text || null,
+          photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
+          actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
+          duration: panel.duration || null,
+        },
+        select: {
+          id: true,
+          panelIndex: true,
+          description: true,
+          srtSegment: true,
+          characters: true,
+        },
+      })
+      persistedPanels.push(created)
+    }
+
+    return {
+      storyboardId: storyboard.id,
+      clipId: storyboard.clipId,
+      panels: persistedPanels,
+    }
+  }, { timeout: 15000 })
+}
+
 export async function persistStoryboardsAndPanels(params: {
   episodeId: string
   clipPanels: ClipPanelsResult[]

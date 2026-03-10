@@ -27,5 +27,8 @@
     "noParams": "No configurable parameters",
     "confirm": "Confirm",
     "cancel": "Cancel",
-    "delete": "Delete"
+    "delete": "Delete",
+    "targetDuration": "Target Video Duration",
+    "targetDurationHint": "AI calculates panel count based on target duration",
+    "targetDurationUnit": "s"
 }

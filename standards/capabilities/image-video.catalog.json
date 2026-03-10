@@ -961,5 +961,105 @@
         "supportGenerateAudio": false
       }
     }
+  },
+  {
+    "modelType": "image",
+    "provider": "kieai",
+    "modelId": "nano-banana-2",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1K",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "kieai",
+    "modelId": "veo3",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal",
+          "firstlastframe"
+        ],
+        "firstlastframe": true,
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "kieai",
+    "modelId": "veo3_fast",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal",
+          "firstlastframe"
+        ],
+        "firstlastframe": true,
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "kieai",
+    "modelId": "kling-3-0-std",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          15
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "kieai",
+    "modelId": "kling-3-0-pro",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          15
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
   }
 ]

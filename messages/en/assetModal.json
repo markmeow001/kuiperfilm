@@ -39,7 +39,10 @@
         "editHint": "Edit the description, then click below to generate",
         "generateFromDescription": "Generate from Description",
         "textToImageTip": "Text-to-image mode: Generate from extracted description",
-        "pleaseExtractFirst": "Please extract character description first"
+        "pleaseExtractFirst": "Please extract character description first",
+        "modeUpload": "Direct Upload",
+        "uploadDirectDesc": "Use uploaded image directly as character image, no AI generation",
+        "createCharacter": "Create Character"
     },
     "location": {
         "title": "New Location",

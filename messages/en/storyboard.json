@@ -147,6 +147,7 @@
         "selectCount": "Select count",
         "generateMultiple": "Generate multiple candidates",
         "generateCount": "Generate {count}",
+        "upload": "Upload",
         "undoShort": "Back"
     },
     "candidate": {

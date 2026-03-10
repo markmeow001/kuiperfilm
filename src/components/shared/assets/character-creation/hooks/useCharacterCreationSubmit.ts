@@ -264,12 +264,63 @@ export function useCharacterCreationSubmit({
     t,
   ])
 
+  const handleCreateWithUpload = useCallback(async () => {
+    if (!name.trim() || referenceImagesBase64.length === 0) return
+
+    try {
+      setIsSubmitting(true)
+      const uploadMutation = mode === 'asset-hub' ? uploadAssetHubTemp : uploadProjectTemp
+      const data = await uploadMutation.mutateAsync({ imageBase64: referenceImagesBase64[0] })
+      if (!data.url) throw new Error(t('errors.uploadFailed'))
+
+      if (mode === 'asset-hub') {
+        await createAssetHubCharacter.mutateAsync({
+          name: name.trim(),
+          description: description.trim() || t('character.defaultDescription', { name: name.trim() }),
+          folderId: folderId ?? null,
+          referenceImageUrls: [data.url],
+          generateFromReference: true,
+        })
+      } else {
+        await createProjectCharacter.mutateAsync({
+          name: name.trim(),
+          description: description.trim() || t('character.defaultDescription', { name: name.trim() }),
+          referenceImageUrls: [data.url],
+          generateFromReference: true,
+        })
+      }
+
+      onSuccess()
+      onClose()
+    } catch (error: unknown) {
+      if (shouldShowError(error)) {
+        alert(getErrorMessage(error, t('errors.createFailed')))
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [
+    createAssetHubCharacter,
+    createProjectCharacter,
+    description,
+    folderId,
+    mode,
+    name,
+    onClose,
+    onSuccess,
+    referenceImagesBase64,
+    t,
+    uploadAssetHubTemp,
+    uploadProjectTemp,
+  ])
+
   return {
     isSubmitting,
     isAiDesigning,
     isExtracting,
     handleExtractDescription,
     handleCreateWithReference,
+    handleCreateWithUpload,
     handleAiDesign,
     handleSubmit,
   }

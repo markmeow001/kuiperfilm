@@ -147,6 +147,7 @@
         "selectCount": "选择生成数量",
         "generateMultiple": "生成多张候选",
         "generateCount": "生成 {count} 张",
+        "upload": "上传图片",
         "undoShort": "返回"
     },
     "candidate": {

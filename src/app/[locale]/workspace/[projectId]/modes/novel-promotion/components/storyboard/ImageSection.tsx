@@ -27,6 +27,7 @@ interface ImageSectionProps {
   candidateData: PanelCandidateData | null
   previousImageUrl?: string | null
   onRegeneratePanelImage: (panelId: string, count?: number, force?: boolean) => void
+  onUploadPanelImage: (panelId: string, file: File) => void
   onOpenEditModal: () => void
   onOpenAIDataModal: () => void
   onSelectCandidateIndex: (panelId: string, index: number) => void
@@ -50,6 +51,7 @@ export default function ImageSection({
   candidateData,
   previousImageUrl,
   onRegeneratePanelImage,
+  onUploadPanelImage,
   onOpenEditModal,
   onOpenAIDataModal,
   onSelectCandidateIndex,
@@ -187,6 +189,7 @@ export default function ImageSection({
           isSubmittingPanelImageTask={isSubmittingPanelImageTask}
           isModifying={isModifying}
           onRegeneratePanelImage={onRegeneratePanelImage}
+          onUploadPanelImage={onUploadPanelImage}
           onOpenEditModal={onOpenEditModal}
           onOpenAIDataModal={onOpenAIDataModal}
           onUndo={onUndo}

@@ -143,6 +143,7 @@ export {
     useSaveProjectEpisodesBatch,
     useDownloadRemoteBlob,
     useCreateProjectPanelVariant,
+    useUploadProjectPanelImage,
     useClearProjectStoryboardError,
     useUpdateSpeakerVoice,
 } from '../mutations/useProjectMutations'

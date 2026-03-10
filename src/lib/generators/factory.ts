@@ -15,12 +15,16 @@ import {
     GoogleGeminiBatchImageGenerator,
     GeminiCompatibleImageGenerator,
     OpenAICompatibleImageGenerator,
+    KieAIImageGenerator,
+    KieAINanoBananaGenerator,
 } from './image'
 import { GoogleVeoVideoGenerator } from './video/google'
 import { OpenAICompatibleVideoGenerator } from './video'
 import { QwenTTSGenerator } from './audio'
 import { MinimaxVideoGenerator } from './minimax'
 import { ViduVideoGenerator } from './vidu'
+import { KieAIVideoGenerator } from './video/kieai'
+import { KieAIKlingVideoGenerator } from './video/kieai-kling'
 import { getProviderKey } from '@/lib/api-config'
 
 /**
@@ -56,6 +60,11 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
             return new GeminiCompatibleImageGenerator(actualModelId, provider)
         case 'openai-compatible':
             return new OpenAICompatibleImageGenerator(actualModelId, provider)
+        case 'kieai':
+            if (actualModelId?.startsWith('nano-banana')) {
+                return new KieAINanoBananaGenerator(actualModelId)
+            }
+            return new KieAIImageGenerator(actualModelId)
         default:
             throw new Error(`Unknown image generator provider: ${provider}`)
     }
@@ -64,7 +73,14 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
 /**
  * 根据 provider 创建视频生成器
  */
-export function createVideoGenerator(provider: string): VideoGenerator {
+export function createVideoGenerator(provider: string, modelId?: string): VideoGenerator {
+    const normalizeModelId = (rawModelId?: string): string | undefined => {
+        if (!rawModelId) return rawModelId
+        const delimiterIndex = rawModelId.indexOf('::')
+        return delimiterIndex === -1 ? rawModelId : rawModelId.slice(delimiterIndex + 2)
+    }
+
+    const actualModelId = normalizeModelId(modelId)
     const providerKey = getProviderKey(provider).toLowerCase()
     switch (providerKey) {
         case 'fal':
@@ -81,6 +97,13 @@ export function createVideoGenerator(provider: string): VideoGenerator {
             return new ViduVideoGenerator()
         case 'openai-compatible':
             return new OpenAICompatibleVideoGenerator(provider)
+        case 'kieai':
+            if (actualModelId?.startsWith('kling-')) {
+                return new KieAIKlingVideoGenerator()
+            }
+            return new KieAIVideoGenerator()
+        case 'kieai-kling':
+            return new KieAIKlingVideoGenerator()
         default:
             throw new Error(`Unknown video generator provider: ${provider}`)
     }

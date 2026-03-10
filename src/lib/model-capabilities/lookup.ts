@@ -266,6 +266,14 @@ export function resolveGenerationOptionsForModel(input: {
     return { options: { ...selection }, issues: [] }
   }
 
+  // Auto-fill missing required fields with the first allowed option value
+  const optionFieldsForDefaults = getCapabilityOptionFields(input.modelType, input.capabilities)
+  for (const [field, allowedValues] of Object.entries(optionFieldsForDefaults)) {
+    if (selection[field] === undefined && allowedValues.length > 0) {
+      selection[field] = allowedValues[0]
+    }
+  }
+
   const issues = validateCapabilitySelectionForModel({
     modelKey: input.modelKey,
     modelType: input.modelType,

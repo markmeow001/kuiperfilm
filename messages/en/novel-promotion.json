@@ -99,6 +99,9 @@
     },
     "videoRatio": "Video Ratio",
     "visualStyle": "Visual Style",
+    "targetDuration": "Target Duration",
+    "targetDurationUnit": "s",
+    "targetDurationHint": "AI calculates panel count based on target duration",
     "moreConfig": "For more configuration options, click the 「 Settings」 button in the top right",
     "narration": {
       "title": "Enable Narration Voiceover",

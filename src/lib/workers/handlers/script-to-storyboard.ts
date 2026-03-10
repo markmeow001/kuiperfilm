@@ -25,9 +25,10 @@ import {
   parseEffort,
   parseTemperature,
   parseVoiceLinesJson,
-  persistStoryboardsAndPanels,
+  persistSingleClipStoryboard,
   toPositiveInt,
   type JsonRecord,
+  type PersistedStoryboard,
 } from './script-to-storyboard-helpers'
 import { buildPrompt, getPromptTemplate, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
@@ -203,6 +204,11 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
     orchestratorResult: null,
   }
 
+  // Pre-delete old storyboards + panels for idempotency
+  await prisma.novelPromotionStoryboard.deleteMany({ where: { episodeId } })
+
+  const persistedSoFar: PersistedStoryboard[] = []
+
   const pipelineState = await (async () => {
     try {
       return await withInternalLLMStreamCallbacks(
@@ -218,7 +224,7 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
                 key: 'script_to_storyboard_orchestrator',
                 title: 'script_to_storyboard_orchestrator',
                 maxAttempts: 2,
-                timeoutMs: 1000 * 60 * 20,
+                timeoutMs: 1000 * 60 * 45,
                 run: async (context) => {
                   const nextResult = await runScriptToStoryboardOrchestrator({
                     clips: clips.map((clip) => ({
@@ -228,6 +234,7 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
                       location: clip.location,
                       screenplay: clip.screenplay,
                     })),
+                    targetDuration: novelData.targetDuration ?? 60,
                     novelPromotionData: {
                       characters: novelData.characters || [],
                       locations: novelData.locations || [],
@@ -239,6 +246,10 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
                       phase3DetailTemplate,
                     },
                     runStep,
+                    onClipComplete: async (clipResult) => {
+                      const persisted = await persistSingleClipStoryboard(episodeId, clipResult)
+                      persistedSoFar.push(persisted)
+                    },
                   })
 
                   context.state.orchestratorResult = nextResult
@@ -283,10 +294,8 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
   })
   await assertTaskActive(job, 'script_to_storyboard_persist')
 
-  const persistedStoryboards = await persistStoryboardsAndPanels({
-    episodeId,
-    clipPanels: orchestratorResult.clipPanels,
-  })
+  // Storyboards already persisted incrementally via onClipComplete
+  const persistedStoryboards = persistedSoFar
 
   if (!episode.novelText || !episode.novelText.trim()) {
     throw new Error('No novel text to analyze')

@@ -39,7 +39,10 @@
         "editHint": "编辑后点击下方按钮生成角色设定图",
         "generateFromDescription": "使用描述生成",
         "textToImageTip": "文生图模式：基于提取的描述生成角色设定图",
-        "pleaseExtractFirst": "请先提取角色描述"
+        "pleaseExtractFirst": "请先提取角色描述",
+        "modeUpload": "直接上传",
+        "uploadDirectDesc": "直接使用上传的图片作为角色图，不经 AI 生成",
+        "createCharacter": "建立角色"
     },
     "location": {
         "title": "新建场景",

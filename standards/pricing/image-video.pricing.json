@@ -513,6 +513,15 @@
     }
   },
   {
+    "apiType": "image",
+    "provider": "kieai",
+    "modelId": "nano-banana-2",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.04
+    }
+  },
+  {
     "apiType": "video",
     "provider": "ark",
     "modelId": "doubao-seedance-1-0-pro-fast-251015",
@@ -6009,6 +6018,42 @@
     "pricing": {
       "mode": "flat",
       "flatAmount": 0.5
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "kieai",
+    "modelId": "veo3",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 3.0
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "kieai",
+    "modelId": "veo3_fast",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 1.5
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "kieai",
+    "modelId": "kling-3-0-std",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 1.0
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "kieai",
+    "modelId": "kling-3-0-pro",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 1.5
     }
   }
 ]

@@ -53,6 +53,7 @@ export type ClipStoryboardPanels = {
 
 export type ScriptToStoryboardOrchestratorInput = {
   clips: ClipInput[]
+  targetDuration?: number
   novelPromotionData: {
     characters: CharacterAsset[]
     locations: LocationAsset[]
@@ -64,6 +65,7 @@ export type ScriptToStoryboardOrchestratorInput = {
     action: string,
     maxOutputTokens: number,
   ) => Promise<ScriptToStoryboardStepOutput>
+  onClipComplete?: (clip: ClipStoryboardPanels) => Promise<void>
 }
 
 export type ScriptToStoryboardOrchestratorResult = {
@@ -260,7 +262,7 @@ async function runStepWithRetry<T>(
 export async function runScriptToStoryboardOrchestrator(
   input: ScriptToStoryboardOrchestratorInput,
 ): Promise<ScriptToStoryboardOrchestratorResult> {
-  const { clips, novelPromotionData, promptTemplates, runStep } = input
+  const { clips, targetDuration = 60, novelPromotionData, promptTemplates, runStep, onClipComplete } = input
   if (!Array.isArray(clips) || clips.length === 0) {
     throw new Error('No clips found')
   }
@@ -269,6 +271,15 @@ export async function runScriptToStoryboardOrchestrator(
   const charactersLibName = (novelPromotionData.characters || []).map((c) => c.name).join(', ') || '无'
   const locationsLibName = (novelPromotionData.locations || []).map((l) => l.name).join(', ') || '无'
   const charactersIntroduction = buildCharactersIntroduction(novelPromotionData.characters || [])
+
+  // Calculate per-clip target panel counts based on target duration
+  const AVG_PANEL_DURATION_SEC = 3.5
+  const totalTargetPanels = Math.round(targetDuration / AVG_PANEL_DURATION_SEC)
+  const totalContentLength = clips.reduce((sum, c) => sum + (typeof c.content === 'string' ? c.content.trim().length : 0), 0)
+  const clipTargetPanels = clips.map((c) => {
+    const clipLen = typeof c.content === 'string' ? c.content.trim().length : 0
+    return Math.max(2, Math.round(totalTargetPanels * clipLen / (totalContentLength || 1)))
+  })
 
   const phase1PanelsByClipId = new Map<string, StoryboardPanel[]>()
 
@@ -300,6 +311,8 @@ export async function runScriptToStoryboardOrchestrator(
         .replace('{characters_appearance_list}', filteredAppearanceList)
         .replace('{characters_full_description}', filteredFullDescription)
         .replace('{clip_json}', clipJson)
+        .replace('{target_duration}', String(targetDuration))
+        .replace('{target_panel_count}', String(clipTargetPanels[i]))
 
       const screenplay = parseScreenplay(clip.screenplay)
       if (screenplay) {
@@ -336,96 +349,98 @@ export async function runScriptToStoryboardOrchestrator(
     phase1PanelsByClipId.set(result.clipId, result.planPanels)
   }
 
-  const clipPanels = await Promise.all(
-    clips.map(async (clip, index): Promise<ClipStoryboardPanels> => {
-      const clipIndex = index + 1
-      const clipCharacters = parseClipCharacters(clip.characters)
-      const clipLocation = clip.location || null
-      const planPanels = phase1PanelsByClipId.get(clip.id) || []
-      if (planPanels.length === 0) {
-        throw new Error(`Missing phase1 result for clip ${formatClipId(clip)}`)
-      }
+  const clipPanels: ClipStoryboardPanels[] = []
+  for (let index = 0; index < clips.length; index++) {
+    const clip = clips[index]
+    const clipIndex = index + 1
+    const clipCharacters = parseClipCharacters(clip.characters)
+    const clipLocation = clip.location || null
+    const planPanels = phase1PanelsByClipId.get(clip.id) || []
+    if (planPanels.length === 0) {
+      throw new Error(`Missing phase1 result for clip ${formatClipId(clip)}`)
+    }
 
-      const filteredFullDescription = getFilteredFullDescription(novelPromotionData.characters || [], clipCharacters)
-      const filteredLocationsDescription = getFilteredLocationsDescription(
-        novelPromotionData.locations || [],
-        clipLocation,
-      )
+    const filteredFullDescription = getFilteredFullDescription(novelPromotionData.characters || [], clipCharacters)
+    const filteredLocationsDescription = getFilteredLocationsDescription(
+      novelPromotionData.locations || [],
+      clipLocation,
+    )
 
-      const phase2Meta = withStepMeta(
-        `clip_${clip.id}_phase2_cinematography`,
-        'progress.streamStep.cinematographyRules',
-        clips.length + index * 3 + 1,
-        totalStepCount,
-      )
-      const phase2ActingMeta = withStepMeta(
-        `clip_${clip.id}_phase2_acting`,
-        'progress.streamStep.actingDirection',
-        clips.length + index * 3 + 2,
-        totalStepCount,
-      )
-      const phase3Meta = withStepMeta(
-        `clip_${clip.id}_phase3_detail`,
-        'progress.streamStep.storyboardDetailRefine',
-        clips.length + index * 3 + 3,
-        totalStepCount,
-      )
+    const phase2Meta = withStepMeta(
+      `clip_${clip.id}_phase2_cinematography`,
+      'progress.streamStep.cinematographyRules',
+      clips.length + index * 3 + 1,
+      totalStepCount,
+    )
+    const phase2ActingMeta = withStepMeta(
+      `clip_${clip.id}_phase2_acting`,
+      'progress.streamStep.actingDirection',
+      clips.length + index * 3 + 2,
+      totalStepCount,
+    )
+    const phase3Meta = withStepMeta(
+      `clip_${clip.id}_phase3_detail`,
+      'progress.streamStep.storyboardDetailRefine',
+      clips.length + index * 3 + 3,
+      totalStepCount,
+    )
 
-      const phase2Prompt = promptTemplates.phase2CinematographyTemplate
-        .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
-        .replace(/\{panel_count\}/g, String(planPanels.length))
-        .replace('{locations_description}', filteredLocationsDescription)
-        .replace('{characters_info}', filteredFullDescription)
+    const phase2Prompt = promptTemplates.phase2CinematographyTemplate
+      .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
+      .replace(/\{panel_count\}/g, String(planPanels.length))
+      .replace('{locations_description}', filteredLocationsDescription)
+      .replace('{characters_info}', filteredFullDescription)
 
-      const phase2ActingPrompt = promptTemplates.phase2ActingTemplate
-        .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
-        .replace(/\{panel_count\}/g, String(planPanels.length))
-        .replace('{characters_info}', filteredFullDescription)
+    const phase2ActingPrompt = promptTemplates.phase2ActingTemplate
+      .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
+      .replace(/\{panel_count\}/g, String(planPanels.length))
+      .replace('{characters_info}', filteredFullDescription)
 
-      const phase3Prompt = promptTemplates.phase3DetailTemplate
-        .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
-        .replace('{characters_age_gender}', filteredFullDescription)
-        .replace('{locations_description}', filteredLocationsDescription)
+    const phase3Prompt = promptTemplates.phase3DetailTemplate
+      .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
+      .replace('{characters_age_gender}', filteredFullDescription)
+      .replace('{locations_description}', filteredLocationsDescription)
 
-      const [
-        { parsed: photographyRules },
-        { parsed: actingDirections },
-        { parsed: filteredPhase3Panels },
-      ] = await Promise.all([
-        runStepWithRetry(
-          runStep, phase2Meta, phase2Prompt, 'storyboard_phase2_cinematography', 2400,
-          (text) => parseJsonArray<PhotographyRule>(text, `phase2:${formatClipId(clip)}`),
-        ),
-        runStepWithRetry(
-          runStep, phase2ActingMeta, phase2ActingPrompt, 'storyboard_phase2_acting', 2400,
-          (text) => parseJsonArray<ActingDirection>(text, `phase2-acting:${formatClipId(clip)}`),
-        ),
-        runStepWithRetry(
-          runStep, phase3Meta, phase3Prompt, 'storyboard_phase3_detail', 2600,
-          (text) => {
-            const panels = parseJsonArray<StoryboardPanel>(text, `phase3:${formatClipId(clip)}`)
-            const filtered = panels.filter(
-              (panel) => panel.description && panel.description !== '无' && panel.location !== '无',
-            )
-            if (filtered.length === 0) {
-              throw new Error(`Phase 3 returned empty valid panels for clip ${formatClipId(clip)}`)
-            }
-            return filtered
-          },
-        ),
-      ])
+    const [
+      { parsed: photographyRules },
+      { parsed: actingDirections },
+      { parsed: filteredPhase3Panels },
+    ] = await Promise.all([
+      runStepWithRetry(
+        runStep, phase2Meta, phase2Prompt, 'storyboard_phase2_cinematography', 2400,
+        (text) => parseJsonArray<PhotographyRule>(text, `phase2:${formatClipId(clip)}`),
+      ),
+      runStepWithRetry(
+        runStep, phase2ActingMeta, phase2ActingPrompt, 'storyboard_phase2_acting', 2400,
+        (text) => parseJsonArray<ActingDirection>(text, `phase2-acting:${formatClipId(clip)}`),
+      ),
+      runStepWithRetry(
+        runStep, phase3Meta, phase3Prompt, 'storyboard_phase3_detail', 2600,
+        (text) => {
+          const panels = parseJsonArray<StoryboardPanel>(text, `phase3:${formatClipId(clip)}`)
+          const filtered = panels.filter(
+            (panel) => panel.description && panel.description !== '无' && panel.location !== '无',
+          )
+          if (filtered.length === 0) {
+            throw new Error(`Phase 3 returned empty valid panels for clip ${formatClipId(clip)}`)
+          }
+          return filtered
+        },
+      ),
+    ])
 
-      return {
-        clipId: clip.id,
-        clipIndex,
-        finalPanels: mergePanelsWithRules({
-          finalPanels: filteredPhase3Panels,
-          photographyRules,
-          actingDirections,
-        }),
-      }
-    }),
-  )
+    const result: ClipStoryboardPanels = {
+      clipId: clip.id,
+      clipIndex,
+      finalPanels: mergePanelsWithRules({
+        finalPanels: filteredPhase3Panels,
+        photographyRules,
+        actingDirections,
+      }),
+    }
+    clipPanels.push(result)
+    if (onClipComplete) await onClipComplete(result)
+  }
 
   const totalPanelCount = clipPanels.reduce((sum, item) => sum + item.finalPanels.length, 0)
   return {

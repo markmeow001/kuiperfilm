@@ -23,6 +23,50 @@ const DEFAULT_POLL_TIMEOUT_MS = Number.parseInt(process.env.WORKER_EXTERNAL_TIME
 const DEFAULT_POLL_INTERVAL_MS = Number.parseInt(process.env.WORKER_EXTERNAL_POLL_MS || '3000', 10)
 
 /**
+ * KieAI 图片尺寸限制：最大 10MB，最大边长 4096px。
+ * 超过限制会返回 422: "Images size exceeds limit"。
+ * 此函数在必要时缩小图片并上传，返回可访问的 URL。
+ */
+const KIEAI_MAX_DIMENSION = 4096
+const KIEAI_MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+export async function ensureImageWithinKieAILimits(
+  imageUrl: string,
+  targetId: string,
+): Promise<string> {
+  const response = await fetch(toFetchableUrl(imageUrl))
+  if (!response.ok) {
+    throw new Error(`Failed to download image for resize check: ${response.status}`)
+  }
+  const raw = Buffer.from(await response.arrayBuffer())
+
+  const meta = await sharp(raw).metadata()
+  const w = meta.width || 0
+  const h = meta.height || 0
+  const needsResize = w > KIEAI_MAX_DIMENSION || h > KIEAI_MAX_DIMENSION || raw.byteLength > KIEAI_MAX_FILE_SIZE
+
+  if (!needsResize) return imageUrl
+
+  const resized = await sharp(raw)
+    .resize({
+      width: KIEAI_MAX_DIMENSION,
+      height: KIEAI_MAX_DIMENSION,
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toBuffer()
+
+  const key = await processMediaResult({
+    source: resized,
+    type: 'image',
+    keyPrefix: 'video-input-resized',
+    targetId,
+  })
+  return getSignedUrl(key, 3600)
+}
+
+/**
  * 查询 DB 中任务是否已有 externalId（服务重启后续接轮询用，避免重复提交外部 API）
  */
 async function getTaskExistingExternalId(taskId: string): Promise<string | null> {
@@ -114,7 +158,9 @@ export async function waitExternalResult(
     if (status.status === 'completed') {
       const url = status.resultUrl || status.imageUrl || status.videoUrl
       if (!url) {
-        throw new Error(`External task completed but no result URL: ${externalId}`)
+        const err = new Error(`External task completed but no result URL: ${externalId}`)
+        ;(err as unknown as { code: string }).code = 'EXTERNAL_ERROR'
+        throw err
       }
       logger.info({
         message: 'external poll completed',
@@ -232,7 +278,9 @@ export async function resolveImageSourceFromGeneration(
     }),
   )
   if (!result.success) {
-    throw new Error(result.error || 'Image generation failed')
+    const err = new Error(result.error || 'Image generation failed')
+    ;(err as unknown as { code: string }).code = 'EXTERNAL_ERROR'
+    throw err
   }
 
   if (result.imageUrl) {
@@ -365,7 +413,9 @@ export async function resolveVideoSourceFromGeneration(
     }),
   )
   if (!result.success) {
-    throw new Error(result.error || 'Video generation failed')
+    const err = new Error(result.error || 'Video generation failed')
+    ;(err as unknown as { code: string }).code = 'EXTERNAL_ERROR'
+    throw err
   }
 
   if (result.videoUrl) {

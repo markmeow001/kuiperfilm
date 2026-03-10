@@ -371,11 +371,12 @@ export async function normalizeReferenceImagesForGeneration(
   }
 
   if (candidateCount > 0 && normalized.length === 0) {
-    throw new OutboundImageNormalizeError({
-      code: 'OUTBOUND_IMAGE_REFERENCE_ALL_FAILED',
-      stage: 'normalize_reference',
-      input: `candidates=${candidateCount}`,
-      message: 'all reference images failed to normalize',
+    logger.warn({
+      message: 'all reference images failed to normalize, proceeding without references',
+      details: {
+        candidateCount,
+        context: options.context || null,
+      },
     })
   }
 

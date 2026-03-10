@@ -49,6 +49,7 @@ interface SettingsModalProps {
 
     videoModel?: string
     videoRatio?: string
+    targetDuration?: number
     capabilityOverrides?: CapabilitySelections
     ttsRate?: string
     onArtStyleChange?: (value: string) => void
@@ -60,6 +61,7 @@ interface SettingsModalProps {
 
     onVideoModelChange?: (value: string) => void
     onVideoRatioChange?: (value: string) => void
+    onTargetDurationChange?: (value: number) => void
     onCapabilityOverridesChange?: (value: CapabilitySelections) => void
     onTTSRateChange?: (value: string) => void
 }
@@ -131,6 +133,7 @@ export function SettingsModal({
     editModel,
     videoModel,
     videoRatio = '9:16',
+    targetDuration = 60,
     capabilityOverrides,
     ttsRate,
     onArtStyleChange,
@@ -141,6 +144,7 @@ export function SettingsModal({
     onEditModelChange,
     onVideoModelChange,
     onVideoRatioChange,
+    onTargetDurationChange,
     onCapabilityOverridesChange,
     onTTSRateChange,
 }: SettingsModalProps) {
@@ -455,6 +459,25 @@ export function SettingsModal({
                                 onChange={(value) => { handleChange(onVideoRatioChange)(value) }}
                                 options={VIDEO_RATIOS}
                             />
+                        </div>
+                    </div>
+
+                    <div className="glass-surface-soft p-5 sm:p-6 space-y-4">
+                        <h3 className="text-sm font-semibold text-[var(--glass-text-tertiary)]">{t('targetDuration')}</h3>
+                        <p className="text-xs text-[var(--glass-text-muted)]">{t('targetDurationHint')}</p>
+                        <div className="max-w-xs">
+                            <select
+                                value={targetDuration}
+                                onChange={(e) => {
+                                    onTargetDurationChange?.(Number(e.target.value))
+                                    showSaved()
+                                }}
+                                className="w-full rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] px-3 py-2 text-sm text-[var(--glass-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--glass-accent)]"
+                            >
+                                {[30, 45, 60, 90, 120, 180].map((sec) => (
+                                    <option key={sec} value={sec}>{sec}{t('targetDurationUnit')}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                 </div>

@@ -37,6 +37,7 @@ interface PanelCardProps {
   onRemoveCharacter: (index: number) => void
   onRemoveLocation: () => void
   onRegeneratePanelImage: (panelId: string, count?: number, force?: boolean) => void
+  onUploadPanelImage: (panelId: string, file: File) => void
   onOpenEditModal: () => void
   onOpenAIDataModal: () => void
   onSelectCandidateIndex: (panelId: string, index: number) => void
@@ -74,6 +75,7 @@ export default function PanelCard({
   onRemoveCharacter,
   onRemoveLocation,
   onRegeneratePanelImage,
+  onUploadPanelImage,
   onOpenEditModal,
   onOpenAIDataModal,
   onSelectCandidateIndex,
@@ -120,6 +122,7 @@ export default function PanelCard({
           candidateData={candidateData}
           previousImageUrl={previousImageUrl}
           onRegeneratePanelImage={onRegeneratePanelImage}
+          onUploadPanelImage={onUploadPanelImage}
           onOpenEditModal={onOpenEditModal}
           onOpenAIDataModal={onOpenAIDataModal}
           onSelectCandidateIndex={onSelectCandidateIndex}

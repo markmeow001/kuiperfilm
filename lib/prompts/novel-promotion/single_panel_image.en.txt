@@ -21,7 +21,8 @@ Style requirement:
 
 Execution rules:
 1. Respect panel composition, character placement, and action logic.
-2. Use reference images for style/identity consistency only.
-3. Repaint the background according to shot type and angle.
-4. If storyboard conflicts with source text, keep narrative logic from source text.
-5. Keep final visual style consistent with provided references.
+2. CRITICAL — Character identity consistency: Generated characters MUST look exactly like their reference images. Match facial features, face shape, hairstyle, hair color, skin tone, and body type precisely. Do NOT generate different-looking people.
+3. Reference images have text labels at the top indicating character/location names — match them to the panel data.
+4. Repaint the background according to shot type and angle.
+5. If storyboard conflicts with source text, keep narrative logic from source text.
+6. Keep final visual style consistent with provided references.

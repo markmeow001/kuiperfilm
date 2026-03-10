@@ -69,10 +69,10 @@ export class GoogleVeoVideoGenerator extends BaseVideoGenerator {
             'duration',
             'lastFrameImageUrl',
         ])
-        for (const [key, value] of Object.entries(options)) {
-            if (value === undefined) continue
+        // 忽略不支援的選項（如 generateAudio、sound 等），避免跨模型切換時報錯
+        for (const key of Object.keys(options)) {
             if (!allowedOptionKeys.has(key)) {
-                throw new Error(`GOOGLE_VIDEO_OPTION_UNSUPPORTED: ${key}`)
+                delete (options as Record<string, unknown>)[key]
             }
         }
 

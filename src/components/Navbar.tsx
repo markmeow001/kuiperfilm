@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from './LanguageSwitcher'
@@ -18,13 +17,7 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-2">
             <Link href={session ? "/workspace" : "/"} className="group">
-              <Image
-                src="/logo-small.png?v=1"
-                alt={tc('appName')}
-                width={80}
-                height={80}
-                className="object-contain transition-transform group-hover:scale-110"
-              />
+              <span className="text-xl font-bold tracking-tight text-[var(--glass-text-primary)] transition-transform group-hover:scale-105 inline-block">CINEAI</span>
             </Link>
             <span className="glass-chip glass-chip-info px-2.5 py-1 text-[11px]">
               {tc('betaVersion')}

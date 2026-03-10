@@ -270,6 +270,7 @@ export const PATCH = apiHandler(async (
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
     'editModel', 'videoModel', 'videoRatio', 'artStyle',
     'ttsRate', 'lipSyncEnabled', 'lipSyncMode', 'capabilityOverrides',
+    'targetDuration',
   ] as const
 
   const updateData: Record<string, unknown> = {}
@@ -278,6 +279,15 @@ export const PATCH = apiHandler(async (
 
     if ((MODEL_FIELDS as readonly string[]).includes(field)) {
       validateModelKeyField(field as typeof MODEL_FIELDS[number], body[field])
+    }
+
+    if (field === 'targetDuration') {
+      const v = body[field]
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 15 || v > 300) {
+        throw new ApiError('INVALID_PARAMS', { field: 'targetDuration', message: 'targetDuration must be an integer between 15 and 300' })
+      }
+      updateData[field] = v
+      continue
     }
 
     if (field === 'capabilityOverrides') {

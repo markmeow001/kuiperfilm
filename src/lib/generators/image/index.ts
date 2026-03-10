@@ -12,6 +12,10 @@ export { GeminiCompatibleImageGenerator } from './gemini-compatible'
 export { OpenAICompatibleImageGenerator } from './openai-compatible'
 
 
+// KieAI 生成器
+export { KieAIImageGenerator } from './kieai'
+export { KieAINanoBananaGenerator } from './kieai-nanobanana'
+
 // 向后兼容：从合并文件重新导出
 export { FalBananaGenerator, FalImageGenerator } from '../fal'
 export { ArkSeedreamGenerator, ArkImageGenerator } from '../ark'

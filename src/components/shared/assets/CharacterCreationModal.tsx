@@ -29,7 +29,7 @@ export function CharacterCreationModal({
 }: CharacterCreationModalProps) {
   const t = useTranslations('assetModal')
 
-  const [createMode, setCreateMode] = useState<'reference' | 'description'>('description')
+  const [createMode, setCreateMode] = useState<'reference' | 'description' | 'upload'>('description')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [aiInstruction, setAiInstruction] = useState('')
@@ -59,6 +59,7 @@ export function CharacterCreationModal({
     isExtracting,
     handleExtractDescription,
     handleCreateWithReference,
+    handleCreateWithUpload,
     handleAiDesign,
     handleSubmit,
   } = useCharacterCreationSubmit({
@@ -84,7 +85,8 @@ export function CharacterCreationModal({
     const fileArray = Array.from(files).filter((f) => f.type.startsWith('image/'))
     if (fileArray.length === 0) return
 
-    const remaining = 5 - referenceImagesBase64.length
+    const maxImages = createMode === 'upload' ? 1 : 5
+    const remaining = maxImages - referenceImagesBase64.length
     const toAdd = fileArray.slice(0, remaining)
 
     for (const file of toAdd) {
@@ -92,14 +94,14 @@ export function CharacterCreationModal({
       reader.onload = (e) => {
         const base64 = e.target?.result as string
         setReferenceImagesBase64((prev) => {
-          if (prev.length >= 5) return prev
+          if (prev.length >= maxImages) return prev
           if (prev.includes(base64)) return prev
           return [...prev, base64]
         })
       }
       reader.readAsDataURL(file)
     }
-  }, [referenceImagesBase64.length])
+  }, [createMode, referenceImagesBase64.length])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -113,7 +115,7 @@ export function CharacterCreationModal({
 
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
-      if (createMode !== 'reference') return
+      if (createMode !== 'reference' && createMode !== 'upload') return
 
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
@@ -204,6 +206,7 @@ export function CharacterCreationModal({
             handleClearReference={handleClearReference}
             handleExtractDescription={() => { void handleExtractDescription() }}
             handleCreateWithReference={() => { void handleCreateWithReference() }}
+            handleCreateWithUpload={() => { void handleCreateWithUpload() }}
             handleAiDesign={() => { void handleAiDesign() }}
             handleSubmit={() => { void handleSubmit() }}
             isSubmitting={isSubmitting}

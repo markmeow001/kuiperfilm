@@ -27,5 +27,8 @@
     "noParams": "该模型无可配置参数",
     "confirm": "确认",
     "cancel": "取消",
-    "delete": "删除"
+    "delete": "删除",
+    "targetDuration": "目标视频时长",
+    "targetDurationHint": "分析剧本时，AI会根据目标时长自动计算所需分镜数量",
+    "targetDurationUnit": "秒"
 }

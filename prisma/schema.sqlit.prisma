@@ -243,6 +243,7 @@ model NovelPromotionProject {
   imageModel      String? // 用户配置的图片模型
   videoModel      String? // 用户配置的视频模型
   videoRatio      String                    @default("9:16")
+  targetDuration  Int                       @default(60) // 目标视频时长（秒）
   ttsRate         String                    @default("+50%")
   globalAssetText String?
   artStyle        String                    @default("american-comic")

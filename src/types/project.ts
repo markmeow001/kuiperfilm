@@ -241,6 +241,7 @@ export interface NovelPromotionProject {
   editModel: string
   videoModel: string
   videoRatio: string
+  targetDuration: number
   capabilityOverrides?: CapabilitySelections | string | null
   ttsRate: string
   workflowMode: WorkflowMode  // 新增：工作流模式

@@ -88,6 +88,7 @@ export interface VideoPanel {
   videoTaskRunning?: boolean
   videoErrorMessage?: string  // 视频生成错误消息
   videoModel?: string
+  srtSegment?: string
   linkedToNextPanel?: boolean
   // 口型同步相关
   lipSyncVideoUrl?: string

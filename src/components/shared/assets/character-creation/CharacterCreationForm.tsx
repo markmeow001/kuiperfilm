@@ -16,8 +16,8 @@ interface AvailableCharacter {
 
 interface CharacterCreationFormProps {
   mode: Mode
-  createMode: 'reference' | 'description'
-  setCreateMode: (mode: 'reference' | 'description') => void
+  createMode: 'reference' | 'description' | 'upload'
+  setCreateMode: (mode: 'reference' | 'description' | 'upload') => void
   name: string
   setName: (value: string) => void
   description: string
@@ -42,6 +42,7 @@ interface CharacterCreationFormProps {
   handleClearReference: (index?: number) => void
   handleExtractDescription: () => void
   handleCreateWithReference: () => void
+  handleCreateWithUpload: () => void
   handleAiDesign: () => void
   handleSubmit: () => void
   isSubmitting: boolean
@@ -55,6 +56,10 @@ const SparklesIcon = ({ className }: { className?: string }) => (
 
 const PhotoIcon = ({ className }: { className?: string }) => (
   <AppIcon name="image" className={className} />
+)
+
+const UploadIcon = ({ className }: { className?: string }) => (
+  <AppIcon name="upload" className={className} />
 )
 
 export default function CharacterCreationForm({
@@ -85,6 +90,7 @@ export default function CharacterCreationForm({
   handleClearReference,
   handleExtractDescription,
   handleCreateWithReference,
+  handleCreateWithUpload,
   handleAiDesign,
   handleSubmit,
   isSubmitting,
@@ -97,16 +103,16 @@ export default function CharacterCreationForm({
     <div className="space-y-5">
       <div className="mb-5">
         {(() => {
-          const tabs = ['description', 'reference'] as const
+          const tabs = ['description', 'reference', 'upload'] as const
           const activeIdx = tabs.indexOf(createMode)
           return (
             <div className="rounded-lg p-0.5" style={{ background: 'rgba(0,0,0,0.04)' }}>
-              <div className="relative grid gap-1" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+              <div className="relative grid gap-1" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
                 <div
                   className="absolute bottom-0.5 top-0.5 rounded-md bg-white transition-transform duration-200"
                   style={{
                     boxShadow: '0 1px 4px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(0,0,0,0.06)',
-                    width: 'calc(100% / 2)',
+                    width: 'calc(100% / 3)',
                     transform: `translateX(${activeIdx * 100}%)`,
                   }}
                 />
@@ -123,6 +129,13 @@ export default function CharacterCreationForm({
                 >
                   <PhotoIcon className="w-4 h-4" />
                   <span>{t('character.modeReference')}</span>
+                </button>
+                <button
+                  onClick={() => setCreateMode('upload')}
+                  className={`relative z-[1] flex items-center justify-center gap-2 rounded-md py-2 px-4 text-sm font-medium transition-colors cursor-pointer ${createMode === 'upload' ? 'text-[var(--glass-text-primary)]' : 'text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)]'}`}
+                >
+                  <UploadIcon className="w-4 h-4" />
+                  <span>{t('character.modeUpload')}</span>
                 </button>
               </div>
             </div>
@@ -354,6 +367,48 @@ export default function CharacterCreationForm({
             {isSubmitting ? t('common.adding') : t('common.add')}
           </button>
         </>
+      )}
+
+      {createMode === 'upload' && (
+        <div className="glass-surface-soft rounded-xl p-4 space-y-3 border border-[var(--glass-stroke-base)]">
+          <div className="flex items-center gap-2 text-sm font-medium text-[var(--glass-tone-info-fg)]">
+            <UploadIcon className="w-4 h-4" />
+            <span>{t('character.modeUpload')}</span>
+          </div>
+          <p className="text-xs text-[var(--glass-text-secondary)]">
+            {t('character.uploadDirectDesc')}
+          </p>
+
+          <CharacterCreationPreview
+            referenceImagesBase64={referenceImagesBase64.slice(0, 1)}
+            fileInputRef={fileInputRef}
+            onDrop={handleDrop}
+            onFileSelect={handleFileSelect}
+            onClearReference={handleClearReference}
+            maxImages={1}
+          />
+
+          <div className="space-y-2">
+            <label className="glass-field-label block">
+              {t('character.description')} {t('common.optional')}
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder={t('character.descPlaceholder')}
+              className="glass-textarea-base w-full px-3 py-2 text-sm resize-none"
+            />
+          </div>
+
+          <button
+            onClick={handleCreateWithUpload}
+            disabled={isSubmitting || !name.trim() || referenceImagesBase64.length === 0}
+            className="glass-btn-base glass-btn-primary w-full px-4 py-2.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+          >
+            {isSubmitting ? t('common.creating') : t('character.createCharacter')}
+          </button>
+        </div>
       )}
     </div>
   )

@@ -148,6 +148,7 @@ export function useCreateProjectCharacter(projectId: string) {
             generateFromReference?: boolean
             referenceImageUrls?: string[]
             customDescription?: string
+            initialImageUrl?: string
         }) =>
             await requestJsonWithError(
                 `/api/novel-promotion/${projectId}/character`,

@@ -17,8 +17,10 @@ export default function ConfigStage() {
       isSwitchingStage={runtime.isTransitioning}
       videoRatio={runtime.videoRatio ?? undefined}
       artStyle={runtime.artStyle ?? undefined}
+      targetDuration={runtime.targetDuration}
       onVideoRatioChange={runtime.onVideoRatioChange}
       onArtStyleChange={runtime.onArtStyleChange}
+      onTargetDurationChange={runtime.onTargetDurationChange}
       onNext={runtime.onRunStoryToScript}
     />
   )

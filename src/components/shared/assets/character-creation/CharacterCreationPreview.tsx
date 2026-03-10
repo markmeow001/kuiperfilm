@@ -11,6 +11,7 @@ interface CharacterCreationPreviewProps {
   onDrop: (event: DragEvent<HTMLDivElement>) => void
   onFileSelect: (files: FileList) => void
   onClearReference: (index?: number) => void
+  maxImages?: number
 }
 
 const PhotoIcon = ({ className }: { className?: string }) => (
@@ -23,6 +24,7 @@ export default function CharacterCreationPreview({
   onDrop,
   onFileSelect,
   onClearReference,
+  maxImages = 5,
 }: CharacterCreationPreviewProps) {
   const t = useTranslations('assetModal')
 
@@ -37,9 +39,12 @@ export default function CharacterCreationPreview({
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        multiple
+        multiple={maxImages > 1}
         className="hidden"
-        onChange={(e) => e.target.files && onFileSelect(e.target.files)}
+        onChange={(e) => {
+          if (e.target.files) onFileSelect(e.target.files)
+          e.target.value = ''
+        }}
       />
 
       {referenceImagesBase64.length > 0 ? (
@@ -73,7 +78,9 @@ export default function CharacterCreationPreview({
         <>
           <PhotoIcon className="w-10 h-10 text-[var(--glass-text-tertiary)] mb-2" />
           <p className="text-sm text-[var(--glass-text-secondary)]">{t('character.dropOrClick')}</p>
-          <p className="text-xs text-[var(--glass-text-tertiary)] mt-1">{t('character.maxReferenceImages')}</p>
+          {maxImages > 1 && (
+            <p className="text-xs text-[var(--glass-text-tertiary)] mt-1">{t('character.maxReferenceImages')}</p>
+          )}
         </>
       )}
     </div>

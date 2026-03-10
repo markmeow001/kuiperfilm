@@ -47,6 +47,7 @@ interface WorkspaceHeaderShellProps {
   videoModel: string | null | undefined
   capabilityOverrides: CapabilitySelections
   videoRatio: string | null | undefined
+  targetDuration: number | null | undefined
   ttsRate: string | null | undefined
   onUpdateConfig: (key: string, value: unknown) => Promise<void>
   globalAssetText: string
@@ -93,6 +94,7 @@ export default function WorkspaceHeaderShell({
   videoModel,
   capabilityOverrides,
   videoRatio,
+  targetDuration,
   ttsRate,
   onUpdateConfig,
   globalAssetText,
@@ -130,6 +132,7 @@ export default function WorkspaceHeaderShell({
         editModel={editModel ?? undefined}
         videoModel={videoModel ?? undefined}
         videoRatio={videoRatio ?? undefined}
+        targetDuration={targetDuration ?? undefined}
         capabilityOverrides={capabilityOverrides}
         ttsRate={ttsRate ?? undefined}
         onArtStyleChange={(value) => { onUpdateConfig('artStyle', value) }}
@@ -140,6 +143,7 @@ export default function WorkspaceHeaderShell({
         onEditModelChange={(value) => { onUpdateConfig('editModel', value) }}
         onVideoModelChange={(value) => { onUpdateConfig('videoModel', value) }}
         onVideoRatioChange={(value) => { onUpdateConfig('videoRatio', value) }}
+        onTargetDurationChange={(value) => { onUpdateConfig('targetDuration', value) }}
         onCapabilityOverridesChange={(value) => { onUpdateConfig('capabilityOverrides', value) }}
         onTTSRateChange={(value) => { onUpdateConfig('ttsRate', value) }}
       />

@@ -12,6 +12,7 @@ import {
   useRegenerateProjectPanelImage,
   useModifyProjectStoryboardImage,
   useDownloadProjectImages,
+  useUploadProjectPanelImage,
 } from '@/lib/query/hooks'
 import {
   getStoryboardPanels,
@@ -51,6 +52,7 @@ export function useStoryboardImageGeneration({
   const modifyPanelMutation = useModifyProjectStoryboardImage(projectId)
   const downloadImagesMutation = useDownloadProjectImages(projectId)
   const clearStoryboardErrorMutation = useClearProjectStoryboardError(projectId)
+  const uploadPanelImageMutation = useUploadProjectPanelImage(projectId)
 
   const submittingStoryboardIds = new Set<string>(
     localStoryboards
@@ -145,6 +147,32 @@ export function useStoryboardImageGeneration({
     setIsDownloadingImages,
   })
 
+  const uploadPanelImage = useCallback(async (panelId: string, file: File) => {
+    try {
+      const result = await uploadPanelImageMutation.mutateAsync({ panelId, file })
+      if (result.imageUrl) {
+        setLocalStoryboards((previousStoryboards) =>
+          previousStoryboards.map((storyboard) => {
+            const panels = getStoryboardPanels(storyboard)
+            let changed = false
+            const updatedPanels = panels.map((panel) => {
+              if (panel.id !== panelId) return panel
+              changed = true
+              return { ...panel, imageUrl: result.imageUrl }
+            })
+            return changed ? { ...storyboard, panels: updatedPanels } : storyboard
+          }),
+        )
+      }
+      if (onSilentRefresh) await onSilentRefresh()
+      refreshEpisode()
+      refreshStoryboards()
+    } catch (error: unknown) {
+      _ulogError('[uploadPanelImage] failed:', error)
+      throw error
+    }
+  }, [uploadPanelImageMutation, setLocalStoryboards, onSilentRefresh, refreshEpisode, refreshStoryboards])
+
   const clearStoryboardError = useCallback(async (storyboardId: string) => {
     let snapshot: NovelPromotionStoryboard[] | null = null
     setLocalStoryboards((previousStoryboards) =>
@@ -197,6 +225,7 @@ export function useStoryboardImageGeneration({
     getPanelCandidates,
     modifyPanelImage,
     downloadAllImages,
+    uploadPanelImage,
     clearStoryboardError,
   }
 }

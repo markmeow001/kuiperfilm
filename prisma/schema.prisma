@@ -246,6 +246,7 @@ model NovelPromotionProject {
   imageModel      String? // 用户配置的图片模型
   videoModel      String? // 用户配置的视频模型
   videoRatio      String                    @default("9:16")
+  targetDuration  Int                       @default(60) // 目标视频时长（秒）
   ttsRate         String                    @default("+50%")
   globalAssetText String?                   @db.Text
   artStyle        String                    @default("american-comic")
@@ -314,6 +315,7 @@ model NovelPromotionStoryboard {
   candidateImages     String?               @db.Text
   lastError           String?
   photographyPlan     String?               @db.Text
+  multiShotVideoUrl   String?               @db.Text
   panels              NovelPromotionPanel[]
   clip                NovelPromotionClip    @relation(fields: [clipId], references: [id], onDelete: Cascade)
   episode             NovelPromotionEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)

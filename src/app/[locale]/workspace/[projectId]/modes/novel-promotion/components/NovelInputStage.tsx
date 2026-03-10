@@ -179,8 +179,10 @@ interface NovelInputStageProps {
   // 配置项 - 比例与风格
   videoRatio?: string
   artStyle?: string
+  targetDuration?: number
   onVideoRatioChange?: (value: string) => void
   onArtStyleChange?: (value: string) => void
+  onTargetDurationChange?: (value: number) => void
 }
 
 export default function NovelInputStage({
@@ -194,8 +196,10 @@ export default function NovelInputStage({
   onEnableNarrationChange,
   videoRatio = '9:16',
   artStyle = 'american-comic',
+  targetDuration = 60,
   onVideoRatioChange,
-  onArtStyleChange
+  onArtStyleChange,
+  onTargetDurationChange
 }: NovelInputStageProps) {
   const t = useTranslations('novelPromotion')
   const hasContent = novelText.trim().length > 0
@@ -267,7 +271,7 @@ AI 将根据您的文本智能分析：
 
       {/* 画面比例与视觉风格配置 */}
       <div className="glass-surface p-6 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* 画面比例 */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-[var(--glass-text-muted)] tracking-[0.01em]">{t("storyInput.videoRatio")}</h3>
@@ -286,6 +290,21 @@ AI 将根据您的文本智能分析：
               onChange={(value) => onArtStyleChange?.(value)}
               options={ART_STYLES}
             />
+          </div>
+
+          {/* 目标时长 */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-[var(--glass-text-muted)] tracking-[0.01em]">{t("storyInput.targetDuration")}</h3>
+            <select
+              value={targetDuration}
+              onChange={(e) => onTargetDurationChange?.(Number(e.target.value))}
+              className="glass-input-base px-3 py-2.5 w-full text-sm cursor-pointer"
+            >
+              {[30, 45, 60, 90, 120, 180].map((sec) => (
+                <option key={sec} value={sec}>{sec}{t("storyInput.targetDurationUnit")}</option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--glass-text-tertiary)]">{t("storyInput.targetDurationHint")}</p>
           </div>
         </div>
         <p className="text-xs text-[var(--glass-text-tertiary)] mt-4 text-center">

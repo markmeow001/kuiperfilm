@@ -215,6 +215,14 @@ export const POST = apiHandler(async (
             throw new Error(`Failed to fetch local file: ${response.statusText}`)
           }
           videoData = Buffer.from(await response.arrayBuffer())
+        } else if (process.env.STORAGE_TYPE === 'r2') {
+          const { getSignedUrl } = await import('@/lib/cos')
+          const r2Url = toFetchableUrl(getSignedUrl(storageKey))
+          const response = await fetch(r2Url)
+          if (!response.ok) {
+            throw new Error(`Failed to fetch R2 file: ${response.statusText}`)
+          }
+          videoData = Buffer.from(await response.arrayBuffer())
         } else {
           const cos = getCOSClient()
           videoData = await new Promise<Buffer>((resolve, reject) => {

@@ -124,33 +124,158 @@ export const TTS_VOICES = [
 ]
 
 export const ART_STYLES = [
+  // ── 写实 ──
+  {
+    value: 'realistic',
+    label: '写实风格',
+    preview: '实',
+    promptZh: '真实电影级画面质感，真实现实场景，色彩饱满通透，画面干净精致，真实感渲染',
+    promptEn: 'Realistic cinematic look, real-world scene fidelity, rich transparent colors, clean and refined image quality.'
+  },
+  {
+    value: 'cyberpunk',
+    label: '赛博朋克',
+    preview: '赛',
+    promptZh: '赛博朋克未来科技风格，霓虹灯光，暗色调城市背景，高科技低生活美学，电子荧光色彩，未来都市氛围',
+    promptEn: 'Cyberpunk futuristic style, neon lighting, dark urban backdrop, high-tech low-life aesthetics, electric fluorescent colors, dystopian city atmosphere.'
+  },
+  {
+    value: 'steampunk',
+    label: '蒸汽朋克',
+    preview: '蒸',
+    promptZh: '蒸汽朋克机械风格，维多利亚时代美学，黄铜齿轮管道，蒸汽动力机械装置，复古工业质感，暖色调金属光泽',
+    promptEn: 'Steampunk mechanical style, Victorian era aesthetics, brass gears and pipes, steam-powered machinery, retro industrial texture, warm metallic tones.'
+  },
+  // ── 日系动漫 ──
+  {
+    value: 'japanese-anime',
+    label: '日系动漫',
+    preview: '日',
+    promptZh: '现代日系动漫风格，赛璐璐上色，清晰干净的线条，视觉小说CG感，高质量经典动漫风格',
+    promptEn: 'Modern Japanese anime style, cel shading, clean line art, visual-novel CG look, high-quality classic anime style.'
+  },
+  {
+    value: 'ghibli',
+    label: '吉卜力',
+    preview: '宫',
+    promptZh: '吉卜力工作室宫崎骏风格，水彩般柔和色调，温暖治愈的氛围，细腻的自然风景，手绘质感，梦幻童话般的场景',
+    promptEn: 'Studio Ghibli Miyazaki style, soft watercolor tones, warm healing atmosphere, detailed natural scenery, hand-drawn texture, dreamlike fairy-tale scenes.'
+  },
+  {
+    value: 'isekai-anime',
+    label: '日漫异世界',
+    preview: '异',
+    promptZh: '日系异世界冒险动漫风格，奇幻魔法世界观，史诗冒险场景，鲜艳饱和色彩，精致角色设计，动态战斗构图',
+    promptEn: 'Japanese isekai adventure anime style, fantasy magical world, epic adventure scenes, vivid saturated colors, detailed character design, dynamic action composition.'
+  },
   {
     value: 'american-comic',
-    label: '漫画风',
-    preview: '漫',
-    promptZh: '日式动漫风格',
-    promptEn: 'Japanese anime style'
+    label: '动漫通用',
+    preview: '通',
+    promptZh: '通用动漫风格，色彩明亮，线条清晰，角色表情生动，画面干净整洁，适合多种题材的动漫画风',
+    promptEn: 'General anime style, bright colors, clean lines, expressive characters, neat visuals, versatile anime art suitable for various genres.'
+  },
+  {
+    value: 'urban-anime',
+    label: '都市动漫',
+    preview: '都',
+    promptZh: '都市动漫风格，现代城市背景，精致的都市街景，日系都市生活氛围，温暖的城市灯光，写实与动漫结合',
+    promptEn: 'Urban anime style, modern city backdrop, detailed urban streetscapes, Japanese urban life atmosphere, warm city lights, blend of realism and anime.'
+  },
+  {
+    value: 'campus-cartoon',
+    label: '校园卡通',
+    preview: '校',
+    promptZh: '校园可爱卡通风格，明亮柔和的色彩，Q版可爱角色造型，青春校园场景，温馨活泼的氛围',
+    promptEn: 'Campus cute cartoon style, bright soft colors, chibi cute character design, youthful school scenes, warm lively atmosphere.'
+  },
+  // ── 国风 ──
+  {
+    value: 'xianxia',
+    label: '国漫仙侠',
+    preview: '仙',
+    promptZh: '中国仙侠修真风格，仙气飘渺的场景，古风角色服饰，灵气特效，云雾缭绕的仙境，东方玄幻美学',
+    promptEn: 'Chinese xianxia cultivation style, ethereal mystical scenes, ancient character costumes, spiritual energy effects, misty celestial realm, Eastern fantasy aesthetics.'
   },
   {
     value: 'chinese-comic',
-    label: '精致国漫',
+    label: '国风卡通',
     preview: '国',
-    promptZh: '现代高质量漫画风格，动漫风格，细节丰富精致，线条锐利干净，质感饱满，超清，干净的画面风格，2D风格，动漫风格。',
-    promptEn: 'Modern premium Chinese comic style, rich details, clean sharp line art, full texture, ultra-clear 2D anime aesthetics.'
+    promptZh: '中国风卡通画风格，国风元素，传统纹样与现代卡通结合，色彩鲜艳，角色造型圆润可爱，中式美学',
+    promptEn: 'Chinese-style cartoon, traditional Chinese elements, blend of classic patterns with modern cartoon, vibrant colors, rounded cute character design, Chinese aesthetics.'
   },
   {
-    value: 'japanese-anime',
-    label: '日系动漫风',
-    preview: '日',
-    promptZh: '现代日系动漫风格，赛璐璐上色，清晰干净的线条，视觉小说CG感。高质量2D风格',
-    promptEn: 'Modern Japanese anime style, cel shading, clean line art, visual-novel CG look, high-quality 2D style.'
+    value: 'ink-wash',
+    label: '古风水墨',
+    preview: '墨',
+    promptZh: '中国古风水墨画风格，淡雅留白，墨色浓淡渲染，山水意境，传统国画质感，诗意东方美学',
+    promptEn: 'Chinese traditional ink wash painting style, elegant whitespace, ink gradient rendering, landscape mood, classical Chinese painting texture, poetic Eastern aesthetics.'
+  },
+  // ── 韩漫 ──
+  {
+    value: 'korean-webtoon',
+    label: '极细韩漫',
+    preview: '韩',
+    promptZh: '韩国网络漫画风格，极细精致线条，柔和渐变色彩，精致的五官描绘，唯美浪漫氛围，高质量韩漫画风',
+    promptEn: 'Korean webtoon style, ultra-fine detailed lines, soft gradient colors, delicate facial features, romantic aesthetic atmosphere, high-quality manhwa art.'
   },
   {
-    value: 'realistic',
-    label: '真人风格',
-    preview: '实',
-    promptZh: '真实电影级画面质感，真实现实场景，色彩饱满通透，画面干净精致，真实感',
-    promptEn: 'Realistic cinematic look, real-world scene fidelity, rich transparent colors, clean and refined image quality.'
+    value: 'korean-historical',
+    label: '韩漫古装',
+    preview: '韩古',
+    promptZh: '韩漫古装风格，韩服传统服饰，古代宫廷场景，精致华丽的服饰细节，东方古典美学，韩式历史画风',
+    promptEn: 'Korean manhwa historical style, traditional hanbok costumes, ancient palace scenes, ornate clothing details, Eastern classical aesthetics, Korean historical art.'
+  },
+  {
+    value: 'korean-urban',
+    label: '韩漫都市',
+    preview: '韩都',
+    promptZh: '韩漫都市现代风格，时尚都市背景，精致的现代角色造型，柔和光影，浪漫都市氛围，韩式现代漫画画风',
+    promptEn: 'Korean manhwa modern urban style, fashionable city backdrop, refined modern character design, soft lighting, romantic urban atmosphere, Korean modern comic art.'
+  },
+  // ── CG与3D ──
+  {
+    value: 'pixar-3d',
+    label: '皮克斯3D',
+    preview: '3D',
+    promptZh: '皮克斯风格3D动画，卡通渲染，圆润柔和的角色造型，丰富细腻的表情，温暖明亮的灯光，电影级渲染质感，高质量3D角色动画风格',
+    promptEn: 'Pixar-style 3D animation, cartoon rendering, rounded soft character design, rich expressive faces, warm bright lighting, cinematic render quality, high-quality 3D character animation style.'
+  },
+  {
+    value: 'cg-epic',
+    label: 'CG史诗',
+    preview: 'CG',
+    promptZh: '史诗级CG渲染风格，电影级画面质感，宏大场景，戏剧性光影，超写实材质细节，大片视觉效果',
+    promptEn: 'Epic CG rendering style, cinematic quality visuals, grand scenes, dramatic lighting, hyper-realistic material detail, blockbuster visual effects.'
+  },
+  {
+    value: 'cg-urban',
+    label: 'CG都市',
+    preview: 'CG都',
+    promptZh: '都市CG风格，现代城市场景渲染，精致的建筑与环境细节，电影级都市氛围，写实光影效果，都市生活质感',
+    promptEn: 'Urban CG style, modern city scene rendering, detailed architecture and environment, cinematic urban atmosphere, realistic lighting effects, urban life texture.'
+  },
+  {
+    value: 'game-cg',
+    label: '游戏CG',
+    preview: '游',
+    promptZh: '半写实游戏CG风格，精致角色建模质感，游戏过场动画画面，细腻的皮肤与材质渲染，动态光影，3A游戏视觉品质',
+    promptEn: 'Semi-realistic game CG style, refined character model texture, game cutscene visuals, detailed skin and material rendering, dynamic lighting, AAA game visual quality.'
+  },
+  // ── 欧美与奇幻 ──
+  {
+    value: 'western-comic',
+    label: '美式漫画',
+    preview: '美',
+    promptZh: '美式漫画风格，粗犷有力的线条，鲜明对比色彩，漫威DC式英雄画风，波普艺术元素，夸张的动态构图',
+    promptEn: 'American comic book style, bold powerful lines, high contrast colors, Marvel/DC hero art style, pop art elements, exaggerated dynamic composition.'
+  },
+  {
+    value: 'fantasy-cartoon',
+    label: '奇幻卡通',
+    preview: '幻',
+    promptZh: '奇幻卡通风格，魔法童话世界，梦幻柔和色彩，可爱奇幻角色，魔法光效，童话故事般的温馨场景',
+    promptEn: 'Fantasy cartoon style, magical fairy-tale world, dreamy soft colors, cute fantasy characters, magical light effects, warm storybook-like scenes.'
   }
 ]
 
@@ -172,7 +297,7 @@ export function getArtStylePrompt(
 }
 
 // 角色形象生成的系统后缀（始终添加到提示词末尾，不显示给用户）- 左侧面部特写+右侧三视图
-export const CHARACTER_PROMPT_SUFFIX = '角色设定图，画面分为左右两个区域：【左侧区域】占约1/3宽度，是角色的正面特写（如果是人类则展示完整正脸，如果是动物/生物则展示最具辨识度的正面形态）；【右侧区域】占约2/3宽度，是角色三视图横向排列（从左到右依次为：正面全身、侧面全身、背面全身），三视图高度一致。纯白色背景，无其他元素。'
+export const CHARACTER_PROMPT_SUFFIX = '角色设定图，画面分为左右两个区域：【左侧区域】占约1/3宽度，是角色的正面特写（如果是人类则展示完整正脸，如果是动物/生物则展示最具辨识度的正面形态）；【右侧区域】占约2/3宽度，是角色三视图横向排列（从左到右依次为：正面全身、侧面全身、背面全身），三视图高度一致。极其重要：左侧特写和右侧三视图必须是完全相同的角色，面部五官、发型、发色、肤色完全一致，只是角度不同。纯白色背景，无其他元素。'
 
 // 场景图片生成的系统后缀（已禁用四视图，直接生成单张场景图）
 export const LOCATION_PROMPT_SUFFIX = ''

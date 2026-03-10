@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { ModelCapabilityDropdown } from '@/components/ui/config-modals/ModelCapabilityDropdown'
@@ -43,6 +44,8 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
     const unitText = safeTranslate(field.unitKey)
     return unitText ? `${labelText} (${unitText})` : labelText
   }
+  const [includeDialogue, setIncludeDialogue] = useState(true)
+  const hasSrtSegment = !!panel.srtSegment && typeof panel.srtSegment === 'string' && panel.srtSegment.trim().length > 0
   const isFirstLastFrameGenerated = panel.videoGenerationMode === 'firstlastframe' && !!panel.videoUrl
 
   return (
@@ -104,6 +107,21 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
               </div>
             )}
 
+            {hasSrtSegment && (
+              <div className="mb-2">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeDialogue}
+                    onChange={(e) => setIncludeDialogue(e.target.checked)}
+                    className="accent-[var(--glass-accent-from)]"
+                  />
+                  <span className="text-xs font-medium text-[var(--glass-text-secondary)]">{t('panelCard.includeDialogue')}</span>
+                </label>
+                <p className="mt-1 ml-5 text-[10px] text-[var(--glass-text-tertiary)] whitespace-pre-wrap">{panel.srtSegment}</p>
+              </div>
+            )}
+
             {layout.isLinked && layout.nextPanel ? (() => {
               const linkedNextPanel = layout.nextPanel
               return (
@@ -158,7 +176,7 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
                         panel.panelIndex,
                         videoModel.selectedModel,
                         undefined,
-                        videoModel.generationOptions,
+                        { ...videoModel.generationOptions, includeDialogue },
                         panel.panelId,
                       )}
                     disabled={
@@ -169,7 +187,7 @@ export default function VideoPanelCardBody({ runtime }: VideoPanelCardBodyProps)
                     }
                     className="flex-shrink-0 min-w-[90px] py-2 px-3 text-sm font-medium rounded-lg shadow-sm transition-all disabled:opacity-50 bg-[var(--glass-accent-from)] text-white"
                   >
-                    {panel.videoUrl ? t('stage.hasSynced') : taskStatus.isVideoTaskRunning ? taskStatus.taskRunningVideoLabel : t('panelCard.generateVideo')}
+                    {taskStatus.isVideoTaskRunning ? taskStatus.taskRunningVideoLabel : panel.videoUrl ? t('panelCard.regenerateVideo') : t('panelCard.generateVideo')}
                   </button>
                   <div className="flex-1 min-w-0">
                     <ModelCapabilityDropdown

@@ -1,6 +1,14 @@
 # Reference Image To Character Sheet Prompt (img2img)
 
-Use the provided reference image to extract face traits, hairstyle, body shape, and outfit structure.
+Based on the provided reference image, strictly reproduce the character's appearance. The generated character MUST be the exact same person as in the reference image — identical facial features, face shape, skin tone, hairstyle, hair color, body type, and proportions.
+
+## Core requirement: Character identity consistency
+
+This is the most important rule: the generated character must be immediately recognizable as the same character from the reference image.
+- Strictly replicate the facial proportions from the reference (eye size and spacing, nose shape, mouth shape, face shape)
+- Hairstyle and hair color must be exactly the same
+- Skin tone and body type must be exactly the same
+- For anime characters, preserve the same character design traits (hairstyle, eye color, facial features, etc.)
 
 ## Style consistency
 Keep the original visual style:
@@ -16,6 +24,7 @@ Keep the original visual style:
 4. Do not copy blur, noise, compression artifacts, or defects
 5. Output must be clear, sharp, and production-quality
 6. Character expression should be neutral and calm, looking at camera
+7. All angles must show the exact same character — no variation in facial identity allowed
 
 ## Missing-part completion
 If only half body or partial body is visible, infer and complete hidden parts consistently:

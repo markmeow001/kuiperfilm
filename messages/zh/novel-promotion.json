@@ -99,6 +99,9 @@
     },
     "videoRatio": "画面比例",
     "visualStyle": "视觉风格",
+    "targetDuration": "目标时长",
+    "targetDurationUnit": "秒",
+    "targetDurationHint": "AI 会根据目标时长自动计算分镜数量",
     "moreConfig": "更多配置请点击右上角「 配置」按钮",
     "narration": {
       "title": "启用旁白配音",

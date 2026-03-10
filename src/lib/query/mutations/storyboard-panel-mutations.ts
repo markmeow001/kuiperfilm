@@ -308,6 +308,37 @@ export function useCreateProjectPanelVariant(projectId: string) {
 /**
  * 清除 storyboard 错误
  */
+/**
+ * 上传面板图片
+ */
+
+export function useUploadProjectPanelImage(projectId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async ({ panelId, file }: { panelId: string; file: File }) => {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('panelId', panelId)
+
+            const res = await fetch(`/api/novel-promotion/${projectId}/upload-panel-image`, {
+                method: 'POST',
+                body: formData,
+            })
+            if (!res.ok) {
+                const error = await res.json().catch(() => ({}))
+                throw new Error(resolveTaskErrorMessage(error, '上传失败'))
+            }
+            return res.json()
+        },
+        onSettled: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
+
+/**
+ * 清除 storyboard 错误
+ */
 export function useClearProjectStoryboardError(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
