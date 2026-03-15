@@ -40,17 +40,17 @@ const loggingMock = vi.hoisted(() => ({
 const prismaMock = vi.hoisted(() => ({
   characterAppearance: {
     findUnique: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   locationImage: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   novelPromotionPanel: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   novelPromotionProject: {
     findUnique: vi.fn(),
@@ -59,13 +59,13 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
   },
   globalCharacterAppearance: {
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   globalLocation: {
     findFirst: vi.fn(),
   },
   globalLocationImage: {
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
 }))
 

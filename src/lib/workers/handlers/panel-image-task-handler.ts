@@ -15,51 +15,23 @@ import {
   AnyObj,
   clampCount,
   collectPanelReferenceImages,
+  collectPanelSceneBase,
   findCharacterByName,
   parsePanelCharacterReferences,
   pickFirstString,
   resolveNovelData,
 } from './image-task-handler-shared'
-import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
+import {
+  buildPanelPrompt,
+  parseJsonUnknown,
+  pickAppearanceDescription,
+} from './panel-image-task-handler-utils'
 
-function parseJsonUnknown(raw: string | null | undefined): unknown | null {
-  if (!raw) return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
-function parseDescriptionList(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-  } catch {
-    return []
-  }
-}
-
-function pickAppearanceDescription(appearance: {
-  descriptions?: string | null
-  description?: string | null
-  selectedIndex?: number | null
-}): string {
-  const descriptions = parseDescriptionList(appearance.descriptions || null)
-  if (descriptions.length > 0) {
-    const selectedIndex = typeof appearance.selectedIndex === 'number' ? appearance.selectedIndex : 0
-    const selected = descriptions[selectedIndex] || descriptions[0]
-    if (selected && selected.trim()) return selected.trim()
-  }
-  if (typeof appearance.description === 'string' && appearance.description.trim()) {
-    return appearance.description.trim()
-  }
-  return '无描述'
-}
-
-function buildPanelPromptContext(params: {
+/**
+ * Build natural-language scene description from panel data.
+ * Image generation models work much better with plain text than JSON blobs.
+ */
+function buildSceneDescription(params: {
   panel: {
     id: string
     shotType: string | null
@@ -73,82 +45,75 @@ function buildPanelPromptContext(params: {
     actingNotes: string | null
   }
   projectData: Awaited<ReturnType<typeof resolveNovelData>>
-}) {
+}): string {
+  const lines: string[] = []
+
+  // Scene description — the most important part
+  const description = params.panel.description || params.panel.videoPrompt || ''
+  if (description) lines.push(description)
+
+  // Shot type and camera
+  const shotParts: string[] = []
+  if (params.panel.shotType) shotParts.push(params.panel.shotType)
+  if (params.panel.cameraMove) shotParts.push(params.panel.cameraMove)
+  if (shotParts.length > 0) lines.push(`镜头：${shotParts.join('，')}`)
+
+  // Characters with appearance descriptions
   const panelCharacters = parsePanelCharacterReferences(params.panel.characters)
-  const characterContexts = panelCharacters.map((reference) => {
-    const character = findCharacterByName(params.projectData.characters || [], reference.name)
-    if (!character) {
-      return {
-        name: reference.name,
-        appearance: reference.appearance || null,
-        description: '无角色外貌数据',
-      }
-    }
+  if (panelCharacters.length > 0) {
+    const charDescs = panelCharacters.map((reference) => {
+      const character = findCharacterByName(params.projectData.characters || [], reference.name)
+      if (!character) return reference.name
 
-    const appearances = character.appearances || []
-    const matchedAppearance =
-      (reference.appearance
-        ? appearances.find((appearance) => (appearance.changeReason || '').toLowerCase() === reference.appearance!.toLowerCase())
-        : null) || appearances[0] || null
+      const appearances = character.appearances || []
+      const matchedAppearance =
+        (reference.appearance
+          ? appearances.find((a) => (a.changeReason || '').toLowerCase() === reference.appearance!.toLowerCase())
+          : null) || appearances[0] || null
 
-    return {
-      name: character.name,
-      appearance: matchedAppearance?.changeReason || null,
-      description: matchedAppearance ? pickAppearanceDescription(matchedAppearance) : '无角色外貌数据',
-    }
-  })
+      const desc = matchedAppearance ? pickAppearanceDescription(matchedAppearance) : ''
+      return desc ? `${character.name}（${desc}）` : character.name
+    })
+    lines.push(`角色：${charDescs.join('、')}`)
+  }
 
-  const locationContext = (() => {
-    if (!params.panel.location) return null
+  // Location
+  if (params.panel.location) {
     const matchedLocation = (params.projectData.locations || []).find(
       (item) => item.name.toLowerCase() === params.panel.location!.toLowerCase(),
     )
-    if (!matchedLocation) return null
-    const selectedImage = (matchedLocation.images || []).find((item) => item.isSelected) || matchedLocation.images?.[0]
-    return {
-      name: matchedLocation.name,
-      description: selectedImage?.description || null,
-    }
-  })()
-
-  return {
-    panel: {
-      panel_id: params.panel.id,
-      shot_type: params.panel.shotType || '',
-      camera_move: params.panel.cameraMove || '',
-      description: params.panel.description || '',
-      video_prompt: params.panel.videoPrompt || '',
-      location: params.panel.location || '',
-      characters: panelCharacters,
-      source_text: params.panel.srtSegment || '',
-      photography_rules: parseJsonUnknown(params.panel.photographyRules),
-      acting_notes: parseJsonUnknown(params.panel.actingNotes),
-    },
-    context: {
-      character_appearances: characterContexts,
-      location_reference: locationContext,
-    },
+    const locDesc = matchedLocation
+      ? (() => {
+          const selectedImage = (matchedLocation.images || []).find((img) => img.isSelected) || matchedLocation.images?.[0]
+          return selectedImage?.description
+            ? `${matchedLocation.name}：${selectedImage.description}`
+            : matchedLocation.name
+        })()
+      : params.panel.location
+    lines.push(`场景：${locDesc}`)
   }
+
+  // Photography rules as plain text
+  const rules = parseJsonUnknown(params.panel.photographyRules)
+  if (rules && typeof rules === 'object') {
+    const ruleEntries = Object.entries(rules as Record<string, unknown>)
+      .filter(([, v]) => v != null && v !== '')
+      .map(([k, v]) => `${k}: ${v}`)
+    if (ruleEntries.length > 0) lines.push(`摄影：${ruleEntries.join('，')}`)
+  }
+
+  // Acting notes as plain text
+  const notes = parseJsonUnknown(params.panel.actingNotes)
+  if (notes && typeof notes === 'object') {
+    const noteEntries = Object.entries(notes as Record<string, unknown>)
+      .filter(([, v]) => v != null && v !== '')
+      .map(([k, v]) => `${k}: ${v}`)
+    if (noteEntries.length > 0) lines.push(`表演：${noteEntries.join('，')}`)
+  }
+
+  return lines.join('\n')
 }
 
-function buildPanelPrompt(params: {
-  locale: TaskJobData['locale']
-  aspectRatio: string
-  styleText: string
-  sourceText: string
-  contextJson: string
-}) {
-  return buildPrompt({
-    promptId: PROMPT_IDS.NP_SINGLE_PANEL_IMAGE,
-    locale: params.locale,
-    variables: {
-      aspect_ratio: params.aspectRatio,
-      storyboard_text_json_input: params.contextJson,
-      source_text: params.sourceText || '无',
-      style: params.styleText,
-    },
-  })
-}
 
 export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
@@ -167,7 +132,13 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   if (!modelKey) throw new Error('Storyboard model not configured')
 
   const candidateCount = clampCount(payload.candidateCount ?? payload.count, 1, 4, 1)
-  const refs = await collectPanelReferenceImages(projectData, panel)
+  const isFluxKontext = modelKey.startsWith('flux-kontext')
+
+  // Flux Kontext: scene base only (it treats inputImage as edit base, not character ref)
+  // Other models: full reference images (character + location)
+  const refs = isFluxKontext
+    ? await collectPanelSceneBase(projectData, panel)
+    : await collectPanelReferenceImages(projectData, panel)
   const normalizedRefs = await normalizeReferenceImagesForGeneration(refs)
 
   const logger = createScopedLogger({
@@ -197,7 +168,7 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const artStyle = getArtStylePrompt(modelConfig.artStyle, job.data.locale)
   if (!projectData.videoRatio) throw new Error('Project videoRatio not configured')
   const aspectRatio = projectData.videoRatio
-  const promptContext = buildPanelPromptContext({
+  const sceneText = buildSceneDescription({
     panel: {
       id: panel.id,
       shotType: panel.shotType,
@@ -212,22 +183,18 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
     },
     projectData,
   })
-  // Use compact JSON for models with prompt length limits (e.g. Flux 3000 chars)
-  const isLengthLimited = modelKey.startsWith('flux-kontext')
-  const contextJson = isLengthLimited
-    ? JSON.stringify(promptContext)
-    : JSON.stringify(promptContext, null, 2)
   let prompt = buildPanelPrompt({
     locale: job.data.locale,
     aspectRatio,
     styleText: artStyle || '与参考图风格一致',
     sourceText: panel.srtSegment || panel.description || '',
-    contextJson,
+    sceneText,
   })
 
-  // Truncate prompt for models with length limits
-  const PROMPT_MAX_LENGTH = 2900 // leave margin for Flux's 3000 char limit
-  if (isLengthLimited && prompt.length > PROMPT_MAX_LENGTH) {
+  // KieAI models (Nano Banana, Flux Kontext) all have 3000 char prompt limit
+  const PROMPT_MAX_LENGTH = 2900
+  const isLengthLimited = prompt.length > PROMPT_MAX_LENGTH
+  if (isLengthLimited) {
     logger.warn({
       message: 'prompt exceeds length limit, truncating',
       details: { originalLength: prompt.length, maxLength: PROMPT_MAX_LENGTH },
@@ -240,6 +207,7 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
     details: {
       promptLength: prompt.length,
       truncated: isLengthLimited && prompt.length >= PROMPT_MAX_LENGTH,
+      prompt: prompt.substring(0, 1500),
     },
   })
 
@@ -282,7 +250,10 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
       where: { id: panel.id },
       data: {
         previousImageUrl: panel.imageUrl,
-        candidateImages: JSON.stringify(candidates),
+        // Single candidate: directly replace imageUrl so user sees the new image immediately
+        ...(candidateCount === 1
+          ? { imageUrl: candidates[0] || null, candidateImages: null }
+          : { candidateImages: JSON.stringify(candidates) }),
       },
     })
   }

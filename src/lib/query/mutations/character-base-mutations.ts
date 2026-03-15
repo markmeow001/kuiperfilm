@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { logError as _ulogError } from '@/lib/logging/core'
 import { useRef } from 'react'
-import type { Character, Project } from '@/types/project'
+import type { Project } from '@/types/project'
 import { queryKeys } from '../keys'
 import type { ProjectAssetsData } from '../hooks/useProjectAssets'
 import {
@@ -14,100 +14,17 @@ import {
     requestJsonWithError,
     requestVoidWithError,
 } from './mutation-shared'
-
-interface SelectProjectCharacterImageContext {
-    previousAssets: ProjectAssetsData | undefined
-    previousProject: Project | undefined
-    targetKey: string
-    requestId: number
-}
-
-interface DeleteProjectCharacterContext {
-    previousAssets: ProjectAssetsData | undefined
-    previousProject: Project | undefined
-}
-
-function applyCharacterSelectionToCharacters(
-    characters: Character[],
-    characterId: string,
-    appearanceId: string,
-    selectedIndex: number | null,
-): Character[] {
-    return characters.map((character) => {
-        if (character.id !== characterId) return character
-        return {
-            ...character,
-            appearances: (character.appearances || []).map((appearance) => {
-                if (appearance.id !== appearanceId) return appearance
-                const selectedUrl =
-                    selectedIndex !== null && selectedIndex >= 0
-                        ? (appearance.imageUrls[selectedIndex] ?? null)
-                        : null
-                return {
-                    ...appearance,
-                    selectedIndex,
-                    imageUrl: selectedUrl ?? appearance.imageUrl ?? null,
-                }
-            }),
-        }
-    })
-}
-
-function applyCharacterSelectionToAssets(
-    previous: ProjectAssetsData | undefined,
-    characterId: string,
-    appearanceId: string,
-    selectedIndex: number | null,
-): ProjectAssetsData | undefined {
-    if (!previous) return previous
-    return {
-        ...previous,
-        characters: applyCharacterSelectionToCharacters(previous.characters || [], characterId, appearanceId, selectedIndex),
-    }
-}
-
-function applyCharacterSelectionToProject(
-    previous: Project | undefined,
-    characterId: string,
-    appearanceId: string,
-    selectedIndex: number | null,
-): Project | undefined {
-    if (!previous?.novelPromotionData) return previous
-    const currentCharacters = previous.novelPromotionData.characters || []
-    return {
-        ...previous,
-        novelPromotionData: {
-            ...previous.novelPromotionData,
-            characters: applyCharacterSelectionToCharacters(currentCharacters, characterId, appearanceId, selectedIndex),
-        },
-    }
-}
-
-function removeCharacterFromAssets(
-    previous: ProjectAssetsData | undefined,
-    characterId: string,
-): ProjectAssetsData | undefined {
-    if (!previous) return previous
-    return {
-        ...previous,
-        characters: (previous.characters || []).filter((character) => character.id !== characterId),
-    }
-}
-
-function removeCharacterFromProject(
-    previous: Project | undefined,
-    characterId: string,
-): Project | undefined {
-    if (!previous?.novelPromotionData) return previous
-    const currentCharacters = previous.novelPromotionData.characters || []
-    return {
-        ...previous,
-        novelPromotionData: {
-            ...previous.novelPromotionData,
-            characters: currentCharacters.filter((character) => character.id !== characterId),
-        },
-    }
-}
+import {
+    applyCharacterSelectionToAssets,
+    applyCharacterSelectionToProject,
+    removeCharacterFromAssets,
+    removeCharacterFromProject,
+    buildProjectCharacterImageFormData,
+} from './character-base-mutations-utils'
+import type {
+    SelectProjectCharacterImageContext,
+    DeleteProjectCharacterContext,
+} from './character-base-mutations-utils'
 
 export function useGenerateProjectCharacterImage(projectId: string) {
     const queryClient = useQueryClient()
@@ -155,26 +72,16 @@ export function useUploadProjectCharacterImage(projectId: string) {
         invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
-        mutationFn: async ({
-            file, characterId, appearanceId, imageIndex, labelText
-        }: {
+        mutationFn: async (params: {
             file: File
             characterId: string
             appearanceId: string
             imageIndex?: number
             labelText?: string
         }) => {
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('type', 'character')
-            formData.append('id', characterId)
-            formData.append('appearanceId', appearanceId)
-            if (imageIndex !== undefined) formData.append('imageIndex', imageIndex.toString())
-            if (labelText) formData.append('labelText', labelText)
-
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/upload-asset-image`, {
                 method: 'POST',
-                body: formData
+                body: buildProjectCharacterImageFormData(params),
             }, 'Failed to upload image')
         },
         onSuccess: invalidateProjectAssets,

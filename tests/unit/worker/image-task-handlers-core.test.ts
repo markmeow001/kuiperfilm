@@ -25,17 +25,17 @@ const sharedMock = vi.hoisted(() => ({
 const prismaMock = vi.hoisted(() => ({
   characterAppearance: {
     findUnique: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   locationImage: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   novelPromotionPanel: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   novelPromotionProject: {
     findUnique: vi.fn(),

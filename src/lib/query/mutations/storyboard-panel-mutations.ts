@@ -1,41 +1,30 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
 import { resolveTaskResponse } from '@/lib/task/client'
-import { resolveTaskErrorMessage } from '@/lib/task/error-message'
 import {
     clearTaskTargetOverlay,
     upsertTaskTargetOverlay,
 } from '../task-target-overlay'
 import {
-    getPageLocale,
     invalidateQueryTemplates,
     requestJsonWithError,
     requestTaskResponseWithError,
 } from './mutation-shared'
+import {
+    fetchRegeneratePanelImage,
+    fetchDownloadProjectImages,
+    fetchUploadPanelImage,
+} from './storyboard-panel-mutations-utils'
+import type {
+    ModifyStoryboardImagePayload,
+    CreatePanelVariantPayload,
+} from './storyboard-panel-mutations-utils'
 
 export function useRegenerateProjectPanelImage(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async ({ panelId, count }: { panelId: string; count?: number }) => {
-            const res = await fetch(`/api/novel-promotion/${projectId}/regenerate-panel-image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept-Language': getPageLocale() },
-                body: JSON.stringify({ panelId, count: count ?? 1 }),
-            })
-            if (!res.ok) {
-                const error = await res.json().catch(() => ({}))
-                if (res.status === 402) throw new Error('余额不足，请充值后继续使用')
-                if (res.status === 400 && String(error?.error || '').includes('敏感')) {
-                    throw new Error(resolveTaskErrorMessage(error, '提示词包含敏感内容'))
-                }
-                if (res.status === 429 || error?.code === 'RATE_LIMIT') {
-                    const retryAfter = error?.retryAfter || 60
-                    throw new Error(`API 配额超限，请等待 ${retryAfter} 秒后重试`)
-                }
-                throw new Error(resolveTaskErrorMessage(error, '重新生成失败'))
-            }
-            return res.json()
-        },
+        mutationFn: async ({ panelId, count }: { panelId: string; count?: number }) =>
+            fetchRegeneratePanelImage(projectId, panelId, count ?? 1),
         onMutate: ({ panelId }) => {
             upsertTaskTargetOverlay(queryClient, {
                 projectId,
@@ -64,20 +53,7 @@ export function useRegenerateProjectPanelImage(projectId: string) {
 export function useModifyProjectStoryboardImage(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async (payload: {
-            storyboardId: string
-            panelIndex: number
-            modifyPrompt: string
-            extraImageUrls: string[]
-            selectedAssets: Array<{
-                id: string
-                name: string
-                type: 'character' | 'location'
-                imageUrl: string | null
-                appearanceId?: number
-                appearanceName?: string
-            }>
-        }) => {
+        mutationFn: async (payload: ModifyStoryboardImagePayload) => {
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/modify-storyboard-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -96,16 +72,8 @@ export function useModifyProjectStoryboardImage(projectId: string) {
 
 export function useDownloadProjectImages(projectId: string) {
     return useMutation({
-        mutationFn: async ({ episodeId }: { episodeId: string }) => {
-            const response = await fetch(`/api/novel-promotion/${projectId}/download-images?episodeId=${episodeId}`, {
-                headers: { 'Accept-Language': getPageLocale() },
-            })
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}))
-                throw new Error(resolveTaskErrorMessage(error, '下载失败'))
-            }
-            return response.blob()
-        },
+        mutationFn: async ({ episodeId }: { episodeId: string }) =>
+            fetchDownloadProjectImages(projectId, episodeId),
     })
 }
 
@@ -279,20 +247,7 @@ export function useInsertProjectPanel(projectId: string) {
 export function useCreateProjectPanelVariant(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async (payload: {
-            storyboardId: string
-            insertAfterPanelId: string
-            sourcePanelId: string
-            variant: {
-                title: string
-                description: string
-                shot_type: string
-                camera_move: string
-                video_prompt: string
-            }
-            includeCharacterAssets: boolean
-            includeLocationAsset: boolean
-        }) => {
+        mutationFn: async (payload: CreatePanelVariantPayload) => {
             return await requestJsonWithError<{ panelId: string }>(`/api/novel-promotion/${projectId}/panel-variant`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -306,30 +261,14 @@ export function useCreateProjectPanelVariant(projectId: string) {
 }
 
 /**
- * 清除 storyboard 错误
- */
-/**
  * 上传面板图片
  */
 
 export function useUploadProjectPanelImage(projectId: string) {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async ({ panelId, file }: { panelId: string; file: File }) => {
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('panelId', panelId)
-
-            const res = await fetch(`/api/novel-promotion/${projectId}/upload-panel-image`, {
-                method: 'POST',
-                body: formData,
-            })
-            if (!res.ok) {
-                const error = await res.json().catch(() => ({}))
-                throw new Error(resolveTaskErrorMessage(error, '上传失败'))
-            }
-            return res.json()
-        },
+        mutationFn: async ({ panelId, file }: { panelId: string; file: File }) =>
+            fetchUploadPanelImage(projectId, panelId, file),
         onSettled: () => {
             invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
         },

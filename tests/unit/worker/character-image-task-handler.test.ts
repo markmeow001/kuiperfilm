@@ -17,7 +17,7 @@ const prismaMock = vi.hoisted(() => ({
   characterAppearance: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   novelPromotionCharacter: {
     findUnique: vi.fn(),
@@ -25,7 +25,7 @@ const prismaMock = vi.hoisted(() => ({
 }))
 
 const sharedMock = vi.hoisted(() => ({
-  generateLabeledImageToCos: vi.fn(async () => 'cos/character-generated-0.png'),
+  generateLabeledImageToCos: vi.fn(async (..._args: unknown[]) => 'cos/character-generated-0.png'),
 }))
 
 vi.mock('@/lib/workers/utils', () => utilsMock)

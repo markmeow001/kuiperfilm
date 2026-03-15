@@ -3,53 +3,18 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
-import type { TaskIntent } from '@/lib/task/intent'
 import type { TaskTargetOverlayMap } from '../task-target-overlay'
-import { createScopedLogger } from '@/lib/logging/core'
+import {
+  type TaskTargetStateQuery,
+  type TaskTargetState,
+  TARGET_STATE_BATCH_WINDOW_MS,
+  TARGET_STATE_CHUNK_SIZE,
+  pendingTaskTargetStateBatches,
+  mergeTraceSignatureByKey,
+  taskTargetStateLogger,
+} from './useTaskTargetStateMap-utils'
 
-export type TaskTargetStateQuery = {
-  targetType: string
-  targetId: string
-  types?: string[]
-}
-
-export type TaskTargetState = {
-  targetType: string
-  targetId: string
-  phase: 'idle' | 'queued' | 'processing' | 'completed' | 'failed'
-  runningTaskId: string | null
-  runningTaskType: string | null
-  intent: TaskIntent
-  hasOutputAtStart: boolean | null
-  progress: number | null
-  stage: string | null
-  stageLabel: string | null
-  lastError: {
-    code: string
-    message: string
-  } | null
-  updatedAt: string | null
-}
-
-type TaskTargetStateBatchSubscriber = {
-  targets: TaskTargetStateQuery[]
-  resolve: (states: TaskTargetState[]) => void
-  reject: (error: unknown) => void
-}
-
-type TaskTargetStateBatch = {
-  targetsByKey: Map<string, TaskTargetStateQuery>
-  subscribers: TaskTargetStateBatchSubscriber[]
-  timer: ReturnType<typeof setTimeout> | null
-}
-
-const TARGET_STATE_BATCH_WINDOW_MS = 120
-const TARGET_STATE_CHUNK_SIZE = 500
-const pendingTaskTargetStateBatches = new Map<string, TaskTargetStateBatch>()
-const mergeTraceSignatureByKey = new Map<string, string>()
-const taskTargetStateLogger = createScopedLogger({
-  module: 'query.use-task-target-state-map',
-})
+export type { TaskTargetStateQuery, TaskTargetState }
 
 function traceFrontend(event: string, details: Record<string, unknown>) {
   if (typeof window === 'undefined') return
@@ -304,7 +269,6 @@ export function useTaskTargetStateMap(
     initialData: {},
     queryFn: async () => ({}),
   })
-
   const mergedByKey = useMemo(() => {
     const map = new Map<string, TaskTargetState>()
     for (const state of query.data || []) {

@@ -9,38 +9,7 @@ import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './
 import type { TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
-
-function readText(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return []
-  return value
-    .map((item) => (typeof item === 'string' ? item.trim() : ''))
-    .filter(Boolean)
-}
-
-/** 按别名匹配：按 '/' 拆分后任一别名精确匹配即为命中 */
-function nameMatchesWithAlias(existingName: string, newName: string): boolean {
-  const a = existingName.toLowerCase().trim()
-  const b = newName.toLowerCase().trim()
-  if (a === b) return true
-  const aliasesA = a.split('/').map(s => s.trim()).filter(Boolean)
-  const aliasesB = b.split('/').map(s => s.trim()).filter(Boolean)
-  return aliasesB.some(alias => aliasesA.includes(alias))
-}
-
-function parseJsonResponse(responseText: string): Record<string, unknown> {
-  let cleanedText = responseText.trim()
-  cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '')
-  const firstBrace = cleanedText.indexOf('{')
-  const lastBrace = cleanedText.lastIndexOf('}')
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleanedText = cleanedText.substring(firstBrace, lastBrace + 1)
-  }
-  return JSON.parse(cleanedText) as Record<string, unknown>
-}
+import { readText, toStringArray, nameMatchesWithAlias, parseJsonResponse } from './analyze-novel-utils'
 
 export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as Record<string, unknown>

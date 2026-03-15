@@ -184,6 +184,37 @@ export function findCharacterByName<T extends { name: string }>(characters: T[],
   return undefined
 }
 
+/**
+ * For image-editing models (Flux Kontext): use sketch or location image as the base image.
+ * Character portraits are NOT included — they would be treated as the base image to edit,
+ * producing character-only outputs instead of scenes.
+ */
+export async function collectPanelSceneBase(projectData: NovelProjectData, panel: PanelLike) {
+  const refs: string[] = []
+
+  // Sketch takes priority as the composition guide
+  const sketch = toSignedUrlIfCos(panel.sketchImageUrl, 3600)
+  if (sketch) {
+    refs.push(sketch)
+    return refs
+  }
+
+  // Fall back to location/scene image as the base for editing
+  if (panel.location) {
+    const location = (projectData.locations || []).find(
+      (loc) => loc.name.toLowerCase() === panel.location!.toLowerCase(),
+    )
+    if (location) {
+      const images = location.images || []
+      const selected = images.find((img) => img.isSelected) || images[0]
+      const signed = toSignedUrlIfCos(selected?.imageUrl, 3600)
+      if (signed) refs.push(signed)
+    }
+  }
+
+  return refs
+}
+
 export async function collectPanelReferenceImages(projectData: NovelProjectData, panel: PanelLike) {
   const refs: string[] = []
 

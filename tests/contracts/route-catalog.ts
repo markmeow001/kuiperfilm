@@ -77,6 +77,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/download-images/route.ts',
   'src/app/api/novel-promotion/[projectId]/download-videos/route.ts',
   'src/app/api/novel-promotion/[projectId]/download-voices/route.ts',
+  'src/app/api/novel-promotion/[projectId]/editor/render/route.ts',
   'src/app/api/novel-promotion/[projectId]/editor/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/batch/route.ts',
@@ -85,6 +86,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/episodes/split/route.ts',
   'src/app/api/novel-promotion/[projectId]/generate-character-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/generate-image/route.ts',
+  'src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts',
   'src/app/api/novel-promotion/[projectId]/generate-video/route.ts',
   'src/app/api/novel-promotion/[projectId]/insert-panel/route.ts',
   'src/app/api/novel-promotion/[projectId]/lip-sync/route.ts',
@@ -103,6 +105,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/regenerate-single-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/regenerate-storyboard-text/route.ts',
   'src/app/api/novel-promotion/[projectId]/route.ts',
+  'src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts',
   'src/app/api/novel-promotion/[projectId]/screenplay-conversion/route.ts',
   'src/app/api/novel-promotion/[projectId]/script-to-storyboard-stream/route.ts',
   'src/app/api/novel-promotion/[projectId]/select-character-image/route.ts',
@@ -117,6 +120,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/update-location/route.ts',
   'src/app/api/novel-promotion/[projectId]/update-prompt/route.ts',
   'src/app/api/novel-promotion/[projectId]/upload-asset-image/route.ts',
+  'src/app/api/novel-promotion/[projectId]/upload-panel-image/route.ts',
   'src/app/api/novel-promotion/[projectId]/video-proxy/route.ts',
   'src/app/api/novel-promotion/[projectId]/video-urls/route.ts',
   'src/app/api/novel-promotion/[projectId]/voice-analyze/route.ts',
@@ -177,6 +181,7 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     || routeFile.endsWith('/clips/route.ts')
     || routeFile.endsWith('/episodes/split/route.ts')
     || routeFile.endsWith('/voice-analyze/route.ts')
+    || routeFile.endsWith('/safe-rewrite/route.ts')
   ) {
     return 'llm-observe-routes'
   }
@@ -195,6 +200,7 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     || routeFile.endsWith('/regenerate-single-image/route.ts')
     || routeFile.endsWith('/regenerate-storyboard-text/route.ts')
     || routeFile.endsWith('/voice-generate/route.ts')
+    || routeFile.endsWith('/generate-multi-shot-video/route.ts')
   ) {
     return 'direct-submit-routes'
   }

@@ -17,7 +17,7 @@ const sharpMock = vi.hoisted(() =>
 )
 
 const generatorApiMock = vi.hoisted(() => ({
-  generateImage: vi.fn(async () => ({
+  generateImage: vi.fn(async (..._args: unknown[]) => ({
     success: true,
     imageUrl: 'https://example.com/generated.jpg',
     async: false,
@@ -86,10 +86,10 @@ const promptI18nMock = vi.hoisted(() => ({
 
 const prismaMock = vi.hoisted(() => ({
   globalCharacterAppearance: {
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   characterAppearance: {
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
 }))
 

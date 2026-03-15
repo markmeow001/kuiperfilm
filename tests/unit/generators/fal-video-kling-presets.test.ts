@@ -5,7 +5,7 @@ const apiConfigMock = vi.hoisted(() => ({
 }))
 
 const asyncSubmitMock = vi.hoisted(() => ({
-  submitFalTask: vi.fn(async () => 'req_kling_1'),
+  submitFalTask: vi.fn(async (..._args: unknown[]) => 'req_kling_1'),
 }))
 
 vi.mock('@/lib/api-config', () => apiConfigMock)

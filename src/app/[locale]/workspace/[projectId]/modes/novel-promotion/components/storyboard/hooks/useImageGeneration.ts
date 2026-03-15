@@ -149,8 +149,9 @@ export function useStoryboardImageGeneration({
 
   const uploadPanelImage = useCallback(async (panelId: string, file: File) => {
     try {
-      const result = await uploadPanelImageMutation.mutateAsync({ panelId, file })
-      if (result.imageUrl) {
+      const result = await uploadPanelImageMutation.mutateAsync({ panelId, file }) as { imageUrl?: string }
+      const imageUrl = result.imageUrl
+      if (imageUrl) {
         setLocalStoryboards((previousStoryboards) =>
           previousStoryboards.map((storyboard) => {
             const panels = getStoryboardPanels(storyboard)
@@ -158,7 +159,7 @@ export function useStoryboardImageGeneration({
             const updatedPanels = panels.map((panel) => {
               if (panel.id !== panelId) return panel
               changed = true
-              return { ...panel, imageUrl: result.imageUrl }
+              return { ...panel, imageUrl }
             })
             return changed ? { ...storyboard, panels: updatedPanels } : storyboard
           }),

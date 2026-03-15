@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Job } from 'bullmq'
 import type { TaskJobData } from '@/lib/task/types'
 
-const reportTaskProgressMock = vi.hoisted(() => vi.fn(async () => undefined))
+const reportTaskProgressMock = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => undefined))
 const reportTaskStreamChunkMock = vi.hoisted(() => vi.fn(async () => undefined))
 const assertTaskActiveMock = vi.hoisted(() => vi.fn(async () => undefined))
 const isTaskActiveMock = vi.hoisted(() => vi.fn(async () => true))
@@ -53,7 +53,7 @@ describe('createWorkerLLMStreamCallbacks', () => {
     const context = createWorkerLLMStreamContext(job, 'story_to_script')
     const callbacks = createWorkerLLMStreamCallbacks(job, context)
 
-    callbacks.onStage({
+    callbacks.onStage!({
       stage: 'streaming',
       provider: 'ark',
       step: {
@@ -64,14 +64,14 @@ describe('createWorkerLLMStreamCallbacks', () => {
         total: 1,
       },
     })
-    callbacks.onComplete('final screenplay text', {
+    callbacks.onComplete!('final screenplay text', {
       id: 'screenplay_clip_1',
       attempt: 2,
       title: 'progress.streamStep.screenplayConversion',
       index: 1,
       total: 1,
     })
-    await callbacks.flush()
+    await callbacks.flush!()
 
     const finalProgressCall = reportTaskProgressMock.mock.calls.find((call) => {
       const payload = call[2] as Record<string, unknown> | undefined
@@ -94,28 +94,28 @@ describe('createWorkerLLMStreamCallbacks', () => {
     const context = createWorkerLLMStreamContext(job, 'story_to_script')
     const callbacks = createWorkerLLMStreamCallbacks(job, context)
 
-    callbacks.onChunk({
+    callbacks.onChunk!({
       kind: 'text',
       delta: 'A-',
       seq: 1,
       lane: 'main',
       step: { id: 'analyze_characters', attempt: 1, title: 'A', index: 1, total: 2 },
     })
-    callbacks.onChunk({
+    callbacks.onChunk!({
       kind: 'text',
       delta: 'B-',
       seq: 1,
       lane: 'main',
       step: { id: 'analyze_locations', attempt: 1, title: 'B', index: 2, total: 2 },
     })
-    callbacks.onComplete('characters-final', {
+    callbacks.onComplete!('characters-final', {
       id: 'analyze_characters',
       attempt: 1,
       title: 'A',
       index: 1,
       total: 2,
     })
-    await callbacks.flush()
+    await callbacks.flush!()
 
     const finalProgressCall = reportTaskProgressMock.mock.calls.find((call) => {
       const payload = call[2] as Record<string, unknown> | undefined

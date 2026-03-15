@@ -15,7 +15,7 @@ type VoiceLineInput = {
 
 const reportTaskProgressMock = vi.hoisted(() => vi.fn(async () => undefined))
 const assertTaskActiveMock = vi.hoisted(() => vi.fn(async () => undefined))
-const chatCompletionMock = vi.hoisted(() => vi.fn(async () => ({ responseId: 'resp-1' })))
+const chatCompletionMock = vi.hoisted(() => vi.fn(async (..._args: unknown[]) => ({ responseId: 'resp-1' })))
 const getCompletionPartsMock = vi.hoisted(() => vi.fn(() => ({ text: 'voice lines json', reasoning: '' })))
 const withInternalLLMStreamCallbacksMock = vi.hoisted(() =>
   vi.fn(async (_callbacks: unknown, fn: () => Promise<unknown>) => await fn()),

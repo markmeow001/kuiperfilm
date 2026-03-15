@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
-import type { Location, Project } from '@/types/project'
+import type { Project } from '@/types/project'
 import { queryKeys } from '../keys'
 import type { ProjectAssetsData } from '../hooks/useProjectAssets'
 import {
@@ -11,64 +11,12 @@ import {
   invalidateQueryTemplates,
   requestJsonWithError,
 } from './mutation-shared'
-
-interface SelectProjectLocationImageContext {
-    previousAssets: ProjectAssetsData | undefined
-    previousProject: Project | undefined
-    targetKey: string
-    requestId: number
-}
-
-function applyLocationSelectionToLocations(
-    locations: Location[],
-    locationId: string,
-    selectedIndex: number | null,
-): Location[] {
-    return locations.map((location) => {
-        if (location.id !== locationId) return location
-        const selectedImageId =
-            selectedIndex === null
-                ? null
-                : (location.images || []).find((image) => image.imageIndex === selectedIndex)?.id ?? null
-        return {
-            ...location,
-            selectedImageId,
-            images: (location.images || []).map((image) => ({
-                ...image,
-                isSelected: selectedIndex !== null && image.imageIndex === selectedIndex,
-            })),
-        }
-    })
-}
-
-function applyLocationSelectionToAssets(
-    previous: ProjectAssetsData | undefined,
-    locationId: string,
-    selectedIndex: number | null,
-): ProjectAssetsData | undefined {
-    if (!previous) return previous
-    return {
-        ...previous,
-        locations: applyLocationSelectionToLocations(previous.locations || [], locationId, selectedIndex),
-    }
-}
-
-function applyLocationSelectionToProject(
-    previous: Project | undefined,
-    locationId: string,
-    selectedIndex: number | null,
-): Project | undefined {
-    if (!previous?.novelPromotionData) return previous
-    const currentLocations = previous.novelPromotionData.locations || []
-    return {
-        ...previous,
-        novelPromotionData: {
-            ...previous.novelPromotionData,
-            locations: applyLocationSelectionToLocations(currentLocations, locationId, selectedIndex),
-        },
-    }
-}
-
+import {
+  applyLocationSelectionToAssets,
+  applyLocationSelectionToProject,
+  buildLocationImageFormData,
+} from './location-image-mutations-utils'
+import type { SelectProjectLocationImageContext } from './location-image-mutations-utils'
 export function useGenerateProjectLocationImage(projectId: string) {
     const queryClient = useQueryClient()
     const invalidateProjectAssets = () =>
@@ -115,24 +63,15 @@ export function useUploadProjectLocationImage(projectId: string) {
         invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
-        mutationFn: async ({
-            file, locationId, imageIndex, labelText
-        }: {
+        mutationFn: async (params: {
             file: File
             locationId: string
             imageIndex?: number
             labelText?: string
         }) => {
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('type', 'location')
-            formData.append('id', locationId)
-            if (imageIndex !== undefined) formData.append('imageIndex', imageIndex.toString())
-            if (labelText) formData.append('labelText', labelText)
-
             return await requestJsonWithError(`/api/novel-promotion/${projectId}/upload-asset-image`, {
                 method: 'POST',
-                body: formData
+                body: buildLocationImageFormData(params),
             }, 'Failed to upload image')
         },
         onSuccess: invalidateProjectAssets,

@@ -24,18 +24,7 @@ import {
 } from './image-task-handler-shared'
 import { executeAiVisionStep } from '@/lib/ai-runtime'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
-import { createScopedLogger } from '@/lib/logging/core'
-
-const logger = createScopedLogger({ module: 'worker.modify-asset-image' })
-
-interface LocationImageRecord {
-  id: string
-  locationId: string
-  imageUrl: string | null
-  location: {
-    name: string
-  } | null
-}
+import { collectExtraReferenceUrls, LocationImageRecord, logger } from './image-task-handlers-core-utils'
 
 export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
@@ -74,14 +63,7 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
     if (!currentUrl) throw new Error('No image to modify')
 
     const requiredReference = await stripLabelBar(currentUrl)
-    const extraReferenceInputs: string[] = []
-    if (Array.isArray(payload.extraImageUrls)) {
-      for (const url of payload.extraImageUrls) {
-        if (typeof url === 'string' && url.trim().length > 0) {
-          extraReferenceInputs.push(url.trim())
-        }
-      }
-    }
+    const extraReferenceInputs = collectExtraReferenceUrls(payload.extraImageUrls)
     const normalizedExtras = await normalizeReferenceImagesForGeneration(extraReferenceInputs)
     const referenceImages = Array.from(new Set([requiredReference, ...normalizedExtras]))
 
@@ -170,14 +152,7 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
     if (!currentUrl) throw new Error('No location image url')
 
     const requiredReference = await stripLabelBar(currentUrl)
-    const extraReferenceInputs: string[] = []
-    if (Array.isArray(payload.extraImageUrls)) {
-      for (const url of payload.extraImageUrls) {
-        if (typeof url === 'string' && url.trim().length > 0) {
-          extraReferenceInputs.push(url.trim())
-        }
-      }
-    }
+    const extraReferenceInputs = collectExtraReferenceUrls(payload.extraImageUrls)
     const normalizedExtras = await normalizeReferenceImagesForGeneration(extraReferenceInputs)
     const referenceImages = Array.from(new Set([requiredReference, ...normalizedExtras]))
 
@@ -265,13 +240,7 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
       }
     }
 
-    if (Array.isArray(payload.extraImageUrls)) {
-      for (const url of payload.extraImageUrls) {
-        if (typeof url === 'string' && url.trim().length > 0) {
-          extraReferenceInputs.push(url.trim())
-        }
-      }
-    }
+    extraReferenceInputs.push(...collectExtraReferenceUrls(payload.extraImageUrls))
 
     const normalizedExtras = await normalizeReferenceImagesForGeneration(extraReferenceInputs)
     const uniqueReferences = Array.from(new Set([requiredReference, ...normalizedExtras]))

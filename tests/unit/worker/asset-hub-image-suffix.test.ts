@@ -16,18 +16,18 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
   },
   globalCharacterAppearance: {
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
   globalLocation: {
     findFirst: vi.fn(),
   },
   globalLocationImage: {
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (..._args: unknown[]) => ({})),
   },
 }))
 
 const sharedMock = vi.hoisted(() => ({
-  generateLabeledImageToCos: vi.fn(async () => 'cos/generated-character.png'),
+  generateLabeledImageToCos: vi.fn(async (..._args: unknown[]) => 'cos/generated-character.png'),
   parseJsonStringArray: vi.fn(() => []),
 }))
 

@@ -15,37 +15,11 @@ import {
     requestTaskResponseWithError,
     requestVoidWithError,
 } from './mutation-shared'
-
-interface DeleteProjectLocationContext {
-    previousAssets: ProjectAssetsData | undefined
-    previousProject: Project | undefined
-}
-
-function removeLocationFromAssets(
-    previous: ProjectAssetsData | undefined,
-    locationId: string,
-): ProjectAssetsData | undefined {
-    if (!previous) return previous
-    return {
-        ...previous,
-        locations: (previous.locations || []).filter((location) => location.id !== locationId),
-    }
-}
-
-function removeLocationFromProject(
-    previous: Project | undefined,
-    locationId: string,
-): Project | undefined {
-    if (!previous?.novelPromotionData) return previous
-    const currentLocations = previous.novelPromotionData.locations || []
-    return {
-        ...previous,
-        novelPromotionData: {
-            ...previous.novelPromotionData,
-            locations: currentLocations.filter((location) => location.id !== locationId),
-        },
-    }
-}
+import {
+    removeLocationFromAssets,
+    removeLocationFromProject,
+} from './location-management-mutations-utils'
+import type { DeleteProjectLocationContext } from './location-management-mutations-utils'
 
 export function useDeleteProjectLocation(projectId: string) {
     const queryClient = useQueryClient()

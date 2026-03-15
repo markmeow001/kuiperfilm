@@ -7,6 +7,7 @@ import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { MediaImageWithLoading } from '@/components/media/MediaImageWithLoading'
 import { AppIcon } from '@/components/ui/icons'
+import { XMarkIcon, MagnifyingGlassIcon, UserIcon, PhotoIcon, CheckCircleIcon, MicrophoneIcon } from './GlobalAssetPickerIcons'
 
 interface GlobalAssetPickerProps {
     isOpen: boolean
@@ -76,32 +77,6 @@ function getLocationPreview(loc: GlobalLocation): string | null {
     if (selected?.imageUrl) return selected.imageUrl
     return loc.images?.[0]?.imageUrl || null
 }
-
-// 内联 SVG 图标组件
-const XMarkIcon = ({ className }: { className?: string }) => (
-    <AppIcon name="close" className={className} />
-)
-
-const MagnifyingGlassIcon = ({ className }: { className?: string }) => (
-    <AppIcon name="search" className={className} />
-)
-
-const UserIcon = ({ className }: { className?: string }) => (
-    <AppIcon name="userAlt" className={className} />
-)
-
-const PhotoIcon = ({ className }: { className?: string }) => (
-    <AppIcon name="image" className={className} />
-)
-
-const CheckCircleIcon = ({ className }: { className?: string }) => (
-    <AppIcon name="badgeCheck" className={className} />
-)
-
-
-const MicrophoneIcon = ({ className }: { className?: string }) => (
-    <AppIcon name="mic" className={className} />
-)
 
 export default function GlobalAssetPicker({
     isOpen,

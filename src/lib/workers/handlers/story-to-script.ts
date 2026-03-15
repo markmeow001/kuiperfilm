@@ -1,19 +1,10 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { executeAiTextStep } from '@/lib/ai-runtime'
 import { resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
-import { withInternalLLMStreamCallbacks } from '@/lib/llm-observe/internal-stream-context'
 import { logAIAnalysis } from '@/lib/logging/semantic'
 import { onProjectNameAvailable } from '@/lib/logging/file-writer'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
-import { executePipelineGraph, type GraphExecutorState } from '@/lib/run-runtime/graph-executor'
-import {
-  runStoryToScriptOrchestrator,
-  type StoryToScriptStepMeta,
-  type StoryToScriptStepOutput,
-  type StoryToScriptOrchestratorResult,
-} from '@/lib/novel-promotion/story-to-script/orchestrator'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
 import type { TaskJobData } from '@/lib/task/types'
 import {
@@ -28,10 +19,11 @@ import {
 } from './story-to-script-helpers'
 import { getPromptTemplate, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
-
-function isReasoningEffort(value: unknown): value is 'minimal' | 'low' | 'medium' | 'high' {
-  return value === 'minimal' || value === 'low' || value === 'medium' || value === 'high'
-}
+import {
+  isReasoningEffort,
+  buildRunStep,
+  runStoryToScriptPipeline,
+} from './story-to-script-utils'
 
 export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
@@ -125,66 +117,16 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
   const streamContext = createWorkerLLMStreamContext(job, 'story_to_script')
   const callbacks = createWorkerLLMStreamCallbacks(job, streamContext)
 
-  const runStep = async (
-    meta: StoryToScriptStepMeta,
-    prompt: string,
-    action: string,
-    _maxOutputTokens: number,
-  ): Promise<StoryToScriptStepOutput> => {
-    void _maxOutputTokens
-    await assertTaskActive(job, `story_to_script_step:${meta.stepId}`)
-    const progress = 15 + Math.min(55, Math.floor((meta.stepIndex / Math.max(1, meta.stepTotal)) * 55))
-    await reportTaskProgress(job, progress, {
-      stage: 'story_to_script_step',
-      stageLabel: 'progress.stage.storyToScriptStep',
-      displayMode: 'detail',
-      message: meta.stepTitle,
-      stepId: meta.stepId,
-      stepAttempt: meta.stepAttempt || 1,
-      stepTitle: meta.stepTitle,
-      stepIndex: meta.stepIndex,
-      stepTotal: meta.stepTotal,
-    })
+  const runStep = buildRunStep({
+    job,
+    projectId,
+    projectName: project.name,
+    model,
+    temperature,
+    reasoning,
+    reasoningEffort,
+  })
 
-    // Log prompt input
-    logAIAnalysis(job.data.userId, 'worker', projectId, project.name, {
-      action: `STORY_TO_SCRIPT_PROMPT:${action}`,
-      input: { stepId: meta.stepId, stepTitle: meta.stepTitle, prompt },
-      model,
-    })
-
-    const output = await executeAiTextStep({
-      userId: job.data.userId,
-      model,
-      messages: [{ role: 'user', content: prompt }],
-      projectId,
-      action,
-      meta,
-      temperature,
-      reasoning,
-      reasoningEffort,
-    })
-
-    // Log AI response output (full raw text included for debugging)
-    logAIAnalysis(job.data.userId, 'worker', projectId, project.name, {
-      action: `STORY_TO_SCRIPT_OUTPUT:${action}`,
-      output: {
-        stepId: meta.stepId,
-        stepTitle: meta.stepTitle,
-        rawText: output.text,
-        textLength: output.text.length,
-        reasoningLength: output.reasoning.length,
-      },
-      model,
-    })
-
-    return {
-      text: output.text,
-      reasoning: output.reasoning,
-    }
-  }
-
-  let result: StoryToScriptOrchestratorResult | null = null
   const payloadMeta = typeof payload.meta === 'object' && payload.meta !== null
     ? (payload.meta as AnyObj)
     : {}
@@ -195,68 +137,28 @@ export async function handleStoryToScriptTask(job: Job<TaskJobData>) {
     throw new Error('runId is required for story_to_script pipeline')
   }
 
-  type StoryToScriptGraphState = GraphExecutorState & {
-    orchestratorResult: StoryToScriptOrchestratorResult | null
-  }
-  const initialState: StoryToScriptGraphState = {
-    refs: {},
-    meta: {},
-    orchestratorResult: null,
-  }
+  const pipelineState = await runStoryToScriptPipeline({
+    runId,
+    projectId,
+    userId: job.data.userId,
+    content,
+    baseCharacters: (novelData.characters || []).map((item) => item.name),
+    baseLocations: (novelData.locations || []).map((item) => item.name),
+    baseCharacterIntroductions: (novelData.characters || []).map((item) => ({
+      name: item.name,
+      introduction: item.introduction || '',
+    })),
+    promptTemplates: {
+      characterPromptTemplate,
+      locationPromptTemplate,
+      clipPromptTemplate,
+      screenplayPromptTemplate,
+    },
+    runStep,
+    callbacks,
+  })
 
-  const pipelineState = await (async () => {
-    try {
-      return await withInternalLLMStreamCallbacks(
-        callbacks,
-        async () =>
-          await executePipelineGraph({
-            runId,
-            projectId,
-            userId: job.data.userId,
-            state: initialState,
-            nodes: [
-              {
-                key: 'story_to_script_orchestrator',
-                title: 'story_to_script_orchestrator',
-                maxAttempts: 2,
-                timeoutMs: 1000 * 60 * 15,
-                run: async (context) => {
-                  const orchestratorResult = await runStoryToScriptOrchestrator({
-                    content,
-                    baseCharacters: (novelData.characters || []).map((item) => item.name),
-                    baseLocations: (novelData.locations || []).map((item) => item.name),
-                    baseCharacterIntroductions: (novelData.characters || []).map((item) => ({
-                      name: item.name,
-                      introduction: item.introduction || '',
-                    })),
-                    promptTemplates: {
-                      characterPromptTemplate,
-                      locationPromptTemplate,
-                      clipPromptTemplate,
-                      screenplayPromptTemplate,
-                    },
-                    runStep,
-                  })
-
-                  context.state.orchestratorResult = orchestratorResult
-                  return {
-                    output: {
-                      clipCount: orchestratorResult.summary.clipCount,
-                      screenplaySuccessCount: orchestratorResult.summary.screenplaySuccessCount,
-                      screenplayFailedCount: orchestratorResult.summary.screenplayFailedCount,
-                    },
-                  }
-                },
-              },
-            ],
-          }),
-      )
-    } finally {
-      await callbacks.flush()
-    }
-  })()
-
-  result = pipelineState.orchestratorResult
+  const result = pipelineState.orchestratorResult
   if (!result) {
     throw new Error('story_to_script orchestrator produced no result')
   }
