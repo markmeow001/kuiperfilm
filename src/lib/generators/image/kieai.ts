@@ -65,6 +65,7 @@ export class KieAIImageGenerator extends BaseImageGenerator {
             prompt,
             model: this.modelId,
             aspectRatio: normalizeAspectRatio(aspectRatio),
+            safetyTolerance: 6,
         }
 
         // 支持参考图片（inputImage）— KieAI 仅接受公开可访问的 URL

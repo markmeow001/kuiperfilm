@@ -1,20 +1,7 @@
-Professional storyboard artist. Generate one cinematic shot image.
+{style}
 
-[CORE] Must be a complete cinematic scene with characters performing in the environment. No white/plain backgrounds, no character sheets, no headshots. Reference images are ONLY for extracting character appearance (face, hair, skin tone) — composition and background follow the storyboard description.
+Aspect ratio: {aspect_ratio}. Generate one complete cinematic shot with characters performing in a real scene. No white backgrounds, character sheets, headshots, or collage. No text or watermarks. Reference images are only for facial feature consistency — compose the scene according to the description.
 
-[FORBIDDEN] No text, labels, watermarks, numbers in image. One frame only, no collage.
-
-Aspect ratio: {aspect_ratio}
-
-[REFERENCES] Extract facial features for character consistency, but composition/background/actions follow the description. Scene references are mood only — redraw background. Close-ups still need environmental background.
-
-[PHOTOGRAPHY] Follow photography_rules: lighting direction, screen_position, posture, depth of field, color tone.
-
-[STORYBOARD DATA]
 {storyboard_text_json_input}
 
-[SOURCE TEXT]
-{source_text}
-
-[STYLE] {style}
-Image must match this style. Character appearance from references, rendering style as specified.
+Source text: {source_text}

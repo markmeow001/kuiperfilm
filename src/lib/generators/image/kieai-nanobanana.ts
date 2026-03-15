@@ -225,6 +225,23 @@ export async function queryKieAINanoBananaTaskStatus(
                     }
                 }
             }
+            if (!imageUrl) {
+                // state=success but no image URL — likely content policy rejection
+                const errorMsg = data.data.errorMessage || data.msg || 'no result URL'
+                logger.error({
+                    message: 'KieAI NanoBanana: success but no image URL',
+                    details: {
+                        taskId,
+                        errorMessage: errorMsg,
+                        resultJson: data.data.resultJson?.substring(0, 500),
+                        rawResponse: rawText.substring(0, 500),
+                    },
+                })
+                return {
+                    status: 'failed',
+                    error: `KieAI NanoBanana: 生成成功但无图片URL (可能被内容审查拦截) — ${errorMsg}`,
+                }
+            }
             return { status: 'completed', imageUrl }
         }
         case 'fail': {
