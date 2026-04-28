@@ -1,7 +1,7 @@
 services:
   mysql:
     image: mysql:8.0
-    container_name: waoowaoo-test-mysql
+    container_name: kuiper-test-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: waoowaoo_test
@@ -20,7 +20,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: waoowaoo-test-redis
+    container_name: kuiper-test-redis
     ports:
       - "6380:6379"
     command: ["redis-server", "--appendonly", "no"]

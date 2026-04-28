@@ -1,13 +1,13 @@
-# **🚀 探索 AI 影视的下一代创作流 | [立即加入 waoowaoo在线网页版内测候补](https://www.waoowaoo.com/)**
+# **🚀 探索 AI 影视的下一代创作流 | [立即加入 KuiperAI在线网页版内测候补](https://www.kuiperai.com/)**
 <p align="center">
-  <img src="public/banner.png" alt="waoowaoo" width="600">
+  <img src="public/banner.png" alt="KuiperAI" width="600">
 </p>
 
 <p align="center">
   <a href="#-quick-start">English</a> | <a href="#-快速开始">中文</a>
 </p>
 
-# waoowaoo AI 影视 Studio
+# KuiperAI 影視 Studio
 >[!IMPORTANT]
 >⚠️ **测试版声明**：本项目目前处于测试初期阶段，由于暂时只有我一个人开发，存在部分 bug 和不完善之处。我们正在快速迭代更新中，欢迎进群反馈问题和需求**请及时关注项目更新！目前更新会非常频繁，后续会增加大量新功能以及优化效果，我们的目标是成为行业最强AI工具！**！
 > 
@@ -37,8 +37,8 @@ An AI-powered tool for creating short drama / comic videos — automatically gen
 **前提条件**：安装 [Docker Desktop](https://docs.docker.com/get-docker/)
 
 ```bash
-git clone https://github.com/saturndec/waoowaoo.git
-cd waoowaoo
+git clone https://github.com/KuiperAI/kuiper-ai.git
+cd KuiperAI
 docker compose up -d
 ```
 
@@ -66,8 +66,8 @@ docker compose down && docker compose up -d --build
 **Prerequisites**: Install [Docker Desktop](https://docs.docker.com/get-docker/)
 
 ```bash
-git clone https://github.com/saturndec/waoowaoo.git
-cd waoowaoo
+git clone https://github.com/KuiperAI/kuiper-ai.git
+cd KuiperAI
 docker compose up -d
 ```
 
@@ -119,22 +119,22 @@ After launching, go to **Settings** to configure your AI service API keys. A bui
 
 本项目由核心团队独立维护。欢迎你通过以下方式参与：
 
-- 🐛 提交 [Issue](https://github.com/waoowaooAI/waoowaoo/issues) 反馈 Bug
-- 💡 提交 [Issue](https://github.com/waoowaooAI/waoowaoo/issues) 提出功能建议
+- 🐛 提交 [Issue](https://github.com/KuiperAI/kuiper-ai/issues) 反馈 Bug
+- 💡 提交 [Issue](https://github.com/KuiperAI/kuiper-ai/issues) 提出功能建议
 - 🔧 提交 Pull Request 供参考 — 我们会认真审阅每一个 PR 的思路，但最终由团队自行实现修复，不会直接合并外部 PR
 
 This project is maintained by the core team. You're welcome to contribute by:
 
-- 🐛 Filing [Issues](https://github.com/waoowaooAI/waoowaoo/issues) — report bugs
-- 💡 Filing [Issues](https://github.com/waoowaooAI/waoowaoo/issues) — propose features
+- 🐛 Filing [Issues](https://github.com/KuiperAI/kuiper-ai/issues) — report bugs
+- 💡 Filing [Issues](https://github.com/KuiperAI/kuiper-ai/issues) — propose features
 - 🔧 Submitting Pull Requests as references — we review every PR carefully for ideas, but the team implements fixes internally rather than merging external PRs directly
 
 ---
 
-**Made with ❤️ by waoowaoo team**
+**Made with ❤️ by KuiperAI team**
 
 ## Star History
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=waoowaooAI/waoowaoo&type=date&legend=top-left)](https://www.star-history.com/#waoowaooAI/waoowaoo&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=KuiperAI/KuiperAI&type=date&legend=top-left)](https://www.star-history.com/#KuiperAI/KuiperAI&type=date&legend=top-left)

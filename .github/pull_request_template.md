@@ -5,7 +5,7 @@
 
 ## Architecture Plan Sync (Required)
 
-- Master plan file: `/Users/earth/Desktop/waoowaoo/docs/architecture-unification-master-plan.md`
+- Master plan file: `/Users/earth/Desktop/KuiperAI/docs/architecture-unification-master-plan.md`
 - [ ] I updated the phase status board (`✅/🔄/⏸/⚠️`) in the same PR.
 - [ ] I recorded concrete file-level changes under the corresponding phase.
 - [ ] I kept the plan date/current-context consistent with the code changes in this PR.

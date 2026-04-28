@@ -2,7 +2,7 @@ services:
   # ==================== MySQL ====================
   mysql:
     image: mysql:8.0
-    container_name: waoowaoo-mysql
+    container_name: kuiper-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: waoowaoo123
@@ -25,7 +25,7 @@ services:
   # ==================== Redis ====================
   redis:
     image: redis:7-alpine
-    container_name: waoowaoo-redis
+    container_name: kuiper-redis
     restart: unless-stopped
     ports:
       - "16379:6379"
@@ -42,7 +42,7 @@ services:
   # ==================== App (Next.js + Workers) ====================
   app:
     build: .
-    container_name: waoowaoo-app
+    container_name: kuiper-app
     restart: unless-stopped
     environment:
       # 数据库（指向容器内部 MySQL，用服务名 mysql 而非 localhost）
@@ -86,7 +86,7 @@ services:
       LOG_FORMAT: "json"
       LOG_DEBUG_ENABLED: "false"
       LOG_AUDIT_ENABLED: "true"
-      LOG_SERVICE: "waoowaoo"
+      LOG_SERVICE: "kuiper"
       LOG_REDACT_KEYS: "password,token,apiKey,apikey,authorization,cookie,secret,access_token,refresh_token"
       # 计费
       BILLING_MODE: "OFF"
@@ -108,7 +108,7 @@ services:
         npx prisma db push --skip-generate &&
         (sleep 5 && echo '' &&
         echo '╔══════════════════════════════════════════════════╗' &&
-        echo '║            waoowaoo is ready!                    ║' &&
+        echo '║            KuiperAI is ready!                    ║' &&
         echo '║                                                  ║' &&
         echo '║  HTTP:  http://localhost:13000                    ║' &&
         echo '║                                                  ║' &&
