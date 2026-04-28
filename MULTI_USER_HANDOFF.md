@@ -36,8 +36,11 @@ provider integration; do not edit that path or you'll smash their WIP.
 | K3b | `0c75353` | **Asset hub flipped to team-shared** (read-anyone, write-editor+) |
 | K4 | `4ae8201` | **Admin UI** for users + invites |
 | K5 | `baabbae` | **39 unit tests** for admin-service + role helpers |
+| Nav | `5c7151c` | Admin link in `Navbar.tsx` (visible only to admins) |
+| K6 | `46db5f1` | **Caddy + DigitalOcean** production scaffolding (`deploy/`) |
+| Integ | `5a41367` | **35 integration tests** for admin endpoints + invite register flow |
 
-K6 (Caddy + DigitalOcean prod compose) was scoped but **not implemented**. See §10.
+Total: **74 tests passing** (39 unit + 35 integration), all phases shipped.
 
 ---
 
@@ -149,18 +152,27 @@ npx vitest run tests/unit/admin/
 
 Coverage:
 
+**Unit (39 tests, K5):**
 - `admin-service.ts` — full coverage (every branch + last-admin guard)
 - `api-auth.ts` role helpers — full coverage (admin/editor/member/user/null × allow-list permutations + isActive guard)
 
-**Not yet covered (would need MySQL container):**
-- `/api/auth/register` invite-code happy & sad paths end-to-end
-- `/api/admin/*` routes against a real DB
-- Asset-hub team-sharing observable behavior
+**Integration (35 tests, C):**
+- `tests/integration/api/admin/users.test.ts` (10) — GET list, PATCH role
+  + active happy paths, self-modification rejection, last-admin guard,
+  invalid role / non-boolean isActive, missing user
+- `tests/integration/api/admin/invites.test.ts` (13) — GET list, POST
+  create with default + custom role/expiry/note (incl. whitespace
+  trim), DELETE happy / NOT_FOUND / CONFLICT (used / revoked)
+- `tests/integration/api/auth/register-invite.test.ts` (12) — happy
+  invite-only register, all validation rejections, all invite states
+  (unknown / used / revoked / expired), duplicate username
 
-The repo's integration test infra (`tests/integration/api/*`) requires
-MySQL + Redis containers spun up via `tests/setup/global-setup.ts`. We
-left those for the merge / a follow-up PR — the unit tests above already
-cover all the non-DB logic.
+Run: `npx vitest run tests/{unit,integration}/api/admin tests/integration/api/auth`
+
+The integration tests use mocked Prisma + Bcrypt + api-auth (via
+`tests/helpers/auth.ts`'s extended `installAuthMocks`), so they do
+**not** require the test MySQL/Redis containers. Real-DB integration
+tests can still be added later if a deeper guarantee is needed.
 
 ---
 
@@ -289,14 +301,13 @@ The system enforces:
 
 ## 10. What's left (suggested next phases)
 
-In rough priority order:
+The original K1–K6 scope plus the three follow-up items at the end of
+K5 are all done. The remaining work is post-merge:
 
 | Phase | Effort | Dependencies |
 |---|---|---|
 | Merge with Tencent integration on `main` | 1 hr | Other Claude commits their WIP |
-| Integration tests for `/api/admin/*` + register invite flow | 3 hr | MySQL test container |
-| Add `/admin` nav link to `AppHeader.tsx` | 15 min | None (visibility check on `session.user.role`) |
-| **K6** — Caddy + production docker-compose for DigitalOcean | 4 hr | None; pattern in handoff `huobao-drama-multiuser` repo for reference |
+| Real-DB integration tests against `tests/setup/global-setup.ts` (MySQL container) | 3 hr | Beyond the mocked-prisma integration suite already shipped — only needed if we want true end-to-end DB guarantees |
 | AI usage quota per user (we shipped the role/active fields but no quota) | 4 hr | Decision: $-budget vs request-count vs token-count |
 | Audit the 12 operation-style asset-hub routes for any remaining per-user filters | 2 hr | None |
 
@@ -330,7 +341,11 @@ git checkout main && git merge feature/multi-user --ff-only
 ## 12. Quick reference — commit log with full SHAs
 
 ```
-baabbae test: K5 — unit coverage for admin-service + role helpers
+5a41367 test(integration): C — admin endpoints + invite-only register flow (35 tests)
+46db5f1 feat(deploy): K6 — DigitalOcean + Caddy production scaffolding (kuiperAI)
+5c7151c feat(web): admin nav link in Navbar (gated on session.user.role === 'admin')
+ff78932 docs: handoff brief for the next agent on this branch
+baabbae test: K5 — unit coverage for admin-service + role helpers (39 tests)
 4ae8201 feat(auth): K4 — admin UI for users + invites
 0c75353 feat(auth): K3b — flip Global asset hub to team-shared (read-all, write-editor)
 a5fa747 feat(auth): K3a — admin API for users + invites
@@ -345,4 +360,4 @@ read them.
 
 ---
 
-*Generated from session — last updated when commit `baabbae` landed.*
+*Last updated when commit `5a41367` landed (K1–K6 + integration tests done).*
