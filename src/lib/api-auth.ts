@@ -369,3 +369,78 @@ export async function requireProjectAuthLight(
 export function isErrorResponse(result: unknown): result is NextResponse {
     return result instanceof NextResponse
 }
+
+// ============================================================
+// 多人系统：角色权限（admin / editor / member）
+// ============================================================
+
+export type Role = 'admin' | 'editor' | 'member'
+
+/**
+ * 验证用户至少拥有指定角色之一。admin 自动通过任何角色检查。
+ *
+ * 角色含义（与团队共享语义对齐）：
+ * - admin: 全部资料 + 管理使用者 / 邀请码
+ * - editor: 自己的 Project + 团队共享 Global 资产的读写
+ * - member: 自己的 Project + 团队共享 Global 资产的只读
+ *
+ * 也会一并检查 isActive — 已停用的帐号不可访问任何受保护 API。
+ *
+ * @example
+ * ```typescript
+ * const authResult = await requireRoleAuth(['editor'])
+ * if (authResult instanceof NextResponse) return authResult
+ * const { session, role } = authResult
+ * ```
+ */
+export async function requireRoleAuth(
+    allowed: Role[]
+): Promise<{ session: AuthSession; role: Role } | NextResponse> {
+    const session = await getAuthSession()
+    if (!session?.user?.id) {
+        return unauthorized()
+    }
+    bindAuthLogContext(session)
+
+    const user = await withPrismaRetry(() =>
+        prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { role: true, isActive: true }
+        })
+    )
+    if (!user) {
+        return unauthorized()
+    }
+    if ((user as { isActive?: boolean }).isActive === false) {
+        return forbidden('Account is disabled')
+    }
+    const role = normalizeRole(user.role)
+    // admin always passes; otherwise role must be in the allowed list.
+    if (role !== 'admin' && !allowed.includes(role)) {
+        return forbidden('Insufficient role')
+    }
+    return { session, role }
+}
+
+/**
+ * 将持久层的 role 字段映射到统一的三角色枚举。
+ *
+ * 历史遗留：Schema 早期版本默认 role = 'user'。多人系统改用 admin/editor/member
+ * 三角色，所以 'user' 视同 'member'（最低权限）。一次性迁移脚本：
+ * `scripts/migrations/migrate-user-role-to-member.ts`
+ */
+function normalizeRole(rawRole: string | null | undefined): Role {
+    if (rawRole === 'admin' || rawRole === 'editor' || rawRole === 'member') {
+        return rawRole
+    }
+    // legacy 'user' 或未知值都归到最低权限。
+    return 'member'
+}
+
+/**
+ * 验证用户至少是 editor（admin/editor 都通过）。
+ * 用于团队共享资产的写操作（GlobalCharacter / GlobalLocation 等）。
+ */
+export async function requireEditorAuth(): Promise<{ session: AuthSession; role: Role } | NextResponse> {
+    return requireRoleAuth(['editor'])
+}
