@@ -43,3 +43,24 @@ Image（13 個）：
 - Vidu: q2
 - Jimeng: 4.0
 - Hunyuan: 3.0
+
+---
+
+## Q-002 [環境問題] 缺 ripgrep 導致 `npm run test:guards` 無法執行
+
+- **背景**: `scripts/check-api-handler.ts` 用 `execSync('rg --files src/app/api ...')` 掃描 API handler。
+- **症狀**: `/bin/sh: rg: command not found` → `npm run test:guards` 失敗（也連帶讓 `npm run test:regression` 中斷在第一步）。
+- **影響**: 跟本輪 catalog 改動無關。Pre-existing。
+- **建議解法**: `brew install ripgrep`（macOS）後重跑即可。
+- **狀態**: 待確認（要不要正式裝、或者讓 guard script fallback 到 grep）
+- **建立時間**: 2026-04-28
+
+## Q-003 [Pre-existing test fail] worker handler 測試 prisma mock 缺欄位
+
+- **背景**: 跑 `npm run test:unit:all` 時有 3 個 test fail，全在 worker handler 範疇：
+  - `tests/unit/worker/panel-image-task-handler.test.ts`：`prismaMock.novelPromotionPanel.update` 期望被呼叫一次，但實際呼叫參數對不上。
+  - `tests/unit/worker/script-to-storyboard.test.ts`（2 個 case）：`TypeError: Cannot read properties of undefined (reading 'deleteMany')`，發生在 `src/lib/workers/handlers/script-to-storyboard.ts:153` 的 `prisma.novelPromotionStoryboard.deleteMany(...)` — 看起來測試的 prisma mock 漏了 `novelPromotionStoryboard` model。
+- **跟本輪改動的關係**: 無。本輪只動了 `standards/capabilities/image-video.catalog.json` 跟新增 `QUESTIONS.md`，這兩個檔案都不在這幾個失敗測試的 import / 依賴鏈裡。
+- **可能原因**: 看起來是之前某個 commit 改了 prisma schema（加 `novelPromotionStoryboard` model）但沒同步更新測試的 prisma mock factory；或是 panel handler 的呼叫時序最近改過但測試 expectation 沒跟上。
+- **狀態**: 待確認 — 屬於 Phase 8（複雜鏈路遷移：story_to_script_run / script_to_storyboard_run）的範疇，可能正在進行中所以暫時紅燈。
+- **建立時間**: 2026-04-28
