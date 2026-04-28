@@ -23,6 +23,7 @@ import { queryKieAITaskStatus } from './generators/image/kieai'
 import { queryKieAIVideoTaskStatus } from './generators/video/kieai'
 import { queryKieAIKlingTaskStatus } from './generators/video/kieai-kling'
 import { queryKieAINanoBananaTaskStatus } from './generators/image/kieai-nanobanana'
+import { queryAtlasCloudTaskStatus } from './generators/video/atlascloud'
 
 export interface PollResult {
     status: 'pending' | 'completed' | 'failed'
@@ -161,6 +162,20 @@ export function parseExternalId(externalId: string): {
         }
     }
 
+    if (externalId.startsWith('ATLASCLOUD:')) {
+        const parts = externalId.split(':')
+        const type = parts[1]
+        const requestId = parts.slice(2).join(':')
+        if (type !== 'VIDEO' || !requestId) {
+            throw new Error(`无效 ATLASCLOUD externalId: "${externalId}"，应为 ATLASCLOUD:VIDEO:requestId`)
+        }
+        return {
+            provider: 'ATLASCLOUD' as any,
+            type: 'VIDEO',
+            requestId,
+        }
+    }
+
     if (externalId.startsWith('KIEAI:')) {
         const parts = externalId.split(':')
         const type = parts[1]
@@ -217,6 +232,8 @@ export async function pollAsyncTask(
             return parsed.type === 'VIDEO'
                 ? await pollKieAIVideoTask(parsed.requestId, userId)
                 : await pollKieAITask(parsed.requestId, userId)
+        case 'ATLASCLOUD':
+            return await pollAtlasCloudTask(parsed.requestId, userId)
         default:
             // 🔥 移除 fallback：未知 provider 直接抛出错误
             throw new Error(`未知的 Provider: ${parsed.provider}`)
@@ -714,4 +731,22 @@ export function formatExternalId(
         return `OPENAI:${type}:${providerToken}:${requestId}`
     }
     return `${provider}:${type}:${requestId}`
+}
+
+/**
+ * AtlasCloud 任务轮询
+ */
+async function pollAtlasCloudTask(
+    requestId: string,
+    userId: string
+): Promise<PollResult> {
+    const { apiKey } = await getProviderConfig(userId, 'atlascloud')
+    const result = await queryAtlasCloudTaskStatus(requestId, apiKey)
+
+    return {
+        status: result.status,
+        videoUrl: result.videoUrl,
+        resultUrl: result.videoUrl,
+        error: result.error,
+    }
 }

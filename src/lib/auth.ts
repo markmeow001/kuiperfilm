@@ -49,6 +49,7 @@ export const authOptions: any = {
         return {
           id: user.id,
           name: user.name,
+          role: (user as any).role || 'user',
         }
       }
     })
@@ -64,6 +65,7 @@ export const authOptions: any = {
     async jwt({ token, user }: any) {
       if (user) {
         token.id = user.id
+        token.role = user.role
       }
       return token
     },
@@ -71,6 +73,7 @@ export const authOptions: any = {
     async session({ session, token }: any) {
       if (token && session.user) {
         session.user.id = token.id as string
+        session.user.role = token.role as string
       }
       return session
     }

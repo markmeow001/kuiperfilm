@@ -24,7 +24,7 @@ function toVideoRuntimeSelections(value: unknown): Record<string, CapabilityValu
   if (!isRecord(value)) return {}
   const selections: Record<string, CapabilityValue> = {}
   for (const [field, raw] of Object.entries(value)) {
-    if (field === 'aspectRatio') continue
+    if (field === 'aspectRatio' || field === 'includeDialogue') continue
     if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
       selections[field] = raw
     }
@@ -112,6 +112,7 @@ async function validateVideoCapabilityCombination(input: {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    console.error('[generate-video] capability resolution failed:', { modelKey, runtimeSelections, message })
     throw new ApiError('INVALID_PARAMS', {
       code: 'VIDEO_CAPABILITY_COMBINATION_UNSUPPORTED',
       field: 'generationOptions',
@@ -129,6 +130,7 @@ async function validateVideoCapabilityCombination(input: {
     selections: resolvedOptions,
   })
   if (resolution.status === 'missing_capability_match') {
+    console.error('[generate-video] pricing resolution failed:', { modelKey, resolvedOptions, status: resolution.status })
     throw new ApiError('INVALID_PARAMS', {
       code: 'VIDEO_CAPABILITY_COMBINATION_UNSUPPORTED',
       field: 'generationOptions',

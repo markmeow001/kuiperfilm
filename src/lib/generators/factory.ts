@@ -25,6 +25,7 @@ import { MinimaxVideoGenerator } from './minimax'
 import { ViduVideoGenerator } from './vidu'
 import { KieAIVideoGenerator } from './video/kieai'
 import { KieAIKlingVideoGenerator } from './video/kieai-kling'
+import { AtlasCloudSeedanceVideoGenerator } from './video/atlascloud'
 import { getProviderKey } from '@/lib/api-config'
 
 /**
@@ -104,6 +105,8 @@ export function createVideoGenerator(provider: string, modelId?: string): VideoG
             return new KieAIVideoGenerator()
         case 'kieai-kling':
             return new KieAIKlingVideoGenerator()
+        case 'atlascloud':
+            return new AtlasCloudSeedanceVideoGenerator()
         default:
             throw new Error(`Unknown video generator provider: ${provider}`)
     }

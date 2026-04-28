@@ -1,6 +1,6 @@
 {style}
 
-Aspect ratio: {aspect_ratio}. Generate one complete cinematic shot with characters performing in a real scene. No white backgrounds, character sheets, headshots, or collage. No text or watermarks. Reference images are only for facial feature consistency — compose the scene according to the description.
+Aspect ratio: {aspect_ratio}. Generate one complete cinematic shot with characters performing in a real scene. No white backgrounds, character sheets, headshots, or collage. ABSOLUTELY NO text, subtitles, captions, dialogue, letters, words, watermarks, or any written content anywhere in the image. The image must be completely free of any text elements. Reference images are only for facial feature consistency — compose the scene according to the description.
 
 {storyboard_text_json_input}
 

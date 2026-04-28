@@ -202,30 +202,53 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
   }
 
   const useReferenceImages = !customDescription
-  const { apiKey: falApiKey } = await getProviderConfig(job.data.userId, 'fal')
-  const keyPrefix = isAssetHub ? 'ref-char' : `proj-ref-char-${job.data.projectId}`
 
-  await reportTaskProgress(job, 35, {
-    stage: 'reference_to_character_generate',
-    stageLabel: '生成角色三视图',
-    displayMode: 'detail',
-  })
+  // 尝试获取 FAL API key，如果没有则直接使用参考图
+  let falApiKey: string | undefined
+  try {
+    const falConfig = await getProviderConfig(job.data.userId, 'fal')
+    falApiKey = falConfig.apiKey
+  } catch {
+    // FAL 未配置，跳过三视图生成，直接使用参考图
+  }
 
-  const imageResults = await Promise.all([0, 1, 2].map(async (index) =>
-    await generateLabeledImage({
-      job,
-      imageIndex: index,
-      userId: job.data.userId,
-      imageModel,
-      prompt,
-      referenceImages: useReferenceImages ? allReferenceImages : undefined,
-      falApiKey,
-      keyPrefix,
-      labelText: characterName,
-    }),
-  ))
-
+  let successfulCosKeys: string[]
   let description: string | null = null
+
+  if (!falApiKey && allReferenceImages.length > 0) {
+    // 无 FAL key：直接使用上传的参考图作为角色图
+    await reportTaskProgress(job, 35, {
+      stage: 'reference_to_character_generate',
+      stageLabel: '使用上传图片',
+      displayMode: 'detail',
+    })
+    successfulCosKeys = allReferenceImages
+  } else {
+    const keyPrefix = isAssetHub ? 'ref-char' : `proj-ref-char-${job.data.projectId}`
+
+    await reportTaskProgress(job, 35, {
+      stage: 'reference_to_character_generate',
+      stageLabel: '生成角色三视图',
+      displayMode: 'detail',
+    })
+
+    const imageResults = await Promise.all([0, 1, 2].map(async (index) =>
+      await generateLabeledImage({
+        job,
+        imageIndex: index,
+        userId: job.data.userId,
+        imageModel,
+        prompt,
+        referenceImages: useReferenceImages ? allReferenceImages : undefined,
+        falApiKey: falApiKey!,
+        keyPrefix,
+        labelText: characterName,
+      }),
+    ))
+
+    successfulCosKeys = imageResults.filter((item): item is string => Boolean(item))
+  }
+
   if (analysisModel) {
     const analysisPrompt = buildPrompt({
       promptId: PROMPT_IDS.CHARACTER_IMAGE_TO_DESCRIPTION,
@@ -242,7 +265,6 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
     description = completion.text
   }
 
-  const successfulCosKeys = imageResults.filter((item): item is string => Boolean(item))
   if (successfulCosKeys.length === 0) {
     throw new Error('图片生成失败')
   }

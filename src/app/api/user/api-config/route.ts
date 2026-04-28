@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { encryptApiKey, decryptApiKey } from '@/lib/crypto-utils'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, requireAdminAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import {
   composeModelKey,
@@ -1236,9 +1236,9 @@ export const GET = apiHandler(async () => {
 })
 
 export const PUT = apiHandler(async (request: NextRequest) => {
-  const authResult = await requireUserAuth()
-  if (isErrorResponse(authResult)) return authResult
-  const { session } = authResult
+  const adminResult = await requireAdminAuth()
+  if (isErrorResponse(adminResult)) return adminResult
+  const { session } = adminResult
   const userId = session.user.id
 
   const body = (await request.json()) as ApiConfigPutBody

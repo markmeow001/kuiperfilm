@@ -106,7 +106,8 @@
       "vidu_step1": "进入生数科技 Vidu 平台，点击「新建 API Key」",
       "openai_compatible_step1": "填写任意 OpenAI 协议兼容服务的 Base URL 与 API Key",
       "gemini_compatible_step1": "填写任意 Gemini 协议兼容服务的 Base URL 与 API Key",
-      "qwen_step1": "进入阿里云百炼平台，获取 API Key"
+      "qwen_step1": "进入阿里云百炼平台，获取 API Key",
+      "atlascloud_step1": "前往 AtlasCloud 控制台，获取 API Key"
     }
   }
 }

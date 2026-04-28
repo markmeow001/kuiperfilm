@@ -17,7 +17,7 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-2">
             <Link href={session ? "/workspace" : "/"} className="group">
-              <span className="text-xl font-bold tracking-tight text-[var(--glass-text-primary)] transition-transform group-hover:scale-105 inline-block">CINEAI</span>
+              <span className="text-xl font-bold tracking-tight text-[var(--glass-text-primary)] transition-transform group-hover:scale-105 inline-block">KUIPERAI</span>
             </Link>
             <span className="glass-chip glass-chip-info px-2.5 py-1 text-[11px]">
               {tc('betaVersion')}

@@ -290,14 +290,33 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
 }
 
 /**
+ * 验证用户是否为管理员
+ */
+export async function requireAdminAuth(): Promise<{ session: AuthSession } | NextResponse> {
+    const session = await getAuthSession()
+    if (!session?.user?.id) {
+        return unauthorized()
+    }
+    bindAuthLogContext(session)
+
+    const user = await withPrismaRetry(() =>
+        prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
+    )
+    if (!user || (user as any).role !== 'admin') {
+        return forbidden('Admin access required')
+    }
+    return { session }
+}
+
+/**
  * 仅验证 Session，不检查项目权限
  * 适用于用户级 API（如资产库）
- * 
+ *
  * @example
  * ```typescript
  * const authResult = await requireUserAuth()
  * if (authResult instanceof NextResponse) return authResult
- * 
+ *
  * const { session } = authResult
  * ```
  */

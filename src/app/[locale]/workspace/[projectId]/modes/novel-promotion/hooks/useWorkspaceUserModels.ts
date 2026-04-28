@@ -28,7 +28,11 @@ export function useWorkspaceUserModels() {
   const userModelsForSettings = (userModelsQuery.data || null) as UserModelsPayload | null
   const userVideoModels = useMemo<UserModelOption[]>(() => {
     if (!userModelsForSettings || !Array.isArray(userModelsForSettings.video)) return []
-    return userModelsForSettings.video
+    // 仅允许 AtlasCloud 视频模型
+    const allowed = userModelsForSettings.video.filter(
+      (m) => m.value === 'atlascloud::seedance-v1.5-pro' || m.value === 'atlascloud::wan-2.6'
+    )
+    return allowed.length > 0 ? allowed : userModelsForSettings.video
   }, [userModelsForSettings])
   const userModelsLoaded = userModelsQuery.isFetched
 

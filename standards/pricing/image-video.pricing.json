@@ -6055,5 +6055,23 @@
       "mode": "flat",
       "flatAmount": 1.5
     }
+  },
+  {
+    "apiType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-v1.5-pro",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.018
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "atlascloud",
+    "modelId": "wan-2.6",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.012
+    }
   }
 ]

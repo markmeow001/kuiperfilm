@@ -136,6 +136,10 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 't2v-01', name: 'T2V-01', type: 'video', provider: 'minimax' },
     { modelId: 't2v-01-director', name: 'T2V-01 Director', type: 'video', provider: 'minimax' },
 
+    // AtlasCloud 视频模型
+    { modelId: 'seedance-v1.5-pro', name: 'Seedance v1.5 Pro', type: 'video', provider: 'atlascloud' },
+    { modelId: 'wan-2.6', name: 'Wan 2.6 Flash', type: 'video', provider: 'atlascloud' },
+
     // Vidu 视频模型
     { modelId: 'viduq3-pro', name: 'Vidu Q3 Pro', type: 'video', provider: 'vidu' },
     { modelId: 'viduq2-pro-fast', name: 'Vidu Q2 Pro Fast', type: 'video', provider: 'vidu' },
@@ -167,6 +171,7 @@ export const PRESET_PROVIDERS: Omit<Provider, 'apiKey' | 'hasApiKey'>[] = [
     { id: 'vidu', name: 'Vidu' },
     { id: 'fal', name: 'FAL' },
     { id: 'qwen', name: 'Qwen' },
+    { id: 'atlascloud', name: 'AtlasCloud' },
 ]
 
 const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
@@ -338,6 +343,15 @@ export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
             {
                 text: 'qwen_step1',
                 url: 'https://bailian.console.aliyun.com/cn-beijing/?tab=model#/api-key'
+            }
+        ]
+    },
+    {
+        providerId: 'atlascloud',
+        steps: [
+            {
+                text: 'atlascloud_step1',
+                url: 'https://www.atlascloud.ai/zh-TW/console/api-keys'
             }
         ]
     }

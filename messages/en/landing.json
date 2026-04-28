@@ -1,5 +1,5 @@
 {
-  "title": "CineAI",
+  "title": "KuiperAI",
   "subtitle": "AI Film & TV Studio",
   "enterWorkspace": "Enter Workspace",
   "getStarted": "Get Started",
@@ -21,6 +21,6 @@
     }
   },
   "footer": {
-    "copyright": "2026 CineAI. All rights reserved."
+    "copyright": "2026 KuiperAI. All rights reserved."
   }
 }

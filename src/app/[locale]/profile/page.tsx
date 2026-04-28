@@ -179,8 +179,12 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [detailsLoading, setDetailsLoading] = useState(false)
 
+  // 用户角色
+  const userRole = (session?.user as any)?.role || 'user'
+  const isAdmin = userRole === 'admin'
+
   // 主要分区：扣费记录 / API配置
-  const [activeSection, setActiveSection] = useState<'billing' | 'apiConfig'>('apiConfig')
+  const [activeSection, setActiveSection] = useState<'billing' | 'apiConfig'>(isAdmin ? 'apiConfig' : 'billing')
   // 扣费记录内的子视图
   const [billingView, setBillingView] = useState<'transactions' | 'projects'>('transactions')
   const [projectViewMode, setProjectViewMode] = useState<'summary' | 'records'>('summary')
@@ -319,46 +323,22 @@ export default function ProfilePage() {
                   <p className="text-xs text-[var(--glass-text-tertiary)]">{t('personalAccount')}</p>
                 </div>
 
-                {/* 余额卡片 */}
-                <div className="glass-surface-soft rounded-2xl border border-[var(--glass-stroke-base)] p-4">
-                  <div className="text-xs font-medium text-[var(--glass-text-secondary)]">{t('availableBalance')}</div>
-                  <div className="mt-1 text-2xl font-bold text-[var(--glass-text-primary)]">{formatMoney(balance?.balance || 0, currency)}</div>
-                  <div className="flex gap-4 mt-3 text-xs">
-                    <div>
-                      <span className="text-[var(--glass-text-secondary)]">{t('frozen')}</span>
-                      <span className="ml-1 font-medium text-[var(--glass-text-primary)]">{formatMoney(balance?.frozenAmount || 0, currency)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[var(--glass-text-secondary)]">{t('totalSpent')}</span>
-                      <span className="ml-1 font-medium text-[var(--glass-text-primary)]">{formatMoney(balance?.totalSpent || 0, currency)}</span>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* 导航菜单 */}
               <nav className="flex-1 space-y-2">
-                <button
-                  onClick={() => setActiveSection('apiConfig')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all cursor-pointer ${activeSection === 'apiConfig'
-                    ? 'glass-btn-base glass-btn-tone-info'
-                    : 'text-[var(--glass-text-secondary)] hover:bg-[var(--glass-bg-muted)]'
-                    }`}
-                >
-                  <AppIcon name="settingsHexAlt" className="w-5 h-5" />
-                  <span className="font-medium">{t('apiConfig')}</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveSection('billing')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all cursor-pointer ${activeSection === 'billing'
-                    ? 'glass-btn-base glass-btn-tone-info'
-                    : 'text-[var(--glass-text-secondary)] hover:bg-[var(--glass-bg-muted)]'
-                    }`}
-                >
-                  <AppIcon name="receipt" className="w-5 h-5" />
-                  <span className="font-medium">{t('billingRecords')}</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => setActiveSection('apiConfig')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all cursor-pointer ${activeSection === 'apiConfig'
+                      ? 'glass-btn-base glass-btn-tone-info'
+                      : 'text-[var(--glass-text-secondary)] hover:bg-[var(--glass-bg-muted)]'
+                      }`}
+                  >
+                    <AppIcon name="settingsHexAlt" className="w-5 h-5" />
+                    <span className="font-medium">{t('apiConfig')}</span>
+                  </button>
+                )}
               </nav>
 
               {/* 退出登录 */}
@@ -376,8 +356,12 @@ export default function ProfilePage() {
           <div className="flex-1 min-w-0">
             <div className="glass-surface-elevated h-full flex flex-col">
 
-              {activeSection === 'apiConfig' ? (
+              {activeSection === 'apiConfig' && isAdmin ? (
                 <ApiConfigTab />
+              ) : !isAdmin ? (
+                <div className="flex-1 flex items-center justify-center text-[var(--glass-text-tertiary)]">
+                  <p>{session.user?.name}</p>
+                </div>
               ) : (
                 <>
                   {/* 扣费记录标题栏 */}
