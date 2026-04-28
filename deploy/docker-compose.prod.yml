@@ -1,0 +1,198 @@
+# Production compose for kuiperAI.
+#
+# Differences from the dev docker-compose.yml at repo root:
+# - All secrets sourced from .env.prod (compose-level :? gate refuses to
+#   start if any required var is missing).
+# - MySQL + Redis ports are NOT published to the host. Only Caddy
+#   exposes 80/443. Everything else stays on the private bridge.
+# - Caddy fronts the Next.js app and handles auto-HTTPS.
+# - App entrypoint runs prisma db push + bootstrap-admin idempotently
+#   on first start, then starts the Next.js server.
+# - Generous restart policies + healthchecks.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: kuiper-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN must be set, e.g. kuiper.example.com}
+      CADDY_EMAIL: ${CADDY_EMAIL:?CADDY_EMAIL must be set for Lets Encrypt registration}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/var/log/caddy
+    networks:
+      - kuiper-network
+    depends_on:
+      app:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    container_name: kuiper-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set; openssl rand -hex 24}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-kuiper}
+      MYSQL_ROOT_HOST: "%"
+    # No host port exposure in prod — only the app reaches MySQL via the
+    # private bridge network.
+    expose:
+      - "3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--sql_mode=STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION"
+      - "--max-connections=256"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks:
+      - kuiper-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: kuiper-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - "256mb"
+      - --maxmemory-policy
+      - "allkeys-lru"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    networks:
+      - kuiper-network
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: kuiper-ai:latest
+    container_name: kuiper-app
+    restart: unless-stopped
+    expose:
+      - "3000"
+      - "3010"
+    environment:
+      NODE_ENV: production
+      # Database
+      DATABASE_URL: "mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-kuiper}"
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_USERNAME: ""
+      REDIS_PASSWORD: ""
+      REDIS_TLS: ""
+      # Storage (R2 by default; switch STORAGE_TYPE=local to use volume mount)
+      STORAGE_TYPE: ${STORAGE_TYPE:-r2}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+      # NextAuth — these MUST be set in production.
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?NEXTAUTH_URL must be set, e.g. https://kuiper.example.com}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET must be 32+ chars; openssl rand -hex 32}
+      # Internal tokens
+      CRON_SECRET: ${CRON_SECRET:?CRON_SECRET must be set; openssl rand -hex 16}
+      INTERNAL_TASK_TOKEN: ${INTERNAL_TASK_TOKEN:?INTERNAL_TASK_TOKEN must be set; openssl rand -hex 16}
+      API_ENCRYPTION_KEY: ${API_ENCRYPTION_KEY:?API_ENCRYPTION_KEY must be 64-hex; openssl rand -hex 32}
+      # Multi-user bootstrap (consumed by scripts/bootstrap-admin.ts at first start)
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME must be set for first-run bootstrap}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set for first-run bootstrap (8+ chars)}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      # Worker / queue concurrency
+      WATCHDOG_INTERVAL_MS: ${WATCHDOG_INTERVAL_MS:-30000}
+      TASK_HEARTBEAT_TIMEOUT_MS: ${TASK_HEARTBEAT_TIMEOUT_MS:-90000}
+      QUEUE_CONCURRENCY_IMAGE: ${QUEUE_CONCURRENCY_IMAGE:-50}
+      QUEUE_CONCURRENCY_VIDEO: ${QUEUE_CONCURRENCY_VIDEO:-50}
+      QUEUE_CONCURRENCY_VOICE: ${QUEUE_CONCURRENCY_VOICE:-20}
+      QUEUE_CONCURRENCY_TEXT: ${QUEUE_CONCURRENCY_TEXT:-50}
+      # Bull Board (internal only — gate via Caddy /admin/queues with basic auth)
+      BULL_BOARD_HOST: "0.0.0.0"
+      BULL_BOARD_PORT: "3010"
+      BULL_BOARD_BASE_PATH: "/admin/queues"
+      BULL_BOARD_USER: ${BULL_BOARD_USER:-}
+      BULL_BOARD_PASSWORD: ${BULL_BOARD_PASSWORD:-}
+      # Logging
+      LOG_UNIFIED_ENABLED: "true"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: "json"
+      LOG_DEBUG_ENABLED: "false"
+      LOG_AUDIT_ENABLED: "true"
+      LOG_SERVICE: "kuiper"
+      LOG_REDACT_KEYS: "password,token,apiKey,apikey,authorization,cookie,secret,access_token,refresh_token"
+      # Billing (OFF by default; set to PER_REQUEST when you wire it)
+      BILLING_MODE: ${BILLING_MODE:-OFF}
+      LLM_STREAM_EPHEMERAL_ENABLED: "true"
+    volumes:
+      - app-data:/app/data
+      - app-logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Hit a known auth-public route. If you have a /api/health route,
+      # swap to that. /auth/signin renders for unauth users so it's a
+      # good liveness check for the Next.js process.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/auth/signin"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - kuiper-network
+    command: >
+      sh -c "
+        echo '[entrypoint] applying prisma schema (db push)' &&
+        npx prisma db push --skip-generate --accept-data-loss=false &&
+        echo '[entrypoint] running multi-user role backfill (idempotent)' &&
+        npx tsx scripts/migrations/migrate-user-role-to-member.ts --apply || true &&
+        echo '[entrypoint] bootstrapping initial admin (idempotent)' &&
+        npx tsx scripts/bootstrap-admin.ts || true &&
+        echo '[entrypoint] starting kuiperAI' &&
+        npm run start
+      "
+
+volumes:
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local
+  caddy-logs:
+    driver: local
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  app-data:
+    driver: local
+  app-logs:
+    driver: local
+
+networks:
+  kuiper-network:
+    driver: bridge

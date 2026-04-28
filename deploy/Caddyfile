@@ -1,0 +1,60 @@
+{
+	# Email used for Let's Encrypt registration; set via env CADDY_EMAIL.
+	email {$CADDY_EMAIL}
+}
+
+# Primary site — production domain.
+# DOMAIN must be set in the environment (e.g. kuiper.example.com).
+{$DOMAIN} {
+	# Auto HTTPS via Let's Encrypt is enabled by default.
+	encode zstd gzip
+
+	# Forward everything to the kuiper-ai Next.js container.
+	reverse_proxy app:3000 {
+		# Generous timeouts for long-running AI generation endpoints.
+		transport http {
+			read_timeout 15m
+			write_timeout 15m
+		}
+		# Pass through real client IP so rate limiting / logging see it.
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Hardening — defense-in-depth headers.
+	header {
+		# HSTS for 1 year, include subdomains. Remove `preload` until you've
+		# submitted to https://hstspreload.org.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Strip Caddy's Server fingerprint.
+		-Server
+	}
+
+	# 5 GiB upload cap (R2 single-part PUT is 5 GiB; tune as needed).
+	request_body {
+		max_size 5GB
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 100MiB
+			roll_keep 7
+		}
+		format json
+	}
+}
+
+# Optional: lock down Bull Board to admin domain or IP-restrict.
+# To expose at https://{$DOMAIN}/admin/queues for ops debugging,
+# uncomment + set BULL_BOARD_USER / BULL_BOARD_PASSWORD in env so Bull
+# Board's own basic auth gates it.
+#
+# (DOMAIN ":443") {
+#     handle_path /admin/queues* {
+#         reverse_proxy app:3010
+#     }
+# }

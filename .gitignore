@@ -57,6 +57,9 @@ next-env.d.ts
 .env
 .env.local
 .env.*.local
+.env.prod
+deploy/.env.prod
+deploy/backups/
 docker-logs/
 
 # database

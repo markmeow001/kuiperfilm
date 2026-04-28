@@ -1,50 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, requireEditorAuth, isErrorResponse } from '@/lib/api-auth'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 
-// 获取单个角色
+// 多人系统：团队共享 — 任何成员都能读取角色详情
 export const GET = apiHandler(async (
-    request: NextRequest,
+    _request: NextRequest,
     context: { params: Promise<{ characterId: string }> }
 ) => {
     const { characterId } = await context.params
 
-    // 🔐 统一权限验证
     const authResult = await requireUserAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const character = await prisma.globalCharacter.findUnique({
         where: { id: characterId },
         include: { appearances: true }
     })
-
-    if (!character || character.userId !== session.user.id) {
+    if (!character) {
         throw new ApiError('NOT_FOUND')
     }
 
     return NextResponse.json({ character })
 })
 
-// 更新角色
+// 更新角色（editor+）
 export const PATCH = apiHandler(async (
     request: NextRequest,
     context: { params: Promise<{ characterId: string }> }
 ) => {
     const { characterId } = await context.params
 
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const character = await prisma.globalCharacter.findUnique({
         where: { id: characterId }
     })
-
-    if (!character || character.userId !== session.user.id) {
-        throw new ApiError('FORBIDDEN')
+    if (!character) {
+        throw new ApiError('NOT_FOUND')
     }
 
     const body = await request.json()
@@ -64,7 +58,7 @@ export const PATCH = apiHandler(async (
             const folder = await prisma.globalAssetFolder.findUnique({
                 where: { id: folderId }
             })
-            if (!folder || folder.userId !== session.user.id) {
+            if (!folder) {
                 throw new ApiError('INVALID_PARAMS')
             }
         }
@@ -80,24 +74,21 @@ export const PATCH = apiHandler(async (
     return NextResponse.json({ success: true, character: updatedCharacter })
 })
 
-// 删除角色
+// 删除角色（editor+）
 export const DELETE = apiHandler(async (
-    request: NextRequest,
+    _request: NextRequest,
     context: { params: Promise<{ characterId: string }> }
 ) => {
     const { characterId } = await context.params
 
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const character = await prisma.globalCharacter.findUnique({
         where: { id: characterId }
     })
-
-    if (!character || character.userId !== session.user.id) {
-        throw new ApiError('FORBIDDEN')
+    if (!character) {
+        throw new ApiError('NOT_FOUND')
     }
 
     await prisma.globalCharacter.delete({

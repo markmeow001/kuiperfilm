@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useTranslations } from 'next-intl'
 import Navbar from "@/components/Navbar"
@@ -10,17 +10,31 @@ export default function SignUp() {
   const [name, setName] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [inviteCode, setInviteCode] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
   const t = useTranslations('auth')
+
+  // Allow share-link flow: /auth/signup?invite=ABC123 prefills the code.
+  useEffect(() => {
+    const fromQuery = searchParams.get('invite')
+    if (fromQuery) setInviteCode(fromQuery)
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError("")
     setSuccess("")
+
+    if (!inviteCode.trim()) {
+      setError(t('inviteRequired'))
+      setLoading(false)
+      return
+    }
 
     if (password !== confirmPassword) {
       setError(t('passwordMismatch'))
@@ -43,6 +57,7 @@ export default function SignUp() {
         body: JSON.stringify({
           name,
           password,
+          invite_code: inviteCode.trim(),
         }),
       })
 
@@ -77,6 +92,22 @@ export default function SignUp() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="inviteCode" className="glass-field-label block mb-2">
+                  {t('inviteCode')}
+                </label>
+                <input
+                  id="inviteCode"
+                  type="text"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  required
+                  autoComplete="off"
+                  className="glass-input-base w-full px-4 py-3 font-mono tracking-wide"
+                  placeholder={t('inviteCodePlaceholder')}
+                />
+              </div>
+
               <div>
                 <label htmlFor="name" className="glass-field-label block mb-2">
                   {t('phoneNumber')}

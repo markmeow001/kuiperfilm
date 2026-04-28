@@ -11,9 +11,15 @@ type SessionPayload = {
   user: SessionUser
 }
 
+type Role = 'admin' | 'editor' | 'member'
+
 type MockAuthState = {
   session: SessionPayload | null
   projectAuthMode: 'allow' | 'forbidden' | 'not_found'
+  // Multi-user: role drives requireAdminAuth / requireEditorAuth /
+  // requireRoleAuth; isActive=false short-circuits to 403.
+  role: Role
+  isActive: boolean
 }
 
 const defaultSession: SessionPayload = {
@@ -27,6 +33,8 @@ const defaultSession: SessionPayload = {
 let state: MockAuthState = {
   session: defaultSession,
   projectAuthMode: 'allow',
+  role: 'member',
+  isActive: true,
 }
 
 function unauthorizedResponse() {
@@ -94,6 +102,28 @@ export function installAuthMocks() {
         project: { id: projectId, userId: state.session.user.id, name: 'project' },
       }
     },
+    requireAdminAuth: async () => {
+      if (!state.session) return unauthorizedResponse()
+      if (!state.isActive) return forbiddenResponse()
+      if (state.role !== 'admin') return forbiddenResponse()
+      return { session: state.session }
+    },
+    requireEditorAuth: async () => {
+      if (!state.session) return unauthorizedResponse()
+      if (!state.isActive) return forbiddenResponse()
+      if (state.role !== 'admin' && state.role !== 'editor') {
+        return forbiddenResponse()
+      }
+      return { session: state.session, role: state.role }
+    },
+    requireRoleAuth: async (allowed: Role[]) => {
+      if (!state.session) return unauthorizedResponse()
+      if (!state.isActive) return forbiddenResponse()
+      if (state.role !== 'admin' && !allowed.includes(state.role)) {
+        return forbiddenResponse()
+      }
+      return { session: state.session, role: state.role }
+    },
   }))
 }
 
@@ -123,10 +153,20 @@ export function mockProjectAuth(mode: 'allow' | 'forbidden' | 'not_found') {
   }
 }
 
+export function mockRole(role: Role) {
+  state = { ...state, role }
+}
+
+export function mockActive(isActive: boolean) {
+  state = { ...state, isActive }
+}
+
 export function resetAuthMockState() {
   state = {
     session: defaultSession,
     projectAuthMode: 'allow',
+    role: 'member',
+    isActive: true,
   }
   vi.doUnmock('@/lib/api-auth')
 }

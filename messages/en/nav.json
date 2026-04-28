@@ -4,5 +4,6 @@
   "profile": "Settings",
   "signin": "Sign In",
   "signup": "Sign Up",
-  "logout": "Logout"
+  "logout": "Logout",
+  "admin": "Admin"
 }

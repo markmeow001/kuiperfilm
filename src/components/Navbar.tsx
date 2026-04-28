@@ -10,6 +10,9 @@ export default function Navbar() {
   const { data: session } = useSession()
   const t = useTranslations('nav')
   const tc = useTranslations('common')
+  // session.user is loosely typed by next-auth — narrow to read role.
+  const role = (session?.user as { role?: string } | undefined)?.role
+  const isAdmin = role === 'admin'
 
   return (
     <nav className="glass-nav sticky top-0 z-50">
@@ -47,6 +50,16 @@ export default function Navbar() {
                   <AppIcon name="userRoundCog" className="w-5 h-5" />
                   {t('profile')}
                 </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin/users"
+                    className="text-sm text-[var(--glass-tone-info-fg)] hover:text-[var(--glass-text-primary)] font-medium transition-colors flex items-center gap-1"
+                    title={t('admin')}
+                  >
+                    <AppIcon name="badgeCheck" className="w-4 h-4" />
+                    {t('admin')}
+                  </Link>
+                )}
                 <LanguageSwitcher />
               </>
 

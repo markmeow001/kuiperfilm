@@ -404,7 +404,10 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
-  role          String          @default("user")
+  role          String          @default("member") // admin | editor | member
+  displayName   String?
+  isActive      Boolean         @default(true)
+  lastLoginAt   DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @default(now()) @updatedAt
   accounts      Account[]
@@ -423,6 +426,10 @@ model User {
   taskEvents         TaskEvent[]
   graphRuns          GraphRun[]
   graphEvents        GraphEvent[]
+
+  // 多人系统：邀请码（建立 / 使用关系）
+  invitesCreated InviteCode[] @relation("InviteCreator")
+  inviteUsed     InviteCode[] @relation("InviteUsedBy")
 
   @@map("user")
 }
@@ -981,4 +988,30 @@ model LegacyMediaRefBackup {
   @@index([runId])
   @@index([tableName, fieldName])
   @@map("legacy_media_refs_backup")
+}
+
+// 多人系统：邀请码
+//
+// 注册采用「凭码注册」模式：管理员先 POST /api/admin/invites 生成一段
+// uppercase hex code 给受邀人，受邀人在 /auth/signup 输入这串码即可加入团队。
+// 每张码只能用一次（usedBy 记录使用者），可设过期或撤销。
+model InviteCode {
+  id        String    @id @default(uuid())
+  code      String    @unique // 例如 3042FDE10070A322257C1711
+  role      String    @default("member") // admin | editor | member
+  createdBy String
+  usedBy    String?
+  usedAt    DateTime?
+  expiresAt DateTime?
+  revokedAt DateTime?
+  note      String?   @db.VarChar(200)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+
+  creator User  @relation("InviteCreator", fields: [createdBy], references: [id])
+  user    User? @relation("InviteUsedBy", fields: [usedBy], references: [id])
+
+  @@index([createdBy])
+  @@index([usedBy])
+  @@map("invite_codes")
 }
