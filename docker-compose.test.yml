@@ -4,7 +4,7 @@ services:
     container_name: kuiper-test-mysql
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: waoowaoo_test
+      MYSQL_DATABASE: kuiper_test
       MYSQL_ROOT_HOST: "%"
     ports:
       - "3307:3306"
