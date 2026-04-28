@@ -17,6 +17,7 @@ const DYNAMIC_PROVIDER_PREFIXES = ['gemini-compatible', 'openai-compatible']
 const ALWAYS_SHOW_PROVIDERS: string[] = []
 const MODEL_TYPES: Array<'llm' | 'image' | 'video' | 'lipsync'> = ['llm', 'image', 'video', 'lipsync']
 const MODEL_PROVIDER_KEYS = [
+  'tencent-vod',
   'ark',
   'google',
   'openrouter',
