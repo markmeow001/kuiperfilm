@@ -19,8 +19,9 @@ export default function SignUp() {
   const t = useTranslations('auth')
 
   // Allow share-link flow: /auth/signup?invite=ABC123 prefills the code.
+  // Next.js 15 narrows useSearchParams() to ReadonlyURLSearchParams | null.
   useEffect(() => {
-    const fromQuery = searchParams.get('invite')
+    const fromQuery = searchParams?.get('invite')
     if (fromQuery) setInviteCode(fromQuery)
   }, [searchParams])
 
