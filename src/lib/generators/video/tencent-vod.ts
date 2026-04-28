@@ -1,0 +1,173 @@
+/**
+ * 騰訊雲 VOD AIGC 視頻生成器
+ *
+ * API:
+ * - 提交: vod.CreateAigcVideoTask
+ * - 輪詢: vod.DescribeTaskDetail (response.AigcVideoTask)
+ *
+ * Provider key: tencent-vod
+ *
+ * 模型命名（apiKey 中傳入時為 ModelName-ModelVersion 格式）：
+ *   Kling-3.0、Kling-3.0-Omni、Kling-2.6、Kling-2.5、Kling-2.1、Kling-2.0、Kling-1.6、Kling-O1
+ *   Vidu-q3、Vidu-q3-pro、Vidu-q3-mix、Vidu-q3-turbo、Vidu-q2、Vidu-q2-pro、Vidu-q2-turbo
+ *   Hailuo-02、Hailuo-2.3、Hailuo-2.3-fast
+ *   PixVerse-v6、PixVerse-v5.6、PixVerse-c1
+ *   GV-3.1、GV-3.1-fast、OS-2.0、Jimeng-3.0pro、Hunyuan-1.5
+ *
+ * 憑證儲存（apiKey 欄位為加密 JSON）：
+ *   { "secretId": "...", "secretKey": "...", "subAppId": 1500044236, "region": "ap-guangzhou" }
+ */
+
+import { BaseVideoGenerator, type VideoGenerateParams, type GenerateResult } from '../base'
+import { getProviderConfig } from '@/lib/api-config'
+import { createScopedLogger } from '@/lib/logging/core'
+import { vod } from 'tencentcloud-sdk-nodejs-vod'
+
+const VodClient = vod.v20180717.Client
+
+interface TencentVODCredentials {
+    secretId: string
+    secretKey: string
+    subAppId: number
+    region?: string
+}
+
+function parseCredentials(apiKey: string): TencentVODCredentials {
+    let parsed: unknown
+    try {
+        parsed = JSON.parse(apiKey)
+    } catch {
+        throw new Error('TENCENT_VOD_INVALID_CREDENTIALS: apiKey must be a JSON object with secretId/secretKey/subAppId')
+    }
+    if (!parsed || typeof parsed !== 'object') {
+        throw new Error('TENCENT_VOD_INVALID_CREDENTIALS: apiKey JSON must be an object')
+    }
+    const obj = parsed as Record<string, unknown>
+    const secretId = typeof obj.secretId === 'string' ? obj.secretId : ''
+    const secretKey = typeof obj.secretKey === 'string' ? obj.secretKey : ''
+    const subAppId = typeof obj.subAppId === 'number' ? obj.subAppId : Number(obj.subAppId)
+    const region = typeof obj.region === 'string' && obj.region ? obj.region : 'ap-guangzhou'
+    if (!secretId || !secretKey) {
+        throw new Error('TENCENT_VOD_INVALID_CREDENTIALS: secretId and secretKey are required')
+    }
+    if (!Number.isFinite(subAppId) || subAppId <= 0) {
+        throw new Error('TENCENT_VOD_INVALID_CREDENTIALS: subAppId is required and must be a positive integer')
+    }
+    return { secretId, secretKey, subAppId, region }
+}
+
+/**
+ * 解析 "Kling-3.0-Omni" 為 { name: "Kling", version: "3.0-Omni" }
+ * 用 SplitN 邏輯：第一個 `-` 之前是 name，之後是 version
+ */
+function splitModel(model: string): { name: string; version: string } {
+    if (!model) return { name: '', version: '' }
+    const idx = model.indexOf('-')
+    if (idx === -1) return { name: model, version: '' }
+    return { name: model.slice(0, idx), version: model.slice(idx + 1) }
+}
+
+interface TencentVODVideoOptions {
+    modelId?: string
+    duration?: number
+    resolution?: string
+    aspectRatio?: string
+    audioGeneration?: 'Enabled' | 'Disabled'
+    enhancePrompt?: 'Enabled' | 'Disabled'
+    sceneType?: string
+    seed?: number
+    inputRegion?: 'Mainland' | 'Oversea'
+    lastFrameUrl?: string
+    referenceImageUrls?: string[]
+    referenceUsage?: 'FirstFrame' | 'Reference'
+}
+
+export class TencentVODVideoGenerator extends BaseVideoGenerator {
+    constructor(private readonly providerId: string = 'tencent-vod') {
+        super()
+    }
+
+    protected async doGenerate(params: VideoGenerateParams): Promise<GenerateResult> {
+        const { userId, imageUrl, prompt = '', options = {} } = params
+        const config = await getProviderConfig(userId, this.providerId)
+        const creds = parseCredentials(config.apiKey)
+
+        const opts = options as TencentVODVideoOptions
+        const modelKey = opts.modelId || ''
+        const { name: modelName, version: modelVersion } = splitModel(modelKey)
+        if (!modelName) {
+            throw new Error('TENCENT_VOD_MODEL_REQUIRED: provide options.modelId like "Kling-3.0"')
+        }
+
+        const logger = createScopedLogger({
+            module: 'worker.tencent-vod-video',
+            action: 'tencent_vod_video_generate',
+        })
+
+        const client = new VodClient({
+            credential: { secretId: creds.secretId, secretKey: creds.secretKey },
+            region: creds.region!,
+            profile: { httpProfile: { endpoint: 'vod.tencentcloudapi.com' } },
+        })
+
+        // FileInfos: 首帧 (FirstFrame) + 参考图 (Reference)
+        const fileInfos: Record<string, unknown>[] = []
+        const usage = opts.referenceUsage || 'FirstFrame'
+        if (imageUrl) {
+            fileInfos.push({ Type: 'Url', Category: 'Image', Url: imageUrl, Usage: usage })
+        }
+        if (opts.referenceImageUrls?.length) {
+            for (const url of opts.referenceImageUrls) {
+                if (!url) continue
+                fileInfos.push({ Type: 'Url', Category: 'Image', Url: url, Usage: 'Reference' })
+            }
+        }
+
+        const outputConfig: Record<string, unknown> = { StorageMode: 'Temporary' }
+        if (opts.duration) outputConfig.Duration = opts.duration
+        if (opts.resolution) outputConfig.Resolution = opts.resolution
+        if (opts.aspectRatio) outputConfig.AspectRatio = opts.aspectRatio
+        if (opts.audioGeneration) outputConfig.AudioGeneration = opts.audioGeneration
+
+        const req: Record<string, unknown> = {
+            SubAppId: creds.subAppId,
+            ModelName: modelName,
+            ModelVersion: modelVersion || undefined,
+            Prompt: prompt || undefined,
+            OutputConfig: outputConfig,
+        }
+        if (fileInfos.length) req.FileInfos = fileInfos
+        if (opts.lastFrameUrl) req.LastFrameUrl = opts.lastFrameUrl
+        if (opts.enhancePrompt) req.EnhancePrompt = opts.enhancePrompt
+        if (opts.sceneType) req.SceneType = opts.sceneType
+        if (typeof opts.seed === 'number') req.Seed = opts.seed
+        if (opts.inputRegion) req.InputRegion = opts.inputRegion
+
+        logger.info({
+            message: 'Tencent VOD video task submit',
+            details: {
+                modelName,
+                modelVersion,
+                hasImage: !!imageUrl,
+                refCount: opts.referenceImageUrls?.length || 0,
+                duration: opts.duration,
+                resolution: opts.resolution,
+                aspectRatio: opts.aspectRatio,
+            },
+        })
+
+        const resp = await client.CreateAigcVideoTask(req as never)
+        const taskId = (resp as { TaskId?: string }).TaskId
+        if (!taskId) {
+            throw new Error('TENCENT_VOD_NO_TASK_ID: CreateAigcVideoTask returned empty TaskId')
+        }
+
+        logger.info({ message: 'Tencent VOD video task submitted', details: { taskId } })
+
+        return {
+            success: true,
+            async: true,
+            externalId: `TENCENTVOD:VIDEO:${taskId}`,
+        }
+    }
+}

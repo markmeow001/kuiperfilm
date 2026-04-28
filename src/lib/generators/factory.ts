@@ -17,6 +17,7 @@ import {
     OpenAICompatibleImageGenerator,
     KieAIImageGenerator,
     KieAINanoBananaGenerator,
+    TencentVODImageGenerator,
 } from './image'
 import { GoogleVeoVideoGenerator } from './video/google'
 import { OpenAICompatibleVideoGenerator } from './video'
@@ -26,6 +27,7 @@ import { ViduVideoGenerator } from './vidu'
 import { KieAIVideoGenerator } from './video/kieai'
 import { KieAIKlingVideoGenerator } from './video/kieai-kling'
 import { AtlasCloudSeedanceVideoGenerator } from './video/atlascloud'
+import { TencentVODVideoGenerator } from './video/tencent-vod'
 import { getProviderKey } from '@/lib/api-config'
 
 /**
@@ -66,6 +68,8 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
                 return new KieAINanoBananaGenerator(actualModelId)
             }
             return new KieAIImageGenerator(actualModelId)
+        case 'tencent-vod':
+            return new TencentVODImageGenerator(provider)
         default:
             throw new Error(`Unknown image generator provider: ${provider}`)
     }
@@ -107,6 +111,8 @@ export function createVideoGenerator(provider: string, modelId?: string): VideoG
             return new KieAIKlingVideoGenerator()
         case 'atlascloud':
             return new AtlasCloudSeedanceVideoGenerator()
+        case 'tencent-vod':
+            return new TencentVODVideoGenerator(provider)
         default:
             throw new Error(`Unknown video generator provider: ${provider}`)
     }

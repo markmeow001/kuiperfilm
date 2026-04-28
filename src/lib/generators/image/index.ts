@@ -16,6 +16,9 @@ export { OpenAICompatibleImageGenerator } from './openai-compatible'
 export { KieAIImageGenerator } from './kieai'
 export { KieAINanoBananaGenerator } from './kieai-nanobanana'
 
+// 騰訊雲 VOD AIGC 生成器
+export { TencentVODImageGenerator } from './tencent-vod'
+
 // 向后兼容：从合并文件重新导出
 export { FalBananaGenerator, FalImageGenerator } from '../fal'
 export { ArkSeedreamGenerator, ArkImageGenerator } from '../ark'

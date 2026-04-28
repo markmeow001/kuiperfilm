@@ -47,7 +47,7 @@ function getErrorMessage(error: unknown): string {
  * 解析 externalId 获取 provider、type 和请求信息
  */
 export function parseExternalId(externalId: string): {
-    provider: 'FAL' | 'ARK' | 'GEMINI' | 'GOOGLE' | 'MINIMAX' | 'VIDU' | 'OPENAI' | 'KIEAI' | 'UNKNOWN'
+    provider: 'FAL' | 'ARK' | 'GEMINI' | 'GOOGLE' | 'MINIMAX' | 'VIDU' | 'OPENAI' | 'KIEAI' | 'ATLASCLOUD' | 'TENCENTVOD' | 'UNKNOWN'
     type: 'VIDEO' | 'IMAGE' | 'BATCH' | 'KLING' | 'NANOBANANA' | 'UNKNOWN'
     endpoint?: string
     requestId: string
@@ -170,7 +170,7 @@ export function parseExternalId(externalId: string): {
             throw new Error(`无效 ATLASCLOUD externalId: "${externalId}"，应为 ATLASCLOUD:VIDEO:requestId`)
         }
         return {
-            provider: 'ATLASCLOUD' as any,
+            provider: 'ATLASCLOUD',
             type: 'VIDEO',
             requestId,
         }
@@ -186,6 +186,20 @@ export function parseExternalId(externalId: string): {
         return {
             provider: 'KIEAI',
             type: type as 'IMAGE' | 'VIDEO' | 'KLING' | 'NANOBANANA',
+            requestId,
+        }
+    }
+
+    if (externalId.startsWith('TENCENTVOD:')) {
+        const parts = externalId.split(':')
+        const type = parts[1]
+        const requestId = parts.slice(2).join(':')
+        if ((type !== 'IMAGE' && type !== 'VIDEO') || !requestId) {
+            throw new Error(`无效 TENCENTVOD externalId: "${externalId}"，应为 TENCENTVOD:IMAGE|VIDEO:taskId`)
+        }
+        return {
+            provider: 'TENCENTVOD',
+            type: type as 'IMAGE' | 'VIDEO',
             requestId,
         }
     }
@@ -234,10 +248,101 @@ export async function pollAsyncTask(
                 : await pollKieAITask(parsed.requestId, userId)
         case 'ATLASCLOUD':
             return await pollAtlasCloudTask(parsed.requestId, userId)
+        case 'TENCENTVOD':
+            return await pollTencentVODTask(parsed.requestId, userId, parsed.type as 'IMAGE' | 'VIDEO')
         default:
             // 🔥 移除 fallback：未知 provider 直接抛出错误
             throw new Error(`未知的 Provider: ${parsed.provider}`)
     }
+}
+
+// 🟢 騰訊雲 VOD AIGC 任務查詢
+async function pollTencentVODTask(
+    taskId: string,
+    userId: string,
+    type: 'IMAGE' | 'VIDEO'
+): Promise<PollResult> {
+    const { apiKey } = await getProviderConfig(userId, 'tencent-vod')
+
+    let creds: { secretId: string; secretKey: string; subAppId: number; region: string }
+    try {
+        const parsed = JSON.parse(apiKey) as Record<string, unknown>
+        creds = {
+            secretId: String(parsed.secretId || ''),
+            secretKey: String(parsed.secretKey || ''),
+            subAppId: Number(parsed.subAppId || 0),
+            region: typeof parsed.region === 'string' && parsed.region ? parsed.region : 'ap-guangzhou',
+        }
+    } catch {
+        return { status: 'failed', error: 'TENCENT_VOD_INVALID_CREDENTIALS: apiKey is not valid JSON' }
+    }
+    if (!creds.secretId || !creds.secretKey || !creds.subAppId) {
+        return { status: 'failed', error: 'TENCENT_VOD_INVALID_CREDENTIALS: missing secretId/secretKey/subAppId' }
+    }
+
+    const { vod } = await import('tencentcloud-sdk-nodejs-vod')
+    const VodClient = vod.v20180717.Client
+    const client = new VodClient({
+        credential: { secretId: creds.secretId, secretKey: creds.secretKey },
+        region: creds.region,
+        profile: { httpProfile: { endpoint: 'vod.tencentcloudapi.com' } },
+    })
+
+    type AigcTask = {
+        TaskId?: string
+        Status?: string
+        ErrCode?: number
+        ErrCodeExt?: string
+        Message?: string
+        Progress?: number
+        Output?: { FileInfos?: Array<{ FileUrl?: string; FileId?: string }> }
+    }
+    type DescribeTaskDetailResp = {
+        AigcImageTask?: AigcTask
+        AigcVideoTask?: AigcTask
+    }
+
+    let resp: DescribeTaskDetailResp
+    try {
+        resp = (await client.DescribeTaskDetail({
+            TaskId: taskId,
+            SubAppId: creds.subAppId,
+        } as never)) as DescribeTaskDetailResp
+    } catch (err) {
+        return { status: 'failed', error: `TENCENT_VOD_DESCRIBE_FAILED: ${getErrorMessage(err)}` }
+    }
+
+    const task = type === 'IMAGE' ? resp.AigcImageTask : resp.AigcVideoTask
+    if (!task) return { status: 'pending' }
+
+    const status = task.Status || ''
+    if (status === 'WAITING' || status === 'PROCESSING' || !status) {
+        return { status: 'pending' }
+    }
+    if (status === 'ABORTED') {
+        return {
+            status: 'failed',
+            error: `Tencent VOD task aborted (${task.ErrCodeExt || ''}): ${task.Message || ''}`,
+        }
+    }
+    if (status === 'FINISH') {
+        const errCode = task.ErrCode ?? 0
+        const errCodeExt = task.ErrCodeExt || ''
+        if (errCode !== 0 || (errCodeExt && errCodeExt !== '0')) {
+            return {
+                status: 'failed',
+                error: `Tencent VOD error ${errCode} (${errCodeExt}): ${task.Message || ''}`,
+            }
+        }
+        const fileUrl = task.Output?.FileInfos?.[0]?.FileUrl || ''
+        if (!fileUrl) {
+            return { status: 'failed', error: 'Tencent VOD: task finished but no file url' }
+        }
+        return type === 'VIDEO'
+            ? { status: 'completed', videoUrl: fileUrl, resultUrl: fileUrl }
+            : { status: 'completed', imageUrl: fileUrl, resultUrl: fileUrl }
+    }
+    return { status: 'pending' }
 }
 
 function decodeProviderId(token: string): string {
