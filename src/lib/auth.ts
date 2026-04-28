@@ -36,6 +36,12 @@ export const authOptions: any = {
           return null
         }
 
+        // 多人系统：被停用的帐号不可登入
+        if ((user as { isActive?: boolean }).isActive === false) {
+          logAuthAction('LOGIN', credentials.username, { error: 'Account disabled' })
+          return null
+        }
+
         // 验证密码
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
 
@@ -44,12 +50,26 @@ export const authOptions: any = {
           return null
         }
 
+        // 更新最近登入时间（错误不阻断登入流程）
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date() },
+          })
+        } catch (err) {
+          logAuthAction('LOGIN', user.name, {
+            userId: user.id,
+            warning: 'failed to update lastLoginAt',
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+
         logAuthAction('LOGIN', user.name, { userId: user.id, success: true })
 
         return {
           id: user.id,
           name: user.name,
-          role: (user as any).role || 'user',
+          role: (user as any).role || 'member',
         }
       }
     })
