@@ -1119,5 +1119,866 @@
         "supportGenerateAudio": true
       }
     }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-1.6",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-2.0",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-2.1",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-2.5",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-2.6",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-O1",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-3.0",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-3.0-Omni",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q2",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q2-pro",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q2-turbo",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q3",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q3-pro",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q3-mix",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q3-turbo",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Hailuo-02",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          6,
+          10
+        ],
+        "resolutionOptions": [
+          "768P",
+          "1080P"
+        ],
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Hailuo-2.3",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          6,
+          10
+        ],
+        "resolutionOptions": [
+          "768P",
+          "1080P"
+        ],
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Hailuo-2.3-fast",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          6,
+          10
+        ],
+        "resolutionOptions": [
+          "768P",
+          "1080P"
+        ],
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "PixVerse-v5.6",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "540p",
+          "720p",
+          "1080p",
+          "2k",
+          "4k"
+        ],
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "PixVerse-v6",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "540p",
+          "720p",
+          "1080p",
+          "2k",
+          "4k"
+        ],
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "PixVerse-c1",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "540p",
+          "720p",
+          "1080p",
+          "2k",
+          "4k"
+        ],
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "GV-3.1",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          8
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "GV-3.1-fast",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          8
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "OS-2.0",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          8,
+          12
+        ],
+        "resolutionOptions": [
+          "720P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Jimeng-3.0pro",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Hunyuan-1.5",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "supportGenerateAudio": false
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "GEM-2.5",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1K",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "GEM-3.0",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1K",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "GEM-3.1",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "512",
+          "1K",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "OG-image2_low",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1080P",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "OG-image2_medium",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1080P",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "OG-image2_high",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1080P",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "Qwen-0925"
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "SI-4.5",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "SI-5.0-lite",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "2K",
+          "3K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "Kling-2.1",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "Vidu-q2",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1080p",
+          "2K",
+          "4K"
+        ]
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "Jimeng-4.0"
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "Hunyuan-3.0"
   }
 ]
