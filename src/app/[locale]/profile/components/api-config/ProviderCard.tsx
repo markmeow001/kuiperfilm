@@ -36,7 +36,7 @@ export function ProviderCard({
 
   return (
     <ProviderCardShell provider={provider} onDeleteProvider={onDeleteProvider} t={t} state={state}>
-      <ProviderBaseFields provider={provider} t={t} state={state} />
+      <ProviderBaseFields provider={provider} t={t} state={state} onUpdateApiKey={onUpdateApiKey} />
       <ProviderAdvancedFields
         provider={provider}
         onToggleModel={onToggleModel}

@@ -164,6 +164,7 @@ export function isPresetComingSoonModelKey(modelKey: string): boolean {
 
 // 预设提供商（API Key 唯一归属于 provider id）
 export const PRESET_PROVIDERS: Omit<Provider, 'apiKey' | 'hasApiKey'>[] = [
+    { id: 'tencent-vod', name: 'Tencent Cloud VOD AIGC', baseUrl: 'https://vod.tencentcloudapi.com' },
     { id: 'ark', name: 'Volcengine Ark' },
     { id: 'google', name: 'Google AI Studio' },
     { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
@@ -175,6 +176,7 @@ export const PRESET_PROVIDERS: Omit<Provider, 'apiKey' | 'hasApiKey'>[] = [
 ]
 
 const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
+    'tencent-vod': '騰訊雲 VOD AIGC',
     ark: '火山引擎 Ark',
     minimax: '海螺 MiniMax',
     vidu: '生数科技 Vidu',

@@ -3,14 +3,20 @@
 import type { ProviderCardProps, ProviderCardTranslator } from './types'
 import type { UseProviderCardStateResult } from './hooks/useProviderCardState'
 import { AppIcon } from '@/components/ui/icons'
+import { ProviderTencentVODFields } from './ProviderTencentVODFields'
 
 interface ProviderBaseFieldsProps {
   provider: ProviderCardProps['provider']
   t: ProviderCardTranslator
   state: UseProviderCardStateResult
+  onUpdateApiKey: ProviderCardProps['onUpdateApiKey']
 }
 
-export function ProviderBaseFields({ provider, t, state }: ProviderBaseFieldsProps) {
+export function ProviderBaseFields({ provider, t, state, onUpdateApiKey }: ProviderBaseFieldsProps) {
+  // 騰訊雲 VOD AIGC 需要多欄位憑證（SecretId/SecretKey/SubAppId/Region），改用專用 UI
+  if (state.providerKey === 'tencent-vod' || state.providerKey === 'tencent' || state.providerKey === 'vod') {
+    return <ProviderTencentVODFields provider={provider} t={t} onUpdateApiKey={onUpdateApiKey} />
+  }
   const baseUrlPlaceholder = (() => {
     switch (state.providerKey) {
       case 'gemini-compatible':
