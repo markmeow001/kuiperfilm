@@ -1,50 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, requireEditorAuth, isErrorResponse } from '@/lib/api-auth'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 
-// 获取单个场景
+// 多人系统：团队共享 — 任何成员都能读取场景详情
 export const GET = apiHandler(async (
-    request: NextRequest,
+    _request: NextRequest,
     context: { params: Promise<{ locationId: string }> }
 ) => {
     const { locationId } = await context.params
 
-    // 🔐 统一权限验证
     const authResult = await requireUserAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const location = await prisma.globalLocation.findUnique({
         where: { id: locationId },
         include: { images: true }
     })
-
-    if (!location || location.userId !== session.user.id) {
+    if (!location) {
         throw new ApiError('NOT_FOUND')
     }
 
     return NextResponse.json({ location })
 })
 
-// 更新场景
+// 更新场景（editor+）
 export const PATCH = apiHandler(async (
     request: NextRequest,
     context: { params: Promise<{ locationId: string }> }
 ) => {
     const { locationId } = await context.params
 
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const location = await prisma.globalLocation.findUnique({
         where: { id: locationId }
     })
-
-    if (!location || location.userId !== session.user.id) {
-        throw new ApiError('FORBIDDEN')
+    if (!location) {
+        throw new ApiError('NOT_FOUND')
     }
 
     const body = await request.json()
@@ -58,7 +52,7 @@ export const PATCH = apiHandler(async (
             const folder = await prisma.globalAssetFolder.findUnique({
                 where: { id: folderId }
             })
-            if (!folder || folder.userId !== session.user.id) {
+            if (!folder) {
                 throw new ApiError('INVALID_PARAMS')
             }
         }
@@ -74,24 +68,21 @@ export const PATCH = apiHandler(async (
     return NextResponse.json({ success: true, location: updatedLocation })
 })
 
-// 删除场景
+// 删除场景（editor+）
 export const DELETE = apiHandler(async (
-    request: NextRequest,
+    _request: NextRequest,
     context: { params: Promise<{ locationId: string }> }
 ) => {
     const { locationId } = await context.params
 
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const location = await prisma.globalLocation.findUnique({
         where: { id: locationId }
     })
-
-    if (!location || location.userId !== session.user.id) {
-        throw new ApiError('FORBIDDEN')
+    if (!location) {
+        throw new ApiError('NOT_FOUND')
     }
 
     await prisma.globalLocation.delete({

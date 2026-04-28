@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireEditorAuth, isErrorResponse } from '@/lib/api-auth'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 
-// 删除音色
+// 多人系统：editor+ 可删除任何共享音色
 export const DELETE = apiHandler(async (
-    request: NextRequest,
+    _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) => {
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const { id } = await params
 
@@ -23,10 +21,6 @@ export const DELETE = apiHandler(async (
         throw new ApiError('NOT_FOUND')
     }
 
-    if (voice.userId !== session.user.id) {
-        throw new ApiError('FORBIDDEN')
-    }
-
     await prisma.globalVoice.delete({
         where: { id }
     })
@@ -34,15 +28,13 @@ export const DELETE = apiHandler(async (
     return NextResponse.json({ success: true })
 })
 
-// 更新音色
+// 多人系统：editor+ 可更新任何共享音色
 export const PATCH = apiHandler(async (
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) => {
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const { id } = await params
     const body = await request.json()
@@ -53,10 +45,6 @@ export const PATCH = apiHandler(async (
 
     if (!voice) {
         throw new ApiError('NOT_FOUND')
-    }
-
-    if (voice.userId !== session.user.id) {
-        throw new ApiError('FORBIDDEN')
     }
 
     const updatedVoice = await prisma.globalVoice.update({

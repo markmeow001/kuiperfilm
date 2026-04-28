@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, requireEditorAuth, isErrorResponse } from '@/lib/api-auth'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 
-// 获取用户所有文件夹
+// 多人系统：团队共享 — 所有成员都能看到全部文件夹
 export const GET = apiHandler(async () => {
-    // 🔐 统一权限验证
     const authResult = await requireUserAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const folders = await prisma.globalAssetFolder.findMany({
-        where: { userId: session.user.id },
         orderBy: { name: 'asc' }
     })
 
     return NextResponse.json({ folders })
 })
 
-// 创建文件夹
+// 创建文件夹（editor+ 才能写共享资产库；userId 仅作为建立者审计）
 export const POST = apiHandler(async (request: NextRequest) => {
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
     const { session } = authResult
 

@@ -1,7 +1,7 @@
 import { logError as _ulogError } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, requireEditorAuth, isErrorResponse } from '@/lib/api-auth'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 import { attachMediaFieldsToGlobalLocation } from '@/lib/media/attach'
 import { resolveTaskLocale } from '@/lib/task/resolve-locale'
@@ -11,17 +11,15 @@ function toObject(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>
 }
 
-// 获取用户所有场景（支持 folderId 筛选）
+// 多人系统：团队共享 — 所有成员都能看到全部场景（支持 folderId 筛选）
 export const GET = apiHandler(async (request: NextRequest) => {
-    // 🔐 统一权限验证
     const authResult = await requireUserAuth()
     if (isErrorResponse(authResult)) return authResult
-    const { session } = authResult
 
     const { searchParams } = new URL(request.url)
     const folderId = searchParams.get('folderId')
 
-    const where: Record<string, unknown> = { userId: session.user.id }
+    const where: Record<string, unknown> = {}
     if (folderId === 'null') {
         where.folderId = null
     } else if (folderId) {
@@ -41,10 +39,9 @@ export const GET = apiHandler(async (request: NextRequest) => {
     return NextResponse.json({ locations: signedLocations })
 })
 
-// 新建场景
+// 新建场景（editor+ 才能写共享资产库）
 export const POST = apiHandler(async (request: NextRequest) => {
-    // 🔐 统一权限验证
-    const authResult = await requireUserAuth()
+    const authResult = await requireEditorAuth()
     if (isErrorResponse(authResult)) return authResult
     const { session } = authResult
 
@@ -62,7 +59,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
         const folder = await prisma.globalAssetFolder.findUnique({
             where: { id: folderId }
         })
-        if (!folder || folder.userId !== session.user.id) {
+        if (!folder) {
             throw new ApiError('INVALID_PARAMS')
         }
     }
