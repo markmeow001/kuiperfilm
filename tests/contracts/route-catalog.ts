@@ -25,6 +25,13 @@ export type RouteCatalogEntry = {
 }
 
 const ROUTE_FILES = [
+  // Multi-user admin endpoints (admin role only; see /api/admin/* in
+  // src/lib/api-auth.ts requireAdminAuth gate).
+  'src/app/api/admin/invites/[id]/route.ts',
+  'src/app/api/admin/invites/route.ts',
+  'src/app/api/admin/users/[id]/active/route.ts',
+  'src/app/api/admin/users/[id]/role/route.ts',
+  'src/app/api/admin/users/route.ts',
   'src/app/api/asset-hub/ai-design-character/route.ts',
   'src/app/api/asset-hub/ai-design-location/route.ts',
   'src/app/api/asset-hub/ai-modify-character/route.ts',
@@ -164,7 +171,10 @@ function resolveCategory(routeFile: string): RouteCategory {
     return 'tasks'
   }
   if (routeFile.startsWith('src/app/api/user/') || routeFile === 'src/app/api/user-preference/route.ts') return 'user'
+  // Multi-user admin lives under the auth domain (manage users + invites
+  // for the same auth system as /api/auth/[...nextauth] and /api/auth/register).
   if (routeFile.startsWith('src/app/api/auth/')) return 'auth'
+  if (routeFile.startsWith('src/app/api/admin/')) return 'auth'
   if (routeFile.startsWith('src/app/api/system/')) return 'system'
   return 'infra'
 }
@@ -218,6 +228,7 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     return 'user-project-routes'
   }
   if (routeFile.startsWith('src/app/api/auth/')) return 'auth-routes'
+  if (routeFile.startsWith('src/app/api/admin/')) return 'auth-routes'
   return 'infra-routes'
 }
 

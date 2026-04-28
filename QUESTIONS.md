@@ -55,6 +55,23 @@ Image（13 個）：
 - **狀態**: 待確認（要不要正式裝、或者讓 guard script fallback 到 grep）
 - **建立時間**: 2026-04-28
 
+## Q-004 [Pre-existing guard fail] `no-api-direct-llm-call` 抓到 `safe-rewrite/route.ts` 直連 LLM
+
+- **Phase**: Phase 6 範疇（AI route 不准旁路 worker）
+- **症狀**: `npm run check:no-api-direct-llm-call` 報：
+  ```
+  [no-api-direct-llm-call] Found forbidden direct LLM execution in production API routes
+    - src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts:56 forbidden direct chatCompletion* call
+    - src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts:74 forbidden direct chatCompletion* call
+  ```
+- **跟本輪改動的關係**: 無。本輪是合併 `feature/multi-user`（多人系統 K1-K6 + 整合測試），未動 `safe-rewrite` 路徑。
+- **可能原因**: 跟 Phase 6 AI runtime unification 同時的遺留路由，尚未遷移到 `createRun` → worker handler。
+- **建議**: 由負責 Phase 6 / Phase 8 的 owner 處理，把 safe-rewrite 改走 worker；不在多人系統範疇。
+- **狀態**: 待確認
+- **建立時間**: 2026-04-28
+
+---
+
 ## Q-003 [Pre-existing test fail] worker handler 測試 prisma mock 缺欄位
 
 - **背景**: 跑 `npm run test:unit:all` 時有 3 個 test fail，全在 worker handler 範疇：
