@@ -140,4 +140,94 @@ describe('TencentVODVideoGenerator', () => {
     const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
     expect(req?.SubjectInfos).toEqual([{ Id: 'real' }])
   })
+
+  // —— ExtInfo / Kling 智能分镜 ——
+
+  it('serialises klingMultiShot into ExtInfo JSON string for Kling 3.0', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      prompt: '兩人在咖啡店對話，然後走出店外',
+      options: {
+        modelId: 'Kling-3.0',
+        klingMultiShot: { multi_shot: 'intelligence' },
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(typeof req?.ExtInfo).toBe('string')
+    expect(JSON.parse(req?.ExtInfo as string)).toEqual({ multi_shot: 'intelligence' })
+  })
+
+  it('forwards short_type and multi_prompt alongside multi_shot', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      prompt: 'short drama opening scene',
+      options: {
+        modelId: 'Kling-3.0-Omni',
+        klingMultiShot: {
+          multi_shot: 'intelligence',
+          short_type: 'drama',
+          multi_prompt: 'scene 1: meet | scene 2: argue',
+        },
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(JSON.parse(req?.ExtInfo as string)).toEqual({
+      multi_shot: 'intelligence',
+      short_type: 'drama',
+      multi_prompt: 'scene 1: meet | scene 2: argue',
+    })
+  })
+
+  it('merges generic extInfo with klingMultiShot — extInfo wins on key conflict', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      prompt: 'mixed payload',
+      options: {
+        modelId: 'Kling-3.0',
+        klingMultiShot: { multi_shot: 'intelligence', short_type: 'drama' },
+        extInfo: { short_type: 'comedy', custom_flag: true },
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(JSON.parse(req?.ExtInfo as string)).toEqual({
+      multi_shot: 'intelligence',
+      short_type: 'comedy', // overridden
+      custom_flag: true,
+    })
+  })
+
+  it('omits ExtInfo when neither klingMultiShot nor extInfo provided', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'plain',
+      options: { modelId: 'Kling-3.0' },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req).not.toHaveProperty('ExtInfo')
+  })
+
+  it('omits ExtInfo when klingMultiShot is an empty object', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'plain',
+      options: {
+        modelId: 'Kling-3.0',
+        klingMultiShot: {},
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req).not.toHaveProperty('ExtInfo')
+  })
 })

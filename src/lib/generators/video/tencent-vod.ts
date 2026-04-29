@@ -81,6 +81,18 @@ interface TencentVODSubjectInfo {
     videoUrls?: string[]
 }
 
+/**
+ * Kling 3.0 / 3.0-Omni 智能分鏡參數。
+ * 透過 ExtInfo 序列化送出 — Tencent VOD 文件 2026-02-14 新增。
+ *   - multi_shot="intelligence" 表示模型自動依 prompt 切多鏡頭
+ *   - short_type / multi_prompt 為短劇場景擴充參數
+ */
+interface KlingMultiShotOptions {
+    multi_shot?: 'intelligence' | string
+    short_type?: string
+    multi_prompt?: string
+}
+
 interface TencentVODVideoOptions {
     modelId?: string
     duration?: number
@@ -95,6 +107,28 @@ interface TencentVODVideoOptions {
     referenceImageUrls?: string[]
     referenceUsage?: 'FirstFrame' | 'Reference'
     subjectInfos?: TencentVODSubjectInfo[]
+    klingMultiShot?: KlingMultiShotOptions
+    /**
+     * 任意 ExtInfo 通透 — 任何尚未在 typed options 涵蓋的 model-specific
+     * 參數都可從這邊傳入。Key 衝突時 extInfo 覆蓋 klingMultiShot。
+     */
+    extInfo?: Record<string, unknown>
+}
+
+/** 從 typed options 組出最終 ExtInfo payload；無欄位則回 null。 */
+function buildExtInfoPayload(opts: TencentVODVideoOptions): Record<string, unknown> | null {
+    const merged: Record<string, unknown> = {}
+    if (opts.klingMultiShot) {
+        for (const [k, v] of Object.entries(opts.klingMultiShot)) {
+            if (v !== undefined && v !== '') merged[k] = v
+        }
+    }
+    if (opts.extInfo) {
+        for (const [k, v] of Object.entries(opts.extInfo)) {
+            if (v !== undefined) merged[k] = v
+        }
+    }
+    return Object.keys(merged).length > 0 ? merged : null
 }
 
 /** 將內部 camelCase subject 物件轉為 Tencent API 的 PascalCase；空物件返回 null。 */
@@ -176,6 +210,9 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
         if (opts.sceneType) req.SceneType = opts.sceneType
         if (typeof opts.seed === 'number') req.Seed = opts.seed
         if (opts.inputRegion) req.InputRegion = opts.inputRegion
+
+        const extInfoPayload = buildExtInfoPayload(opts)
+        if (extInfoPayload) req.ExtInfo = JSON.stringify(extInfoPayload)
 
         logger.info({
             message: 'Tencent VOD video task submit',
