@@ -32,5 +32,5 @@ fi
 
 exec docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" \
   exec "${DEBUG_ENV[@]}" app \
-  sh -c 'cd /app && pnpm tsx --env-file=deploy/.env.prod scripts/tencent-vod-smoke.ts "$@"' \
+  sh -c 'cd /app && npx --no-install tsx --env-file=deploy/.env.prod scripts/tencent-vod-smoke.ts "$@"' \
   -- "$@"
