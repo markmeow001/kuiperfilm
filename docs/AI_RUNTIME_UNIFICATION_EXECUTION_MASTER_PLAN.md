@@ -25,7 +25,7 @@
 ## 预计改动规模（动态更新）
 - 预计文件：75-105
 - 预计代码行：8000-13000
-- 当前已改动文件：102（26 既有累计 + 本轮 Phase 11.5 working tree 76 个：schema / runtime / worker / UI / migration scripts / regression tests / docs / QUESTIONS.md）
+- 当前已改动文件：125（102 既有累计 + 本轮 Phase 11.1 working tree 23 个：messages i18n / WorkspaceHeaderShell / project page / episodes API route / CapsuleNav / useEpisodeMutations / route-catalog + 新增 EpisodeList / OverviewView / ProjectSettings / episode-progress / episode-thumbnail / EpisodeTabBar + dom-setup / vitest.dom.config / package.json deps + 7 个新 test files）
 
 # 2:阶段+具体代码修改地方以及需要修改的内容
 
@@ -40,8 +40,9 @@
 - 🔄 Phase 8: 复杂链路迁移（story_to_script_run / script_to_storyboard_run）
 - ⏸ Phase 9: 其余 AI 任务全量迁移
 - 🔄 Phase 10: 清理旧执行路径与旧事件协议（代码清理持续进行）
-- ⏸ Phase 11: 竞品对标功能补完（基于 docs/competitor-features/ 分析；Top 5 优先）
-  - ⏸ Phase 11.1: 「剧 → 集」UI 第一公民化（P0，纯前端，最契合用户核心需求）
+- 🔄 Phase 11: 竞品对标功能补完（基于 docs/competitor-features/ 分析；Top 5 优先）— 11.5 + 11.1 主要子任務 ✅ 完成；11.2 / 11.3 / 11.4 仍 ⏸；11.1.5 reviewer follow-up ⏸
+  - ✅ Phase 11.1: 「剧 → 集」UI 第一公民化（P0，纯前端，最契合用户核心需求）— 主要 4 個子任務全部 ✅ 完成；reorder API 拆 Phase 11.1.5
+  - ⏸ Phase 11.1.5: reviewer round 1 + round 2 follow-up（reorder API + lean GET 拆分 + EpisodeCard 抽取 + dead Sidebar 删除 + vitest dom config 默认旗 + locale prefix 验证 + OverviewView unit test）
   - ⏸ Phase 11.2: 角色 / 场景跨集共用 UX 强化（P0，含 junction table migration）
   - ⏸ Phase 11.3: 道具（Props）first-class asset（P1，新 model）
   - ⏸ Phase 11.4: 角色三视图（全身 → 三视图 → 头像）结构化（P0，跨集一致性核心）
@@ -220,40 +221,85 @@
 
 **目标**：让 Project = 剧、Episode = 集 在介面上明确，体验对齐 PolyFilm。**只改 UI，不改 schema**。
 
-- ⏸ 任务：Project 详情页加「集列表」主视图
+- ✅ 任务：Project 详情页加「集列表」主视图
   - 文件：`src/app/[locale]/workspace/[projectId]/page.tsx`
   - 文件：`src/app/[locale]/workspace/[projectId]/components/EpisodeList.tsx`（新）
-  - 要求：
-    - 进到 project 第一眼看到所有 episodes 的 grid
-    - 每集显示：episodeNumber、name、缩略图（首镜或封面）、进度（剧本/分镜/视频完成度）
-    - 顶部「+ 新建集」按钮
-    - 点集进入既有的 stage workflow（带 episodeId param）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/episode-progress.ts`（新）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/episode-thumbnail.ts`（新）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/OverviewView.tsx`（新；project dashboard wrapper，组合 EpisodeList + ProjectSettings）
+  - 文件：`src/app/api/novel-promotion/[projectId]/episodes/route.ts`（GET 回填 progress / thumbnail 计算所需欄位）
+  - 完成：进到 project 第一眼看到所有 episodes grid + 剧名 + 角色/场景计数；每集显示 episodeNumber、name、缩略图（首镜或封面）、进度（剧本/分镜/视频完成度）；顶部「+ 新建集」按钮；点集进入既有的 stage workflow（带 episodeId param）。Q-4 A 拍板「**完全停止「自动跳第一集」effect**」，user 进 project 永远先看 dashboard
+  - 测试：`tests/unit/episode-progress.test.ts` 8/8 ✅、`tests/unit/episode-thumbnail.test.ts` 7/7 ✅、`tests/unit/components/EpisodeList.test.tsx` 9/9 ✅、`tests/unit/components/OverviewView.test.tsx` ⏸（拆 Phase 11.1.5 follow-up）、`tests/integration/api/episodes-list.test.ts` 7/7 ✅、`tests/integration/workspace-page.test.tsx` 6/6 ✅（含 Q-4 A regression）
 
-- ⏸ 任务：Episode 切换器在 workspace header 永久存在
-  - 文件：`src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/WorkspaceHeaderShell.tsx`
-  - 要求：
-    - 类似 PolyFilm 故事板的水平 tab（第1集 / 第2集 / ...）
-    - 所有阶段（config / assets / storyboard / videos / voice）都能切集
-    - 当前 episode 高亮
-    - 「+ 新建集」end-of-tabs
+- ✅ 任务：Episode 切换器在 workspace header 永久存在
+  - 文件：`src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/WorkspaceHeaderShell.tsx`（接入 EpisodeTabBar）
+  - 文件：`src/components/ui/EpisodeTabBar.tsx`（新；水平 tab + 「+ 新建集」end-of-tabs）
+  - 文件：`src/components/ui/CapsuleNav.tsx`（旧 dropdown 切换器移除 / 改导）
+  - 文件：`src/lib/query/mutations/useEpisodeMutations.ts`（新增 / 重排序 mutation 缓存对齐）
+  - 完成：所有阶段（config / assets / storyboard / videos / voice）都能切集；当前 episode 高亮；切集时 Q-2 B 拍板「**保留 URL stage param（不重置）**」让用户停在同 stage 跨集对比。reorder 行为本轮无 UI（拆 Phase 11.1.5 ⏸）
+  - 测试：`tests/unit/components/EpisodeTabBar.test.tsx` 6/6 ✅、`tests/integration/workspace-page.test.tsx` 6/6 ✅（含 Q-2 B regression）
 
-- ⏸ 任务：Project 层级设定独立区块
-  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectSettings.tsx`（新或重构）
-  - 显示：videoRatio（9:16 / 16:9）、targetDuration、artStyle、各种 model 配置
-  - 集会继承这些设定（已是现状）
+- ✅ 任务：Project 层级设定独立区块
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectSettings.tsx`（新）
+  - 显示：videoRatio（9:16 / 16:9）、targetDuration、各种 model 配置 / capabilityOverrides，**styleProfile 唯讀 badge（自訂 / 未設定 + 參考圖數）**
+  - 註：master plan 此處原文写「artStyle」**已過時**（Phase 11.5 / Q-006 拍板 A 完全停用 artStyle / artStylePrompt）。Q-1 C user 拍板 ProjectSettings 显示 styleProfile 唯讀 badge：解 `referenceImageObjectIds` JSON 出参考图数；`isCustom` 透过判断 styleProfile 是否有 positivePrompt / referenceImage 决定显「自訂」或「未設定」。**不反推 preset 名**（避免 hardcode 对照表）
+  - 测试：`tests/unit/components/ProjectSettings.test.tsx` 8/8 ✅（涵盖 parseReferenceImageCount / capabilityOverrides 正規化 / styleProfileSummary isCustom 判断三条核心 path）
 
-- ⏸ 任务：API 层补 episode CRUD 完整性检查
-  - 文件：`src/app/api/projects/[projectId]/episodes/route.ts`（确认 / 补足）
-  - 验收：POST 新增、PATCH 重排序、DELETE 删除都顺畅
+- ✅ 任务：API 层补 episode CRUD 完整性检查
+  - 文件：`src/app/api/novel-promotion/[projectId]/episodes/route.ts`（GET / POST 完整性检查 + 回填 progress / thumbnail 所需欄位）
+  - 文件：`tests/integration/api/episodes-list.test.ts`（新；7/7 ✅）
+  - 完成：POST 新增、DELETE 删除都顺畅，GET 回 progress / thumbnail 计算所需欄位
+  - **PATCH 重排序未做** — Q-3 B user 拍板「拆 Phase 11.1.5 子任务」（reorder API + drag-and-drop UI 一併下个 phase 做）。本子任务边界：仅完成 GET / POST / DELETE 完整性
 
 **驗收**：
-- 进到 project 看到 dashboard：剧名 + N 集 + 角色 N 个 + 场景 N 个
-- header 任何阶段都能轻易切其他集
-- 「新增集」一键搞定
-- `npm run test:regression` 全绿
+- ✅ 进到 project 看到 dashboard：剧名 + N 集 + 角色 N 个 + 场景 N 个（OverviewView）
+- ✅ header 任何阶段都能轻易切其他集（EpisodeTabBar，含 stage param 保留）
+- ✅ 「新增集」一键搞定
+- ⚠️ `npm run test:regression` 完整链路本轮未跑（Q-002 ripgrep 缺失 / Q-003 worker mock 缺欄位 pre-existing 仍挡），但 Phase 11.1 范围内 7 类测试 51 cases 全 pass：tsc / config-center-guards / test-route-coverage / test-coverage-guards / 5 类 unit / 2 类 integration（详见末尾「当前验证执行记录」段）
 
 **风险**：
-- ⚠️ Episode 切换涉及 client state（既有 useNovelPromotionWorkspaceController）改动，需确认 stage state 不会因切集错乱
+- ✅ Episode 切换涉及 client state（既有 useNovelPromotionWorkspaceController）已确认 stage state 不会因切集错乱（Q-2 B 保留 stage param 设计）
+- ⚠️ N=50 集场景：dashboard 拉 episodes list 会拉出 N 个 `novelText` `@db.Text` blob 上 wire（Phase 11.1.5 #2 拆 lean / wizard-rehydrate 两条路径）
+
+### Phase 11.1.5 reviewer follow-up（11.1 收尾后子任务，未开工）
+
+来源：reviewer round 1 + round 2 提的 follow-up + Q-3 B 拍板拆出来的 reorder API。每一项独立可推进，不互相阻塞。
+
+- ⏸ 任务：Episode reorder API + drag-and-drop UI（Q-3 B 拆过来）
+  - 文件：`src/app/api/novel-promotion/[projectId]/episodes/reorder/route.ts`（新）
+  - 文件：`src/components/ui/EpisodeTabBar.tsx`（加 reorder UI）
+  - 逻辑：transaction 处理 episodeNumber `@@unique` 约束（先升再写：把目标号段先 +1000 暂存避撞 unique，再写最终值）
+  - 验收：drag-and-drop 顺序、unique 冲突 graceful 处理（不暴露 db error）、optimistic update 失败回滚
+
+- ⏸ 任务：GET `/episodes` 拆 lean / wizard-rehydrate 两条路径
+  - 问题：dashboard 用 `useQuery` 拉 episodes 拉到 N 集 `novelText` `@db.Text`，N=50 集就 50 个 large blob 上 wire
+  - 文件：`src/app/api/novel-promotion/[projectId]/episodes/route.ts`（加 `?slim=1`）或新 endpoint `episodes/wizard-rehydrate`
+  - 逻辑：dashboard 用 lean GET（不含 novelText），wizard 用 full GET 或专属 endpoint
+  - 验收：N=50 集 dashboard 载入时间下降可量测（before/after benchmark）、wizard 重编能拿到 novelText
+
+- ⏸ 任务：`OverviewView.tsx` 补 unit test
+  - 文件：`tests/unit/components/OverviewView.test.tsx`（新）
+  - 涵盖：`parseReferenceImageCount` 解 JSON、`capabilityOverrides` 正規化、`styleProfileSummary` isCustom 判断
+  - 验收：4-6 case + 假绿灯检查（assertion 真的会 fail when 实作错）
+
+- ⏸ 任务：拆 `EpisodeList.tsx` 304 行 → 提取 `EpisodeCard.tsx`
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/EpisodeCard.tsx`（新）
+  - 含 editingName / confirmingDelete 两组局部 state（从 EpisodeList 抽出）
+  - EpisodeList 缩到 ~150 行
+  - 验收：tests 不变、guard 绿、`scripts/guards/file-line-count-guard.mjs` 不挡
+
+- ⏸ 任务：删除 dead `src/app/[locale]/workspace/[projectId]/components/Sidebar.tsx`
+  - reviewer 确认无 import / caller
+  - 验收：grep 确认无遗留 import + tests 不变
+
+- ⏸ 任务：`vitest.dom.config.ts` 预设关 BILLING_TEST_BOOTSTRAP
+  - 避免后人忘记带 `BILLING_TEST_BOOTSTRAP=0` 跑 dom test
+  - 验收：跑 dom test 不需手动带旗
+
+- ⏸ 任务：EpisodeTabBar projectHref 确认带 [locale] prefix
+  - reviewer round 1 提的小问题
+  - 看 next-intl middleware 行为（直连 `/workspace/...` vs `/zh/workspace/...`）
+  - 验收：locale-prefixed route 跳转正确
 
 ### Phase 11.2 角色 / 场景跨集共用 UX 强化（P0，含 schema migration）
 
@@ -507,6 +553,20 @@
 - ✅ `npx vitest run tests/unit/worker/chokepoint-style-injection.test.ts`：5 tests pass
 - ✅ 其他 worker test 全綠（character-image / location-image / panel-image / panel-variant / modify-image-reference-description / image-task-handlers-core / video-worker / analyze-novel / reference-to-character + reference-to-character-style-profile），唯 pre-existing Q-003 panel-image-task-handler.test:188 與 script-to-storyboard.test x2 prisma mock 缺欄位 fail（非本 phase 引入）
 - ✅ `npx vitest run tests/unit/media/service.test.ts`：5 tests pass（MediaObject.uploadedByUserId 寫入路徑）
+
+### Phase 11.1 本轮新增验证（working tree，feature/phase-11，未 commit）
+- ✅ `npx tsc --noEmit -p tsconfig.json`：0 errors
+- ✅ `npm run check:config-center-guards`：5/5
+- ✅ `npm run check:test-route-coverage`：131 routes（含本轮 episodes endpoint progress / thumbnail 欄位回填）
+- ✅ `npm run check:test-coverage-guards`：全綠
+- ✅ `tests/unit/episode-progress.test.ts`：8/8 pass
+- ✅ `tests/unit/episode-thumbnail.test.ts`：7/7 pass
+- ✅ `tests/unit/components/EpisodeList.test.tsx`：9/9 pass
+- ✅ `tests/unit/components/EpisodeTabBar.test.tsx`：6/6 pass
+- ✅ `tests/unit/components/ProjectSettings.test.tsx`：8/8 pass（涵盖 parseReferenceImageCount / capabilityOverrides 正規化 / styleProfileSummary isCustom 判断）
+- ✅ `tests/integration/api/episodes-list.test.ts`：7/7 pass
+- ✅ `tests/integration/workspace-page.test.tsx`：6/6 pass（**Q-2 B regression：切集保留 stage param** + **Q-4 A regression：不自动跳第一集** 双路径守住）
+- ⚠️ 本轮无新 BLOCK 问题；pre-existing Q-002 / Q-003 / Q-004（Phase 11.5 同步阶段已登记）仍挡 `npm run test:regression` 完整链路，不在 Phase 11.1 范围内
 
 ## 当前问题登记（必须先记录再推进）
 - ⚠️ 回归门禁未全绿：存在 3 个历史/并行改动引入的失败用例，导致 `test:regression` 无法通过。

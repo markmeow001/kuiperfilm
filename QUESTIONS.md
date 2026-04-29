@@ -314,3 +314,29 @@ Image（13 個）：
 - **解決時間**: 2026-04-28
 - `vi.fn` 推導為 undefined 時 cast 報錯
 - 修補紀錄：給 `vi.fn` 加泛型參數；`tests/unit/worker/location-image-task-handler.test.ts` 全綠；`npx tsc --noEmit -p tsconfig.json` 0 errors
+
+---
+
+## Phase 11.1 設計決策（已落實）
+
+> 註：Phase 11.1 user 拍板的 Q-1 / Q-2 / Q-3 / Q-4 屬於 phase-architect 範疇的「當輪設計選擇」，不是 QUESTIONS.md 一般的「跨輪未解 / 架構決策」。輕量化記錄在此給未來接手的人 trace。差別：QUESTIONS.md 主體是長期未解，本段是 phase 內已落地。
+
+- **Q-1 C：ProjectSettings 顯示「自訂 / 未設定」+ 參考圖數，不反推 preset 名（避免 hardcode 對照表）**
+  - 落實：`ProjectSettings.tsx` 渲染 styleProfile 唯讀 badge — `parseReferenceImageCount(referenceImageObjectIds)` 解 JSON 出參考圖數；`isCustom` 透過 styleProfile 是否有 positivePrompt 或 referenceImage 決定顯「自訂」或「未設定」
+  - 不做：不反推 preset 名（master plan 原 Phase 11.1 寫的「artStyle」已過時，Phase 11.5 / Q-006 拍板 A 已完全停用 artStyle / artStylePrompt）
+  - 測試：`tests/unit/components/ProjectSettings.test.tsx` 8/8 ✅
+
+- **Q-2 B：切集保留 URL stage param（不重置）**
+  - 落實：`EpisodeTabBar` 切集時保留現有 stage param（user 在 storyboard 切第 2 集仍停在 storyboard），讓用戶能跨集對比同 stage
+  - 不做：不重置回 config / 不重置回第一個 stage
+  - 測試：`tests/integration/workspace-page.test.tsx` regression case 守住
+
+- **Q-3 B：reorder API 拆 Phase 11.1.5**
+  - 落實：本 Phase 11.1 子任務 4「API 層補 episode CRUD 完整性檢查」邊界縮減為 GET / POST / DELETE 完整性；PATCH 重排序拆出去獨立子任務
+  - 拆出去的子任務含：reorder API（transaction 處理 episodeNumber `@@unique` 約束）+ EpisodeTabBar drag-and-drop UI + optimistic update 回滾
+  - 理由：reorder transaction 邏輯獨立、UI drag-and-drop 工作量明顯 > 單一 API 端點
+
+- **Q-4 A：完全停止「自動跳第一集」effect**
+  - 落實：移除既有「進 project 自動 redirect 到第一集」effect（`page.tsx`）；user 進 project 永遠先看 `OverviewView` dashboard
+  - 不做：不做「最後造訪集」記憶（避免 localStorage 同步成本）/ 不做「無集時自動建第一集」（讓 user 主動點「+ 新建集」）
+  - 測試：`tests/integration/workspace-page.test.tsx` regression case 守住「進 project 看到 OverviewView，不自動跳到 first episode workspace」
