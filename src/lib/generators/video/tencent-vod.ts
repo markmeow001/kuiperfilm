@@ -67,6 +67,20 @@ function splitModel(model: string): { name: string; version: string } {
     return { name: model.slice(0, idx), version: model.slice(idx + 1) }
 }
 
+/**
+ * 固定主體輸入資訊（角色一致性）。
+ * - Kling: Id 必填，Name 選填
+ * - Vidu: Name 必填（prompt 用 [@name] 引用），Id/VoiceId/ImageUrls/VideoUrls 選填
+ * 來源：Tencent VOD AIGC SubjectInfos.N
+ */
+interface TencentVODSubjectInfo {
+    id?: string
+    name?: string
+    voiceId?: string
+    imageUrls?: string[]
+    videoUrls?: string[]
+}
+
 interface TencentVODVideoOptions {
     modelId?: string
     duration?: number
@@ -80,6 +94,18 @@ interface TencentVODVideoOptions {
     lastFrameUrl?: string
     referenceImageUrls?: string[]
     referenceUsage?: 'FirstFrame' | 'Reference'
+    subjectInfos?: TencentVODSubjectInfo[]
+}
+
+/** 將內部 camelCase subject 物件轉為 Tencent API 的 PascalCase；空物件返回 null。 */
+function buildSubjectInfo(subject: TencentVODSubjectInfo): Record<string, unknown> | null {
+    const out: Record<string, unknown> = {}
+    if (subject.id) out.Id = subject.id
+    if (subject.name) out.Name = subject.name
+    if (subject.voiceId) out.VoiceId = subject.voiceId
+    if (subject.imageUrls?.length) out.ImageUrls = subject.imageUrls
+    if (subject.videoUrls?.length) out.VideoUrls = subject.videoUrls
+    return Object.keys(out).length > 0 ? out : null
 }
 
 export class TencentVODVideoGenerator extends BaseVideoGenerator {
@@ -137,6 +163,14 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
             OutputConfig: outputConfig,
         }
         if (fileInfos.length) req.FileInfos = fileInfos
+
+        if (opts.subjectInfos?.length) {
+            const subjectInfos = opts.subjectInfos
+                .map(buildSubjectInfo)
+                .filter((s): s is Record<string, unknown> => s !== null)
+            if (subjectInfos.length) req.SubjectInfos = subjectInfos
+        }
+
         if (opts.lastFrameUrl) req.LastFrameUrl = opts.lastFrameUrl
         if (opts.enhancePrompt) req.EnhancePrompt = opts.enhancePrompt
         if (opts.sceneType) req.SceneType = opts.sceneType

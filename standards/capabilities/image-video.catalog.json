@@ -1386,7 +1386,8 @@
         ],
         "resolutionOptions": [
           "720P",
-          "1080P"
+          "1080P",
+          "4K"
         ],
         "generateAudioOptions": [
           true,
@@ -1394,7 +1395,7 @@
         ],
         "supportGenerateAudio": true,
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -1413,7 +1414,8 @@
         ],
         "resolutionOptions": [
           "720P",
-          "1080P"
+          "1080P",
+          "4K"
         ],
         "generateAudioOptions": [
           true,
@@ -1421,7 +1423,7 @@
         ],
         "supportGenerateAudio": true,
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -1931,7 +1933,97 @@
         ],
         "supportGenerateAudio": true,
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Seedance-1.0-pro",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Seedance-1.0-lite-i2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Seedance-1.0-pro-fast",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5
+        ],
+        "resolutionOptions": [
+          "720P",
+          "1080P"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Seedance-1.5-pro",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          5,
+          10
+        ],
+        "resolutionOptions": [
+          "720P"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
       }
     }
   },
@@ -1981,7 +2073,7 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -1997,7 +2089,7 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -2014,7 +2106,7 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -2030,7 +2122,7 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -2046,7 +2138,7 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -2062,7 +2154,7 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
