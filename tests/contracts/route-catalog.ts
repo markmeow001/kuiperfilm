@@ -138,6 +138,7 @@ const ROUTE_FILES = [
   'src/app/api/projects/[projectId]/costs/route.ts',
   'src/app/api/projects/[projectId]/data/route.ts',
   'src/app/api/projects/[projectId]/route.ts',
+  'src/app/api/projects/[projectId]/style-profile/route.ts',
   'src/app/api/projects/route.ts',
   'src/app/api/runs/[runId]/cancel/route.ts',
   'src/app/api/runs/[runId]/events/route.ts',
