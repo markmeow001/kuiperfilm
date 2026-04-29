@@ -99,10 +99,18 @@ function interpretError(err: unknown): InterpretedResult {
   const message = err instanceof Error ? err.message : String(err)
 
   // The "good" failure path — authenticated, just no such task.
-  if (code === 'InvalidParameter.NotFoundTaskId' || /NotFound.*Task/i.test(message)) {
+  // Tencent emits this under a few different codes depending on the
+  // service version; treat any "task / resource not found" shape as
+  // proof of working auth.
+  if (
+    code === 'InvalidParameter.NotFoundTaskId'
+    || code === 'ResourceNotFound'
+    || code === 'ResourceNotFound.NotFoundTask'
+    || /NotFound.*Task/i.test(message)
+  ) {
     return {
       ok: true,
-      verdict: 'AUTH OK — Tencent accepted the credentials and reported "task not found" (which is what we expected for a fake taskId).',
+      verdict: 'AUTH OK — Tencent accepted the credentials and reported "task not found" (which is what we expected for a probe TaskId that does not exist).',
     }
   }
 
