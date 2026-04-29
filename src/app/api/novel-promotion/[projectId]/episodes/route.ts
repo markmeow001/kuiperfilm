@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { computeEpisodeProgress } from '@/app/[locale]/workspace/[projectId]/components/episode-progress'
+import { pickEpisodeThumbnail } from '@/app/[locale]/workspace/[projectId]/components/episode-thumbnail'
 
 /**
- * GET - 获取项目的所有剧集
+ * GET - 获取项目的所有剧集（含 progress + thumbnail，不回大欄位）
+ *
+ * Phase 11.1: 為「劇 → 集」dashboard 提供集列表。
+ * - 嚴格 select：避免拉到 prompt / imageHistory 等大欄位
+ * - 計算 progress（劇本 / 分鏡 / 視頻）與 thumbnailUrl
  */
 export const GET = apiHandler(async (
   request: NextRequest,
@@ -19,10 +25,50 @@ export const GET = apiHandler(async (
 
   const episodes = await prisma.novelPromotionEpisode.findMany({
     where: { novelPromotionProjectId: novelData.id },
-    orderBy: { episodeNumber: 'asc' }
+    orderBy: { episodeNumber: 'asc' },
+    select: {
+      id: true,
+      episodeNumber: true,
+      name: true,
+      description: true,
+      novelText: true,
+      createdAt: true,
+      updatedAt: true,
+      clips: { select: { id: true, screenplay: true } },
+      storyboards: {
+        select: {
+          id: true,
+          panels: { select: { id: true, imageUrl: true, videoUrl: true } },
+        },
+      },
+      shots: { select: { id: true, imageUrl: true } },
+    },
   })
 
-  return NextResponse.json({ episodes })
+  const enriched = episodes.map((episode) => {
+    const progress = computeEpisodeProgress({
+      clips: episode.clips,
+      storyboards: episode.storyboards,
+    })
+    const thumbnailUrl = pickEpisodeThumbnail({
+      storyboards: episode.storyboards,
+      shots: episode.shots,
+    })
+
+    return {
+      id: episode.id,
+      episodeNumber: episode.episodeNumber,
+      name: episode.name,
+      description: episode.description,
+      novelText: episode.novelText,
+      createdAt: episode.createdAt,
+      updatedAt: episode.updatedAt,
+      progress,
+      thumbnailUrl,
+    }
+  })
+
+  return NextResponse.json({ episodes: enriched })
 })
 
 /**
