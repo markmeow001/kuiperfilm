@@ -15,11 +15,23 @@ type MediaObjectRow = {
   height: number | null
   durationMs: number | null
   updatedAt: Date | string
+  uploadedByUserId?: string | null
+}
+
+/**
+ * Q-005: ownership context for MediaObject creation.
+ * Passed all the way from the request handler / worker handler so the row is tagged
+ * with the original uploader. Required for cross-user reference protection in
+ * styleProfile + similar features.
+ */
+export interface MediaObjectOwnerContext {
+  uploadedByUserId: string | null
 }
 
 type MediaModel = {
   findUnique: (args: unknown) => Promise<unknown>
   upsert: (args: unknown) => Promise<unknown>
+  update: (args: unknown) => Promise<unknown>
 }
 
 const mediaModel = (prisma as unknown as { mediaObject: MediaModel }).mediaObject
@@ -88,11 +100,24 @@ function mapMediaObjectToRef(row: MediaObjectRow): MediaRef {
 export async function ensureMediaObjectFromStorageKey(
   rawStorageKey: string,
   metadata?: Partial<Pick<MediaRef, 'mimeType' | 'sizeBytes' | 'width' | 'height' | 'durationMs'>>,
+  owner?: MediaObjectOwnerContext,
 ): Promise<MediaRef> {
   const storageKey = normalizeStorageKey(rawStorageKey)
 
   const existing = (await mediaModel.findUnique({ where: { storageKey } })) as MediaObjectRow | null
   if (existing != null) {
+    // Q-005: backfill uploadedByUserId on lazy resolves when the row had none and
+    // we now have a known owner context.  Never overwrite an existing owner.
+    if (
+      owner?.uploadedByUserId &&
+      (existing.uploadedByUserId == null || existing.uploadedByUserId === '')
+    ) {
+      const updated = (await mediaModel.update({
+        where: { id: existing.id },
+        data: { uploadedByUserId: owner.uploadedByUserId },
+      })) as MediaObjectRow
+      return mapMediaObjectToRef(updated)
+    }
     return mapMediaObjectToRef(existing)
   }
 
@@ -107,6 +132,8 @@ export async function ensureMediaObjectFromStorageKey(
         width: metadata?.width ?? undefined,
         height: metadata?.height ?? undefined,
         durationMs: metadata?.durationMs ?? undefined,
+        // only fill owner on update if currently null and we have a context
+        ...(owner?.uploadedByUserId ? { uploadedByUserId: owner.uploadedByUserId } : {}),
       },
       create: {
         publicId,
@@ -116,6 +143,7 @@ export async function ensureMediaObjectFromStorageKey(
         width: metadata?.width ?? null,
         height: metadata?.height ?? null,
         durationMs: metadata?.durationMs ?? null,
+        uploadedByUserId: owner?.uploadedByUserId ?? null,
       },
     })) as MediaObjectRow
 
@@ -182,24 +210,31 @@ export function extractStorageKeyFromLegacyValue(value: unknown): string | null 
   return null
 }
 
-export async function resolveMediaRefFromLegacyValue(value: unknown): Promise<MediaRef | null> {
+export async function resolveMediaRefFromLegacyValue(
+  value: unknown,
+  owner?: MediaObjectOwnerContext,
+): Promise<MediaRef | null> {
   const storageKey = extractStorageKeyFromLegacyValue(value)
   if (!storageKey) return null
-  return ensureMediaObjectFromStorageKey(storageKey)
+  return ensureMediaObjectFromStorageKey(storageKey, undefined, owner)
 }
 
 export async function resolveMediaRef(
   mediaId: unknown,
   legacyValue: unknown,
+  owner?: MediaObjectOwnerContext,
 ): Promise<MediaRef | null> {
   if (typeof mediaId === 'string' && mediaId.trim()) {
     const mediaById = await getMediaObjectById(mediaId)
     if (mediaById) return mediaById
   }
-  return resolveMediaRefFromLegacyValue(legacyValue)
+  return resolveMediaRefFromLegacyValue(legacyValue, owner)
 }
 
-export async function resolveMediaRefsFromLegacyJsonArray(jsonStr: unknown): Promise<MediaRef[]> {
+export async function resolveMediaRefsFromLegacyJsonArray(
+  jsonStr: unknown,
+  owner?: MediaObjectOwnerContext,
+): Promise<MediaRef[]> {
   if (typeof jsonStr !== 'string' || !jsonStr.trim()) return []
   try {
     const parsed = JSON.parse(jsonStr)
@@ -208,7 +243,7 @@ export async function resolveMediaRefsFromLegacyJsonArray(jsonStr: unknown): Pro
     const refs = await Promise.all(
       parsed
         .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
-        .map((v) => resolveMediaRefFromLegacyValue(v)),
+        .map((v) => resolveMediaRefFromLegacyValue(v, owner)),
     )
 
     return refs.filter((v): v is MediaRef => !!v)

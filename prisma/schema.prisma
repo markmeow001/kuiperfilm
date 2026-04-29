@@ -249,8 +249,14 @@ model NovelPromotionProject {
   targetDuration  Int                       @default(60) // 目标视频时长（秒）
   ttsRate         String                    @default("+50%")
   globalAssetText String?                   @db.Text
+  // deprecated: replaced by styleProfile fields (stylePositivePrompt / styleNegativePrompt / styleReferenceImages),
+  // kept for migration trace only. Do not write from new code.
   artStyle        String                    @default("american-comic")
+  // deprecated: replaced by styleProfile fields, kept for migration trace, do not write
   artStylePrompt  String?                   @db.Text
+  stylePositivePrompt   String?             @db.Text
+  styleNegativePrompt   String?             @db.Text
+  styleReferenceImages  String?             @db.Text // JSON array of MediaObject ids
   characterModel  String? // 用户配置的角色图片模型
   locationModel   String? // 用户配置的场景图片模型
   storyboardModel String? // 用户配置的分镜图片模型
@@ -430,6 +436,9 @@ model User {
   // 多人系统：邀请码（建立 / 使用关系）
   invitesCreated InviteCode[] @relation("InviteCreator")
   inviteUsed     InviteCode[] @relation("InviteUsedBy")
+
+  // Q-005: MediaObject ownership reverse relation
+  uploadedMedia MediaObject[] @relation("MediaObjectUploader")
 
   @@map("user")
 }
@@ -951,6 +960,11 @@ model MediaObject {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now()) @updatedAt
 
+  // Q-005: ownership for cross-user reference protection.
+  // nullable for backfill compatibility; future phase enforces non-null after backfill complete.
+  uploadedByUserId String? @db.VarChar(36)
+  uploader         User?   @relation("MediaObjectUploader", fields: [uploadedByUserId], references: [id])
+
   characterAppearanceImages             CharacterAppearance[]       @relation("CharacterAppearanceImageMedia")
   locationImages                        LocationImage[]             @relation("LocationImageMedia")
   novelPromotionCharacterVoices         NovelPromotionCharacter[]   @relation("NovelPromotionCharacterVoiceMedia")
@@ -972,6 +986,7 @@ model MediaObject {
   globalVoiceCustomVoices               GlobalVoice[]               @relation("GlobalVoiceCustomVoiceMedia")
 
   @@index([createdAt])
+  @@index([uploadedByUserId])
   @@map("media_objects")
 }
 
