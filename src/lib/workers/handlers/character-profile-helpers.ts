@@ -25,21 +25,34 @@ export function parseVisualResponse(responseText: string): AnyObj {
   return JSON.parse(cleaned) as AnyObj
 }
 
-export async function resolveProjectModel(projectId: string) {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: {
-      id: true,
-      novelPromotionData: {
-        select: {
-          id: true,
-          analysisModel: true,
+export async function resolveProjectModel(projectId: string, userId?: string) {
+  const [project, userPreference] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        novelPromotionData: {
+          select: {
+            id: true,
+            analysisModel: true,
+          },
         },
       },
-    },
-  })
+    }),
+    userId
+      ? prisma.userPreference.findUnique({
+          where: { userId },
+          select: { analysisModel: true },
+        })
+      : Promise.resolve(null),
+  ])
   if (!project) throw new Error('Project not found')
   if (!project.novelPromotionData) throw new Error('Novel promotion data not found')
+  // Project-level override wins; otherwise fall back to user preference,
+  // matching the contract used by resolveAnalysisModel in shot-ai-persist.
+  if (!project.novelPromotionData.analysisModel && userPreference?.analysisModel) {
+    project.novelPromotionData.analysisModel = userPreference.analysisModel
+  }
   if (!project.novelPromotionData.analysisModel) throw new Error('请先在项目设置中配置分析模型')
   return project
 }
