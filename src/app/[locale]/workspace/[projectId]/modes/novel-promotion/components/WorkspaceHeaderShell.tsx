@@ -1,6 +1,7 @@
 'use client'
 
-import { CapsuleNav, EpisodeSelector } from '@/components/ui/CapsuleNav'
+import { CapsuleNav } from '@/components/ui/CapsuleNav'
+import EpisodeTabBar from '@/components/ui/EpisodeTabBar'
 import { SettingsModal, WorldContextModal } from '@/components/ui/ConfigModals'
 import WorkspaceTopActions from './WorkspaceTopActions'
 import type { NovelPromotionPanel } from '@/types/project'
@@ -158,22 +159,24 @@ export default function WorkspaceHeaderShell({
           return d !== 0 ? d : a.name.localeCompare(b.name, 'zh')
         })
         return (
-          <EpisodeSelector
+          <EpisodeTabBar
             projectName={projectName}
-            episodes={sorted.map((ep) => ({
+            projectHref={`/workspace/${projectId}?view=overview`}
+            episodes={sorted.map((ep, idx) => ({
               id: ep.id,
               title: ep.name,
-              summary: ep.description ?? undefined,
-              status: {
-                script: ep.clips?.length ? 'ready' as const : 'empty' as const,
-                visual: ep.storyboards?.some((sb) => sb.panels?.some((panel) => panel.videoUrl)) ? 'ready' as const : 'empty' as const,
-              },
+              episodeNumber: ep.episodeNumber ?? idx + 1,
+              readyDot: ep.storyboards?.some((sb) => sb.panels?.some((panel) => panel.videoUrl))
+                ? 'ready'
+                : ep.clips?.length
+                  ? 'processing'
+                  : 'empty',
             }))}
             currentId={currentEpisodeId}
             onSelect={(id) => onEpisodeSelect?.(id)}
-            onAdd={onEpisodeCreate}
+            onAdd={() => onEpisodeCreate?.()}
             onRename={(id, newName) => onEpisodeRename?.(id, newName)}
-            onDelete={onEpisodeDelete}
+            onDelete={(id) => onEpisodeDelete?.(id)}
           />
         )
       })()}

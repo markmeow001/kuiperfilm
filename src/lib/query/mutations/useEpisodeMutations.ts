@@ -11,16 +11,31 @@ import {
 
 /**
  * 获取项目剧集列表
+ *
+ * Phase 11.1: 回傳結構新增 `progress` 與 `thumbnailUrl`，並移除 panels/storyboards 大欄位。
+ * 既有 caller（smart-import wizard）依賴 `novelText`，仍保留於 select。
  */
 export function useListProjectEpisodes(projectId: string) {
   return useMutation({
     mutationFn: async () =>
       await requestJsonWithError<{
         episodes?: Array<{
+          id?: string
           episodeNumber?: number
           name?: string
           description?: string
           novelText?: string
+          createdAt?: string
+          updatedAt?: string
+          progress?: {
+            scriptDone: number
+            scriptTotal: number
+            storyboardDone: number
+            storyboardTotal: number
+            videoDone: number
+            videoTotal: number
+          }
+          thumbnailUrl?: string | null
         }>
       }>(`/api/novel-promotion/${projectId}/episodes`, { method: 'GET' }, '获取剧集失败'),
   })
