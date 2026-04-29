@@ -37,5 +37,29 @@
     "newEpisodePlaceholder": "输入剧集名称...",
     "create": "创建",
     "addEpisode": "添加剧集"
+  },
+  "projectAssets": {
+    "title": "项目资产",
+    "subtitle": "跨集共用的角色与场景管理",
+    "tabCharacters": "角色",
+    "tabLocations": "场景",
+    "tabProps": "道具",
+    "tabPropsComingSoon": "道具管理（即将上线）",
+    "charactersCount": "共 {count} 个角色",
+    "locationsCount": "共 {count} 个场景",
+    "emptyCharacters": "尚无角色。点击「从资产中心导入」加入既有角色。",
+    "emptyLocations": "尚无场景。点击「从资产中心导入」加入既有场景。",
+    "appearsInNone": "尚未出现在任何剧集",
+    "appearsInEpisodes": "出现于：{list}",
+    "importFromGlobal": "+ 从资产中心导入",
+    "importCharacterTitle": "从资产中心导入角色",
+    "importLocationTitle": "从资产中心导入场景",
+    "includeAppearances": "同时复制角色形象",
+    "includeImages": "同时复制场景图片",
+    "emptyGlobalList": "资产中心目前没有可导入的项目。",
+    "loading": "加载中…",
+    "loadFailed": "加载失败",
+    "importFailed": "导入失败",
+    "close": "关闭"
   }
 }

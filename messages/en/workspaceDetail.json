@@ -37,5 +37,29 @@
     "newEpisodePlaceholder": "Enter episode name...",
     "create": "Create",
     "addEpisode": "Add Episode"
+  },
+  "projectAssets": {
+    "title": "Project Assets",
+    "subtitle": "Cross-episode characters and locations",
+    "tabCharacters": "Characters",
+    "tabLocations": "Locations",
+    "tabProps": "Props",
+    "tabPropsComingSoon": "Props management (coming soon)",
+    "charactersCount": "{count} characters",
+    "locationsCount": "{count} locations",
+    "emptyCharacters": "No characters yet. Click \"Import from Asset Hub\" to add existing ones.",
+    "emptyLocations": "No locations yet. Click \"Import from Asset Hub\" to add existing ones.",
+    "appearsInNone": "Not yet used in any episode",
+    "appearsInEpisodes": "Appears in: {list}",
+    "importFromGlobal": "+ Import from Asset Hub",
+    "importCharacterTitle": "Import Character from Asset Hub",
+    "importLocationTitle": "Import Location from Asset Hub",
+    "includeAppearances": "Also copy character appearances",
+    "includeImages": "Also copy location images",
+    "emptyGlobalList": "Asset Hub has no items to import.",
+    "loading": "Loading…",
+    "loadFailed": "Failed to load",
+    "importFailed": "Import failed",
+    "close": "Close"
   }
 }

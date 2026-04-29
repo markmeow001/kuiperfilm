@@ -12,6 +12,7 @@ import { queryKeys } from '@/lib/query/keys'
 import NovelPromotionWorkspace from './modes/novel-promotion/NovelPromotionWorkspace'
 import SmartImportWizard, { SplitEpisode } from './modes/novel-promotion/components/SmartImportWizard'
 import OverviewView from './components/OverviewView'
+import ProjectAssets from './components/ProjectAssets'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { resolveSelectedEpisodeId } from './episode-selection'
 
@@ -20,7 +21,8 @@ const VALID_STAGES = ['config', 'script', 'assets', 'text-storyboard', 'storyboa
 type Stage = typeof VALID_STAGES[number]
 
 // Phase 11.1: view enum，將 dashboard / 集 / 全局資產 變第一公民
-const VALID_VIEWS = ['overview', 'episode', 'global-assets'] as const
+// Phase 11.2: 'assets' view 加入（project-level 跨集角色/場景）
+const VALID_VIEWS = ['overview', 'episode', 'global-assets', 'assets'] as const
 type ViewMode = typeof VALID_VIEWS[number]
 
 interface Episode {
@@ -334,6 +336,9 @@ export default function ProjectDetailPage() {
                 onStageChange={updateUrlStage}
               />
             </div>
+          ) : effectiveView === 'assets' ? (
+            // Phase 11.2: project-level 跨集角色/場景管理
+            <ProjectAssets projectId={projectId} />
           ) : effectiveView === 'episode' && selectedEpisodeId && currentEpisode ? (
             // 剧集工作区
             <NovelPromotionWorkspace
