@@ -134,8 +134,17 @@ async function handleConfirmProfile(
     await assertTaskActive(job, 'character_profile_confirm_create_appearance')
     const descriptions = Array.isArray(app.descriptions) ? app.descriptions : []
     const normalizedDescriptions = descriptions.map((item) => readText(item)).filter(Boolean)
-    await prisma.characterAppearance.create({
-      data: {
+    // Upsert so re-confirming a character (e.g. a UI double-click while
+    // the first run is still in flight) overwrites the row instead of
+    // throwing on the (characterId, appearanceIndex) unique constraint.
+    await prisma.characterAppearance.upsert({
+      where: {
+        characterId_appearanceIndex: {
+          characterId: character.id,
+          appearanceIndex: appIndex,
+        },
+      },
+      create: {
         characterId: character.id,
         appearanceIndex: appIndex,
         changeReason: readText(app.change_reason) || '初始形象',
@@ -143,6 +152,11 @@ async function handleConfirmProfile(
         descriptions: JSON.stringify(normalizedDescriptions),
         imageUrls: encodeImageUrls([]),
         previousImageUrls: encodeImageUrls([]),
+      },
+      update: {
+        changeReason: readText(app.change_reason) || '初始形象',
+        description: normalizedDescriptions[0] || '',
+        descriptions: JSON.stringify(normalizedDescriptions),
       },
     })
   }
