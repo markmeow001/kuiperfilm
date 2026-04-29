@@ -12,35 +12,49 @@
  * Usage (on the droplet):
  *   ssh root@137.184.64.179
  *   cd /opt/kuiperAI
- *   docker compose exec app pnpm tsx --env-file=deploy/.env.prod scripts/tencent-vod-smoke.ts --user <userId>
+ *   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.prod \
+ *     exec app sh -c 'cd /app && pnpm tsx --env-file=deploy/.env.prod scripts/tencent-vod-smoke.ts'
  *
- * Or on local dev:
- *   pnpm tsx --env-file=.env scripts/tencent-vod-smoke.ts --user <userId>
+ * --user <userId> is optional. When omitted, the first admin user is used.
  */
 
 import { getProviderConfig } from '@/lib/api-config'
+import { prisma } from '@/lib/prisma'
 import { vod } from 'tencentcloud-sdk-nodejs-vod'
 
 const VodClient = vod.v20180717.Client
 
 interface ParsedArgs {
-  userId: string
+  userId: string | null
 }
 
 function parseArgs(): ParsedArgs {
   const argv = process.argv.slice(2)
-  let userId = ''
+  let userId: string | null = null
   for (let i = 0; i < argv.length; i++) {
     if ((argv[i] === '--user' || argv[i] === '-u') && argv[i + 1]) {
       userId = argv[i + 1]
       i++
     }
   }
-  if (!userId) {
-    console.error('usage: tsx scripts/tencent-vod-smoke.ts --user <userId>')
+  return { userId }
+}
+
+/** When --user is omitted, fall back to the first admin user. */
+async function resolveUserId(explicit: string | null): Promise<string> {
+  if (explicit) return explicit
+  const admin = await prisma.user.findFirst({
+    where: { role: 'admin' },
+    select: { id: true, name: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (!admin) {
+    console.error('\n❌ No admin user found in DB and no --user supplied.')
+    console.error('   Run scripts/bootstrap-admin.ts first, or pass --user <userId> explicitly.')
     process.exit(2)
   }
-  return { userId }
+  console.log(`[tencent-vod-smoke] no --user given, defaulting to admin: ${admin.name} (${admin.id})`)
+  return admin.id
 }
 
 interface TencentVODCredentials {
@@ -139,7 +153,8 @@ function interpretError(err: unknown): InterpretedResult {
 }
 
 async function main() {
-  const { userId } = parseArgs()
+  const { userId: explicitUserId } = parseArgs()
+  const userId = await resolveUserId(explicitUserId)
 
   console.log(`\n[tencent-vod-smoke] user=${userId}`)
   console.log('[tencent-vod-smoke] step 1/3: loading encrypted provider config…')
