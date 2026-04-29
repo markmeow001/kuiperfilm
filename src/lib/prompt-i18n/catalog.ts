@@ -57,6 +57,10 @@ export const PROMPT_CATALOG: Record<PromptId, PromptCatalogEntry> = {
     pathStem: 'novel-promotion/agent_storyboard_detail',
     variableKeys: ['panels_json', 'characters_age_gender', 'locations_description'],
   },
+  [PROMPT_IDS.NP_KLING_AGENT_STORYBOARD_DETAIL]: {
+    pathStem: 'novel-promotion/kling/agent_storyboard_detail',
+    variableKeys: ['panels_json', 'characters_age_gender', 'locations_description'],
+  },
   [PROMPT_IDS.NP_AGENT_STORYBOARD_INSERT]: {
     pathStem: 'novel-promotion/agent_storyboard_insert',
     variableKeys: [

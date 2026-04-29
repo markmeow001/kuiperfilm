@@ -9,6 +9,13 @@ export const PROMPT_IDS = {
   NP_AGENT_SHOT_VARIANT_ANALYSIS: 'np_agent_shot_variant_analysis',
   NP_AGENT_SHOT_VARIANT_GENERATE: 'np_agent_shot_variant_generate',
   NP_AGENT_STORYBOARD_DETAIL: 'np_agent_storyboard_detail',
+  /**
+   * Kling-specific variant of NP_AGENT_STORYBOARD_DETAIL — emits Kling-tuned
+   * camera vocabulary, English movement words, explicit timing hints, and
+   * optional multi_shot_group tags so the generator can choose to merge
+   * consecutive panels into a Kling 3.0 multi_shot=intelligence submission.
+   */
+  NP_KLING_AGENT_STORYBOARD_DETAIL: 'np_kling_agent_storyboard_detail',
   NP_AGENT_STORYBOARD_INSERT: 'np_agent_storyboard_insert',
   NP_AGENT_STORYBOARD_PLAN: 'np_agent_storyboard_plan',
   NP_CHARACTER_CREATE: 'np_character_create',
