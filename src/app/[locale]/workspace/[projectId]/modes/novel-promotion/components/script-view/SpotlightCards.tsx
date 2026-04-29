@@ -114,6 +114,21 @@ export function SpotlightCharCard({
         {isActive && (
           <div className="absolute top-2 right-2 w-2 h-2 bg-[var(--glass-tone-success-fg)] rounded-full shadow-[0_0_8px_rgba(74,222,128,0.8)] border border-white" />
         )}
+        {/* Quick "edit / regenerate" entry — shows on hover when an image
+            already exists. Reuses onOpenAssetLibrary because regen lives
+            inside the asset library modal, where the user can pick the
+            new style / model and then trigger regeneration. */}
+        {imageUrl && onOpenAssetLibrary && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpenAssetLibrary() }}
+            className="absolute top-2 left-2 inline-flex h-7 items-center gap-1 rounded-full bg-[var(--glass-overlay)] px-2 text-[11px] font-medium text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 hover:bg-[var(--glass-overlay-strong)] z-20"
+            title="打開資產庫重新生成 / 編輯"
+          >
+            <AppIcon name="edit" className="h-3 w-3" />
+            <span>編輯 / 重生</span>
+          </button>
+        )}
         {isActive && onRemove && (
           <button
             onClick={(e) => {

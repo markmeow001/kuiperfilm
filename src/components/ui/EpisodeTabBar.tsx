@@ -96,8 +96,12 @@ export default function EpisodeTabBar({
   }
 
   return (
+    // sticky (not fixed) so the bar still pins to the top while
+    // scrolling, but it occupies real layout space — the progress
+    // card and other content below now flow underneath it instead
+    // of being covered. top-20 still leaves room for the global Navbar.
     <div
-      className="fixed top-20 left-6 right-6 z-[60] flex items-stretch gap-3"
+      className="sticky top-20 z-[60] mx-6 mb-3 flex items-stretch gap-3"
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >

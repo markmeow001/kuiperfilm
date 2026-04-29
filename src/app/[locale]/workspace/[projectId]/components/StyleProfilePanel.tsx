@@ -93,17 +93,23 @@ export function StyleProfilePanel({ projectId }: StyleProfilePanelProps) {
   }
 
   return (
-    <div className="space-y-4 rounded border border-gray-200 bg-white p-4">
-      <header>
-        <h3 className="text-base font-semibold">Style Profile</h3>
-        <p className="mt-1 text-xs text-gray-500">
-          Project-level visual anchor. Positive prompt is prepended to every image / video generation;
-          negative prompt and reference images are applied when the model supports them.
-        </p>
+    <div className="space-y-5 rounded-2xl border-2 border-[var(--glass-stroke-focus)] bg-[var(--glass-bg-surface)] p-5 shadow-[var(--glass-shadow-md)]">
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-[var(--glass-text-primary)]">視覺風格 / Style Profile</h3>
+          <p className="mt-1 text-xs text-[var(--glass-text-tertiary)]">
+            這個風格會套用到全片每張圖跟每段影片的生成。請先選一個 preset,系統會在每個 prompt 前面自動加上對應的風格描述。
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-[var(--glass-stroke-focus)] bg-[var(--glass-tone-info-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--glass-tone-info-fg)]">
+          開始前必選
+        </span>
       </header>
 
-      <section>
-        <h4 className="mb-2 text-sm font-medium">Preset</h4>
+      <section className="rounded-xl bg-[var(--glass-bg-muted)] p-4">
+        <h4 className="mb-3 text-sm font-semibold text-[var(--glass-text-primary)]">
+          快速套用 preset(直接點下方任一個)
+        </h4>
         <StyleProfilePresetPicker onSelect={handleApplyPreset} disabled={mutation.isPending} />
       </section>
 
