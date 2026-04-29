@@ -40,6 +40,7 @@
     "check:outbound-image-success-rate": "tsx scripts/check-outbound-image-success-rate.ts",
     "check:image-urls-contract": "tsx scripts/check-image-urls-contract.ts",
     "verify:outbound-image": "cross-env BILLING_TEST_BOOTSTRAP=0 vitest run src/lib/media/outbound-image.test.ts src/lib/media/image-url.test.ts && npm run check:outbound-image-unification",
+    "tencent-vod:smoke": "tsx scripts/tencent-vod-smoke.ts",
     "check:task-loading": "node scripts/guards/task-loading-guard.mjs",
     "check:task-target-states-no-polling": "node scripts/guards/task-target-states-no-polling-guard.mjs",
     "check:no-server-mirror-state": "node scripts/guards/no-server-mirror-state.mjs",
