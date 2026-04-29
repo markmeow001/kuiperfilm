@@ -11,6 +11,7 @@ import { logAIAnalysis } from '@/lib/logging/semantic'
 import { buildCharactersIntroduction } from '@/lib/constants'
 import type { Locale } from '@/i18n/routing'
 import { getPromptTemplate, PROMPT_IDS } from '@/lib/prompt-i18n'
+import { pickStoryboardDetailPromptId } from '@/lib/novel-promotion/storyboard-prompt-router'
 
 // 阶段类型
 export type StoryboardPhase = 1 | '2-cinematography' | '2-acting' | 3
@@ -62,6 +63,13 @@ type NovelPromotionAssetData = {
     analysisModel: string
     characters: CharacterAsset[]
     locations: LocationAsset[]
+    /**
+     * The video model the project is configured to use. Optional — when
+     * absent, the storyboard pipeline uses the generic prompt. When set
+     * to a Kling-* model the storyboard prompt router picks the
+     * Kling-tuned variant.
+     */
+    videoModel?: string | null
 }
 
 export type StoryboardPanel = JsonRecord & {
@@ -575,8 +583,9 @@ export async function executePhase3(
     void taskId
     _ulogInfo(`[Phase 3] Clip ${clipId}: 开始补充镜头细节...`)
 
-    // 读取提示词
-    const detailPromptTemplate = getPromptTemplate(PROMPT_IDS.NP_AGENT_STORYBOARD_DETAIL, locale)
+    // 读取提示词 — Kling 系列 videoModel 走 Kling-tuned 變體，其他走通用版
+    const detailPromptId = pickStoryboardDetailPromptId(novelPromotionData.videoModel)
+    const detailPromptTemplate = getPromptTemplate(detailPromptId, locale)
 
     // 解析clip数据
     const clipCharacters = parseClipCharacters(clip.characters)

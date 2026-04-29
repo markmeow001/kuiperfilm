@@ -229,6 +229,8 @@ async function runStoryboardPhasesForClip(params: {
     analysisModel: string
     characters: CharacterAsset[]
     locations: LocationAsset[]
+    /** Optional — when set to Kling-*, the storyboard pipeline picks the Kling-tuned prompt. */
+    videoModel?: string | null
   }
   projectId: string
   projectName: string

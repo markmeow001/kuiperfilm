@@ -24,6 +24,7 @@ import {
   type PersistedStoryboard,
 } from './script-to-storyboard-helpers'
 import { buildPrompt, getPromptTemplate, PROMPT_IDS } from '@/lib/prompt-i18n'
+import { pickStoryboardDetailPromptId } from '@/lib/novel-promotion/storyboard-prompt-router'
 import { resolveAnalysisModel } from './resolve-analysis-model'
 import { createRunStep } from './script-to-storyboard-run-step'
 import { runVoiceAnalyzeWithRetry, persistVoiceLines } from './script-to-storyboard-voice'
@@ -115,7 +116,12 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
   const phase1PlanTemplate = getPromptTemplate(PROMPT_IDS.NP_AGENT_STORYBOARD_PLAN, job.data.locale)
   const phase2CinematographyTemplate = getPromptTemplate(PROMPT_IDS.NP_AGENT_CINEMATOGRAPHER, job.data.locale)
   const phase2ActingTemplate = getPromptTemplate(PROMPT_IDS.NP_AGENT_ACTING_DIRECTION, job.data.locale)
-  const phase3DetailTemplate = getPromptTemplate(PROMPT_IDS.NP_AGENT_STORYBOARD_DETAIL, job.data.locale)
+  // Phase 3 (storyboard detail) is the only stage that varies per video
+  // provider — Kling-* models get a Kling-tuned prompt, everything else uses
+  // the generic one. The router resolves to a PromptId; the template loader
+  // is otherwise identical.
+  const phase3DetailPromptId = pickStoryboardDetailPromptId(novelData.videoModel)
+  const phase3DetailTemplate = getPromptTemplate(phase3DetailPromptId, job.data.locale)
 
   const streamContext = createWorkerLLMStreamContext(job, 'script_to_storyboard')
   const callbacks = createWorkerLLMStreamCallbacks(job, streamContext)
