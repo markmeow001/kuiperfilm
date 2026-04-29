@@ -69,8 +69,9 @@ ssh root@<droplet-ip>
 git clone https://github.com/waoowaooAI/waoowaoo.git /opt/kuiperAI
 cd /opt/kuiperAI
 
-# (until merge) switch to the multi-user branch
-git checkout feature/multi-user
+# Switch to the active feature branch (Phase 11 work-in-progress).
+# Once Phase 11 lands on main, change this to: git checkout main
+git checkout feature/phase-11
 
 cd deploy
 ./deploy.sh bootstrap
