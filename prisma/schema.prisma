@@ -92,6 +92,7 @@ model NovelPromotionCharacter {
   introduction            String?               @db.Text // 角色介绍（身份、关系、称呼映射，如"我"对应此角色）
   sourceGlobalCharacterId String? // 🆕 来源全局角色ID（复制时记录）
   appearances             CharacterAppearance[]
+  episodeCharacters       EpisodeCharacter[]
   novelPromotionProject   NovelPromotionProject @relation(fields: [novelPromotionProjectId], references: [id], onDelete: Cascade)
 
   @@index([novelPromotionProjectId])
@@ -110,10 +111,46 @@ model NovelPromotionLocation {
   selectedImageId         String?
   selectedImage           LocationImage?        @relation("SelectedLocationImage", fields: [selectedImageId], references: [id], onDelete: SetNull)
   images                  LocationImage[]       @relation("LocationImages")
+  episodeLocations        EpisodeLocation[]
   novelPromotionProject   NovelPromotionProject @relation(fields: [novelPromotionProjectId], references: [id], onDelete: Cascade)
 
   @@index([novelPromotionProjectId])
   @@map("novel_promotion_locations")
+}
+
+// Phase 11.2: junction = source of truth for "which characters appear in which episode"
+// role distinguishes the origin: 'auto-from-panel' | 'manual' | 'imported-from-global'
+model EpisodeCharacter {
+  id          String   @id @default(uuid())
+  episodeId   String
+  characterId String
+  role        String? // 'auto-from-panel' | 'manual' | 'imported-from-global'
+  createdAt   DateTime @default(now())
+
+  episode   NovelPromotionEpisode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  character NovelPromotionCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([episodeId, characterId])
+  @@index([episodeId])
+  @@index([characterId])
+  @@map("episode_characters")
+}
+
+// Phase 11.2: junction = source of truth for "which locations appear in which episode"
+model EpisodeLocation {
+  id         String   @id @default(uuid())
+  episodeId  String
+  locationId String
+  role       String? // 'auto-from-panel' | 'manual' | 'imported-from-global'
+  createdAt  DateTime @default(now())
+
+  episode  NovelPromotionEpisode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  location NovelPromotionLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([episodeId, locationId])
+  @@index([episodeId])
+  @@index([locationId])
+  @@map("episode_locations")
 }
 
 model NovelPromotionEpisode {
@@ -136,6 +173,8 @@ model NovelPromotionEpisode {
   storyboards             NovelPromotionStoryboard[]
   voiceLines              NovelPromotionVoiceLine[]
   editorProject           VideoEditorProject?
+  episodeCharacters       EpisodeCharacter[]
+  episodeLocations        EpisodeLocation[]
 
   @@unique([novelPromotionProjectId, episodeNumber])
   @@index([novelPromotionProjectId])
