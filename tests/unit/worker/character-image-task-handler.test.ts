@@ -24,10 +24,38 @@ const prismaMock = vi.hoisted(() => ({
   },
 }))
 
+// Bug-4 chokepoint: generateLabeledImageToCos 接受 raw styleProfile 参数（chokepoint 内做 prepend + capability filter）。
+type StyleProfileForGen = {
+  positivePrompt: string | null
+  negativePrompt: string | null
+  referenceImageUrls: string[]
+} | null
+type GenerateLabeledImageToCosArg = {
+  prompt: string
+  label?: string
+  targetId?: string
+  options?: {
+    aspectRatio?: string
+    referenceImages?: string[]
+    negativePrompt?: string | null
+  }
+  styleProfile?: StyleProfileForGen
+}
 const sharedMock = vi.hoisted(() => ({
-  generateLabeledImageToCos: vi.fn(async (..._args: unknown[]) => 'cos/character-generated-0.png'),
+  generateLabeledImageToCos: vi.fn<(arg: GenerateLabeledImageToCosArg) => Promise<string>>(
+    async () => 'cos/character-generated-0.png',
+  ),
 }))
 
+const styleProfileLoaderMock = vi.hoisted(() => ({
+  loadStyleProfile: vi.fn(async () => null as null | {
+    positivePrompt: string | null
+    negativePrompt: string | null
+    referenceImageUrls: string[]
+  }),
+}))
+
+vi.mock('@/lib/style-profile/loader', () => styleProfileLoaderMock)
 vi.mock('@/lib/workers/utils', () => utilsMock)
 vi.mock('@/lib/media/outbound-image', () => outboundMock)
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
@@ -115,6 +143,91 @@ describe('worker character-image-task-handler behavior', () => {
         imageUrls: JSON.stringify(['cos/character-generated-0.png']),
         imageUrl: 'cos/character-generated-0.png',
       },
+    })
+  })
+
+  // Bug-4 chokepoint approach: handler 把 raw userPrompt + raw styleProfile 透传给
+  // generateLabeledImageToCos，chokepoint 内做 inject (prepend + capability filter)。
+  // 因此 handler 测试只验证「styleProfile 原封不动透传」+ prompt 是 raw user prompt。
+  it('project 有 styleProfile -> generateLabeledImageToCos 收到原 styleProfile 透传 + raw user prompt 不含 prepend marker', async () => {
+    const styleProfileFixture = {
+      positivePrompt: 'STYLE_POS',
+      negativePrompt: 'STYLE_NEG',
+      referenceImageUrls: ['https://style/ref-a.png'],
+    }
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(styleProfileFixture)
+
+    const job = buildJob({ imageIndex: 0 })
+    await handleCharacterImageTask(job)
+
+    const generationInput = sharedMock.generateLabeledImageToCos.mock.calls[0]?.[0]
+    // styleProfile 必须原封不动透传给 chokepoint
+    expect(generationInput.styleProfile).toEqual(styleProfileFixture)
+    // handler 不再自己 prepend — prompt 不含 STYLE_POS marker
+    expect(generationInput.prompt).not.toContain('STYLE_POS')
+    expect(generationInput.prompt.length).toBeGreaterThan(0)
+    // handler 不再 inline 注入 negativePrompt — chokepoint 处理
+    const neg = generationInput.options?.negativePrompt ?? null
+    expect(neg).toBeNull()
+  })
+
+  it('project styleProfile 三栏全 null -> generateLabeledImageToCos 收到 styleProfile = null + prompt 是 raw user prompt', async () => {
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(null)
+
+    const job = buildJob({ imageIndex: 0 })
+    await handleCharacterImageTask(job)
+
+    const generationInput = sharedMock.generateLabeledImageToCos.mock.calls[0]?.[0]
+    expect(generationInput.styleProfile).toBeNull()
+    // prompt 是 raw user prompt（防 trivial pass — 至少非空）
+    expect(generationInput.prompt.length).toBeGreaterThan(0)
+    expect(generationInput.prompt).not.toMatch(/STYLE_POS|STYLE_NEG/)
+    const neg = generationInput.options?.negativePrompt ?? null
+    expect(neg).toBeNull()
+  })
+
+  // Q-006 A: artStyle 完全停用 — handler 不再 read getArtStylePrompt(artStyle)。
+  // Bug-4 chokepoint 架构下，handler 只把 raw userPrompt 透传给 chokepoint。
+  it('Q-006 A: 即使 artStyle 設了 (real value: realistic)，handler 透传给 generateLabeledImageToCos 的 prompt 不含舊 ART_STYLES 字串', async () => {
+    utilsMock.getProjectModels.mockResolvedValueOnce({
+      characterModel: 'image-model-1',
+      artStyle: 'realistic',
+    })
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(null)
+
+    const job = buildJob({ imageIndex: 0 })
+    await handleCharacterImageTask(job)
+
+    const generationInput = sharedMock.generateLabeledImageToCos.mock.calls[0]?.[0]
+    // 旧 ART_STYLES['realistic'] 的特征字串都不應出現
+    expect(generationInput.prompt).not.toContain('Strictly photorealistic')
+    expect(generationInput.prompt).not.toContain('ABSOLUTELY NO cartoon')
+    expect(generationInput.prompt).not.toContain('写实风格')
+  })
+
+  it('Q-006 A: artStyle = japanese-anime → handler 透传的 prompt 不含舊 ART_STYLES anime 字串（styleProfile 透传给 chokepoint）', async () => {
+    utilsMock.getProjectModels.mockResolvedValueOnce({
+      characterModel: 'image-model-1',
+      artStyle: 'japanese-anime',
+    })
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce({
+      positivePrompt: 'STYLE_PROFILE_ANIME_POS',
+      negativePrompt: null,
+      referenceImageUrls: [],
+    })
+
+    const job = buildJob({ imageIndex: 0 })
+    await handleCharacterImageTask(job)
+
+    const generationInput = sharedMock.generateLabeledImageToCos.mock.calls[0]?.[0]
+    // 旧 ART_STYLES['japanese-anime'] 字串不應出現在 raw prompt
+    expect(generationInput.prompt).not.toContain('Modern Japanese anime style')
+    expect(generationInput.prompt).not.toContain('cel shading')
+    // styleProfile 必须透传给 chokepoint
+    expect(generationInput.styleProfile).toEqual({
+      positivePrompt: 'STYLE_PROFILE_ANIME_POS',
+      negativePrompt: null,
+      referenceImageUrls: [],
     })
   })
 })

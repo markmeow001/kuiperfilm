@@ -6,7 +6,10 @@ const utilsMock = vi.hoisted(() => ({
   assertTaskActive: vi.fn(async () => {}),
   getProjectModels: vi.fn(async () => ({ editModel: 'edit-model' })),
   getUserModels: vi.fn(async () => ({ editModel: 'edit-model', analysisModel: 'analysis-model' })),
-  resolveImageSourceFromGeneration: vi.fn(async () => 'generated-image-source'),
+  // Bug-6: typed vi.fn so mock.calls[0]?.[1] resolves to the second-arg type
+  resolveImageSourceFromGeneration: vi.fn<(...args: [unknown, Record<string, unknown>]) => Promise<string>>(
+    async () => 'generated-image-source',
+  ),
   stripLabelBar: vi.fn(async () => 'required-reference-image'),
   toSignedUrlIfCos: vi.fn(() => 'https://signed/current-image.png'),
   uploadImageSourceToCos: vi.fn(async () => 'cos/new-image.png'),
@@ -42,6 +45,21 @@ const prismaMock = vi.hoisted(() => ({
   },
 }))
 
+// Q-009 A: modify handler 也要 inject styleProfile（chokepoint 内做 — Bug-4）。
+const styleProfileLoaderMock = vi.hoisted(() => ({
+  loadStyleProfile: vi.fn(async () => null as null | {
+    positivePrompt: string | null
+    negativePrompt: string | null
+    referenceImageUrls: string[]
+  }),
+  loadStyleProfileByProjectId: vi.fn(async () => null as null | {
+    positivePrompt: string | null
+    negativePrompt: string | null
+    referenceImageUrls: string[]
+  }),
+}))
+
+vi.mock('@/lib/style-profile/loader', () => styleProfileLoaderMock)
 vi.mock('@/lib/workers/utils', () => utilsMock)
 vi.mock('@/lib/media/outbound-image', () => outboundImageMock)
 vi.mock('@/lib/prisma', () => ({
@@ -175,5 +193,68 @@ describe('worker image-task-handlers-core', () => {
     expect(updateData.previousImageUrl).toBe('cos/panel-old.png')
     expect(updateData.imageUrl).toBe('cos/new-image.png')
     expect(updateData.candidateImages).toBeNull()
+  })
+
+  // Q-009 A: modify handler 必须透传 styleProfile 给 chokepoint，让 modify 后的图也保持 style lock。
+  it('Q-009 A: project 有 styleProfile -> resolveImageSourceFromGeneration 收到原 styleProfile 透传', async () => {
+    const styleProfileFixture = {
+      positivePrompt: 'MODIFY_STYLE_POS',
+      negativePrompt: 'MODIFY_STYLE_NEG',
+      referenceImageUrls: ['https://style/modify-ref.png'],
+    }
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(styleProfileFixture)
+
+    prismaMock.locationImage.findUnique.mockResolvedValue({
+      id: 'location-image-1',
+      locationId: 'location-1',
+      imageUrl: 'cos/location-old.png',
+      location: { name: 'Old Town' },
+    })
+
+    const job = buildJob({
+      type: 'location',
+      locationImageId: 'location-image-1',
+      modifyPrompt: 'add heavy rain',
+      generationOptions: { resolution: '1536x1024' },
+    })
+    await handleModifyAssetImageTask(job)
+
+    const call = utilsMock.resolveImageSourceFromGeneration.mock.calls[0]?.[1] as {
+      prompt: string
+      styleProfile?: typeof styleProfileFixture | null
+      options?: { negativePrompt?: string | null }
+    }
+    expect(call.styleProfile).toEqual(styleProfileFixture)
+    // handler 不再自己 prepend
+    expect(call.prompt).not.toContain('MODIFY_STYLE_POS')
+    // negativePrompt 由 chokepoint 注入，handler 不应自己塞
+    const neg = call.options?.negativePrompt ?? null
+    expect(neg).toBeNull()
+  })
+
+  it('Q-009 A: project styleProfile 为 null -> resolveImageSourceFromGeneration 收到 styleProfile = null', async () => {
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(null)
+
+    prismaMock.locationImage.findUnique.mockResolvedValue({
+      id: 'location-image-1',
+      locationId: 'location-1',
+      imageUrl: 'cos/location-old.png',
+      location: { name: 'Old Town' },
+    })
+
+    const job = buildJob({
+      type: 'location',
+      locationImageId: 'location-image-1',
+      modifyPrompt: 'add heavy rain',
+      generationOptions: { resolution: '1536x1024' },
+    })
+    await handleModifyAssetImageTask(job)
+
+    const call = utilsMock.resolveImageSourceFromGeneration.mock.calls[0]?.[1] as {
+      prompt: string
+      styleProfile?: unknown
+    }
+    expect(call.styleProfile).toBeNull()
+    expect(call.prompt).not.toMatch(/MODIFY_STYLE_POS|MODIFY_STYLE_NEG/)
   })
 })

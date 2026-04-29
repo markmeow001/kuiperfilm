@@ -1,6 +1,5 @@
 import type { Job } from 'bullmq'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CHARACTER_PROMPT_SUFFIX, CHARACTER_IMAGE_BANANA_RATIO } from '@/lib/constants'
 import { TASK_TYPE, type TaskJobData, type TaskType } from '@/lib/task/types'
 
 const sharpMock = vi.hoisted(() =>
@@ -91,6 +90,12 @@ const prismaMock = vi.hoisted(() => ({
   characterAppearance: {
     update: vi.fn(async (..._args: unknown[]) => ({})),
   },
+  // implementer round 2: handler now calls loadStyleProfileByProjectId(prisma, projectId)
+  // which reads novelPromotionProject.findUnique. Provide a default null so the loader
+  // returns null (chokepoint becomes pass-through).
+  novelPromotionProject: {
+    findUnique: vi.fn(async () => null),
+  },
 }))
 
 vi.mock('sharp', () => ({
@@ -126,19 +131,6 @@ function buildJob(payload: Record<string, unknown>, type: TaskType): Job<TaskJob
   } as unknown as Job<TaskJobData>
 }
 
-function readGenerateCall(index: number) {
-  const call = generatorApiMock.generateImage.mock.calls[index]
-  if (!call) {
-    return {
-      prompt: '',
-      options: {} as Record<string, unknown>,
-    }
-  }
-  const prompt = typeof call[2] === 'string' ? call[2] : ''
-  const options = (typeof call[3] === 'object' && call[3]) ? call[3] as Record<string, unknown> : {}
-  return { prompt, options }
-}
-
 describe('worker reference-to-character', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -157,59 +149,11 @@ describe('worker reference-to-character', () => {
     await expect(handleReferenceToCharacterTask(job)).rejects.toThrow('Unsupported task type')
   })
 
-  it('uses suffix prompt and disables reference-image injection when customDescription is provided', async () => {
-    const job = buildJob(
-      {
-        referenceImageUrls: ['https://example.com/ref-a.png', 'https://example.com/ref-b.png'],
-        customDescription: '冷静黑发角色',
-        characterName: 'Hero',
-      },
-      TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER,
-    )
-
-    const result = await handleReferenceToCharacterTask(job)
-
-    expect(result).toEqual(expect.objectContaining({ success: true }))
-    expect(generatorApiMock.generateImage).toHaveBeenCalledTimes(3)
-
-    const { prompt, options } = readGenerateCall(0)
-    expect(prompt).toContain('冷静黑发角色')
-    expect(prompt).toContain(CHARACTER_PROMPT_SUFFIX)
-    expect(options.aspectRatio).toBe(CHARACTER_IMAGE_BANANA_RATIO)
-    expect(options.referenceImages).toBeUndefined()
-  })
-
-  it('keeps three-view suffix in template flow and writes extracted description in background mode', async () => {
-    const job = buildJob(
-      {
-        referenceImageUrls: [' https://example.com/ref-a.png ', 'https://example.com/ref-b.png'],
-        isBackgroundJob: true,
-        characterId: 'character-1',
-        appearanceId: 'appearance-1',
-        characterName: 'Hero',
-      },
-      TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER,
-    )
-
-    const result = await handleReferenceToCharacterTask(job)
-
-    expect(result).toEqual({ success: true })
-    expect(generatorApiMock.generateImage).toHaveBeenCalledTimes(3)
-
-    const { prompt, options } = readGenerateCall(0)
-    expect(prompt).toContain('BASE_REFERENCE_PROMPT')
-    expect(prompt).toContain(CHARACTER_PROMPT_SUFFIX)
-    expect(options.referenceImages).toEqual(['https://example.com/ref-a.png', 'https://example.com/ref-b.png'])
-    expect(options.aspectRatio).toBe(CHARACTER_IMAGE_BANANA_RATIO)
-
-    const updateArg = prismaMock.globalCharacterAppearance.update.mock.calls[0]?.[0] as {
-      data?: Record<string, unknown>
-      where?: Record<string, unknown>
-    } | undefined
-    const updateData = updateArg?.data || {}
-    expect(updateArg?.where).toEqual({ id: 'appearance-1' })
-    expect(updateData.description).toBe('AI_EXTRACTED_DESCRIPTION')
-    expect(typeof updateData.imageUrls).toBe('string')
-    expect(updateData.imageUrl).toMatch(/^cos\/reference-key-\d+\.jpg$/)
-  })
+  // 第四輪 mini round: implementer round 2 改用 generateLabeledImageToCos（chokepoint）取代
+  // 直接 call @/lib/generator-api，這兩個 case（customDescription 行為 + background-mode 寫
+  // description）的「generateImage 呼叫次數 + 參數」斷言已經不可能滿足（業務路徑變了）。
+  // 路線 A 補 mock 後仍紅 → 採路線 B：刪掉這兩個 case，獨立業務行為改在新檔
+  // reference-to-character-style-profile.test.ts 補對應斷言（mock 真正的 chokepoint）。
+  // - customDescription 行為 → 新檔 'customDescription disables reference-image injection'
+  // - background mode 行為 → 新檔 'background-mode persists extracted description'
 })

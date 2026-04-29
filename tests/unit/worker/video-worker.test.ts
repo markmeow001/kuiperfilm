@@ -84,6 +84,16 @@ vi.mock('@/lib/api-config', () => ({
   getProviderConfig: vi.fn(async () => ({ apiKey: 'api-key' })),
 }))
 
+const styleProfileLoaderMock = vi.hoisted(() => ({
+  loadStyleProfile: vi.fn(async () => null as null | {
+    positivePrompt: string | null
+    negativePrompt: string | null
+    referenceImageUrls: string[]
+  }),
+}))
+
+vi.mock('@/lib/style-profile/loader', () => styleProfileLoaderMock)
+
 function buildPanel(overrides?: Partial<PanelRow>): PanelRow {
   return {
     id: 'panel-1',
@@ -239,5 +249,77 @@ describe('worker video processor behavior', () => {
     })
 
     await expect(processor!(unsupportedJob)).rejects.toThrow('Unsupported video task type')
+  })
+
+  // Bug-4 chokepoint approach: video handler 把 raw prompt + raw styleProfile 透传给
+  // resolveVideoSourceFromGeneration (chokepoint)，chokepoint 內做 inject。
+  it('VIDEO_PANEL: project 有 styleProfile -> resolveVideoSourceFromGeneration 收到原 styleProfile 透传 + options.prompt 是 raw', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    const styleProfileFixture = {
+      positivePrompt: 'VIDEO_STYLE_POS',
+      negativePrompt: 'VIDEO_STYLE_NEG',
+      referenceImageUrls: ['https://style/video-ref.png'],
+    }
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(styleProfileFixture)
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::seedance-1',
+        generationOptions: { duration: 5, resolution: '720p' },
+      },
+    })
+
+    await processor!(job)
+
+    const calls = utilsMock.resolveVideoSourceFromGeneration.mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    const generationArg = calls[0]?.[1] as {
+      options?: { prompt?: string; referenceImages?: string[]; negativePrompt?: string | null }
+      styleProfile?: typeof styleProfileFixture | null
+    } | undefined
+    expect(generationArg).toBeDefined()
+    // styleProfile 必须原封不动透传给 chokepoint
+    expect(generationArg?.styleProfile).toEqual(styleProfileFixture)
+    // handler 不再自己 prepend — options.prompt 是 raw
+    const optionsPrompt = generationArg?.options?.prompt ?? ''
+    expect(optionsPrompt.length).toBeGreaterThan(0)
+    expect(optionsPrompt).not.toContain('VIDEO_STYLE_POS')
+    // handler 不再 inline 注入 negativePrompt — chokepoint 处理
+    const neg = generationArg?.options?.negativePrompt ?? null
+    expect(neg).toBeNull()
+  })
+
+  it('VIDEO_PANEL: project styleProfile 为 null -> resolveVideoSourceFromGeneration 收到 styleProfile = null', async () => {
+    const processor = workerState.processor
+    expect(processor).toBeTruthy()
+
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(null)
+
+    const job = buildJob({
+      type: TASK_TYPE.VIDEO_PANEL,
+      payload: {
+        videoModel: 'fal::seedance-1',
+        generationOptions: { duration: 5, resolution: '720p' },
+      },
+    })
+
+    await processor!(job)
+
+    const calls = utilsMock.resolveVideoSourceFromGeneration.mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    const generationArg = calls[0]?.[1] as {
+      options?: { prompt?: string; negativePrompt?: string | null }
+      styleProfile?: unknown
+    } | undefined
+    expect(generationArg?.styleProfile).toBeNull()
+    const optionsPrompt = generationArg?.options?.prompt ?? ''
+    // 实际值必须存在（不是空字串）— 防 trivial pass
+    expect(optionsPrompt.length).toBeGreaterThan(0)
+    expect(optionsPrompt).not.toMatch(/VIDEO_STYLE_POS|VIDEO_STYLE_NEG/)
+    const neg = generationArg?.options?.negativePrompt ?? null
+    expect(neg).toBeNull()
   })
 })

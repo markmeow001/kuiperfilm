@@ -169,10 +169,16 @@ describe('worker analyze-novel behavior', () => {
       },
     })
 
-    expect(prismaMock.novelPromotionProject.update).toHaveBeenCalledWith({
-      where: { id: 'np-project-1' },
-      data: { artStylePrompt: 'cinematic style' },
-    })
+    // Q-006: artStylePrompt 完全停用 — analyze-novel 不再 update artStylePrompt 欄位。
+    // styleProfile 由 PATCH /api/projects/{id}/style-profile 管理，handler 不再寫入 art-style 字段。
+    // 反向斷言：保證未來沒人偷塞 artStylePrompt 寫入。
+    const updateCalls = prismaMock.novelPromotionProject.update.mock.calls as unknown as Array<
+      [{ where?: unknown; data?: Record<string, unknown> }]
+    >
+    for (const [arg] of updateCalls) {
+      const data = (arg && typeof arg === 'object' ? arg.data : undefined) || {}
+      expect(data).not.toHaveProperty('artStylePrompt')
+    }
 
     expect(workerMock.reportTaskProgress).toHaveBeenCalledWith(
       expect.anything(),

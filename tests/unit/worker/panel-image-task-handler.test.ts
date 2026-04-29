@@ -29,6 +29,15 @@ const outboundMock = vi.hoisted(() => ({
   normalizeReferenceImagesForGeneration: vi.fn(async () => ['normalized-ref-1']),
 }))
 
+const styleProfileLoaderMock = vi.hoisted(() => ({
+  loadStyleProfile: vi.fn(async () => null as null | {
+    positivePrompt: string | null
+    negativePrompt: string | null
+    referenceImageUrls: string[]
+  }),
+}))
+
+vi.mock('@/lib/style-profile/loader', () => styleProfileLoaderMock)
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/workers/utils', () => utilsMock)
 vi.mock('@/lib/media/outbound-image', () => outboundMock)
@@ -182,6 +191,104 @@ describe('worker panel-image-task-handler behavior', () => {
         previousImageUrl: 'cos/panel-old.png',
         candidateImages: JSON.stringify(['cos/panel-regenerated.png']),
       },
+    })
+  })
+
+  // Bug-4 chokepoint approach: handler 把 raw prompt + raw styleProfile 透传给
+  // resolveImageSourceFromGeneration (chokepoint)，chokepoint 內做 inject。
+  // 因此 handler 测试只验证「styleProfile 透传给 chokepoint」+「prompt 不含 prepend marker」。
+  it('project 有 styleProfile -> resolveImageSourceFromGeneration 收到原 styleProfile 透传 + prompt 是 raw', async () => {
+    const styleProfileFixture = {
+      positivePrompt: 'PANEL_STYLE_POS',
+      negativePrompt: 'PANEL_STYLE_NEG',
+      referenceImageUrls: ['https://style/panel-ref.png'],
+    }
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(styleProfileFixture)
+
+    const job = buildJob({ candidateCount: 1 })
+    await handlePanelImageTask(job)
+
+    const generationCall = utilsMock.resolveImageSourceFromGeneration.mock.calls[0]?.[1] as {
+      prompt: string
+      options?: { referenceImages?: string[]; negativePrompt?: string | null }
+      styleProfile?: typeof styleProfileFixture | null
+    }
+    // styleProfile 必须原封不动透传给 chokepoint
+    expect(generationCall.styleProfile).toEqual(styleProfileFixture)
+    // handler 不再自己 prepend — prompt 不含 PANEL_STYLE_POS marker
+    expect(generationCall.prompt).not.toContain('PANEL_STYLE_POS')
+    // handler 不再 inline 注入 negativePrompt — chokepoint 处理
+    const neg = generationCall.options?.negativePrompt ?? null
+    expect(neg).toBeNull()
+    // handler 不再透传 styleProfile.referenceImageUrls 到 options.referenceImages（chokepoint 处理）
+    const refs = generationCall.options?.referenceImages ?? []
+    expect(refs).not.toContain('https://style/panel-ref.png')
+  })
+
+  it('project styleProfile 为 null -> resolveImageSourceFromGeneration 收到 styleProfile = null', async () => {
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(null)
+
+    const job = buildJob({ candidateCount: 1 })
+    await handlePanelImageTask(job)
+
+    const generationCall = utilsMock.resolveImageSourceFromGeneration.mock.calls[0]?.[1] as {
+      prompt: string
+      options?: { negativePrompt?: string | null }
+      styleProfile?: unknown
+    }
+    expect(generationCall.styleProfile).toBeNull()
+    expect(generationCall.prompt).not.toMatch(/PANEL_STYLE_POS|PANEL_STYLE_NEG/)
+    const neg = generationCall.options?.negativePrompt ?? null
+    expect(neg).toBeNull()
+  })
+
+  // Q-006 A: artStyle 完全停用。handler 不再呼叫 getArtStylePrompt 注入舊風格 prompt。
+  // 注意：本檔 buildPanelPrompt 是 mock 過的（return 固定 'panel-image-prompt'）— 但 implementer
+  // 改為傳「'与参考图风格一致'」作為 styleText 占位（避免拿 getArtStylePrompt）。所以
+  // 旧 ART_STYLES 字串不應出現在 final prompt 裡。
+  it('Q-006 A: 即使 artStyle = realistic，final prompt 不含舊 ART_STYLES 字串', async () => {
+    utilsMock.getProjectModels.mockResolvedValueOnce({
+      storyboardModel: 'storyboard-model-1',
+      artStyle: 'realistic',
+    })
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce(null)
+
+    const job = buildJob({ candidateCount: 1 })
+    await handlePanelImageTask(job)
+
+    const generationCall = utilsMock.resolveImageSourceFromGeneration.mock.calls[0]?.[1] as {
+      prompt: string
+    }
+    expect(generationCall.prompt).not.toContain('Strictly photorealistic')
+    expect(generationCall.prompt).not.toContain('ABSOLUTELY NO cartoon')
+    expect(generationCall.prompt).not.toContain('写实风格')
+  })
+
+  it('Q-006 A: artStyle = japanese-anime → final prompt 不含 ART_STYLES anime 字串（styleProfile 透传给 chokepoint）', async () => {
+    utilsMock.getProjectModels.mockResolvedValueOnce({
+      storyboardModel: 'storyboard-model-1',
+      artStyle: 'japanese-anime',
+    })
+    styleProfileLoaderMock.loadStyleProfile.mockResolvedValueOnce({
+      positivePrompt: 'PANEL_STYLE_PROFILE_POS',
+      negativePrompt: null,
+      referenceImageUrls: [],
+    })
+
+    const job = buildJob({ candidateCount: 1 })
+    await handlePanelImageTask(job)
+
+    const generationCall = utilsMock.resolveImageSourceFromGeneration.mock.calls[0]?.[1] as {
+      prompt: string
+      styleProfile?: unknown
+    }
+    expect(generationCall.prompt).not.toContain('Modern Japanese anime style')
+    expect(generationCall.prompt).not.toContain('cel shading')
+    // styleProfile 必须透传给 chokepoint
+    expect(generationCall.styleProfile).toEqual({
+      positivePrompt: 'PANEL_STYLE_PROFILE_POS',
+      negativePrompt: null,
+      referenceImageUrls: [],
     })
   })
 })
