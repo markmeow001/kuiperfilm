@@ -115,6 +115,13 @@ interface TencentVODVideoOptions {
      * 參數都可從這邊傳入。Key 衝突時 extInfo 覆蓋 klingMultiShot。
      */
     extInfo?: Record<string, unknown>
+    /**
+     * 結果存儲類型。預設 Temporary（短期 URL，doc 預設）；
+     * Permanent 會將結果存入 VOD 並回傳 FileId，後續 pipeline stage
+     * 可用 FileId 走內網拉取省流量。多 stage 串接（如 storyboard →
+     * video → 後處理）建議用 Permanent。
+     */
+    storageMode?: 'Temporary' | 'Permanent'
     // —— OutputConfig 進階欄位 (doc 3.2.2) ——
     /** Vidu 智能插帧 */
     frameInterpolate?: ToggleFlag
@@ -196,7 +203,9 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
             }
         }
 
-        const outputConfig: Record<string, unknown> = { StorageMode: 'Temporary' }
+        const outputConfig: Record<string, unknown> = {
+            StorageMode: opts.storageMode ?? 'Temporary',
+        }
         if (opts.duration) outputConfig.Duration = opts.duration
         if (opts.resolution) outputConfig.Resolution = opts.resolution
         if (opts.aspectRatio) outputConfig.AspectRatio = opts.aspectRatio

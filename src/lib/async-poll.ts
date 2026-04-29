@@ -32,6 +32,14 @@ export interface PollResult {
     videoUrl?: string
     downloadHeaders?: Record<string, string>
     error?: string
+    /**
+     * Provider-side persistent file id, when the upstream service stores
+     * the result and returns an internal handle. Currently populated only
+     * by Tencent VOD when StorageMode=Permanent. Downstream pipeline stages
+     * may use this for internal-network re-ingest instead of re-fetching
+     * the public URL.
+     */
+    providerFileId?: string
 }
 
 function getErrorMessage(error: unknown): string {
@@ -334,13 +342,16 @@ async function pollTencentVODTask(
                 error: `Tencent VOD error ${errCode} (${errCodeExt}): ${task.Message || ''}`,
             }
         }
-        const fileUrl = task.Output?.FileInfos?.[0]?.FileUrl || ''
+        const firstFile = task.Output?.FileInfos?.[0]
+        const fileUrl = firstFile?.FileUrl || ''
+        const fileId = firstFile?.FileId || undefined
         if (!fileUrl) {
             return { status: 'failed', error: 'Tencent VOD: task finished but no file url' }
         }
-        return type === 'VIDEO'
-            ? { status: 'completed', videoUrl: fileUrl, resultUrl: fileUrl }
-            : { status: 'completed', imageUrl: fileUrl, resultUrl: fileUrl }
+        const base = type === 'VIDEO'
+            ? { status: 'completed' as const, videoUrl: fileUrl, resultUrl: fileUrl }
+            : { status: 'completed' as const, imageUrl: fileUrl, resultUrl: fileUrl }
+        return fileId ? { ...base, providerFileId: fileId } : base
     }
     return { status: 'pending' }
 }

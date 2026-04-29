@@ -70,6 +70,11 @@ interface TencentVODImageOptions {
     enhancePrompt?: 'Enabled' | 'Disabled'
     seed?: number
     negativePrompt?: string
+    /**
+     * 結果存儲類型。預設 Temporary；Permanent 將結果存入 VOD 並回傳
+     * FileId，下游 stage（如 i2v、超分）可走內網拉取省流量。
+     */
+    storageMode?: 'Temporary' | 'Permanent'
 }
 
 export class TencentVODImageGenerator extends BaseImageGenerator {
@@ -107,7 +112,9 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
             fileInfos.push({ Type: 'Url', Url: ref })
         }
 
-        const outputConfig: Record<string, unknown> = { StorageMode: 'Temporary' }
+        const outputConfig: Record<string, unknown> = {
+            StorageMode: opts.storageMode ?? 'Temporary',
+        }
         if (opts.aspectRatio) outputConfig.AspectRatio = opts.aspectRatio
         if (opts.resolution) outputConfig.Resolution = opts.resolution
 

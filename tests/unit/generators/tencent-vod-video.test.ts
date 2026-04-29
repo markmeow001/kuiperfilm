@@ -299,4 +299,37 @@ describe('TencentVODVideoGenerator', () => {
     expect(out).not.toHaveProperty('InputComplianceCheck')
     expect(out).not.toHaveProperty('OffPeak')
   })
+
+  // —— StorageMode (Temporary / Permanent) ——
+
+  it('defaults StorageMode to Temporary when not specified', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'baseline',
+      options: { modelId: 'Kling-3.0' },
+    })
+
+    const out = (createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>)
+      .OutputConfig as Record<string, unknown>
+    expect(out.StorageMode).toBe('Temporary')
+  })
+
+  it('uses Permanent StorageMode when storageMode option is set', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'pipeline-stage-1',
+      options: {
+        modelId: 'Kling-3.0',
+        storageMode: 'Permanent',
+      },
+    })
+
+    const out = (createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>)
+      .OutputConfig as Record<string, unknown>
+    expect(out.StorageMode).toBe('Permanent')
+  })
 })
