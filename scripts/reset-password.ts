@@ -9,7 +9,7 @@
  *
  *   read -s -p "New password: " NEW_PASSWORD; echo
  *   docker exec -e NEW_PASSWORD="$NEW_PASSWORD" kuiper-app \
- *     pnpm tsx scripts/reset-password.ts --username admin
+ *     npx tsx scripts/reset-password.ts --username admin
  *   unset NEW_PASSWORD
  *
  * The script never accepts the password as a command-line argument

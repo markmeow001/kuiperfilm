@@ -42,7 +42,7 @@ unset CONFIRM
 # `ps aux` and shell history). The container's reset-password.ts
 # reads NEW_PASSWORD from process.env.
 docker exec -e NEW_PASSWORD="${NEW_PASSWORD}" kuiper-app \
-  pnpm tsx scripts/reset-password.ts --username "${USERNAME}"
+  npx tsx scripts/reset-password.ts --username "${USERNAME}"
 
 unset NEW_PASSWORD
 echo "Done. Try logging in at https://${DOMAIN:-your-domain} with the new password."
