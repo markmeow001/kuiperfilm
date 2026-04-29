@@ -66,7 +66,7 @@ the certificate.
 ssh root@<droplet-ip>
 
 # Clone the repo
-git clone https://github.com/waoowaooAI/waoowaoo.git /opt/kuiperAI
+git clone https://github.com/markmeow001/kuiperfilm.git /opt/kuiperAI
 cd /opt/kuiperAI
 
 # Switch to the active feature branch (Phase 11 work-in-progress).
