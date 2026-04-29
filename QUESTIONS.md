@@ -340,3 +340,36 @@ Image（13 個）：
   - 落實：移除既有「進 project 自動 redirect 到第一集」effect（`page.tsx`）；user 進 project 永遠先看 `OverviewView` dashboard
   - 不做：不做「最後造訪集」記憶（避免 localStorage 同步成本）/ 不做「無集時自動建第一集」（讓 user 主動點「+ 新建集」）
   - 測試：`tests/integration/workspace-page.test.tsx` regression case 守住「進 project 看到 OverviewView，不自動跳到 first episode workspace」
+
+---
+
+## Phase 11.2 設計決策（已落實）
+
+> 註：Phase 11.2 user 拍板的 Q-1 / Q-2 / Q-3 / Q-5 屬於 phase-architect 範疇的「當輪設計選擇」，不是 QUESTIONS.md 主體的「跨輪未解 / 架構決策」。同 Phase 11.1 模式輕量化記錄在此給未來接手的人 trace。
+
+- **Q-1 A：junction = SoT，panels.characters 是 panel 屬性（角色出場記錄），不是 episode 索引**
+  - 落實：「列 episodes by character」一律走 `getEpisodesForCharacter(characterId)` 反查 `EpisodeCharacter` junction；`panels.characters` 仍保留作為「該 panel 出場了哪些角色」的 panel 屬性，不被當成 episode-character 關係源
+  - 不做：不做雙寫雙讀（避免 source of truth 拉扯）；不刪 panels.characters（panel 編輯 UI 仍需要它）
+  - 測試：`tests/unit/lib/episode-asset-bridge.test.ts` 22 cases 守住 junction reverse-lookup；`npm run check:no-multiple-sources-of-truth` 全綠
+
+- **Q-2 B：name 解析三層 fallback（精確 → case-insensitive → aliases JSON）**
+  - 落實：`linkEpisodeCharactersFromPanel` 從 panel.characters JSON 解出 character 名後，依序：
+    1. `findFirst({ name: { equals: x } })` 精確
+    2. `findFirst({ name: { equals: x, mode: 'insensitive' } })` 大小寫不敏感
+    3. `findFirst({ aliases: { contains: x } })` 比對 aliases JSON
+  - 找不到不抛錯，log warning 跳過（避免 storyboard transaction 因為某個 panel 用了不存在的 character 名而整批 rollback）
+  - 不做：不做 fuzzy match / Levenshtein（避免錯配）；不自動建立缺失 character（這是 panel 端的污髒 prompt 問題，不該由 junction layer 補洞）
+  - 測試：`tests/unit/lib/episode-asset-bridge.test.ts` 三條 fallback path 各有獨立 case；找不到 asset 的 warning path 也覆蓋
+
+- **Q-3 C：role 用 enum/string 區分 'auto-from-panel' / 'manual' / 'imported-from-global'**
+  - 落實：`EpisodeCharacter.role` 用 `String?` 而非 Prisma enum，取值 `'auto-from-panel'` | `'manual'` | `'imported-from-global'`；用 String 避免後續擴增 role 時要 ALTER TABLE
+  - 本輪只實作 `auto-from-panel` writer（storyboard handler 自動寫入）；`manual` 跟 `imported-from-global` 欄位就緒但寫入路徑拆 Phase 11.2.5 ⏸
+  - 註：`imported-from-global` **預期不會大量出現** — import 是「把 global asset 拷進 project asset library」，跟 episode 無關；junction 只在 storyboard handler 偵測到 panel 引用時寫，role 仍是 `auto-from-panel`。`imported-from-global` 只在「user 在 episode 詳情手動 link 一個剛 import 的 character」時用得到，邏輯拆 11.2.5
+  - 測試：`tests/unit/lib/episode-asset-bridge.test.ts` 驗 `auto-from-panel` 寫入；`tests/unit/worker/storyboard-junction.test.ts` 驗 worker handler e2e 寫入
+
+- **Q-5 B：import-character endpoint 簽名 `POST /api/projects/[projectId]/import-character` body `{globalCharacterId, includeAppearances?}`，返回完整 character object**
+  - 落實：endpoint body shape 不用 `characterId`（避免跟既有 NovelPromotionCharacter id 命名衝突）；用 `globalCharacterId` 明確表達「來源是 global 庫」
+  - 返回完整 character object（含 appearances 若 `includeAppearances=true`）讓 UI 可立即渲染，不需再多打一個 GET — 對應 Q-8 同樣的 API design 原則「single round-trip 給足 UI 能用的資料」
+  - import-location 對稱：body `{globalLocationId, includeImages?}`，返回完整 location object
+  - 不做：不做 batch import（一次一個 asset；batch 拆 11.2.5 若需要）
+  - 測試：`tests/integration/api/projects/import-character.test.ts` 8 cases；`tests/integration/api/projects/import-location.test.ts` 8 cases

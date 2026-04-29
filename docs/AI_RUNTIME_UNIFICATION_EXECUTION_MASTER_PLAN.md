@@ -25,7 +25,7 @@
 ## 预计改动规模（动态更新）
 - 预计文件：75-105
 - 预计代码行：8000-13000
-- 当前已改动文件：125（102 既有累计 + 本轮 Phase 11.1 working tree 23 个：messages i18n / WorkspaceHeaderShell / project page / episodes API route / CapsuleNav / useEpisodeMutations / route-catalog + 新增 EpisodeList / OverviewView / ProjectSettings / episode-progress / episode-thumbnail / EpisodeTabBar + dom-setup / vitest.dom.config / package.json deps + 7 个新 test files）
+- 当前已改动文件：146（125 既有累计 + 本轮 Phase 11.2 working tree 21 个：prisma schema / messages i18n x2 / project page / route-catalog / script-to-storyboard handler + helpers + 新增 episode-asset-bridge / characters list route / locations list route / import-character route / import-location route / ProjectAssets parent + Characters tab + Locations tab + ImportFromGlobalDialog / sync-episode-character-junction migration script + 8 个新 test files：episode-asset-bridge unit + import-character / import-location / characters-list / locations-list integration + sync-episode-character-junction integration + ProjectAssets jsdom + storyboard-junction worker test）
 
 # 2:阶段+具体代码修改地方以及需要修改的内容
 
@@ -40,10 +40,11 @@
 - 🔄 Phase 8: 复杂链路迁移（story_to_script_run / script_to_storyboard_run）
 - ⏸ Phase 9: 其余 AI 任务全量迁移
 - 🔄 Phase 10: 清理旧执行路径与旧事件协议（代码清理持续进行）
-- 🔄 Phase 11: 竞品对标功能补完（基于 docs/competitor-features/ 分析；Top 5 优先）— 11.5 + 11.1 主要子任務 ✅ 完成；11.2 / 11.3 / 11.4 仍 ⏸；11.1.5 reviewer follow-up ⏸
+- 🔄 Phase 11: 竞品对标功能补完（基于 docs/competitor-features/ 分析；Top 5 优先）— 11.5 + 11.1 + 11.2 主要子任務 ✅ 完成；11.3 / 11.4 仍 ⏸；11.1.5 / 11.2.5 reviewer follow-up ⏸
   - ✅ Phase 11.1: 「剧 → 集」UI 第一公民化（P0，纯前端，最契合用户核心需求）— 主要 4 個子任務全部 ✅ 完成；reorder API 拆 Phase 11.1.5
   - ⏸ Phase 11.1.5: reviewer round 1 + round 2 follow-up（reorder API + lean GET 拆分 + EpisodeCard 抽取 + dead Sidebar 删除 + vitest dom config 默认旗 + locale prefix 验证 + OverviewView unit test）
-  - ⏸ Phase 11.2: 角色 / 场景跨集共用 UX 强化（P0，含 junction table migration）
+  - ✅ Phase 11.2: 角色 / 场景跨集共用 UX 强化（P0，含 junction table migration）— 主要 4 個子任務全部 ✅ 完成；本輪只實作 `auto-from-panel` role producer，`manual` / `imported-from-global` 寫入路徑拆 Phase 11.2.5
+  - ⏸ Phase 11.2.5: 11.2 follow-up debt（manual character/location editing UI / dead non-junction lookup 清查 / MediaObject 跨用戶限制寫進 08-open-gaps.md）
   - ⏸ Phase 11.3: 道具（Props）first-class asset（P1，新 model）
   - ⏸ Phase 11.4: 角色三视图（全身 → 三视图 → 头像）结构化（P0，跨集一致性核心）
   - 🔄 Phase 11.5: 风格 lock（正向 + 负向 prompt）（P0，最小可行验证）— 主要 4 個子任務全部 ✅ 完成；末尾留 5 個 P2 ⏸ 子任務（dead i18n key / comment / DB cleanup / asset-hub forward / handler 測試覆蓋）
@@ -305,47 +306,105 @@
 
 **目标**：「同一个剧当中共用角色跟场景」实质上 schema 已支持，本 Phase 强化 UX 让用户看得见、用得到，并加 junction table 让查询更准。
 
-- ⏸ 任务：Project 层级的「角色 / 场景」分页
-  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectAssets.tsx`（新）
-  - 要求：
-    - 不论在哪集，都能在 workspace 看到该 project 所有角色 / 场景
-    - 操作：新增、编辑、删除、从全局库导入
-    - 显示该角色 / 场景在哪几集出现过（依赖下方 junction table）
+**Q-1 / Q-2 / Q-3 / Q-5 拍板**（user 拍板紀錄已存 QUESTIONS.md「Phase 11.2 設計決策（已落實）」）：
+- **Q-1 A**：junction = SoT，`panels.characters` 视为 panel 属性（角色出场记录），不是 episode 索引；列 episodes for character 一律走 junction，不再 scan panels.characters
+- **Q-2 B**：junction 写入用三层 fallback 解 character/location 名 — name 精确 → name case-insensitive → aliases JSON
+- **Q-3 C**：`role` 用 enum/string 区分 `'auto-from-panel'` | `'manual'` | `'imported-from-global'`，让 UI 能区分来源
+- **Q-5 B**：import endpoint 签名 `POST /api/projects/[projectId]/import-character` body `{globalCharacterId, includeAppearances?}`；返回**完整 character object**（不是只有 characterId），UI 可立即渲染
 
-- ⏸ 任务：新增 EpisodeCharacter / EpisodeLocation junction table
+- ✅ 任务：Project 层级的「角色 / 场景」分页
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectAssets.tsx`（新；parent，组合 Characters / Locations 两个 tab）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectAssetsCharactersTab.tsx`（新）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectAssetsLocationsTab.tsx`（新）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ImportFromGlobalDialog.tsx`（新；从全局库选择 selector + 「import」按钮）
+  - 文件：`src/app/[locale]/workspace/[projectId]/page.tsx`（加 `view='assets'` 分支挂载 ProjectAssets）
+  - 文件：`messages/{en,zh}/workspaceDetail.json`（i18n 字串）
+  - 完成：进 project 任意时刻都能在 dashboard 看到该 project 所有角色 / 场景；列出每个 asset 出现在哪几集（资料源：junction）；显示「import from global」按钮触发 dialog；逐项编辑 / 删除 UI **本轮未做**（拆 Phase 11.2.5 ⏸；本轮 read-only + import-only）
+  - 测试：`tests/unit/components/ProjectAssets.test.tsx` 6 cases（jsdom）
+
+- ✅ 任务：新增 EpisodeCharacter / EpisodeLocation junction table + bridge layer
   - 文件：`prisma/schema.prisma`
-    - 新增 model `EpisodeCharacter`：`{ id, episodeId, characterId, role?, createdAt }`，索引 `[episodeId, characterId]`
-    - 新增 model `EpisodeLocation`：`{ id, episodeId, locationId, createdAt }`，索引 `[episodeId, locationId]`
-  - 文件：`prisma/migrations/...`（新 migration）
-    - 既有 `panels.characters` / `panels.location` text 字段保留（不破坏既有数据）
-    - 但新增写入路径：当 panel 引用 character 时，同步写入 EpisodeCharacter
-  - 文件：`src/lib/workers/handlers/script-to-storyboard.ts` 或对应 storyboard 生成路径
-    - 在 panel / shot 落库时同步 upsert 到 junction table
+    - 新增 model `EpisodeCharacter`：`{ id, episodeId, characterId, role String?, createdAt }`，`@@unique([episodeId, characterId])`
+    - 新增 model `EpisodeLocation`：`{ id, episodeId, locationId, role String?, createdAt }`，`@@unique([episodeId, locationId])`
+    - NovelPromotionEpisode / Character / Location 加上反向 relation
+    - `role` field 用 String 而非 enum：取值 `'auto-from-panel'` | `'manual'` | `'imported-from-global'`（Q-3 C 拍板）；用 String 是为了向后扩展不需 ALTER TABLE
+  - 文件：`src/lib/episode-asset-bridge.ts`（新；bridge layer）
+    - `linkEpisodeCharactersFromPanel(tx, episodeId, panelCharactersJson, projectId)`：从 panel 落库时 upsert junction，**三层 fallback** 解名（Q-2 B 拍板）：name 精确 → name case-insensitive → aliases JSON contains
+    - `linkEpisodeLocationFromPanel(tx, episodeId, panelLocationName, projectId)`：同上
+    - `getEpisodesForCharacter(characterId)` / `getEpisodesForLocation(locationId)`：list-episodes-by-asset 反查
+    - `createMany skipDuplicates: true` 避免 `@@unique` 冲突；role 一律标 `'auto-from-panel'`
+  - 文件：`src/lib/workers/handlers/script-to-storyboard-helpers.ts`
+    - `persistSingleClipStoryboard` / `persistStoryboardsAndPanels` 加 `projectId` 参数
+    - 在 panel 落库的 transaction 内呼叫 `linkEpisodeCharactersFromPanel` + `linkEpisodeLocationFromPanel`，role=`'auto-from-panel'`
+    - **transaction timeout 从 15s→30s, 30s→60s**（因为 transaction 多了 junction sync 的 db ops；保守扩容避免 timeout）
+  - 文件：`src/lib/workers/handlers/script-to-storyboard.ts` 把 `projectId` 传进 helpers
+  - **本轮只实作 `auto-from-panel` role producer**（由 storyboard handler 自动写入）。`manual` 跟 `imported-from-global` **是欄位 / 概念已就緒，但沒有實際的寫入路徑**：
+    - `manual`：缺 manual character / location editing UI（CRUD endpoint + form）— 拆 Phase 11.2.5 ⏸
+    - `imported-from-global`：import endpoint **目前没有写 EpisodeCharacter / EpisodeLocation junction**，因为「跨集共用」是 global asset library 的概念，没绑特定 episode；junction 是「这集用到这个 asset」的关系，而 import 只是「把 global asset 拷进 project asset library」。两件事正交。**真正写 junction 的时机仍然是 storyboard handler 偵測到 panel 引用该 asset 时**，role 还是 `auto-from-panel`。后续若要支援「user 在 episode 详情手动添 asset 不出现在任何 panel 也算这集用到」才会动到 `manual` 写入路径
+  - 测试：`tests/unit/lib/episode-asset-bridge.test.ts` 22 cases（三层 fallback 各路径 + skipDuplicates 不抛 + projectId scope 过滤）；`tests/unit/worker/storyboard-junction.test.ts` 5 cases（worker handler 端 e2e；`vi.fn` 用 generic 解 8 个 TS 错）
 
-- ⏸ 任务：从全局资产中心一键导入到 project
-  - 文件：`src/app/api/projects/[projectId]/import-character/route.ts`（确认 / 补足）
-  - 文件：`src/app/api/projects/[projectId]/import-location/route.ts`（确认 / 补足）
-  - 逻辑：
-    - 选 GlobalCharacter → 复制成 NovelPromotionCharacter
-    - 设置 `sourceGlobalCharacterId` 标记来源
-    - 复制 appearances / images（可选）
-  - UI：在 ProjectAssets.tsx 加「从资产中心导入」按钮 + selector
+- ✅ 任务：从全局资产中心一键导入到 project
+  - 文件：`src/app/api/projects/[projectId]/import-character/route.ts`（新；POST）
+    - body：`{globalCharacterId: string, includeAppearances?: boolean}`（Q-5 B 拍板）
+    - 复制 GlobalCharacter → NovelPromotionCharacter，设 `sourceGlobalCharacterId`；若 `includeAppearances=true` 同步复制 appearances + images
+    - **返回完整 character object**（含 appearances）让 UI 立即渲染，不需再 GET 一次（Q-5 B 拍板）
+  - 文件：`src/app/api/projects/[projectId]/import-location/route.ts`（新；POST）
+    - body：`{globalLocationId: string, includeImages?: boolean}`，对称结构
+  - 文件：`src/app/api/projects/[projectId]/characters/route.ts`（新；GET 列出该 project 所有 characters + 每人 episodes from junction）
+  - 文件：`src/app/api/projects/[projectId]/locations/route.ts`（新；GET 列出该 project 所有 locations + 每个 episodes from junction）
+  - UI：`ImportFromGlobalDialog.tsx` 接 import endpoint，invalidate characters/locations query
+  - 测试：
+    - `tests/integration/api/projects/import-character.test.ts` 8 cases
+    - `tests/integration/api/projects/import-location.test.ts` 8 cases
+    - `tests/integration/api/projects/characters-list.test.ts` 6 cases
+    - `tests/integration/api/projects/locations-list.test.ts` 6 cases
+  - **route-catalog 同步**：`tests/contracts/route-catalog.ts` 131→135 routes，加 4 个 entry（characters / import-character / import-location / locations，按字母順序排在 projects/[projectId] 區塊）
 
-- ⏸ 任务：同步既有 panels.characters / panels.location 数据到 junction table
-  - 文件：`scripts/migrations/sync-episode-character-junction.ts`（新）
-  - 一次性脚本：扫所有 panels，反查 character/location 名 → id，回填 junction table
+- ✅ 任务：同步既有 panels.characters / panels.location 数据到 junction table
+  - 文件：`scripts/migrations/sync-episode-character-junction.ts`（新；一次性 backfill）
+  - 设计：
+    - flag `--commit`（不带 = dry-run）：默认 dry-run 不写 db，只输出会写多少 row；带 `--commit` 才真写
+    - flag `--projectId=<id>`：可选，只跑指定 project 范围（用于 staged rollout 或修单个 project）
+    - 扫 panels.characters / panels.location，套用 bridge layer 的三层 fallback 解名 → upsert junction，role=`'auto-from-panel'`
+    - 找不到对应 character / location 的 panel 不当错误，log warning（避免噪音 row 阻断 backfill）
+  - 测试：`tests/integration/scripts/sync-episode-character-junction.test.ts` 8 cases（含 dry-run / commit / projectId scope / 三层 fallback / skipDuplicates / 找不到 asset 的 warning path）
 
 **驗收**：
-- Project 详情页有独立「角色 / 场景」分页
-- Episode 1 加角色，Episode 2 自动看得到、可选用
-- Junction table query 能跑：`SELECT episodes WHERE character_id = X`
-- 既有数据迁移不丢失
-- `npm run test:regression` + `npm run check:no-multiple-sources-of-truth` 全绿
+- ✅ Project 详情页有独立「角色 / 场景」分页（read-only + import；manual edit UI 拆 11.2.5）
+- ✅ Episode 1 加角色（透过 panel 引用），Episode 2 自动在 ProjectAssets 看得到（因为 junction 是 project-wide）、可选用
+- ✅ Junction table query 能跑：`getEpisodesForCharacter(characterId)` / `getEpisodesForLocation(locationId)` 反查
+- ✅ 既有数据迁移有 backfill 脚本（dry-run + commit 两路）
+- ✅ TypeScript clean、test:guards 全绿、相关 vitest 全绿（详见末尾「当前验证执行记录」段）
 
-**风险**：
-- ⚠️ Schema migration 高风险，必须分两步发布（add table → backfill → enforce）
-- ⚠️ panels.characters text 字段与 junction table 双写期间数据一致性问题，要明确 source of truth（建议 junction 为主，text 为兼容遗留）
-- ⚠️ 既有 sourceGlobalCharacterId 关系不能断
+**风险（剩余 / 已收尾）**：
+- ✅ Schema migration 风险已收：本 phase 用「add table → bridge layer 双写自 storyboard handler → backfill script」三步策略，没强制 enforce，旧 panels.characters text 字段保留作为 read-side 信号源（搜索哪些 panel 用了哪角色仍然走 panels.characters）
+- ✅ panels.characters text 字段与 junction table source of truth 已明确：**junction = episodes-for-character 的 SoT**（Q-1 A 拍板）；**panels.characters = 该 panel 使用了哪些角色的属性**（不是 episode 索引）。两者 not redundant
+- ✅ 既有 sourceGlobalCharacterId 关系不动；import endpoint 持续设这个 id
+
+### Phase 11.2.5 reviewer round 2 follow-up + 11.2 debt（11.2 收尾后，未开工）
+
+来源：reviewer round 2 APPROVE 但留的 follow-up + 本轮拆出去的 manual write path。
+
+- ⏸ 任务：Manual character / location editing UI
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectAssetsCharactersTab.tsx`（加 edit / create / delete UI）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectAssetsLocationsTab.tsx`（同）
+  - 文件：`src/app/api/projects/[projectId]/characters/[characterId]/route.ts`（新；PATCH / DELETE）
+  - 文件：`src/app/api/projects/[projectId]/locations/[locationId]/route.ts`（新；PATCH / DELETE）
+  - 文件：`src/app/api/projects/[projectId]/characters/route.ts`（已有 GET，加 POST manual create）
+  - 文件：`src/app/api/projects/[projectId]/locations/route.ts`（已有 GET，加 POST manual create）
+  - 逻辑：manual create / link 时 junction `role='manual'`（区分 storyboard auto-write）
+  - 验收：UI 能 CRUD；manual junction row 跟 auto-from-panel row 在 list 端能区分
+
+- ⏸ 任务：dead code lookup（确认没有舊的 non-junction 讀取殘留）
+  - grep `panels.characters` / `panels.location` 所有读取点
+  - 期望：只有「panel 详情页 / 编辑 panel UI」用 panels.characters 显示「这个 panel 出场角色」（合理；这是 panel 属性）
+  - 不期望：用 panels.characters 列「该 character 出现在哪几集」（应改走 junction）
+  - 验收：grep + manual review 把所有「list episodes by asset」路径都迁到 `getEpisodesForCharacter` / `getEpisodesForLocation`
+
+- ⏸ 任务：把 MediaObject 跨用戶限制写进 `docs/ai-runtime/08-open-gaps.md`
+  - 来源：Phase 11.5 Q-005 拍板 A 加了 `MediaObject.uploadedByUserId`，但本轮 11.2 import-character 把 GlobalCharacter 的 appearance image 拷进 NovelPromotionCharacter 时，对应 MediaObject 仍维持原 uploader（global asset 的 uploader）
+  - 后果：A 用户 import B 用户的 GlobalCharacter，B 的 MediaObject id 出现在 A 的 NovelPromotionCharacterAppearance.imageMediaId，下游 styleProfile 之类的 ownership check 可能误拒（11.5 的 `assertReferenceImagesOwned` 还没卷到 character appearance image）
+  - 验收：08-open-gaps.md 加一条 entry 说明 MediaObject ownership 跨 user import 的语义（要决定：转嫁 ownership？保持原 uploader？clone MediaObject？）
 
 ### Phase 11.3 道具（Props）first-class asset（P1）
 
@@ -553,6 +612,22 @@
 - ✅ `npx vitest run tests/unit/worker/chokepoint-style-injection.test.ts`：5 tests pass
 - ✅ 其他 worker test 全綠（character-image / location-image / panel-image / panel-variant / modify-image-reference-description / image-task-handlers-core / video-worker / analyze-novel / reference-to-character + reference-to-character-style-profile），唯 pre-existing Q-003 panel-image-task-handler.test:188 與 script-to-storyboard.test x2 prisma mock 缺欄位 fail（非本 phase 引入）
 - ✅ `npx vitest run tests/unit/media/service.test.ts`：5 tests pass（MediaObject.uploadedByUserId 寫入路徑）
+
+### Phase 11.2 本轮新增验证（working tree，feature/phase-11，未 commit）
+- ✅ `npx tsc --noEmit -p tsconfig.json`：0 errors（含 worker test `vi.fn` 用 generic 解 8 個 TS error）
+- ✅ `npm run check:config-center-guards`：全綠
+- ✅ `npm run check:test-route-coverage`：131→135 routes（本轮 catalog 加 4 個 entry：projects/[projectId]/characters / locations / import-character / import-location）
+- ✅ `npm run check:test-coverage-guards`：全綠
+- ✅ `npm run check:no-multiple-sources-of-truth`：全綠（junction = episodes-for-character SoT；panels.characters = panel 属性，两者 not redundant）
+- ✅ `tests/unit/lib/episode-asset-bridge.test.ts`：22/22 pass（三层 name fallback 各路径 + skipDuplicates + projectId scope）
+- ✅ `tests/integration/api/projects/import-character.test.ts`：8/8 pass
+- ✅ `tests/integration/api/projects/import-location.test.ts`：8/8 pass
+- ✅ `tests/integration/api/projects/characters-list.test.ts`：6/6 pass
+- ✅ `tests/integration/api/projects/locations-list.test.ts`：6/6 pass
+- ✅ `tests/integration/scripts/sync-episode-character-junction.test.ts`：8/8 pass（dry-run / commit / projectId scope / 三层 fallback / skipDuplicates / warning path）
+- ✅ `tests/unit/components/ProjectAssets.test.tsx`：6/6 pass（jsdom）
+- ✅ `tests/unit/worker/storyboard-junction.test.ts`：5/5 pass（worker handler 端 storyboard 落库后 junction 写入正确）
+- ⚠️ 本轮无新 BLOCK 问题；pre-existing Q-002 / Q-003 / Q-004（Phase 11.5 / 11.1 同步阶段已登记）仍挡 `npm run test:regression` 完整链路，不在 Phase 11.2 范围内
 
 ### Phase 11.1 本轮新增验证（working tree，feature/phase-11，未 commit）
 - ✅ `npx tsc --noEmit -p tsconfig.json`：0 errors
