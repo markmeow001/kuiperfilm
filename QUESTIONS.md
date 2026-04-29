@@ -81,3 +81,236 @@ Image（13 個）：
 - **可能原因**: 看起來是之前某個 commit 改了 prisma schema（加 `novelPromotionStoryboard` model）但沒同步更新測試的 prisma mock factory；或是 panel handler 的呼叫時序最近改過但測試 expectation 沒跟上。
 - **狀態**: 待確認 — 屬於 Phase 8（複雜鏈路遷移：story_to_script_run / script_to_storyboard_run）的範疇，可能正在進行中所以暫時紅燈。
 - **建立時間**: 2026-04-28
+
+---
+
+## Q-005 [安全/架構決策] MediaObject 沒 ownership 欄位 → styleReferenceImages owner check 是空殼
+
+- **Phase**: Phase 11.5（風格 lock）— code-reviewer 第一輪 BLOCK 點 #2
+- **背景**:
+  - Phase 11.5 加 `NovelPromotionProject.styleReferenceImages: String? @db.Text`（JSON array of MediaObject id），透過 PATCH `/api/projects/[projectId]/style-profile` 寫入
+  - implementer 寫的 `assertReferenceImagesOwned` 在 `src/app/api/projects/[projectId]/style-profile/route.ts:35-57` 只做 `mediaObject.findMany({ where: { id: { in: mediaIds } } })`，比對 `rows.length === mediaIds.length`
+  - **問題**：`prisma/schema.prisma` 的 MediaObject 沒有 `userId` / `uploadedBy` / `creatorId` 任何 ownership 欄位 → 上面那個 check 只能驗 id 存在，不能驗誰擁有
+  - **後果**：任何登入用戶能把別人的 MediaObject id 寫進自己 project 的 styleReferenceImages，下一次生圖會用別人的圖當風格 reference → 跨 user 圖片洩漏 / 越權引用
+  - 同樣問題也存在於 `loadStyleProfile` (`src/lib/style-profile/loader.ts:69-92`)，loader 也沒做真實 owner 過濾
+- **選項**:
+  - **A. 給 MediaObject 加 `uploadedByUserId` 欄位**（schema 改動 → AUTONOMY_PROTOCOL §4 hard stop）
+    - 優點：根本解；ownership 一階可查；後續其他資源也能用
+    - 缺點：DB migration、既有 row 要 backfill（透過 `Project → User` 反查或標 NULL+寬鬆策略）；MediaObject 被多處共享時「誰是 uploadedBy」可能模糊
+  - **B. 透過間接鏈驗 owner**（例如 MediaObject → 任一 Generation/Variant → Project → User）
+    - 優點：不動 schema
+    - 缺點：MediaObject 跟 Generation 是 N:M（透過 LegacyMediaRefBackup），間接鏈複雜，每次驗證多 join；對「孤立 MediaObject」(直接 upload 沒進 generation)無解
+  - **C. 限制 styleReferenceImages 只接受「曾經由本 user upload 的 image」並用 upload audit log**
+    - 優點：明確語意
+    - 缺點：需要 upload audit table；目前不一定有
+  - **D. 暫時禁用 styleReferenceImages（API 直接拒絕非空陣列）**直到 Q 解決
+    - 優點：最小改動；不洩漏
+    - 缺點：UI 已有 reference image uploader，砍掉等於 11.5 sub-task 缺一塊
+- **我的傾向**: A，因為 codebase 任何資源最終都會碰到 ownership 問題，越早建立 single-source-of-truth 越好。MediaObject 加 `uploadedByUserId` + 既有 row 透過 Project→User 反查 backfill；新 row 在 upload 時填好。
+- **狀態**: **已解決（user 拍板 A）**
+- **建立時間**: 2026-04-28
+- **解決時間**: 2026-04-28
+- **拍板紀錄**: user 選 A — 加 `MediaObject.uploadedByUserId String? @db.VarChar(36)` + `uploader User? @relation("MediaObjectUploader")` + `@@index([uploadedByUserId])`（落盤於 `prisma/schema.prisma:965-989`）
+- **對應 commit 範圍（working tree，未 commit）**:
+  - `prisma/schema.prisma`（line 965-989 加欄位 + relation + index；User model 加反向 relation）
+  - `src/app/api/projects/[projectId]/style-profile/route.ts:48-50`（用 `uploadedByUserId: userId` 過濾真實 ownership，不再是空殼 length 比對）
+  - `src/lib/style-profile/loader.ts:35, 65-105`（loader 同樣用 `row.uploadedByUserId !== projectOwnerUserId` 真實過濾，跳過孤立 / 他人 row）
+  - `src/lib/media/service.ts`（MediaObject 寫入路徑全面填 `uploadedByUserId`）
+  - `scripts/migrations/backfill-media-object-uploader.ts`（新；既有 row 透過 Generation/Project → User 反查回填，孤立 row 標 NULL+log）
+  - `tests/unit/media/service.test.ts` 5 tests + `tests/unit/style-profile/backfill-media-object-uploader.test.ts` 涵蓋
+- **相關檔案**:
+  - `prisma/schema.prisma`（MediaObject model + Project / User 關聯）
+  - `src/app/api/projects/[projectId]/style-profile/route.ts`（真實 owner 過濾）
+  - `src/lib/style-profile/loader.ts`（真實 owner 過濾）
+  - `src/lib/media/service.ts`（upload 寫入點）
+  - `scripts/migrations/backfill-media-object-uploader.ts`（一次性回填）
+
+## Q-006 [架構決策] artStyle / artStylePrompt「唯讀遺留」具體含義
+
+- **Phase**: Phase 11.5 — code-reviewer 第一輪 BLOCK 點 #1
+- **背景**:
+  - Phase 11.5 計畫 Q-3 user 拍板「artStyle / artStylePrompt 唯讀遺留」
+  - implementer 解讀為「移除 3 個寫入點 + 保留 schema 欄位」
+  - **但讀取邏輯沒移除**：image/video handler 仍呼叫 `getArtStylePrompt(models.artStyle)` append 到 prompt 結尾
+  - **同時** styleProfile.positivePrompt prepend 到開頭
+  - 最終 prompt = `{styleProfile.positivePrompt}\n\n{userPrompt}，{getArtStylePrompt(artStyle)}`
+  - 違反強約束「不打補丁」「不做兼容層」
+  - 而且寫入也沒完全移除：`/api/novel-promotion/[projectId]/route.ts:271` 仍允許 PATCH `artStyle`、前端 `useWorkspaceStageRuntime.ts:100 onArtStyleChange` 仍存在
+- **選項**:
+  - **A. 完全停用 artStyle / artStylePrompt**：
+    - 移除所有寫入點（route.ts PATCH validator 把 artStyle 拿掉、前端 onArtStyleChange + ArtStyleSelector 砍掉）
+    - 移除所有讀取點（handler 不再呼叫 `getArtStylePrompt`，prompt 純走 styleProfile）
+    - 既有 schema 欄位保留（向下兼容 / migration trace），但生產 code 完全不碰
+  - **B. 保留現狀（雙系統並行）**：違反強約束，不可接受
+  - **C. 保留 read 但移除 write**：read 邏輯放 fallback（styleProfile null 時才用 artStyle）— 變成「隱式回退」也違反強約束
+- **我的傾向**: A。Q-3 字面就是「唯讀遺留 = 不寫不讀，欄位保留留 trace」。implementer 漏掉 read 那邊。
+- **狀態**: **已解決（user 拍板 A）**
+- **建立時間**: 2026-04-28
+- **解決時間**: 2026-04-28
+- **拍板紀錄**: user 選 A — 完全停用 artStyle / artStylePrompt：write/read 全砍 + UI 4 處 `ART_STYLES` selector 全砍 + chokepoint 接 injector 重構；schema 欄位保留作 deprecated trace（N+2 release 移除，已登記為 P2 ⏸ 子任務）
+- **對應 commit 範圍（working tree，未 commit）**:
+  - 寫入路徑全砍：
+    - `src/app/api/novel-promotion/[projectId]/route.ts`、`src/app/api/novel-promotion/[projectId]/{location,episodes/[episodeId],voice-lines,generate-character-image}/route.ts`、`src/app/api/asset-hub/{characters,picker,voices}/route.ts` PATCH validator 把 artStyle 欄位拿掉
+  - 讀取路徑全砍：
+    - `src/lib/workers/handlers/{character-image-task-handler,location-image-task-handler,panel-image-task-handler,panel-variant-task-handler,asset-hub-image-task-handler,asset-hub-modify-task-handler,reference-to-character,image-task-handlers-core,image-task-handler-shared,analyze-novel}.ts` + `src/lib/workers/video.worker.ts`：worker 端 `getArtStylePrompt` 0 呼叫
+    - `src/lib/workers/utils.ts`：`resolveImageSourceFromGeneration` / `resolveVideoSourceFromGeneration` 改接 styleProfile 參數
+  - chokepoint 接 injector：
+    - `src/lib/ai-runtime/index.ts:11`、`src/lib/ai-runtime/style-profile-injector.ts`（新；inject 順序：positive prepend / negative prepend / reference image inject when supported）
+  - UI 4 處 `ART_STYLES` selector 全砍：
+    - `src/components/shared/assets/character-creation/CharacterCreationForm.tsx`、`src/components/shared/assets/LocationCreationModal.tsx`、`src/components/ui/config-modals/ConfigEditModal.tsx`、`src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/AddLocationModal.tsx`、`src/app/[locale]/workspace/asset-hub/components/AddLocationModal.tsx`、`src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/{ConfigStage,NovelInputStage,WorkspaceHeaderShell}.tsx` + 相關 controller / runtime hook 砍 `onArtStyleChange`
+  - `useWorkspaceStageRuntime.ts` 砍 `onArtStyleChange` 並把 styleProfile 接上 ConfigStage
+- **相關檔案**:
+  - `src/lib/ai-runtime/{index.ts,style-profile-injector.ts}`
+  - 所有 `src/lib/workers/handlers/*-task-handler*.ts` + `src/lib/workers/utils.ts` + `src/lib/workers/video.worker.ts`
+  - `src/app/api/novel-promotion/[projectId]/**/*.ts` + `src/app/api/asset-hub/**/*.ts`
+  - `src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/{ConfigStage,NovelInputStage,WorkspaceHeaderShell}.tsx` + `useWorkspaceStageRuntime.ts`
+  - `src/components/shared/assets/character-creation/CharacterCreationForm.tsx` 等 UI ART_STYLES 砍除點
+
+## Q-007 [計畫範圍] 4 preset vs 15+ artStyle enum 不對齊 → migration 沉默資料失落
+
+- **Phase**: Phase 11.5 — code-reviewer 第一輪 REQUEST CHANGES #8
+- **背景**:
+  - Phase 11.5 計畫的 4 個 preset：`realistic` / `american-comic` / `anime` / `thick-paint`
+  - **但** `src/lib/constants.ts:160-260` 列的 `artStyle` enum 至少有 15 個值：`xianxia` / `ink-wash` / `korean-webtoon` / `pixar-3d` / `cg-epic` / `urban-anime` / `campus-cartoon` / `chinese-comic` / `isekai-anime` / `korean-historical` / `korean-urban` / `cg-urban` / `game-cg` 等
+  - migration script 對 4 preset 之外的 row 做 `skippedUnknownArtStyle` 處理 → silent skip
+  - **後果**：這些 row 的 `stylePositivePrompt` 永遠 null → 之後生圖完全沒風格鎖（user 視角是「啊風格沒了」）
+  - 違反「不靜默吞錯」精神
+- **選項**:
+  - **A. plan scope 外（不遷）+ 明確 UI 通知**：UI 開 styleProfile panel 時若 user 的 artStyle 屬於 unmapped 11 個值，顯示「這個風格還沒對應 styleProfile preset，請手動設定」
+    - 優點：明確語意；不偷塞
+    - 缺點：要做 UI；user 還是要手填
+  - **B. 加 fallback 把 unmapped artStyle 灌進 stylePositivePrompt**：用既有 `getArtStylePrompt(artStyle)` 的字串當 fallback positive
+    - 優點：所有 row 都有風格鎖；migration 無遺珠
+    - 缺點：等於把舊系統的 prompt 字串複製進新系統（但概念上是「一次性遷移」不是「兼容層」）
+  - **C. 一次補完 4 → 15 個 preset**：把所有 enum 都對應 preset
+    - 優點：完美
+    - 缺點：要寫 11 個 preset 的 positive + negative；需要美術 / 風格設計參與
+- **我的傾向**: B。一次性 migration 把舊字串遷進新欄位是合理的，這是「遷移」不是「並行」。preset 數量擴充到 15 個留下個 phase 做。
+- **狀態**: **已解決（user 拍板 B）**
+- **建立時間**: 2026-04-28
+- **解決時間**: 2026-04-28
+- **拍板紀錄**: user 選 B — 加 fallback 把 unmapped artStyle（11 個非 4-preset 值）灌進 `stylePositivePrompt`，使用既有 `getArtStylePrompt(artStyle)` 的字串作為一次性 migration 的 fallback positive。**這是「遷移」不是「兼容層」**，遷完即可砍 artStyle 欄位（已登記為 P2 ⏸ 子任務）
+- **對應 commit 範圍（working tree，未 commit）**:
+  - `scripts/migrations/migrate-artstyle-to-style-profile.ts`（新；4 preset 直接對應，11 個 unmapped enum fallback 用 `getArtStylePrompt(artStyle)`，無 silent skip）
+  - `src/lib/style-profile/presets.ts`（4 preset：realistic / american-comic / anime / thick-paint）
+  - `tests/unit/style-profile/migration.test.ts`（涵蓋 mapped + unmapped fallback 兩條 path）
+- **相關檔案**:
+  - `src/lib/style-profile/presets.ts`（4 preset）
+  - `src/lib/constants.ts`（artStyle enum）
+  - `scripts/migrations/migrate-artstyle-to-style-profile.ts`
+  - `lib/prompts/novel-promotion/getArtStylePrompt`（fallback 來源；migration 跑完待 P2 砍）
+
+## Q-008 [UX/實作] StyleProfilePanel 沒 prefill + Save 會清空既有資料
+
+- **Phase**: Phase 11.5 — code-reviewer 第一輪 REQUEST CHANGES #4
+- **背景**:
+  - implementer 偏離點 #5：StyleProfilePanel 接 initial props 但 ConfigStage 永遠傳 `null`
+  - 結果：user 已經設過 stylePositivePrompt，下次打開 panel 看到全空，按 Save → 後端收到 `{ stylePositivePrompt: null, ... }` → 既有資料被清空
+  - 嚴重資料損失 bug
+- **選項**:
+  - **A. 加 GET endpoint + UI fetch 初始值**（最完整）
+    - 優點：用戶體驗對；改動範圍清楚
+    - 缺點：多一個 API；多一次 request；mutation invalidate query 流程要對齊
+  - **B. UI 只送 dirty 欄位**（不 fetch，但 Save 只送 user 動過的）
+    - 優點：不需 GET endpoint
+    - 缺點：UI 變複雜（要 track dirty state）；user 仍看不到既有值
+  - **C. 暫時 disable Save 按鈕直到 user 至少改一個欄位**
+    - 優點：最小改動
+    - 缺點：UX 還是不好；user 看不到既有值
+- **我的傾向**: A。這是 styleProfile UI 的核心交互，省不掉。GET endpoint + react-query 的 standard pattern。Q-6「UI 簡單版」應該是「先不加 token 預估警告」，不是「不接 GET」。
+- **狀態**: **已解決（user 拍板 A）**
+- **建立時間**: 2026-04-28
+- **解決時間**: 2026-04-28
+- **拍板紀錄**: user 選 A — 加 GET endpoint + UI fetch 初始值，避免 Save 清空既有資料的資料損失 bug
+- **對應 commit 範圍（working tree，未 commit）**:
+  - `src/app/api/projects/[projectId]/style-profile/route.ts`（GET handler，含 ownership check）
+  - `src/lib/query/hooks/useStyleProfile.ts`（新；react-query 抓初始值）
+  - `src/lib/query/mutations/updateStyleProfile.ts`（PATCH，invalidate query 對齊）
+  - `src/lib/query/keys.ts`（新增 styleProfile query key）
+  - `src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/ConfigStage.tsx`（接 `useStyleProfile` 把資料 prefill 進 panel）
+  - `src/app/[locale]/workspace/[projectId]/components/StyleProfilePanel.tsx`（accept initial props from parent）
+  - `tests/integration/api/style-profile.test.ts` 13 tests pass（GET + PATCH 雙路徑覆蓋）
+- **相關檔案**:
+  - `src/app/[locale]/workspace/[projectId]/components/StyleProfilePanel.tsx`
+  - `src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/ConfigStage.tsx`
+  - `src/lib/query/{hooks/useStyleProfile.ts,mutations/updateStyleProfile.ts,keys.ts}`
+  - `src/app/api/projects/[projectId]/style-profile/route.ts`
+
+## Q-009 [計畫範圍] Phase 11.5 是否包含 variant / modify handler？
+
+- **Phase**: Phase 11.5 — code-reviewer 第一輪 REQUEST CHANGES（範圍問題）
+- **背景**:
+  - implementer 接了 4 個 image/video handler：`character-image-task-handler` / `location-image-task-handler` / `panel-image-task-handler` / `video.worker`
+  - **但** `panel-variant-task-handler.ts` / `asset-hub-modify-task-handler.ts` / `image-task-handlers-core.ts` / `modify-asset-image-task-handler.ts` 也走 `resolveImageSourceFromGeneration`，全部沒接 styleProfile
+  - 結果：Variants（panel 重新生圖）跟 Modify（用戶調整）的圖風格不會跟 baseline 一致
+  - master plan 字面寫「全片所有 image / video generate 自動 inject style」— 嚴格說 variant / modify 也算「全片」
+- **選項**:
+  - **A. 本 Phase 11.5 範圍擴大到 variant / modify**
+    - 優點：完整；user 看到的所有圖風格一致
+    - 缺點：本輪 implementer 工作量增加；可能引出更多測試需求
+  - **B. 留到 Phase 11.5.x 子任務做**
+    - 優點：本輪 scope 收斂
+    - 缺點：上線後一段期間 variants 會有風格漂移問題
+- **我的傾向**: A。Phase 11.5 主目標就是「全片風格一致」，漏掉 variant / modify 等於主目標沒達成。範圍擴大但 implementation pattern 跟既有 4 個 handler 一樣，工作量可控。
+- **狀態**: **已解決（user 拍板 A）**
+- **建立時間**: 2026-04-28
+- **解決時間**: 2026-04-28
+- **拍板紀錄**: user 選 A — 本 Phase 11.5 範圍擴大到 variant / modify / asset-hub-modify，全部接 styleProfile injector，確保「全片風格一致」主目標達成
+- **對應 commit 範圍（working tree，未 commit）**:
+  - `src/lib/workers/handlers/panel-variant-task-handler.ts`（接 chokepoint）
+  - `src/lib/workers/handlers/asset-hub-modify-task-handler.ts`（per-user / per-project sentinel：`global-asset-hub` 跳過 styleProfile，真實 projectId 才載入）
+  - `src/lib/workers/handlers/image-task-handlers-core.ts`（共用 chokepoint 路徑）
+  - `src/lib/workers/handlers/asset-hub-image-task-handler.ts`、`reference-to-character.ts`（順手砍 `getArtStylePrompt`）
+  - `tests/unit/worker/{panel-variant-task-handler,modify-image-reference-description,image-task-handlers-core}.test.ts` 全部加涵蓋 styleProfile inject 行為
+- **相關檔案**:
+  - `src/lib/workers/handlers/panel-variant-task-handler.ts`
+  - `src/lib/workers/handlers/asset-hub-modify-task-handler.ts`
+  - `src/lib/workers/handlers/image-task-handlers-core.ts`
+  - `src/lib/workers/handlers/asset-hub-image-task-handler.ts`
+  - `src/lib/workers/handlers/reference-to-character.ts`
+
+---
+
+## 額外整理：Phase 11.5 第一輪 reviewer 抓到的不需要 user 拍板的 issues（implementer 二輪要修）
+
+這些不是「待確認」級別，是明確的修補項，列在這裡留 trace：
+
+### Bug-1: capability-catalog guard 紅
+- **狀態**: **已修補**
+- **解決時間**: 2026-04-28
+- 症狀：`npm run check:capability-catalog` 168 issue，`config-center-guards` 整串 fail
+- 根因：`scripts/check-capability-catalog.mjs:6-21` 的 allow-list 沒同步 `supportNegativePrompt` / `supportReferenceImage`
+- 修補紀錄：把 allow-list 從 TS contract（`src/lib/model-config-contract.ts`）讀取，避免兩個 source of truth；`scripts/check-capability-catalog.mjs` 與 `src/lib/model-config-contract.ts` 同步擴充；`standards/capabilities/{catalog.example,image-video.catalog}.json` 同步補欄位；`npm run check:config-center-guards` 全綠
+
+### Bug-2: video-worker test 假綠燈
+- **狀態**: **已修補**
+- **解決時間**: 2026-04-28
+- 症狀：`tests/unit/worker/video-worker.test.ts:283` 讀 `generationArg.prompt`，但實際在 `generationArg.options.prompt`
+- 結果：`'' || ''` 永遠等於空字串，`expect.not.toMatch(/VIDEO_STYLE_POS/)` trivially true
+- 修補紀錄：path 改正為 `generationArg.options.prompt`，並補 styleProfile inject / null-fallback 兩條 case；test 全綠
+
+### Bug-3: integration test fixture vs Zod schema 不一致
+- **狀態**: **已修補**
+- **解決時間**: 2026-04-28
+- 症狀：`tests/integration/api/style-profile.test.ts:61, 109` 用 `'media-1'` / `'media-not-mine'`，但 route 的 Zod 強制 UUID
+- 結果：兩條 test 直接 422，沒驗證業務
+- 修補紀錄：fixture 換成合法 UUID + mock `prisma.mediaObject.findMany` 控制返回；13 tests 全綠（含 Q-005 ownership 雙路徑：自家 row 通過、他人 row 拒絕、孤立 row 拒絕）
+
+### Bug-4: injectStyleProfile + workers/utils.ts styleProfile 參數變 dead code
+- **狀態**: **已修補**
+- **解決時間**: 2026-04-28
+- 症狀：純函式 `injectStyleProfile` + `resolveImageSourceFromGeneration / resolveVideoSourceFromGeneration` 的 `styleProfile?` 參數從未在 production 被讀取
+- 修補紀錄：選「接上 chokepoint」路線 — `src/lib/ai-runtime/index.ts:11` re-export `injectStyleProfile`，chokepoint 在實際 dispatch 前呼叫 injector；`src/lib/workers/utils.ts` 的 `resolve*FromGeneration` 把 styleProfile 真實 forward 給 chokepoint；`tests/unit/worker/chokepoint-style-injection.test.ts` 5 tests pass
+
+### Bug-5: tsconfig + vitest 加 `@/scripts` alias
+- **狀態**: **已修補**
+- **解決時間**: 2026-04-28
+- implementer 自報 deviation #6
+- reviewer 沒明確 BLOCK 但提醒：alias 改動須確認不影響其他 alias 解析
+- 修補紀錄：`tsconfig.json` + `vitest.config.ts` 同步加 `@/scripts` alias；grep 確認沒衝突；migration test 透過此 alias import `scripts/migrations/*`；commit message 將明寫「為 migration test 加 @/scripts alias」
+
+### Bug-6: location-image-task-handler.test.ts:128/147 typing error
+- **狀態**: **已修補**
+- **解決時間**: 2026-04-28
+- `vi.fn` 推導為 undefined 時 cast 報錯
+- 修補紀錄：給 `vi.fn` 加泛型參數；`tests/unit/worker/location-image-task-handler.test.ts` 全綠；`npx tsc --noEmit -p tsconfig.json` 0 errors

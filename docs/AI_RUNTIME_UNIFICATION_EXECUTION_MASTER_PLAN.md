@@ -25,7 +25,7 @@
 ## 预计改动规模（动态更新）
 - 预计文件：75-105
 - 预计代码行：8000-13000
-- 当前已改动文件：26（本轮累计，含 runtime/service/bridge/worker/前端运行钩子/回归测试/文档集）
+- 当前已改动文件：102（26 既有累计 + 本轮 Phase 11.5 working tree 76 个：schema / runtime / worker / UI / migration scripts / regression tests / docs / QUESTIONS.md）
 
 # 2:阶段+具体代码修改地方以及需要修改的内容
 
@@ -45,7 +45,7 @@
   - ⏸ Phase 11.2: 角色 / 场景跨集共用 UX 强化（P0，含 junction table migration）
   - ⏸ Phase 11.3: 道具（Props）first-class asset（P1，新 model）
   - ⏸ Phase 11.4: 角色三视图（全身 → 三视图 → 头像）结构化（P0，跨集一致性核心）
-  - ⏸ Phase 11.5: 风格 lock（正向 + 负向 prompt）（P0，最小可行验证）
+  - 🔄 Phase 11.5: 风格 lock（正向 + 负向 prompt）（P0，最小可行验证）— 主要 4 個子任務全部 ✅ 完成；末尾留 5 個 P2 ⏸ 子任務（dead i18n key / comment / DB cleanup / asset-hub forward / handler 測試覆蓋）
 - ⚠️ Phase Risk: 一次性切换风险高，必须严格按阶段门禁推进
 - ⚠️ Phase 11 Risk: 11.2 / 11.3 / 11.4 涉及 schema migration，需详细 playbook；11.4 改 character generation pipeline 影响范围大
 
@@ -384,28 +384,35 @@
 
 **目标**：建立全局视觉锚点，让全片画风统一。**Phase 11 内最小投入、最先做的子任务**。
 
-- ⏸ 任务：Project 加 styleProfile
+- ✅ 任务：Project 加 styleProfile（含 Q-005 連帶 MediaObject ownership）
   - 文件：`prisma/schema.prisma`
-    - NovelPromotionProject 新增字段：`stylePositivePrompt String? @db.Text`、`styleNegativePrompt String? @db.Text`、`styleReferenceImages String? @db.Text`（JSON array of URLs）
-    - 既有 `artStyle` enum 字段保留（向下兼容，可视为 styleProfile 的 preset 来源）
+    - NovelPromotionProject 新增字段：`stylePositivePrompt String? @db.Text`、`styleNegativePrompt String? @db.Text`、`styleReferenceImages String? @db.Text`（JSON array of MediaObject ids）— 已落盤 line 257-259
+    - 既有 `artStyle` enum 字段保留（schema-only deprecated；生產 code 完全停用，見下個子任務）— 註解 line 252 已標 deprecated
+    - **Q-005 拍板 A：MediaObject 加 `uploadedByUserId String? @db.VarChar(36)` + `uploader User? @relation("MediaObjectUploader")` + `@@index([uploadedByUserId])`** — line 965-989，使 `assertReferenceImagesOwned` 與 `loadStyleProfile` 可做真實 owner 過濾
 
-- ⏸ 任务：所有 image / video generate 自动 inject style
-  - 文件：`src/lib/ai-runtime/`（image / video adapter 添加 styleProfile 参数）
-  - 文件：相关 storyboard / character / location image generate handler
-  - 注入规则：
-    - positive prompt prepend `styleProfile.positivePrompt`
-    - negative prompt prepend `styleProfile.negativePrompt`
-    - 若 model 支持 reference image，inject `styleReferenceImages`
+- ✅ 任务：所有 image / video generate 自动 inject style（含 Q-006 artStyle 完全停用 + Q-009 範圍擴大）
+  - 文件：`src/lib/ai-runtime/index.ts`（chokepoint 接 `injectStyleProfile`，line 11 export injector）
+  - 文件：`src/lib/ai-runtime/style-profile-injector.ts`（新；純函式：positive prepend、negative prepend、reference image inject when model supports）
+  - 文件：worker handlers 全部接 chokepoint 並砍掉 `getArtStylePrompt` 直連：
+    - `character-image-task-handler.ts`、`location-image-task-handler.ts`、`panel-image-task-handler.ts`、`panel-variant-task-handler.ts`、`asset-hub-image-task-handler.ts`、`asset-hub-modify-task-handler.ts`、`reference-to-character.ts`、`image-task-handlers-core.ts`、`image-task-handler-shared.ts`、`video.worker.ts`
+    - **Q-006 拍板 A：完全停用 artStyle**：`getArtStylePrompt` 在 worker 端零呼叫；asset-hub 與 reference-to-character 等 handler 標明「artStyle deactivated」
+    - **Q-009 拍板 A：範圍擴大**：variant / modify / asset-hub-modify 也接 styleProfile
+  - 文件：`src/app/api/asset-hub/{characters,picker,voices}/route.ts`、`src/app/api/novel-promotion/[projectId]/{route.ts,location/route.ts,episodes/[episodeId]/route.ts,voice-lines/route.ts,generate-character-image/route.ts}` 等：把 artStyle 從 PATCH validator / 寫入路徑 / response 欄位拿掉
+  - 文件：UI 4 處 `ART_STYLES` selector 全砍：`CharacterCreationForm.tsx`、`LocationCreationModal.tsx`、`ConfigEditModal.tsx`、`AddLocationModal.tsx` x2（novel-promotion + asset-hub）
+  - 文件：`src/lib/workers/utils.ts`：`resolveImageSourceFromGeneration` / `resolveVideoSourceFromGeneration` 接 styleProfile 參數實際傳入 chokepoint（修 Bug-4）
 
-- ⏸ 任务：UI 风格设定面板
+- ✅ 任务：UI 风格设定面板
   - 文件：`src/app/[locale]/workspace/[projectId]/components/StyleProfilePanel.tsx`（新）
-  - 内建 preset：写实 / 美漫 / 动漫 / 厚涂（每个 preset 包含 positive + negative pair）
-  - 可自定义 positive + negative
-  - 可上传 reference image 当风格锚点（走 MediaObject）
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/StyleProfilePresetPicker.tsx`（新）
+  - 文件：`src/lib/style-profile/presets.ts`（4 preset：realistic / american-comic / anime / thick-paint）
+  - 文件：`src/app/api/projects/[projectId]/style-profile/route.ts`（GET + PATCH，含 Q-005 真實 ownership check）
+  - 文件：`src/lib/query/hooks/useStyleProfile.ts` + `src/lib/query/mutations/updateStyleProfile.ts` + `src/lib/query/keys.ts`
+  - 文件：`ConfigStage.tsx` 接 `useStyleProfile` 把既有資料 prefill 進 panel（修 Q-008 / Bug-3 reviewer 抓的「Save 會清空既有資料」資料損失）
 
-- ⏸ 任务：迁移既有 artStyle 到 styleProfile
+- ✅ 任务：迁移既有 artStyle 到 styleProfile（含 Q-007 fallback + Q-005 backfill）
   - 文件：`scripts/migrations/migrate-artstyle-to-style-profile.ts`（新）
-  - 一次性脚本：扫所有 NovelPromotionProject，根据 artStyle enum 填入对应的 positive + negative prompt
+  - **Q-007 拍板 B fallback**：unmapped artStyle（11 個非 4-preset enum 值）改用 `getArtStylePrompt(artStyle)` 字串當 positive prompt fallback，避免 silent skip 造成資料遺失
+  - 文件：`scripts/migrations/backfill-media-object-uploader.ts`（新；Q-005 連帶；MediaObject → Generation/Project → User 反查回填 `uploadedByUserId`，孤立 row 標 NULL+log）
 
 **驗收**：
 - 同 project 内多集生成的画风一致
@@ -416,6 +423,33 @@
 **风险**：
 - ⚠️ 改 prompt 注入逻辑会影响所有 image / video 生成的 token 数与成本，要监控
 - ⚠️ 不同 model 对 negative prompt 的支持度不同（capability catalog 需更新）
+
+### Phase 11.5 P2 后续清理待办（user 拍板延后，非阻塞 11.5 验收）
+
+- ⏸ 任务：移除 dead i18n key `visualStyle`
+  - 文件：`messages/zh/novel-promotion.json:101`、`messages/en/novel-promotion.json:101`、`messages/zh/configModal.json:5`、`messages/en/configModal.json:5`
+  - 变动：刪除 `storyInput.visualStyle` / `configModal.visualStyle` 4 條鍵（ART_STYLES selector 已砍，i18n key 變 dead code）
+  - 驗收：`npm run check:prompt-i18n` 全綠（zh + en 同步刪）；UI grep `visualStyle` 0 命中
+
+- ⏸ 任务：`asset-hub-modify-task-handler.ts:87` comment 改寫
+  - 文件：`src/lib/workers/handlers/asset-hub-modify-task-handler.ts`（line 87 附近）
+  - 變動：目前註解仍提 Q-009 sentinel，待 asset-hub 全量改成 per-user / per-project 二分後改寫，避免 Q-009 標記混淆後續 reader
+  - 驗收：comment 不再引用 Q-009 sentinel；grep `Q-009` 命中數 0
+
+- ⏸ 任务：N+2 release 移除 DB column `NovelPromotionProject.artStyle` / `artStylePrompt`
+  - 文件：`prisma/schema.prisma`（line 250-256 附近 deprecated 區）+ 對應 Prisma migration
+  - 變動：生產 code 已零讀寫；schema cleanup 在 N+2 release 執行 `ALTER TABLE NovelPromotionProject DROP COLUMN artStyle, DROP COLUMN artStylePrompt`
+  - 驗收：grep `artStyle` 在 `src/` 0 命中（除 deprecation history 註解）；migration script 跑過 DEV / staging 通過
+
+- ⏸ 任务：清掉 POST `/api/asset-hub/locations` backend forward `artStyle`
+  - 文件：`src/app/api/asset-hub/locations/route.ts:52, 102`
+  - 變動：worker 已 deactivated artStyle，但 route 仍 destructure `artStyle` 並 forward `artStyle: artStyle || 'american-comic'` 給 worker（屬 implementer round 2 偏離點，留下的 dead forward）
+  - 驗收：route 不再 destructure artStyle；payload 不再含 artStyle 欄位；對應 integration test fixture 同步移除
+
+- ⏸ 任务：reviewer round 3 指出順手砍 `getArtStylePrompt` 的 handler 是否需要正式測試覆蓋
+  - 文件：`tests/unit/worker/asset-hub-image-task-handler.test.ts`（新或補）、`tests/unit/worker/reference-to-character-style-profile.test.ts`（已建，可能要補測 case）
+  - 變動：`asset-hub-image-task-handler` / `reference-to-character` 等順手砍 `getArtStylePrompt` 的 handler 雖功能正確，但 reviewer 提醒目前測試覆蓋只到 happy path，缺「styleProfile null 時 fallback 不再 inject artStyle string」的 negative case
+  - 驗收：每個改過的 handler 都至少有一個「styleProfile null + 確保 prompt 不含 artStyle 字串」的 unit test；coverage 達 80%
 
 ### Phase 11 推进顺序建议
 
@@ -463,9 +497,23 @@
   - `tests/unit/billing/cost-error-branches.test.ts`（1 failure）
 - ✅ `npm run build`（含 run-request-executor 改造后再次通过）
 
+### Phase 11.5 本轮新增验证（working tree，feature/phase-11，未 commit）
+- ✅ `npx tsc --noEmit -p tsconfig.json`：0 errors
+- ✅ `npm run check:config-center-guards`：全綠
+- ✅ `npm run check:no-multiple-sources-of-truth`：全綠
+- ✅ `npm run check:no-hardcoded-model-capabilities`：全綠
+- ✅ `npx vitest run tests/unit/style-profile/`：4 files / 44 tests pass（presets / injector / loader / migration / backfill-media-object-uploader）
+- ✅ `npx vitest run tests/integration/api/style-profile.test.ts`：13 tests pass（含 Q-005 ownership BLOCK 修補後 fixture 改用合法 UUID 的 Bug-3 修補）
+- ✅ `npx vitest run tests/unit/worker/chokepoint-style-injection.test.ts`：5 tests pass
+- ✅ 其他 worker test 全綠（character-image / location-image / panel-image / panel-variant / modify-image-reference-description / image-task-handlers-core / video-worker / analyze-novel / reference-to-character + reference-to-character-style-profile），唯 pre-existing Q-003 panel-image-task-handler.test:188 與 script-to-storyboard.test x2 prisma mock 缺欄位 fail（非本 phase 引入）
+- ✅ `npx vitest run tests/unit/media/service.test.ts`：5 tests pass（MediaObject.uploadedByUserId 寫入路徑）
+
 ## 当前问题登记（必须先记录再推进）
 - ⚠️ 回归门禁未全绿：存在 3 个历史/并行改动引入的失败用例，导致 `test:regression` 无法通过。
 - ⚠️ 本地构建环境 Redis 未监听 `127.0.0.1:16379`，`next build` 期间出现大量连接拒绝日志，但构建产物仍成功输出。
+- ⚠️ Q-002（pre-existing，非本 phase 引入）：ripgrep 未裝 → `scripts/check-api-handler.ts` 用 `rg --files` 報 `command not found` → `npm run test:guards` 連帶失敗 → `npm run test:regression` 同樣中斷在第一步。建議解法：`brew install ripgrep` 或讓 guard fallback 到 `grep`。
+- ⚠️ Q-003（pre-existing，非本 phase 引入）：worker handler test prisma mock 缺欄位導致 3 個用例 fail：`tests/unit/worker/panel-image-task-handler.test.ts:188`（`prismaMock.novelPromotionPanel.update` 期望被呼叫一次，實際參數對不上）+ `tests/unit/worker/script-to-storyboard.test.ts` 兩個 case（`Cannot read properties of undefined (reading 'deleteMany')` on `prisma.novelPromotionStoryboard.deleteMany`，看起來 mock factory 漏 model）。屬 Phase 8（複雜鏈路遷移）範疇。
+- ⚠️ Q-004（pre-existing，非本 phase 引入，但屬 Phase 6 強約束違反）：`src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts:56, 74` 直連 `chatCompletion*` → 違反強約束「AI route 不准旁路 worker」「AI 必須走 ai-runtime」。`npm run check:no-api-direct-llm-call` 會抓出。需 Phase 6 / Phase 8 owner 處理改走 `createRun` → worker handler。
 
 # 5:备注
 - 本文档是唯一执行来源，必须与代码库保持同步。
