@@ -230,4 +230,73 @@ describe('TencentVODVideoGenerator', () => {
     const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
     expect(req).not.toHaveProperty('ExtInfo')
   })
+
+  // —— OutputConfig 進階欄位 ——
+
+  it('passes all advanced OutputConfig flags when set', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'production-grade run',
+      options: {
+        modelId: 'Vidu-q3',
+        duration: 5,
+        resolution: '1080P',
+        frameInterpolate: 'Enabled',
+        offPeak: 'Enabled',
+        logoAdd: 'Disabled',
+        inputComplianceCheck: 'Enabled',
+        outputComplianceCheck: 'Enabled',
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    const out = req?.OutputConfig as Record<string, unknown>
+    expect(out.FrameInterpolate).toBe('Enabled')
+    expect(out.OffPeak).toBe('Enabled')
+    expect(out.LogoAdd).toBe('Disabled')
+    expect(out.InputComplianceCheck).toBe('Enabled')
+    expect(out.OutputComplianceCheck).toBe('Enabled')
+    // existing fields still present
+    expect(out.StorageMode).toBe('Temporary')
+    expect(out.Duration).toBe(5)
+    expect(out.Resolution).toBe('1080P')
+  })
+
+  it('omits unsupplied advanced OutputConfig flags', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'baseline run',
+      options: { modelId: 'Kling-3.0' },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    const out = req?.OutputConfig as Record<string, unknown>
+    expect(out).not.toHaveProperty('FrameInterpolate')
+    expect(out).not.toHaveProperty('OffPeak')
+    expect(out).not.toHaveProperty('LogoAdd')
+    expect(out).not.toHaveProperty('InputComplianceCheck')
+    expect(out).not.toHaveProperty('OutputComplianceCheck')
+  })
+
+  it('forwards only the explicitly-set advanced flags', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      prompt: 'partial flags',
+      options: {
+        modelId: 'Kling-3.0',
+        outputComplianceCheck: 'Enabled',
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    const out = req?.OutputConfig as Record<string, unknown>
+    expect(out.OutputComplianceCheck).toBe('Enabled')
+    expect(out).not.toHaveProperty('InputComplianceCheck')
+    expect(out).not.toHaveProperty('OffPeak')
+  })
 })

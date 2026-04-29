@@ -93,13 +93,15 @@ interface KlingMultiShotOptions {
     multi_prompt?: string
 }
 
+type ToggleFlag = 'Enabled' | 'Disabled'
+
 interface TencentVODVideoOptions {
     modelId?: string
     duration?: number
     resolution?: string
     aspectRatio?: string
-    audioGeneration?: 'Enabled' | 'Disabled'
-    enhancePrompt?: 'Enabled' | 'Disabled'
+    audioGeneration?: ToggleFlag
+    enhancePrompt?: ToggleFlag
     sceneType?: string
     seed?: number
     inputRegion?: 'Mainland' | 'Oversea'
@@ -113,6 +115,17 @@ interface TencentVODVideoOptions {
      * 參數都可從這邊傳入。Key 衝突時 extInfo 覆蓋 klingMultiShot。
      */
     extInfo?: Record<string, unknown>
+    // —— OutputConfig 進階欄位 (doc 3.2.2) ——
+    /** Vidu 智能插帧 */
+    frameInterpolate?: ToggleFlag
+    /** 錯峰模式（有折扣） */
+    offPeak?: ToggleFlag
+    /** 圖標水印（目前僅 Vidu 支援） */
+    logoAdd?: ToggleFlag
+    /** 輸入內容合規性檢查 */
+    inputComplianceCheck?: ToggleFlag
+    /** 輸出內容合規性檢查（production 上線建議開啟） */
+    outputComplianceCheck?: ToggleFlag
 }
 
 /** 從 typed options 組出最終 ExtInfo payload；無欄位則回 null。 */
@@ -188,6 +201,11 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
         if (opts.resolution) outputConfig.Resolution = opts.resolution
         if (opts.aspectRatio) outputConfig.AspectRatio = opts.aspectRatio
         if (opts.audioGeneration) outputConfig.AudioGeneration = opts.audioGeneration
+        if (opts.frameInterpolate) outputConfig.FrameInterpolate = opts.frameInterpolate
+        if (opts.offPeak) outputConfig.OffPeak = opts.offPeak
+        if (opts.logoAdd) outputConfig.LogoAdd = opts.logoAdd
+        if (opts.inputComplianceCheck) outputConfig.InputComplianceCheck = opts.inputComplianceCheck
+        if (opts.outputComplianceCheck) outputConfig.OutputComplianceCheck = opts.outputComplianceCheck
 
         const req: Record<string, unknown> = {
             SubAppId: creds.subAppId,
