@@ -30,7 +30,12 @@ if [[ "${DEBUG:-}" == "1" ]]; then
   DEBUG_ENV=(-e DEBUG=1)
 fi
 
+# The `app` service in docker-compose.prod.yml already injects every var
+# from deploy/.env.prod into the container's process.env via its
+# environment: block. Don't pass --env-file to tsx — it would try to
+# load a file at /app/deploy/.env.prod that doesn't exist inside the
+# container.
 exec docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" \
   exec "${DEBUG_ENV[@]}" app \
-  sh -c 'cd /app && npx --no-install tsx --env-file=deploy/.env.prod scripts/tencent-vod-smoke.ts "$@"' \
+  sh -c 'cd /app && npx --no-install tsx scripts/tencent-vod-smoke.ts "$@"' \
   -- "$@"
