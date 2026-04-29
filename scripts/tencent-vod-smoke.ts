@@ -145,6 +145,18 @@ function interpretError(err: unknown): InterpretedResult {
     }
   }
 
+  // InvalidParameterValue with a Tencent-issued requestId means the
+  // request reached Tencent and passed signature verification, then
+  // failed structural validation. That's still proof that auth works —
+  // the smoke test's probe TaskId just doesn't match the expected shape.
+  const hasTraceId = !!(err as { requestId?: string }).requestId
+  if (code === 'InvalidParameterValue' && hasTraceId) {
+    return {
+      ok: true,
+      verdict: 'AUTH OK — Tencent verified the signature (request returned a Tencent traceId before failing on parameter shape). Credentials are good.',
+    }
+  }
+
   return {
     ok: false,
     verdict: `UNRECOGNISED ERROR: ${code || '(no code)'} — ${message}`,
@@ -191,10 +203,13 @@ async function main() {
     profile: { httpProfile: { endpoint: 'vod.tencentcloudapi.com' } },
   })
 
-  // Use a deterministically invalid TaskId — Tencent task ids look like
-  // "<subAppId>-<TaskType>-<sha>" so anything else is guaranteed not to
-  // collide with a real task.
-  const probeTaskId = `kuiperai-smoke-${Date.now()}`
+  // Tencent expects task ids shaped like
+  //   "<subAppId>-AigcVideoTask-<32-hex-sha>t"
+  // and rejects anything else with InvalidParameterValue *before* the
+  // auth verdict is meaningful. Use a properly-shaped but all-zero sha
+  // so the request passes parameter validation and we get a clean
+  // "task not found" response when auth is OK.
+  const probeTaskId = `${creds.subAppId}-AigcVideoTask-${'0'.repeat(32)}t`
 
   try {
     const resp = await client.DescribeTaskDetail({
