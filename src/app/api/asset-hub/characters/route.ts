@@ -94,7 +94,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
     })
 
     const descText = description?.trim() || `${name.trim()} 的角色设定`
-    const imageMedia = await resolveMediaRefFromLegacyValue(initialImageUrl || null)
+    // Q-005: tag MediaObject with the uploader so styleProfile owner-checks pass
+    // when this image is later picked as a style reference.
+    const imageMedia = await resolveMediaRefFromLegacyValue(
+        initialImageUrl || null,
+        { uploadedByUserId: session.user.id },
+    )
     const appearance = await prisma.globalCharacterAppearance.create({
         data: {
             characterId: character.id,

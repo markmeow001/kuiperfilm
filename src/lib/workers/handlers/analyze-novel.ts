@@ -2,7 +2,7 @@ import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { executeAiTextStep } from '@/lib/ai-runtime'
 import { withInternalLLMStreamCallbacks } from '@/lib/llm-observe/internal-stream-context'
-import { getArtStylePrompt, removeLocationPromptSuffix } from '@/lib/constants'
+import { removeLocationPromptSuffix } from '@/lib/constants'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
@@ -257,12 +257,8 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
     createdLocations.push(created)
   }
 
-  await prisma.novelPromotionProject.update({
-    where: { id: novelData.id },
-    data: {
-      artStylePrompt: getArtStylePrompt(novelData.artStyle, job.data.locale) || '',
-    },
-  })
+  // Phase 11.5: artStylePrompt 已 deprecated（被 styleProfile 三栏取代）。
+  // 此处不再写入 artStylePrompt — 风格统一由 PATCH /api/projects/{id}/style-profile 管理。
 
   await reportTaskProgress(job, 96, {
     stage: 'analyze_novel_done',

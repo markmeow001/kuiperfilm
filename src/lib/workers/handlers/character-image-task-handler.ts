@@ -1,6 +1,6 @@
 import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { addCharacterPromptSuffix, getArtStylePrompt, PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
+import { addCharacterPromptSuffix, PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
 import { type TaskJobData } from '@/lib/task/types'
 import { encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { reportTaskProgress } from '../shared'
@@ -17,6 +17,7 @@ import {
   parseJsonStringArray,
   pickFirstString,
 } from './image-task-handler-shared'
+import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 interface CharacterAppearanceRecord {
   id: string
@@ -96,7 +97,9 @@ export async function handleCharacterImageTask(job: Job<TaskJobData>) {
 
   if (!appearance) throw new Error('Character appearance not found')
 
-  const artStyle = getArtStylePrompt(models.artStyle, job.data.locale)
+  // Q-006: artStyle / artStylePrompt are deactivated. Prompt is built purely from
+  // the character description; styleProfile is the only style anchor and is
+  // injected at the chokepoint.
   const descriptions = parseJsonStringArray(appearance.descriptions)
   const baseDescriptions = descriptions.length > 0 ? descriptions : [appearance.description || '']
 
@@ -130,10 +133,15 @@ export async function handleCharacterImageTask(job: Job<TaskJobData>) {
   const nextImageUrls = [...imageUrls]
   const label = `${characterName} - ${appearance.changeReason || '形象'}`
 
+  // Phase 11.5: 載入项目级 styleProfile（global style anchor）。
+  // Bug-4: chokepoint owns prepend + capability filter — handler passes raw
+  // userPrompt + raw styleProfile.
+  const styleProfile = await loadStyleProfile(prisma, projectId)
+
   for (let i = 0; i < indexes.length; i++) {
     const index = indexes[i]
     const raw = baseDescriptions[index] || baseDescriptions[0]
-    const prompt = artStyle ? `${addCharacterPromptSuffix(raw)}，${artStyle}` : addCharacterPromptSuffix(raw)
+    const userPrompt = addCharacterPromptSuffix(raw)
 
     await reportTaskProgress(job, 15 + Math.floor((i / Math.max(indexes.length, 1)) * 55), {
       stage: 'generate_character_image',
@@ -144,7 +152,7 @@ export async function handleCharacterImageTask(job: Job<TaskJobData>) {
       job,
       userId,
       modelId,
-      prompt,
+      prompt: userPrompt,
       label,
       targetId: `${appearance.id}-${index}`,
       keyPrefix: 'character',
@@ -152,6 +160,7 @@ export async function handleCharacterImageTask(job: Job<TaskJobData>) {
         referenceImages: primaryReferenceImages.length > 0 ? primaryReferenceImages : undefined,
         aspectRatio: '3:2',
       },
+      styleProfile,
     })
 
     while (nextImageUrls.length <= index) {

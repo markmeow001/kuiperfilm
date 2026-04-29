@@ -266,9 +266,12 @@ export const PATCH = apiHandler(async (
     throw new ApiError('NOT_FOUND')
   }
 
+  // Q-006: artStyle / artStylePrompt are deactivated (replaced by styleProfile).
+  // Field is deliberately omitted from allowedProjectFields so PATCH silently ignores it.
+  // Schema columns are kept for migration trace; styleProfile is the only write path.
   const allowedProjectFields = [
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
-    'editModel', 'videoModel', 'videoRatio', 'artStyle',
+    'editModel', 'videoModel', 'videoRatio',
     'ttsRate', 'lipSyncEnabled', 'lipSyncMode', 'capabilityOverrides',
     'targetDuration',
   ] as const
@@ -307,9 +310,10 @@ export const PATCH = apiHandler(async (
     data: updateData})
 
   // 同步更新用户偏好配置（配置字段）
+  // Q-006: artStyle removed from preference sync — styleProfile replaces it.
   const preferenceFields = [
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
-    'editModel', 'videoModel', 'videoRatio', 'artStyle', 'ttsRate',
+    'editModel', 'videoModel', 'videoRatio', 'ttsRate',
   ] as const
   const preferenceUpdate: Record<string, unknown> = {}
   for (const field of preferenceFields) {

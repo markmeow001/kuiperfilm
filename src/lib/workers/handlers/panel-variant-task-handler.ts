@@ -1,6 +1,5 @@
 import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { getArtStylePrompt } from '@/lib/constants'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { type TaskJobData } from '@/lib/task/types'
 import {
@@ -20,6 +19,7 @@ import {
   resolveNovelData,
 } from './image-task-handler-shared'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
+import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 // ── 构建变体提示词 ──────────────────────────────────────
 interface VariantPromptParams {
@@ -139,7 +139,8 @@ export async function handlePanelVariantTask(job: Job<TaskJobData>) {
   const normalizedRefs = await normalizeReferenceImagesForGeneration(refs)
 
   // 使用 agent_shot_variant_generate.txt 提示词模板
-  const artStyle = getArtStylePrompt(modelConfig.artStyle, job.data.locale)
+  // Q-006: artStyle is deactivated. styleProfile is the only style anchor and is
+  // injected at the chokepoint; {style} template var falls back to a neutral phrase.
   const charactersInfo = buildCharactersInfo(newPanel, projectData)
   const characterAssetsDesc = buildCharacterAssetsDescription(newPanel, projectData)
   const locationName = newPanel.location || sourcePanel.location || ''
@@ -159,10 +160,14 @@ export async function handlePanelVariantTask(job: Job<TaskJobData>) {
     characterAssets: characterAssetsDesc,
     locationAsset: locationName ? `场景：${locationName}` : '无场景参考',
     aspectRatio,
-    style: artStyle || '与参考图风格一致',
+    style: '与参考图风格一致',
   })
 
   _ulogInfo('[panel-variant] resolved variant prompt', prompt)
+
+  // Q-009: variant handler must inject styleProfile so variants stay style-locked
+  // with the rest of the project. Chokepoint owns prepend + capability filter.
+  const styleProfile = await loadStyleProfile(prisma, job.data.projectId)
 
   await assertTaskActive(job, 'generate_panel_variant_image')
   const source = await resolveImageSourceFromGeneration(job, {
@@ -173,6 +178,7 @@ export async function handlePanelVariantTask(job: Job<TaskJobData>) {
       referenceImages: normalizedRefs,
       aspectRatio,
     },
+    styleProfile,
   })
 
   const cosKey = await uploadImageSourceToCos(source, 'panel-variant', newPanel.id)

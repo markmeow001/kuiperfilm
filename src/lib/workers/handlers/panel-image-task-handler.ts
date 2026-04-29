@@ -1,6 +1,5 @@
 import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { getArtStylePrompt } from '@/lib/constants'
 import { createScopedLogger } from '@/lib/logging/core'
 import { type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
@@ -26,6 +25,7 @@ import {
   parseJsonUnknown,
   pickAppearanceDescription,
 } from './panel-image-task-handler-utils'
+import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 /**
  * Build natural-language scene description from panel data.
@@ -161,11 +161,11 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
       normalizedUrls: normalizedRefs.map((u) => u.substring(0, 100)),
       panelCharacters: panel.characters,
       panelLocation: panel.location,
-      artStyle: modelConfig.artStyle,
     },
   })
 
-  const artStyle = getArtStylePrompt(modelConfig.artStyle, job.data.locale)
+  // Q-006: artStyle / artStylePrompt are deactivated. styleProfile (loaded below)
+  // is the only style anchor and is injected at the chokepoint.
   if (!projectData.videoRatio) throw new Error('Project videoRatio not configured')
   const aspectRatio = projectData.videoRatio
   const sceneText = buildSceneDescription({
@@ -183,10 +183,13 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
     },
     projectData,
   })
+  // Q-006: artStyle is deactivated. styleProfile.positivePrompt is prepended at
+  // the chokepoint, so we pass a neutral fallback for the {style} template var
+  // (kept for prompt template compatibility; not a runtime style source).
   let prompt = buildPanelPrompt({
     locale: job.data.locale,
     aspectRatio,
-    styleText: artStyle || '与参考图风格一致',
+    styleText: '与参考图风格一致',
     sourceText: panel.srtSegment || panel.description || '',
     sceneText,
   })
@@ -211,6 +214,10 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
     },
   })
 
+  // Phase 11.5 / Bug-4: chokepoint owns prepend + capability filter. Handler passes
+  // raw prompt + raw styleProfile + caller-controlled refs.
+  const styleProfile = await loadStyleProfile(prisma, job.data.projectId)
+
   const candidates: string[] = []
 
   for (let i = 0; i < candidateCount; i++) {
@@ -228,6 +235,7 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
         aspectRatio,
       },
       pollProgress: { start: 30, end: 90 },
+      styleProfile,
     })
 
     const cosKey = await uploadImageSourceToCos(source, 'panel-candidate', `${panel.id}-${i}`)

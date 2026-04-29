@@ -18,6 +18,7 @@ import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
 import { handleMultiShotVideoTask } from './handlers/multi-shot-video-handler'
 import { handleVideoEditorRenderTask } from './handlers/video-editor-render'
+import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 type AnyObj = Record<string, unknown>
 type VideoOptionValue = string | number | boolean
@@ -156,6 +157,10 @@ async function generateVideoForPanel(
     }
   }
 
+  // Phase 11.5 / Bug-4: chokepoint owns prepend + capability filter for video.
+  // Handler passes raw prompt + raw styleProfile.
+  const styleProfile = await loadStyleProfile(prisma, job.data.projectId)
+
   const generatedVideo = await resolveVideoSourceFromGeneration(job, {
     userId: job.data.userId,
     modelId: model,
@@ -168,6 +173,7 @@ async function generateVideoForPanel(
       ...(typeof requestedGenerateAudio === 'boolean' ? { generateAudio: requestedGenerateAudio } : {}),
       ...(finalLastFrameUrl ? { lastFrameImageUrl: finalLastFrameUrl } : {}),
     },
+    styleProfile,
   })
 
   let downloadHeaders: Record<string, string> | undefined

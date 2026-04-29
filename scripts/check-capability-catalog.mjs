@@ -3,9 +3,18 @@ import path from 'node:path'
 
  const CATALOG_DIR = path.resolve(process.cwd(), 'standards/capabilities')
 const CAPABILITY_NAMESPACES = new Set(['llm', 'image', 'video', 'audio', 'lipsync'])
+// IMPORTANT: keep this allow-list in sync with the TS contract
+// `src/lib/model-config-contract.ts` and the capability namespace types.
+// Phase 11.5 added `supportNegativePrompt` / `supportReferenceImage` to the
+// `image` and `video` namespaces; the guard must accept them.
 const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
   llm: new Set(['reasoningEffortOptions', 'fieldI18n']),
-  image: new Set(['resolutionOptions', 'fieldI18n']),
+  image: new Set([
+    'resolutionOptions',
+    'supportNegativePrompt',
+    'supportReferenceImage',
+    'fieldI18n',
+  ]),
   video: new Set([
     'generationModeOptions',
     'generateAudioOptions',
@@ -14,6 +23,8 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
     'resolutionOptions',
     'firstlastframe',
     'supportGenerateAudio',
+    'supportNegativePrompt',
+    'supportReferenceImage',
     'fieldI18n',
   ]),
   audio: new Set(['voiceOptions', 'rateOptions', 'fieldI18n']),

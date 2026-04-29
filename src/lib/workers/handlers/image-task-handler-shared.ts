@@ -8,6 +8,7 @@ import {
   uploadImageSourceToCos,
   withLabelBar,
 } from '../utils'
+import type { StyleProfile } from '@/lib/style-profile/loader'
 
 export type AnyObj = Record<string, unknown>
 
@@ -105,13 +106,17 @@ export async function generateLabeledImageToCos(params: {
     referenceImages?: string[]
     aspectRatio?: string
     size?: string
+    negativePrompt?: string | null
   }
+  // Phase 11.5 / Bug-4: pass raw styleProfile; chokepoint owns prepend + capability filter.
+  styleProfile?: StyleProfile | null
 }) {
   const source = await resolveImageSourceFromGeneration(params.job, {
     userId: params.userId,
     modelId: params.modelId,
     prompt: params.prompt,
     options: params.options,
+    styleProfile: params.styleProfile ?? null,
   })
 
   const labeled = await withLabelBar(source, params.label)

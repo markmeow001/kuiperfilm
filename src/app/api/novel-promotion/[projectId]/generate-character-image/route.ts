@@ -29,7 +29,7 @@ export const POST = apiHandler(async (
     const taskLocale = resolveTaskLocale(request, body)
     const bodyMeta = toObject((body as Record<string, unknown>).meta)
     const acceptLanguage = request.headers.get('accept-language') || ''
-    const { characterId, appearanceId, artStyle } = body
+    const { characterId, appearanceId } = body
 
     if (!characterId) {
         throw new ApiError('INVALID_PARAMS')
@@ -52,26 +52,8 @@ export const POST = apiHandler(async (
         targetAppearanceId = firstAppearance.id
     }
 
-    // 如果设置了 artStyle，需要更新到 novelPromotionProject 中（供 generate-image 使用）
-    if (artStyle) {
-        const novelData = await prisma.novelPromotionProject.findUnique({ where: { projectId } })
-        if (novelData) {
-            // 将风格转换为提示词
-            const ART_STYLES = [
-                { value: 'american-comic', prompt: '美式漫画风格' },
-                { value: 'chinese-comic', prompt: '精致国漫风格' },
-                { value: 'anime', prompt: '日系动漫风格' },
-                { value: 'realistic', prompt: '真人照片写实风格' }
-            ]
-            const style = ART_STYLES.find(s => s.value === artStyle)
-            if (style) {
-                await prisma.novelPromotionProject.update({
-                    where: { id: novelData.id },
-                    data: { artStylePrompt: style.prompt }
-                })
-            }
-        }
-    }
+    // Phase 11.5: artStylePrompt 已 deprecated（被 styleProfile 三栏取代）。
+    // 此处不再写入 artStylePrompt — 风格统一由 PATCH /api/projects/{id}/style-profile 管理。
 
     // 调用 generate-image API
     const { getBaseUrl } = await import('@/lib/env')

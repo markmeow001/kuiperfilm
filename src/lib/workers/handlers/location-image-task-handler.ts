@@ -1,6 +1,6 @@
 import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { addLocationPromptSuffix, getArtStylePrompt } from '@/lib/constants'
+import { addLocationPromptSuffix } from '@/lib/constants'
 import { type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 import {
@@ -12,6 +12,7 @@ import {
   generateLabeledImageToCos,
   pickFirstString,
 } from './image-task-handler-shared'
+import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 interface LocationImageRecord {
   id: string
@@ -47,7 +48,9 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
   const modelId = models.locationModel
   if (!modelId) throw new Error('Location model not configured')
 
-  const artStyle = getArtStylePrompt(models.artStyle, job.data.locale)
+  // Q-006: artStyle / artStylePrompt are deactivated. Prompt is built purely from
+  // the location description; styleProfile is the only style anchor and is
+  // injected at the chokepoint.
 
   // targetId may be locationId (group) or locationImageId (single)
   const maybeLocationImage = await db.locationImage.findUnique({
@@ -115,6 +118,10 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
 
   const locationIds = Array.from(new Set(locationImages.map((it) => it.locationId)))
 
+  // Phase 11.5 / Bug-4: chokepoint owns prepend + capability filter. Handler passes
+  // raw userPrompt + raw styleProfile.
+  const styleProfile = await loadStyleProfile(prisma, projectId)
+
   for (let i = 0; i < locationImages.length; i++) {
     const item = locationImages[i]
     // 优先用映射表中的名字，回退到 item.location?.name，最后才用默认值
@@ -122,7 +129,8 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
     const promptBody = item.description || ''
     if (!promptBody) continue
 
-    const prompt = artStyle ? `${addLocationPromptSuffix(promptBody)}，${artStyle}` : addLocationPromptSuffix(promptBody)
+    const userPrompt = addLocationPromptSuffix(promptBody)
+
     await reportTaskProgress(job, 20 + Math.floor((i / Math.max(locationImages.length, 1)) * 55), {
       stage: 'generate_location_image',
       imageId: item.id,
@@ -132,13 +140,14 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
       job,
       userId,
       modelId,
-      prompt,
+      prompt: userPrompt,
       label: name,
       targetId: item.id,
       keyPrefix: 'location',
       options: {
         aspectRatio: '1:1',
       },
+      styleProfile,
     })
 
     await assertTaskActive(job, 'persist_location_image')

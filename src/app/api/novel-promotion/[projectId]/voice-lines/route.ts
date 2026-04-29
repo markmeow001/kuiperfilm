@@ -246,6 +246,7 @@ export const PATCH = apiHandler(async (
   // 🔐 统一权限验证
   const authResult = await requireProjectAuthLight(projectId)
   if (isErrorResponse(authResult)) return authResult
+  const { session } = authResult
 
   const body = await request.json()
   const {
@@ -280,7 +281,11 @@ export const PATCH = apiHandler(async (
     }
     if (audioUrl !== undefined) {
       updateData.audioUrl = audioUrl // 支持清空音频 (传 null)
-      const media = await resolveMediaRefFromLegacyValue(audioUrl)
+      // Q-005: tag MediaObject with the uploader so owner-checks pass downstream.
+      const media = await resolveMediaRefFromLegacyValue(
+        audioUrl,
+        { uploadedByUserId: session.user.id },
+      )
       updateData.audioMediaId = media?.id || null
     }
     if (matchedPanelId !== undefined) {

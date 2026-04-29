@@ -71,6 +71,7 @@ export const PATCH = apiHandler(async (
   // 🔐 统一权限验证
   const authResult = await requireProjectAuthLight(projectId)
   if (isErrorResponse(authResult)) return authResult
+  const { session } = authResult
 
   const body = await request.json()
   const { name, description, novelText, audioUrl, srtContent } = body
@@ -81,7 +82,11 @@ export const PATCH = apiHandler(async (
   if (novelText !== undefined) updateData.novelText = novelText
   if (audioUrl !== undefined) {
     updateData.audioUrl = audioUrl
-    const media = await resolveMediaRefFromLegacyValue(audioUrl)
+    // Q-005: tag MediaObject with the uploader so owner-checks pass downstream.
+    const media = await resolveMediaRefFromLegacyValue(
+      audioUrl,
+      { uploadedByUserId: session.user.id },
+    )
     updateData.audioMediaId = media?.id || null
   }
   if (srtContent !== undefined) updateData.srtContent = srtContent

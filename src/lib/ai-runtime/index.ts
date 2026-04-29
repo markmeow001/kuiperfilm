@@ -8,3 +8,8 @@ export type {
   AiStepMeta,
   AiTextMessages,
 } from './types'
+export { injectStyleProfile } from './style-profile-injector'
+export type {
+  InjectionResult,
+  ModelStyleCapabilities,
+} from './style-profile-injector'

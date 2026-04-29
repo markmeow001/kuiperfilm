@@ -1,6 +1,6 @@
 import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { addCharacterPromptSuffix, addLocationPromptSuffix, getArtStylePrompt } from '@/lib/constants'
+import { addCharacterPromptSuffix, addLocationPromptSuffix } from '@/lib/constants'
 import { type TaskJobData } from '@/lib/task/types'
 import { encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
@@ -59,10 +59,10 @@ export async function handleAssetHubImageTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
   const userId = job.data.userId
   const userModels = await getUserModels(userId)
-  const artStyle = getArtStylePrompt(
-    typeof payload.artStyle === 'string' ? payload.artStyle : undefined,
-    job.data.locale,
-  )
+
+  // Q-006: artStyle / artStylePrompt deactivated. Asset hub generations use the
+  // raw description as the prompt; project-level styleProfile does not apply
+  // (asset hub is per-user, not per-project).
 
   if (payload.type === 'character') {
     const characterId = typeof payload.id === 'string' ? payload.id : null
@@ -88,7 +88,7 @@ export async function handleAssetHubImageTask(job: Job<TaskJobData>) {
 
     for (let i = 0; i < Math.min(3, base.length || 1); i++) {
       const raw = base[i] || base[0]
-      const prompt = artStyle ? `${addCharacterPromptSuffix(raw)}，${artStyle}` : addCharacterPromptSuffix(raw)
+      const prompt = addCharacterPromptSuffix(raw)
       const cosKey = await generateLabeledImageToCos({
         job,
         userId,
@@ -133,7 +133,7 @@ export async function handleAssetHubImageTask(job: Job<TaskJobData>) {
 
     for (const image of location.images) {
       if (!image.description) continue
-      const prompt = artStyle ? `${addLocationPromptSuffix(image.description)}，${artStyle}` : addLocationPromptSuffix(image.description)
+      const prompt = addLocationPromptSuffix(image.description)
 
       const cosKey = await generateLabeledImageToCos({
         job,

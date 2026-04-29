@@ -42,7 +42,13 @@ export const GET = apiHandler(async (request: NextRequest) => {
                 const urls = decodeImageUrlsFromDb(primaryAppearance.imageUrls, 'globalCharacterAppearance.imageUrls')
                 const selectedUrl = urls[primaryAppearance.selectedIndex ?? 0] || urls[0] || primaryAppearance.imageUrl
                 if (selectedUrl) {
-                    const media = await resolveMediaRefFromLegacyValue(selectedUrl)
+                    // Q-005: row is filtered by `userId: session.user.id`, so the
+                    // viewer is the row owner. Tag MediaObject so styleProfile
+                    // owner-checks pass downstream.
+                    const media = await resolveMediaRefFromLegacyValue(
+                        selectedUrl,
+                        { uploadedByUserId: session.user.id },
+                    )
                     previewUrl = media?.url || selectedUrl
                 }
             }
@@ -77,7 +83,11 @@ export const GET = apiHandler(async (request: NextRequest) => {
             let previewUrl = null
 
             if (selectedImage?.imageUrl) {
-                const media = await resolveMediaRefFromLegacyValue(selectedImage.imageUrl)
+                // Q-005: row is filtered by `userId: session.user.id`; tag the MediaObject.
+                const media = await resolveMediaRefFromLegacyValue(
+                    selectedImage.imageUrl,
+                    { uploadedByUserId: session.user.id },
+                )
                 previewUrl = media?.url || selectedImage.imageUrl
             }
 
@@ -106,7 +116,11 @@ export const GET = apiHandler(async (request: NextRequest) => {
         const processedVoices = await Promise.all(voices.map(async (voice) => {
             let previewUrl = null
             if (voice.customVoiceUrl) {
-                const media = await resolveMediaRefFromLegacyValue(voice.customVoiceUrl)
+                // Q-005: row is filtered by `userId: session.user.id`; tag the MediaObject.
+                const media = await resolveMediaRefFromLegacyValue(
+                    voice.customVoiceUrl,
+                    { uploadedByUserId: session.user.id },
+                )
                 previewUrl = media?.url || voice.customVoiceUrl
             }
 

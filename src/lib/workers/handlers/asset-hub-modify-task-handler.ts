@@ -22,6 +22,7 @@ import { PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
 import { executeAiVisionStep } from '@/lib/ai-runtime'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { createScopedLogger } from '@/lib/logging/core'
+import { loadStyleProfileByProjectId } from '@/lib/style-profile/loader'
 
 const logger = createScopedLogger({ module: 'worker.asset-hub-modify' })
 
@@ -81,6 +82,11 @@ export async function handleAssetHubModifyTask(job: Job<TaskJobData>) {
     ? generationOptions.resolution
     : undefined
 
+  // Q-009: asset-hub modify is global (per-user, not per-project), so styleProfile
+  // is loaded only when a real novel-promotion projectId is supplied. Sentinel
+  // 'global-asset-hub' returns null and chokepoint behaves like before.
+  const styleProfile = await loadStyleProfileByProjectId(prisma, job.data.projectId)
+
   if (payload.type === 'character') {
     const character = await db.globalCharacter.findFirst({
       where: { id: payload.id, userId },
@@ -120,6 +126,7 @@ export async function handleAssetHubModifyTask(job: Job<TaskJobData>) {
         aspectRatio: '3:2',
         ...(resolution ? { resolution } : {}),
       },
+      styleProfile,
     })
 
     const label = `${character.name} - ${appearance.changeReason || '形象'}`
@@ -203,6 +210,7 @@ export async function handleAssetHubModifyTask(job: Job<TaskJobData>) {
         aspectRatio: '1:1',
         ...(resolution ? { resolution } : {}),
       },
+      styleProfile,
     })
 
     const labeled = await withLabelBar(source, location.name)

@@ -18,6 +18,10 @@ import { isTaskActive, trySetTaskExternalId } from '@/lib/task/service'
 import { type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from './shared'
 import { prisma } from '@/lib/prisma'
+import { parseModelKeyStrict } from '@/lib/model-config-contract'
+import { findBuiltinCapabilities } from '@/lib/model-capabilities/catalog'
+import { injectStyleProfile, type ModelStyleCapabilities } from '@/lib/ai-runtime/style-profile-injector'
+import { type StyleProfile } from '@/lib/style-profile/loader'
 
 const DEFAULT_POLL_TIMEOUT_MS = Number.parseInt(process.env.WORKER_EXTERNAL_TIMEOUT_MS || String(20 * 60 * 1000), 10)
 const DEFAULT_POLL_INTERVAL_MS = Number.parseInt(process.env.WORKER_EXTERNAL_POLL_MS || '3000', 10)
@@ -206,6 +210,22 @@ export async function waitExternalResult(
   throw new Error(`External task polling timeout (${Math.round(timeoutMs / 1000)}s): ${externalId}`)
 }
 
+function resolveModelStyleCapabilities(
+  modelKey: string,
+  modelType: 'image' | 'video',
+): ModelStyleCapabilities {
+  const parsed = parseModelKeyStrict(modelKey)
+  if (!parsed) {
+    return { supportNegativePrompt: false, supportReferenceImage: false }
+  }
+  const caps = findBuiltinCapabilities(modelType, parsed.provider, parsed.modelId)
+  const ns = modelType === 'image' ? caps?.image : caps?.video
+  return {
+    supportNegativePrompt: ns?.supportNegativePrompt === true,
+    supportReferenceImage: ns?.supportReferenceImage === true,
+  }
+}
+
 export async function resolveImageSourceFromGeneration(
   job: Job<TaskJobData>,
   params: {
@@ -218,8 +238,10 @@ export async function resolveImageSourceFromGeneration(
       resolution?: string
       size?: string
       provider?: string
+      negativePrompt?: string | null  // Phase 11.5: styleProfile-injected negative prompt
     }
     pollProgress?: { start?: number; end?: number }
+    styleProfile?: StyleProfile | null
   },
 ): Promise<string> {
   const logger = scopedWorkerUtilLogger(job, 'worker.image.generate_source')
@@ -260,22 +282,66 @@ export async function resolveImageSourceFromGeneration(
     runtimeSelections,
   })
 
+  // 🎨 Phase 11.5 / Bug-4: chokepoint owns styleProfile injection.
+  // Handlers pass raw `userPrompt` + raw `styleProfile`; we run `injectStyleProfile`
+  // here to (a) prepend positive prompt, (b) capability-filter negativePrompt /
+  // referenceImageUrls. This is the single source of truth.
+  //
+  // Backward compatibility: if caller still passes `options.negativePrompt` /
+  // `options.referenceImages` directly (e.g. a caller-controlled reference image
+  // such as a primary character anchor), they are merged with the injected ones
+  // and capability-filtered the same way.
+  const styleCaps = resolveModelStyleCapabilities(params.modelId, 'image')
+  const callerOptions = params.options ?? {}
+  const callerReferenceImages = callerOptions.referenceImages ?? []
+  const callerNegativePrompt =
+    typeof callerOptions.negativePrompt === 'string' && callerOptions.negativePrompt.length > 0
+      ? callerOptions.negativePrompt
+      : null
+
+  const injection = injectStyleProfile(params.prompt, params.styleProfile ?? null, styleCaps)
+  const finalPrompt = injection.prompt
+
+  const mergedReferenceImages = Array.from(
+    new Set([
+      ...(styleCaps.supportReferenceImage ? callerReferenceImages : []),
+      ...injection.referenceImageUrls,
+    ]),
+  )
+  const finalNegativePrompt =
+    injection.negativePrompt ?? (styleCaps.supportNegativePrompt ? callerNegativePrompt : null)
+
+  const callerOptionsRest: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(callerOptions)) {
+    if (key === 'negativePrompt' || key === 'referenceImages') continue
+    callerOptionsRest[key] = value
+  }
+
+  const generateOptions: Parameters<typeof generateImage>[3] = {
+    ...callerOptionsRest,
+    ...capabilityOptions,
+    ...(mergedReferenceImages.length > 0 ? { referenceImages: mergedReferenceImages } : {}),
+    ...(finalNegativePrompt !== null ? { negativePrompt: finalNegativePrompt } : {}),
+  }
+
   logger.info({
     message: 'image source generation calling generateImage',
     details: {
       model: params.modelId,
-      referenceImageCount: params.options?.referenceImages?.length ?? 0,
+      referenceImageCount: mergedReferenceImages.length,
       capabilityOptions,
-      optionKeys: Object.keys(params.options || {}),
+      optionKeys: Object.keys(generateOptions),
+      negativePromptApplied: finalNegativePrompt !== null,
+      styleProfileInjected: params.styleProfile != null,
+      negativePromptDroppedByCaps:
+        (callerNegativePrompt !== null || params.styleProfile?.negativePrompt != null) &&
+        finalNegativePrompt === null,
     },
   })
 
   const result = await withLogContext(
     { projectId: job.data.projectId, taskId: job.data.taskId, userId: params.userId },
-    () => generateImage(params.userId, params.modelId, params.prompt, {
-      ...params.options,
-      ...capabilityOptions,
-    }),
+    () => generateImage(params.userId, params.modelId, finalPrompt, generateOptions),
   )
   if (!result.success) {
     const err = new Error(result.error || 'Image generation failed')
@@ -338,6 +404,7 @@ export async function resolveVideoSourceFromGeneration(
       [key: string]: string | number | boolean | undefined
     }
     pollProgress?: { start?: number; end?: number }
+    styleProfile?: StyleProfile | null
   },
 ): Promise<{ url: string; downloadHeaders?: Record<string, string> }> {
   const logger = scopedWorkerUtilLogger(job, 'worker.video.generate_source')
@@ -403,6 +470,40 @@ export async function resolveVideoSourceFromGeneration(
   for (const [key, value] of Object.entries(params.options || {})) {
     if (key === 'generationMode' || value === undefined) continue
     providerRequestOptions[key] = value
+  }
+
+  // 🎨 Phase 11.5 / Bug-4: chokepoint owns styleProfile injection for video.
+  // Handlers pass raw `options.prompt` + raw `styleProfile`; we run `injectStyleProfile`
+  // to (a) prepend positive prompt to options.prompt, (b) capability-filter negativePrompt.
+  // referenceImageUrls are not used for video (image-to-video uses the image arg).
+  const videoStyleCaps = resolveModelStyleCapabilities(params.modelId, 'video')
+  const videoCallerNegativePrompt =
+    typeof providerRequestOptions.negativePrompt === 'string' && providerRequestOptions.negativePrompt.length > 0
+      ? providerRequestOptions.negativePrompt
+      : null
+  const rawVideoPrompt = typeof providerRequestOptions.prompt === 'string'
+    ? providerRequestOptions.prompt
+    : ''
+
+  const videoInjection = injectStyleProfile(
+    rawVideoPrompt,
+    params.styleProfile ?? null,
+    videoStyleCaps,
+  )
+
+  if (videoInjection.prompt.length > 0) {
+    providerRequestOptions.prompt = videoInjection.prompt
+  } else {
+    delete providerRequestOptions.prompt
+  }
+
+  const finalVideoNegativePrompt =
+    videoInjection.negativePrompt ?? (videoStyleCaps.supportNegativePrompt ? videoCallerNegativePrompt : null)
+
+  if (finalVideoNegativePrompt !== null) {
+    providerRequestOptions.negativePrompt = finalVideoNegativePrompt
+  } else {
+    delete providerRequestOptions.negativePrompt
   }
 
   const result = await withLogContext(

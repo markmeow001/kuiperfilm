@@ -31,6 +31,8 @@ export interface LLMCapabilities {
 
 export interface ImageCapabilities {
   resolutionOptions?: string[]
+  supportNegativePrompt?: boolean
+  supportReferenceImage?: boolean
   fieldI18n?: CapabilityFieldI18nMap
 }
 
@@ -42,6 +44,8 @@ export interface VideoCapabilities {
   resolutionOptions?: string[]
   firstlastframe?: boolean
   supportGenerateAudio?: boolean
+  supportNegativePrompt?: boolean
+  supportReferenceImage?: boolean
   fieldI18n?: CapabilityFieldI18nMap
 }
 
@@ -85,6 +89,8 @@ const LLM_ALLOWED_FIELDS = new Set<keyof LLMCapabilities>([
 
 const IMAGE_ALLOWED_FIELDS = new Set<keyof ImageCapabilities>([
   'resolutionOptions',
+  'supportNegativePrompt',
+  'supportReferenceImage',
   'fieldI18n',
 ])
 
@@ -96,6 +102,8 @@ const VIDEO_ALLOWED_FIELDS = new Set<keyof VideoCapabilities>([
   'resolutionOptions',
   'firstlastframe',
   'supportGenerateAudio',
+  'supportNegativePrompt',
+  'supportReferenceImage',
   'fieldI18n',
 ])
 
@@ -288,6 +296,22 @@ function validateImageCapabilities(issues: CapabilityValidationIssue[], raw: unk
     })
   }
 
+  if (raw.supportNegativePrompt !== undefined && typeof raw.supportNegativePrompt !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.image.supportNegativePrompt',
+      message: 'supportNegativePrompt must be boolean',
+    })
+  }
+
+  if (raw.supportReferenceImage !== undefined && typeof raw.supportReferenceImage !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.image.supportReferenceImage',
+      message: 'supportReferenceImage must be boolean',
+    })
+  }
+
   validateFieldI18nMap(issues, 'image', raw.fieldI18n, {
     resolution: isStringArray(resolutionOptions) ? resolutionOptions : undefined,
   })
@@ -354,6 +378,22 @@ function validateVideoCapabilities(issues: CapabilityValidationIssue[], raw: unk
       code: 'CAPABILITY_FIELD_INVALID',
       field: 'capabilities.video.firstlastframe',
       message: 'firstlastframe must be boolean',
+    })
+  }
+
+  if (raw.supportNegativePrompt !== undefined && typeof raw.supportNegativePrompt !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.video.supportNegativePrompt',
+      message: 'supportNegativePrompt must be boolean',
+    })
+  }
+
+  if (raw.supportReferenceImage !== undefined && typeof raw.supportReferenceImage !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.video.supportReferenceImage',
+      message: 'supportReferenceImage must be boolean',
     })
   }
 

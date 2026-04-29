@@ -64,7 +64,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
         }
     }
 
-    const customVoiceMedia = await resolveMediaRefFromLegacyValue(customVoiceUrl || null)
+    // Q-005: tag MediaObject with the uploader so owner-checks pass downstream.
+    const customVoiceMedia = await resolveMediaRefFromLegacyValue(
+        customVoiceUrl || null,
+        { uploadedByUserId: session.user.id },
+    )
     const voice = await prisma.globalVoice.create({
         data: {
             userId: session.user.id,

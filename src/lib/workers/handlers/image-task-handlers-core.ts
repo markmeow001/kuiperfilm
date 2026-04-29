@@ -25,6 +25,7 @@ import {
 import { executeAiVisionStep } from '@/lib/ai-runtime'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { collectExtraReferenceUrls, LocationImageRecord, logger } from './image-task-handlers-core-utils'
+import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
@@ -38,6 +39,11 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
   const projectModels = await getProjectModels(job.data.projectId, job.data.userId)
   const editModel = projectModels.editModel
   if (!editModel) throw new Error('Edit model not configured')
+
+  // Q-009: modify handler must inject styleProfile so modified assets stay
+  // style-locked with the rest of the project. Chokepoint owns prepend +
+  // capability filter.
+  const styleProfile = await loadStyleProfile(prisma, job.data.projectId)
 
   // 从 payload.generationOptions 读取 resolution（由 route 层 buildImageBillingPayload 注入）
   // 与老版本 getModelResolution 等价，但数据来源改为 capabilityDefaults/capabilityOverrides 体系
@@ -77,6 +83,7 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
         aspectRatio: '3:2',
         ...(resolution ? { resolution } : {}),
       },
+      styleProfile,
     })
 
     const label = `${appearance.character?.name || '角色'} - ${appearance.changeReason || '形象'}`
@@ -166,6 +173,7 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
         aspectRatio: '1:1',
         ...(resolution ? { resolution } : {}),
       },
+      styleProfile,
     })
 
     const label = locationImage.location?.name || '场景'
@@ -254,6 +262,7 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
         aspectRatio,
         ...(resolution ? { resolution } : {}),
       },
+      styleProfile,
     })
 
     const cosKey = await uploadImageSourceToCos(source, 'panel-modify', panel.id)

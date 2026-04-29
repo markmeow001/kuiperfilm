@@ -1,31 +1,28 @@
-import sharp from 'sharp'
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { generateImage } from '@/lib/generator-api'
-import { queryFalStatus } from '@/lib/async-submit'
-import { fetchWithTimeoutAndRetry } from '@/lib/ark-api'
 import { getProviderConfig } from '@/lib/api-config'
 import { executeAiVisionStep } from '@/lib/ai-runtime'
 import { getUserModelConfig } from '@/lib/config-service'
 import {
   CHARACTER_IMAGE_BANANA_RATIO,
   addCharacterPromptSuffix,
-  getArtStylePrompt,
 } from '@/lib/constants'
 import { encodeImageUrls } from '@/lib/contracts/image-urls-contract'
-import { generateUniqueKey, getSignedUrl, uploadToCOS } from '@/lib/cos'
-import { initializeFonts, createLabelSVG } from '@/lib/fonts'
+import { getSignedUrl } from '@/lib/cos'
+import { initializeFonts } from '@/lib/fonts'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
+import { generateLabeledImageToCos } from './image-task-handler-shared'
+import { loadStyleProfileByProjectId, type StyleProfile } from '@/lib/style-profile/loader'
+import { logError } from '@/lib/logging/core'
 import {
   parseReferenceImages,
   readBoolean,
   readString,
 } from './reference-to-character-helpers'
-const POLL_MAX_ATTEMPTS = 60
-const POLL_INTERVAL_MS = 2000
+
 async function generateLabeledImage(params: {
   job: Job<TaskJobData>
   imageIndex: number
@@ -33,9 +30,9 @@ async function generateLabeledImage(params: {
   imageModel: string
   prompt: string
   referenceImages?: string[]
-  falApiKey?: string | null
   keyPrefix: string
   labelText: string
+  styleProfile: StyleProfile | null
 }): Promise<string | null> {
   const {
     job,
@@ -44,75 +41,37 @@ async function generateLabeledImage(params: {
     imageModel,
     prompt,
     referenceImages,
-    falApiKey,
     keyPrefix,
     labelText,
+    styleProfile,
   } = params
 
   try {
     await assertTaskActive(job, `reference_to_character_generate_${imageIndex + 1}`)
-    const result = await generateImage(
+    // Q-006 / Phase 11.5 / Bug-4: chokepoint owns styleProfile injection +
+    // capability filter. We pass raw prompt + raw styleProfile and let
+    // resolveImageSourceFromGeneration (via generateLabeledImageToCos) handle it.
+    const cosKey = await generateLabeledImageToCos({
+      job,
       userId,
-      imageModel,
+      modelId: imageModel,
       prompt,
-      {
+      label: labelText,
+      targetId: `${imageIndex}`,
+      keyPrefix,
+      options: {
         referenceImages,
         aspectRatio: CHARACTER_IMAGE_BANANA_RATIO,
       },
-    )
-
-    let finalImageUrl = result.imageUrl
-    const requestId = typeof result.requestId === 'string' ? result.requestId : ''
-    const endpoint = typeof result.endpoint === 'string' ? result.endpoint : ''
-    if (result.async && requestId && endpoint) {
-      if (!falApiKey) {
-        throw new Error('reference_to_character async result requires falApiKey')
-      }
-      for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt += 1) {
-        await assertTaskActive(job, `reference_to_character_poll_${imageIndex + 1}_${attempt + 1}`)
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
-        const status = await queryFalStatus(endpoint, requestId, falApiKey)
-        if (status.completed && status.resultUrl) {
-          finalImageUrl = status.resultUrl
-          break
-        }
-        if (status.failed) {
-          return null
-        }
-      }
-    }
-
-    if (!result.success || !finalImageUrl) {
-      return null
-    }
-
-    const imgRes = await fetchWithTimeoutAndRetry(finalImageUrl, {
-      logPrefix: `[reference-to-character:${imageIndex + 1}]`,
+      styleProfile,
     })
-    const buffer = Buffer.from(await imgRes.arrayBuffer())
-    const meta = await sharp(buffer).metadata()
-    const width = meta.width || 2160
-    const height = meta.height || 2160
-    const fontSize = Math.floor(height * 0.04)
-    const pad = Math.floor(fontSize * 0.5)
-    const barHeight = fontSize + pad * 2
-
-    const svg = await createLabelSVG(width, barHeight, fontSize, pad, labelText)
-    const processed = await sharp(buffer)
-      .extend({
-        top: barHeight,
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: { r: 0, g: 0, b: 0, alpha: 1 },
-      })
-      .composite([{ input: svg, top: 0, left: 0 }])
-      .jpeg({ quality: 90, mozjpeg: true })
-      .toBuffer()
-
-    const key = generateUniqueKey(`${keyPrefix}-${Date.now()}-${imageIndex}`, 'jpg')
-    return await uploadToCOS(processed, key)
-  } catch {
+    return cosKey
+  } catch (err) {
+    // Explicit failure logging — never silently swallow (CLAUDE.md §3).
+    logError('[reference-to-character] generateLabeledImage failed', err, {
+      imageIndex,
+      keyPrefix,
+    })
     return null
   }
 }
@@ -136,7 +95,7 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
   const extractOnly = readBoolean(payload.extractOnly)
   const customDescription = readString(payload.customDescription)
   const characterName = readString(payload.characterName) || '新角色 - 初始形象'
-  const artStyle = readString(payload.artStyle)
+  // Q-006: artStyle deactivated. payload.artStyle is intentionally ignored.
 
   if (isBackgroundJob && (!characterId || !appearanceId)) {
     throw new Error('Missing characterId or appearanceId for background job')
@@ -190,16 +149,18 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
     }
   }
 
-  const artStylePrompt = getArtStylePrompt(artStyle, job.data.locale)
+  // Q-006 / Phase 11.5: load styleProfile so the chokepoint can prepend
+  // styleProfile.positivePrompt + capability-filter negativePrompt /
+  // referenceImageUrls. For asset-hub jobs, projectId is the sentinel
+  // 'global-asset-hub' which has no NovelPromotionProject row; the loader
+  // returns null in that case (chokepoint then becomes pass-through).
+  const styleProfile = await loadStyleProfileByProjectId(prisma, job.data.projectId)
 
   const basePrompt = customDescription || buildPrompt({
     promptId: PROMPT_IDS.CHARACTER_REFERENCE_TO_SHEET,
     locale: job.data.locale,
   })
-  let prompt = addCharacterPromptSuffix(basePrompt)
-  if (artStylePrompt) {
-    prompt = `${prompt}，${artStylePrompt}`
-  }
+  const prompt = addCharacterPromptSuffix(basePrompt)
 
   const useReferenceImages = !customDescription
 
@@ -240,9 +201,9 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
         imageModel,
         prompt,
         referenceImages: useReferenceImages ? allReferenceImages : undefined,
-        falApiKey: falApiKey!,
         keyPrefix,
         labelText: characterName,
+        styleProfile,
       }),
     ))
 
