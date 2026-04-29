@@ -40,7 +40,14 @@
 - 🔄 Phase 8: 复杂链路迁移（story_to_script_run / script_to_storyboard_run）
 - ⏸ Phase 9: 其余 AI 任务全量迁移
 - 🔄 Phase 10: 清理旧执行路径与旧事件协议（代码清理持续进行）
+- ⏸ Phase 11: 竞品对标功能补完（基于 docs/competitor-features/ 分析；Top 5 优先）
+  - ⏸ Phase 11.1: 「剧 → 集」UI 第一公民化（P0，纯前端，最契合用户核心需求）
+  - ⏸ Phase 11.2: 角色 / 场景跨集共用 UX 强化（P0，含 junction table migration）
+  - ⏸ Phase 11.3: 道具（Props）first-class asset（P1，新 model）
+  - ⏸ Phase 11.4: 角色三视图（全身 → 三视图 → 头像）结构化（P0，跨集一致性核心）
+  - ⏸ Phase 11.5: 风格 lock（正向 + 负向 prompt）（P0，最小可行验证）
 - ⚠️ Phase Risk: 一次性切换风险高，必须严格按阶段门禁推进
+- ⚠️ Phase 11 Risk: 11.2 / 11.3 / 11.4 涉及 schema migration，需详细 playbook；11.4 改 character generation pipeline 影响范围大
 
 ## Phase 2（当前执行中）主控文档
 - 🔄 任务：创建并维护唯一执行文档
@@ -189,6 +196,241 @@
     - `08-open-gaps.md`
   - 更新：`README.md` 添加文档入口
 - ⚠️ 风险：漏删；需关键字全仓扫描验收
+
+## Phase 11 竞品对标功能补完（基于 docs/competitor-features/ 分析）
+
+### 背景
+对标 PolyFilm AI、Alibaba LumenX、LocalMiniDrama 三家产品后产出的整合计划。详细对标资料见：
+- `docs/competitor-features/_summary.md`（总体战略）
+- `docs/competitor-features/integration-plan.md`（具体实施建议）
+- `docs/competitor-features/polyfilm.md` / `lumenx.md` / `localminidrama.md`（个别对手深度）
+
+**用户核心需求**：「像 PolyFilm 一样建置一个剧，每个剧里面去增加集数，同一个剧当中共用角色跟场景」
+
+**关键发现**：现有 `prisma/schema.prisma` 已支持 Project（剧）→ Episode（集）→ project-scoped Character / Location 的结构。Phase 11 主要补 UI / 体验 + 几个关键 schema 增强。
+
+### 强约束（Phase 11 内独有）
+- 不打补丁、不兼容层、不隐式回退（继承全局强约束）
+- 任何 schema migration 必须有完整 playbook，包含 rollback 步骤
+- 既有 NovelPromotionCharacter / NovelPromotionLocation 的 sourceGlobalCharacterId 链接关系不能断
+- prompt 改动必须 zh + en 同步（prompt-i18n-guard.mjs 会挡）
+- 所有 image / video generate 改动必须走 ai-runtime（no-api-direct-llm-call.mjs 会挡）
+
+### Phase 11.1 「剧 → 集」UI 第一公民化（P0）
+
+**目标**：让 Project = 剧、Episode = 集 在介面上明确，体验对齐 PolyFilm。**只改 UI，不改 schema**。
+
+- ⏸ 任务：Project 详情页加「集列表」主视图
+  - 文件：`src/app/[locale]/workspace/[projectId]/page.tsx`
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/EpisodeList.tsx`（新）
+  - 要求：
+    - 进到 project 第一眼看到所有 episodes 的 grid
+    - 每集显示：episodeNumber、name、缩略图（首镜或封面）、进度（剧本/分镜/视频完成度）
+    - 顶部「+ 新建集」按钮
+    - 点集进入既有的 stage workflow（带 episodeId param）
+
+- ⏸ 任务：Episode 切换器在 workspace header 永久存在
+  - 文件：`src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/WorkspaceHeaderShell.tsx`
+  - 要求：
+    - 类似 PolyFilm 故事板的水平 tab（第1集 / 第2集 / ...）
+    - 所有阶段（config / assets / storyboard / videos / voice）都能切集
+    - 当前 episode 高亮
+    - 「+ 新建集」end-of-tabs
+
+- ⏸ 任务：Project 层级设定独立区块
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectSettings.tsx`（新或重构）
+  - 显示：videoRatio（9:16 / 16:9）、targetDuration、artStyle、各种 model 配置
+  - 集会继承这些设定（已是现状）
+
+- ⏸ 任务：API 层补 episode CRUD 完整性检查
+  - 文件：`src/app/api/projects/[projectId]/episodes/route.ts`（确认 / 补足）
+  - 验收：POST 新增、PATCH 重排序、DELETE 删除都顺畅
+
+**驗收**：
+- 进到 project 看到 dashboard：剧名 + N 集 + 角色 N 个 + 场景 N 个
+- header 任何阶段都能轻易切其他集
+- 「新增集」一键搞定
+- `npm run test:regression` 全绿
+
+**风险**：
+- ⚠️ Episode 切换涉及 client state（既有 useNovelPromotionWorkspaceController）改动，需确认 stage state 不会因切集错乱
+
+### Phase 11.2 角色 / 场景跨集共用 UX 强化（P0，含 schema migration）
+
+**目标**：「同一个剧当中共用角色跟场景」实质上 schema 已支持，本 Phase 强化 UX 让用户看得见、用得到，并加 junction table 让查询更准。
+
+- ⏸ 任务：Project 层级的「角色 / 场景」分页
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/ProjectAssets.tsx`（新）
+  - 要求：
+    - 不论在哪集，都能在 workspace 看到该 project 所有角色 / 场景
+    - 操作：新增、编辑、删除、从全局库导入
+    - 显示该角色 / 场景在哪几集出现过（依赖下方 junction table）
+
+- ⏸ 任务：新增 EpisodeCharacter / EpisodeLocation junction table
+  - 文件：`prisma/schema.prisma`
+    - 新增 model `EpisodeCharacter`：`{ id, episodeId, characterId, role?, createdAt }`，索引 `[episodeId, characterId]`
+    - 新增 model `EpisodeLocation`：`{ id, episodeId, locationId, createdAt }`，索引 `[episodeId, locationId]`
+  - 文件：`prisma/migrations/...`（新 migration）
+    - 既有 `panels.characters` / `panels.location` text 字段保留（不破坏既有数据）
+    - 但新增写入路径：当 panel 引用 character 时，同步写入 EpisodeCharacter
+  - 文件：`src/lib/workers/handlers/script-to-storyboard.ts` 或对应 storyboard 生成路径
+    - 在 panel / shot 落库时同步 upsert 到 junction table
+
+- ⏸ 任务：从全局资产中心一键导入到 project
+  - 文件：`src/app/api/projects/[projectId]/import-character/route.ts`（确认 / 补足）
+  - 文件：`src/app/api/projects/[projectId]/import-location/route.ts`（确认 / 补足）
+  - 逻辑：
+    - 选 GlobalCharacter → 复制成 NovelPromotionCharacter
+    - 设置 `sourceGlobalCharacterId` 标记来源
+    - 复制 appearances / images（可选）
+  - UI：在 ProjectAssets.tsx 加「从资产中心导入」按钮 + selector
+
+- ⏸ 任务：同步既有 panels.characters / panels.location 数据到 junction table
+  - 文件：`scripts/migrations/sync-episode-character-junction.ts`（新）
+  - 一次性脚本：扫所有 panels，反查 character/location 名 → id，回填 junction table
+
+**驗收**：
+- Project 详情页有独立「角色 / 场景」分页
+- Episode 1 加角色，Episode 2 自动看得到、可选用
+- Junction table query 能跑：`SELECT episodes WHERE character_id = X`
+- 既有数据迁移不丢失
+- `npm run test:regression` + `npm run check:no-multiple-sources-of-truth` 全绿
+
+**风险**：
+- ⚠️ Schema migration 高风险，必须分两步发布（add table → backfill → enforce）
+- ⚠️ panels.characters text 字段与 junction table 双写期间数据一致性问题，要明确 source of truth（建议 junction 为主，text 为兼容遗留）
+- ⚠️ 既有 sourceGlobalCharacterId 关系不能断
+
+### Phase 11.3 道具（Props）first-class asset（P1）
+
+**目标**：补齐三家对手都有但 KuiperAI 没有的道具概念。
+
+- ⏸ 任务：新增 NovelPromotionProp + GlobalProp 模型
+  - 文件：`prisma/schema.prisma`
+    - 新增 `NovelPromotionProp`：`{ id, novelPromotionProjectId, name, summary?, sourceGlobalPropId?, createdAt, updatedAt }`
+    - 新增 `NovelPromotionPropImage`：参考既有 LocationImage 结构
+    - 新增 `GlobalProp`：参考 GlobalLocation 结构
+    - 新增 `GlobalPropImage`：参考 GlobalLocationImage 结构
+    - NovelPromotionProject 加 relation：`props NovelPromotionProp[]`
+    - User 加 relation：`globalProps GlobalProp[]`
+  - 索引规则参考既有 character / location 模式
+
+- ⏸ 任务：劇本實體提取 prompt 加上道具
+  - 文件：`lib/prompts/novel-promotion/agent_storyboard_*.{zh,en}.txt`
+  - 文件：`lib/prompts/novel-promotion/agent_character_profile.{zh,en}.txt` 邻近的实体提取 prompt
+  - 改 prompt：输出 characters + locations + **props** 三类
+  - 文件：`src/lib/workers/handlers/analyze-novel.ts`、`analyze-global.ts`
+    - 解析 props，写入 NovelPromotionProp
+
+- ⏸ 任务：UI「道具」分页（与角色 / 场景并列）
+  - 文件：延伸 ProjectAssets.tsx
+  - Categories：武器 / 物品 / 載具 / 特殊（可选）
+
+- ⏸ 任务：Panel 可绑定道具 reference
+  - 文件：`prisma/schema.prisma`（NovelPromotionPanel 加 propIds 字段，JSON array of UUID）
+  - 文件：图片生成 prompt 自动拉对应道具 reference image
+
+**驗收**：
+- 从剧本能自动提取道具并生成图片
+- Panel 编辑 UI 可手动绑定道具
+- 道具的图片可作为 reference 注入分镜图生成
+- `npm run check:prompt-i18n` 全绿（zh + en 同步）
+
+**风险**：
+- ⚠️ 新增 model 影响范围大（schema + prompt + UI + worker），按子任务分开 commit
+
+### Phase 11.4 角色三视图结构化（P0，跨集一致性核心）
+
+**目标**：对标 LumenX 的「全身像 → 三视图 + 头像」reference 结构，提升跨集 / 跨镜头角色一致性。
+
+- ⏸ 任务：CharacterAppearance 结构化扩展
+  - 文件：`prisma/schema.prisma`
+    - CharacterAppearance 加字段：`fullBodyUrl?`、`fullBodyMediaId?`、`threeViewUrl?`、`threeViewMediaId?`、`portraitUrl?`、`portraitMediaId?`
+    - GlobalCharacterAppearance 同步加这些字段
+    - 既有 `imageUrl` 字段保留（向下兼容，标 deprecated 注释）
+  - 或方案 B：新表 `CharacterReferenceSet { id, appearanceId, type: 'fullBody'|'threeView'|'portrait', url, mediaId }`
+
+- ⏸ 任务：角色生成流程改两步
+  - 文件：`src/lib/workers/handlers/character-profile.ts`
+  - Step A: 生「无背景全身图」（已有？确认现状）
+  - Step B: 用全身图当 reference，并行生三视图 + 头像特写
+  - 文件：`lib/prompts/novel-promotion/character_image_to_description.{zh,en}.txt` 与相关 prompt
+    - 三视图：要求 front / side / back 三个角度
+    - 头像：要求 close-up portrait
+
+- ⏸ 任务：storyboard / panel 自动选 reference
+  - 文件：分镜图生成相关 worker
+  - 逻辑：当 panel 涉及 Character A
+    - 若 panel 是近景 / 对白特写 → 用 portrait
+    - 若 panel 是全身动作 → 用 fullBody
+    - 若 panel 涉及多角度 → 用 threeView
+  - 实现：在分镜图生成 prompt assembly 阶段，根据 panel.scale / panel.shotType 选 reference
+
+- ⏸ 任务：UI 显示三视图 + 头像
+  - 文件：character 编辑面板
+  - 显示：全身像 + 三视图 + 头像，可分别重生
+
+**驗收**：
+- 同角色在 N 集视觉一致（人类 review 通过）
+- 既有 imageUrl 字段不被破坏
+- character generation 走 ai-runtime（不绕过）
+- `npm run test:regression` + `npm run check:config-center-guards` 全绿
+
+**风险**：
+- ⚠️ 改 character generation pipeline，影响既有所有 project 的下游分镜图
+- ⚠️ Schema 加字段是 additive，但 backfill 既有 character 是大工程（建议新创角色才生三视图，旧角色按需触发）
+
+### Phase 11.5 风格 lock（P0，最小可行验证 + LumenX 借鑑）
+
+**目标**：建立全局视觉锚点，让全片画风统一。**Phase 11 内最小投入、最先做的子任务**。
+
+- ⏸ 任务：Project 加 styleProfile
+  - 文件：`prisma/schema.prisma`
+    - NovelPromotionProject 新增字段：`stylePositivePrompt String? @db.Text`、`styleNegativePrompt String? @db.Text`、`styleReferenceImages String? @db.Text`（JSON array of URLs）
+    - 既有 `artStyle` enum 字段保留（向下兼容，可视为 styleProfile 的 preset 来源）
+
+- ⏸ 任务：所有 image / video generate 自动 inject style
+  - 文件：`src/lib/ai-runtime/`（image / video adapter 添加 styleProfile 参数）
+  - 文件：相关 storyboard / character / location image generate handler
+  - 注入规则：
+    - positive prompt prepend `styleProfile.positivePrompt`
+    - negative prompt prepend `styleProfile.negativePrompt`
+    - 若 model 支持 reference image，inject `styleReferenceImages`
+
+- ⏸ 任务：UI 风格设定面板
+  - 文件：`src/app/[locale]/workspace/[projectId]/components/StyleProfilePanel.tsx`（新）
+  - 内建 preset：写实 / 美漫 / 动漫 / 厚涂（每个 preset 包含 positive + negative pair）
+  - 可自定义 positive + negative
+  - 可上传 reference image 当风格锚点（走 MediaObject）
+
+- ⏸ 任务：迁移既有 artStyle 到 styleProfile
+  - 文件：`scripts/migrations/migrate-artstyle-to-style-profile.ts`（新）
+  - 一次性脚本：扫所有 NovelPromotionProject，根据 artStyle enum 填入对应的 positive + negative prompt
+
+**驗收**：
+- 同 project 内多集生成的画风一致
+- 既有 artStyle 数据迁移到 styleProfile
+- 改 negative prompt 后下次生成排除特定风格
+- `npm run test:regression` + `npm run check:no-hardcoded-model-capabilities` 全绿
+
+**风险**：
+- ⚠️ 改 prompt 注入逻辑会影响所有 image / video 生成的 token 数与成本，要监控
+- ⚠️ 不同 model 对 negative prompt 的支持度不同（capability catalog 需更新）
+
+### Phase 11 推进顺序建议
+
+按风险与价值排序：
+
+1. **Phase 11.5**（最小验证，1 周）→ 跑通 Claude Code sub-agent orchestrator，建立信心
+2. **Phase 11.1**（纯 UI，1-2 周）→ 用户核心需求，立即体感
+3. **Phase 11.2**（schema migration，1-2 周）→ 把 11.1 的 UX 体验做扎实
+4. **Phase 11.4**（核心一致性，2-3 周）→ 真正的产品差异化
+5. **Phase 11.3**（道具，1-2 周）→ 补齐对手共有功能
+
+每个子任务完成必须：
+- 跑 `/verify`（含 `npm run test:regression`）
+- `/sync-master-plan` 同步状态
+- commit message 标注 Phase 编号（例如：`feat(phase-11.5): add style profile to NovelPromotionProject`）
 
 # 4:验证策略
 
