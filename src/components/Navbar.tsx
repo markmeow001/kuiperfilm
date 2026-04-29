@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from './LanguageSwitcher'
+import ThemeToggle from './ThemeToggle'
 import { AppIcon } from '@/components/ui/icons'
 
 export default function Navbar() {
@@ -50,6 +51,7 @@ export default function Navbar() {
                   <AppIcon name="userRoundCog" className="w-5 h-5" />
                   {t('profile')}
                 </Link>
+                <ThemeToggle />
                 {isAdmin && (
                   <Link
                     href="/admin/users"
@@ -65,6 +67,7 @@ export default function Navbar() {
 
             ) : (
               <>
+                <ThemeToggle />
                 <Link
                   href="/auth/signin"
                   className="text-sm text-[var(--glass-text-secondary)] hover:text-[var(--glass-text-primary)] font-medium transition-colors"

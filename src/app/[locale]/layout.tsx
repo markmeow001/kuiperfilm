@@ -70,8 +70,18 @@ export default async function LocaleLayout({
     // 获取翻译消息
     const messages = await getMessages();
 
+    // Inline pre-hydration script: read the stored theme choice and apply
+    // data-theme on <html> before React hydrates. Avoids the
+    // light-to-dark flash when the user has previously chosen dark mode.
+    // The :root[data-theme] CSS rules in ui-tokens-glass.css then take
+    // effect immediately on first paint.
+    const themeBootstrap = `(function(){try{var t=localStorage.getItem('kuiper-theme');if(t==='light'||t==='dark'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
+
     return (
-        <html lang={locale}>
+        <html lang={locale} suppressHydrationWarning>
+            <head>
+                <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+            </head>
             <body
                 className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} ${openSans.variable} antialiased`}
             >

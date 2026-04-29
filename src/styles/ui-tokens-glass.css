@@ -77,6 +77,110 @@
   --glass-ghost-hover-bg: rgba(255, 255, 255, 0.5);
 }
 
+/*
+ * Dark mode tokens.
+ * Activated by either the OS preference (no [data-theme] set, or
+ * data-theme="system") or by an explicit [data-theme="dark"] on <html>.
+ *
+ * Strategy: when explicit [data-theme="light"] is set we stay on the
+ * defaults above. When explicit [data-theme="dark"] we apply this
+ * block. When data-theme is missing or "system" we fall back to the
+ * media-query below, so SSR works without JS.
+ */
+[data-theme='dark'] {
+  /* Surface and text */
+  --glass-bg-canvas: #0a0c12;
+  --glass-bg-surface: rgba(255, 255, 255, 0.05);
+  --glass-bg-surface-strong: rgba(255, 255, 255, 0.08);
+  --glass-bg-surface-modal: rgba(20, 22, 28, 0.95);
+  --glass-bg-muted: rgba(255, 255, 255, 0.04);
+  --glass-bg-nav: rgba(12, 14, 22, 0.85);
+  --glass-text-primary: #f5f4ee;
+  --glass-text-secondary: #c4c2b9;
+  --glass-text-tertiary: #888780;
+  --glass-text-on-accent: #ffffff;
+
+  --glass-stroke-soft: rgba(255, 255, 255, 0.06);
+  --glass-stroke-base: rgba(255, 255, 255, 0.12);
+  --glass-stroke-strong: rgba(255, 255, 255, 0.22);
+  --glass-stroke-focus: rgba(94, 156, 255, 0.6);
+  --glass-stroke-danger: rgba(248, 113, 113, 0.6);
+  --glass-stroke-warning: rgba(251, 191, 36, 0.6);
+  --glass-stroke-success: rgba(52, 211, 153, 0.6);
+
+  --glass-shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.32);
+  --glass-shadow-md: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --glass-shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.46);
+  --glass-shadow-modal: 0 14px 34px rgba(0, 0, 0, 0.55);
+  --glass-shadow-nav: 0 8px 18px rgba(0, 0, 0, 0.38);
+
+  --glass-tone-neutral-bg: rgba(148, 163, 184, 0.16);
+  --glass-tone-neutral-fg: #cbd5e1;
+  --glass-tone-info-bg: rgba(94, 156, 255, 0.18);
+  --glass-tone-info-fg: #93c5fd;
+  --glass-tone-success-bg: rgba(52, 211, 153, 0.18);
+  --glass-tone-success-fg: #6ee7b7;
+  --glass-tone-warning-bg: rgba(251, 191, 36, 0.2);
+  --glass-tone-warning-fg: #fcd34d;
+  --glass-tone-danger-bg: rgba(248, 113, 113, 0.2);
+  --glass-tone-danger-fg: #fca5a5;
+
+  --glass-overlay-soft: rgba(0, 0, 0, 0.5);
+  --glass-overlay: rgba(0, 0, 0, 0.62);
+  --glass-overlay-strong: rgba(0, 0, 0, 0.76);
+
+  --glass-accent-from: #5e9cff;
+  --glass-accent-to: #93c5fd;
+  --glass-accent-shadow-soft: rgba(94, 156, 255, 0.32);
+  --glass-accent-shadow-strong: rgba(94, 156, 255, 0.42);
+  --glass-focus-ring: rgba(94, 156, 255, 0.22);
+  --glass-focus-ring-strong: rgba(94, 156, 255, 0.32);
+  --glass-danger-ring: rgba(248, 113, 113, 0.18);
+  --glass-ghost-hover-bg: rgba(255, 255, 255, 0.08);
+}
+
+/*
+ * System-preference fallback.
+ * Only applies when there is NO explicit theme choice on <html>.
+ * The :not(...) selector keeps user-chosen light mode safe even
+ * when their OS is in dark mode.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --glass-bg-canvas: #0a0c12;
+    --glass-bg-surface: rgba(255, 255, 255, 0.05);
+    --glass-bg-surface-strong: rgba(255, 255, 255, 0.08);
+    --glass-bg-surface-modal: rgba(20, 22, 28, 0.95);
+    --glass-bg-muted: rgba(255, 255, 255, 0.04);
+    --glass-bg-nav: rgba(12, 14, 22, 0.85);
+    --glass-text-primary: #f5f4ee;
+    --glass-text-secondary: #c4c2b9;
+    --glass-text-tertiary: #888780;
+    --glass-stroke-soft: rgba(255, 255, 255, 0.06);
+    --glass-stroke-base: rgba(255, 255, 255, 0.12);
+    --glass-stroke-strong: rgba(255, 255, 255, 0.22);
+    --glass-shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.32);
+    --glass-shadow-md: 0 6px 18px rgba(0, 0, 0, 0.4);
+    --glass-shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.46);
+    --glass-shadow-modal: 0 14px 34px rgba(0, 0, 0, 0.55);
+    --glass-shadow-nav: 0 8px 18px rgba(0, 0, 0, 0.38);
+    --glass-tone-neutral-bg: rgba(148, 163, 184, 0.16);
+    --glass-tone-neutral-fg: #cbd5e1;
+    --glass-tone-info-bg: rgba(94, 156, 255, 0.18);
+    --glass-tone-info-fg: #93c5fd;
+    --glass-tone-success-bg: rgba(52, 211, 153, 0.18);
+    --glass-tone-success-fg: #6ee7b7;
+    --glass-tone-warning-bg: rgba(251, 191, 36, 0.2);
+    --glass-tone-warning-fg: #fcd34d;
+    --glass-tone-danger-bg: rgba(248, 113, 113, 0.2);
+    --glass-tone-danger-fg: #fca5a5;
+    --glass-overlay-soft: rgba(0, 0, 0, 0.5);
+    --glass-overlay: rgba(0, 0, 0, 0.62);
+    --glass-overlay-strong: rgba(0, 0, 0, 0.76);
+    --glass-ghost-hover-bg: rgba(255, 255, 255, 0.08);
+  }
+}
+
 /* Low-cost preset for performance-sensitive environments */
 [data-glass-preset='subtle'] {
   --glass-bg-surface: rgba(255, 255, 255, 0.92);
