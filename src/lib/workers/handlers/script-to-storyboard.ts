@@ -192,7 +192,7 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
                     },
                     runStep,
                     onClipComplete: async (clipResult) => {
-                      const persisted = await persistSingleClipStoryboard(episodeId, clipResult)
+                      const persisted = await persistSingleClipStoryboard(projectId, episodeId, clipResult)
                       persistedSoFar.push(persisted)
                     },
                   })

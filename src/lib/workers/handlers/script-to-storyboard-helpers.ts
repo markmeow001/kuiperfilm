@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import type { StoryboardPanel } from '@/lib/storyboard-phases'
+import {
+  linkEpisodeCharactersFromPanel,
+  linkEpisodeLocationFromPanel,
+} from '@/lib/episode-asset-bridge'
+import { logError } from '@/lib/logging/core'
 
 export type JsonRecord = Record<string, unknown>
 
@@ -93,6 +98,7 @@ export function buildStoryboardJson(storyboards: PersistedStoryboard[]) {
 }
 
 export async function persistSingleClipStoryboard(
+  projectId: string,
   episodeId: string,
   clipEntry: ClipPanelsResult,
 ): Promise<PersistedStoryboard> {
@@ -107,6 +113,10 @@ export async function persistSingleClipStoryboard(
     })
 
     const persistedPanels: PersistedStoryboard['panels'] = []
+    // Phase 11.2: collect names across all panels in this clip for one-shot junction sync.
+    const allCharacterNames: string[] = []
+    const allLocationNames: string[] = []
+
     for (let i = 0; i < clipEntry.finalPanels.length; i += 1) {
       const panel = clipEntry.finalPanels[i]
       const created = await tx.novelPromotionPanel.create({
@@ -134,6 +144,54 @@ export async function persistSingleClipStoryboard(
         },
       })
       persistedPanels.push(created)
+
+      // Collect for junction sync (Phase 11.2). panel.characters is already a string[] here.
+      if (Array.isArray(panel.characters)) {
+        for (const name of panel.characters) {
+          if (typeof name === 'string' && name.trim()) allCharacterNames.push(name.trim())
+        }
+      }
+      if (typeof panel.location === 'string' && panel.location.trim()) {
+        allLocationNames.push(panel.location.trim())
+      }
+    }
+
+    // Phase 11.2: sync junction tables. role='auto-from-panel' so manual rows are not overwritten.
+    if (allCharacterNames.length > 0) {
+      const uniqueNames = Array.from(new Set(allCharacterNames))
+      try {
+        await linkEpisodeCharactersFromPanel(tx, {
+          projectId,
+          episodeId,
+          panelCharacterNames: uniqueNames,
+          role: 'auto-from-panel',
+        })
+      } catch (err) {
+        logError('[persistSingleClipStoryboard] linkEpisodeCharactersFromPanel failed', {
+          projectId,
+          episodeId,
+          error: err,
+        })
+        throw err
+      }
+    }
+    for (const locName of Array.from(new Set(allLocationNames))) {
+      try {
+        await linkEpisodeLocationFromPanel(tx, {
+          projectId,
+          episodeId,
+          locationName: locName,
+          role: 'auto-from-panel',
+        })
+      } catch (err) {
+        logError('[persistSingleClipStoryboard] linkEpisodeLocationFromPanel failed', {
+          projectId,
+          episodeId,
+          locationName: locName,
+          error: err,
+        })
+        throw err
+      }
     }
 
     return {
@@ -141,20 +199,25 @@ export async function persistSingleClipStoryboard(
       clipId: storyboard.clipId,
       panels: persistedPanels,
     }
-  }, { timeout: 15000 })
+  }, { timeout: 30000 })
 }
 
 export async function persistStoryboardsAndPanels(params: {
+  projectId: string
   episodeId: string
   clipPanels: ClipPanelsResult[]
 }) {
-  const { episodeId, clipPanels } = params
+  const { projectId, episodeId, clipPanels } = params
   return await prisma.$transaction(async (tx) => {
     await tx.novelPromotionStoryboard.deleteMany({
       where: { episodeId },
     })
 
     const persisted: PersistedStoryboard[] = []
+    // Phase 11.2: collect names across all panels in all clips for one-shot junction sync per episode.
+    const allCharacterNames: string[] = []
+    const allLocationNames: string[] = []
+
     for (const clipEntry of clipPanels) {
       const storyboard = await tx.novelPromotionStoryboard.create({
         data: {
@@ -193,6 +256,15 @@ export async function persistStoryboardsAndPanels(params: {
           },
         })
         persistedPanels.push(created)
+
+        if (Array.isArray(panel.characters)) {
+          for (const name of panel.characters) {
+            if (typeof name === 'string' && name.trim()) allCharacterNames.push(name.trim())
+          }
+        }
+        if (typeof panel.location === 'string' && panel.location.trim()) {
+          allLocationNames.push(panel.location.trim())
+        }
       }
 
       persisted.push({
@@ -201,6 +273,45 @@ export async function persistStoryboardsAndPanels(params: {
         panels: persistedPanels,
       })
     }
+
+    // Phase 11.2: sync junction tables.
+    if (allCharacterNames.length > 0) {
+      const uniqueNames = Array.from(new Set(allCharacterNames))
+      try {
+        await linkEpisodeCharactersFromPanel(tx, {
+          projectId,
+          episodeId,
+          panelCharacterNames: uniqueNames,
+          role: 'auto-from-panel',
+        })
+      } catch (err) {
+        logError('[persistStoryboardsAndPanels] linkEpisodeCharactersFromPanel failed', {
+          projectId,
+          episodeId,
+          error: err,
+        })
+        throw err
+      }
+    }
+    for (const locName of Array.from(new Set(allLocationNames))) {
+      try {
+        await linkEpisodeLocationFromPanel(tx, {
+          projectId,
+          episodeId,
+          locationName: locName,
+          role: 'auto-from-panel',
+        })
+      } catch (err) {
+        logError('[persistStoryboardsAndPanels] linkEpisodeLocationFromPanel failed', {
+          projectId,
+          episodeId,
+          locationName: locName,
+          error: err,
+        })
+        throw err
+      }
+    }
+
     return persisted
-  }, { timeout: 30000 })
+  }, { timeout: 60000 })
 }
