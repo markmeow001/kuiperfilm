@@ -73,8 +73,11 @@ services:
       - "yes"
       - --maxmemory
       - "256mb"
+      # BullMQ requires noeviction so jobs are never silently dropped
+      # under memory pressure. The previous allkeys-lru triggered a
+      # repeated warning from BullMQ on every queue connection.
       - --maxmemory-policy
-      - "allkeys-lru"
+      - "noeviction"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

@@ -156,6 +156,18 @@ invite codes for the team via `/admin/invites`.
 ./deploy.sh backup     # mysqldump + tar volumes into deploy/backups/
 ```
 
+### Helper scripts
+
+| Script | Purpose |
+|---|---|
+| `bash deploy/check-env.sh` | Audits `.env.prod`: missing / empty / duplicate keys, prints visible fields plainly and secret keys as length only. Run after edits, before `./deploy.sh up`. |
+| `bash deploy/diagnose.sh` | Read-only diagnostic when something behaves weirdly: shell SHLVL, rc-file SHLVL refs, ulimits, cgroup pids limits, sub-shell smoke tests. Use when `./deploy.sh up` fails in a way that doesn't look like an app problem. |
+
+`require_env()` inside `deploy.sh` also lints `.env.prod` before sourcing
+it: any line that isn't `KEY=value` / `# comment` / blank causes the
+script to refuse to start, with the offending lines printed. This stops
+a stray pasted command turning into a `source`-time fork bomb.
+
 ### Backups
 
 `deploy.sh backup` produces two artifacts per run:

@@ -30,6 +30,18 @@ require_env() {
     red "Tip: run \`./deploy.sh init-secrets\` to generate strong values."
     exit 1
   fi
+  # Reject anything that isn't KEY=value, blank, or '# comment'.
+  # Sourcing such a line would execute it as a shell command — which
+  # is exactly how a stray './deploy.sh up' pasted into .env.prod
+  # turned into a fork bomb in the past.
+  local bad
+  bad="$(grep -nvE '^([A-Za-z_][A-Za-z0-9_]*=.*|#.*|[[:space:]]*)$' "${ENV_FILE}" || true)"
+  if [[ -n "${bad}" ]]; then
+    red "Refusing to source ${ENV_FILE}: lines that are not KEY=value / # comment / blank:"
+    while IFS= read -r line; do red "  ${line}"; done <<< "${bad}"
+    red "Edit the file so every non-comment line is KEY=value, then re-run."
+    exit 1
+  fi
   set -a
   # shellcheck disable=SC1090
   source "${ENV_FILE}"
