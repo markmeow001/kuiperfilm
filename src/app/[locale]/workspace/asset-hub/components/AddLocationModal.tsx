@@ -3,7 +3,7 @@ import { logError as _ulogError } from '@/lib/logging/core'
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { ART_STYLES } from '@/lib/constants'
+// Q-006: ART_STYLES selector removed — styleProfile (PATCH /api/projects/{id}/style-profile) replaces it.
 import { useAiDesignLocation, useCreateAssetHubLocation } from '@/lib/query/hooks'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
@@ -31,7 +31,7 @@ export function AddLocationModal({ folderId, onClose, onSuccess }: AddLocationMo
     const [name, setName] = useState('')
     const [summary, setSummary] = useState('')
     const [aiInstruction, setAiInstruction] = useState('')
-    const [artStyle, setArtStyle] = useState('american-comic')
+    // Q-006: artStyle state removed — styleProfile replaces it.
 
     const aiDesignMutation = useAiDesignLocation()
     const createLocationMutation = useCreateAssetHubLocation()
@@ -76,7 +76,6 @@ export function AddLocationModal({ folderId, onClose, onSuccess }: AddLocationMo
                 name: name.trim(),
                 summary: summary.trim(),
                 folderId,
-                artStyle
             })
             onSuccess()
         } catch (error) {
@@ -157,28 +156,7 @@ export function AddLocationModal({ folderId, onClose, onSuccess }: AddLocationMo
                             />
                         </div>
 
-                        {/* 风格选择 */}
-                        <div className="space-y-2">
-                            <label className="glass-field-label block">
-                                画面风格
-                            </label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {ART_STYLES.map((style) => (
-                                    <button
-                                        key={style.value}
-                                        type="button"
-                                        onClick={() => setArtStyle(style.value)}
-                                        className={`glass-btn-base px-3 py-2 rounded-lg text-sm border flex items-center justify-start gap-2 transition-all ${artStyle === style.value
-                                            ? 'glass-btn-tone-info border-[var(--glass-stroke-focus)]'
-                                            : 'glass-btn-soft border-[var(--glass-stroke-base)] text-[var(--glass-text-secondary)] hover:border-[var(--glass-stroke-strong)]'
-                                            }`}
-                                    >
-                                        <span>{style.preview}</span>
-                                        <span>{style.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                        {/* Q-006: artStyle selector removed — styleProfile is the only style anchor. */}
 
                         {/* 场景描述 */}
                         <div className="space-y-2">

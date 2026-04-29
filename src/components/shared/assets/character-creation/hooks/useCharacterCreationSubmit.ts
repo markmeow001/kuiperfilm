@@ -24,7 +24,7 @@ interface UseCharacterCreationSubmitParams {
   name: string
   description: string
   aiInstruction: string
-  artStyle: string
+  // Q-006: artStyle removed — styleProfile replaces it.
   referenceImagesBase64: string[]
   referenceSubMode: 'direct' | 'extract'
   isSubAppearance: boolean
@@ -48,7 +48,7 @@ export function useCharacterCreationSubmit({
   name,
   description,
   aiInstruction,
-  artStyle,
+  // Q-006: artStyle removed — styleProfile replaces it.
   referenceImagesBase64,
   referenceSubMode,
   isSubAppearance,
@@ -134,7 +134,6 @@ export function useCharacterCreationSubmit({
           name: name.trim(),
           description: finalDescription || t('character.defaultDescription', { name: name.trim() }),
           folderId: folderId ?? null,
-          artStyle,
           generateFromReference: true,
           referenceImageUrls,
           customDescription: referenceSubMode === 'extract' ? finalDescription : undefined,
@@ -143,7 +142,6 @@ export function useCharacterCreationSubmit({
         await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: finalDescription || t('character.defaultDescription', { name: name.trim() }),
-          artStyle,
           generateFromReference: true,
           referenceImageUrls,
           customDescription: referenceSubMode === 'extract' ? finalDescription : undefined,
@@ -160,7 +158,6 @@ export function useCharacterCreationSubmit({
       setIsSubmitting(false)
     }
   }, [
-    artStyle,
     createAssetHubCharacter,
     createProjectCharacter,
     description,
@@ -229,13 +226,11 @@ export function useCharacterCreationSubmit({
           name: name.trim(),
           description: description.trim(),
           folderId: folderId ?? null,
-          artStyle,
         })
       } else {
         await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: description.trim(),
-          artStyle,
         })
       }
       onSuccess()
@@ -248,7 +243,6 @@ export function useCharacterCreationSubmit({
       setIsSubmitting(false)
     }
   }, [
-    artStyle,
     changeReason,
     createAssetHubCharacter,
     createProjectAppearance,

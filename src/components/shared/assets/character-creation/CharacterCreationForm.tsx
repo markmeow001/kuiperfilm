@@ -2,7 +2,7 @@
 
 import type { DragEvent, RefObject } from 'react'
 import { useTranslations } from 'next-intl'
-import { ART_STYLES } from '@/lib/constants'
+// Q-006: ART_STYLES selector removed — styleProfile (PATCH /api/projects/{id}/style-profile) replaces it.
 import CharacterCreationPreview from './CharacterCreationPreview'
 import { AppIcon } from '@/components/ui/icons'
 
@@ -24,8 +24,7 @@ interface CharacterCreationFormProps {
   setDescription: (value: string) => void
   aiInstruction: string
   setAiInstruction: (value: string) => void
-  artStyle: string
-  setArtStyle: (value: string) => void
+  // Q-006: artStyle / setArtStyle removed — styleProfile replaces them.
   referenceImagesBase64: string[]
   referenceSubMode: 'direct' | 'extract'
   setReferenceSubMode: (mode: 'direct' | 'extract') => void
@@ -72,8 +71,7 @@ export default function CharacterCreationForm({
   setDescription,
   aiInstruction,
   setAiInstruction,
-  artStyle,
-  setArtStyle,
+  // Q-006: artStyle / setArtStyle removed — styleProfile replaces them.
   referenceImagesBase64,
   referenceSubMode,
   setReferenceSubMode,
@@ -209,29 +207,7 @@ export default function CharacterCreationForm({
         </div>
       )}
 
-      {!isSubAppearance && (
-        <div className="space-y-2">
-          <label className="glass-field-label block">
-            {t('artStyle.title')}
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {ART_STYLES.map((style) => (
-              <button
-                key={style.value}
-                type="button"
-                onClick={() => setArtStyle(style.value)}
-                className={`glass-btn-base px-3 py-2 rounded-lg text-sm border transition-all justify-start ${artStyle === style.value
-                  ? 'glass-btn-tone-info border-[var(--glass-stroke-focus)]'
-                  : 'glass-btn-soft border-[var(--glass-stroke-base)] text-[var(--glass-text-secondary)]'
-                  }`}
-              >
-                <span>{style.preview}</span>
-                <span>{style.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Q-006: artStyle selector removed — styleProfile is the only style anchor. */}
 
       {createMode === 'reference' && (
         <div className="glass-surface-soft rounded-xl p-4 space-y-3 border border-[var(--glass-stroke-base)]">

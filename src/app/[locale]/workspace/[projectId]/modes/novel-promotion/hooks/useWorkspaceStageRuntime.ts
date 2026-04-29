@@ -12,7 +12,7 @@ interface UseWorkspaceStageRuntimeParams {
   isTransitioning: boolean
   isConfirmingAssets: boolean
   videoRatio: string | undefined
-  artStyle: string | undefined
+  // Q-006: artStyle removed — styleProfile replaces it.
   targetDuration: number | undefined
   videoModel: string | undefined
   capabilityOverrides: CapabilitySelections
@@ -61,7 +61,6 @@ export function useWorkspaceStageRuntime({
   isTransitioning,
   isConfirmingAssets,
   videoRatio,
-  artStyle,
   targetDuration,
   videoModel,
   capabilityOverrides,
@@ -90,14 +89,12 @@ export function useWorkspaceStageRuntime({
     isTransitioning,
     isConfirmingAssets,
     videoRatio,
-    artStyle,
     targetDuration,
     videoModel,
     capabilityOverrides,
     userVideoModels: resolvedUserVideoModels,
     onNovelTextChange: (value) => handleUpdateEpisode('novelText', value),
     onVideoRatioChange: (value) => handleUpdateConfig('videoRatio', value),
-    onArtStyleChange: (value) => handleUpdateConfig('artStyle', value),
     onTargetDurationChange: (value) => handleUpdateConfig('targetDuration', value),
     onRunStoryToScript: () => runWithRebuildConfirm('storyToScript', runStoryToScriptFlow),
     onClipUpdate: (clipId, data) => {
@@ -116,7 +113,6 @@ export function useWorkspaceStageRuntime({
     onOpenAssetLibraryForCharacter: (characterId, refreshAssets) => openAssetLibrary(characterId, refreshAssets),
     onEnterEditor: () => handleStageChange('editor'),
   }), [
-    artStyle,
     targetDuration,
     assetsLoading,
     handleGenerateAllVideos,

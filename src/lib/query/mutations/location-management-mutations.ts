@@ -203,10 +203,10 @@ export function useCreateProjectLocation(projectId: string) {
         invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
+        // Q-006: artStyle removed from create-location payload — styleProfile replaces it.
         mutationFn: async (payload: {
             name: string
             description: string
-            artStyle?: string
         }) =>
             await requestJsonWithError(
                 `/api/novel-promotion/${projectId}/location`,

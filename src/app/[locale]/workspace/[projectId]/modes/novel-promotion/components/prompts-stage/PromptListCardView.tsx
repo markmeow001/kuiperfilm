@@ -23,7 +23,7 @@ export default function PromptListCardView({ runtime }: PromptListCardViewProps)
     isBatchSubmitting,
     assetLibraryCharacters,
     assetLibraryLocations,
-    styleLabel,
+    // Q-006: styleLabel removed — styleProfile replaces artStyle, no per-shot style label.
     editingPrompt,
     editValue,
     aiModifyInstruction,
@@ -89,12 +89,7 @@ export default function PromptListCardView({ runtime }: PromptListCardViewProps)
             <div className="p-5 space-y-4">
               {shot.imagePrompt && (
                 <div className="space-y-2 border-b pb-4">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)] rounded-md text-sm font-medium">
-                      <AppIcon name="imageEdit" className="w-4 h-4" />
-                      {styleLabel}
-                    </span>
-                  </div>
+                  {/* Q-006: per-shot styleLabel pill removed — styleProfile replaces artStyle. */}
 
                   <div className="text-sm">
                     <div className="flex items-center justify-between mb-2">

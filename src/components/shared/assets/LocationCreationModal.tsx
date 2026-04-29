@@ -4,7 +4,7 @@ import { logError as _ulogError } from '@/lib/logging/core'
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
-import { ART_STYLES } from '@/lib/constants'
+// Q-006: ART_STYLES selector removed — styleProfile (PATCH /api/projects/{id}/style-profile) replaces it.
 import { shouldShowError } from '@/lib/error-utils'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
@@ -51,7 +51,7 @@ export function LocationCreationModal({
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [aiInstruction, setAiInstruction] = useState('')
-    const [artStyle, setArtStyle] = useState('american-comic')
+    // Q-006: artStyle state removed — styleProfile replaces it.
 
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isAiDesigning, setIsAiDesigning] = useState(false)
@@ -130,15 +130,14 @@ export function LocationCreationModal({
         try {
             setIsSubmitting(true)
 
+            // Q-006: artStyle removed from create payload — styleProfile replaces it.
             const body: {
                 name: string
                 description: string
-                artStyle: string
                 folderId?: string | null
             } = {
                 name: name.trim(),
                 description: description.trim(),
-                artStyle
             }
 
             if (mode === 'asset-hub') {
@@ -149,14 +148,12 @@ export function LocationCreationModal({
                 await createAssetHubLocation.mutateAsync({
                     name: body.name,
                     summary: body.description,
-                    artStyle: body.artStyle,
                     folderId: body.folderId ?? null,
                 })
             } else {
                 await createProjectLocation.mutateAsync({
                     name: body.name,
                     description: body.description,
-                    artStyle: body.artStyle,
                 })
             }
 
@@ -215,28 +212,7 @@ export function LocationCreationModal({
                             />
                         </div>
 
-                        {/* 风格选择 */}
-                        <div className="space-y-2">
-                            <label className="glass-field-label block">
-                                {t('artStyle.title')}
-                            </label>
-                            <div className="grid grid-cols-2 gap-2">
-                                {ART_STYLES.map((style) => (
-                                    <button
-                                        key={style.value}
-                                        type="button"
-                                        onClick={() => setArtStyle(style.value)}
-                                        className={`glass-btn-base px-3 py-2 rounded-lg text-sm border transition-all justify-start ${artStyle === style.value
-                                            ? 'glass-btn-tone-info border-[var(--glass-stroke-focus)]'
-                                            : 'glass-btn-soft border-[var(--glass-stroke-base)] text-[var(--glass-text-secondary)]'
-                                            }`}
-                                    >
-                                        <span>{style.preview}</span>
-                                        <span>{style.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                        {/* Q-006: artStyle selector removed — styleProfile is the only style anchor. */}
 
                         {/* AI 设计区域 */}
                         <div className="glass-surface-soft rounded-xl p-4 space-y-3 border border-[var(--glass-stroke-base)]">

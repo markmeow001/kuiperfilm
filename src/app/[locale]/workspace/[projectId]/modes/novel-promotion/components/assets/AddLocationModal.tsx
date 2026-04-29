@@ -3,7 +3,7 @@ import { logError as _ulogError } from '@/lib/logging/core'
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { ART_STYLES } from '@/lib/constants'
+// Q-006: ART_STYLES selector removed — styleProfile (PATCH /api/projects/{id}/style-profile) replaces it.
 import { shouldShowError } from '@/lib/error-utils'
 import { useAiCreateProjectLocation, useCreateProjectLocation } from '@/lib/query/hooks'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
@@ -55,7 +55,7 @@ export default function AddLocationModal({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [aiInstruction, setAiInstruction] = useState('')
-  const [artStyle, setArtStyle] = useState('american-comic')
+  // Q-006: artStyle state removed — styleProfile replaces it.
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isAiDesigning, setIsAiDesigning] = useState(false)
   const aiDesigningState = isAiDesigning
@@ -109,7 +109,6 @@ export default function AddLocationModal({
       await createLocationMutation.mutateAsync({
         name: name.trim(),
         description: description.trim(),
-        artStyle,
       })
       onSuccess()
       onClose()
@@ -156,28 +155,7 @@ export default function AddLocationModal({
               />
             </div>
 
-            {/* 风格选择 */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-[var(--glass-text-secondary)]">
-                {t('modal.artStyle')}
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {ART_STYLES.map((style) => (
-                  <button
-                    key={style.value}
-                    type="button"
-                    onClick={() => setArtStyle(style.value)}
-                    className={`px-3 py-2 rounded-lg text-sm border transition-all flex items-center gap-2 ${artStyle === style.value
-                      ? 'border-[var(--glass-stroke-focus)] bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)]'
-                      : 'border-[var(--glass-stroke-base)] hover:border-[var(--glass-stroke-strong)] text-[var(--glass-text-secondary)]'
-                      }`}
-                  >
-                    <span>{style.preview}</span>
-                    <span>{style.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Q-006: artStyle selector removed — styleProfile is the only style anchor. */}
 
             {/* AI 设计区域 */}
             <div className="bg-[var(--glass-tone-info-bg)] rounded-xl p-4 space-y-3 border border-[var(--glass-stroke-focus)]">

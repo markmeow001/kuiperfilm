@@ -38,7 +38,7 @@ interface WorkspaceHeaderShellProps {
   onCloseWorldContextModal: () => void
   availableModels?: UserModelsPayload
   modelsLoaded: boolean
-  artStyle: string | null | undefined
+  // Q-006: artStyle removed from header settings — styleProfile replaces it.
   analysisModel: string | null | undefined
   characterModel: string | null | undefined
   locationModel: string | null | undefined
@@ -85,7 +85,6 @@ export default function WorkspaceHeaderShell({
   onCloseWorldContextModal,
   availableModels,
   modelsLoaded,
-  artStyle,
   analysisModel,
   characterModel,
   locationModel,
@@ -124,7 +123,6 @@ export default function WorkspaceHeaderShell({
         onClose={onCloseSettingsModal}
         availableModels={availableModels}
         modelsLoaded={modelsLoaded}
-        artStyle={artStyle ?? undefined}
         analysisModel={analysisModel ?? undefined}
         characterModel={characterModel ?? undefined}
         locationModel={locationModel ?? undefined}
@@ -135,7 +133,6 @@ export default function WorkspaceHeaderShell({
         targetDuration={targetDuration ?? undefined}
         capabilityOverrides={capabilityOverrides}
         ttsRate={ttsRate ?? undefined}
-        onArtStyleChange={(value) => { onUpdateConfig('artStyle', value) }}
         onAnalysisModelChange={(value) => { onUpdateConfig('analysisModel', value) }}
         onCharacterModelChange={(value) => { onUpdateConfig('characterModel', value) }}
         onLocationModelChange={(value) => { onUpdateConfig('locationModel', value) }}

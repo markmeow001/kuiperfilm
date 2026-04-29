@@ -31,11 +31,11 @@ export function useCreateAssetHubLocation() {
   const invalidateLocations = () => invalidateGlobalLocations(queryClient)
 
   return useMutation({
+    // Q-006: artStyle removed from create-location payload — styleProfile is the only style anchor.
     mutationFn: async (payload: {
       name: string
       summary: string
       folderId: string | null
-      artStyle: string
     }) => {
       return await requestJsonWithError('/api/asset-hub/locations', {
         method: 'POST',
@@ -104,11 +104,11 @@ export function useCreateAssetHubCharacter() {
   const invalidateCharacters = () => invalidateGlobalCharacters(queryClient)
 
   return useMutation({
+    // Q-006: artStyle removed from create-character payload — styleProfile is the only style anchor.
     mutationFn: async (payload: {
       name: string
       description: string
       folderId?: string | null
-      artStyle?: string
       generateFromReference?: boolean
       referenceImageUrls?: string[]
       customDescription?: string

@@ -129,7 +129,6 @@ export function useNovelPromotionWorkspaceController({
     isTransitioning: execution.isTransitioning,
     isConfirmingAssets: execution.isConfirmingAssets,
     videoRatio: projectSnapshot.videoRatio,
-    artStyle: projectSnapshot.artStyle,
     targetDuration: projectSnapshot.targetDuration,
     videoModel: projectSnapshot.videoModel,
     capabilityOverrides: projectSnapshot.capabilityOverrides,

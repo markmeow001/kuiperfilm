@@ -141,10 +141,10 @@ export function useCreateProjectCharacter(projectId: string) {
         invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
 
     return useMutation({
+        // Q-006: artStyle removed from create-character payload — styleProfile is the only style anchor.
         mutationFn: async (payload: {
             name: string
             description: string
-            artStyle?: string
             generateFromReference?: boolean
             referenceImageUrls?: string[]
             customDescription?: string

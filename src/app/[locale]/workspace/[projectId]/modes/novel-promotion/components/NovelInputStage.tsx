@@ -8,7 +8,7 @@
 import { useTranslations } from 'next-intl'
 import { useState, useRef, useEffect } from 'react'
 import '@/styles/animations.css'
-import { ART_STYLES, VIDEO_RATIOS } from '@/lib/constants'
+import { VIDEO_RATIOS } from '@/lib/constants'
 import TaskStatusInline from '@/components/task/TaskStatusInline'
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { AppIcon, RatioPreviewIcon } from '@/components/ui/icons'
@@ -92,75 +92,7 @@ function RatioSelector({
   )
 }
 
-/**
- * StyleSelector - 视觉风格选择抽屉组件
- */
-function StyleSelector({
-  value,
-  onChange,
-  options
-}: {
-  value: string
-  onChange: (value: string) => void
-  options: { value: string; label: string; preview: string }[]
-}) {
-  const [isOpen, setIsOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const selectedOption = options.find(o => o.value === value) || options[0]
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      {/* 触发按钮 */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="glass-input-base px-3 py-2.5 flex w-full items-center justify-between gap-2 cursor-pointer transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-lg">{selectedOption.preview}</span>
-          <span className="text-sm text-[var(--glass-text-primary)] font-medium">{selectedOption.label}</span>
-        </div>
-        <AppIcon name="chevronDown" className={`w-4 h-4 text-[var(--glass-text-tertiary)] transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {/* 下拉面板 */}
-      {isOpen && (
-        <div className="glass-surface-modal absolute z-50 mt-1 left-0 right-0 p-3">
-          <div className="grid grid-cols-2 gap-2">
-            {options.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  onChange(option.value)
-                  setIsOpen(false)
-                }}
-                className={`flex items-center gap-2 p-3 rounded-lg text-left transition-all ${value === option.value
-                  ? 'bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)] shadow-[0_0_0_1px_rgba(79,128,255,0.35)]'
-                  : 'hover:bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)]'
-                  }`}
-              >
-                <span className="text-lg">{option.preview}</span>
-                <span className="font-medium text-sm">{option.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+// Q-006: StyleSelector removed — styleProfile replaces artStyle.
 
 interface NovelInputStageProps {
   // 核心数据
@@ -177,11 +109,10 @@ interface NovelInputStageProps {
   enableNarration?: boolean
   onEnableNarrationChange?: (enabled: boolean) => void
   // 配置项 - 比例与风格
+  // Q-006: artStyle / onArtStyleChange removed — styleProfile replaces them.
   videoRatio?: string
-  artStyle?: string
   targetDuration?: number
   onVideoRatioChange?: (value: string) => void
-  onArtStyleChange?: (value: string) => void
   onTargetDurationChange?: (value: number) => void
 }
 
@@ -195,10 +126,8 @@ export default function NovelInputStage({
   enableNarration = false,
   onEnableNarrationChange,
   videoRatio = '9:16',
-  artStyle = 'american-comic',
   targetDuration = 60,
   onVideoRatioChange,
-  onArtStyleChange,
   onTargetDurationChange
 }: NovelInputStageProps) {
   const t = useTranslations('novelPromotion')
@@ -269,9 +198,10 @@ AI 将根据您的文本智能分析：
         </div>
       </div>
 
-      {/* 画面比例与视觉风格配置 */}
+      {/* 画面比例与目标时长配置 */}
+      {/* Q-006: 视觉风格选项已移除，由 styleProfile 接手 */}
       <div className="glass-surface p-6 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* 画面比例 */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-[var(--glass-text-muted)] tracking-[0.01em]">{t("storyInput.videoRatio")}</h3>
@@ -279,16 +209,6 @@ AI 将根据您的文本智能分析：
               value={videoRatio}
               onChange={(value) => onVideoRatioChange?.(value)}
               options={VIDEO_RATIOS}
-            />
-          </div>
-
-          {/* 视觉风格 */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-[var(--glass-text-muted)] tracking-[0.01em]">{t("storyInput.visualStyle")}</h3>
-            <StyleSelector
-              value={artStyle}
-              onChange={(value) => onArtStyleChange?.(value)}
-              options={ART_STYLES}
             />
           </div>
 

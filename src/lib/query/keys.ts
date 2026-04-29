@@ -73,6 +73,7 @@ export const queryKeys = {
         detail: (projectId: string) => ['project', projectId] as const,
         episodes: (projectId: string) => ['project', projectId, 'episodes'] as const,
         data: (projectId: string) => ['project', projectId, 'data'] as const,
+        styleProfile: (projectId: string) => ['project', projectId, 'style-profile'] as const,
     },
 
     // ============ 顶层便捷函数 ============

@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import { useCallback, useMemo, useState } from 'react'
-import { ART_STYLES } from '@/lib/constants'
+// Q-006: ART_STYLES read removed — styleProfile is now the only style anchor.
 import { resolveTaskPresentationState } from '@/lib/task/presentation'
 import { useAiModifyProjectShotPrompt } from '@/lib/query/hooks'
 import type { NovelPromotionShot } from '@/types/project'
@@ -30,7 +30,7 @@ export function usePromptStageActions({
   onBack,
   onNext,
   onUpdatePrompt,
-  artStyle,
+  // Q-006: artStyle removed — styleProfile replaces it.
   assetLibraryCharacters,
   assetLibraryLocations,
   onAppendContent,
@@ -42,7 +42,8 @@ export function usePromptStageActions({
     return Boolean((shot as NovelPromotionShot & { imageTaskRunning?: boolean }).imageTaskRunning)
   }, [])
 
-  const styleLabel = ART_STYLES.find((style) => style.value === artStyle)?.label || t('prompts.customStyle')
+  // Q-006: styleLabel removed from card display. styleProfile replaces artStyle as the style anchor;
+  // there is no per-shot style label to display anymore.
   const runningCount = shots.filter((shot) => isShotTaskRunning(shot)).length
   const [previewImage, setPreviewImage] = useState<string | null>(null)
 
@@ -98,7 +99,7 @@ export function usePromptStageActions({
     onAppendContent,
     assetLibraryCharacters,
     assetLibraryLocations,
-    styleLabel,
+    // Q-006: styleLabel removed — styleProfile replaces artStyle.
     runningCount,
     isAnyTaskRunning,
     previewImage,

@@ -13,7 +13,7 @@ export interface PromptsStageShellProps {
   onBack?: () => void
   onNext: () => void
   onUpdatePrompt: (shotId: string, field: 'imagePrompt', value: string) => Promise<void>
-  artStyle: string
+  // Q-006: artStyle removed — styleProfile replaces it.
   assetLibraryCharacters: AssetLibraryCharacter[]
   assetLibraryLocations: AssetLibraryLocation[]
   onAppendContent?: (content: string) => Promise<void>

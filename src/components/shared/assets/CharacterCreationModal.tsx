@@ -33,7 +33,7 @@ export function CharacterCreationModal({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [aiInstruction, setAiInstruction] = useState('')
-  const [artStyle, setArtStyle] = useState('american-comic')
+  // Q-006: artStyle state removed — styleProfile replaces it.
   const [referenceImagesBase64, setReferenceImagesBase64] = useState<string[]>([])
   const [referenceSubMode, setReferenceSubMode] = useState<'direct' | 'extract'>('direct')
   const [isSubAppearance, setIsSubAppearance] = useState(false)
@@ -69,7 +69,7 @@ export function CharacterCreationModal({
     name,
     description,
     aiInstruction,
-    artStyle,
+    // Q-006: artStyle removed — styleProfile replaces it.
     referenceImagesBase64,
     referenceSubMode,
     isSubAppearance,
@@ -188,8 +188,6 @@ export function CharacterCreationModal({
             setDescription={(value) => setDescription(value)}
             aiInstruction={aiInstruction}
             setAiInstruction={(value) => setAiInstruction(value)}
-            artStyle={artStyle}
-            setArtStyle={(value) => setArtStyle(value)}
             referenceImagesBase64={referenceImagesBase64}
             referenceSubMode={referenceSubMode}
             setReferenceSubMode={(value) => setReferenceSubMode(value)}

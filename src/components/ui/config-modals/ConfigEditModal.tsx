@@ -2,16 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import {
-    ART_STYLES,
-    VIDEO_RATIOS,
-} from '@/lib/constants'
+import { VIDEO_RATIOS } from '@/lib/constants'
 import type {
     CapabilitySelections,
     CapabilityValue,
     ModelCapabilities,
 } from '@/lib/model-config-contract'
-import { RatioSelector, StyleSelector } from './config-modal-selectors'
+import { RatioSelector } from './config-modal-selectors'
 import { ModelCapabilityDropdown } from './ModelCapabilityDropdown'
 import { AppIcon } from '@/components/ui/icons'
 
@@ -40,7 +37,7 @@ interface SettingsModalProps {
     onClose: () => void
     availableModels?: Partial<UserModels>
     modelsLoaded?: boolean
-    artStyle?: string
+    // Q-006: artStyle / onArtStyleChange removed — styleProfile replaces them.
     analysisModel?: string
     characterModel?: string
     locationModel?: string
@@ -52,7 +49,6 @@ interface SettingsModalProps {
     targetDuration?: number
     capabilityOverrides?: CapabilitySelections
     ttsRate?: string
-    onArtStyleChange?: (value: string) => void
     onAnalysisModelChange?: (value: string) => void
     onCharacterModelChange?: (value: string) => void
     onLocationModelChange?: (value: string) => void
@@ -125,7 +121,6 @@ export function SettingsModal({
     onClose,
     availableModels,
     modelsLoaded = false,
-    artStyle = 'american-comic',
     analysisModel,
     characterModel,
     locationModel,
@@ -136,7 +131,6 @@ export function SettingsModal({
     targetDuration = 60,
     capabilityOverrides,
     ttsRate,
-    onArtStyleChange,
     onAnalysisModelChange,
     onCharacterModelChange,
     onLocationModelChange,
@@ -347,17 +341,7 @@ export function SettingsModal({
                 </div>
 
                 <div className="space-y-5">
-                    <div className="glass-surface-soft p-5 sm:p-6 space-y-4">
-                        <h3 className="text-sm font-semibold text-[var(--glass-text-tertiary)]">{t('visualStyle')}</h3>
-                        <div className="max-w-xs">
-                            <StyleSelector
-                                value={artStyle}
-                                onChange={(value) => handleChange(onArtStyleChange)(value)}
-                                options={ART_STYLES}
-                            />
-                        </div>
-                    </div>
-
+                    {/* Q-006: 视觉风格选项已移除，由 styleProfile 接手 */}
                     <div className="glass-surface-soft p-5 sm:p-6 space-y-4">
                         <h3 className="text-sm font-semibold text-[var(--glass-text-tertiary)]">{t('modelParams')}</h3>
                         {!modelsLoaded && (

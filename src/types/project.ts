@@ -247,6 +247,10 @@ export interface NovelPromotionProject {
   workflowMode: WorkflowMode  // 新增：工作流模式
   artStyle: string
   artStylePrompt: string | null
+  // Phase 11.5: styleProfile 三栏（替代 artStyle / artStylePrompt 的新版风格 lock）
+  stylePositivePrompt?: string | null
+  styleNegativePrompt?: string | null
+  styleReferenceImages?: string | null  // JSON array of MediaObject ids
   audioUrl: string | null
   media?: MediaRef | null
   srtContent: string | null
