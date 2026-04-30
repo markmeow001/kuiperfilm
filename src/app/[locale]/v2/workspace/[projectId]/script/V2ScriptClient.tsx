@@ -102,9 +102,34 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
     }))
   }, [])
 
+  async function saveNovelTextToEpisode(episodeId: string, text: string): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/novel-promotion/${projectId}/episodes/${episodeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ novelText: text }),
+      })
+      if (!res.ok) {
+        const t = await res.text().catch(() => '')
+        // eslint-disable-next-line no-console
+        console.warn('[v2-script] save novelText failed', res.status, t)
+        return false
+      }
+      return true
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[v2-script] save novelText error', err)
+      return false
+    }
+  }
+
   function handleSaveNovelText() {
-    // Debounced manual save — store the textarea value to the project.
-    updateConfig.mutate({ key: 'novelText', value: novelText })
+    // Debounced manual save — store the textarea value into the FIRST episode's
+    // novelText (only if the episode already exists). Project-level PATCH does
+    // NOT accept novelText (allowedProjectFields whitelist), so going through
+    // /episodes/[id] PATCH is the only path the analyze worker can read.
+    if (!firstEpisodeId) return // nothing to save into yet — handleAnalyze creates one
+    void saveNovelTextToEpisode(firstEpisodeId, novelText)
   }
 
   function handleRatioChange(value: string) {
@@ -158,15 +183,13 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
     }
     const episodeId = await ensureEpisode()
     if (!episodeId) return
-    // Save novelText first, then trigger analyze.
-    updateConfig.mutate(
-      { key: 'novelText', value: novelText },
-      {
-        onSuccess: () => {
-          analyze.mutate({ episodeId })
-        },
-      },
-    )
+    // Save novelText to the EPISODE row (analyze worker reads firstEpisode.novelText).
+    const saved = await saveNovelTextToEpisode(episodeId, novelText)
+    if (!saved) {
+      alert('保存劇本失敗,請稍後重試')
+      return
+    }
+    analyze.mutate({ episodeId })
   }
 
   if (projectQuery.isLoading) {
