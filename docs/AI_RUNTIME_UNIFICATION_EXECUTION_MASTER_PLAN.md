@@ -556,7 +556,24 @@
   - 變動：`asset-hub-image-task-handler` / `reference-to-character` 等順手砍 `getArtStylePrompt` 的 handler 雖功能正確，但 reviewer 提醒目前測試覆蓋只到 happy path，缺「styleProfile null 時 fallback 不再 inject artStyle string」的 negative case
   - 驗收：每個改過的 handler 都至少有一個「styleProfile null + 確保 prompt 不含 artStyle 字串」的 unit test；coverage 達 80%
 
-### Phase 12 New UI Pivot（基于 docs/ui-redesign/，**user 2026-04-30 拍板**）
+### Phase 12 New UI Pivot ✅(2026-04-30 一晚 dogfood pass 完成)
+
+**Status**:12.0 → 12.8 全部完成,/v2/workspace/[projectId] 上線並設為 default。
+6 個 step page 都接 real data,multi-shot batch CTA 接通,sidebar 顯示登入帳號(NextAuth session),legacy /workspace fallback 保留。完整 commit list:`d34f9c1`(skeleton)→ `a703019`(script)→ `2abb854`(subjects)→ `6754fc0`(storyboard 12.5.1)→ `074c434`(voice+final)→ `6a9ff7d`(sidebar user info + regen wiring)→ `5668625`(multi-shot 12.5.2)→ `cb9dabd`(default route 12.8)→ `1827f38`(home overview)→ `4d48d06`(live project name)。
+
+**已 deploy build 13/14/15/16/17(rebuild 12.x 系列)**,droplet `art.kuiperfilmailab.com` 訪問 dashboard 點 project 預設進新 UI。
+
+**已知遺漏 / Phase 12.x.x 跟進**(均不阻塞 Phase 12 收工):
+- 12.5.3 LLM 自動依語意切 multi-shot group(目前是 client 側機械每 5 個一組)+ schema 加 panel.multiShotGroupId
+- 12.6.x voice tuning slider 接 panel-level config + 套用至全部分鏡
+- 12.7.x FFmpeg 全集合成 + 匯出 mp4
+- 12.5.x video panel 「首尾幀生視頻」 CTA enable
+- 12.5.x prompt builder chips 接 capabilityOverrides PATCH
+- 12.x.x SubjectsPage 「鎖定」chip 接 character_profile_confirm
+
+(Phase 12 原始規劃保留下方供查閱 — 以下為當初 scope)
+
+### Phase 12 New UI Pivot 原規劃(基于 docs/ui-redesign/,**user 2026-04-30 拍板**)
 
 #### 背景
 
