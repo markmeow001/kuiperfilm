@@ -6,28 +6,22 @@
  * Ported from ~/Downloads/kino_mockup.jsx Sidebar() but parameterised:
  *   - currentStep        which step is highlighted
  *   - onSelect(stepId)   click handler (router.push at the call site)
- *   - userName / credits user block in the footer
  *
- * Visual: 264px wide (w-64), stone-950 background, amber accents, tracking
- * the design tokens from docs/ui-redesign/03-design-system.md as best as we
- * can while reusing existing glass tokens for dark/light parity.
+ * The user block in the footer auto-pulls from NextAuth session.
+ * Phase 12 fix: previously rendered nothing because no caller passed
+ * the `user` prop — making the page look like there was no auth.
  */
 
+import { signOut, useSession } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
 import { V2_STEPS, type V2StepId, v2StepIndex } from './v2-types'
 
 interface SidebarProps {
   currentStep: V2StepId
   onSelect: (stepId: V2StepId) => void
-  /** Optional user / credits block in the footer; pass null to hide. */
-  user?: {
-    initial: string
-    name: string
-    credits?: string
-  } | null
 }
 
-export function Sidebar({ currentStep, onSelect, user }: SidebarProps) {
+export function Sidebar({ currentStep, onSelect }: SidebarProps) {
   const currentIdx = v2StepIndex(currentStep)
 
   return (
@@ -92,23 +86,57 @@ export function Sidebar({ currentStep, onSelect, user }: SidebarProps) {
         })}
       </nav>
 
-      {/* User block */}
-      {user ? (
-        <div className="border-t border-amber-900/15 px-5 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-rose-700 font-display text-sm text-stone-100">
-              {user.initial}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-body text-sm text-stone-200">{user.name}</div>
-              {user.credits ? (
-                <div className="mt-0.5 font-mono text-[10px] text-amber-600/70">{user.credits}</div>
-              ) : null}
-            </div>
-            <AppIcon name="settingsHex" className="h-4 w-4 text-stone-600" />
+      {/* User block — auto from NextAuth session */}
+      <SidebarUser />
+    </aside>
+  )
+}
+
+function SidebarUser() {
+  const { data: session, status } = useSession()
+  if (status === 'loading') {
+    return (
+      <div className="border-t border-amber-900/15 px-5 py-5">
+        <div className="font-mono text-[10px] tracking-wider text-stone-600">載入帳號中…</div>
+      </div>
+    )
+  }
+  if (!session?.user) {
+    return (
+      <div className="border-t border-amber-900/15 px-5 py-5">
+        <a
+          href="/auth/signin"
+          className="block rounded-md border border-amber-500/30 px-3 py-2 text-center font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/10"
+        >
+          登入帳號
+        </a>
+      </div>
+    )
+  }
+  const name = session.user.name ?? session.user.email ?? '使用者'
+  const role = (session.user as { role?: string } | undefined)?.role ?? null
+  const initial = name.charAt(0).toUpperCase()
+  return (
+    <div className="border-t border-amber-900/15 px-5 py-5">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-rose-700 font-display text-sm text-stone-100">
+          {initial}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-body text-sm text-stone-200">{name}</div>
+          <div className="mt-0.5 font-mono text-[10px] text-amber-600/70">
+            {role ? role.toUpperCase() : 'MEMBER'}
           </div>
         </div>
-      ) : null}
-    </aside>
+        <button
+          type="button"
+          onClick={() => void signOut({ callbackUrl: '/' })}
+          className="rounded text-stone-600 transition-all hover:text-amber-400"
+          title="登出"
+        >
+          <AppIcon name="logout" className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
   )
 }

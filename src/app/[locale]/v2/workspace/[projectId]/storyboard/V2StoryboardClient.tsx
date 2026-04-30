@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
+import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -48,6 +49,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const storyboardsQuery = useStoryboards(firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
+  const regenPanel = useRegenerateProjectPanelImage(projectId)
 
   const allPanels = useMemo<PanelLike[]>(() => {
     const sb = storyboardsData?.storyboards ?? []
@@ -233,23 +235,36 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           <div className="mt-5 flex items-center gap-3">
             <button
               type="button"
-              disabled
-              className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 bg-stone-900/50 py-2.5 font-serif-cn text-sm text-stone-300 opacity-60"
-              title="12.5.2 接通"
+              disabled={!selected || regenPanel.isPending}
+              onClick={() => {
+                if (!selected) return
+                regenPanel.mutate({ panelId: selected.id })
+              }}
+              className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 bg-stone-900/50 py-2.5 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="image" className="h-3.5 w-3.5" />
-              重新生成
+              {regenPanel.isPending ? '提交中…' : '重新生成圖'}
             </button>
             <button
               type="button"
               disabled
               className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2.5 font-serif-cn text-sm text-amber-400 opacity-60"
-              title="12.5.2 接通"
+              title="12.5.2 接 video pipeline"
             >
               <AppIcon name="play" className="h-3.5 w-3.5" />
               首尾幀生視頻
             </button>
           </div>
+          {regenPanel.isError ? (
+            <p className="mt-3 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+              {(regenPanel.error as Error)?.message ?? '重生失敗'}
+            </p>
+          ) : null}
+          {regenPanel.isSuccess ? (
+            <p className="mt-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+              已送出重生任務,稍候 worker 處理(每張約 30-60s)
+            </p>
+          ) : null}
         </div>
 
         {/* Right: inspector placeholder */}

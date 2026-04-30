@@ -17,6 +17,8 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
+import { useRegenerateSingleCharacterImage } from '@/lib/query/mutations/character-image-ops-mutations'
+import { useRegenerateSingleLocationImage } from '@/lib/query/mutations/location-image-mutations'
 
 type Tab = 'character' | 'scene' | 'prop'
 
@@ -68,9 +70,24 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const [tab, setTab] = useState<Tab>('character')
   const charactersQuery = useProjectCharacters(projectId)
   const locationsQuery = useProjectLocations(projectId)
+  const regenChar = useRegenerateSingleCharacterImage(projectId)
+  const regenLoc = useRegenerateSingleLocationImage(projectId)
 
   const characters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
   const locations = (locationsQuery.data ?? []) as unknown as LocationLike[]
+
+  function handleRegenChar(c: CharacterLike) {
+    const appearanceId = c.appearances?.[0]?.id
+    if (!appearanceId) {
+      alert('此角色還沒有 appearance,請先回劇本 step 跑分析')
+      return
+    }
+    regenChar.mutate({ characterId: c.id, appearanceId, imageIndex: 0 })
+  }
+
+  function handleRegenLoc(l: LocationLike) {
+    regenLoc.mutate({ locationId: l.id, imageIndex: 0 })
+  }
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: 'character', label: '角色', count: characters.length },
@@ -118,6 +135,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             caption: c.role ?? '角色',
             description: c.description ?? null,
             imageUrl: pickCharacterImage(c),
+            onRegenerate: () => handleRegenChar(c),
+            isRegenerating: regenChar.isPending,
           }))}
           emptyHint="此項目還沒有角色 — 請先回劇本 step 跑 LLM 分析"
         />
@@ -129,6 +148,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             caption: '場景',
             description: l.description ?? null,
             imageUrl: pickLocationImage(l),
+            onRegenerate: () => handleRegenLoc(l),
+            isRegenerating: regenLoc.isPending,
           }))}
           emptyHint="此項目還沒有場景 — 請先回劇本 step 跑 LLM 分析"
         />
@@ -149,6 +170,8 @@ interface SubjectItem {
   caption: string
   description: string | null
   imageUrl: string | null
+  onRegenerate?: () => void
+  isRegenerating?: boolean
 }
 
 function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: string }) {
@@ -196,6 +219,19 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
               </div>
             ) : null}
           </div>
+          {item.onRegenerate ? (
+            <div className="flex items-center justify-between border-t border-stone-800/50 px-4 pb-3 pt-2">
+              <button
+                type="button"
+                disabled={item.isRegenerating}
+                onClick={item.onRegenerate}
+                className="font-mono text-[10px] tracking-wider text-stone-500 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {item.isRegenerating ? '提交中…' : '重新生成'}
+              </button>
+              <span className="font-mono text-[10px] tracking-wider text-amber-500/70">✓ 鎖定</span>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
