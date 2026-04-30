@@ -42,14 +42,44 @@ interface ProjectLike {
   episodes?: Array<{ id: string }> | null
 }
 
+interface ProjectLikeFull {
+  episodes?: Array<{ id: string }> | null
+  novelPromotionData?: {
+    videoModel?: string | null
+  } | null
+}
+
+type MultiShotState =
+  | { status: 'idle' }
+  | { status: 'submitting'; sent: number; total: number }
+  | { status: 'done'; sent: number; failures: number }
+  | { status: 'error'; message: string }
+
+const KLING_GROUP_SIZE = 5 // panel/group; API allows 2-6
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  if (arr.length === 0) return []
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  // The last chunk could be of size 1, which the API rejects. Merge it
+  // into the previous chunk if there is one.
+  if (out.length >= 2 && out[out.length - 1].length === 1) {
+    const tail = out.pop() as T[]
+    out[out.length - 1].push(tail[0])
+  }
+  return out
+}
+
 export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const projectQuery = useProjectData(projectId)
-  const project = projectQuery.data as ProjectLike | undefined
+  const project = projectQuery.data as ProjectLikeFull | undefined
   const firstEpisodeId = project?.episodes?.[0]?.id ?? null
 
   const storyboardsQuery = useStoryboards(firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
   const regenPanel = useRegenerateProjectPanelImage(projectId)
+
+  const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
 
   const allPanels = useMemo<PanelLike[]>(() => {
     const sb = storyboardsData?.storyboards ?? []
@@ -65,6 +95,51 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const selected = allPanels.find((p) => p.id === selectedId) ?? null
   const selectedIndex = allPanels.findIndex((p) => p.id === selectedId)
+
+  async function handleSubmitMultiShot() {
+    const videoModel = project?.novelPromotionData?.videoModel
+    if (!videoModel) {
+      setMultiShotState({
+        status: 'error',
+        message: '請先在 profile / 預設模型配置 中選擇視頻模型(建議 Kling-3.0-Omni)',
+      })
+      return
+    }
+    if (!videoModel.toLowerCase().includes('kling')) {
+      setMultiShotState({
+        status: 'error',
+        message: `多鏡頭只支援 Kling 系列模型,你目前選的是 ${videoModel}`,
+      })
+      return
+    }
+    const eligible = allPanels.filter((p) => Boolean(p.imageUrl))
+    if (eligible.length < 2) {
+      setMultiShotState({
+        status: 'error',
+        message: '至少需要 2 個有圖的分鏡才能跑 multi-shot',
+      })
+      return
+    }
+    const groups = chunk(eligible.map((p) => p.id), KLING_GROUP_SIZE)
+    setMultiShotState({ status: 'submitting', sent: 0, total: groups.length })
+    let sent = 0
+    let failures = 0
+    for (const groupIds of groups) {
+      try {
+        const res = await fetch(`/api/novel-promotion/${projectId}/generate-multi-shot-video`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ panelIds: groupIds, videoModel, async: true }),
+        })
+        if (!res.ok) failures += 1
+      } catch {
+        failures += 1
+      }
+      sent += 1
+      setMultiShotState({ status: 'submitting', sent, total: groups.length })
+    }
+    setMultiShotState({ status: 'done', sent, failures })
+  }
 
   if (projectQuery.isLoading || storyboardsQuery.isLoading) {
     return (
@@ -195,13 +270,28 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <div className="font-fraunces text-sm italic text-amber-500/80">Selected Shot</div>
             <button
               type="button"
-              disabled
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-500 opacity-50"
-              title="12.5.2 將開放"
+              onClick={() => handleSubmitMultiShot()}
+              disabled={multiShotState.status === 'submitting'}
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-500 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              title="把所有有圖的分鏡 5 個一組送 Kling multi-shot=intelligence"
             >
-              <AppIcon name="sparklesAlt" className="h-3 w-3" /> Kling 多鏡頭(實驗)
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              {multiShotState.status === 'submitting'
+                ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
+                : 'Kling 多鏡頭(批次)'}
             </button>
           </div>
+          {multiShotState.status === 'done' ? (
+            <div className="mb-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+              ✓ 已送出 {multiShotState.sent} 個 multi-shot 任務
+              {multiShotState.failures > 0 ? `(${multiShotState.failures} 組失敗)` : ''}
+            </div>
+          ) : null}
+          {multiShotState.status === 'error' ? (
+            <div className="mb-3 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+              {multiShotState.message}
+            </div>
+          ) : null}
 
           <div className="overflow-hidden rounded-sm border border-stone-800/60 bg-stone-900/30">
             <div className="relative aspect-video bg-gradient-to-br from-stone-800 to-stone-900">
