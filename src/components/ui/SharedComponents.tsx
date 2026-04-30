@@ -12,7 +12,7 @@ export function AnimatedBackground() {
                 <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-[var(--glass-bg-muted)] rounded-full mix-blend-multiply animate-blob animation-delay-2000" />
                 <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-[var(--glass-bg-surface-strong)] rounded-full mix-blend-multiply animate-blob animation-delay-4000" />
             </div>
-            <div className="absolute inset-0 bg-white/60 backdrop-blur-3xl" />
+            <div className="absolute inset-0 backdrop-blur-3xl" style={{ backgroundColor: 'var(--glass-bg-canvas)', opacity: 0.6 }} />
         </div>
     )
 }
