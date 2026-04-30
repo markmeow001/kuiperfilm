@@ -101,6 +101,12 @@ interface TencentVODVideoOptions {
     resolution?: string
     aspectRatio?: string
     audioGeneration?: ToggleFlag
+    /**
+     * Boolean alias for audioGeneration coming from the upstream worker
+     * (video.worker.ts passes `generateAudio: boolean`). Mapped to
+     * AudioGeneration='Enabled'/'Disabled' before submit.
+     */
+    generateAudio?: boolean
     enhancePrompt?: ToggleFlag
     sceneType?: string
     seed?: number
@@ -209,7 +215,15 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
         if (opts.duration) outputConfig.Duration = opts.duration
         if (opts.resolution) outputConfig.Resolution = opts.resolution
         if (opts.aspectRatio) outputConfig.AspectRatio = opts.aspectRatio
-        if (opts.audioGeneration) outputConfig.AudioGeneration = opts.audioGeneration
+        // AudioGeneration: prefer explicit ToggleFlag, fall back to the boolean
+        // alias coming from video.worker (Kling 3.0 / Omni "音畫同出").
+        if (opts.audioGeneration) {
+            outputConfig.AudioGeneration = opts.audioGeneration
+        } else if (opts.generateAudio === true) {
+            outputConfig.AudioGeneration = 'Enabled'
+        } else if (opts.generateAudio === false) {
+            outputConfig.AudioGeneration = 'Disabled'
+        }
         if (opts.frameInterpolate) outputConfig.FrameInterpolate = opts.frameInterpolate
         if (opts.offPeak) outputConfig.OffPeak = opts.offPeak
         if (opts.logoAdd) outputConfig.LogoAdd = opts.logoAdd
