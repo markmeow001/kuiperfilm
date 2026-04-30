@@ -95,12 +95,19 @@ export default function StoryboardPanelList({
           )
         const isPanelDeleting = deletingPanelIds.has(panel.id)
         const panelSaveState = saveStateByPanel[panel.id]
+        // hasImage means the DB already has a panel.imageUrl — i.e. the
+        // panel has successfully been generated at least once. When that's
+        // true any in-memory failure state from a *previous* attempt is
+        // stale (the user got the image, the BullMQ retry won, the error
+        // banner just never cleared). Suppress the error UI in that case
+        // so the user doesn't have to hard-reload to see it gone.
+        const hasImage = Boolean(imageUrl)
         const isPanelSaving = savingPanels.has(panel.id) || panelSaveState?.status === 'saving'
-        const hasUnsavedChanges = hasUnsavedByPanel.has(panel.id) || panelSaveState?.status === 'error'
-        const panelSaveError = panelSaveState?.errorMessage || null
+        const hasUnsavedChanges = !hasImage && (hasUnsavedByPanel.has(panel.id) || panelSaveState?.status === 'error')
+        const panelSaveError = hasImage ? null : (panelSaveState?.errorMessage || null)
         const panelTaskRunning = isPanelTaskRunning(panel)
         const taskError = panelTaskErrorMap.get(panel.id)
-        const panelFailedError = taskError?.message || null
+        const panelFailedError = hasImage ? null : (taskError?.message || null)
         const panelData = getPanelEditData(panel)
         const panelCandidateData = getPanelCandidates(panel as unknown as NovelPromotionPanel)
 
