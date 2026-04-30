@@ -12,7 +12,6 @@ export default async function V2StoryboardPage({ params }: PageProps) {
       projectId={projectId}
       locale={locale}
       currentStep="storyboard"
-      projectName="未命名劇本"
       draftNumber={4}
     >
       <V2StoryboardClient projectId={projectId} />

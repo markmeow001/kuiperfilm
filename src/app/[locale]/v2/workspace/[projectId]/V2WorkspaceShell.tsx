@@ -49,6 +49,7 @@ export function V2WorkspaceShell({
       <main className="flex flex-1 flex-col overflow-hidden">
         <TopBar
           currentStep={currentStep}
+          projectId={projectId}
           projectName={projectName}
           draftNumber={draftNumber}
         />

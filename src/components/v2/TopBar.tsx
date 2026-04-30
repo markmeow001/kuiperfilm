@@ -6,19 +6,31 @@
  * Ported from ~/Downloads/kino_mockup.jsx TopBar(): renders STEP NN —
  * SUBTITLE caption on the left, project title + DRAFT NN/06 on the
  * right, and a 6-segment progress strip below.
+ *
+ * If projectId is supplied the project name is fetched live (via
+ * useProjectData) so callers don't have to thread it through.
  */
 
+import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { findV2Step, V2_STEPS, v2StepIndex, type V2StepId } from './v2-types'
 
 interface TopBarProps {
   currentStep: V2StepId
-  /** Project name shown on the right. */
+  projectId?: string
+  /** Override the live project name lookup. */
   projectName?: string
   /** Optional draft number (default 01). Matched by the DRAFT NN/06 caption. */
   draftNumber?: number
 }
 
-export function TopBar({ currentStep, projectName, draftNumber }: TopBarProps) {
+interface ProjectShape {
+  name?: string | null
+}
+
+export function TopBar({ currentStep, projectId, projectName, draftNumber }: TopBarProps) {
+  const projectQuery = useProjectData(projectId ?? null)
+  const liveName = (projectQuery.data as ProjectShape | undefined)?.name ?? null
+  const resolvedName = projectName ?? liveName ?? '未命名劇本'
   const step = findV2Step(currentStep)
   const stepIdx = v2StepIndex(currentStep)
   const totalSteps = V2_STEPS.length
@@ -39,9 +51,7 @@ export function TopBar({ currentStep, projectName, draftNumber }: TopBarProps) {
           </h1>
         </div>
         <div className="text-right">
-          {projectName ? (
-            <div className="font-fraunces text-sm italic text-stone-500">《{projectName}》</div>
-          ) : null}
+          <div className="font-fraunces text-sm italic text-stone-500">《{resolvedName}》</div>
           <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-600">
             DRAFT · {draftLabel}/{String(totalSteps).padStart(2, '0')}
           </div>

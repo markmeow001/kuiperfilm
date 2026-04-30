@@ -12,7 +12,6 @@ export default async function V2SubjectsPage({ params }: PageProps) {
       projectId={projectId}
       locale={locale}
       currentStep="subjects"
-      projectName="未命名劇本"
       draftNumber={3}
     >
       <V2SubjectsClient projectId={projectId} locale={locale} />

@@ -12,7 +12,6 @@ export default async function V2ScriptPage({ params }: PageProps) {
       projectId={projectId}
       locale={locale}
       currentStep="script"
-      projectName="未命名劇本"
       draftNumber={2}
     >
       <V2ScriptClient projectId={projectId} />

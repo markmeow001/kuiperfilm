@@ -12,7 +12,6 @@ export default async function V2VoicePage({ params }: PageProps) {
       projectId={projectId}
       locale={locale}
       currentStep="voice"
-      projectName="未命名劇本"
       draftNumber={5}
     >
       <V2VoiceClient projectId={projectId} />

@@ -12,7 +12,6 @@ export default async function V2FinalPage({ params }: PageProps) {
       projectId={projectId}
       locale={locale}
       currentStep="final"
-      projectName="未命名劇本"
       draftNumber={6}
     >
       <V2FinalClient projectId={projectId} />
