@@ -17,11 +17,13 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useUpdateProjectConfig, useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { useStyleProfile } from '@/lib/query/hooks/useStyleProfile'
 import { useUpdateStyleProfile } from '@/lib/query/mutations/updateStyleProfile'
+import { queryKeys } from '@/lib/query/keys'
 import {
   STYLE_PROFILE_PRESETS,
   PRESET_ORDER_BY_CATEGORY,
@@ -61,11 +63,13 @@ const START_METHODS: Array<{ key: string; label: string; desc: string; icon: 'sp
 const CATEGORY_ORDER: PresetCategory[] = ['realistic', 'anime', 'chinese', 'korean', 'cg-3d', 'western']
 
 export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
+  const queryClient = useQueryClient()
   const projectQuery = useProjectData(projectId)
   const styleQuery = useStyleProfile(projectId)
   const updateConfig = useUpdateProjectConfig(projectId)
   const updateStyle = useUpdateStyleProfile(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
+  const [creatingEpisode, setCreatingEpisode] = useState(false)
 
   const project = projectQuery.data as ProjectDataLike | undefined
   const novelData = project?.novelPromotionData ?? null
@@ -116,21 +120,50 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
     })
   }
 
-  function handleAnalyze() {
-    if (!firstEpisodeId) {
-      alert('此 project 還沒有 episode,請先在舊 workspace 建立 episode 再回 v2')
-      return
+  async function ensureEpisode(): Promise<string | null> {
+    if (firstEpisodeId) return firstEpisodeId
+    setCreatingEpisode(true)
+    try {
+      const res = await fetch(`/api/novel-promotion/${projectId}/episodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '第 1 集' }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        alert(`建立 episode 失敗 (${res.status}):${text || '未知錯誤'}`)
+        return null
+      }
+      const json = (await res.json()) as { episode?: { id?: string } }
+      const newId = json.episode?.id ?? null
+      if (!newId) {
+        alert('建立 episode 失敗:server 沒回 episode id')
+        return null
+      }
+      // Refresh project data so episodes list picks up the new row.
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectData(projectId) })
+      return newId
+    } catch (err) {
+      alert(`建立 episode 失敗:${(err as Error).message}`)
+      return null
+    } finally {
+      setCreatingEpisode(false)
     }
+  }
+
+  async function handleAnalyze() {
     if (!novelText.trim()) {
       alert('請先輸入劇本內容')
       return
     }
-    // Save first, then trigger analyze.
+    const episodeId = await ensureEpisode()
+    if (!episodeId) return
+    // Save novelText first, then trigger analyze.
     updateConfig.mutate(
       { key: 'novelText', value: novelText },
       {
         onSuccess: () => {
-          analyze.mutate({ episodeId: firstEpisodeId })
+          analyze.mutate({ episodeId })
         },
       },
     )
@@ -256,11 +289,11 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
           <button
             type="button"
             onClick={handleAnalyze}
-            disabled={analyze.isPending || updateConfig.isPending || !novelText.trim()}
+            disabled={analyze.isPending || updateConfig.isPending || creatingEpisode || !novelText.trim()}
             className="mt-8 flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className="h-4 w-4" />
-            {analyze.isPending ? '生成中…' : '生成劇本'}
+            {creatingEpisode ? '建立 episode…' : analyze.isPending ? '生成中…' : '生成劇本'}
           </button>
 
           {analyze.isError ? (
