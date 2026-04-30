@@ -39,7 +39,7 @@ interface V2ScriptClientProps {
 interface NovelDataLike {
   novelText?: string | null
   videoRatio?: string | null
-  episodes?: Array<{ id: string; episodeNumber?: number | null }> | null
+  episodes?: Array<{ id: string; episodeNumber?: number | null; novelText?: string | null }> | null
 }
 
 interface ProjectDataLike {
@@ -78,11 +78,20 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
   const [novelText, setNovelText] = useState('')
   const [activeMethod, setActiveMethod] = useState<string>('novel')
   const [hasInitialized, setHasInitialized] = useState(false)
+  const [savedText, setSavedText] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (hasInitialized) return
     if (!novelData) return
-    setNovelText(novelData.novelText ?? '')
+    // Read from the FIRST episode's novelText — that's where v2 writes go
+    // (project.novelText is never set because PATCH /api/novel-promotion/[id]
+    //  silently drops the field). Fall back to project.novelText only for
+    // legacy data shaped before this fix.
+    const fromEpisode = novelData.episodes?.[0]?.novelText ?? null
+    const initial = fromEpisode ?? novelData.novelText ?? ''
+    setNovelText(initial)
+    setSavedText(initial)
     setHasInitialized(true)
   }, [hasInitialized, novelData])
 
@@ -103,6 +112,7 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
   }, [])
 
   async function saveNovelTextToEpisode(episodeId: string, text: string): Promise<boolean> {
+    setSaving(true)
     try {
       const res = await fetch(`/api/novel-promotion/${projectId}/episodes/${episodeId}`, {
         method: 'PATCH',
@@ -115,11 +125,14 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
         console.warn('[v2-script] save novelText failed', res.status, t)
         return false
       }
+      setSavedText(text)
       return true
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[v2-script] save novelText error', err)
       return false
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -234,7 +247,18 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
         <div>
           <div className="mb-3 flex items-center justify-between">
             <div className="font-fraunces text-sm italic text-amber-500/80">Your Spark</div>
-            <div className="font-mono text-[10px] text-stone-600">{charCount} chars</div>
+            <div className="flex items-center gap-3 font-mono text-[10px] text-stone-600">
+              <span>{charCount} chars</span>
+              {firstEpisodeId ? (
+                saving ? (
+                  <span className="text-amber-500/70">儲存中…</span>
+                ) : savedText !== null && savedText === novelText && novelText.length > 0 ? (
+                  <span className="text-emerald-500/70">✓ 已儲存</span>
+                ) : novelText.length > 0 ? (
+                  <span className="text-stone-500">未儲存(離開輸入框會自動存)</span>
+                ) : null
+              ) : null}
+            </div>
           </div>
           <textarea
             value={novelText}
