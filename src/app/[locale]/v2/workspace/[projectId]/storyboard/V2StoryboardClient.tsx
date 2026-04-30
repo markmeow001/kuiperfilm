@@ -18,6 +18,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
+import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -31,6 +32,8 @@ interface PanelLike {
   prompt?: string | null
   videoPrompt?: string | null
   characters?: string[] | null
+  multiShotGroupId?: string | null
+  multiShotGroupOrder?: number | null
 }
 
 interface StoryboardLike {
@@ -57,6 +60,24 @@ type MultiShotState =
 
 const KLING_GROUP_SIZE = 5 // panel/group; API allows 2-6
 
+// 6 distinct accent colours for multi-shot group ribbons. Cycles if more
+// groups than colours (rare — typical episode has 5-8 groups for 25-40 panels).
+const GROUP_ACCENTS = [
+  'border-l-amber-500',
+  'border-l-rose-500',
+  'border-l-emerald-500',
+  'border-l-sky-500',
+  'border-l-violet-500',
+  'border-l-orange-500',
+] as const
+
+function accentForGroupId(groupId: string | null | undefined, allGroupIds: string[]): string {
+  if (!groupId) return 'border-l-transparent'
+  const idx = allGroupIds.indexOf(groupId)
+  if (idx < 0) return 'border-l-transparent'
+  return GROUP_ACCENTS[idx % GROUP_ACCENTS.length]
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   if (arr.length === 0) return []
   const out: T[][] = []
@@ -78,6 +99,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const storyboardsQuery = useStoryboards(firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
   const regenPanel = useRegenerateProjectPanelImage(projectId)
+  const autoGroup = useAutoGroupMultiShot(projectId)
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
 
@@ -95,6 +117,30 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const selected = allPanels.find((p) => p.id === selectedId) ?? null
   const selectedIndex = allPanels.findIndex((p) => p.id === selectedId)
+
+  // Distinct group ids in the order panels appear, for stable colour cycling.
+  const orderedGroupIds = useMemo(() => {
+    const seen = new Set<string>()
+    const ordered: string[] = []
+    for (const p of allPanels) {
+      if (p.multiShotGroupId && !seen.has(p.multiShotGroupId)) {
+        seen.add(p.multiShotGroupId)
+        ordered.push(p.multiShotGroupId)
+      }
+    }
+    return ordered
+  }, [allPanels])
+  const hasGroups = orderedGroupIds.length > 0
+  const groupedPanelCount = allPanels.filter((p) => p.multiShotGroupId).length
+
+  async function handleAutoGroup() {
+    if (!firstEpisodeId) return
+    try {
+      await autoGroup.mutateAsync({ episodeId: firstEpisodeId })
+    } catch {
+      // surfaced via autoGroup.error
+    }
+  }
 
   async function handleSubmitMultiShot() {
     const videoModel = project?.novelPromotionData?.videoModel
@@ -120,7 +166,42 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       })
       return
     }
-    const groups = chunk(eligible.map((p) => p.id), KLING_GROUP_SIZE)
+
+    // Prefer LLM-assigned groups (Phase 12.5.3): if any panel has a
+    // multiShotGroupId, group everything by that, otherwise fall back to
+    // mechanical chunk(5).
+    let groups: string[][]
+    const grouped = new Map<string, PanelLike[]>()
+    let anyAssigned = false
+    for (const p of eligible) {
+      if (p.multiShotGroupId) {
+        anyAssigned = true
+        const list = grouped.get(p.multiShotGroupId) ?? []
+        list.push(p)
+        grouped.set(p.multiShotGroupId, list)
+      }
+    }
+    if (anyAssigned) {
+      groups = Array.from(grouped.values()).map((panels) =>
+        panels
+          .slice()
+          .sort((a, b) => (a.multiShotGroupOrder ?? 0) - (b.multiShotGroupOrder ?? 0))
+          .map((p) => p.id),
+      )
+      // Drop any group < 2 (Kling rejects). Drop any group > 6 (slice).
+      groups = groups
+        .filter((g) => g.length >= 2)
+        .map((g) => (g.length > 6 ? g.slice(0, 6) : g))
+    } else {
+      groups = chunk(eligible.map((p) => p.id), KLING_GROUP_SIZE)
+    }
+    if (groups.length === 0) {
+      setMultiShotState({
+        status: 'error',
+        message: '沒有可送出的 multi-shot 群組',
+      })
+      return
+    }
     setMultiShotState({ status: 'submitting', sent: 0, total: groups.length })
     let sent = 0
     let failures = 0
@@ -177,26 +258,54 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     <div className="flex h-full flex-col">
       {/* Top: panel strip */}
       <div className="border-b border-amber-900/15 px-12 pb-4 pt-6">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="font-fraunces text-sm italic text-amber-500/80">Storyboard Strip</div>
-          <div className="font-mono text-[10px] tracking-wider text-stone-500">
-            {allPanels.length} SHOTS · DRAFT 03
+        <div className="mb-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="font-fraunces text-sm italic text-amber-500/80">Storyboard Strip</div>
+            {hasGroups ? (
+              <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400">
+                {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={autoGroup.isPending || allPanels.length < 2}
+              onClick={handleAutoGroup}
+              title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群,提升 Kling 多鏡頭品質"
+              className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
+            </button>
+            <div className="font-mono text-[10px] tracking-wider text-stone-500">
+              {allPanels.length} SHOTS · DRAFT 03
+            </div>
           </div>
         </div>
+        {autoGroup.isError ? (
+          <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
+            切組失敗:{(autoGroup.error as Error)?.message ?? '未知錯誤'}
+          </div>
+        ) : null}
         <div className="flex gap-2 overflow-x-auto pb-2">
           {allPanels.map((p, i) => {
             const active = p.id === selectedId
             const hasImage = Boolean(p.imageUrl)
+            const accent = accentForGroupId(p.multiShotGroupId, orderedGroupIds)
+            const groupBoundary = i > 0
+              && p.multiShotGroupId
+              && allPanels[i - 1].multiShotGroupId !== p.multiShotGroupId
             return (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => setSelectedId(p.id)}
-                className={`flex-shrink-0 overflow-hidden rounded-sm border text-left transition-all ${
+                className={`flex-shrink-0 overflow-hidden rounded-sm border-l-4 border-y border-r text-left transition-all ${accent} ${
                   active
                     ? 'border-amber-500/60 ring-2 ring-amber-500/20'
                     : 'border-stone-800/60 hover:border-stone-700'
-                }`}
+                } ${groupBoundary ? 'ml-2' : ''}`}
                 style={{ width: 176 }}
               >
                 <div className="relative h-24 overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900">

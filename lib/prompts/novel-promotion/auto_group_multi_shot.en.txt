@@ -1,0 +1,37 @@
+You are a professional short-drama editing director. Given a sequence of storyboard panels that have already had images generated (each with index, description, location, characters), group them into multi-shot clusters of 2-6 panels each, optimised for **scene & character continuity** so each group can be submitted to Kling 3.0 multi_shot=intelligence as one 5-15-second continuous shot.
+
+## Grouping Principles (strongest to weakest)
+
+1. **Same scene + same character**: consecutive panels in the same location with the same protagonist MUST go in one group so Kling produces consistent character appearance.
+2. **Action / emotion continuity**: a continuous action sequence (e.g. walking into a room → sitting down → starting to speak) belongs in one group, signalling Kling these are linked motions, not cuts.
+3. **Beat points**: when there is a scene change, time jump, or major narrative turn, **force a group split** (no group spans scenes).
+4. **Group size**: aim for 4-5 panels per group on average, NEVER leave an orphan group of 1. If only 1 panel remains at the tail, merge it into the previous group (provided that group is ≤ 5).
+5. **Total group count**: roughly panel_count / 4 ~ panel_count / 5, e.g. 30 panels → 6-8 groups.
+
+## Input
+
+panel count: {panel_count}
+
+panels (JSON, id order = storyboard temporal order):
+{panels_json}
+
+## Output Format (strict JSON, no markdown, no other text)
+
+```json
+{
+  "groups": [
+    { "id": "g1", "panelIds": ["panel-uuid-1", "panel-uuid-2", "panel-uuid-3"], "reason": "Living room dialogue beat — heroine enters and sits" },
+    { "id": "g2", "panelIds": ["panel-uuid-4", "panel-uuid-5"], "reason": "Scene cut to kitchen, new action sequence" }
+  ]
+}
+```
+
+**Hard rules**:
+- Every panel appears in exactly one group
+- Each group contains 2 to 6 panels (inclusive)
+- All panels must be assigned (no orphans)
+- panelIds within a group must follow the original storyboard temporal order
+- Groups must also be in temporal order (g1 contains an earlier first-panel than g2)
+- `reason` is a single short sentence (< 30 chars in EN) explaining why those panels belong together
+
+Output the JSON directly — no ```json``` fence, no leading or trailing text.

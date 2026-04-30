@@ -33,6 +33,12 @@ export const PROMPT_IDS = {
   NP_SINGLE_PANEL_IMAGE: 'np_single_panel_image',
   NP_STORYBOARD_EDIT: 'np_storyboard_edit',
   NP_VOICE_ANALYSIS: 'np_voice_analysis',
+  /**
+   * Phase 12.5.3 — group consecutive storyboard panels into Kling multi-shot
+   * clusters of 2-6 each, prioritising scene/character continuity. Output is
+   * strict JSON: { groups: [{ id, panelIds: [...] }, ...] }.
+   */
+  NP_AUTO_GROUP_MULTI_SHOT: 'np_auto_group_multi_shot',
 } as const
 
 export type PromptId = (typeof PROMPT_IDS)[keyof typeof PROMPT_IDS]

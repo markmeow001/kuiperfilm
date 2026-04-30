@@ -143,4 +143,8 @@ export const PROMPT_CATALOG: Record<PromptId, PromptCatalogEntry> = {
     pathStem: 'novel-promotion/voice_analysis',
     variableKeys: ['input', 'characters_lib_name', 'characters_introduction', 'storyboard_json'],
   },
+  [PROMPT_IDS.NP_AUTO_GROUP_MULTI_SHOT]: {
+    pathStem: 'novel-promotion/auto_group_multi_shot',
+    variableKeys: ['panels_json', 'panel_count'],
+  },
 }

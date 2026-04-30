@@ -255,6 +255,12 @@ model NovelPromotionPanel {
   sceneType         String?
   candidateImages   String?                   @db.Text
   linkedToNextPanel Boolean                   @default(false)
+  // Phase 12.5.3 — LLM-assigned multi-shot grouping for Kling batch generation.
+  // Panels sharing multiShotGroupId are submitted as one Kling multi_shot=intelligence
+  // call; multiShotGroupOrder is the position inside the group (0-indexed).
+  // Null means "ungrouped" — falls back to mechanical chunk(5) on the client.
+  multiShotGroupId    String?
+  multiShotGroupOrder Int?
   lipSyncTaskId     String?
   lipSyncVideoUrl   String?
   lipSyncVideoMediaId String?
