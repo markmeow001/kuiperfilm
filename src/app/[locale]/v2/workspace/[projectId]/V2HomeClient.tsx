@@ -25,11 +25,11 @@ interface V2HomeClientProps {
 interface NovelData {
   novelText?: string | null
   videoModel?: string | null
+  episodes?: Array<{ id: string }> | null
 }
 interface ProjectShape {
   name?: string | null
   createdAt?: string | null
-  episodes?: Array<{ id: string }> | null
   novelPromotionData?: NovelData | null
 }
 
@@ -44,7 +44,7 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
   const charsQuery = useProjectCharacters(projectId)
   const locsQuery = useProjectLocations(projectId)
   const project = projectQuery.data as ProjectShape | undefined
-  const firstEpisodeId = project?.episodes?.[0]?.id ?? null
+  const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
   const storyboardsQuery = useStoryboards(firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: Array<{ panels?: PanelLike[] }> } | undefined
 

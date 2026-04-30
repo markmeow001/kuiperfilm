@@ -35,17 +35,17 @@ interface StoryboardLike {
 }
 
 interface ProjectLike {
-  episodes?: Array<{ id: string }> | null
   novelPromotionData?: {
     videoRatio?: string | null
     targetDuration?: number | null
+    episodes?: Array<{ id: string }> | null
   } | null
 }
 
 export function V2FinalClient({ projectId }: V2FinalClientProps) {
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLike | undefined
-  const firstEpisodeId = project?.episodes?.[0]?.id ?? null
+  const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
   const storyboardsQuery = useStoryboards(firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
 

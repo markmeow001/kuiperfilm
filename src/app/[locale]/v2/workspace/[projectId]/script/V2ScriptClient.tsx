@@ -37,11 +37,11 @@ interface V2ScriptClientProps {
 interface NovelDataLike {
   novelText?: string | null
   videoRatio?: string | null
+  episodes?: Array<{ id: string; episodeNumber?: number | null }> | null
 }
 
 interface ProjectDataLike {
   novelPromotionData?: NovelDataLike | null
-  episodes?: Array<{ id: string; episodeNumber?: number | null }> | null
 }
 
 const RATIO_OPTIONS: Array<{ value: string; label: string; caption: string }> = [
@@ -69,7 +69,7 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
 
   const project = projectQuery.data as ProjectDataLike | undefined
   const novelData = project?.novelPromotionData ?? null
-  const firstEpisodeId = project?.episodes?.[0]?.id ?? null
+  const firstEpisodeId = novelData?.episodes?.[0]?.id ?? null
 
   const [novelText, setNovelText] = useState('')
   const [activeMethod, setActiveMethod] = useState<string>('novel')

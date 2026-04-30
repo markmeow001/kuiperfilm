@@ -39,13 +39,13 @@ interface StoryboardLike {
 }
 
 interface ProjectLike {
-  episodes?: Array<{ id: string }> | null
+  novelPromotionData?: { episodes?: Array<{ id: string }> | null } | null
 }
 
 interface ProjectLikeFull {
-  episodes?: Array<{ id: string }> | null
   novelPromotionData?: {
     videoModel?: string | null
+    episodes?: Array<{ id: string }> | null
   } | null
 }
 
@@ -73,7 +73,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
 export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLikeFull | undefined
-  const firstEpisodeId = project?.episodes?.[0]?.id ?? null
+  const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
 
   const storyboardsQuery = useStoryboards(firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
