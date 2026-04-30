@@ -76,6 +76,7 @@ export const TASK_TYPE = {
   ASSET_HUB_REFERENCE_TO_CHARACTER: 'asset_hub_reference_to_character',
   VIDEO_MULTI_SHOT: 'video_multi_shot',
   VIDEO_EDITOR_RENDER: 'video_editor_render',
+  EPISODE_STITCH_MP4: 'episode_stitch_mp4',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

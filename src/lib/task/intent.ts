@@ -61,6 +61,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER]: 'process',
   [TASK_TYPE.VIDEO_MULTI_SHOT]: 'generate',
   [TASK_TYPE.VIDEO_EDITOR_RENDER]: 'process',
+  [TASK_TYPE.EPISODE_STITCH_MP4]: 'process',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {

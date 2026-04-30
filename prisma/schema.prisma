@@ -164,6 +164,10 @@ model NovelPromotionEpisode {
   audioMediaId            String?
   audioMedia              MediaObject?               @relation("NovelPromotionEpisodeAudioMedia", fields: [audioMediaId], references: [id], onDelete: SetNull)
   srtContent              String?                    @db.Text
+  // Phase 12.7.x — FFmpeg full-episode stitch output
+  stitchedVideoUrl        String?                    @db.Text
+  stitchStatus            String? // pending | rendering | completed | failed
+  stitchedAt              DateTime?
   createdAt               DateTime                   @default(now())
   updatedAt               DateTime                   @default(now()) @updatedAt
   speakerVoices           String?                    @db.Text

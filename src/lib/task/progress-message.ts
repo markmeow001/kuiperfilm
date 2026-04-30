@@ -39,6 +39,8 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   [TASK_TYPE.ASSET_HUB_AI_MODIFY_LOCATION]: 'progress.taskType.assetHubAiModifyLocation',
   [TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER]: 'progress.taskType.assetHubReferenceToCharacter',
   [TASK_TYPE.VIDEO_MULTI_SHOT]: 'progress.taskType.videoMultiShot',
+  [TASK_TYPE.EPISODE_STITCH_MP4]: 'progress.taskType.episodeStitchMp4',
+  [TASK_TYPE.VIDEO_EDITOR_RENDER]: 'progress.taskType.videoEditorRender',
 }
 
 const STAGE_LABELS: Record<string, string> = {

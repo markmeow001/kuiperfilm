@@ -21,7 +21,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-RUN apk add --no-cache tini chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto-cjk
+RUN apk add --no-cache tini chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto-cjk ffmpeg
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 # node_modules（含 devDeps，因为 npm run start 需要 concurrently + tsx）

@@ -19,6 +19,7 @@ import Link from 'next/link'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
+import { useStitchEpisodeMp4 } from '@/lib/query/mutations/episode-stitch-mutations'
 
 interface V2FinalClientProps {
   projectId: string
@@ -36,20 +37,28 @@ interface StoryboardLike {
   panels?: PanelLike[]
 }
 
+interface EpisodeLike {
+  id: string
+  stitchedVideoUrl?: string | null
+  stitchStatus?: string | null
+}
+
 interface ProjectLike {
   novelPromotionData?: {
     videoRatio?: string | null
     targetDuration?: number | null
-    episodes?: Array<{ id: string }> | null
+    episodes?: EpisodeLike[] | null
   } | null
 }
 
 export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLike | undefined
-  const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
+  const firstEpisode = project?.novelPromotionData?.episodes?.[0] ?? null
+  const firstEpisodeId = firstEpisode?.id ?? null
   const storyboardsQuery = useStoryboards(firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
+  const stitchMp4 = useStitchEpisodeMp4(projectId)
 
   const allPanels = useMemo<PanelLike[]>(() => {
     return (storyboardsData?.storyboards ?? []).flatMap((s) => s.panels ?? [])
@@ -171,15 +180,60 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
             </dl>
           </div>
 
-          <button
-            type="button"
-            disabled
-            title="12.7.x 接 FFmpeg 全集合成 pipeline"
-            className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 opacity-60 disabled:cursor-not-allowed"
-          >
-            <AppIcon name="download" className="h-4 w-4" />
-            匯出 MP4 · 1080P
-          </button>
+          {firstEpisode?.stitchedVideoUrl ? (
+            <div className="space-y-2">
+              <video
+                src={firstEpisode.stitchedVideoUrl}
+                controls
+                className="w-full rounded-sm border border-amber-500/30 bg-stone-950"
+              />
+              <a
+                href={firstEpisode.stitchedVideoUrl}
+                download={`episode-${firstEpisode.id}.mp4`}
+                className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
+              >
+                <AppIcon name="download" className="h-4 w-4" />
+                下載成片 MP4
+              </a>
+              <button
+                type="button"
+                disabled={stitchMp4.isPending || !firstEpisodeId || panelsWithVideo.length === 0}
+                onClick={() => firstEpisodeId && stitchMp4.mutate({ episodeId: firstEpisodeId })}
+                className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {stitchMp4.isPending ? '重新合成中…' : '↻ 重新合成'}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={
+                stitchMp4.isPending ||
+                !firstEpisodeId ||
+                panelsWithVideo.length === 0 ||
+                firstEpisode?.stitchStatus === 'rendering'
+              }
+              onClick={() => firstEpisodeId && stitchMp4.mutate({ episodeId: firstEpisodeId })}
+              title={
+                panelsWithVideo.length === 0
+                  ? '需先生成至少 1 個分鏡視頻才能匯出全集'
+                  : 'FFmpeg 把所有分鏡視頻按順序串成一支 mp4 上傳到 R2'
+              }
+              className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="download" className="h-4 w-4" />
+              {stitchMp4.isPending
+                ? '合成中…'
+                : firstEpisode?.stitchStatus === 'rendering'
+                  ? '後台合成中…'
+                  : `匯出 MP4 · ${panelsWithVideo.length} 段`}
+            </button>
+          )}
+          {stitchMp4.isError ? (
+            <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+              {(stitchMp4.error as Error)?.message ?? '合成失敗'}
+            </p>
+          ) : null}
 
           <div className="grid grid-cols-2 gap-2">
             <button

@@ -1,0 +1,82 @@
+/**
+ * Phase 12.7.x — POST /api/novel-promotion/[projectId]/episodes/[episodeId]/stitch-mp4
+ *
+ * Submits an EPISODE_STITCH_MP4 task to the video queue. The worker
+ * downloads every panel videoUrl in the episode, ffmpeg-concats them,
+ * uploads to COS, and writes the URL back to episode.stitchedVideoUrl.
+ *
+ * Returns the standard task envelope so the client can resolve via
+ * resolveTaskResponse / poll runs status.
+ */
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
+import { apiHandler, ApiError, getRequestId } from '@/lib/api-errors'
+import { submitTask } from '@/lib/task/submitter'
+import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
+import { TASK_TYPE } from '@/lib/task/types'
+
+export const POST = apiHandler(async (
+  request: NextRequest,
+  context: { params: Promise<{ projectId: string; episodeId: string }> },
+) => {
+  const { projectId, episodeId } = await context.params
+
+  const authResult = await requireProjectAuthLight(projectId)
+  if (isErrorResponse(authResult)) return authResult
+  const { session } = authResult
+
+  const body = await request.json().catch(() => ({}))
+  const locale = resolveRequiredTaskLocale(request, body as Record<string, unknown>)
+
+  // Verify the episode exists, belongs to this project, and has at least
+  // one panel with a videoUrl (otherwise ffmpeg has nothing to concat).
+  const episode = await prisma.novelPromotionEpisode.findUnique({
+    where: { id: episodeId },
+    select: {
+      id: true,
+      novelPromotionProjectId: true,
+      novelPromotionProject: { select: { projectId: true } },
+      storyboards: {
+        select: {
+          panels: { select: { id: true, videoUrl: true } },
+        },
+      },
+    },
+  })
+
+  if (!episode) {
+    throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_FOUND' })
+  }
+  if (episode.novelPromotionProject?.projectId !== projectId) {
+    throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_IN_PROJECT' })
+  }
+
+  const panelsWithVideo = episode.storyboards
+    .flatMap((sb) => sb.panels)
+    .filter((p) => Boolean(p.videoUrl))
+
+  if (panelsWithVideo.length === 0) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'NO_PANEL_VIDEOS',
+      details: { message: '此 episode 還沒有任何分鏡視頻,請先生成 panel videos' },
+    })
+  }
+
+  const result = await submitTask({
+    userId: session.user.id,
+    locale,
+    requestId: getRequestId(request),
+    projectId,
+    episodeId: episode.id,
+    type: TASK_TYPE.EPISODE_STITCH_MP4,
+    targetType: 'NovelPromotionEpisode',
+    targetId: episode.id,
+    payload: {
+      episodeId: episode.id,
+    },
+    dedupeKey: `episode_stitch_mp4:${episode.id}`,
+  })
+
+  return NextResponse.json(result)
+})

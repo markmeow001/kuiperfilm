@@ -25,7 +25,7 @@ interface V2HomeClientProps {
 interface NovelData {
   novelText?: string | null
   videoModel?: string | null
-  episodes?: Array<{ id: string }> | null
+  episodes?: Array<{ id: string; novelText?: string | null }> | null
 }
 interface ProjectShape {
   name?: string | null
@@ -54,7 +54,11 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
 
   const charCount = charsQuery.data?.length ?? 0
   const locCount = locsQuery.data?.length ?? 0
-  const hasNovelText = Boolean(project?.novelPromotionData?.novelText?.trim())
+  // v2 writes novelText to episodes[0].novelText (project.novelText is never
+  // set because PATCH /api/novel-promotion/[id] silently drops the field).
+  const episodeNovelText = project?.novelPromotionData?.episodes?.[0]?.novelText ?? null
+  const projectNovelText = project?.novelPromotionData?.novelText ?? null
+  const hasNovelText = Boolean((episodeNovelText ?? projectNovelText)?.trim())
 
   const stepStatus: Record<V2StepId, 'done' | 'in-progress' | 'todo'> = {
     home: 'done',

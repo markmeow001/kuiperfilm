@@ -18,6 +18,7 @@ import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { getProviderConfig } from '@/lib/api-config'
 import { handleMultiShotVideoTask } from './handlers/multi-shot-video-handler'
 import { handleVideoEditorRenderTask } from './handlers/video-editor-render'
+import { handleEpisodeStitchMp4Task } from './handlers/episode-stitch-ffmpeg'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 type AnyObj = Record<string, unknown>
@@ -314,6 +315,8 @@ async function processVideoTask(job: Job<TaskJobData>) {
       return await handleMultiShotVideoTask(job)
     case TASK_TYPE.VIDEO_EDITOR_RENDER:
       return await handleVideoEditorRenderTask(job)
+    case TASK_TYPE.EPISODE_STITCH_MP4:
+      return await handleEpisodeStitchMp4Task(job)
     default:
       throw new Error(`Unsupported video task type: ${job.data.type}`)
   }
