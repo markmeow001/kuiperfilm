@@ -556,6 +556,107 @@
   - 變動：`asset-hub-image-task-handler` / `reference-to-character` 等順手砍 `getArtStylePrompt` 的 handler 雖功能正確，但 reviewer 提醒目前測試覆蓋只到 happy path，缺「styleProfile null 時 fallback 不再 inject artStyle string」的 negative case
   - 驗收：每個改過的 handler 都至少有一個「styleProfile null + 確保 prompt 不含 artStyle 字串」的 unit test；coverage 達 80%
 
+### Phase 12 New UI Pivot（基于 docs/ui-redesign/，**user 2026-04-30 拍板**）
+
+#### 背景
+
+11.x 系列(11.5/11.1/11.2 已完成,11.3/11.4 ⏸)已经把 backend 能力堆得够用 — multi-shot handler、22 styleProfile preset、character junction、tencent-vod audio fix 都已就位。但现有 frontend 是线性 stage navigation,user demo 时发现:
+- 跟 Kino 视界 2.0 比起来「丑」「找不到东西」(整体 UX 不专业)
+- multi-shot / 角色一致性等 advance feature 没 UI 入口
+- styleProfile picker / 角色 regenerate 等关键 entry point 隐蔽
+
+User 自己用 Claude 写了完整 UI 重设计规格,放在 `docs/ui-redesign/`(8 screens + design system + 4 phase plan),目标对标 Kino 4-Agent 架构 + drama-workshop 多 character schema + KuiperAI 既有 BCP 批量能力。User 也提供了具体 mockup `~/Downloads/kino_mockup.jsx`(已 ported 到 `/zh/preview` 路由)。
+
+**Why pivot now:** user 明确说「目标不是 demo,要真实可用」。继续在现有线性 UI 加大 feature 等于「以后新 UI 起来再做一遍」,浪费 30-40% 工。直接重做 frontend layout(backend 不改,api/schema/worker 全部沿用)更快到 production。
+
+**How to apply:** Phase 12 在 `feature/phase-11` 之后另起一个 branch,或直接在同 branch 增加 v2 路由。**不砍现有 `/workspace/[id]`**(留作 fallback,避免破坏正在跑的 demo 用户)。所有新功能都做在 `/v2/workspace/[id]` 下。
+
+#### Phase 12.0 master plan 增补 + task tree
+
+(本节)— 把 pivot 决定记录,对齐 docs/ui-redesign/ 跟现有 Phase 11.x 工作。
+
+#### Phase 12.1 抽 Sidebar + TopBar 为 reusable component
+
+`/preview/page.tsx` 内的 Sidebar(264px,Logo + 6 step + user block)跟 TopBar(STEP 编号 + 标题 + 进度条)抽成 `src/components/v2/Sidebar.tsx` + `src/components/v2/TopBar.tsx`。参数化 STEPS、active step、project name、进度。先用假资料,12.3+ 接真 project。
+
+**验收:** 两个 component 可被 mockup `/preview` 直接用,且 TS clean。
+
+#### Phase 12.2 建 /v2/workspace/[projectId] 路由 + 6 page skeleton
+
+Next.js app router:
+```
+src/app/[locale]/v2/workspace/[projectId]/
+├── layout.tsx                  Sidebar + TopBar shell
+├── page.tsx                    redirect to /script(or home)
+├── home/page.tsx              首页 OPC vs BCP
+├── script/page.tsx            剧本(替代 NovelInputStage)
+├── subjects/page.tsx          主体(替代 AssetsStage)
+├── storyboard/page.tsx        分镜(替代 StoryboardStage)
+├── voice/page.tsx             配音
+└── final/page.tsx             成片
+```
+
+每个 page 先 import Sidebar/TopBar + 假内容,接资料留 12.3+。
+
+**验收:** 6 个 page 都可访问,sidebar step 切换正确 highlight。
+
+#### Phase 12.3 ScriptPage 接资料(剧本 / 故事 stage)
+
+把 mockup 的 ScriptPage 接 `useNovelPromotionProject` + 上传小说 + 4 种起始方式 + 「生成剧本」mutation。画面比例 / 风格 chip 改用 22 个 styleProfile preset(下拉或 popover)。
+
+**验收:** 进 /v2/.../script 可输入小说 → 触发既有 LLM pipeline → 看到 AI Draft 分镜结果。
+
+#### Phase 12.4 SubjectsPage 接资料(角色 / 场景 / 道具)
+
+Tabs 切换 character / location / prop。Grid 显示卡片(复用现有 character-list / location-list API)。每张卡有「重新生成」「锁定」(== confirm character_profile_confirm)。「进入分镜」按钮接 router.push storyboard。
+
+**验收:** 角色/场景资产看得到、可重生、可锁定。
+
+#### Phase 12.5 StoryboardPage 接资料 + multi-shot 整合 ⭐
+
+**这是 Phase 12 最核心的 feature**:
+
+3 栏 layout(左 prompt builder / 中 multi-model output / 右 inspector + cast + audio + notes)。接现有 storyboard panel API。**重点是 multi-shot 自动整合**:
+
+1. LLM 分镜阶段(已有 `multi_shot_group` placeholder tag)依语意自动 group 2-3 panel(同场景 / 连续动作)
+2. 每组送一个 multi-shot=intelligence task 给 Kling 3.0 / Omni
+3. SubjectInfos 自动从 `EpisodeCharacter` junction 填(character.name + character.imageUrl)
+4. 20-25 panel 短剧预期切成 ~10 个 multi-shot tasks,角色一致性靠 SubjectInfos 维持
+
+`/api/.../generate-multi-shot-video` 已存在(平行 session 写),只需 UI 接通 + LLM prompt 加 group 标记逻辑。
+
+**验收:** 一段 90 秒短剧(20-25 panel)→ 点「批量生成」→ 自动分组 → 出 ~10 个连贯 multi-shot 视频,角色跨镜不飘。
+
+#### Phase 12.6 VoicePage 接资料(配音)
+
+Filter rail(性别 / 情绪)+ voice grid(复用现有 voice 管理 API)。Tuning slider(情绪强度 / 语速 / 语调)接 panel-level voice config。
+
+**验收:** 选 voice → 试听 → 套用至「全部」生成 audio + 关联到对应 panel。
+
+#### Phase 12.7 FinalPage 接资料(成片)
+
+Player + timeline + 导出 mp4。复用现有 video editor 逻辑(srt / FFmpeg pipeline)。Stats panel 显示总分镜 / 总时长 / 解析度 / 风格。
+
+**验收:** 看到完整短剧播放 + 可下载 1080P mp4。
+
+#### Phase 12.8 切换 default route → /v2/workspace
+
+Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/workspace/[id]` 保留作 fallback。所有新建 project flow 走 /v2。
+
+**验收:** 新用户 / 已有用户进 dashboard 点 project,默认进新 UI。
+
+#### Phase 12 推进顺序
+
+12.0 → 12.1 → 12.2 → 12.3 → 12.4 → 12.5 ⭐ → 12.6 → 12.7 → 12.8
+
+预估 2-3 周(单 dev + Claude Code,一次只做一个子任务,每子任务都通 type-check + 部分 e2e + commit + push)。
+
+#### Phase 12 跟 Phase 11.3 / 11.4 的关系
+
+- **11.3 道具 first-class** ⏸ — 12.4 SubjectsPage 的「道具」tab 等于 11.3 的 UI;backend 11.3 schema 改动可在 12.4 同时做
+- **11.4 角色三视图** ⏸ — 12.5 multi-shot 的角色一致性靠 SubjectInfos 已够,11.4 的「frontView/sideView/backView」是更深的 character.imageUrl 多视角扩展,可推迟到 Phase 13
+- **11.1.5 / 11.2.5 follow-up debt** ⏸ — 12 系列做完会替换掉这些子任务的 UI,debt 可一次清
+
 ### Phase 11 推进顺序建议
 
 按风险与价值排序：
