@@ -19,6 +19,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
 import { useRegenerateSingleCharacterImage } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useRegenerateSingleLocationImage } from '@/lib/query/mutations/location-image-mutations'
+import { useConfirmProjectCharacterProfile } from '@/lib/query/mutations/character-profile-mutations'
 
 type Tab = 'character' | 'scene' | 'prop'
 
@@ -33,6 +34,7 @@ interface CharacterLike {
   role?: string | null
   description?: string | null
   imageUrl?: string | null
+  profileConfirmed?: boolean | null
   appearances?: Array<{
     id: string
     appearanceIndex?: number
@@ -72,6 +74,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const locationsQuery = useProjectLocations(projectId)
   const regenChar = useRegenerateSingleCharacterImage(projectId)
   const regenLoc = useRegenerateSingleLocationImage(projectId)
+  const confirmProfile = useConfirmProjectCharacterProfile(projectId)
 
   const characters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
   const locations = (locationsQuery.data ?? []) as unknown as LocationLike[]
@@ -87,6 +90,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
 
   function handleRegenLoc(l: LocationLike) {
     regenLoc.mutate({ locationId: l.id, imageIndex: 0 })
+  }
+
+  function handleConfirmProfile(c: CharacterLike) {
+    if (c.profileConfirmed) return // already locked — no-op (un-lock not exposed yet)
+    confirmProfile.mutate({ characterId: c.id, generateImage: false })
   }
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
@@ -137,6 +145,9 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             imageUrl: pickCharacterImage(c),
             onRegenerate: () => handleRegenChar(c),
             isRegenerating: regenChar.isPending,
+            isLocked: Boolean(c.profileConfirmed),
+            onLock: () => handleConfirmProfile(c),
+            isLocking: confirmProfile.isPending,
           }))}
           emptyHint="此項目還沒有角色 — 請先回劇本 step 跑 LLM 分析"
         />
@@ -172,6 +183,9 @@ interface SubjectItem {
   imageUrl: string | null
   onRegenerate?: () => void
   isRegenerating?: boolean
+  isLocked?: boolean
+  onLock?: () => void
+  isLocking?: boolean
 }
 
 function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: string }) {
@@ -229,7 +243,23 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
               >
                 {item.isRegenerating ? '提交中…' : '重新生成'}
               </button>
-              <span className="font-mono text-[10px] tracking-wider text-amber-500/70">✓ 鎖定</span>
+              {item.onLock ? (
+                <button
+                  type="button"
+                  disabled={item.isLocking || item.isLocked}
+                  onClick={item.onLock}
+                  title={item.isLocked ? '已鎖定 — 之後分鏡會優先綁定此角色檔案' : '鎖定後分鏡會優先綁定此角色檔案'}
+                  className={`font-mono text-[10px] tracking-wider transition-all disabled:cursor-not-allowed ${
+                    item.isLocked
+                      ? 'text-amber-400'
+                      : 'text-stone-500 hover:text-amber-400'
+                  } ${item.isLocking ? 'opacity-50' : ''}`}
+                >
+                  {item.isLocking ? '鎖定中…' : item.isLocked ? '✓ 已鎖定' : '⊙ 鎖定'}
+                </button>
+              ) : (
+                <span className="font-mono text-[10px] tracking-wider text-stone-700">—</span>
+              )}
             </div>
           ) : null}
         </div>

@@ -9,7 +9,7 @@
  * only for now (12.6.x will bind to panel-level voice config).
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useGlobalVoices } from '@/lib/query/hooks/useGlobalAssets'
 
@@ -36,6 +36,17 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
   const [emotionFilter, setEmotionFilter] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [playingId, setPlayingId] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Pause + clear ref on unmount so audio doesn't keep playing after navigation.
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+    }
+  }, [])
 
   const filtered = useMemo(() => {
     return voices.filter((v) => {
@@ -47,14 +58,29 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
 
   function handlePlay(id: string, audioUrl: string | null | undefined) {
     if (!audioUrl) return
+    // Stop any audio currently playing (single-track behaviour).
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
     if (playingId === id) {
       setPlayingId(null)
       return
     }
     const audio = new Audio(audioUrl)
-    audio.onended = () => setPlayingId(null)
-    audio.onerror = () => setPlayingId(null)
-    void audio.play()
+    audio.onended = () => {
+      setPlayingId((current) => (current === id ? null : current))
+      if (audioRef.current === audio) audioRef.current = null
+    }
+    audio.onerror = () => {
+      setPlayingId((current) => (current === id ? null : current))
+      if (audioRef.current === audio) audioRef.current = null
+    }
+    audioRef.current = audio
+    void audio.play().catch(() => {
+      setPlayingId((current) => (current === id ? null : current))
+      if (audioRef.current === audio) audioRef.current = null
+    })
     setPlayingId(id)
   }
 

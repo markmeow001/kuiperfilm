@@ -14,7 +14,7 @@ export default async function V2FinalPage({ params }: PageProps) {
       currentStep="final"
       draftNumber={6}
     >
-      <V2FinalClient projectId={projectId} />
+      <V2FinalClient projectId={projectId} locale={locale} />
     </V2WorkspaceShell>
   )
 }

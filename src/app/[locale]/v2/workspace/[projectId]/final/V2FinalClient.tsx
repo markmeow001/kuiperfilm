@@ -15,12 +15,14 @@
  */
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 
 interface V2FinalClientProps {
   projectId: string
+  locale: string
 }
 
 interface PanelLike {
@@ -42,7 +44,7 @@ interface ProjectLike {
   } | null
 }
 
-export function V2FinalClient({ projectId }: V2FinalClientProps) {
+export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLike | undefined
   const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
@@ -183,17 +185,17 @@ export function V2FinalClient({ projectId }: V2FinalClientProps) {
             <button
               type="button"
               disabled
+              title="12.7.x 接 zip 打包 storyboard 圖 + 視頻"
               className="rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 opacity-60"
             >
               下載分鏡素材
             </button>
-            <button
-              type="button"
-              disabled
-              className="rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 opacity-60"
+            <Link
+              href={`/${locale}/v2/workspace/${projectId}/script`}
+              className="flex items-center justify-center rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400"
             >
               查看劇本
-            </button>
+            </Link>
           </div>
 
           <div className="rounded-sm border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-rose-900/10 p-4">
