@@ -12,6 +12,7 @@ export interface StyleProfileUpdatePayload {
   stylePositivePrompt?: string | null
   styleNegativePrompt?: string | null
   styleReferenceImages?: string[] | null
+  stylePresetKey?: string | null
 }
 
 export interface StyleProfileUpdateResponse {

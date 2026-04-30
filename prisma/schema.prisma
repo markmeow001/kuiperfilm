@@ -296,6 +296,10 @@ model NovelPromotionProject {
   stylePositivePrompt   String?             @db.Text
   styleNegativePrompt   String?             @db.Text
   styleReferenceImages  String?             @db.Text // JSON array of MediaObject ids
+  // Phase 11.5+ preset tracking: which preset card the user clicked.
+  // Lets the picker UI highlight the active preset across reloads
+  // without having to fuzzy-match on the prompt text.
+  stylePresetKey        String?
   characterModel  String? // 用户配置的角色图片模型
   locationModel   String? // 用户配置的场景图片模型
   storyboardModel String? // 用户配置的分镜图片模型

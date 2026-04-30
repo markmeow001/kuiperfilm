@@ -3,19 +3,25 @@
 /**
  * Phase 11.5 — StyleProfilePanel
  *
- * Project 级 styleProfile 编辑面板：
- *  - Preset selector（4 个 preset → 点击填入两个 textarea）
- *  - stylePositivePrompt textarea + char count + 软上限 8000 提示
- *  - styleNegativePrompt textarea 同上
- *  - styleReferenceImages：MediaObject id 列表（手工输入或后续接入 uploader）
- *  - Save 按钮调用 useUpdateStyleProfile mutation
+ * Project-level styleProfile editor:
+ *  - 22 preset cards in 6 categories (handled by StyleProfilePresetPicker)
+ *  - Clicking a preset is the save: writes stylePresetKey + positive/negative
+ *    prompts to the server in one shot, no separate "Save" button required.
+ *  - The selected preset stays visually highlighted across reloads because
+ *    we round-trip stylePresetKey through the DB.
+ *  - Free-form prompts and reference image ids are still editable below
+ *    for power users; the lower "Save manual edits" button covers that path.
  */
 
 import { useState, useMemo, useEffect, type ChangeEvent } from 'react'
 import { useUpdateStyleProfile } from '@/lib/query/mutations/updateStyleProfile'
 import { useStyleProfile } from '@/lib/query/hooks/useStyleProfile'
 import { StyleProfilePresetPicker } from './StyleProfilePresetPicker'
-import type { PresetKey, StylePresetEntry } from '@/lib/style-profile/presets'
+import {
+  STYLE_PROFILE_PRESETS,
+  type PresetKey,
+  type StylePresetEntry,
+} from '@/lib/style-profile/presets'
 
 const PROMPT_SOFT_LIMIT = 8000
 
@@ -31,29 +37,31 @@ interface CharCountHintProps {
 function CharCountHint({ count, limit }: CharCountHintProps) {
   const exceeded = count > limit
   return (
-    <span className={exceeded ? 'text-red-600' : 'text-gray-500'}>
+    <span className={exceeded ? 'text-[var(--glass-tone-danger-fg)]' : 'text-[var(--glass-text-tertiary)]'}>
       {count}/{limit} chars{exceeded ? ' (exceeds soft limit)' : ''}
     </span>
   )
 }
 
 export function StyleProfilePanel({ projectId }: StyleProfilePanelProps) {
-  // Q-008: prefill from server so opening the panel shows previously-saved values
-  // and Save no longer wipes existing data.
   const styleProfileQuery = useStyleProfile(projectId)
   const [positivePrompt, setPositivePrompt] = useState<string>('')
   const [negativePrompt, setNegativePrompt] = useState<string>('')
   const [referenceImagesText, setReferenceImagesText] = useState<string>('')
+  const [selectedPresetKey, setSelectedPresetKey] = useState<PresetKey | null>(null)
   const [hasInitialized, setHasInitialized] = useState(false)
 
-  // Initialize textareas once the GET response arrives. Subsequent invalidations
-  // (e.g. after Save) refresh the cache but we do NOT clobber unsaved edits.
+  // Initialize once from server.
   useEffect(() => {
     if (hasInitialized) return
     if (!styleProfileQuery.data) return
     setPositivePrompt(styleProfileQuery.data.stylePositivePrompt ?? '')
     setNegativePrompt(styleProfileQuery.data.styleNegativePrompt ?? '')
     setReferenceImagesText((styleProfileQuery.data.styleReferenceImages ?? []).join('\n'))
+    const storedKey = styleProfileQuery.data.stylePresetKey
+    setSelectedPresetKey(
+      storedKey && storedKey in STYLE_PROFILE_PRESETS ? (storedKey as PresetKey) : null,
+    )
     setHasInitialized(true)
   }, [hasInitialized, styleProfileQuery.data])
 
@@ -73,24 +81,50 @@ export function StyleProfilePanel({ projectId }: StyleProfilePanelProps) {
   const negativeExceeded = negativeCount > PROMPT_SOFT_LIMIT
   const canSave = !positiveExceeded && !negativeExceeded && !mutation.isPending
 
+  // Preset click = instant save. We update local state and fire the mutation
+  // in the same tick so the picker can light up the selected card immediately.
   const handleApplyPreset = (preset: StylePresetEntry & { key: PresetKey }) => {
     setPositivePrompt(preset.positivePrompt)
     setNegativePrompt(preset.negativePrompt)
+    setSelectedPresetKey(preset.key)
+    mutation.mutate({
+      stylePositivePrompt: preset.positivePrompt,
+      styleNegativePrompt: preset.negativePrompt,
+      styleReferenceImages: referenceImageIds.length > 0 ? referenceImageIds : null,
+      stylePresetKey: preset.key,
+    })
   }
 
-  const handleSave = () => {
+  // Manual edits below the picker still need an explicit save because the
+  // user is mid-typing; we don't fire on every keystroke.
+  const handleSaveManualEdits = () => {
     mutation.mutate({
       stylePositivePrompt: positivePrompt.length > 0 ? positivePrompt : null,
       styleNegativePrompt: negativePrompt.length > 0 ? negativePrompt : null,
       styleReferenceImages: referenceImageIds.length > 0 ? referenceImageIds : null,
+      // Manual edits drift away from any preset → drop the link so the picker
+      // stops showing a stale selection.
+      stylePresetKey: null,
     })
+    setSelectedPresetKey(null)
   }
 
   const handleClearAll = () => {
     setPositivePrompt('')
     setNegativePrompt('')
     setReferenceImagesText('')
+    setSelectedPresetKey(null)
+    mutation.mutate({
+      stylePositivePrompt: null,
+      styleNegativePrompt: null,
+      styleReferenceImages: null,
+      stylePresetKey: null,
+    })
   }
+
+  const selectedPresetLabel = selectedPresetKey
+    ? STYLE_PROFILE_PRESETS[selectedPresetKey].zhLabel
+    : null
 
   return (
     <div className="space-y-5 rounded-2xl border-2 border-[var(--glass-stroke-focus)] bg-[var(--glass-bg-surface)] p-5 shadow-[var(--glass-shadow-md)]">
@@ -98,8 +132,20 @@ export function StyleProfilePanel({ projectId }: StyleProfilePanelProps) {
         <div>
           <h3 className="text-lg font-semibold text-[var(--glass-text-primary)]">視覺風格 / Style Profile</h3>
           <p className="mt-1 text-xs text-[var(--glass-text-tertiary)]">
-            這個風格會套用到全片每張圖跟每段影片的生成。請先選一個 preset,系統會在每個 prompt 前面自動加上對應的風格描述。
+            點選任一張卡片即套用並自動儲存,該風格會在後續所有圖片 / 影片生成時自動加進 prompt。
           </p>
+          {selectedPresetLabel ? (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-full border border-[var(--glass-stroke-focus)] bg-[var(--glass-tone-info-bg)] px-3 py-1 text-xs font-medium text-[var(--glass-tone-info-fg)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--glass-tone-info-fg)]" />
+              目前風格:<strong className="font-semibold">{selectedPresetLabel}</strong>
+              {mutation.isPending ? <span className="text-[10px] opacity-70">儲存中…</span> : null}
+            </p>
+          ) : (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-full border border-[var(--glass-stroke-warning)] bg-[var(--glass-tone-warning-bg)] px-3 py-1 text-xs font-medium text-[var(--glass-tone-warning-fg)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--glass-tone-warning-fg)]" />
+              尚未選擇風格
+            </p>
+          )}
         </div>
         <span className="shrink-0 rounded-full border border-[var(--glass-stroke-focus)] bg-[var(--glass-tone-info-bg)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--glass-tone-info-fg)]">
           開始前必選
@@ -107,87 +153,89 @@ export function StyleProfilePanel({ projectId }: StyleProfilePanelProps) {
       </header>
 
       <section className="rounded-xl bg-[var(--glass-bg-muted)] p-4">
-        <h4 className="mb-3 text-sm font-semibold text-[var(--glass-text-primary)]">
-          快速套用 preset(直接點下方任一個)
-        </h4>
-        <StyleProfilePresetPicker onSelect={handleApplyPreset} disabled={mutation.isPending} />
-      </section>
-
-      <section>
-        <label className="mb-1 flex items-center justify-between text-sm font-medium">
-          <span>Positive prompt</span>
-          <CharCountHint count={positiveCount} limit={PROMPT_SOFT_LIMIT} />
-        </label>
-        <textarea
-          className="w-full rounded border border-gray-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
-          rows={5}
-          value={positivePrompt}
-          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setPositivePrompt(e.target.value)}
-          placeholder="Describe the global art style you want every panel to follow."
+        <StyleProfilePresetPicker
+          onSelect={handleApplyPreset}
+          disabled={mutation.isPending}
+          selectedKey={selectedPresetKey}
         />
       </section>
 
-      <section>
-        <label className="mb-1 flex items-center justify-between text-sm font-medium">
-          <span>Negative prompt</span>
-          <CharCountHint count={negativeCount} limit={PROMPT_SOFT_LIMIT} />
-        </label>
-        <textarea
-          className="w-full rounded border border-gray-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
-          rows={4}
-          value={negativePrompt}
-          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setNegativePrompt(e.target.value)}
-          placeholder="Things to avoid (only applied if the chosen model supports negative prompt)."
-        />
-      </section>
+      <details className="rounded-xl border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)]/60">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-[var(--glass-text-secondary)]">
+          進階手動編輯 prompt(可選)
+        </summary>
+        <div className="space-y-4 px-4 pb-4">
+          <section>
+            <label className="mb-1 flex items-center justify-between text-sm font-medium text-[var(--glass-text-primary)]">
+              <span>Positive prompt</span>
+              <CharCountHint count={positiveCount} limit={PROMPT_SOFT_LIMIT} />
+            </label>
+            <textarea
+              className="w-full rounded border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-2 text-sm text-[var(--glass-text-primary)] focus:border-[var(--glass-stroke-focus)] focus:outline-none"
+              rows={5}
+              value={positivePrompt}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setPositivePrompt(e.target.value)}
+              placeholder="Describe the global art style you want every panel to follow."
+            />
+          </section>
 
-      <section>
-        <label className="mb-1 flex items-center justify-between text-sm font-medium">
-          <span>Reference image media ids</span>
-          <span className="text-gray-500">{referenceImageIds.length} item(s)</span>
-        </label>
-        <textarea
-          className="w-full rounded border border-gray-300 p-2 text-sm focus:border-blue-500 focus:outline-none"
-          rows={3}
-          value={referenceImagesText}
-          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setReferenceImagesText(e.target.value)}
-          placeholder="One MediaObject id per line. Upload images via the asset hub and paste their ids here."
-        />
-        <p className="mt-1 text-xs text-gray-500">
-          Comma- or newline-separated. Only applied when the chosen model supports reference images.
-        </p>
-      </section>
+          <section>
+            <label className="mb-1 flex items-center justify-between text-sm font-medium text-[var(--glass-text-primary)]">
+              <span>Negative prompt</span>
+              <CharCountHint count={negativeCount} limit={PROMPT_SOFT_LIMIT} />
+            </label>
+            <textarea
+              className="w-full rounded border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-2 text-sm text-[var(--glass-text-primary)] focus:border-[var(--glass-stroke-focus)] focus:outline-none"
+              rows={4}
+              value={negativePrompt}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setNegativePrompt(e.target.value)}
+              placeholder="Things to avoid (only applied if the chosen model supports negative prompt)."
+            />
+          </section>
+
+          <section>
+            <label className="mb-1 flex items-center justify-between text-sm font-medium text-[var(--glass-text-primary)]">
+              <span>Reference image media ids</span>
+              <span className="text-[var(--glass-text-tertiary)]">{referenceImageIds.length} item(s)</span>
+            </label>
+            <textarea
+              className="w-full rounded border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-surface)] p-2 text-sm text-[var(--glass-text-primary)] focus:border-[var(--glass-stroke-focus)] focus:outline-none"
+              rows={3}
+              value={referenceImagesText}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setReferenceImagesText(e.target.value)}
+              placeholder="One MediaObject id per line. Upload images via the asset hub and paste their ids here."
+            />
+            <p className="mt-1 text-xs text-[var(--glass-text-tertiary)]">
+              Comma- or newline-separated. Only applied when the chosen model supports reference images.
+            </p>
+          </section>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              disabled={!canSave}
+              onClick={handleSaveManualEdits}
+              className="rounded-lg bg-[var(--glass-accent-from)] px-4 py-2 text-sm font-medium text-[var(--glass-text-on-accent)] transition hover:bg-[var(--glass-accent-to)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {mutation.isPending ? '儲存中…' : '儲存手動編輯'}
+            </button>
+            <button
+              type="button"
+              disabled={mutation.isPending}
+              onClick={handleClearAll}
+              className="rounded-lg border border-[var(--glass-stroke-base)] px-4 py-2 text-sm text-[var(--glass-text-secondary)] transition hover:border-[var(--glass-stroke-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              清除全部
+            </button>
+          </div>
+        </div>
+      </details>
 
       {mutation.isError ? (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg border border-[var(--glass-stroke-danger)] bg-[var(--glass-tone-danger-bg)] px-3 py-2 text-sm text-[var(--glass-tone-danger-fg)]">
           {(mutation.error as Error)?.message ?? 'Failed to save style profile.'}
         </p>
       ) : null}
-
-      {mutation.isSuccess ? (
-        <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
-          Style profile saved.
-        </p>
-      ) : null}
-
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={!canSave}
-          onClick={handleSave}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {mutation.isPending ? 'Saving…' : 'Save'}
-        </button>
-        <button
-          type="button"
-          disabled={mutation.isPending}
-          onClick={handleClearAll}
-          className="rounded border border-gray-300 px-4 py-2 text-sm transition hover:border-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Clear all
-        </button>
-      </div>
     </div>
   )
 }

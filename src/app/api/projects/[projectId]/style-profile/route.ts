@@ -23,6 +23,9 @@ const styleProfileBodySchema = z
         z.null(),
       ])
       .optional(),
+    stylePresetKey: z
+      .union([z.string().max(64), z.null()])
+      .optional(),
   })
   .strict()
 
@@ -90,6 +93,7 @@ export const GET = apiHandler(async (
       stylePositivePrompt: true,
       styleNegativePrompt: true,
       styleReferenceImages: true,
+      stylePresetKey: true,
     },
   })
 
@@ -106,6 +110,7 @@ export const GET = apiHandler(async (
       stylePositivePrompt: novelData.stylePositivePrompt,
       styleNegativePrompt: novelData.styleNegativePrompt,
       styleReferenceImages: parseReferenceImagesField(novelData.styleReferenceImages),
+      stylePresetKey: novelData.stylePresetKey,
     },
   })
 })
@@ -157,6 +162,7 @@ export const PATCH = apiHandler(async (
     stylePositivePrompt?: string | null
     styleNegativePrompt?: string | null
     styleReferenceImages?: string | null
+    stylePresetKey?: string | null
   } = {}
 
   if (parsed.stylePositivePrompt !== undefined) {
@@ -168,6 +174,9 @@ export const PATCH = apiHandler(async (
   if (parsed.styleReferenceImages !== undefined) {
     updateData.styleReferenceImages = serializeReferenceImages(parsed.styleReferenceImages) ?? null
   }
+  if (parsed.stylePresetKey !== undefined) {
+    updateData.stylePresetKey = parsed.stylePresetKey
+  }
 
   const updated = await prisma.novelPromotionProject.update({
     where: { id: novelData.id },
@@ -177,6 +186,7 @@ export const PATCH = apiHandler(async (
       stylePositivePrompt: true,
       styleNegativePrompt: true,
       styleReferenceImages: true,
+      stylePresetKey: true,
     },
   })
 
@@ -187,6 +197,7 @@ export const PATCH = apiHandler(async (
       stylePositivePrompt: updated.stylePositivePrompt,
       styleNegativePrompt: updated.styleNegativePrompt,
       styleReferenceImages: updated.styleReferenceImages,
+      stylePresetKey: updated.stylePresetKey,
     },
   })
 })

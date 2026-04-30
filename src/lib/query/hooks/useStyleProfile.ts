@@ -16,6 +16,8 @@ export interface StyleProfileFetched {
   styleNegativePrompt: string | null
   /** Parsed JSON array of MediaObject ids; null when no reference images saved. */
   styleReferenceImages: string[] | null
+  /** Which preset card the user clicked. Null when fully custom / never selected. */
+  stylePresetKey: string | null
 }
 
 interface StyleProfileResponse {
