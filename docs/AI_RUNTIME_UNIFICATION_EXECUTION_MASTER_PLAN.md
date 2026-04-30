@@ -569,7 +569,10 @@
 - 12.7.x FFmpeg 全集合成 + 匯出 mp4
 - 12.5.x video panel 「首尾幀生視頻」 CTA enable
 - 12.5.x prompt builder chips 接 capabilityOverrides PATCH
-- 12.x.x SubjectsPage 「鎖定」chip 接 character_profile_confirm
+- ✅ 12.x.x SubjectsPage 「鎖定」chip 接 character_profile_confirm(commit `e315457`,2026-04-30)
+- ✅ 12.x.x VoicePage audioRef 修正(避免重疊播放 + 換頁不停)(commit `e315457`,2026-04-30)
+- ✅ 12.x.x FinalPage 查看劇本 button → /v2/.../script Link(commit `e315457`,2026-04-30)
+- ✅ 12.x.x v2 client `episodes` path 修正(改讀 `novelPromotionData.episodes`)(commit `9102ee1`,2026-04-30)
 
 (Phase 12 原始規劃保留下方供查閱 — 以下為當初 scope)
 
