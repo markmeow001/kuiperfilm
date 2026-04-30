@@ -41,9 +41,11 @@ export function V2WorkspaceShell({
     router.push(next)
   }
 
+  const legacyHref = `/${locale}/workspace/${projectId}`
+
   return (
     <div className="font-body grain flex min-h-screen bg-stone-950 text-stone-200">
-      <Sidebar currentStep={currentStep} onSelect={handleSelect} />
+      <Sidebar currentStep={currentStep} onSelect={handleSelect} legacyHref={legacyHref} />
       <main className="flex flex-1 flex-col overflow-hidden">
         <TopBar
           currentStep={currentStep}
