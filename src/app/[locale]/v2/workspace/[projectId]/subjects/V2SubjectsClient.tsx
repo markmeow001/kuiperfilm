@@ -216,10 +216,14 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // the worker is in flight, and used as the source of truth for the
   // analyze status banner (instead of the component-local mutation state
   // that resets on unmount).
+  // Query the analyze task scoped to the CURRENT episode so different
+  // episodes can be analyzed in parallel without blocking each other's
+  // banner / button. Falls back to project-level only when there's no
+  // current episode (no episodes yet — analyze is disabled anyway).
   const taskSnapshot = useTaskSnapshot({
     projectId,
-    targetType: 'NovelPromotionProject',
-    targetId: projectId,
+    targetType: currentEpisodeId ? 'NovelPromotionEpisode' : 'NovelPromotionProject',
+    targetId: currentEpisodeId || projectId,
     type: ['analyze_novel'],
   })
   const taskStatus = taskSnapshot.data?.status ?? null

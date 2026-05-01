@@ -22,14 +22,27 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
+  // Scope target to the episode when one is supplied so the V2
+  // SubjectsPage status banner / button-disable logic only sees this
+  // episode's analyze run, not other episodes' parallel runs. Falls
+  // back to project-level scope only for the legacy "no episode"
+  // global analyze (rare; pre-Stage C projects).
+  //
+  // Without this scope-narrowing, the frontend useTaskSnapshot query
+  // matched any analyze_novel task in the project — so kicking off
+  // ep1 analyze blocked the ep2 button (and vice versa) even though
+  // the dedupeKey already permits parallel runs at the BullMQ layer.
+  const taskTarget = episodeId
+    ? { targetType: 'NovelPromotionEpisode' as const, targetId: episodeId }
+    : { targetType: 'NovelPromotionProject' as const, targetId: projectId }
+
   const asyncTaskResponse = await maybeSubmitLLMTask({
     request,
     userId: session.user.id,
     projectId,
     episodeId,
     type: TASK_TYPE.ANALYZE_NOVEL,
-    targetType: 'NovelPromotionProject',
-    targetId: projectId,
+    ...taskTarget,
     routePath: `/api/novel-promotion/${projectId}/analyze`,
     body: {
       ...body,
