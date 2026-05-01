@@ -7,10 +7,11 @@ Input text:
 Existing character library info:
 {characters_lib_info}
 
-Ethnicity default rule:
-1. If the input text explicitly states a character's ethnicity (e.g. "blonde and blue-eyed", "Black bodyguard", "Latina protagonist"), use that — it overrides the default below.
-2. Otherwise default to: {default_ethnicity_hint}
-3. visual_description MUST include an explicit ethnicity descriptor ("Caucasian face", "Han Chinese face", "Hispanic-Latino face", "Black/African face", "mixed-race face", etc). This is required because the downstream image model (Tencent VOD GEM-3.1) is biased toward East Asian faces when ethnicity is unspecified.
+Ethnicity rule (strict priority):
+1. If the input text explicitly states a character's ethnicity (e.g. "blonde and blue-eyed", "Black bodyguard", "Latina protagonist"), use that — overrides everything below.
+2. Judge by DIALOGUE language, not narration/stage-direction language. Screenplays often mix narration (Chinese/English) with dialogue in another language. Example: narration in Chinese with dialogue entirely in Spanish → characters are Hispanic-Latino, NOT Han Chinese. Example: narration in English with dialogue in Japanese → characters are Japanese.
+3. Auto-detected hint (FYI; if it disagrees with what you observe in the dialogue, defer to the dialogue language): {default_ethnicity_hint}
+4. visual_description MUST include an explicit ethnicity descriptor ("Caucasian face", "Han Chinese face", "Hispanic-Latino face", "Black/African face", "mixed-race face", etc). Required because the downstream image model (Tencent VOD GEM-3.1) is biased toward East Asian faces when ethnicity is unspecified.
 
 Goals:
 1. Identify characters that should appear visually.

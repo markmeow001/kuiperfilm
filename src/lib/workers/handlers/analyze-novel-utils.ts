@@ -98,7 +98,11 @@ export function detectScriptEthnicityHint(text: string): {
   if (!text || typeof text !== 'string') {
     return { language: 'unknown', ethnicityHint: '不限種族(原文未指定語言)' }
   }
-  const sample = text.slice(0, 4000)
+  // Larger sample — screenplays often mix narrator/stage directions in
+  // one language with dialogue in another, and the dialogue lines are
+  // shorter than scene descriptions. Want enough text to surface
+  // dialogue markers even when narration dominates the byte count.
+  const sample = text.slice(0, 8000)
   const cjk = (sample.match(/[一-鿿]/g) || []).length
   const hiragana = (sample.match(/[぀-ゟ]/g) || []).length
   const katakana = (sample.match(/[゠-ヿ]/g) || []).length
@@ -109,6 +113,21 @@ export function detectScriptEthnicityHint(text: string): {
     return { language: 'unknown', ethnicityHint: '不限種族(原文未指定語言)' }
   }
 
+  // Pre-check: Spanish-specific markers (¿ ¡ ñ á é í ó ú ü or common
+  // function words) by ABSOLUTE count, not ratio. Screenplays where
+  // narration is in zh/en but dialogue is Spanish would otherwise be
+  // misclassified as zh/en just because narration has more bytes.
+  const spanishMarkers = (sample.match(/[ñáíóúü¿¡]|é(?![a-z])|\b(que|los|las|para|pero|este|esta|cómo|así|porque|también|cuando|hola|gracias|adiós|señor|señora|mira|nada|todo|aquí|amigo|hijo|hija|madre|padre)\b/gi) || []).length
+  if (spanishMarkers >= 15) {
+    return {
+      language: 'es',
+      ethnicityHint: '拉丁裔/Hispanic-Latino(偵測到西班牙語台詞;LLM 請以台詞語言為主)',
+    }
+  }
+
+  // Other Asian scripts: ratio-based since they only appear in their
+  // native scripts (no mixing with another base language for dialogue
+  // is common in our user base).
   if (hangul / total > 0.2) {
     return { language: 'ko', ethnicityHint: '韓國/Korean(東亞面孔)' }
   }
@@ -119,10 +138,9 @@ export function detectScriptEthnicityHint(text: string): {
     return { language: 'zh', ethnicityHint: '華人/East Asian(亞洲面孔,中國/台灣/香港背景)' }
   }
 
-  // Latin-script branch — try to distinguish Spanish from generic English
-  // via a few telltale punctuations and common function words.
-  const spanishMarkers = (sample.match(/[ñáéíóúü¿¡]|\b(que|los|las|para|pero|este|esta|cómo|así|porque|también|cuando)\b/gi) || []).length
-  if (spanishMarkers > 8) {
+  // Lower-threshold Spanish fallback — Latin-script with even modest
+  // Spanish flavour leans Hispanic over default English.
+  if (spanishMarkers >= 5) {
     return { language: 'es', ethnicityHint: '拉丁裔/Hispanic-Latino(西班牙語劇本)' }
   }
 
