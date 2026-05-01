@@ -73,6 +73,20 @@ function withFlowFields(jobData: TaskJobData, payload?: Record<string, unknown> 
       base[key] = value
     }
   }
+  // Preserve meta.locale from jobData on every progress event so the reconcile
+  // / instrumentation re-enqueue paths can still resolve the task locale even
+  // after worker-side progress updates overwrite task.payload via
+  // tryUpdateTaskProgress. Without this, any in-flight task interrupted by a
+  // worker restart fails with a misleading TASK_LOCALE_REQUIRED that masks the
+  // real failure cause.
+  const baseMeta =
+    base.meta && typeof base.meta === 'object' && !Array.isArray(base.meta)
+      ? (base.meta as Record<string, unknown>)
+      : {}
+  base.meta = {
+    ...baseMeta,
+    locale: jobData.locale,
+  }
   return base
 }
 

@@ -24,28 +24,38 @@ const resolveProjectModelCapabilityGenerationOptionsMock = vi.hoisted(() =>
   vi.fn(async () => ({ reasoningEffort: 'high' })),
 )
 const runScriptToStoryboardOrchestratorMock = vi.hoisted(() =>
-  vi.fn(async () => ({
-    clipPanels: [
-      {
-        clipId: 'clip-1',
-        panels: [
-          {
-            panelIndex: 1,
-            shotType: 'close-up',
-            cameraMove: 'static',
-            description: 'panel desc',
-            videoPrompt: 'panel prompt',
-            location: 'room',
-            characters: ['Narrator'],
-          },
-        ],
+  vi.fn(async (params: { onClipComplete?: (entry: unknown) => Promise<void> | void }) => {
+    const clipEntry = {
+      clipId: 'clip-1',
+      finalPanels: [
+        {
+          panelIndex: 1,
+          shotType: 'close-up',
+          cameraMove: 'static',
+          description: 'panel desc',
+          videoPrompt: 'panel prompt',
+          location: 'room',
+          characters: ['Narrator'],
+        },
+      ],
+    }
+    if (params.onClipComplete) {
+      await params.onClipComplete(clipEntry)
+    }
+    return {
+      clipPanels: [
+        {
+          clipId: 'clip-1',
+          panels: clipEntry.finalPanels,
+        },
+      ],
+      summary: {
+        clipCount: 1,
+        totalPanelCount: 1,
+        totalStepCount: 4,
       },
-    ],
-    summary: {
-      totalPanelCount: 1,
-      totalStepCount: 4,
-    },
-  })),
+    }
+  }),
 )
 const graphExecutorMock = vi.hoisted(() => ({
   executePipelineGraph: vi.fn(async (input: {
@@ -71,6 +81,7 @@ const graphExecutorMock = vi.hoisted(() => ({
 
 const parseVoiceLinesJsonMock = vi.hoisted(() => vi.fn())
 const persistStoryboardsAndPanelsMock = vi.hoisted(() => vi.fn())
+const persistSingleClipStoryboardMock = vi.hoisted(() => vi.fn())
 
 const txState = vi.hoisted(() => ({
   createdRows: [] as Array<Record<string, unknown>>,
@@ -85,6 +96,9 @@ const prismaMock = vi.hoisted(() => ({
   },
   novelPromotionEpisode: {
     findUnique: vi.fn(),
+  },
+  novelPromotionStoryboard: {
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
   },
   $transaction: vi.fn(),
 }))
@@ -174,6 +188,7 @@ vi.mock('@/lib/workers/handlers/script-to-storyboard-helpers', () => ({
   parseTemperature: vi.fn(() => 0.7),
   parseVoiceLinesJson: parseVoiceLinesJsonMock,
   persistStoryboardsAndPanels: persistStoryboardsAndPanelsMock,
+  persistSingleClipStoryboard: persistSingleClipStoryboardMock,
   toPositiveInt: (value: unknown) => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return null
     const n = Math.floor(value)
@@ -283,6 +298,10 @@ describe('worker script-to-storyboard behavior', () => {
         panels: [{ id: 'panel-1', panelIndex: 1 }],
       },
     ])
+    persistSingleClipStoryboardMock.mockResolvedValue({
+      storyboardId: 'storyboard-1',
+      panels: [{ id: 'panel-1', panelIndex: 1 }],
+    })
 
     parseVoiceLinesJsonMock.mockReturnValue(baseVoiceRows())
   })
