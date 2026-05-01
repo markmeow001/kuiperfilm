@@ -7,7 +7,8 @@
 # user / project / character / panel row would be gone with no recovery.
 #
 # This script:
-#   1. mysqldump the kuiperai database from the running container
+#   1. mysqldump the database (name from MYSQL_DATABASE in .env.prod,
+#      default "kuiper") from the running container
 #   2. gzip + timestamp the dump
 #   3. upload to a separate R2 bucket (off-host, off-droplet)
 #   4. keep the 14 most recent local copies, prune older
@@ -35,6 +36,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/.env.prod"
 BACKUP_DIR="${SCRIPT_DIR}/backups/db"
 RETENTION_DAYS=14
+# DB name comes from MYSQL_DATABASE in .env.prod (defaults to "kuiper" per
+# docker-compose.prod.yml). Hardcoding "kuiperai" was a porting leftover.
+DB_NAME_DEFAULT="kuiper"
 
 red()    { printf '\033[31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[32m%s\033[0m\n' "$*"; }
@@ -53,13 +57,15 @@ if [[ -z "${MYSQL_ROOT_PASSWORD:-}" ]]; then
   exit 1
 fi
 
+DB_NAME="${MYSQL_DATABASE:-${DB_NAME_DEFAULT}}"
+
 mkdir -p "${BACKUP_DIR}"
 
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
-DUMP_NAME="kuiperai-${TIMESTAMP}.sql.gz"
+DUMP_NAME="${DB_NAME}-${TIMESTAMP}.sql.gz"
 LOCAL_PATH="${BACKUP_DIR}/${DUMP_NAME}"
 
-green "[backup] dumping kuiperai → ${LOCAL_PATH}"
+green "[backup] dumping ${DB_NAME} → ${LOCAL_PATH}"
 
 # Pipe directly through gzip so we don't write the uncompressed dump to disk
 # (saves IO on a swap-strained host).
@@ -70,7 +76,7 @@ docker exec kuiper-mysql mysqldump \
   --events \
   --quick \
   -u root -p"${MYSQL_ROOT_PASSWORD}" \
-  kuiperai \
+  "${DB_NAME}" \
   | gzip -9 \
   > "${LOCAL_PATH}"
 
@@ -99,6 +105,6 @@ fi
 
 # Prune local copies older than RETENTION_DAYS
 yellow "[backup] pruning local copies older than ${RETENTION_DAYS} days"
-find "${BACKUP_DIR}" -name 'kuiperai-*.sql.gz' -mtime "+${RETENTION_DAYS}" -delete -print
+find "${BACKUP_DIR}" -name "${DB_NAME}-*.sql.gz" -mtime "+${RETENTION_DAYS}" -delete -print
 
 green "[backup] done"
