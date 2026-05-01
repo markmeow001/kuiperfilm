@@ -251,10 +251,12 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
         characterId: created.id,
         appearanceIndex: 0, // PRIMARY_APPEARANCE_INDEX
         changeReason: initialChangeReason,
-        // image-urls contract requires a JSON-string in DB even when
-        // empty; null breaks attachMediaFieldsToProject and cascades a
-        // 500 to the project /data endpoint.
+        // image-urls contract requires JSON-strings in DB for both
+        // imageUrls AND previousImageUrls — null on either field breaks
+        // attachMediaFieldsToProject and cascades a 500 to the project
+        // /data endpoint, blanking the v2 home name + step status.
         imageUrls: '[]',
+        previousImageUrls: '[]',
       },
       select: { id: true },
     })
