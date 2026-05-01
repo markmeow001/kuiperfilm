@@ -46,7 +46,7 @@
   - ✅ Phase 11.2: 角色 / 场景跨集共用 UX 强化（P0，含 junction table migration）— 主要 4 個子任務全部 ✅ 完成；本輪只實作 `auto-from-panel` role producer，`manual` / `imported-from-global` 寫入路徑拆 Phase 11.2.5
   - ⏸ Phase 11.2.5: 11.2 follow-up debt（manual character/location editing UI / dead non-junction lookup 清查 / MediaObject 跨用戶限制寫進 08-open-gaps.md）
   - 🔄 Phase 11.3: 道具（Props）first-class asset（P1，新 model）— Stage 1 schema + CRUD API + tests 完成（commit, Session B 2026-04-30）；analyze prompt + worker image gen + V2SubjectsPage UI 待 Session A 收尾後再接
-  - ⏸ Phase 11.4: 角色三视图（全身 → 三视图 → 头像）结构化（P0，跨集一致性核心）
+  - ✅ Phase 11.4: 角色三视图(2026-05-01 Session A `9b68107` 完成 — 重用既有 CHARACTER_REFERENCE_TO_SHEET worker + `CharacterAppearance.imageUrls` JSON array,0 schema 改动)
   - 🔄 Phase 11.5: 风格 lock（正向 + 负向 prompt）（P0，最小可行验证）— 主要 4 個子任務全部 ✅ 完成；末尾留 5 個 P2 ⏸ 子任務（dead i18n key / comment / DB cleanup / asset-hub forward / handler 測試覆蓋）
 - ⚠️ Phase Risk: 一次性切换风险高，必须严格按阶段门禁推进
 - ⚠️ Phase 11 Risk: 11.2 / 11.3 / 11.4 涉及 schema migration，需详细 playbook；11.4 改 character generation pipeline 影响范围大

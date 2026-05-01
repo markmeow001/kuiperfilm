@@ -62,20 +62,8 @@ Stage 2-3 等 Session A 在 v2 创作流程稳定后再接,避免与他们的 ch
 
 ---
 
-### Phase 11.4 角色三视图(front/side/back)schema 待加
+### ~~Phase 11.4 角色三视图~~ — Session A 用不同路径完成(2026-05-01)
 
-User 2026-04-30 拍板:角色升级到三视图(`front` / `side` / `back`),提升 multi-shot 跨镜一致性。
+Session A 在 `9b68107` 把既有 `CHARACTER_REFERENCE_TO_SHEET` worker(已支援 3 视角输出)wire 进 V2CharacterEditModal「上传并转多视角」CTA,重用 `CharacterAppearance.imageUrls` JSON array(3 张图一笔 row),**0 schema 改动**完成需求。
 
-Schema 决策:
-- `CharacterAppearance.viewType String?` (`'front' | 'side' | 'back' | null`),null 代表 legacy 单图
-- `@@unique([characterId, appearanceIndex])` 改成 `@@unique([characterId, appearanceIndex, viewType])`
-- `GlobalCharacterAppearance` 同步加 `viewType`(对称)
-
-Worker 改:
-- `panel-image-task-handler` 按 `panel.shotType` 挑对应视图(正面镜头取 front,侧面镜头取 side)
-- `multi-shot-video-handler` 的 `SubjectInfos.N` 也按视图选
-
-UI:
-- V2SubjectsPage 角色卡展开 = 三视图 grid + 「补生 side / back」按钮(不自动全补,避免 3x credit cost)
-
-**当前阻塞**:Session A 正在 iterate `analyze-novel.ts` + character image generation 的 contract bug(commits `b492fb4` / `6462ee6` / `69df394`)。Phase 11.4 schema 改 `CharacterAppearance` unique key,跟他们正在改的字段直接冲突。等他们收尾后再开。
+跟我之前规划的 `viewType` column 路径不同 — 他们更轻量。Phase 11.4 视为完成,本条移除。
