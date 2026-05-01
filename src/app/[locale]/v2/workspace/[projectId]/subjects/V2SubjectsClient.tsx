@@ -251,10 +251,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
     return set
   }, [activeImageTasks.data])
-  // Poll active tasks every 4s while any are running.
+  // Poll active tasks every 2s while any are running so the overlay
+  // clears within ~2s of the worker marking the task completed (4s
+  // before — overlay lingered too visibly past image arrival).
   useEffect(() => {
     if (serverInflightIds.size === 0) return
-    const interval = setInterval(() => { void activeImageTasks.refetch() }, 4000)
+    const interval = setInterval(() => { void activeImageTasks.refetch() }, 2000)
     return () => clearInterval(interval)
   }, [serverInflightIds.size, activeImageTasks])
   // When server in-flight set drops to 0, also refresh assets so the
@@ -266,6 +268,30 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
     previousServerInflight.current = serverInflightIds.size
   }, [serverInflightIds.size, projectId, queryClient])
+
+  // Sync local regenInFlight against the server-side truth. Without this
+  // the local Set is only cleared by a 5-min safety timeout, so when a
+  // task actually completes in 50s the per-card "生圖中…" overlay
+  // hangs around for the remaining ~4min. We watch the server set: any
+  // appearanceId that WAS in the previous serverInflightIds snapshot but
+  // ISN'T anymore had its task finish (or fail past max attempts), so
+  // it's safe to drop from regenInFlight too.
+  const previousServerIds = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    const dropped = Array.from(previousServerIds.current).filter((id) => !serverInflightIds.has(id))
+    if (dropped.length > 0) {
+      setRegenInFlight((prev) => {
+        if (prev.size === 0) return prev
+        const next = new Set(prev)
+        let changed = false
+        for (const id of dropped) {
+          if (next.delete(id)) changed = true
+        }
+        return changed ? next : prev
+      })
+    }
+    previousServerIds.current = serverInflightIds
+  }, [serverInflightIds])
 
   // Continuous projectAssets polling whenever EITHER set has entries.
   // The earlier client-only-Set version missed analyze-cascade backfill
