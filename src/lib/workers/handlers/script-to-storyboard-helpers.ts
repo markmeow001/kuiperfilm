@@ -26,6 +26,49 @@ export type PersistedStoryboard = {
   }>
 }
 
+/**
+ * 從 LLM 輸出的 source_text 抽出真正的對話。
+ *
+ * Background: agent_storyboard_plan prompt 規定每個 panel 都要有 source_text
+ * (對應原文片段),所以 LLM 把場景描述如「编号1 特写: 一个插着...」也塞進
+ * 這個欄位。我們把整個 source_text 寫進 srtSegment 後,UI 上 SHOT 01 對話框
+ * 就出現了「编号1 特写: ...」這種敘述,user 抗議「這不是對話」。
+ *
+ * 觀察到的兩種模式:
+ *   ❌ 描述行:以「编号N」/「鏡頭N」開頭 + 含 \t scene header
+ *   ✅ 對話行:以說話者名字 + 「:」開頭(NAME: / 中文角色名:)
+ *
+ * 抽法:
+ *   1. 拆 newlines
+ *   2. 找出符合「<說話者>: <內容>」格式的行
+ *   3. 全部都符合或都不符合 → 整段傳回 / null
+ *   4. 部分符合 → 只保留對話行(混合 description+dialogue 的 panel)
+ *
+ * 嚴格 conservative — 寧可漏抽留 null 讓 user 手動補對話,也不要把場景敘述
+ * 當成對話塞進 srtSegment 干擾 voice analyze TTS。
+ */
+export function extractDialogueFromSourceText(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length === 0) return null
+  const SPEAKER_PREFIX = /^([A-ZÁÉÍÓÚÑÄÖÜ一-鿿][A-Za-zÁ-ÿ一-鿿·\s']{0,30})\s*[:：](.+)$/u
+  const dialogueLines = lines.filter((line) => SPEAKER_PREFIX.test(line))
+  if (dialogueLines.length === 0) return null
+  // Strip "编号N" or "鏡頭N" / scene-header artefacts from the captured
+  // dialogue lines just in case the LLM concatenated them onto the same
+  // line (e.g. "编号3 TOBY: ..." — keep only the TOBY: bit).
+  const cleaned = dialogueLines.map((line) => {
+    const match = line.match(SPEAKER_PREFIX)
+    if (!match) return line
+    const speaker = match[1].replace(/^(编号|編號|镜头|鏡頭|Shot|Panel)\s*\d+\s*/i, '').trim()
+    const content = match[2].trim()
+    return speaker ? `${speaker}: ${content}` : content
+  })
+  return cleaned.join('\n')
+}
+
 export function parseEffort(value: unknown): 'minimal' | 'low' | 'medium' | 'high' | null {
   if (value === 'minimal' || value === 'low' || value === 'medium' || value === 'high') return value
   return null
@@ -130,7 +173,7 @@ export async function persistSingleClipStoryboard(
           videoPrompt: panel.video_prompt || null,
           location: panel.location || null,
           characters: panel.characters ? JSON.stringify(panel.characters) : null,
-          srtSegment: panel.source_text || null,
+          srtSegment: extractDialogueFromSourceText(panel.source_text || null),
           photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
           actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
           duration: panel.duration || null,
@@ -242,7 +285,7 @@ export async function persistStoryboardsAndPanels(params: {
             videoPrompt: panel.video_prompt || null,
             location: panel.location || null,
             characters: panel.characters ? JSON.stringify(panel.characters) : null,
-            srtSegment: panel.source_text || null,
+            srtSegment: extractDialogueFromSourceText(panel.source_text || null),
             photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
             actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
             duration: panel.duration || null,
