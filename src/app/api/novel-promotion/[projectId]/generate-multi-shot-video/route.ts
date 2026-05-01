@@ -63,13 +63,72 @@ export const POST = apiHandler(async (
       ? body.multiShotMode
       : undefined
 
-  // Optional intelligence-mode prompt style. Defaults to auto-seedance
-  // in the worker when undefined; only the explicit opt-out value
-  // 'panel-numbered' falls back to the legacy `镜头N:` concatenation.
+  // Optional intelligence-mode prompt style. Defaults to panel-numbered
+  // in the worker when undefined (10s, best for action). Pass
+  // 'auto-seedance' to opt into the 15s Seedance segment format.
   const promptStyle =
     body.promptStyle === 'auto-seedance' || body.promptStyle === 'panel-numbered'
       ? body.promptStyle
       : undefined
+
+  // Optional entity overrides — UI's "swap costume / swap scene view"
+  // affordance per multi-shot call. Shape validated here; existence
+  // checks happen in the worker against project data.
+  let characterOverrides: Array<{ characterId: string; appearanceId?: string }> | undefined
+  if (body.characterOverrides !== undefined) {
+    if (!Array.isArray(body.characterOverrides)) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'CHARACTER_OVERRIDES_INVALID',
+        field: 'characterOverrides',
+      })
+    }
+    const arr: Array<{ characterId: string; appearanceId?: string }> = []
+    for (const o of body.characterOverrides) {
+      if (!o || typeof o !== 'object' || Array.isArray(o)) {
+        throw new ApiError('INVALID_PARAMS', { code: 'CHARACTER_OVERRIDES_INVALID', field: 'characterOverrides' })
+      }
+      const r = o as Record<string, unknown>
+      if (typeof r.characterId !== 'string' || !r.characterId) {
+        throw new ApiError('INVALID_PARAMS', { code: 'CHARACTER_OVERRIDES_INVALID', field: 'characterOverrides[].characterId' })
+      }
+      if (r.appearanceId !== undefined && typeof r.appearanceId !== 'string') {
+        throw new ApiError('INVALID_PARAMS', { code: 'CHARACTER_OVERRIDES_INVALID', field: 'characterOverrides[].appearanceId' })
+      }
+      arr.push({
+        characterId: r.characterId,
+        ...(typeof r.appearanceId === 'string' ? { appearanceId: r.appearanceId } : {}),
+      })
+    }
+    characterOverrides = arr.length > 0 ? arr : undefined
+  }
+
+  let locationOverrides: Array<{ locationId: string; viewName?: string }> | undefined
+  if (body.locationOverrides !== undefined) {
+    if (!Array.isArray(body.locationOverrides)) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'LOCATION_OVERRIDES_INVALID',
+        field: 'locationOverrides',
+      })
+    }
+    const arr: Array<{ locationId: string; viewName?: string }> = []
+    for (const o of body.locationOverrides) {
+      if (!o || typeof o !== 'object' || Array.isArray(o)) {
+        throw new ApiError('INVALID_PARAMS', { code: 'LOCATION_OVERRIDES_INVALID', field: 'locationOverrides' })
+      }
+      const r = o as Record<string, unknown>
+      if (typeof r.locationId !== 'string' || !r.locationId) {
+        throw new ApiError('INVALID_PARAMS', { code: 'LOCATION_OVERRIDES_INVALID', field: 'locationOverrides[].locationId' })
+      }
+      if (r.viewName !== undefined && typeof r.viewName !== 'string') {
+        throw new ApiError('INVALID_PARAMS', { code: 'LOCATION_OVERRIDES_INVALID', field: 'locationOverrides[].viewName' })
+      }
+      arr.push({
+        locationId: r.locationId,
+        ...(typeof r.viewName === 'string' ? { viewName: r.viewName } : {}),
+      })
+    }
+    locationOverrides = arr.length > 0 ? arr : undefined
+  }
 
   // Optional caller-supplied prompt for intelligence mode (Seedance-style
   // 5-element 15s segment). Worker still appends matched dialogue.
@@ -206,6 +265,8 @@ export const POST = apiHandler(async (
       ...(panelDurations ? { panelDurations } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(promptStyle ? { promptStyle } : {}),
+      ...(characterOverrides ? { characterOverrides } : {}),
+      ...(locationOverrides ? { locationOverrides } : {}),
     },
     dedupeKey: `video_multi_shot:${storyboard.id}`,
   })

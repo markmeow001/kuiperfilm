@@ -99,12 +99,35 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   const rawPrompt = typeof payload.rawPrompt === 'string' && payload.rawPrompt.trim()
     ? payload.rawPrompt.trim()
     : undefined
-  // Intelligence-mode prompt style. Default 'auto-seedance' applied in
-  // the worker when undefined; 'panel-numbered' is the legacy opt-out.
+  // Intelligence-mode prompt style. Default 'panel-numbered' applied
+  // in the worker when undefined (10s tight cuts — best for action).
+  // 'auto-seedance' is the explicit opt-in for dialogue/narrative
+  // scenes (15s soft cuts).
   const promptStyle =
     payload.promptStyle === 'auto-seedance' || payload.promptStyle === 'panel-numbered'
       ? payload.promptStyle
       : undefined
+  // Optional per-call entity overrides (UI's "swap costume / swap
+  // scene view" affordance). Worker validates entities exist; we just
+  // shape-check here.
+  const characterOverrides = Array.isArray(payload.characterOverrides)
+    ? (payload.characterOverrides as unknown[])
+        .filter((o): o is { characterId: string; appearanceId?: string } => {
+          if (!o || typeof o !== 'object') return false
+          const r = o as Record<string, unknown>
+          return typeof r.characterId === 'string' && r.characterId.length > 0
+            && (r.appearanceId === undefined || typeof r.appearanceId === 'string')
+        })
+    : undefined
+  const locationOverrides = Array.isArray(payload.locationOverrides)
+    ? (payload.locationOverrides as unknown[])
+        .filter((o): o is { locationId: string; viewName?: string } => {
+          if (!o || typeof o !== 'object') return false
+          const r = o as Record<string, unknown>
+          return typeof r.locationId === 'string' && r.locationId.length > 0
+            && (r.viewName === undefined || typeof r.viewName === 'string')
+        })
+    : undefined
 
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
@@ -165,6 +188,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(panelDurations ? { panelDurations } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(promptStyle ? { promptStyle } : {}),
+      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
+      ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
     })
   }
 

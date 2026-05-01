@@ -369,17 +369,100 @@ export async function runMultiShotBPath(params: {
    * Intelligence-mode prompt assembly strategy. Ignored when rawPrompt
    * is provided (caller wins) or when multiShotMode is 'customize'.
    *
-   * - 'auto-seedance' (DEFAULT, 2026-05-01): time-indexed
+   * - 'panel-numbered' (DEFAULT, 2026-05-01 retest): `镜头N:` Chinese
+   *   numbered list, total 10s. Tight rapid-cut pacing — verified
+   *   most satisfying on action sequences (gunfight, fight choreo)
+   *   where Kling's 15s render window degrades visual fidelity in
+   *   later shots.
+   * - 'auto-seedance': time-indexed
    *   `Xs-Ys: [scene] - [char] body (cameraMove). [speaker]: "line"`
-   *   format. Designed to give Kling intelligence's parser the same
-   *   shape as Seedance 2.0's manually validated 5-element method.
-   * - 'panel-numbered': legacy `镜头1: ... 镜头2: ...` concatenation
-   *   for callers that haven't migrated yet (kept bit-for-bit
-   *   compatible with pre-Seedance behaviour).
+   *   format. Spreads 15s across panels with soft cut hints — better
+   *   suited to dialogue / reaction / small-action segments.
+   *   Explicitly opt in for narrative scenes; default 'panel-numbered'
+   *   covers the common case without surprising regressions.
    */
   promptStyle?: 'auto-seedance' | 'panel-numbered'
-}): Promise<{ storyboardId: string; multiShotVideoUrl: string; shotCount: number; subjectCount: number; path: 'B'; multiShotMode: 'intelligence' | 'customize'; durations?: number[]; promptSource?: 'panels' | 'raw' | 'seedance' }> {
-  const { job, validPanels, projectData, videoModel, sound, aspectRatio, panelDurations, rawPrompt } = params
+  /**
+   * Pin specific character appearances (override the auto-collector's
+   * pick of `appearances[0]` or the EpisodeCharacter binding). Lets a
+   * UI ship a "switch costume" affordance per multi-shot call.
+   *
+   * Each entry { characterId, appearanceId? }:
+   *   - If appearanceId given, force-use that appearance row.
+   *   - If appearanceId omitted, force-include the character but let
+   *     the auto-collector still pick the appearance.
+   *
+   * Characters NOT in this list still get auto-collected from
+   * panel.characters references — overrides only adjust what was
+   * already going to be included, they do not curate the subject set.
+   */
+  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
+  /**
+   * Pin specific location image views. Each entry { locationId,
+   * viewName? }:
+   *   - viewName selects a particular image in location.images[]
+   *     (LocationImage.viewName).
+   *   - When omitted, falls through to the existing isSelected →
+   *     imageIndex=0 picking order.
+   *
+   * Same scoping rule as character overrides — only adjusts auto-
+   * collected scenes, doesn't add ones panels never referenced.
+   */
+  locationOverrides?: Array<{ locationId: string; viewName?: string }>
+}): Promise<{
+  storyboardId: string
+  multiShotVideoUrl: string
+  shotCount: number
+  subjectCount: number
+  path: 'B'
+  multiShotMode: 'intelligence' | 'customize'
+  durations?: number[]
+  promptSource?: 'panels' | 'raw' | 'seedance'
+  /**
+   * Bindings actually used by Kling for this generation, grouped by
+   * entity kind so the UI can render chips ("出场角色 / 场景") and
+   * surface override affordances (swap costume, swap view).
+   */
+  bindings: {
+    characters: Array<{
+      id: string
+      name: string
+      appearanceId: string | null
+      appearanceLabel: string | null
+      imageUrl: string
+    }>
+    scenes: Array<{
+      id: string
+      name: string
+      viewName: string | null
+      imageUrl: string
+    }>
+  }
+}> {
+  const {
+    job,
+    validPanels,
+    projectData,
+    videoModel,
+    sound,
+    aspectRatio,
+    panelDurations,
+    rawPrompt,
+    characterOverrides,
+    locationOverrides,
+  } = params
+  const charOverrideById = new Map<string, string | undefined>()
+  for (const o of characterOverrides ?? []) {
+    if (typeof o.characterId === 'string' && o.characterId) {
+      charOverrideById.set(o.characterId, o.appearanceId)
+    }
+  }
+  const locOverrideById = new Map<string, string | undefined>()
+  for (const o of locationOverrides ?? []) {
+    if (typeof o.locationId === 'string' && o.locationId) {
+      locOverrideById.set(o.locationId, o.viewName)
+    }
+  }
   // Implicit promotion: caller passing panelDurations means they care
   // about per-shot timing; force customize regardless of the mode flag.
   const multiShotMode: 'intelligence' | 'customize' =
@@ -412,19 +495,37 @@ export async function runMultiShotBPath(params: {
     }
   }
 
-  // Collect unique characters in panel order, take their primary
-  // appearance image for SubjectInfos. Cap at 3 (Tencent limit).
-  const subjectMap = new Map<string, { name: string; imageUrl: string }>()
+  // Collect unique characters in panel order, resolve their appearance
+  // image, and remember the full entity tuple for the response payload.
+  // Resolution priority for appearance:
+  //   1. characterOverrides[characterId].appearanceId (caller pin)
+  //   2. EpisodeCharacter binding (cross-episode costume change)
+  //   3. ref.appearance match against changeReason (legacy contract)
+  //   4. appearances[0] (fallback)
+  type CharacterBinding = {
+    id: string
+    name: string
+    appearanceId: string | null
+    appearanceLabel: string | null
+    imageUrl: string
+  }
+  const characterBindings: CharacterBinding[] = []
+  const seenCharIds = new Set<string>()
   for (const panel of validPanels) {
     const charRefs = parsePanelCharacterReferences(panel.characters)
     for (const ref of charRefs) {
-      if (subjectMap.has(ref.name.toLowerCase())) continue
       const character = findCharacterByName(projectData.characters || [], ref.name)
       if (!character) continue
+      if (seenCharIds.has(character.id)) continue
       const appearances = character.appearances || []
+
       let appearance = appearances[0]
+      const overrideAppearanceId = charOverrideById.get(character.id)
       const boundAppearanceId = episodeBindings.get(character.id)
-      if (boundAppearanceId) {
+      if (overrideAppearanceId) {
+        const ov = appearances.find((a) => a.id === overrideAppearanceId)
+        if (ov) appearance = ov
+      } else if (boundAppearanceId) {
         const bound = appearances.find((a) => a.id === boundAppearanceId)
         if (bound) appearance = bound
       } else if (ref.appearance) {
@@ -441,7 +542,15 @@ export async function runMultiShotBPath(params: {
       const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
       const publicUrl = toSignedUrlIfCos(imageKey, 7200)
       if (!publicUrl) continue
-      subjectMap.set(ref.name.toLowerCase(), { name: ref.name, imageUrl: publicUrl })
+
+      seenCharIds.add(character.id)
+      characterBindings.push({
+        id: character.id,
+        name: ref.name,
+        appearanceId: appearance.id ?? null,
+        appearanceLabel: appearance.changeReason || null,
+        imageUrl: publicUrl,
+      })
     }
   }
   // Tencent caps SubjectInfos at 3 entries per CreateAigcVideoTask. Take
@@ -450,17 +559,23 @@ export async function runMultiShotBPath(params: {
   // Kling has a consistent backdrop anchor across shots. Without scene
   // anchoring the same alleyway tends to drift in lighting/material
   // between cuts.
-  const characterSubjects = Array.from(subjectMap.values()).map((s) => ({
-    name: s.name,
-    imageUrls: [s.imageUrl],
+  const characterSubjects = characterBindings.map((c) => ({
+    name: c.name,
+    imageUrls: [c.imageUrl],
   }))
 
-  const sceneSubjects: Array<{ name: string; imageUrls: string[] }> = []
+  type SceneBinding = {
+    id: string
+    name: string
+    viewName: string | null
+    imageUrl: string
+  }
+  const sceneBindings: SceneBinding[] = []
   const remainingSlots = Math.max(0, 3 - characterSubjects.length)
   if (remainingSlots > 0 && (projectData.locations?.length ?? 0) > 0) {
     const seenLoc = new Set<string>()
     for (const panel of validPanels) {
-      if (sceneSubjects.length >= remainingSlots) break
+      if (sceneBindings.length >= remainingSlots) break
       if (!panel.location) continue
       // panel.location is "<name>" or "<name>#<viewHint>" (Approach
       // B-Standard). Match by name only — viewHint is for image picking
@@ -472,23 +587,44 @@ export async function runMultiShotBPath(params: {
       if (seenLoc.has(key)) continue
       const loc = projectData.locations!.find((l) => l.name.toLowerCase() === key)
       if (!loc) continue
-      const viewHint = hashIdx === -1 ? null : panel.location.slice(hashIdx + 1).trim()
+      const panelViewHint = hashIdx === -1 ? null : panel.location.slice(hashIdx + 1).trim()
+      // Override beats panel hint beats isSelected/imageIndex defaults.
+      const overrideViewName = locOverrideById.get(loc.id)
+      const effectiveView = (overrideViewName ?? panelViewHint) || null
       const images = loc.images ?? []
-      // Prefer the view-matching image, else isSelected, else imageIndex=0
-      const viewMatch = viewHint
-        ? images.find((img) => (img.viewName || '').trim().toLowerCase() === viewHint.toLowerCase())
+      const viewMatch = effectiveView
+        ? images.find((img) => (img.viewName || '').trim().toLowerCase() === effectiveView.toLowerCase())
         : null
       const selected = images.find((img) => img.isSelected)
       const primary = images.find((img) => (img.imageIndex ?? 0) === 0) ?? images[0]
-      const pickedRaw = (viewMatch?.imageUrl) || (selected?.imageUrl) || (primary?.imageUrl)
+      const pickedImg = viewMatch || selected || primary
+      const pickedRaw = pickedImg?.imageUrl
       const publicUrl = toSignedUrlIfCos(pickedRaw, 7200)
       if (!publicUrl) continue
       seenLoc.add(key)
-      sceneSubjects.push({ name: loc.name, imageUrls: [publicUrl] })
+      sceneBindings.push({
+        id: loc.id,
+        name: loc.name,
+        viewName: pickedImg?.viewName || null,
+        imageUrl: publicUrl,
+      })
     }
   }
+  const sceneSubjects = sceneBindings.map((s) => ({
+    name: s.name,
+    imageUrls: [s.imageUrl],
+  }))
 
+  // Tencent's 3-slot cap applies to the *combined* list. Trim bindings
+  // identically so the response shape mirrors what Kling actually saw.
   const subjectInfos = [...characterSubjects, ...sceneSubjects].slice(0, 3)
+  const usedCharCount = Math.min(characterBindings.length, subjectInfos.length)
+  const usedSceneCount = Math.min(
+    sceneBindings.length,
+    Math.max(0, subjectInfos.length - usedCharCount),
+  )
+  const activeCharacterBindings = characterBindings.slice(0, usedCharCount)
+  const activeSceneBindings = sceneBindings.slice(0, usedSceneCount)
 
   // Pull dialogue lines that script_to_storyboard matched to any of the
   // panels we're sending. Without this Kling Omni's generate_audio:true
@@ -525,7 +661,7 @@ export async function runMultiShotBPath(params: {
   let generateOptions: Record<string, unknown>
   let resolvedDurations: number[] | undefined
   let resolvedTotal: number
-  let intelligencePromptSource: 'panels' | 'raw' | 'seedance' = 'seedance'
+  let intelligencePromptSource: 'panels' | 'raw' | 'seedance' = 'panels'
 
   if (multiShotMode === 'customize') {
     const { durations, totalDuration } = distributeShotDurations(validPanels.length, panelDurations)
@@ -575,11 +711,14 @@ export async function runMultiShotBPath(params: {
     // Intelligence mode. Three prompt sources:
     //  1. Caller-supplied rawPrompt — wins over everything (e.g. user
     //     paste of a hand-crafted Seedance segment).
-    //  2. promptStyle='auto-seedance' (default) — auto-assemble
-    //     time-indexed entity-tagged prompt from panel data.
-    //  3. promptStyle='panel-numbered' — legacy `镜头N:` concatenation
-    //     kept for back-compat with pre-2026-05-01 callers.
-    const promptStyle = params.promptStyle ?? 'auto-seedance'
+    //  2. promptStyle='panel-numbered' (DEFAULT, 2026-05-01 retest) —
+    //     legacy `镜头N:` 10s tight cuts. Action sequences regressed
+    //     visibly under auto-seedance (later shots blurred under the
+    //     longer 15s render); reverted as default after user A/B.
+    //  3. promptStyle='auto-seedance' (opt-in) — Seedance-style
+    //     time-indexed entity-tagged 15s segment, better for dialogue
+    //     and reaction scenes.
+    const promptStyle = params.promptStyle ?? 'panel-numbered'
     let primaryPrompt: string
     let promptSource: 'panels' | 'raw' | 'seedance'
     if (typeof rawPrompt === 'string' && rawPrompt.trim().length > 0) {
@@ -678,5 +817,9 @@ export async function runMultiShotBPath(params: {
     multiShotMode,
     ...(resolvedDurations ? { durations: resolvedDurations } : {}),
     ...(multiShotMode === 'intelligence' ? { promptSource: intelligencePromptSource } : {}),
+    bindings: {
+      characters: activeCharacterBindings,
+      scenes: activeSceneBindings,
+    },
   }
 }
