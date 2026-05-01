@@ -27,13 +27,15 @@ dataset would be lost.
 ### Set up nightly MySQL backups
 
 ```bash
-# 1. Add R2 backup creds to .env.prod
-# (DO NOT reuse the main app's R2_* — keep backup creds separate so a
-# leaked app credential can't delete backups too):
+# 1. Add R2 backup creds to .env.prod.
+# Var names are R2_BACKUP_* (NOT R2_*) — intentionally distinct from
+# the main app's R2_ACCESS_KEY_ID. Issue a separate API token in the
+# Cloudflare dashboard scoped only to R2_BACKUP_BUCKET; that way a
+# leaked main token can't reach (or delete) backups.
 R2_BACKUP_BUCKET=kuiperfilm-backups
-R2_ACCESS_KEY_ID=<separate-account-or-scoped-token>
-R2_SECRET_ACCESS_KEY=<...>
-R2_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+R2_BACKUP_ACCESS_KEY_ID=<scoped-token-id>
+R2_BACKUP_SECRET_ACCESS_KEY=<scoped-token-secret>
+R2_BACKUP_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 
 # 2. Install aws CLI on the droplet (R2 talks S3 protocol)
 apt-get install -y awscli

@@ -20,12 +20,14 @@
 #
 # Pre-reqs in .env.prod:
 #   - MYSQL_ROOT_PASSWORD (already there)
-#   - R2_BACKUP_BUCKET    (separate from kuiperfilm-storage; recommend
-#                          kuiperfilm-backups so a deletion-cascade in
-#                          the main bucket can't take backups too)
-#   - R2_ACCESS_KEY_ID
-#   - R2_SECRET_ACCESS_KEY
-#   - R2_ENDPOINT         (https://<account>.r2.cloudflarestorage.com)
+#   - R2_BACKUP_BUCKET             (separate from kuiperfilm-storage;
+#                                   recommend kuiperfilm-backups so a
+#                                   deletion-cascade in the main bucket
+#                                   can't take backups too)
+#   - R2_BACKUP_ACCESS_KEY_ID      (intentionally distinct from the main
+#   - R2_BACKUP_SECRET_ACCESS_KEY   app's R2_ACCESS_KEY_ID — issue a
+#   - R2_BACKUP_ENDPOINT            separate API token scoped only to
+#                                   the backup bucket)
 
 set -euo pipefail
 
@@ -75,21 +77,24 @@ docker exec kuiper-mysql mysqldump \
 DUMP_SIZE="$(du -h "${LOCAL_PATH}" | cut -f1)"
 green "[backup] dump complete: ${DUMP_SIZE}"
 
-# Upload to R2 if credentials present
-if [[ -n "${R2_BACKUP_BUCKET:-}" && -n "${R2_ACCESS_KEY_ID:-}" && -n "${R2_SECRET_ACCESS_KEY:-}" && -n "${R2_ENDPOINT:-}" ]]; then
+# Upload to R2 if credentials present.
+# These env vars are intentionally distinct from the main app's R2_*
+# (which writes to kuiperfilm-storage). The backup token must be scoped
+# only to R2_BACKUP_BUCKET so a leaked main token can't reach backups.
+if [[ -n "${R2_BACKUP_BUCKET:-}" && -n "${R2_BACKUP_ACCESS_KEY_ID:-}" && -n "${R2_BACKUP_SECRET_ACCESS_KEY:-}" && -n "${R2_BACKUP_ENDPOINT:-}" ]]; then
   if ! command -v aws >/dev/null 2>&1; then
     yellow "[backup] aws CLI missing — skip R2 upload. Install: apt install awscli"
   else
     green "[backup] uploading to s3://${R2_BACKUP_BUCKET}/db/${DUMP_NAME}"
-    AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID}" \
-    AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY}" \
+    AWS_ACCESS_KEY_ID="${R2_BACKUP_ACCESS_KEY_ID}" \
+    AWS_SECRET_ACCESS_KEY="${R2_BACKUP_SECRET_ACCESS_KEY}" \
     aws s3 cp "${LOCAL_PATH}" "s3://${R2_BACKUP_BUCKET}/db/${DUMP_NAME}" \
-      --endpoint-url "${R2_ENDPOINT}" \
+      --endpoint-url "${R2_BACKUP_ENDPOINT}" \
       --no-progress
     green "[backup] uploaded"
   fi
 else
-  yellow "[backup] R2_* env vars missing — local-only backup. Add R2_BACKUP_BUCKET/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY/R2_ENDPOINT to .env.prod"
+  yellow "[backup] R2_BACKUP_* env vars missing — local-only backup. Add R2_BACKUP_BUCKET/R2_BACKUP_ACCESS_KEY_ID/R2_BACKUP_SECRET_ACCESS_KEY/R2_BACKUP_ENDPOINT to .env.prod"
 fi
 
 # Prune local copies older than RETENTION_DAYS
