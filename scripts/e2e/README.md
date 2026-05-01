@@ -34,7 +34,7 @@ export E2E_PASSWORD=...
 
 # Optional
 export E2E_BASE_URL=https://art.kuiperfilmailab.com   # default
-export E2E_LOCALE=zh-TW                                # default
+export E2E_LOCALE=zh                                   # default (must be one of locales in src/i18n/routing.ts: zh|en)
 export E2E_KEEP=1                                      # don't delete the test project
 export E2E_SKIP_VIDEO=1                                # skip the video stage (cheaper)
 export E2E_CASCADE_TIMEOUT=1500                        # seconds for storyboard

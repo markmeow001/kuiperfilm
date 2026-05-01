@@ -48,7 +48,7 @@
 set -euo pipefail
 
 BASE_URL="${E2E_BASE_URL:-https://art.kuiperfilmailab.com}"
-LOCALE="${E2E_LOCALE:-zh-TW}"
+LOCALE="${E2E_LOCALE:-zh}"
 USERNAME="${E2E_USERNAME:-}"
 PASSWORD="${E2E_PASSWORD:-}"
 
