@@ -1,21 +1,37 @@
 # Design Doc — Kling 對口型（lip_sync）整合
 
-> **Status:** ⏸ Deferred — 等英文劇主流程上線後再啟動
+> **Status:** ⏸ Deferred — TikTok 短劇場景不需要 word-perfect 對白，產品需求面暫不啟動
 > **Author:** AI session (Anthropic CLI)
 > **Date:** 2026-05-01
 > **Discovered during:** E2E test on art.kuiperfilmailab.com (project `57f45350-44c0-46b1-aab4-acf69e08dbf8`)
-> **Last updated:** 2026-05-01 (status → deferred)
+> **Last updated:** 2026-05-01 (status → deferred 強化版)
 
-## ⏸ 為什麼 deferred
+## ⏸ 為什麼 deferred（產品決策）
 
-**User 確認接下來主力是英文劇（白人角色為主）**，所以：
-1. TTS provider 決策要把**英文音色品質**放進評估維度（不只看中文）
-2. 中文 lip_sync 的 e2e 結果（這份 doc 的場景）跟英文劇主場景不直接相關
-3. 等英文劇主 pipeline 跑通、TTS 選型有共識後，再回頭啟動本 doc 的 Phase 1
+**User 2026-05-01 確認**：
 
-**不刪掉**因為設計大方向（PANEL_LIP_SYNC 後處理 stage、schema 預留欄位重用、Kling lip_sync 配 TTS）對英文劇照樣適用，只差 TTS provider 換家。
+> 「TikTok 短劇不會太在意口音正不正確」
 
-→ 重啟前必補的內容見 [Section 16. 重啟前更新清單](#16-重啟前更新清單)。
+→ **目標市場（TikTok 短劇）不要求 word-perfect 對白**：
+- 觀眾在意的是劇情、視覺、節奏，不是聲音對嘴
+- Kling Omni `AudioGeneration: Enabled` 自動生的環境/類對白音已經足夠
+- 加 lip_sync 整套（TTS provider 評估、schema 改、新 worker、UI 改）的 ROI 不值
+
+**Sub-context** 1：主力會做英文劇（白人角色為主），但即使在英文場景下，TikTok 短劇消費形態同樣不需要對白精準。
+
+**Sub-context** 2：等到產品方向轉向「精緻長劇」「正版內容」「企業客製」這類「對白要對」的場景，才回頭啟動。
+
+## 🚦 重啟觸發條件（user 2026-05-01 明確）
+
+**符合下列任何一個** → 啟動本 doc 的 Phase 1：
+
+1. **加入廣告產品線** — 廣告對 brand voice 嚴格、品牌台詞 word-perfect、TTS 音色控制
+2. **加入電視劇產品線** — 長劇對演員聲音一致性敏感（同角色跨集別漂、口音風格穩）
+3. （未來新增條件可加在這）
+
+→ 條件達成時：先看 [Section 16. 重啟前更新清單](#16-重啟前更新清單)，補完評估再開工。
+
+**不刪掉本 doc** 的理由：設計大方向（PANEL_LIP_SYNC 後處理 stage、schema 預留欄位重用、Kling lip_sync 配 TTS）對廣告/電視劇場景照樣適用，只差 TTS provider 換家 + voice cloning 等 advanced 維度補進評估。
 
 ## TL;DR
 
