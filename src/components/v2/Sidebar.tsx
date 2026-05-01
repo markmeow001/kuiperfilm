@@ -12,6 +12,7 @@
  * the `user` prop — making the page look like there was no auth.
  */
 
+import Link from 'next/link'
 import { signOut, useSession } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
 import { V2_STEPS, type V2StepId, v2StepIndex } from './v2-types'
@@ -19,15 +20,22 @@ import { V2_STEPS, type V2StepId, v2StepIndex } from './v2-types'
 interface SidebarProps {
   currentStep: V2StepId
   onSelect: (stepId: V2StepId) => void
+  /** Locale for the "回專案列表" link. Optional for back-compat; defaults to zh. */
+  locale?: string
 }
 
-export function Sidebar({ currentStep, onSelect }: SidebarProps) {
+export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) {
   const currentIdx = v2StepIndex(currentStep)
+  const projectsHref = `/${locale}/v2`
 
   return (
     <aside className="flex w-64 flex-col border-r border-amber-900/20 bg-stone-950 text-stone-200">
-      {/* Logo */}
-      <div className="border-b border-amber-900/15 px-7 pt-8 pb-10">
+      {/* Logo — clicking returns to /v2 entry (project list) */}
+      <Link
+        href={projectsHref}
+        className="block border-b border-amber-900/15 px-7 pt-8 pb-5 transition-colors hover:bg-stone-900/40"
+        title="回到專案列表"
+      >
         <div className="flex items-baseline gap-1.5">
           <div className="font-display text-3xl font-semibold italic tracking-tight text-amber-400">
             Kuiper
@@ -37,7 +45,17 @@ export function Sidebar({ currentStep, onSelect }: SidebarProps) {
         <div className="mt-1 font-mono text-[10px] tracking-[0.2em] text-stone-500">
           AI · MANHUA · STUDIO
         </div>
-      </div>
+      </Link>
+
+      {/* Explicit "switch project" affordance — easier to spot than the
+          subtle "click the logo" pattern. */}
+      <Link
+        href={projectsHref}
+        className="group flex items-center gap-2 border-b border-amber-900/10 px-7 py-3 font-mono text-[10px] tracking-wider text-stone-500 transition-colors hover:bg-stone-900/40 hover:text-amber-400"
+      >
+        <AppIcon name="chevronLeft" className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
+        <span>所有專案 · 切換</span>
+      </Link>
 
       {/* Steps */}
       <nav className="flex-1 space-y-1 px-4 py-6">
