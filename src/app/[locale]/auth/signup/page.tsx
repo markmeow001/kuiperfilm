@@ -1,10 +1,15 @@
 'use client'
 
+/**
+ * /auth/signup — restyled to match V2 cinematic palette.
+ * Functional behaviour identical to the previous glass version.
+ * Still supports the share-link prefill: ?invite=<code>
+ */
+
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useTranslations } from 'next-intl'
-import Navbar from "@/components/Navbar"
 
 export default function SignUp() {
   const [name, setName] = useState("")
@@ -19,7 +24,6 @@ export default function SignUp() {
   const t = useTranslations('auth')
 
   // Allow share-link flow: /auth/signup?invite=ABC123 prefills the code.
-  // Next.js 15 narrows useSearchParams() to ReadonlyURLSearchParams | null.
   useEffect(() => {
     const fromQuery = searchParams?.get('invite')
     if (fromQuery) setInviteCode(fromQuery)
@@ -80,21 +84,44 @@ export default function SignUp() {
   }
 
   return (
-    <div className="glass-page min-h-screen">
-      <Navbar />
-      <div className="flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full">
-          <div className="glass-surface-modal p-8">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-[var(--glass-text-primary)] mb-2">
+    <div className="font-body grain min-h-screen bg-stone-950 text-stone-200">
+      <header className="border-b border-amber-900/15 px-8 py-5">
+        <Link href="/" className="flex items-baseline gap-1.5">
+          <span className="font-display text-2xl font-semibold italic tracking-tight text-amber-400">
+            Kuiper
+          </span>
+          <span className="font-serif-cn text-base font-medium text-stone-100">影界</span>
+          <span className="ml-3 font-mono text-[10px] tracking-[0.3em] text-stone-500">
+            AI · MANHUA · STUDIO
+          </span>
+        </Link>
+      </header>
+
+      <div className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-[radial-gradient(900px_500px_at_50%_-10%,rgba(245,158,11,0.07),transparent)]" />
+      </div>
+
+      <main className="relative z-10 flex min-h-[calc(100vh-89px)] items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md">
+          <div className="rounded-sm border border-amber-900/30 bg-stone-900/60 p-8 shadow-2xl backdrop-blur-sm">
+            <div className="mb-8 text-center">
+              <div className="mb-2 font-mono text-[10px] tracking-[0.3em] text-amber-600/80">
+                CHAPTER · SIGN UP
+              </div>
+              <h1 className="font-serif-cn text-3xl font-medium tracking-wide text-stone-100">
                 {t('createAccount')}
               </h1>
-              <p className="text-[var(--glass-text-secondary)]">{t('joinPlatform')}</p>
+              <p className="mt-2 font-fraunces text-sm italic text-stone-500">
+                {t('joinPlatform')}
+              </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="inviteCode" className="glass-field-label block mb-2">
+                <label
+                  htmlFor="inviteCode"
+                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                >
                   {t('inviteCode')}
                 </label>
                 <input
@@ -104,13 +131,16 @@ export default function SignUp() {
                   onChange={(e) => setInviteCode(e.target.value)}
                   required
                   autoComplete="off"
-                  className="glass-input-base w-full px-4 py-3 font-mono tracking-wide"
+                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-mono text-base tracking-widest text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
                   placeholder={t('inviteCodePlaceholder')}
                 />
               </div>
 
               <div>
-                <label htmlFor="name" className="glass-field-label block mb-2">
+                <label
+                  htmlFor="name"
+                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                >
                   {t('phoneNumber')}
                 </label>
                 <input
@@ -119,13 +149,16 @@ export default function SignUp() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  className="glass-input-base w-full px-4 py-3"
+                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-serif-cn text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
                   placeholder={t('phoneNumberPlaceholder')}
                 />
               </div>
 
               <div>
-                <label htmlFor="password" className="glass-field-label block mb-2">
+                <label
+                  htmlFor="password"
+                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                >
                   {t('password')}
                 </label>
                 <input
@@ -134,13 +167,16 @@ export default function SignUp() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="glass-input-base w-full px-4 py-3"
+                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-mono text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
                   placeholder={t('passwordMinPlaceholder')}
                 />
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="glass-field-label block mb-2">
+                <label
+                  htmlFor="confirmPassword"
+                  className="mb-2 block font-mono text-[10px] uppercase tracking-wider text-stone-500"
+                >
                   {t('confirmPassword')}
                 </label>
                 <input
@@ -149,49 +185,53 @@ export default function SignUp() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
-                  className="glass-input-base w-full px-4 py-3"
+                  className="w-full rounded-sm border border-stone-800 bg-stone-950 px-4 py-3 font-mono text-base text-stone-100 transition-colors placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
                   placeholder={t('confirmPasswordPlaceholder')}
                 />
               </div>
 
-              {error && (
-                <div className="bg-[var(--glass-tone-danger-bg)] border border-[color:color-mix(in_srgb,var(--glass-tone-danger-fg)_22%,transparent)] text-[var(--glass-tone-danger-fg)] px-4 py-3 rounded-lg text-sm">
+              {error ? (
+                <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
                   {error}
                 </div>
-              )}
+              ) : null}
 
-              {success && (
-                <div className="bg-[var(--glass-tone-success-bg)] border border-[color:color-mix(in_srgb,var(--glass-tone-success-fg)_22%,transparent)] text-[var(--glass-tone-success-fg)] px-4 py-3 rounded-lg text-sm">
+              {success ? (
+                <div className="rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
                   {success}
                 </div>
-              )}
+              ) : null}
 
               <button
                 type="submit"
                 disabled={loading}
-                className="glass-btn-base glass-btn-primary w-full py-3 px-4 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? t('signupButtonLoading') : t('signupButton')}
               </button>
             </form>
 
-            <div className="mt-6 text-center">
-              <p className="text-[var(--glass-text-secondary)]">
-                {t('hasAccount')}{" "}
-                <Link href="/auth/signin" className="text-[var(--glass-tone-info-fg)] hover:underline font-medium">
-                  {t('signinNow')}
-                </Link>
-              </p>
+            <div className="mt-6 text-center font-fraunces text-sm italic text-stone-500">
+              {t('hasAccount')}{" "}
+              <Link
+                href="/auth/signin"
+                className="font-medium text-amber-400 transition-colors hover:text-amber-300"
+              >
+                {t('signinNow')}
+              </Link>
             </div>
 
-            <div className="mt-6 text-center">
-              <Link href="/" className="text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)] text-sm">
-                {t('backToHome')}
+            <div className="mt-3 text-center">
+              <Link
+                href="/"
+                className="font-mono text-[10px] tracking-wider text-stone-600 transition-colors hover:text-amber-400"
+              >
+                ← {t('backToHome')}
               </Link>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
