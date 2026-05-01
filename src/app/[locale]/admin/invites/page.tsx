@@ -95,7 +95,11 @@ export default function AdminInvitesPage() {
     setCreating(true)
     setError(null)
     try {
-      const body: Record<string, unknown> = { role: formRole }
+      // Hard-coded 'member' — invites must NEVER carry admin/editor
+      // role. To grant admin, demote/promote via /admin/users after the
+      // invitee has signed up. This guards against state drift, devtools
+      // tampering, and the original "admin invited admin" footgun.
+      const body: Record<string, unknown> = { role: 'member' }
       if (typeof formExpiresHours === 'number' && formExpiresHours > 0) {
         body.expires_hours = formExpiresHours
       }
@@ -316,18 +320,18 @@ export default function AdminInvitesPage() {
             </h2>
 
             <div className="space-y-4">
-              <label className="block">
-                <span className="glass-field-label block mb-1">{t('role')}</span>
-                <select
-                  value={formRole}
-                  onChange={(e) => setFormRole(e.target.value as Role)}
-                  className="glass-input-base w-full px-3 py-2"
-                >
-                  <option value="member">{t('role_member')}</option>
-                  <option value="editor">{t('role_editor')}</option>
-                  <option value="admin">{t('role_admin')}</option>
-                </select>
-              </label>
+              {/* Role 選項已移除 — 邀請只用來「讓某人加入系統」,
+                  不應該透過邀請夾帶管理權限。所有邀請建立的使用者都
+                  是 member,如果之後要升等請去 /admin/users 改 role。
+                  formRole state 仍存在,固定為 'member' 送出。 */}
+              <div className="rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 text-xs text-stone-400">
+                ℹ️ 邀請碼建立的新使用者**一律為成員 (member)**。如需升級為管理員,
+                請先讓對方註冊完成,再去
+                <a href="/zh/admin/users" className="ml-1 text-amber-400 hover:underline">
+                  使用者管理
+                </a>
+                手動升級。
+              </div>
 
               <label className="block">
                 <span className="glass-field-label block mb-1">
