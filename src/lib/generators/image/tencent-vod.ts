@@ -56,11 +56,30 @@ function parseCredentials(apiKey: string): TencentVODCredentials {
     return { secretId, secretKey, subAppId, region }
 }
 
+/**
+ * Tencent VOD AIGC 圖片任務的 ModelName 合法值是
+ *   OG, GG, Jimeng, SI, Qwen, Hunyuan, Vidu, Kling
+ * (見 SDK vod_models.d.ts 對 CreateAigcImageTask 的 ModelName 說明)
+ *
+ * 我們前端 / DB 把 Google nano banana 系列叫做「GEM-3.1」,但 Tencent
+ * 真正的 ModelName 是「GG」(GG 2.5 / GG 3.0 / GG 3.1)。原本直接送
+ * ModelName="GEM" Tencent 會 silent fallback 走某個 default model,
+ * 副作用是 AspectRatio 被忽略 — 用戶設 9:16 永遠出 16:9。
+ *
+ * 修法:在這層做 alias 映射,前端 UI / DB / capability catalog 都
+ * 不用動,生成器內部把 GEM 翻譯成 GG 才送出去。
+ */
+const TENCENT_VOD_MODEL_NAME_ALIAS: Record<string, string> = {
+  GEM: 'GG',
+}
+
 function splitModel(model: string): { name: string; version: string } {
     if (!model) return { name: '', version: '' }
     const idx = model.indexOf('-')
     if (idx === -1) return { name: model, version: '' }
-    return { name: model.slice(0, idx), version: model.slice(idx + 1) }
+    const rawName = model.slice(0, idx)
+    const name = TENCENT_VOD_MODEL_NAME_ALIAS[rawName] ?? rawName
+    return { name, version: model.slice(idx + 1) }
 }
 
 interface TencentVODImageOptions {
