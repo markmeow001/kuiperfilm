@@ -46,6 +46,9 @@ model CharacterAppearance {
   imageMediaId         String?
   imageMedia           MediaObject?            @relation("CharacterAppearanceImageMedia", fields: [imageMediaId], references: [id], onDelete: SetNull)
   character            NovelPromotionCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  // Phase 11.4 — reverse side of EpisodeCharacter.appearanceId so prisma
+  // can navigate appearance → episodes-using-it.
+  episodeCharacters    EpisodeCharacter[]      @relation("EpisodeCharacterAppearance")
 
   @@unique([characterId, appearanceIndex])
   @@index([characterId])
@@ -125,10 +128,16 @@ model EpisodeCharacter {
   episodeId   String
   characterId String
   role        String? // 'auto-from-panel' | 'manual' | 'imported-from-global'
+  // Phase 11.4 / multi-appearance: which CharacterAppearance row to use
+  // when this character shows up in panels of THIS episode. null = fall
+  // back to appearance[0] (legacy behaviour). Lets users say "Catherine
+  // ep1-10 wears appearance A, ep11+ wears appearance B".
+  appearanceId String?
   createdAt   DateTime @default(now())
 
   episode   NovelPromotionEpisode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
   character NovelPromotionCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  appearance CharacterAppearance?    @relation("EpisodeCharacterAppearance", fields: [appearanceId], references: [id], onDelete: SetNull)
 
   @@unique([episodeId, characterId])
   @@index([episodeId])
