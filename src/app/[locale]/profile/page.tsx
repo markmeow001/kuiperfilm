@@ -387,25 +387,24 @@ export default function ProfilePage() {
                         const activeTab = (billingView === 'transactions' && selectedProject === 'all') ? 'transactions' : 'projects'
                         const activeIdx = tabs.indexOf(activeTab)
                         return (
-                          <div className="rounded-lg p-0.5" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                          <div className="rounded-sm border border-stone-800 bg-stone-950/60 p-1">
                             <div className="relative grid gap-1" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                               <div
-                                className="absolute bottom-0.5 top-0.5 rounded-md bg-white transition-transform duration-200"
+                                className="absolute bottom-0.5 top-0.5 rounded-sm border border-amber-500/40 bg-amber-500/15 transition-transform duration-200"
                                 style={{
-                                  boxShadow: '0 1px 4px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(0,0,0,0.06)',
                                   width: 'calc(100% / 2)',
                                   transform: `translateX(${activeIdx * 100}%)`,
                                 }}
                               />
                               <button
                                 onClick={() => { setBillingView('transactions'); setSelectedProject('all') }}
-                                className={`relative z-[1] flex items-center justify-center gap-1 rounded-md px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer ${activeTab === 'transactions' ? 'text-[var(--glass-text-primary)]' : 'text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)]'}`}
+                                className={`relative z-[1] flex items-center justify-center gap-1.5 rounded-sm px-5 py-2 font-serif-cn text-sm transition-colors cursor-pointer ${activeTab === 'transactions' ? 'text-amber-300' : 'text-stone-500 hover:text-stone-300'}`}
                               >
                                 {t('accountTransactions')}
                               </button>
                               <button
                                 onClick={() => { setBillingView('projects'); setSelectedProject('all') }}
-                                className={`relative z-[1] flex items-center justify-center gap-1 rounded-md px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer ${activeTab === 'projects' ? 'text-[var(--glass-text-primary)]' : 'text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)]'}`}
+                                className={`relative z-[1] flex items-center justify-center gap-1.5 rounded-sm px-5 py-2 font-serif-cn text-sm transition-colors cursor-pointer ${activeTab === 'projects' ? 'text-amber-300' : 'text-stone-500 hover:text-stone-300'}`}
                               >
                                 {t('projectDetails')}
                               </button>
@@ -418,24 +417,23 @@ export default function ProfilePage() {
                     {/* 项目内视图切换 */}
                     {selectedProject !== 'all' && (
                       <div className="flex items-center gap-3">
-                        <div className="rounded-lg p-0.5" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                        <div className="rounded-sm border border-stone-800 bg-stone-950/60 p-1">
                           {(() => {
                             const modeTabs = ['summary', 'records'] as const
                             const modeIdx = modeTabs.indexOf(projectViewMode)
                             return (
                               <div className="relative grid gap-1" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                                 <div
-                                  className="absolute bottom-0.5 top-0.5 rounded-md bg-white transition-transform duration-200"
+                                  className="absolute bottom-0.5 top-0.5 rounded-sm border border-amber-500/40 bg-amber-500/15 transition-transform duration-200"
                                   style={{
-                                    boxShadow: '0 1px 4px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(0,0,0,0.06)',
                                     width: 'calc(100% / 2)',
                                     transform: `translateX(${modeIdx * 100}%)`,
                                   }}
                                 />
-                                <button onClick={() => setProjectViewMode('summary')} className={`relative z-[1] px-3 py-1 text-xs rounded-md transition-colors cursor-pointer ${projectViewMode === 'summary' ? 'text-[var(--glass-text-primary)] font-medium' : 'text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)]'}`}>
+                                <button onClick={() => setProjectViewMode('summary')} className={`relative z-[1] rounded-sm px-4 py-1.5 font-serif-cn text-sm transition-colors cursor-pointer ${projectViewMode === 'summary' ? 'text-amber-300' : 'text-stone-500 hover:text-stone-300'}`}>
                                   {t('summary')}
                                 </button>
-                                <button onClick={() => setProjectViewMode('records')} className={`relative z-[1] px-3 py-1 text-xs rounded-md transition-colors cursor-pointer ${projectViewMode === 'records' ? 'text-[var(--glass-text-primary)] font-medium' : 'text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)]'}`}>
+                                <button onClick={() => setProjectViewMode('records')} className={`relative z-[1] rounded-sm px-4 py-1.5 font-serif-cn text-sm transition-colors cursor-pointer ${projectViewMode === 'records' ? 'text-amber-300' : 'text-stone-500 hover:text-stone-300'}`}>
                                   {t('transactions')}
                                 </button>
                               </div>

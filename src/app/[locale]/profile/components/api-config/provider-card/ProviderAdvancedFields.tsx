@@ -296,17 +296,16 @@ export function ProviderAdvancedFields({
   const useTabbedLayout = state.hasModels || shouldShowDefaultTabs(provider.id)
 
   return useTabbedLayout ? (
-    <div className="space-y-2.5 p-3">
-      <div className="rounded-lg p-0.5" style={{ background: 'rgba(0,0,0,0.04)' }}>
+    <div className="space-y-3 p-4">
+      <div className="rounded-sm border border-stone-800 bg-stone-950/60 p-1">
         <div
           className="relative grid gap-1"
           style={{ gridTemplateColumns: `repeat(${Math.max(1, visibleTypes.length)}, minmax(0, 1fr))` }}
         >
           {visibleTypes.length > 0 && currentType && (
             <div
-              className="absolute bottom-0.5 top-0.5 rounded-md bg-white transition-transform duration-200"
+              className="absolute bottom-0.5 top-0.5 rounded-sm border border-amber-500/40 bg-amber-500/15 transition-transform duration-200"
               style={{
-                boxShadow: '0 1px 4px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(0,0,0,0.06)',
                 width: `calc(100% / ${visibleTypes.length})`,
                 transform: `translateX(${Math.max(0, visibleTypes.indexOf(currentType)) * 100}%)`,
               }}
@@ -316,12 +315,12 @@ export function ProviderAdvancedFields({
             <button
               key={type}
               onClick={() => setActiveType(type)}
-              className={`relative z-[1] flex items-center justify-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${currentType === type
-                ? 'text-[var(--glass-text-primary)]'
-                : 'text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)]'
+              className={`relative z-[1] flex items-center justify-center gap-1.5 rounded-sm px-3 py-2 font-serif-cn text-sm transition-colors ${currentType === type
+                ? 'text-amber-300'
+                : 'text-stone-500 hover:text-stone-300'
                 }`}
             >
-              <TypeIcon type={type} className="h-3 w-3" />
+              <TypeIcon type={type} className="h-3.5 w-3.5" />
               <span>{typeLabel(type, t)}</span>
             </button>
           ))}
@@ -330,10 +329,10 @@ export function ProviderAdvancedFields({
 
       {currentType && (
         <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2 text-[12px] font-semibold text-[var(--glass-text-primary)]">
-            <TypeIcon type={currentType} className="h-3 w-3" />
+          <div className="flex items-center gap-2 font-serif-cn text-sm font-medium text-stone-100">
+            <TypeIcon type={currentType} className="h-3.5 w-3.5" />
             <span>{typeLabel(currentType, t)}</span>
-            <span className="rounded-full bg-[var(--glass-tone-neutral-bg)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--glass-tone-neutral-fg)]">
+            <span className="rounded-sm border border-stone-700 bg-stone-900/60 px-2 py-0.5 font-mono text-[10px] tracking-wider text-stone-400">
               {currentModels.length}
             </span>
           </div>
