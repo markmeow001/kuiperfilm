@@ -244,15 +244,39 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     previousServerInflight.current = serverInflightIds.size
   }, [serverInflightIds.size, projectId, queryClient])
 
-  // Detect transition into 'completed' and invalidate character/location
-  // queries so the grid picks up the freshly-written rows.
+  // Detect transition into 'completed' and invalidate both projectAssets
+  // (so cards see the LLM-written introduction / visual_description) AND
+  // tasks (so useActiveTasks picks up the IMAGE_CHARACTER backfill tasks
+  // that the analyze worker just submitted — without a second invalidate
+  // here the active-tasks query stays stuck on whatever it saw at submit
+  // time and the per-card overlay never lights up).
   const previousTaskStatus = useRef(taskStatus)
   useEffect(() => {
     if (previousTaskStatus.current !== 'completed' && taskStatus === 'completed') {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId), exact: false })
     }
     previousTaskStatus.current = taskStatus
   }, [taskStatus, projectId, queryClient])
+
+  // While analyze is running OR has just completed, keep polling the
+  // active-tasks query every 3s. The backfill tasks are submitted in a
+  // single tick at the END of analyze, so the moment the snapshot flips
+  // to 'completed' we want a fresh fetch within seconds, not 5s+.
+  useEffect(() => {
+    if (!isAnalyzing && taskStatus !== 'completed') return
+    const interval = setInterval(() => {
+      void activeImageTasks.refetch()
+    }, 3000)
+    // Stop polling 30s after completion — by then any backfill tasks
+    // are visible in the snapshot and the existing 4s in-flight loop
+    // takes over.
+    const stopAt = setTimeout(() => clearInterval(interval), 30_000)
+    return () => {
+      clearInterval(interval)
+      clearTimeout(stopAt)
+    }
+  }, [isAnalyzing, taskStatus, activeImageTasks])
 
   const characters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
   const locations = (locationsQuery.data ?? []) as unknown as LocationLike[]
