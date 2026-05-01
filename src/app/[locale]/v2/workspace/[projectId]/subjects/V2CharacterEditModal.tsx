@@ -53,8 +53,12 @@ export interface V2CharacterEditModalProps {
   // Image actions
   onRegenerate: () => void
   onUploadFile: (file: File) => void
+  // Two-step "upload reference + auto-expand to 3-view sheet" flow.
+  // Worker overwrites this appearance's imageUrls with the multi-view set.
+  onUploadAndExpandToMultiView?: (file: File) => void
   isRegenerating: boolean
   isUploading: boolean
+  isExpanding?: boolean
 
   // Text edits
   onSaveIntroduction: (introduction: string) => void
@@ -76,8 +80,10 @@ export function V2CharacterEditModal({
   onZoomImage,
   onRegenerate,
   onUploadFile,
+  onUploadAndExpandToMultiView,
   isRegenerating,
   isUploading,
+  isExpanding,
   onSaveIntroduction,
   onSaveVisualPrompt,
   isSavingIntroduction,
@@ -116,6 +122,7 @@ export function V2CharacterEditModal({
   const visualPromptChanged = visualPromptDraft !== initialVisualPrompt
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const expandFileInputRef = useRef<HTMLInputElement | null>(null)
 
   function handleConfirmDelete() {
     if (!window.confirm(`確定要刪除角色「${character.name ?? '未命名'}」?\n\n此操作會連帶刪除這個角色的所有造型與圖片,且無法復原。`)) {
@@ -169,12 +176,20 @@ export function V2CharacterEditModal({
                   <AppIcon name="image" className="h-10 w-10 text-stone-600" />
                 </div>
               )}
-              {isRegenerating ? (
+              {isExpanding ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
+                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
+                  <div className="font-mono text-[10px] tracking-wider text-amber-300">提交中…</div>
+                  <div className="px-4 text-center font-serif-cn text-[10px] text-stone-400">
+                    上傳參考圖,即將開始生 3 視角
+                  </div>
+                </div>
+              ) : isRegenerating ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
                   <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
                   <div className="font-mono text-[10px] tracking-wider text-amber-300">生圖中…</div>
                   <div className="px-4 text-center font-serif-cn text-[10px] text-stone-400">
-                    Tencent VOD 30-90 秒,撞並發會自動 retry
+                    Tencent VOD 60-180 秒,撞並發會自動 retry
                   </div>
                 </div>
               ) : isUploading ? (
@@ -216,6 +231,32 @@ export function V2CharacterEditModal({
                 if (fileInputRef.current) fileInputRef.current.value = ''
               }}
             />
+
+            {onUploadAndExpandToMultiView ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => expandFileInputRef.current?.click()}
+                  disabled={isRegenerating || isUploading || isExpanding}
+                  title="上傳一張參考圖,自動生成 3 張多視角圖(正面/側面/背面),覆蓋現有圖"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                  {isExpanding ? '提交中…' : '上傳並轉多視角(3 張)'}
+                </button>
+                <input
+                  ref={expandFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) onUploadAndExpandToMultiView(file)
+                    if (expandFileInputRef.current) expandFileInputRef.current.value = ''
+                  }}
+                />
+              </>
+            ) : null}
 
             {imageUrl ? (
               <a

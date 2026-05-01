@@ -35,7 +35,10 @@ import {
   useConfirmProjectCharacterProfile,
   useUpdateProjectCharacterIntroduction,
 } from '@/lib/query/mutations/character-profile-mutations'
-import { useUpdateProjectAppearanceDescription } from '@/lib/query/mutations/character-image-ops-mutations'
+import {
+  useUpdateProjectAppearanceDescription,
+  useUploadAndExpandCharacterToMultiView,
+} from '@/lib/query/mutations/character-image-ops-mutations'
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
@@ -127,6 +130,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const updateAppearanceDesc = useUpdateProjectAppearanceDescription(projectId)
   const updateCharIntro = useUpdateProjectCharacterIntroduction(projectId)
   const deleteCharacter = useDeleteProjectCharacter(projectId)
+  const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
   const [batchGenInFlight, setBatchGenInFlight] = useState<'characters' | 'locations' | null>(null)
@@ -276,6 +280,27 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       {
         onError: (err) => {
           alert(`儲存外觀提示詞失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
+  }
+
+  function handleUploadAndExpandToMultiView(c: CharacterLike, file: File) {
+    const ap = c.appearances?.[0]
+    if (!ap?.id) {
+      alert('此角色還沒有 appearance,請先點重新生成建立首張')
+      return
+    }
+    // Track via the same regen overlay since the worker generates 3
+    // images (~ 60-180s on Tencent VOD). The poll loop on /assets will
+    // pick up the new imageUrls and the overlay clears via the 5min
+    // safety timeout or sooner once images surface.
+    markRegenStart(ap.id)
+    uploadExpand.mutate(
+      { file, characterId: c.id, appearanceId: ap.id },
+      {
+        onError: (err) => {
+          alert(`提交多視角生成失敗:${(err as Error)?.message ?? '未知錯誤'}`)
         },
       },
     )
@@ -621,8 +646,10 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             onZoomImage={(url) => setZoomImage(url)}
             onRegenerate={() => handleRegenChar(c)}
             onUploadFile={(file) => handleUploadChar(c, file)}
+            onUploadAndExpandToMultiView={(file) => handleUploadAndExpandToMultiView(c, file)}
             isRegenerating={regenInFlight.has(apId)}
             isUploading={uploadInFlight.has(apId)}
+            isExpanding={uploadExpand.isPending}
             onSaveIntroduction={(intro) => handleSaveIntroduction(c.id, intro)}
             onSaveVisualPrompt={(prompt) => {
               if (!apId) {

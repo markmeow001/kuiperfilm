@@ -223,3 +223,61 @@ export function useBatchGenerateCharacterImages(projectId: string) {
         }
     })
 }
+
+/**
+ * Upload a single character reference image and expand it into a 3-view
+ * (multi-angle) sheet via the REFERENCE_TO_CHARACTER worker. Two-step
+ * chain: temp upload to get a signed URL, then submit the worker task
+ * pointing at the existing CharacterAppearance row so the worker
+ * overwrites it with the generated multi-view set.
+ */
+export function useUploadAndExpandCharacterToMultiView(projectId: string) {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async (params: {
+            file: File
+            characterId: string
+            appearanceId: string
+        }) => {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => {
+                    const value = reader.result
+                    if (typeof value === 'string') resolve(value)
+                    else reject(new Error('FileReader produced no string'))
+                }
+                reader.onerror = () => reject(reader.error || new Error('FileReader error'))
+                reader.readAsDataURL(params.file)
+            })
+
+            const uploadRes = await fetch('/api/asset-hub/upload-temp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: dataUrl }),
+            })
+            const uploadJson = await uploadRes.json().catch(() => null) as { success?: boolean; url?: string } | null
+            if (!uploadRes.ok || !uploadJson?.url) {
+                throw new Error('Failed to upload reference image')
+            }
+
+            return await requestJsonWithError(
+                `/api/novel-promotion/${projectId}/reference-to-character`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        referenceImageUrls: [uploadJson.url],
+                        characterId: params.characterId,
+                        appearanceId: params.appearanceId,
+                        isBackgroundJob: true,
+                    }),
+                },
+                'Failed to start multi-view generation',
+            )
+        },
+        onSettled: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
