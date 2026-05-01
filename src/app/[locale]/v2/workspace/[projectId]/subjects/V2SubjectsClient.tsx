@@ -20,6 +20,8 @@ import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/use
 import { useRegenerateSingleCharacterImage } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useRegenerateSingleLocationImage } from '@/lib/query/mutations/location-image-mutations'
 import { useConfirmProjectCharacterProfile } from '@/lib/query/mutations/character-profile-mutations'
+import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
+import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
 type Tab = 'character' | 'scene' | 'prop'
 
@@ -75,9 +77,19 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const regenChar = useRegenerateSingleCharacterImage(projectId)
   const regenLoc = useRegenerateSingleLocationImage(projectId)
   const confirmProfile = useConfirmProjectCharacterProfile(projectId)
+  const analyze = useAnalyzeProjectAssets(projectId)
+  const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
 
   const characters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
   const locations = (locationsQuery.data ?? []) as unknown as LocationLike[]
+
+  function handleAnalyze() {
+    if (!currentEpisodeId) {
+      alert('還沒有任何集數 — 請先到「劇本」step 貼劇本並儲存')
+      return
+    }
+    analyze.mutate({ episodeId: currentEpisodeId })
+  }
 
   function handleRegenChar(c: CharacterLike) {
     const appearanceId = c.appearances?.[0]?.id
@@ -107,6 +119,45 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
 
   return (
     <div className="px-12 py-10">
+      {/* Analyze CTA strip — Stage C: independent subjects analysis */}
+      <div className="mb-6 flex flex-col gap-4 rounded-sm border border-amber-500/30 bg-amber-500/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="font-fraunces text-sm italic text-amber-400">
+            分析{currentEpisode ? `「${currentEpisode.name}」` : '當前集'}的劇本
+          </div>
+          <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">
+            從劇本自動抽出角色 / 場景 — 完成後可在下方卡片點「重新生成」/「鎖定」/上傳替換
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={analyze.isPending || !currentEpisodeId}
+            className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2.5 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <AppIcon name="sparklesAlt" className="h-4 w-4" />
+            {analyze.isPending ? '分析中…' : '一鍵分析'}
+          </button>
+          <Link
+            href={`/${locale}/workspace/asset-hub`}
+            className="font-mono text-[10px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
+          >
+            或從素材庫導入 →
+          </Link>
+        </div>
+      </div>
+      {analyze.isError ? (
+        <div className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
+          分析失敗:{(analyze.error as Error)?.message ?? '未知錯誤'}
+        </div>
+      ) : null}
+      {analyze.isSuccess ? (
+        <div className="mb-6 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
+          ✓ 已送出分析任務,結果稍後出現在下方卡片(可同時切到分鏡 step)
+        </div>
+      ) : null}
+
       <div className="mb-8 flex items-center justify-between">
         <div className="flex gap-1 rounded-sm border border-stone-800/50 bg-stone-900/50 p-1">
           {tabs.map((t) => (
@@ -127,9 +178,9 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         </div>
         <Link
           href={`/${locale}/v2/workspace/${projectId}/storyboard`}
-          className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400"
+          className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-5 py-2 font-serif-cn text-sm text-amber-400 transition-all hover:border-amber-500/60 hover:bg-amber-500/15"
         >
-          進入分鏡 <AppIcon name="chevronRight" className="h-4 w-4" />
+          下一步 → 分鏡 <AppIcon name="chevronRight" className="h-4 w-4" />
         </Link>
       </div>
 
@@ -149,7 +200,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             onLock: () => handleConfirmProfile(c),
             isLocking: confirmProfile.isPending,
           }))}
-          emptyHint="此項目還沒有角色 — 請先回劇本 step 跑 LLM 分析"
+          emptyHint="此項目還沒有角色 — 點上方「一鍵分析」抽出此集的角色,或從素材庫導入"
         />
       ) : tab === 'scene' ? (
         <SubjectGrid
@@ -162,7 +213,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             onRegenerate: () => handleRegenLoc(l),
             isRegenerating: regenLoc.isPending,
           }))}
-          emptyHint="此項目還沒有場景 — 請先回劇本 step 跑 LLM 分析"
+          emptyHint="此項目還沒有場景 — 點上方「一鍵分析」抽出此集的場景,或從素材庫導入"
         />
       ) : (
         <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
