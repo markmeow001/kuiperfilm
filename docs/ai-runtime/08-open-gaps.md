@@ -108,6 +108,14 @@ Tencent VOD Kling-3.0-Omni 在 capability catalog 里 priceLabel='--'(没设 pri
 - **lip-sync (fal)**: admin 帐户 fal apiKey 是空的,这步直接 skip。等 fal 接上再测
 - **stitch-mp4 (Phase 12.7)**: 全集 ffmpeg 拼接,需要前面所有 panel 都有 video
 
+### 还没查清的 root cause
+
+E2E 第一轮跑 storyboard 时跑到 `voice_analyze` 那个 phase,worker 进 LLM streaming 后(`stage=worker_llm_streaming` seq=1709)就不再有事件,task 最终被 reconcile 撿起来标 `TASK_LOCALE_REQUIRED`(由 Bug #1 的 secondary error)。修 Bug #1 后第二轮跑通了,但**那次中断的真正 root cause** — 是 LLM 超时、heartbeat 过期、worker container OOM、Redis 短断、还是别的 — 没查到。
+
+判断:第二轮 (commit 871d560 deploy 后) 跑通有可能只是这次 timing 没踩到那个 corner case,不代表问题不存在。Prod 高负载 / 长尾 / 多用户并发场景仍可能再现,只是这次不会被错的 errorCode 误导。
+
+下一轮 e2e 完整跑(包含 `3a57b6b` 的 root-cause cleanup deploy)如果再次踩到中断,因为 service.ts 的 meta merge 不再丢 locale,真正的 errorCode 会浮出来,届时再追。
+
 ### 下次 deploy 后 SOP
 
 ```bash
