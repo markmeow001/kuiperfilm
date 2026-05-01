@@ -831,6 +831,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         />
       ) : tab === 'scene' ? (
         <SubjectGrid
+          aspect="wide"
           items={locations.map((l) => ({
             id: l.id,
             targetId: l.id,
@@ -996,7 +997,20 @@ interface SubjectItem {
   isSavingDescription?: boolean
 }
 
-function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: string }) {
+function SubjectGrid({
+  items,
+  emptyHint,
+  aspect = 'portrait',
+}: {
+  items: SubjectItem[]
+  emptyHint: string
+  // Characters are 3:4 portrait (full-body 三视图). Scenes are 16:9
+  // wide (Approach A widescreen). Forcing portrait on a wide source
+  // center-crops it into a vertical strip and hides the left/right
+  // composition we explicitly told the model to draw.
+  aspect?: 'portrait' | 'wide'
+}) {
+  const aspectClass = aspect === 'wide' ? 'aspect-video' : 'aspect-[3/4]'
   if (items.length === 0) {
     return (
       <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
@@ -1013,7 +1027,7 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
           className="group overflow-hidden rounded-sm border border-stone-800/50 bg-stone-900/30 transition-all hover:border-amber-500/40"
         >
           <div
-            className={`relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900 ${
+            className={`relative ${aspectClass} overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900 ${
               item.imageUrl && item.onZoom ? 'cursor-zoom-in' : ''
             }`}
             onClick={() => {
