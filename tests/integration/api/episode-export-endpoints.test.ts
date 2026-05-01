@@ -1,12 +1,10 @@
 /**
- * Episode export endpoint regression — covers the 3 endpoints added
- * for v2 FinalPage:
- *   - POST /episodes/:id/stitch-mp4   (b61a653 FFmpeg full-episode stitch)
- *   - POST /download-videos           (829ff12 panel zip)
- *   - POST /episodes/:id/auto-group-multi-shot (276fb2a LLM grouping)
+ * Episode export endpoint regression — covers the v2 FinalPage routes:
+ *   - POST /episodes/:id/stitch-mp4   (zip pack handed off to BullMQ)
+ *   - POST /episodes/:id/auto-group-multi-shot (LLM grouping)
  *
- * The actual heavy lifting (ffmpeg, prisma transactions, LLM call)
- * runs in worker handlers / behind external services; here we just
+ * The actual heavy lifting (zip packaging in the worker, prisma
+ * transactions, LLM call) runs behind external services; here we just
  * exercise the route handlers' validation + dispatch logic.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,16 +60,6 @@ vi.mock('@/lib/workers/handlers/resolve-analysis-model', () => resolveModelMock)
 vi.mock('@/lib/task/resolve-locale', () => ({
   resolveRequiredTaskLocale: vi.fn(() => 'zh'),
 }))
-// archiver pulled in by /download-videos route — stub it to avoid
-// shelling out / streaming issues during tests.
-vi.mock('archiver', () => ({
-  default: vi.fn(() => ({
-    on: vi.fn(),
-    append: vi.fn(),
-    finalize: vi.fn(),
-  })),
-}))
-
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()

@@ -228,31 +228,6 @@ describe('Multi-user isolation: novel-promotion child resources', () => {
     )
   })
 
-  it('POST /download-videos — user A cannot zip user B episode', async () => {
-    prismaMock.novelPromotionEpisode.findFirst.mockResolvedValueOnce(null)
-
-    const { POST } = await import(
-      '@/app/api/novel-promotion/[projectId]/download-videos/route'
-    )
-
-    const res = await callRoute(POST, {
-      path: `/api/novel-promotion/${ATTACKER_PROJECT}/download-videos`,
-      method: 'POST',
-      body: { episodeId: VICTIM_EPISODE },
-      context: {
-        params: Promise.resolve({ projectId: ATTACKER_PROJECT }),
-      },
-    })
-
-    // download-videos returns 404 (NOT_FOUND) when no episodes resolved.
-    expect(res.status).toBe(404)
-    const call = prismaMock.novelPromotionEpisode.findFirst.mock.calls[0][0]
-    expect(call.where.id).toBe(VICTIM_EPISODE)
-    expectChainedQuery(call)
-    // The unsafe findUnique-by-id-only must NOT be called.
-    expect(prismaMock.novelPromotionEpisode.findUnique).not.toHaveBeenCalled()
-  })
-
   it('GET /speaker-voice — user A cannot read user B episode speaker voices', async () => {
     prismaMock.novelPromotionEpisode.findFirst.mockResolvedValueOnce(null)
 

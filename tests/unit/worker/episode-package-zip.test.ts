@@ -161,7 +161,9 @@ describe('handleEpisodePackageZipTask', () => {
     expect(script).toContain('小明: Hello world')
     expect(script).toContain('Panel 02')
 
-    const updateCalls = prismaMock.novelPromotionEpisode.update.mock.calls
+    const updateCalls = prismaMock.novelPromotionEpisode.update.mock.calls as unknown as Array<
+      [{ where: { id: string }; data: { stitchStatus?: string; stitchedVideoUrl?: string } }]
+    >
     expect(updateCalls.length).toBe(2)
     expect(updateCalls[0][0]).toMatchObject({
       where: { id: 'ep-1' },
@@ -229,7 +231,9 @@ describe('handleEpisodePackageZipTask', () => {
     const { handleEpisodePackageZipTask } = await import('@/lib/workers/handlers/episode-package-zip')
     await expect(handleEpisodePackageZipTask(makeJob('ep-fetch-fail'))).rejects.toThrow(/HTTP 503/)
 
-    const updateCalls = prismaMock.novelPromotionEpisode.update.mock.calls
+    const updateCalls = prismaMock.novelPromotionEpisode.update.mock.calls as unknown as Array<
+      [{ where: { id: string }; data: { stitchStatus?: string } }]
+    >
     const failedCall = updateCalls.find((call) => call[0]?.data?.stitchStatus === 'failed')
     expect(failedCall).toBeTruthy()
     expect(cosMock.uploadToCOS).not.toHaveBeenCalled()

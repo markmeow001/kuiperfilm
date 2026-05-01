@@ -82,7 +82,6 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/clips/route.ts',
   'src/app/api/novel-promotion/[projectId]/copy-from-global/route.ts',
   'src/app/api/novel-promotion/[projectId]/download-images/route.ts',
-  'src/app/api/novel-promotion/[projectId]/download-videos/route.ts',
   'src/app/api/novel-promotion/[projectId]/download-voices/route.ts',
   'src/app/api/novel-promotion/[projectId]/editor/render/route.ts',
   'src/app/api/novel-promotion/[projectId]/editor/route.ts',

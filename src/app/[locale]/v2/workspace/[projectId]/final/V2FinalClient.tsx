@@ -77,39 +77,6 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   const [active, setActive] = useState<string | null>(null)
   const activePanel = active ? allPanels.find((p) => p.id === active) ?? firstVideoPanel : firstVideoPanel
 
-  const [downloadingZip, setDownloadingZip] = useState(false)
-  const [downloadError, setDownloadError] = useState<string | null>(null)
-
-  async function handleDownloadPanelsZip() {
-    if (!currentEpisode?.id) return
-    setDownloadingZip(true)
-    setDownloadError(null)
-    try {
-      const res = await fetch(`/api/novel-promotion/${projectId}/download-videos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ episodeId: currentEpisode.id }),
-      })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(text || `HTTP ${res.status}`)
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `episode-${currentEpisode.id}-panels.zip`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      setDownloadError((err as Error).message || '下載失敗')
-    } finally {
-      setDownloadingZip(false)
-    }
-  }
-
   const ratio = project?.novelPromotionData?.videoRatio ?? '9:16'
   const targetDuration = project?.novelPromotionData?.targetDuration ?? 60
   const generatedSeconds = panelsWithVideo.length * 5 // rough estimate; Kling default 5s
@@ -272,32 +239,12 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
             </p>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={handleDownloadPanelsZip}
-              disabled={downloadingZip || !currentEpisode?.id || panelsWithVideo.length === 0}
-              title={
-                panelsWithVideo.length === 0
-                  ? '沒有任何分鏡視頻可下載'
-                  : '把當前集所有分鏡 mp4 打包成 zip,方便拖進剪映等剪輯工具'
-              }
-              className="flex items-center justify-center rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {downloadingZip ? '打包中…' : `下載 ${panelsWithVideo.length} 段 zip`}
-            </button>
-            <Link
-              href={`/${locale}/v2/workspace/${projectId}/script`}
-              className="flex items-center justify-center rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400"
-            >
-              查看劇本
-            </Link>
-          </div>
-          {downloadError ? (
-            <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-              下載失敗:{downloadError}
-            </p>
-          ) : null}
+          <Link
+            href={`/${locale}/v2/workspace/${projectId}/script`}
+            className="flex items-center justify-center rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400"
+          >
+            查看劇本
+          </Link>
 
           <div className="rounded-sm border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-rose-900/10 p-4">
             <div className="font-fraunces text-sm italic text-amber-400">From spark to screen.</div>
