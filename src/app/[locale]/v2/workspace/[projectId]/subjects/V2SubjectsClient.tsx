@@ -59,6 +59,10 @@ interface CharacterLike {
   name?: string | null
   role?: string | null
   description?: string | null
+  // Character.introduction (身份/關係/稱呼映射) is the human-readable
+  // role description produced by analyze-novel. Used as the primary
+  // source for the card's role text now that it's persisted again.
+  introduction?: string | null
   imageUrl?: string | null
   profileConfirmed?: boolean | null
   appearances?: CharacterAppearanceLike[] | null
@@ -496,13 +500,19 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           items={characters.map((c) => {
             const ap = c.appearances?.[0]
             const apId = ap?.id ?? ''
-            const apDescription = ap?.description ?? c.description ?? null
+            // Role description (身份/關係) prefers Character.introduction
+            // — that's the human-readable LLM tagline. Visual prompt
+            // (used by image regen) lives on appearance.description and
+            // is what the inline editor mutates.
+            const roleSummary = c.introduction ?? c.description ?? null
+            const visualPrompt = ap?.description ?? null
             return {
               id: c.id,
               targetId: apId,
               name: c.name ?? '未命名角色',
               caption: c.role ?? '角色',
-              description: apDescription,
+              description: roleSummary,
+              visualPrompt,
               imageUrl: pickCharacterImage(c),
               onRegenerate: () => handleRegenChar(c),
               isRegenerating: regenInFlight.has(apId),
@@ -576,7 +586,12 @@ interface SubjectItem {
   targetId: string
   name: string
   caption: string
+  // Role/identity description (Character.introduction). User-friendly,
+  // shown as a subtitle under the name.
   description: string | null
+  // Image-generation prompt (Appearance.description). What the inline
+  // editor mutates and what the regen worker feeds to the image model.
+  visualPrompt?: string | null
   imageUrl: string | null
   onRegenerate?: () => void
   isRegenerating?: boolean
@@ -586,7 +601,7 @@ interface SubjectItem {
   onUpload?: (file: File) => void
   isUploading?: boolean
   onZoom?: (url: string) => void
-  // Description editor (character cards only).
+  // Visual-prompt editor (character cards only).
   onEditDescription?: () => void
   isEditingDescription?: boolean
   descriptionDraft?: string
@@ -662,21 +677,30 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
                   type="button"
                   onClick={item.onEditDescription}
                   className="flex flex-shrink-0 items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
-                  title="編輯角色描述詞 — 下次「重新生成」會用新描述"
+                  title="編輯外觀提示詞 — 下次「重新生成」會用此 prompt"
                 >
                   <AppIcon name="edit" className="h-3 w-3" />
-                  改描述
+                  改外觀
                 </button>
               ) : null}
             </div>
+            {item.description ? (
+              <div className="mt-1 line-clamp-2 font-body text-xs leading-relaxed text-stone-400">
+                {item.description}
+              </div>
+            ) : null}
             {item.isEditingDescription ? (
-              <div className="mt-2 space-y-2">
+              <div className="mt-3 space-y-2 rounded-sm border border-amber-500/30 bg-stone-950/40 p-2">
+                <div className="flex items-center justify-between font-mono text-[9px] tracking-wider text-amber-500/70">
+                  <span>外觀提示詞 (image prompt)</span>
+                  <span className="text-stone-600">{item.descriptionDraft?.length ?? 0} 字</span>
+                </div>
                 <textarea
                   value={item.descriptionDraft ?? ''}
                   onChange={(e) => item.onDescriptionDraftChange?.(e.target.value)}
-                  rows={4}
+                  rows={5}
                   className="w-full resize-none rounded-sm border border-amber-500/40 bg-stone-900/80 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
-                  placeholder="描述外觀:髮色、髮型、衣著、年齡、體態、表情… 越具體生圖越穩定"
+                  placeholder="例:三十岁中年男性,黑短发,商务衬衫卷袖,深灰西裤,腕表,神情冷峻... (越具體越穩)"
                   disabled={item.isSavingDescription}
                 />
                 <div className="flex items-center justify-end gap-2 font-mono text-[10px] tracking-wider">
@@ -694,19 +718,24 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
                     disabled={item.isSavingDescription}
                     className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {item.isSavingDescription ? '儲存中…' : '儲存描述'}
+                    {item.isSavingDescription ? '儲存中…' : '儲存提示詞'}
                   </button>
                 </div>
               </div>
-            ) : item.description ? (
-              <div className="mt-1 line-clamp-3 font-body text-xs leading-relaxed text-stone-500">
-                {item.description}
+            ) : item.visualPrompt ? (
+              <div className="mt-2 rounded-sm border border-stone-800/40 bg-stone-950/30 p-2">
+                <div className="mb-1 font-mono text-[9px] tracking-wider text-stone-500">
+                  外觀提示詞
+                </div>
+                <div className="line-clamp-3 font-body text-[11px] leading-relaxed text-stone-400">
+                  {item.visualPrompt}
+                </div>
               </div>
-            ) : (
-              <div className="mt-1 font-body text-xs italic text-stone-600">
-                (還沒有描述 — 點「改描述」加上)
+            ) : item.onEditDescription ? (
+              <div className="mt-2 font-body text-[11px] italic text-stone-600">
+                (還沒有外觀提示詞 — 點「改外觀」加上,或重跑「一鍵分析」自動生成)
               </div>
-            )}
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-3 border-t border-stone-800/50 px-4 pb-3 pt-2 font-mono text-[10px] tracking-wider">
             {item.onRegenerate ? (

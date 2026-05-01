@@ -32,6 +32,7 @@ Output format (JSON only):
       "name": "Canonical Name",
       "aliases": ["alias 1", "alias 2"],
       "introduction": "Role, perspective mapping, relationships, and naming aliases",
+      "visual_description": "An 80-150 word English visual prompt for the initial appearance, ready to feed into a text-to-image model. MUST stay strictly grounded in the source text era_period, social_class, occupation, costume_tier, suggested_colors, visual_keywords, and primary_identifier. Cover age, hairstyle/color, facial features, expression, upper-body wear, lower-body wear, accessories/footwear, overall mood. Never drift outside the era: a modern drama must NOT mention armor/robes/period costumes; a historical piece must NOT mention suits/wristwatches; sci-fi must NOT mention period-court attire. If era_period is modern/contemporary/urban, only contemporary clothing (shirts/suits/jeans/hoodies/dresses) is allowed.",
       "gender": "male/female/other",
       "age_range": "young adult",
       "role_level": "S",
@@ -54,6 +55,7 @@ Output format (JSON only):
       "name": "Canonical Name",
       "aliases": ["alias 1", "alias 2"],
       "introduction": "Role, perspective mapping, relationships, and naming aliases",
+      "visual_description": "An 80-150 word English visual prompt for the initial appearance, ready to feed into a text-to-image model. MUST stay strictly grounded in the source text era_period, social_class, occupation, costume_tier, suggested_colors, visual_keywords, and primary_identifier. Cover age, hairstyle/color, facial features, expression, upper-body wear, lower-body wear, accessories/footwear, overall mood. Never drift outside the era: a modern drama must NOT mention armor/robes/period costumes; a historical piece must NOT mention suits/wristwatches; sci-fi must NOT mention period-court attire. If era_period is modern/contemporary/urban, only contemporary clothing (shirts/suits/jeans/hoodies/dresses) is allowed.",
       "gender": "male/female/other",
       "age_range": "young adult",
       "role_level": "S",
@@ -84,3 +86,4 @@ Strict constraints:
 1. JSON only.
 2. If no valid character is found, return empty arrays.
 3. Keep all strings in English.
+4. visual_description is required and must stay consistent with era_period (no historical attire in modern stories, no modern attire in historical stories).
