@@ -24,7 +24,7 @@ import {
 } from '@/lib/query/hooks/useStoryboards'
 import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
-import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
+import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
@@ -222,6 +222,71 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // click registered (worker takes 30-60s before videoUrl appears).
   const [videoInFlight, setVideoInFlight] = useState<Set<string>>(new Set())
 
+  // Server-side image / video panel tasks. These survive page navigation
+  // because they're polled from the DB, not stored in React state. Without
+  // this, the user clicks 重新生成圖, switches to /subjects to check
+  // characters, returns — sees no overlay and assumes the task is gone
+  // even though it's still running in the background. User reported:
+  // 「當我在這邊按重新生成圖, 我切換到主體或其他頁面, 就會消失了」.
+  const activePanelImageTasks = useActiveTasks({
+    projectId,
+    type: ['image_panel', 'video_panel'],
+  })
+  const serverInflightPanelImageIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const t of activePanelImageTasks.data ?? []) {
+      if (t.targetType === 'NovelPromotionPanel' && typeof t.targetId === 'string' && t.type === 'image_panel') {
+        set.add(t.targetId)
+      }
+    }
+    return set
+  }, [activePanelImageTasks.data])
+  const serverInflightPanelVideoIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const t of activePanelImageTasks.data ?? []) {
+      if (t.targetType === 'NovelPromotionPanel' && typeof t.targetId === 'string' && t.type === 'video_panel') {
+        set.add(t.targetId)
+      }
+    }
+    return set
+  }, [activePanelImageTasks.data])
+  // Poll while any in-flight, including video tracked locally — that way
+  // we catch tasks no matter where they were submitted from.
+  useEffect(() => {
+    if (
+      serverInflightPanelImageIds.size === 0 &&
+      serverInflightPanelVideoIds.size === 0 &&
+      videoInFlight.size === 0
+    ) return
+    const interval = setInterval(() => { void activePanelImageTasks.refetch() }, 3000)
+    return () => clearInterval(interval)
+  }, [
+    serverInflightPanelImageIds.size,
+    serverInflightPanelVideoIds.size,
+    videoInFlight.size,
+    activePanelImageTasks,
+  ])
+  // When the server set of in-flight image/video tasks shrinks, refresh
+  // storyboards so the new imageUrl / videoUrl surfaces immediately.
+  const previousServerImageInflight = useRef(serverInflightPanelImageIds.size)
+  const previousServerVideoInflight = useRef(serverInflightPanelVideoIds.size)
+  useEffect(() => {
+    if (
+      (previousServerImageInflight.current > serverInflightPanelImageIds.size ||
+        previousServerVideoInflight.current > serverInflightPanelVideoIds.size) &&
+      currentEpisodeId
+    ) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId) })
+    }
+    previousServerImageInflight.current = serverInflightPanelImageIds.size
+    previousServerVideoInflight.current = serverInflightPanelVideoIds.size
+  }, [
+    serverInflightPanelImageIds.size,
+    serverInflightPanelVideoIds.size,
+    currentEpisodeId,
+    queryClient,
+  ])
+
   // Poll storyboards while any panel video is in flight so the new
   // videoUrl surfaces and the indicator clears automatically.
   useEffect(() => {
@@ -274,7 +339,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       },
     )
   }
-  const isCurrentPanelVideoInFlight = !!selected && videoInFlight.has(selected.id)
+  const isCurrentPanelVideoInFlight =
+    !!selected && (videoInFlight.has(selected.id) || serverInflightPanelVideoIds.has(selected.id))
+  const isCurrentPanelImageInFlight =
+    !!selected && serverInflightPanelImageIds.has(selected.id)
 
   // Distinct group ids in the order panels appear, for stable colour cycling.
   const orderedGroupIds = useMemo(() => {
@@ -581,6 +649,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   <div className="absolute left-2 top-1.5 rounded bg-stone-950/50 px-1.5 py-0.5 font-mono text-[10px] text-stone-200 backdrop-blur-sm">
                     #{String(i + 1).padStart(2, '0')}
                   </div>
+                  {serverInflightPanelImageIds.has(p.id) || serverInflightPanelVideoIds.has(p.id) ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
+                      <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+                      <div className="font-mono text-[9px] tracking-wider text-amber-300">
+                        {serverInflightPanelVideoIds.has(p.id) ? '視頻生成中' : '圖生成中'}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="bg-stone-900/40 px-2 py-2">
                   <div className="truncate font-serif-cn text-xs text-stone-200">
@@ -733,16 +809,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   <AppIcon name="image" className="h-8 w-8 text-stone-600" />
                 </div>
               )}
-              {isCurrentPanelVideoInFlight ? (
+              {isCurrentPanelVideoInFlight || isCurrentPanelImageInFlight ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-stone-950/75 backdrop-blur-sm">
                   <AppIcon name="sparklesAlt" className="h-8 w-8 animate-pulse text-amber-400" />
-                  <div className="font-fraunces text-base italic text-amber-300">視頻生成中</div>
-                  <div className="px-6 text-center font-serif-cn text-xs text-stone-300">
-                    Kling 模型 30-60 秒,完成後自動更新
+                  <div className="font-fraunces text-base italic text-amber-300">
+                    {isCurrentPanelVideoInFlight ? '視頻生成中' : '圖片生成中'}
                   </div>
-                  {/* Indeterminate progress strip — animates left→right via the
-                      animate-[progress_2s_linear_infinite] CSS keyframe defined
-                      globally. Provides a "moving" cue without needing actual %. */}
+                  <div className="px-6 text-center font-serif-cn text-xs text-stone-300">
+                    {isCurrentPanelVideoInFlight
+                      ? 'Kling 模型 30-60 秒,完成後自動更新'
+                      : 'Tencent VOD 30-60 秒,完成後自動更新'}
+                  </div>
                   <div className="mt-1 h-0.5 w-48 overflow-hidden rounded-full bg-stone-800/60">
                     <div className="h-full w-1/3 animate-[progressSlide_2s_linear_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
                   </div>
