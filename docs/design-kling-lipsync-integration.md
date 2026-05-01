@@ -1,9 +1,21 @@
 # Design Doc — Kling 對口型（lip_sync）整合
 
-> **Status:** Draft / Awaiting decision
+> **Status:** ⏸ Deferred — 等英文劇主流程上線後再啟動
 > **Author:** AI session (Anthropic CLI)
 > **Date:** 2026-05-01
 > **Discovered during:** E2E test on art.kuiperfilmailab.com (project `57f45350-44c0-46b1-aab4-acf69e08dbf8`)
+> **Last updated:** 2026-05-01 (status → deferred)
+
+## ⏸ 為什麼 deferred
+
+**User 確認接下來主力是英文劇（白人角色為主）**，所以：
+1. TTS provider 決策要把**英文音色品質**放進評估維度（不只看中文）
+2. 中文 lip_sync 的 e2e 結果（這份 doc 的場景）跟英文劇主場景不直接相關
+3. 等英文劇主 pipeline 跑通、TTS 選型有共識後，再回頭啟動本 doc 的 Phase 1
+
+**不刪掉**因為設計大方向（PANEL_LIP_SYNC 後處理 stage、schema 預留欄位重用、Kling lip_sync 配 TTS）對英文劇照樣適用，只差 TTS provider 換家。
+
+→ 重啟前必補的內容見 [Section 16. 重啟前更新清單](#16-重啟前更新清單)。
 
 ## TL;DR
 
@@ -11,7 +23,7 @@ Kling 3.0/3.0-Omni 的 `AudioGeneration: Enabled` 會生**模型自決定的環�
 
 本 doc 提案在 panel video 後加一個 `PANEL_LIP_SYNC` stage，**有對白 panel** 自動跑 TTS + Kling lip_sync，產出有正確對白的 `panel.lipSyncVideoUrl`，stitch 時優先採用。
 
-**P0 決策卡點：** TTS（音色合成）的 provider 還沒選（騰訊 TTS / Vidu voice / Fal IndexTTS 三選一）。Design doc 寫完，下一步就是**等 user 決定 TTS provider** 才能動工。
+**P0 決策卡點：** TTS（音色合成）的 provider 還沒選（騰訊 TTS / Vidu voice / Fal IndexTTS 三選一）。**現已 deferred — 主力轉英文劇後重新評估，候選名單要擴充到包含英文音色強的 ElevenLabs / OpenAI TTS 等。**
 
 ---
 
@@ -448,6 +460,7 @@ Stage D 走 Kling Omni t2v + multi_shot=intelligence。本 doc 不衝突 — Omn
 | 日期 | 內容 | 作者 |
 |---|---|---|
 | 2026-05-01 | Draft v1 — 觀察 e2e 後初稿 | AI session (Anthropic CLI) |
+| 2026-05-01 | Status → Deferred — user 確認主力轉英文劇，TTS 評估要等英文音色 candidates 擴充 | AI session (Anthropic CLI) |
 
 ---
 
@@ -455,10 +468,52 @@ Stage D 走 Kling Omni t2v + multi_shot=intelligence。本 doc 不衝突 — Omn
 
 **這 doc 已能讓 P1+P2 動工**（schema + backend stage 的 80%），只差 TTS provider 決定。
 
-建議步驟：
-1. **User 決定 Q1（TTS provider）** ← 最大 unlocker
+⏸ **現已 Deferred** — 等以下條件齊備再重啟：
+- 英文劇主 pipeline 跑通（schema、prompt、storyboard 都確認支援英文場景）
+- TTS provider 評估納入英文音色（ElevenLabs / OpenAI TTS / Cartesia / Tencent 國際版 等）
+- User 拍板 P0 的 TTS 選型
+
+重啟流程：
+1. 補完 [Section 16](#16-重啟前更新清單) 的清單
 2. AI session 寫 Phase 1（schema migration + LLM prompt 更新）
 3. AI session 寫 Phase 2（backend lip_sync 後處理）
-4. AI session 寫 Phase 3（接 TTS）
-5. e2e 重跑同一個 project 57f45350，驗證 panel #12 對白音為精準的「妳要的證據，我找到了。」
+4. AI session 寫 Phase 3（接 TTS — 以英文劇場景驗證）
+5. e2e 重跑驗證英文對白被 word-perfect 唸出
 6. 接 Phase 4 + 5
+
+---
+
+## 16. 重啟前更新清單
+
+當未來要重啟這份 doc 時，**先做這幾件事**：
+
+### 16.1 重新評估 TTS provider（Section 6 改寫）
+- 候選名單擴充為英文/中英雙語並重：
+  - **ElevenLabs** — 英文情感表達業界頂級，多語言；獨立計費
+  - **OpenAI TTS（gpt-4o-mini-tts / tts-1-hd）** — 多語言、自然度高、API 便利
+  - **Cartesia Sonic** — 低延遲、emotion control
+  - **Azure Neural TTS** — 多 SSML 控制、企業常用
+  - **Fal IndexTTS-2** — 已配在 default audio model
+  - **騰訊雲 TTS（國際/國內）** — 中文強，英文音色待驗
+  - Vidu voice library — 風格化偏中文
+- 新評估維度：英文情感、emotion tags、中英切換能力、SSML 支援、cost per char、是否支援 voice cloning
+- Voice cloning 對連續劇角色很關鍵（5 集後同角色音色不能漂移）
+
+### 16.2 角色 voiceId schema 重看
+- `character.voiceId` 目前 String（單值）
+- 英文場景可能要拓展為 `voiceProfile: { provider, voiceId, language, style? }` 多 provider 支援
+
+### 16.3 LLM prompt 處理英文 dialogueText
+- script-to-storyboard prompt 已有 zh/en 雙版本，dialogueText 規格雙語都加
+- 注意英文劇場景：`dialogueText: "I found the proof you wanted."` 要 word-perfect 不被翻譯轉換
+
+### 16.4 多人對話策略可能要往前提
+- 英文劇通常對話密度高，多人 panel 比中文短劇多
+- Kling face detection（docx 提到的「Kling 人脸识别」）的優先級可能要在這 phase 處理而非延後
+
+### 16.5 跟主 pipeline 對齊
+- 看那時的 pipeline 是不是已經到 v3/某新階段（v2 可能已 promoted）
+- Stage D / 多造型 / Hunyuan 遷移的狀態，重新檢查 Section 12 的關係矩陣
+
+### 16.6 把這份 doc 的 status 改回 Active
+- 並更新「變更歷史」
