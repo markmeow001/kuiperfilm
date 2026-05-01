@@ -159,8 +159,10 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
     [currentEpisodeId, editingId, episodes, setCurrentEpisode],
   )
 
-  if (episodes.length === 0 || !currentEpisodeId) return null
-
+  // Render even with 0 episodes — show just the "+ 新建劇集" button so the
+  // user has a clear entry point before any episode exists. ScriptPage's
+  // own "儲存" still auto-creates the first episode on its own as a safety
+  // net for users who skip the tab bar and start typing directly.
   return (
     <div
       className="flex items-stretch gap-2 border-b border-stone-800/60 bg-stone-950 px-6 py-3"

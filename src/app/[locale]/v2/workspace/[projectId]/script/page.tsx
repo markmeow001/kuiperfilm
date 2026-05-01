@@ -14,7 +14,7 @@ export default async function V2ScriptPage({ params }: PageProps) {
       currentStep="script"
       draftNumber={2}
     >
-      <V2ScriptClient projectId={projectId} />
+      <V2ScriptClient projectId={projectId} locale={locale} />
     </V2WorkspaceShell>
   )
 }

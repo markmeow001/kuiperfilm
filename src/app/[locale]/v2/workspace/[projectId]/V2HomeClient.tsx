@@ -16,6 +16,7 @@ import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { V2_STEPS, type V2StepId } from '@/components/v2/v2-types'
+import { V2ProjectSettingsPanel } from './V2ProjectSettingsPanel'
 
 interface V2HomeClientProps {
   projectId: string
@@ -119,7 +120,7 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
           })}
         </div>
 
-        <div className="mt-10 flex items-center gap-4">
+        <div className="mt-10">
           <Link
             href={`/${locale}/v2/workspace/${projectId}/${nextStep}`}
             className="inline-flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
@@ -127,12 +128,11 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
             繼續到 {V2_STEPS.find((s) => s.id === nextStep)?.label} step
             <AppIcon name="chevronRight" className="h-4 w-4" />
           </Link>
-          <Link
-            href={`/${locale}/workspace/${projectId}`}
-            className="font-mono text-[11px] tracking-wider text-stone-600 transition-all hover:text-amber-500"
-          >
-            ↩ 切回舊版工作區
-          </Link>
+        </div>
+
+        {/* Project-level settings — videoRatio + style preset (Stage B) */}
+        <div className="mt-10">
+          <V2ProjectSettingsPanel projectId={projectId} />
         </div>
 
         <div className="mt-12 rounded-sm border border-stone-800/60 bg-stone-900/30 p-6">
