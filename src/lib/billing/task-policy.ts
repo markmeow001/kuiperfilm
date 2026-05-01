@@ -174,8 +174,18 @@ function buildVideoTaskInfo(taskType: TaskType, payload: AnyPayload): TaskBillin
   try {
     maxFrozenCost = calcVideo(model, resolution || '720p', quantity, metadata)
   } catch (error) {
-    if (error instanceof BillingOperationError && error.code === 'BILLING_UNKNOWN_MODEL') {
-      // Uncatalogued model: allow task to proceed without billing estimate
+    if (error instanceof BillingOperationError && (
+      error.code === 'BILLING_UNKNOWN_MODEL'
+      // Models with no pricing entry yet (e.g. tencent-vod::Kling-3.0-Omni
+      // shows priceLabel '--') would otherwise reject every multi-shot
+      // video request with BILLING_UNKNOWN_VIDEO_RESOLUTION /
+      // BILLING_UNKNOWN_VIDEO_CAPABILITY_COMBINATION. Treat the same as
+      // an uncatalogued model — the task runs free until pricing lands.
+      || error.code === 'BILLING_UNKNOWN_VIDEO_RESOLUTION'
+      || error.code === 'BILLING_UNKNOWN_VIDEO_CAPABILITY_COMBINATION'
+      || error.code === 'BILLING_CAPABILITY_PRICE_NOT_FOUND'
+    )) {
+      // Uncatalogued model / capability: allow task to proceed without billing estimate
     } else {
       throw error
     }
