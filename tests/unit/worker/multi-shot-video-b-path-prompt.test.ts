@@ -8,15 +8,24 @@ const panel = (id: string, opts: { description?: string | null; videoPrompt?: st
 })
 
 describe('buildBPathCombinedPrompt', () => {
-  it('numbers each shot with 镜头N: and prefers videoPrompt over description', () => {
+  it('numbers each shot with 镜头N: and prefers description over videoPrompt', () => {
+    // Priority is description→videoPrompt because description retains
+    // character names ("劉浩跌入水洼") that Kling Omni anchors against
+    // SubjectInfos.N, while videoPrompt anonymises ("一名年轻男子跌入水洼")
+    // for model-agnostic image generators.
     const panels = [
-      panel('p1', { videoPrompt: '中景：男子起床', description: 'fallback A' }),
+      panel('p1', { videoPrompt: '一名男子起床', description: '中景：林志明起床' }),
       panel('p2', { videoPrompt: null, description: '近景：闹钟' }),
     ]
     const dialogues = new Map()
     expect(buildBPathCombinedPrompt(panels, dialogues)).toBe(
-      '镜头1: 中景：男子起床\n\n镜头2: 近景：闹钟',
+      '镜头1: 中景：林志明起床\n\n镜头2: 近景：闹钟',
     )
+  })
+
+  it('falls back to videoPrompt when description is missing', () => {
+    const panels = [panel('p1', { videoPrompt: '一名男子起床', description: null })]
+    expect(buildBPathCombinedPrompt(panels, new Map())).toBe('镜头1: 一名男子起床')
   })
 
   it('injects matched dialogue inline so Kling Omni dubs the script line', () => {

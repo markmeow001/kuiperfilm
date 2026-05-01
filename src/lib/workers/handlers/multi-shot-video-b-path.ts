@@ -67,12 +67,23 @@ export const KLING_OMNI_MAX_SHOTS = 6
  * visual + motion prompt with any matched dialogue. Used by both modes:
  * intelligence concatenates the fragments under `镜头N:`, customize
  * embeds them as discrete multi_prompt entries.
+ *
+ * Priority: description over videoPrompt. The script_to_storyboard
+ * worker writes description with the original character names
+ * (e.g. "劉浩重重倒在水洼中，陳子豪站在前方") and videoPrompt with
+ * anonymised generic phrasing (e.g. "一名年轻男子重重倒在…另一名年轻男子站立")
+ * so non-subject-aware image models can render shots without context.
+ * Kling Omni's SubjectInfos.N pipeline ANCHORS subjects by name match
+ * — feeding it the anonymised version causes identity confusion (e.g.
+ * the wrong character falls in the puddle). Reproduced 2026-05-01:
+ * uneven-duration regen of panels 1-5 had Chen Zihao falling instead
+ * of Liu Hao because videoPrompt only said "另一名年轻男子".
  */
 function buildShotBody(
   panel: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt'>,
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
 ): string {
-  const visual = (panel.videoPrompt || panel.description || '').trim()
+  const visual = (panel.description || panel.videoPrompt || '').trim()
   const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
     .map((d) => `${d.speaker}说："${d.content}"`)
     .join(' ')
