@@ -114,13 +114,27 @@ export function useAnalyzeProjectAssets(projectId: string) {
     const queryClient = useQueryClient()
 
     return useMutation({
-        mutationFn: async ({ episodeId }: { episodeId: string }) => {
+        // cascadeToStoryboard is opt-in (default false at the backend so legacy
+        // /workspace flows + character-debug paths get analyze-only behaviour).
+        // V2 SubjectsPage's 一鍵分析 can pass true to chain analyze → CLIPS_BUILD
+        // → SCRIPT_TO_STORYBOARD_RUN in one click.
+        mutationFn: async ({
+            episodeId,
+            cascadeToStoryboard,
+        }: {
+            episodeId: string
+            cascadeToStoryboard?: boolean
+        }) => {
             const response = await requestTaskResponseWithError(
                 `/api/novel-promotion/${projectId}/analyze`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ episodeId, async: true }),
+                    body: JSON.stringify({
+                        episodeId,
+                        async: true,
+                        ...(cascadeToStoryboard === true ? { cascadeToStoryboard: true } : {}),
+                    }),
                 },
                 'Failed to analyze assets',
             )

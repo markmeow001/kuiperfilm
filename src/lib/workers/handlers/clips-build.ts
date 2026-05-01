@@ -255,10 +255,12 @@ export async function handleClipsBuildTask(job: Job<TaskJobData>) {
     displayMode: 'detail',
   })
 
-  // Phase 12.x.x — second hop in the analyze→clips→storyboard cascade
-  // started by analyze-novel. Skip if storyboards already exist for this
-  // episode (idempotent on rerun) or if the caller opted out.
-  const cascade = payload.cascadeToStoryboard !== false
+  // Phase 12.x.x — second hop in the analyze→clips→storyboard cascade.
+  // Default OFF (opt-in) — the analyze-novel handler propagates the
+  // flag down when v2 SubjectsPage opted in upstream. Anyone calling
+  // CLIPS_BUILD directly (legacy /workspace 「生成片段」 button) gets
+  // clips-only behaviour as before.
+  const cascade = payload.cascadeToStoryboard === true
   if (cascade) {
     const existingStoryboards = await prisma.novelPromotionStoryboard.count({
       where: { episodeId },

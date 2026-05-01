@@ -224,6 +224,7 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
       age_range: item.age_range,
     }
 
+    const introduction = readText(item.introduction).trim() || null
     const created = await prisma.novelPromotionCharacter.create({
       data: {
         novelPromotionProjectId: novelData.id,
@@ -231,6 +232,11 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
         aliases: JSON.stringify(toStringArray(item.aliases)),
         profileData: JSON.stringify(profileData),
         profileConfirmed: false,
+        // introduction is the human-readable role/relationship summary
+        // shown on the SubjectsPage card. The prompt produces it but the
+        // legacy handler dropped it on the floor; downstream consumers
+        // (V2 cards, edit modal) had no source for the role description.
+        introduction,
       },
       select: { id: true },
     })
@@ -246,11 +252,21 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
       ? (item.expected_appearances as Array<{ id?: number; change_reason?: string }>)
       : []
     const initialChangeReason = readText(expectedAppearances[0]?.change_reason).trim() || '初始形象'
+    // visual_description is the LLM-authored, era-grounded image prompt for
+    // the initial appearance. Without it, the image worker fed an empty
+    // userPrompt to the generator and got generic Tencent VOD output (a
+    // contemporary drama could surface battlefield armor, robes, etc.).
+    // Keep both `description` (singular, used as fallback prompt source)
+    // and `descriptions` (JSON array, the canonical multi-prompt store)
+    // in sync so either consumer works.
+    const visualDescription = readText(item.visual_description).trim()
     await prisma.characterAppearance.create({
       data: {
         characterId: created.id,
         appearanceIndex: 0, // PRIMARY_APPEARANCE_INDEX
         changeReason: initialChangeReason,
+        description: visualDescription || null,
+        descriptions: visualDescription ? JSON.stringify([visualDescription]) : null,
         // image-urls contract requires JSON-strings in DB for both
         // imageUrls AND previousImageUrls — null on either field breaks
         // attachMediaFieldsToProject and cascades a 500 to the project
@@ -316,12 +332,17 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
     displayMode: 'detail',
   })
 
-  // Phase 12.x.x — cascade to clips → storyboard so v2 SubjectsPage's
-  // 一鍵分析 actually walks the user all the way to a populated
-  // storyboard step. Opt-out by passing { cascadeToStoryboard: false }
-  // in the analyze payload (legacy /workspace flows that have explicit
-  // 「生成片段」/「生成分鏡」 buttons can suppress).
-  const cascade = payload.cascadeToStoryboard !== false
+  // Phase 12.x.x — cascade to clips → storyboard.
+  //
+  // Default OFF (opt-in) so legacy /workspace flows + Session A's
+  // character-generation debugging path get analyze-only behaviour
+  // they expect. The v2 SubjectsPage 一鍵分析 mutation explicitly
+  // sends { cascadeToStoryboard: true } to opt in to the full chain.
+  //
+  // (Earlier this was default-on; flipped after Session A reported
+  // surprise CLIPS_BUILD → SCRIPT_TO_STORYBOARD_RUN runs while
+  // debugging character generation in isolation.)
+  const cascade = payload.cascadeToStoryboard === true
   if (cascade && targetEpisode?.id) {
     try {
       await submitTask({
