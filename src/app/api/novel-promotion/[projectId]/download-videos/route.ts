@@ -52,8 +52,9 @@ export const POST = apiHandler(async (
 
   if (episodeId) {
     // 只获取指定剧集的数据
-    const episode = await prisma.novelPromotionEpisode.findUnique({
-      where: { id: episodeId },
+    // ⚠️ Multi-user isolation: chain ownership through novelPromotionProject.projectId.
+    const episode = await prisma.novelPromotionEpisode.findFirst({
+      where: { id: episodeId, novelPromotionProject: { projectId } },
       include: {
         storyboards: {
           include: {
