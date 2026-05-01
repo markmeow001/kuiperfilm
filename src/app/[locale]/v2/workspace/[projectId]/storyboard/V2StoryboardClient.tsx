@@ -59,8 +59,38 @@ interface ProjectLike {
 interface ProjectLikeFull {
   novelPromotionData?: {
     videoModel?: string | null
+    videoRatio?: string | null
     episodes?: Array<{ id: string }> | null
   } | null
+}
+
+/**
+ * Build a tailwind aspect-ratio class from a "W:H" project setting.
+ * Supports the same set of ratios Tencent VOD GG/Kling expose
+ * (1:1 / 4:3 / 3:4 / 16:9 / 9:16 / 21:9 / 2:3 / 3:2). Anything else
+ * falls back to 16:9 so the layout doesn't break when the project
+ * setting is malformed or absent.
+ */
+function aspectClassFromRatio(ratio: string | null | undefined): string {
+  if (!ratio) return 'aspect-video'
+  const trimmed = ratio.trim()
+  switch (trimmed) {
+    case '1:1':  return 'aspect-square'
+    case '16:9': return 'aspect-video'
+    case '9:16': return 'aspect-[9/16]'
+    case '4:3':  return 'aspect-[4/3]'
+    case '3:4':  return 'aspect-[3/4]'
+    case '3:2':  return 'aspect-[3/2]'
+    case '2:3':  return 'aspect-[2/3]'
+    case '21:9': return 'aspect-[21/9]'
+    default: {
+      const [w, h] = trimmed.split(':').map((n) => Number.parseFloat(n))
+      if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+        return `aspect-[${w}/${h}]`
+      }
+      return 'aspect-video'
+    }
+  }
 }
 
 type MultiShotState =
@@ -112,6 +142,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const queryClient = useQueryClient()
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLikeFull | undefined
+  const projectVideoRatio = project?.novelPromotionData?.videoRatio ?? '16:9'
+  const aspectClass = aspectClassFromRatio(projectVideoRatio)
+  // Heuristic for thumb sizing: portrait projects (9:16, 3:4, 2:3) get
+  // a taller-narrower thumb; landscape stays compact-wide. Without this
+  // 9:16 thumbs at h-24 fixed-height end up only ~54px wide — readable
+  // but cramped to the point of unusable.
+  const isPortraitRatio = (() => {
+    const [w, h] = projectVideoRatio.split(':').map((n) => Number.parseFloat(n))
+    return Number.isFinite(w) && Number.isFinite(h) && h > w
+  })()
+  const thumbHeightClass = isPortraitRatio ? 'h-40' : 'h-24'
   // Episode picked via the V2WorkspaceShell tab bar (URL ?episode=<id>);
   // falls back to first episode when none is selected.
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
@@ -655,9 +696,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     ? 'border-amber-500/60 ring-2 ring-amber-500/20'
                     : 'border-stone-800/60 hover:border-stone-700'
                 } ${groupBoundary ? 'ml-2' : ''}`}
-                style={{ width: 176 }}
               >
-                <div className="relative h-24 overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900">
+                <div className={`relative ${thumbHeightClass} ${aspectClass} overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900`}>
                   {hasImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.imageUrl ?? ''} alt={`panel ${i + 1}`} className="h-full w-full object-cover" />
@@ -817,7 +857,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           ) : null}
 
           <div className="overflow-hidden rounded-sm border border-stone-800/60 bg-stone-900/30">
-            <div className="relative aspect-video bg-gradient-to-br from-stone-800 to-stone-900">
+            <div className={`relative ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
               {selected?.videoUrl ? (
                 // Video player when videoUrl is present. Use the still
                 // imageUrl as poster so first paint is the same frame
@@ -930,6 +970,48 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     : '生成視頻'}
             </button>
           </div>
+          {/* Download row — surface the underlying COS URL as a direct
+              download for users who want the raw asset for editing
+              elsewhere (CapCut / 剪映 / PR). Disabled until the asset
+              actually exists. <a download> uses the filename hint so
+              the saved file gets a meaningful name instead of the
+              cosKey hash. */}
+          {selected ? (
+            <div className="mt-3 flex items-center gap-3">
+              <a
+                href={selected.imageUrl ?? '#'}
+                download={selected.imageUrl ? `panel-${String(selectedIndex + 1).padStart(2, '0')}.jpg` : undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-disabled={!selected.imageUrl}
+                onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all ${
+                  selected.imageUrl
+                    ? 'hover:border-amber-500/40 hover:text-amber-400'
+                    : 'cursor-not-allowed opacity-40'
+                }`}
+              >
+                <AppIcon name="download" className="h-3 w-3" />
+                下載靜態圖
+              </a>
+              <a
+                href={selected.videoUrl ?? '#'}
+                download={selected.videoUrl ? `panel-${String(selectedIndex + 1).padStart(2, '0')}.mp4` : undefined}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-disabled={!selected.videoUrl}
+                onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all ${
+                  selected.videoUrl
+                    ? 'hover:border-amber-500/40 hover:text-amber-400'
+                    : 'cursor-not-allowed opacity-40'
+                }`}
+              >
+                <AppIcon name="download" className="h-3 w-3" />
+                下載影片
+              </a>
+            </div>
+          ) : null}
           {regenPanel.isError ? (
             <p className="mt-3 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
               {(regenPanel.error as Error)?.message ?? '重生失敗'}
