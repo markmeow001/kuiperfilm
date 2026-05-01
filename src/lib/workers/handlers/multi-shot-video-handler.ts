@@ -94,6 +94,11 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     && (payload.panelDurations as unknown[]).every((d) => typeof d === 'number')
     ? (payload.panelDurations as number[])
     : undefined
+  // Optional caller-supplied prompt that bypasses panel concatenation
+  // in intelligence mode (Seedance-style 5-element 15s segment).
+  const rawPrompt = typeof payload.rawPrompt === 'string' && payload.rawPrompt.trim()
+    ? payload.rawPrompt.trim()
+    : undefined
 
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
@@ -113,6 +118,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
           description: true,
           videoPrompt: true,
           characters: true,
+          location: true,
           imageUrl: true,
           storyboardId: true,
         },
@@ -149,6 +155,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       aspectRatio,
       ...(multiShotMode ? { multiShotMode } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      ...(rawPrompt ? { rawPrompt } : {}),
     })
   }
 

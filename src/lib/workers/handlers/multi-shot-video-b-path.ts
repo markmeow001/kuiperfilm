@@ -35,12 +35,32 @@ interface BPathPanel {
   description: string | null
   videoPrompt: string | null
   characters: string | null
+  /**
+   * Free-form scene name written by the analyze worker — typically
+   * `<locationName>` or `<locationName>#<viewHint>` (Approach B-Standard).
+   * We use the bare name to look up Location entities for SubjectInfos.
+   */
+  location: string | null
   imageUrl: string | null
   storyboardId: string
 }
 
+interface LocationImageForBPath {
+  imageIndex?: number | null
+  imageUrl?: string | null
+  isSelected?: boolean | null
+  viewName?: string | null
+}
+
+interface LocationForBPath {
+  id: string
+  name: string
+  images?: LocationImageForBPath[]
+}
+
 interface BPathProjectData {
   characters?: CharacterForBPath[]
+  locations?: LocationForBPath[]
 }
 
 interface BPathDialogueLine {
@@ -233,8 +253,23 @@ export async function runMultiShotBPath(params: {
    * KLING_OMNI_MAX_TOTAL_DURATION.
    */
   panelDurations?: number[]
-}): Promise<{ storyboardId: string; multiShotVideoUrl: string; shotCount: number; subjectCount: number; path: 'B'; multiShotMode: 'intelligence' | 'customize'; durations?: number[] }> {
-  const { job, validPanels, projectData, videoModel, sound, aspectRatio, panelDurations } = params
+  /**
+   * Caller-supplied final prompt that bypasses panel-based assembly.
+   * Intended for hand-crafted Seedance-style 5-element prompts where
+   * a single 15s segment internally describes 3-5 micro-shots with
+   * time markers ("0-5 seconds: ... 5-10 seconds: ..."). Only honoured
+   * in `intelligence` mode — customize mode requires per-shot prompts
+   * via multi_prompt array, so rawPrompt is ignored there.
+   *
+   * Dialogue injection still happens — voiceLines matched to any of
+   * the supplied panels are appended at the end as 「角色说: "对白"」
+   * lines (so caller does not have to embed dialogue manually). If the
+   * raw prompt already contains dialogue and you want to skip the
+   * automatic append, omit the relevant panels from panelIds.
+   */
+  rawPrompt?: string
+}): Promise<{ storyboardId: string; multiShotVideoUrl: string; shotCount: number; subjectCount: number; path: 'B'; multiShotMode: 'intelligence' | 'customize'; durations?: number[]; promptSource?: 'panels' | 'raw' }> {
+  const { job, validPanels, projectData, videoModel, sound, aspectRatio, panelDurations, rawPrompt } = params
   // Implicit promotion: caller passing panelDurations means they care
   // about per-shot timing; force customize regardless of the mode flag.
   const multiShotMode: 'intelligence' | 'customize' =
@@ -299,9 +334,51 @@ export async function runMultiShotBPath(params: {
       subjectMap.set(ref.name.toLowerCase(), { name: ref.name, imageUrl: publicUrl })
     }
   }
-  const subjectInfos = Array.from(subjectMap.values())
-    .slice(0, 3)
-    .map((s) => ({ name: s.name, imageUrls: [s.imageUrl] }))
+  // Tencent caps SubjectInfos at 3 entries per CreateAigcVideoTask. Take
+  // characters first (typically 1-3 speaking roles drive the visual),
+  // then fill remaining slots with location/scene reference images so
+  // Kling has a consistent backdrop anchor across shots. Without scene
+  // anchoring the same alleyway tends to drift in lighting/material
+  // between cuts.
+  const characterSubjects = Array.from(subjectMap.values()).map((s) => ({
+    name: s.name,
+    imageUrls: [s.imageUrl],
+  }))
+
+  const sceneSubjects: Array<{ name: string; imageUrls: string[] }> = []
+  const remainingSlots = Math.max(0, 3 - characterSubjects.length)
+  if (remainingSlots > 0 && (projectData.locations?.length ?? 0) > 0) {
+    const seenLoc = new Set<string>()
+    for (const panel of validPanels) {
+      if (sceneSubjects.length >= remainingSlots) break
+      if (!panel.location) continue
+      // panel.location is "<name>" or "<name>#<viewHint>" (Approach
+      // B-Standard). Match by name only — viewHint is for image picking
+      // inside the location's images[] (handled below).
+      const hashIdx = panel.location.indexOf('#')
+      const locName = (hashIdx === -1 ? panel.location : panel.location.slice(0, hashIdx)).trim()
+      if (!locName) continue
+      const key = locName.toLowerCase()
+      if (seenLoc.has(key)) continue
+      const loc = projectData.locations!.find((l) => l.name.toLowerCase() === key)
+      if (!loc) continue
+      const viewHint = hashIdx === -1 ? null : panel.location.slice(hashIdx + 1).trim()
+      const images = loc.images ?? []
+      // Prefer the view-matching image, else isSelected, else imageIndex=0
+      const viewMatch = viewHint
+        ? images.find((img) => (img.viewName || '').trim().toLowerCase() === viewHint.toLowerCase())
+        : null
+      const selected = images.find((img) => img.isSelected)
+      const primary = images.find((img) => (img.imageIndex ?? 0) === 0) ?? images[0]
+      const pickedRaw = (viewMatch?.imageUrl) || (selected?.imageUrl) || (primary?.imageUrl)
+      const publicUrl = toSignedUrlIfCos(pickedRaw, 7200)
+      if (!publicUrl) continue
+      seenLoc.add(key)
+      sceneSubjects.push({ name: loc.name, imageUrls: [publicUrl] })
+    }
+  }
+
+  const subjectInfos = [...characterSubjects, ...sceneSubjects].slice(0, 3)
 
   // Pull dialogue lines that script_to_storyboard matched to any of the
   // panels we're sending. Without this Kling Omni's generate_audio:true
@@ -338,6 +415,7 @@ export async function runMultiShotBPath(params: {
   let generateOptions: Record<string, unknown>
   let resolvedDurations: number[] | undefined
   let resolvedTotal: number
+  let intelligencePromptSource: 'panels' | 'raw' = 'panels'
 
   if (multiShotMode === 'customize') {
     const { durations, totalDuration } = distributeShotDurations(validPanels.length, panelDurations)
@@ -384,11 +462,36 @@ export async function runMultiShotBPath(params: {
       outputComplianceCheck: 'Enabled',
     }
   } else {
-    const combinedPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel)
-    if (!combinedPrompt.trim()) {
+    // Intelligence mode. Two prompt sources:
+    //  1. Auto-built `镜头N:` combined prompt from panels (default)
+    //  2. Caller-supplied raw prompt (Seedance-style 5-element format
+    //     with time markers like "0-5 seconds:") — bypasses panel
+    //     concatenation and feeds the prompt straight to Kling so its
+    //     intelligence parser can choose internal cut points based on
+    //     the time annotations. Dialogue is still appended after the
+    //     raw prompt body so generate_audio:true still dubs the script.
+    let primaryPrompt: string
+    let promptSource: 'panels' | 'raw'
+    if (typeof rawPrompt === 'string' && rawPrompt.trim().length > 0) {
+      promptSource = 'raw'
+      const trimmed = rawPrompt.trim()
+      const dialogueAppendix = Array.from(dialogueByPanel.values())
+        .flat()
+        .map((d) => `${d.speaker}说："${d.content}"`)
+        .join(' ')
+      primaryPrompt = dialogueAppendix ? `${trimmed}\n\n${dialogueAppendix}` : trimmed
+    } else {
+      promptSource = 'panels'
+      primaryPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel)
+    }
+    if (!primaryPrompt.trim()) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
     }
-    resolvedTotal = validPanels.length >= 3 ? 10 : 5
+    // Raw prompt likely covers the full 15s window; legacy panel-driven
+    // path keeps the conservative 10s default to preserve compatibility.
+    resolvedTotal = promptSource === 'raw'
+      ? KLING_OMNI_MAX_TOTAL_DURATION
+      : (validPanels.length >= 3 ? 10 : 5)
 
     logger.info({
       message: 'B path multi-shot submit (intelligence)',
@@ -396,14 +499,15 @@ export async function runMultiShotBPath(params: {
         videoModel,
         shotCount: validPanels.length,
         subjectCount: subjectInfos.length,
-        promptLength: combinedPrompt.length,
+        promptLength: primaryPrompt.length,
+        promptSource,
         dialogueLineCount: voiceLines.length,
         totalDuration: resolvedTotal,
       },
     })
 
     generateOptions = {
-      prompt: combinedPrompt,
+      prompt: primaryPrompt,
       duration: resolvedTotal,
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
@@ -411,6 +515,8 @@ export async function runMultiShotBPath(params: {
       klingMultiShot: { multi_shot: 'intelligence' },
       outputComplianceCheck: 'Enabled',
     }
+    // Stash for the function's return shape.
+    intelligencePromptSource = promptSource
   }
   // generateVideo's option type is intentionally narrow (only standard
   // fields). Tencent-specific keys (subjectInfos / klingMultiShot /
@@ -456,5 +562,6 @@ export async function runMultiShotBPath(params: {
     path: 'B',
     multiShotMode,
     ...(resolvedDurations ? { durations: resolvedDurations } : {}),
+    ...(multiShotMode === 'intelligence' ? { promptSource: intelligencePromptSource } : {}),
   }
 }

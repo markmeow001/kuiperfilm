@@ -63,6 +63,33 @@ export const POST = apiHandler(async (
       ? body.multiShotMode
       : undefined
 
+  // Optional caller-supplied prompt for intelligence mode (Seedance-style
+  // 5-element 15s segment). Worker still appends matched dialogue.
+  let rawPrompt: string | undefined
+  if (body.rawPrompt !== undefined) {
+    if (typeof body.rawPrompt !== 'string') {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'RAW_PROMPT_INVALID',
+        field: 'rawPrompt',
+        details: { message: 'rawPrompt must be a string' },
+      })
+    }
+    const trimmed = body.rawPrompt.trim()
+    if (trimmed.length === 0) {
+      // Treat empty/whitespace as "not provided" rather than rejecting —
+      // makes UI debouncing trivial.
+      rawPrompt = undefined
+    } else if (trimmed.length > 4000) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'RAW_PROMPT_TOO_LONG',
+        field: 'rawPrompt',
+        details: { length: trimmed.length, max: 4000 },
+      })
+    } else {
+      rawPrompt = trimmed
+    }
+  }
+
   // Optional per-shot durations (B-path customize mode). Length must
   // match panelIds; each ≥1; sum 5-15s (Kling Omni constraint). Heavy
   // validation lives in the worker; route only screens the shape so
@@ -169,6 +196,7 @@ export const POST = apiHandler(async (
       aspectRatio: typeof body.aspectRatio === 'string' ? body.aspectRatio : undefined,
       ...(multiShotMode ? { multiShotMode } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      ...(rawPrompt ? { rawPrompt } : {}),
     },
     dedupeKey: `video_multi_shot:${storyboard.id}`,
   })
