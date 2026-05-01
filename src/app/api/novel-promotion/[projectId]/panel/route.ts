@@ -57,8 +57,12 @@ export const POST = apiHandler(async (
   }
 
   // 验证 storyboard 存在，并获取现有 panels 以计算正确的 panelIndex
-  const storyboard = await prisma.novelPromotionStoryboard.findUnique({
-    where: { id: storyboardId },
+  // ⚠️ Multi-user isolation: chain ownership through episode → project.
+  const storyboard = await prisma.novelPromotionStoryboard.findFirst({
+    where: {
+      id: storyboardId,
+      episode: { novelPromotionProject: { projectId } },
+    },
     include: {
       panels: {
         orderBy: { panelIndex: 'desc' },
@@ -130,8 +134,12 @@ export const DELETE = apiHandler(async (
   }
 
   // 获取要删除的 Panel 信息
-  const panel = await prisma.novelPromotionPanel.findUnique({
-    where: { id: panelId }
+  // ⚠️ Multi-user isolation: chain ownership through storyboard → episode → project.
+  const panel = await prisma.novelPromotionPanel.findFirst({
+    where: {
+      id: panelId,
+      storyboard: { episode: { novelPromotionProject: { projectId } } },
+    },
   })
 
   if (!panel) {
@@ -225,8 +233,12 @@ export const PATCH = apiHandler(async (
 
   // 🔥 方式1：通过 panelId 直接更新（优先）
   if (panelId) {
-    const panel = await prisma.novelPromotionPanel.findUnique({
-      where: { id: panelId }
+    // ⚠️ Multi-user isolation: chain through storyboard → episode → project.
+    const panel = await prisma.novelPromotionPanel.findFirst({
+      where: {
+        id: panelId,
+        storyboard: { episode: { novelPromotionProject: { projectId } } },
+      },
     })
 
     if (!panel) {
@@ -255,8 +267,12 @@ export const PATCH = apiHandler(async (
   }
 
   // 验证 storyboard 存在
-  const storyboard = await prisma.novelPromotionStoryboard.findUnique({
-    where: { id: storyboardId }
+  // ⚠️ Multi-user isolation: chain through episode → project.
+  const storyboard = await prisma.novelPromotionStoryboard.findFirst({
+    where: {
+      id: storyboardId,
+      episode: { novelPromotionProject: { projectId } },
+    },
   })
 
   if (!storyboard) {
@@ -340,8 +356,12 @@ export const PUT = apiHandler(async (
   }
 
   // 验证 storyboard 存在
-  const storyboard = await prisma.novelPromotionStoryboard.findUnique({
-    where: { id: storyboardId }
+  // ⚠️ Multi-user isolation: chain through episode → project.
+  const storyboard = await prisma.novelPromotionStoryboard.findFirst({
+    where: {
+      id: storyboardId,
+      episode: { novelPromotionProject: { projectId } },
+    },
   })
 
   if (!storyboard) {

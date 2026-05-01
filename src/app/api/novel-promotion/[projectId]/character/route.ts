@@ -39,6 +39,15 @@ export const PATCH = apiHandler(async (
   if (name) updateData.name = name.trim()
   if (introduction !== undefined) updateData.introduction = introduction.trim()
 
+  // ⚠️ Multi-user isolation: ensure the character belongs to this project.
+  const owned = await prisma.novelPromotionCharacter.findFirst({
+    where: { id: characterId, novelPromotionProject: { projectId } },
+    select: { id: true },
+  })
+  if (!owned) {
+    throw new ApiError('NOT_FOUND')
+  }
+
   // 更新角色
   const character = await prisma.novelPromotionCharacter.update({
     where: { id: characterId },
@@ -64,6 +73,15 @@ export const DELETE = apiHandler(async (
 
   if (!characterId) {
     throw new ApiError('INVALID_PARAMS')
+  }
+
+  // ⚠️ Multi-user isolation: ensure the character belongs to this project.
+  const owned = await prisma.novelPromotionCharacter.findFirst({
+    where: { id: characterId, novelPromotionProject: { projectId } },
+    select: { id: true },
+  })
+  if (!owned) {
+    throw new ApiError('NOT_FOUND')
   }
 
   // 删除角色（CharacterAppearance 会级联删除）

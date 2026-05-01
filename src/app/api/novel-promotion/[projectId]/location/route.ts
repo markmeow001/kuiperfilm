@@ -29,6 +29,15 @@ export const DELETE = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
+  // ⚠️ Multi-user isolation: ensure the location belongs to this project.
+  const owned = await prisma.novelPromotionLocation.findFirst({
+    where: { id: locationId, novelPromotionProject: { projectId } },
+    select: { id: true },
+  })
+  if (!owned) {
+    throw new ApiError('NOT_FOUND')
+  }
+
   // 删除场景（LocationImage 会级联删除）
   await prisma.novelPromotionLocation.delete({
     where: { id: locationId }
@@ -129,6 +138,15 @@ export const PATCH = apiHandler(async (
 
   if (!locationId) {
     throw new ApiError('INVALID_PARAMS')
+  }
+
+  // ⚠️ Multi-user isolation: ensure the location belongs to this project.
+  const ownedLoc = await prisma.novelPromotionLocation.findFirst({
+    where: { id: locationId, novelPromotionProject: { projectId } },
+    select: { id: true },
+  })
+  if (!ownedLoc) {
+    throw new ApiError('NOT_FOUND')
   }
 
   // 如果提供了 name 或 summary，更新场景信息

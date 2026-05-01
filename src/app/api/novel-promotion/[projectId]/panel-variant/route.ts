@@ -35,14 +35,26 @@ export const POST = apiHandler(async (
 
   // 在 API route 中同步创建 panel（无图片），确保新 panel 立即存在于数据库，
   // 避免乐观更新与 worker 之间的状态真空期
-  const sourcePanel = await prisma.novelPromotionPanel.findUnique({ where: { id: sourcePanelId } })
+  // ⚠️ Multi-user isolation: chain panel → storyboard → episode → project.
+  const projectChain = { storyboard: { episode: { novelPromotionProject: { projectId } } } }
+  const sourcePanel = await prisma.novelPromotionPanel.findFirst({
+    where: { id: sourcePanelId, ...projectChain },
+  })
   if (!sourcePanel) {
     throw new ApiError('NOT_FOUND')
   }
 
-  const insertAfter = await prisma.novelPromotionPanel.findUnique({ where: { id: insertAfterPanelId } })
+  const insertAfter = await prisma.novelPromotionPanel.findFirst({
+    where: { id: insertAfterPanelId, ...projectChain },
+  })
   if (!insertAfter) {
     throw new ApiError('NOT_FOUND')
+  }
+
+  // Also verify storyboardId belongs to this project (defence in depth — the
+  // caller could pass a mismatched storyboardId paired with the right panels).
+  if (sourcePanel.storyboardId !== storyboardId || insertAfter.storyboardId !== storyboardId) {
+    throw new ApiError('INVALID_PARAMS', { code: 'STORYBOARD_MISMATCH' })
   }
 
   const createdPanel = await prisma.$transaction(async (tx) => {

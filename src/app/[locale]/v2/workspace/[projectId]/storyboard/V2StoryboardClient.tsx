@@ -19,6 +19,7 @@ import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
+import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -94,9 +95,11 @@ function chunk<T>(arr: T[], size: number): T[][] {
 export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLikeFull | undefined
-  const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
+  // Episode picked via the V2WorkspaceShell tab bar (URL ?episode=<id>);
+  // falls back to first episode when none is selected.
+  const { currentEpisodeId } = useCurrentEpisode(projectId)
 
-  const storyboardsQuery = useStoryboards(firstEpisodeId)
+  const storyboardsQuery = useStoryboards(currentEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
   const regenPanel = useRegenerateProjectPanelImage(projectId)
   const autoGroup = useAutoGroupMultiShot(projectId)
@@ -134,9 +137,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const groupedPanelCount = allPanels.filter((p) => p.multiShotGroupId).length
 
   async function handleAutoGroup() {
-    if (!firstEpisodeId) return
+    if (!currentEpisodeId) return
     try {
-      await autoGroup.mutateAsync({ episodeId: firstEpisodeId })
+      await autoGroup.mutateAsync({ episodeId: currentEpisodeId })
     } catch {
       // surfaced via autoGroup.error
     }
@@ -230,7 +233,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     )
   }
 
-  if (!firstEpisodeId) {
+  if (!currentEpisodeId) {
     return (
       <div className="px-12 py-10">
         <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">

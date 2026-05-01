@@ -32,8 +32,9 @@ export const GET = apiHandler(async (
   }
 
   // 获取剧集
-  const episode = await prisma.novelPromotionEpisode.findUnique({
-    where: { id: episodeId }
+  // ⚠️ Multi-user isolation: chain ownership through novelPromotionProject.projectId.
+  const episode = await prisma.novelPromotionEpisode.findFirst({
+    where: { id: episodeId, novelPromotionProject: { projectId } },
   })
 
   if (!episode) {

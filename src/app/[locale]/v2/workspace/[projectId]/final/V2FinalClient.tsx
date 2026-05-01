@@ -20,6 +20,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { useStitchEpisodeMp4 } from '@/lib/query/mutations/episode-stitch-mutations'
+import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
 interface V2FinalClientProps {
   projectId: string
@@ -54,9 +55,14 @@ interface ProjectLike {
 export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLike | undefined
-  const firstEpisode = project?.novelPromotionData?.episodes?.[0] ?? null
-  const firstEpisodeId = firstEpisode?.id ?? null
-  const storyboardsQuery = useStoryboards(firstEpisodeId)
+  // URL-driven current episode (V2WorkspaceShell tab bar). Look up the
+  // corresponding row from the project so stitchedVideoUrl / stitchStatus
+  // and friends — which the hook intentionally doesn't expose — stay
+  // available on this page.
+  const { currentEpisodeId } = useCurrentEpisode(projectId)
+  const episodes = project?.novelPromotionData?.episodes ?? []
+  const currentEpisode = episodes.find((ep) => ep?.id === currentEpisodeId) ?? episodes[0] ?? null
+  const storyboardsQuery = useStoryboards(currentEpisode?.id ?? null)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
   const stitchMp4 = useStitchEpisodeMp4(projectId)
 
@@ -180,16 +186,16 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
             </dl>
           </div>
 
-          {firstEpisode?.stitchedVideoUrl ? (
+          {currentEpisode?.stitchedVideoUrl ? (
             <div className="space-y-2">
               <video
-                src={firstEpisode.stitchedVideoUrl}
+                src={currentEpisode.stitchedVideoUrl}
                 controls
                 className="w-full rounded-sm border border-amber-500/30 bg-stone-950"
               />
               <a
-                href={firstEpisode.stitchedVideoUrl}
-                download={`episode-${firstEpisode.id}.mp4`}
+                href={currentEpisode.stitchedVideoUrl}
+                download={`episode-${currentEpisode.id}.mp4`}
                 className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
               >
                 <AppIcon name="download" className="h-4 w-4" />
@@ -197,8 +203,8 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
               </a>
               <button
                 type="button"
-                disabled={stitchMp4.isPending || !firstEpisodeId || panelsWithVideo.length === 0}
-                onClick={() => firstEpisodeId && stitchMp4.mutate({ episodeId: firstEpisodeId })}
+                disabled={stitchMp4.isPending || !currentEpisodeId || panelsWithVideo.length === 0}
+                onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
                 className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {stitchMp4.isPending ? '重新合成中…' : '↻ 重新合成'}
@@ -209,11 +215,11 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
               type="button"
               disabled={
                 stitchMp4.isPending ||
-                !firstEpisodeId ||
+                !currentEpisodeId ||
                 panelsWithVideo.length === 0 ||
-                firstEpisode?.stitchStatus === 'rendering'
+                currentEpisode?.stitchStatus === 'rendering'
               }
-              onClick={() => firstEpisodeId && stitchMp4.mutate({ episodeId: firstEpisodeId })}
+              onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
               title={
                 panelsWithVideo.length === 0
                   ? '需先生成至少 1 個分鏡視頻才能匯出全集'
@@ -224,7 +230,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
               <AppIcon name="download" className="h-4 w-4" />
               {stitchMp4.isPending
                 ? '合成中…'
-                : firstEpisode?.stitchStatus === 'rendering'
+                : currentEpisode?.stitchStatus === 'rendering'
                   ? '後台合成中…'
                   : `匯出 MP4 · ${panelsWithVideo.length} 段`}
             </button>

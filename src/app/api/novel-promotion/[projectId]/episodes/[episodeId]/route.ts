@@ -21,8 +21,13 @@ export const GET = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   // 获取剧集及其关联数据
-  const episode = await prisma.novelPromotionEpisode.findUnique({
-    where: { id: episodeId },
+  // ⚠️ Multi-user isolation: chain ownership through novelPromotionProject.projectId
+  // so user A can't read user B's episode by guessing the id.
+  const episode = await prisma.novelPromotionEpisode.findFirst({
+    where: {
+      id: episodeId,
+      novelPromotionProject: { projectId },
+    },
     include: {
       clips: {
         orderBy: { createdAt: 'asc' }
@@ -91,6 +96,15 @@ export const PATCH = apiHandler(async (
   }
   if (srtContent !== undefined) updateData.srtContent = srtContent
 
+  // ⚠️ Verify the episode belongs to this project before mutating.
+  const owned = await prisma.novelPromotionEpisode.findFirst({
+    where: { id: episodeId, novelPromotionProject: { projectId } },
+    select: { id: true },
+  })
+  if (!owned) {
+    throw new ApiError('NOT_FOUND')
+  }
+
   const episode = await prisma.novelPromotionEpisode.update({
     where: { id: episodeId },
     data: updateData
@@ -111,6 +125,15 @@ export const DELETE = apiHandler(async (
   // 🔐 统一权限验证
   const authResult = await requireProjectAuthLight(projectId)
   if (isErrorResponse(authResult)) return authResult
+
+  // ⚠️ Verify the episode belongs to this project before deleting.
+  const owned = await prisma.novelPromotionEpisode.findFirst({
+    where: { id: episodeId, novelPromotionProject: { projectId } },
+    select: { id: true },
+  })
+  if (!owned) {
+    throw new ApiError('NOT_FOUND')
+  }
 
   // 删除剧集（关联数据会级联删除）
   await prisma.novelPromotionEpisode.delete({
