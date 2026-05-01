@@ -18,7 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
-import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
+import { useProjectCharacters, useProjectLocations, useProjectProps } from '@/lib/query/hooks/useProjectAssets'
 import {
   useRegenerateSingleCharacterImage,
   useRegenerateCharacterGroup,
@@ -166,6 +166,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
   const charactersQuery = useProjectCharacters(projectId)
   const locationsQuery = useProjectLocations(projectId)
+  const propsQuery = useProjectProps(projectId)
   const regenChar = useRegenerateSingleCharacterImage(projectId)
   const regenLoc = useRegenerateSingleLocationImage(projectId)
   const regenCharGroup = useRegenerateCharacterGroup(projectId)
@@ -671,10 +672,17 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     )
   }
 
+  const props = (propsQuery.data ?? []) as Array<{
+    id: string
+    name: string
+    summary?: string | null
+    description?: string | null
+    imageUrl?: string | null
+  }>
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: 'character', label: '角色', count: characters.length },
     { id: 'scene', label: '場景', count: locations.length },
-    { id: 'prop', label: '道具', count: 0 },
+    { id: 'prop', label: '道具', count: props.length },
   ]
 
   // Include binding queries — without them, the strict per-episode filter
@@ -881,11 +889,22 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           emptyHint="此項目還沒有場景 — 點上方「一鍵分析」抽出此集的場景,或從素材庫導入"
         />
       ) : (
-        <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
-          <AppIcon name="cube" className="mx-auto mb-3 h-8 w-8 text-stone-600" />
-          <p className="font-fraunces text-base italic text-stone-400">道具 first-class 待 Phase 11.3 上線</p>
-          <p className="mt-2 font-mono text-[10px] tracking-wider text-stone-600">PROP_ASSETS · COMING SOON</p>
-        </div>
+        <SubjectGrid
+          aspect="portrait"
+          items={props.map((p) => ({
+            id: p.id,
+            targetId: p.id,
+            name: p.name ?? '未命名道具',
+            caption: '道具',
+            description: p.summary ?? null,
+            imageUrl: p.imageUrl ?? null,
+            // Image regen / upload not wired yet — Stage C 之前,點按
+            // 鈕會 noop。先讓 grid 顯示道具的描述卡片,user 至少能看到
+            // analyze 抽出來的東西 + 後續刪除。
+            onZoom: (url) => setZoomImage(url),
+          }))}
+          emptyHint="此項目還沒有道具 — 點上方「一鍵分析」抽出此集的道具(刀/信封/戒指等劇情關鍵物件)"
+        />
       )}
 
       {editingCharacterId ? (() => {

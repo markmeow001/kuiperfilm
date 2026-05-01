@@ -20,6 +20,7 @@ export const queryKeys = {
         all: (projectId: string) => ['project-assets', projectId] as const,
         characters: (projectId: string) => ['project-assets', projectId, 'characters'] as const,
         locations: (projectId: string) => ['project-assets', projectId, 'locations'] as const,
+        props: (projectId: string) => ['project-assets', projectId, 'props'] as const,
         detail: (projectId: string) => ['project-assets', projectId, 'detail'] as const,
     },
 

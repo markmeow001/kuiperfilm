@@ -182,6 +182,32 @@ export function useProjectLocations(projectId: string | null) {
     })
 }
 
+interface PropRow {
+    id: string
+    name: string
+    summary?: string | null
+    description?: string | null
+    imageUrl?: string | null
+}
+
+/**
+ * Phase 11.3 Stage B — 取得專案的道具列表。/api/.../prop GET 已在 Stage A
+ * 之前就上線(只是沒人用)。前端 grid 透過這個 hook 訂閱。
+ */
+export function useProjectProps(projectId: string | null) {
+    return useQuery({
+        queryKey: queryKeys.projectAssets.props(projectId || ''),
+        queryFn: async () => {
+            if (!projectId) throw new Error('Project ID is required')
+            const res = await fetch(`/api/novel-promotion/${projectId}/prop`)
+            if (!res.ok) throw new Error('Failed to fetch props')
+            const data = await res.json() as { props?: PropRow[] }
+            return (data.props ?? []) as PropRow[]
+        },
+        enabled: !!projectId,
+    })
+}
+
 /**
  * 刷新项目资产
  * 🔥 同时刷新 projectAssets 和 projectData 两个缓存
