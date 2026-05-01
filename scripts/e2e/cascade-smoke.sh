@@ -232,6 +232,29 @@ SB_OK=$(echo "$SB_COUNTS" | grep -oE 'sbs=[0-9]+' | grep -oE '[0-9]+')
 [[ "$CHARACTERS_OK" -gt 0 ]] || fail "no characters extracted" 2
 [[ "$SB_OK" -gt 0 ]] || fail "no storyboards persisted" 2
 
+# Voice-line assertion — the storyboard worker's voice_analyze step
+# (where the original locale heisenbug surfaced) writes voice lines
+# into NovelPromotionVoiceLine. Empty here means the LLM streamed but
+# the parse / persist downstream silently failed, which historically
+# was masked by the locale-required secondary error before commit
+# 871d560. This assertion makes the failure mode loud.
+VOICE=$(C "$BASE_URL/api/novel-promotion/$PID/voice-lines?episodeId=$EID")
+VL_COUNT=$(echo "$VOICE" | "$PYTHON3" -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    print(d.get('count', len(d.get('voiceLines',[]))))
+except: print(0)" 2>/dev/null)
+SPEAKERS=$(echo "$VOICE" | "$PYTHON3" -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    s=d.get('speakerStats',{}) or {}
+    print(','.join(f'{k}={v}' for k,v in sorted(s.items())))
+except: print('')" 2>/dev/null)
+log "voice lines: count=$VL_COUNT speakers=[$SPEAKERS]"
+[[ "$VL_COUNT" -gt 0 ]] || fail "voice_analyze produced 0 voice lines (storyboard cascade incomplete)" 2
+
 # Pick character #1's first appearance + storyboard #1's first panel for
 # the asset stage. Both must exist or we'd already have failed above.
 PICKS=$(echo "$ASSETS" | "$PYTHON3" -c "
