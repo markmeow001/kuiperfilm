@@ -400,9 +400,20 @@ export async function getProviderConfig(userId: string, providerId: string): Pro
 
 /**
  * 获取用户自定义模型列表
+ *
+ * Multi-user inheritance: if the user has no models configured (member
+ * accounts that never touched /profile), surface admin's catalog so
+ * resolveModelSelection / getModelsByType succeed. Mirrors the fallback
+ * pattern used by getProviderConfig (provider keys cascade the same way).
  */
 export async function getUserModels(userId: string): Promise<CustomModel[]> {
   const { models } = await readUserConfig(userId)
+  if (models.length > 0) return models
+
+  const adminConfig = await readAdminConfig()
+  if (adminConfig && adminConfig.userId !== userId) {
+    return adminConfig.models
+  }
   return models
 }
 
@@ -410,7 +421,7 @@ export async function getUserModels(userId: string): Promise<CustomModel[]> {
  * 获取模型关联 provider
  */
 export async function getModelProvider(userId: string, model: string): Promise<string | null> {
-  const { models } = await readUserConfig(userId)
+  const models = await getUserModels(userId)
   const matched = findModelByKey(models, model)
   return matched?.provider || null
 }
@@ -435,7 +446,7 @@ export async function resolveModelId(userId: string, model: string): Promise<str
  * 获取模型价格
  */
 export async function getModelPrice(userId: string, model: string): Promise<number> {
-  const { models } = await readUserConfig(userId)
+  const models = await getUserModels(userId)
   const matched = findModelByKey(models, model)
   if (!matched) {
     throw new Error(`MODEL_NOT_FOUND: ${model}`)
