@@ -531,25 +531,22 @@
 
 ### Phase 11.5 P2 后续清理待办（user 拍板延后，非阻塞 11.5 验收）
 
-- ⏸ 任务：移除 dead i18n key `visualStyle`
-  - 文件：`messages/zh/novel-promotion.json:101`、`messages/en/novel-promotion.json:101`、`messages/zh/configModal.json:5`、`messages/en/configModal.json:5`
-  - 变动：刪除 `storyInput.visualStyle` / `configModal.visualStyle` 4 條鍵（ART_STYLES selector 已砍，i18n key 變 dead code）
-  - 驗收：`npm run check:prompt-i18n` 全綠（zh + en 同步刪）；UI grep `visualStyle` 0 命中
+- ✅ 任务：移除 dead i18n key `visualStyle`(commit 隨後一起 push)
+  - 4 條鍵刪除完;`grep visualStyle messages/ src/` 0 命中
+  - Session B,2026-04-30
 
-- ⏸ 任务：`asset-hub-modify-task-handler.ts:87` comment 改寫
-  - 文件：`src/lib/workers/handlers/asset-hub-modify-task-handler.ts`（line 87 附近）
-  - 變動：目前註解仍提 Q-009 sentinel，待 asset-hub 全量改成 per-user / per-project 二分後改寫，避免 Q-009 標記混淆後續 reader
-  - 驗收：comment 不再引用 Q-009 sentinel；grep `Q-009` 命中數 0
+- ✅ 任务：`asset-hub-modify-task-handler.ts:87` comment 改寫(同次 commit)
+  - 同步把 `image-task-handlers-core.ts:43` + `panel-variant-task-handler.ts:168` 的 Q-009 sentinel 也改寫了;`grep Q-009 src/` 0 命中
+  - Session B,2026-04-30
 
 - ⏸ 任务：N+2 release 移除 DB column `NovelPromotionProject.artStyle` / `artStylePrompt`
   - 文件：`prisma/schema.prisma`（line 250-256 附近 deprecated 區）+ 對應 Prisma migration
   - 變動：生產 code 已零讀寫；schema cleanup 在 N+2 release 執行 `ALTER TABLE NovelPromotionProject DROP COLUMN artStyle, DROP COLUMN artStylePrompt`
   - 驗收：grep `artStyle` 在 `src/` 0 命中（除 deprecation history 註解）；migration script 跑過 DEV / staging 通過
 
-- ⏸ 任务：清掉 POST `/api/asset-hub/locations` backend forward `artStyle`
-  - 文件：`src/app/api/asset-hub/locations/route.ts:52, 102`
-  - 變動：worker 已 deactivated artStyle，但 route 仍 destructure `artStyle` 並 forward `artStyle: artStyle || 'american-comic'` 給 worker（屬 implementer round 2 偏離點，留下的 dead forward）
-  - 驗收：route 不再 destructure artStyle；payload 不再含 artStyle 欄位；對應 integration test fixture 同步移除
+- ✅ 任务：清掉 POST `/api/asset-hub/locations` backend forward `artStyle`(同次 commit)
+  - 不再 destructure `artStyle` (line 52);不再 forward `artStyle: artStyle || 'american-comic'` 給 worker (line 102)
+  - Session B,2026-04-30
 
 - ⏸ 任务：reviewer round 3 指出順手砍 `getArtStylePrompt` 的 handler 是否需要正式測試覆蓋
   - 文件：`tests/unit/worker/asset-hub-image-task-handler.test.ts`（新或補）、`tests/unit/worker/reference-to-character-style-profile.test.ts`（已建，可能要補測 case）
@@ -585,7 +582,7 @@
   2. Hunyuan 文本 LLM provider 接入(`src/lib/ai-runtime/`、`src/lib/api-config.ts`)
   3. Phase 11.4 角色三視圖 schema + analyze prompt + worker handler(V2 UI tab 等
      Session A 的 EpisodeTabBar 落地後再加)
-  4. Q-004 safe-rewrite chatCompletion guard 修
+  4. ✅ Q-004 safe-rewrite chatCompletion guard 修(2026-04-30 完成,改走 executeAiTextStep)
 - 🔒 Lock zone:
   - `prisma/schema.prisma`(Session B 改 schema 時 Session A 別動)
   - `src/lib/workers/handlers/*-stitch-*` `*auto-group*`(Session B 已建)
@@ -808,7 +805,7 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 - ⚠️ 本地构建环境 Redis 未监听 `127.0.0.1:16379`，`next build` 期间出现大量连接拒绝日志，但构建产物仍成功输出。
 - ⚠️ Q-002（pre-existing，非本 phase 引入）：ripgrep 未裝 → `scripts/check-api-handler.ts` 用 `rg --files` 報 `command not found` → `npm run test:guards` 連帶失敗 → `npm run test:regression` 同樣中斷在第一步。建議解法：`brew install ripgrep` 或讓 guard fallback 到 `grep`。
 - ⚠️ Q-003（pre-existing，非本 phase 引入）：worker handler test prisma mock 缺欄位導致 3 個用例 fail：`tests/unit/worker/panel-image-task-handler.test.ts:188`（`prismaMock.novelPromotionPanel.update` 期望被呼叫一次，實際參數對不上）+ `tests/unit/worker/script-to-storyboard.test.ts` 兩個 case（`Cannot read properties of undefined (reading 'deleteMany')` on `prisma.novelPromotionStoryboard.deleteMany`，看起來 mock factory 漏 model）。屬 Phase 8（複雜鏈路遷移）範疇。
-- ⚠️ Q-004（pre-existing，非本 phase 引入，但屬 Phase 6 強約束違反）：`src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts:56, 74` 直連 `chatCompletion*` → 違反強約束「AI route 不准旁路 worker」「AI 必須走 ai-runtime」。`npm run check:no-api-direct-llm-call` 會抓出。需 Phase 6 / Phase 8 owner 處理改走 `createRun` → worker handler。
+- ✅ Q-004(已修,Session B,2026-04-30):`src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts` 改走 `executeAiTextStep` (ai-runtime),不再直連 `chatCompletion`。`node scripts/guards/no-api-direct-llm-call.mjs` OK。
 
 # 5:备注
 - 本文档是唯一执行来源，必须与代码库保持同步。

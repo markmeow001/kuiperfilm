@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireProjectAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { chatCompletion } from '@/lib/llm/chat-completion'
+import { executeAiTextStep } from '@/lib/ai-runtime'
 
 const SAFE_REWRITE_SYSTEM_PROMPT = `你是一个专业的图片/视频生成提示词改写助手。
 
@@ -22,7 +22,12 @@ const SAFE_REWRITE_SYSTEM_PROMPT = `你是一个专业的图片/视频生成提�
 /**
  * POST /api/novel-promotion/[projectId]/safe-rewrite
  *
- * 将可能违规的描述词用 LLM 改写为安全版本
+ * 将可能违规的描述词用 LLM 改写为安全版本。
+ *
+ * Q-004 fix: routes through executeAiTextStep (ai-runtime) instead of
+ * the legacy chatCompletion direct call so the strong-constraint
+ * "AI 必須走 ai-runtime" / "no-api-direct-llm-call" guard passes.
+ * Behaviour is identical — same model, same prompt, same temperature.
  */
 export const POST = apiHandler(async (
     request: NextRequest,
@@ -53,39 +58,45 @@ export const POST = apiHandler(async (
     const results: { description?: string; videoPrompt?: string } = {}
 
     if (description) {
-        const completion = await chatCompletion(
-            session.user.id,
-            analysisModel,
-            [
+        const completion = await executeAiTextStep({
+            userId: session.user.id,
+            model: analysisModel,
+            messages: [
                 { role: 'system', content: SAFE_REWRITE_SYSTEM_PROMPT },
                 { role: 'user', content: description },
             ],
-            {
-                temperature: 0.3,
-                reasoning: false,
-                projectId,
-                action: 'safe_rewrite_description',
+            temperature: 0.3,
+            projectId,
+            action: 'safe_rewrite_description',
+            meta: {
+                stepId: 'safe_rewrite_description',
+                stepTitle: 'Safe rewrite (description)',
+                stepIndex: 1,
+                stepTotal: videoPrompt ? 2 : 1,
             },
-        )
-        results.description = completion.choices[0]?.message?.content?.trim() || description
+        })
+        results.description = completion.text.trim() || description
     }
 
     if (videoPrompt) {
-        const completion = await chatCompletion(
-            session.user.id,
-            analysisModel,
-            [
+        const completion = await executeAiTextStep({
+            userId: session.user.id,
+            model: analysisModel,
+            messages: [
                 { role: 'system', content: SAFE_REWRITE_SYSTEM_PROMPT },
                 { role: 'user', content: videoPrompt },
             ],
-            {
-                temperature: 0.3,
-                reasoning: false,
-                projectId,
-                action: 'safe_rewrite_video_prompt',
+            temperature: 0.3,
+            projectId,
+            action: 'safe_rewrite_video_prompt',
+            meta: {
+                stepId: 'safe_rewrite_video_prompt',
+                stepTitle: 'Safe rewrite (video prompt)',
+                stepIndex: description ? 2 : 1,
+                stepTotal: description ? 2 : 1,
             },
-        )
-        results.videoPrompt = completion.choices[0]?.message?.content?.trim() || videoPrompt
+        })
+        results.videoPrompt = completion.text.trim() || videoPrompt
     }
 
     return NextResponse.json(results)

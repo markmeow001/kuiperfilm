@@ -98,7 +98,6 @@
       "description": "点击右上角的「资产库」按钮，可以上传资产设定文档或手动添加角色/场景。AI 将优先使用资产库中的设定进行分析。"
     },
     "videoRatio": "画面比例",
-    "visualStyle": "视觉风格",
     "targetDuration": "目标时长",
     "targetDurationUnit": "秒",
     "targetDurationHint": "AI 会根据目标时长自动计算分镜数量",

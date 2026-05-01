@@ -40,9 +40,9 @@ export async function handleModifyAssetImageTask(job: Job<TaskJobData>) {
   const editModel = projectModels.editModel
   if (!editModel) throw new Error('Edit model not configured')
 
-  // Q-009: modify handler must inject styleProfile so modified assets stay
-  // style-locked with the rest of the project. Chokepoint owns prepend +
-  // capability filter.
+  // Modify handler must inject styleProfile so modified assets stay
+  // style-locked with the rest of the project. The chokepoint owns
+  // both the positive-prompt prepend and the capability filter.
   const styleProfile = await loadStyleProfile(prisma, job.data.projectId)
 
   // 从 payload.generationOptions 读取 resolution（由 route 层 buildImageBillingPayload 注入）

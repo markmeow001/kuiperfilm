@@ -49,7 +49,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     const taskLocale = resolveTaskLocale(request, body)
     const bodyMeta = toObject((body as Record<string, unknown>).meta)
     const acceptLanguage = request.headers.get('accept-language') || ''
-    const { name, summary, folderId, artStyle } = body
+    const { name, summary, folderId } = body
 
     if (!name) {
         throw new ApiError('INVALID_PARAMS')
@@ -99,7 +99,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
             body: JSON.stringify({
                 type: 'location',
                 id: location.id,
-                artStyle: artStyle || 'american-comic',
                 locale: taskLocale || undefined,
                 meta: {
                     ...bodyMeta,

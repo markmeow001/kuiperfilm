@@ -82,9 +82,11 @@ export async function handleAssetHubModifyTask(job: Job<TaskJobData>) {
     ? generationOptions.resolution
     : undefined
 
-  // Q-009: asset-hub modify is global (per-user, not per-project), so styleProfile
-  // is loaded only when a real novel-promotion projectId is supplied. Sentinel
-  // 'global-asset-hub' returns null and chokepoint behaves like before.
+  // asset-hub edits live at the user level, not under any single project.
+  // loadStyleProfileByProjectId returns null whenever projectId isn't a real
+  // novel-promotion project (e.g. team-shared global asset edits), and the
+  // caller treats null as "no style overlay" — which is the desired behaviour
+  // for global asset images.
   const styleProfile = await loadStyleProfileByProjectId(prisma, job.data.projectId)
 
   if (payload.type === 'character') {

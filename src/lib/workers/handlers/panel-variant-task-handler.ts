@@ -165,8 +165,9 @@ export async function handlePanelVariantTask(job: Job<TaskJobData>) {
 
   _ulogInfo('[panel-variant] resolved variant prompt', prompt)
 
-  // Q-009: variant handler must inject styleProfile so variants stay style-locked
-  // with the rest of the project. Chokepoint owns prepend + capability filter.
+  // Variant handler must inject styleProfile so variants stay style-locked
+  // with the rest of the project. The chokepoint owns both the positive-
+  // prompt prepend and the capability filter.
   const styleProfile = await loadStyleProfile(prisma, job.data.projectId)
 
   await assertTaskActive(job, 'generate_panel_variant_image')
