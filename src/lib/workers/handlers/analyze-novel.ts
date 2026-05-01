@@ -10,6 +10,9 @@ import type { TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
 import { readText, toStringArray, nameMatchesWithAlias, parseJsonResponse } from './analyze-novel-utils'
+import { submitTask } from '@/lib/task/submitter'
+import { TASK_TYPE } from '@/lib/task/types'
+import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as Record<string, unknown>
@@ -287,11 +290,47 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
     displayMode: 'detail',
   })
 
+  // Phase 12.x.x — cascade to clips → storyboard so v2 SubjectsPage's
+  // 一鍵分析 actually walks the user all the way to a populated
+  // storyboard step. Opt-out by passing { cascadeToStoryboard: false }
+  // in the analyze payload (legacy /workspace flows that have explicit
+  // 「生成片段」/「生成分鏡」 buttons can suppress).
+  const cascade = payload.cascadeToStoryboard !== false
+  if (cascade && targetEpisode?.id) {
+    try {
+      await submitTask({
+        userId: job.data.userId,
+        locale: job.data.locale,
+        projectId,
+        episodeId: targetEpisode.id,
+        type: TASK_TYPE.CLIPS_BUILD,
+        targetType: 'NovelPromotionEpisode',
+        targetId: targetEpisode.id,
+        payload: {
+          episodeId: targetEpisode.id,
+          cascadeToStoryboard: true,
+        },
+        dedupeKey: `clips_build:${targetEpisode.id}`,
+        priority: 2,
+      })
+      _ulogInfo('[analyze-novel] cascaded to clips_build', {
+        projectId,
+        episodeId: targetEpisode.id,
+      })
+    } catch (err) {
+      // Swallow cascade errors — the analyze itself succeeded; the user
+      // can manually trigger clips later. We log so admins see it on the
+      // failed-runs dashboard.
+      _ulogError('[analyze-novel] cascade to clips_build failed:', err)
+    }
+  }
+
   return {
     success: true,
     characters: createdCharacters,
     locations: createdLocations,
     characterCount: createdCharacters.length,
     locationCount: createdLocations.length,
+    cascadedToClipsBuild: cascade && Boolean(targetEpisode?.id),
   }
 }

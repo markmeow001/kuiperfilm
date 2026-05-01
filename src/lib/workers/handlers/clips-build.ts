@@ -10,6 +10,9 @@ import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './
 import type { TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
+import { submitTask } from '@/lib/task/submitter'
+import { TASK_TYPE } from '@/lib/task/types'
+import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 function parseClipArrayResponse(responseText: string): Array<Record<string, unknown>> {
   let cleaned = responseText.trim()
@@ -252,8 +255,50 @@ export async function handleClipsBuildTask(job: Job<TaskJobData>) {
     displayMode: 'detail',
   })
 
+  // Phase 12.x.x — second hop in the analyze→clips→storyboard cascade
+  // started by analyze-novel. Skip if storyboards already exist for this
+  // episode (idempotent on rerun) or if the caller opted out.
+  const cascade = payload.cascadeToStoryboard !== false
+  if (cascade) {
+    const existingStoryboards = await prisma.novelPromotionStoryboard.count({
+      where: { episodeId },
+    })
+    if (existingStoryboards === 0) {
+      try {
+        await submitTask({
+          userId: job.data.userId,
+          locale: job.data.locale,
+          projectId,
+          episodeId,
+          type: TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN,
+          targetType: 'NovelPromotionEpisode',
+          targetId: episodeId,
+          payload: {
+            episodeId,
+            displayMode: 'detail',
+          },
+          dedupeKey: `script_to_storyboard_run:${episodeId}`,
+          priority: 2,
+        })
+        _ulogInfo('[clips-build] cascaded to script_to_storyboard_run', {
+          projectId,
+          episodeId,
+        })
+      } catch (err) {
+        _ulogError('[clips-build] cascade to script_to_storyboard_run failed:', err)
+      }
+    } else {
+      _ulogInfo('[clips-build] storyboard already exists, skipping cascade', {
+        projectId,
+        episodeId,
+        existingStoryboards,
+      })
+    }
+  }
+
   return {
     episodeId,
     count: createdClips.length,
+    cascadedToStoryboard: cascade,
   }
 }
