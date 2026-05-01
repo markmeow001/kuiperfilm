@@ -41,6 +41,11 @@ import {
 } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
+import { V2LocationEditModal } from './V2LocationEditModal'
+import {
+  useUpdateProjectLocationBasics,
+  useUpdateProjectLocationDescription,
+} from '@/lib/query/mutations/location-management-mutations'
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import {
@@ -139,6 +144,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const uploadLocImage = useUploadProjectLocationImage(projectId)
   const confirmProfile = useConfirmProjectCharacterProfile(projectId)
   const updateAppearanceDesc = useUpdateProjectAppearanceDescription(projectId)
+  const updateLocBasics = useUpdateProjectLocationBasics(projectId)
+  const updateLocDescription = useUpdateProjectLocationDescription(projectId)
   const updateCharIntro = useUpdateProjectCharacterIntroduction(projectId)
   const deleteCharacter = useDeleteProjectCharacter(projectId)
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
@@ -170,6 +177,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const [editingDescId, setEditingDescId] = useState<string | null>(null) // appearanceId
   const [editingDescDraft, setEditingDescDraft] = useState<string>('')
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null)
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null)
 
   function markRegenStart(targetId: string) {
     setRegenInFlight((prev) => {
@@ -827,6 +835,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             onUpload: (file) => handleUploadLoc(l, file),
             isUploading: uploadInFlight.has(l.id),
             onZoom: (url) => setZoomImage(url),
+            onOpenEditor: () => setEditingLocationId(l.id),
           }))}
           emptyHint="此項目還沒有場景 — 點上方「一鍵分析」抽出此集的場景,或從素材庫導入"
         />
@@ -870,6 +879,56 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             isLocking={confirmProfile.isPending}
             onDelete={() => handleDeleteCharacterFromModal(c.id)}
             isDeleting={deleteCharacter.isPending}
+          />
+        )
+      })() : null}
+
+      {editingLocationId ? (() => {
+        const l = locations.find((loc) => loc.id === editingLocationId)
+        if (!l) return null
+        return (
+          <V2LocationEditModal
+            location={l as unknown as {
+              id: string
+              name?: string | null
+              summary?: string | null
+              description?: string | null
+              images?: Array<{ id: string; imageIndex?: number | null; description?: string | null }> | null
+            }}
+            imageUrl={pickLocationImage(l)}
+            onClose={() => setEditingLocationId(null)}
+            onZoomImage={(url) => setZoomImage(url)}
+            onRegenerate={() => handleRegenLoc(l)}
+            onUploadFile={(file) => handleUploadLoc(l, file)}
+            isRegenerating={regenInFlight.has(l.id) || serverInflightIds.has(l.id)}
+            isUploading={uploadInFlight.has(l.id)}
+            onSaveBasics={(params) => {
+              updateLocBasics.mutate(
+                {
+                  locationId: l.id,
+                  name: params.name,
+                  note: params.note,
+                  metadata: (params.metadata as unknown as Record<string, unknown> | null),
+                },
+                {
+                  onError: (err) => {
+                    alert(err instanceof Error ? err.message : '儲存失敗')
+                  },
+                },
+              )
+            }}
+            isSavingBasics={updateLocBasics.isPending}
+            onSaveDescription={(description) => {
+              updateLocDescription.mutate(
+                { locationId: l.id, description, imageIndex: 0 },
+                {
+                  onError: (err) => {
+                    alert(err instanceof Error ? err.message : '儲存失敗')
+                  },
+                },
+              )
+            }}
+            isSavingDescription={updateLocDescription.isPending}
           />
         )
       })() : null}

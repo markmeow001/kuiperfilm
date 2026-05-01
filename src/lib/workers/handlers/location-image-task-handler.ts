@@ -1,6 +1,7 @@
 import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { addLocationPromptSuffix, LOCATION_IMAGE_RATIO } from '@/lib/constants'
+import { parseLocationSummary, metadataToPromptPrefix } from '@/lib/location-metadata'
 import { type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 import {
@@ -104,7 +105,7 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
     }
   }
 
-  // 补充查询缺失的 location 名字（兜底）
+  // 補充查詢缺失的 location 名字 + summary(後者帶環境設置 metadata)
   const missingLocationIds = Array.from(new Set(locationImages.map((it) => it.locationId)))
     .filter((id) => !locationNameMap[id])
   if (missingLocationIds.length > 0) {
@@ -116,7 +117,23 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
     }
   }
 
-  const locationIds = Array.from(new Set(locationImages.map((it) => it.locationId)))
+  // 把所有相關 location 的 summary 也撈一次,給環境 metadata prompt
+  // prefix 用。這裡是 worker 端唯一拿得到 metadata 的入口 — 上面 if/else
+  // 兩條分支只記了 name,沒撈 summary,所以這裡統一補一次。
+  const allLocationIds = Array.from(new Set(locationImages.map((it) => it.locationId)))
+  const locationSummaryMap: Record<string, string | null> = {}
+  if (allLocationIds.length > 0) {
+    // db wrapper's findMany return type is LocationWithImages regardless
+    // of `select`, so we cast to access summary defensively.
+    const rows = (await db.novelPromotionLocation.findMany({
+      where: { id: { in: allLocationIds } } as Record<string, unknown>,
+    })) as Array<{ id: string; summary?: string | null }>
+    for (const r of rows) {
+      locationSummaryMap[r.id] = r.summary ?? null
+    }
+  }
+
+  const locationIds = allLocationIds
 
   // Phase 11.5 / Bug-4: chokepoint owns prepend + capability filter. Handler passes
   // raw userPrompt + raw styleProfile.
@@ -129,7 +146,14 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
     const promptBody = item.description || ''
     if (!promptBody) continue
 
-    const userPrompt = addLocationPromptSuffix(promptBody)
+    // Inject 環境設置 metadata at the top of the user prompt block so
+    // GEM-3.1 sees it before the description. metadataToPromptPrefix
+    // returns '' when no metadata is set,so legacy locations behave
+    // exactly like before.
+    const meta = parseLocationSummary(locationSummaryMap[item.locationId] ?? null).metadata
+    const metaPrefix = metadataToPromptPrefix(meta)
+    const composedBody = metaPrefix ? `${metaPrefix}\n\n${promptBody}` : promptBody
+    const userPrompt = addLocationPromptSuffix(composedBody)
 
     await reportTaskProgress(job, 20 + Math.floor((i / Math.max(locationImages.length, 1)) * 55), {
       stage: 'generate_location_image',

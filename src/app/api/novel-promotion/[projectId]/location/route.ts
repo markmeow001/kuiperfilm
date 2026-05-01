@@ -2,6 +2,11 @@ import { logError as _ulogError } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { removeLocationPromptSuffix } from '@/lib/constants'
+import {
+  parseLocationSummary,
+  stringifyLocationSummary,
+  type LocationMetadata,
+} from '@/lib/location-metadata'
 import { requireProjectAuth, requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { resolveTaskLocale } from '@/lib/task/resolve-locale'
@@ -149,11 +154,36 @@ export const PATCH = apiHandler(async (
     throw new ApiError('NOT_FOUND')
   }
 
-  // 如果提供了 name 或 summary，更新场景信息
-  if (name !== undefined || body.summary !== undefined) {
+  // 如果提供了 name / summary / metadata,更新場景資訊。
+  // metadata(環境設置:天氣/時段/光源/色溫/標籤等)直接序列化進現有
+  // summary 欄位,避免 schema migration。讀寫一律走 location-metadata
+  // 模組以保持格式一致。
+  if (name !== undefined || body.summary !== undefined || body.metadata !== undefined) {
     const updateData: { name?: string; summary?: string | null } = {}
     if (name !== undefined) updateData.name = name.trim()
-    if (body.summary !== undefined) updateData.summary = body.summary?.trim() || null
+
+    if (body.summary !== undefined || body.metadata !== undefined) {
+      // 先讀現有的 row 拿到 (note, metadata) 基準,部分更新時不蓋掉沒
+      // 動到的那一邊。例如 user 只改了天氣,不該把 note 一起清掉。
+      const current = await prisma.novelPromotionLocation.findUnique({
+        where: { id: locationId },
+        select: { summary: true },
+      })
+      const baseline = parseLocationSummary(current?.summary || null)
+      const nextNote =
+        body.summary !== undefined
+          ? typeof body.summary === 'string'
+            ? body.summary.trim()
+            : ''
+          : baseline.note
+      const nextMeta: LocationMetadata | null =
+        body.metadata !== undefined
+          ? body.metadata && typeof body.metadata === 'object'
+            ? (body.metadata as LocationMetadata)
+            : null
+          : baseline.metadata
+      updateData.summary = stringifyLocationSummary({ note: nextNote, metadata: nextMeta })
+    }
 
     const location = await prisma.novelPromotionLocation.update({
       where: { id: locationId },

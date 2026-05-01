@@ -104,6 +104,40 @@ export function useUpdateProjectLocationName(projectId: string) {
 }
 
 /**
+ * 更新場景基本資料 — name + 簡短備註(note) + 環境設置 metadata。
+ * 一次 PATCH 帶過去,server 端會 merge 進現有 summary 欄位的 JSON。
+ * Modal 端配合 buildMetaForSave 計算 metadata,null 表示清空(回到
+ * legacy 純字串 summary 行為)。
+ */
+export function useUpdateProjectLocationBasics(projectId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (params: {
+            locationId: string
+            name?: string
+            note?: string
+            metadata?: Record<string, unknown> | null
+        }) => {
+            // body.summary 對應 location-metadata 的 note 欄位 — server
+            // 端 PATCH 邏輯會把 (summary, metadata) 重新 stringify 進 DB
+            // 的 summary 欄位。
+            const body: Record<string, unknown> = { locationId: params.locationId }
+            if (params.name !== undefined) body.name = params.name
+            if (params.note !== undefined) body.summary = params.note
+            if (params.metadata !== undefined) body.metadata = params.metadata
+            return await requestJsonWithError(`/api/novel-promotion/${projectId}/location`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            }, 'Failed to update location basics')
+        },
+        onSuccess: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
+
+/**
  * 更新项目角色形象描述
  */
 
