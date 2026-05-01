@@ -137,22 +137,22 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
   return (
     <div className="grain min-h-screen bg-stone-950 text-stone-200">
       {/* Top header */}
-      <header className="border-b border-stone-800/60 px-12 py-5">
+      <header className="border-b border-stone-700 px-12 py-5">
         <div className="flex items-center justify-between">
           <div>
-            <div className="font-fraunces text-2xl italic tracking-tight text-amber-500">
+            <div className="font-fraunces text-2xl italic tracking-tight text-amber-400">
               Kuiper <span className="not-italic font-serif-cn">影界</span>
             </div>
-            <div className="mt-0.5 font-mono text-[9px] tracking-[0.2em] text-stone-600">
+            <div className="mt-0.5 font-mono text-[10px] tracking-[0.2em] text-stone-400">
               AI · MANHUA · STUDIO
             </div>
           </div>
-          <div className="flex items-center gap-4 font-mono text-[10px] tracking-wider text-stone-500">
-            <span className="text-stone-400">{session.user?.name ?? session.user?.email ?? ''}</span>
+          <div className="flex items-center gap-4 font-mono text-[11px] tracking-wider">
+            <span className="text-stone-200">{session.user?.name ?? session.user?.email ?? ''}</span>
             <button
               type="button"
               onClick={() => void signOut({ callbackUrl: `/${locale}/auth/signin` })}
-              className="rounded-sm border border-stone-800/50 bg-stone-900/30 px-3 py-1.5 transition-colors hover:border-amber-500/40 hover:text-amber-300"
+              className="rounded-sm border border-stone-600 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
             >
               登出
             </button>
@@ -164,13 +164,13 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
         {/* Title row */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="font-mono text-[10px] tracking-[0.25em] text-amber-500/70">
+            <div className="font-mono text-[11px] tracking-[0.25em] text-amber-400">
               MY PROJECTS
             </div>
-            <h1 className="mt-2 font-serif-cn text-3xl font-light text-stone-100">
+            <h1 className="mt-2 font-serif-cn text-3xl font-light text-white">
               我的專案
             </h1>
-            <p className="mt-1 font-fraunces text-sm italic text-stone-500">
+            <p className="mt-1 font-fraunces text-sm italic text-stone-300">
               Manage your AI cinematic projects
             </p>
           </div>
@@ -182,13 +182,13 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
               placeholder="搜尋專案名稱或描述…"
-              className="w-64 rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 font-serif-cn text-sm text-stone-200 placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
+              className="w-64 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-500 focus:border-amber-500 focus:outline-none"
             />
             {searchQuery ? (
               <button
                 type="button"
                 onClick={clearSearch}
-                className="rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 font-mono text-xs text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
+                className="rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-2 font-mono text-xs text-stone-300 transition-colors hover:border-stone-600 hover:text-white"
               >
                 清除
               </button>
@@ -196,7 +196,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
             <button
               type="button"
               onClick={handleSearch}
-              className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-mono text-xs text-amber-400 transition-colors hover:border-amber-500/60 hover:bg-amber-500/15"
+              className="rounded-sm border border-amber-500/60 bg-amber-500/20 px-4 py-2 font-mono text-xs text-amber-300 transition-colors hover:border-amber-500 hover:bg-amber-500/30"
             >
               搜尋
             </button>
@@ -208,68 +208,68 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
           {/* + New project card */}
           <Link
             href={`/${locale}/v2/new`}
-            className="group flex h-44 items-center justify-center rounded-sm border border-amber-500/30 bg-amber-500/5 transition-all hover:border-amber-500/60 hover:bg-amber-500/10"
+            className="group flex h-44 items-center justify-center rounded-sm border border-amber-500/60 bg-amber-500/10 transition-all hover:border-amber-400 hover:bg-amber-500/20"
           >
             <div className="flex flex-col items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/15 transition-all group-hover:scale-110">
-                <AppIcon name="plus" className="h-5 w-5 text-amber-400" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500 bg-amber-500/30 transition-all group-hover:scale-110">
+                <AppIcon name="plus" className="h-5 w-5 text-amber-300" />
               </div>
-              <span className="font-serif-cn text-sm text-amber-400">新建專案</span>
+              <span className="font-serif-cn text-base font-medium text-amber-300">新建專案</span>
             </div>
           </Link>
 
           {/* Loading skeletons */}
           {loading
             ? Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-44 animate-pulse rounded-sm border border-stone-800/50 bg-stone-900/30" />
+                <div key={i} className="h-44 animate-pulse rounded-sm border border-stone-700 bg-stone-900/70" />
               ))
             : formatted.map((project) => (
                 <Link
                   key={project.id}
                   href={`/${locale}/v2/workspace/${project.id}`}
-                  className="group relative flex h-44 flex-col rounded-sm border border-stone-800/50 bg-stone-900/30 p-5 transition-all hover:border-amber-500/40"
+                  className="group relative flex h-44 flex-col rounded-sm border border-stone-700 bg-stone-900/70 p-5 transition-all hover:border-amber-500 hover:bg-stone-900/90"
                 >
                   <button
                     type="button"
                     onClick={(e) => void handleDelete(project, e)}
                     disabled={deletingId === project.id}
-                    className="absolute right-3 top-3 hidden h-7 w-7 items-center justify-center rounded-sm border border-stone-700 bg-stone-900 text-stone-500 transition-colors hover:border-rose-500/50 hover:bg-rose-500/15 hover:text-rose-300 group-hover:flex disabled:opacity-50"
+                    className="absolute right-3 top-3 hidden h-7 w-7 items-center justify-center rounded-sm border border-stone-600 bg-stone-900 text-stone-300 transition-colors hover:border-rose-500 hover:bg-rose-500/20 hover:text-rose-200 group-hover:flex disabled:opacity-50"
                     title="刪除專案"
                   >
                     <AppIcon name="trash" className="h-3.5 w-3.5" />
                   </button>
 
-                  <div className="font-serif-cn text-lg font-medium text-stone-100 group-hover:text-amber-300">
+                  <div className="font-serif-cn text-lg font-medium text-white group-hover:text-amber-300">
                     {project.name}
                   </div>
 
                   {project.description || project.stats?.firstEpisodePreview ? (
-                    <p className="mt-2 line-clamp-2 font-serif-cn text-xs leading-relaxed text-stone-500">
+                    <p className="mt-2 line-clamp-2 font-serif-cn text-xs leading-relaxed text-stone-300">
                       {project.description || project.stats?.firstEpisodePreview}
                     </p>
                   ) : (
-                    <p className="mt-2 font-fraunces text-xs italic text-stone-700">
+                    <p className="mt-2 font-fraunces text-xs italic text-stone-500">
                       Untitled draft
                     </p>
                   )}
 
-                  <div className="mt-auto flex items-center justify-between font-mono text-[10px] text-stone-600">
+                  <div className="mt-auto flex items-center justify-between font-mono text-[10px] text-stone-400">
                     <div className="flex items-center gap-3">
                       {project.stats?.episodes ? (
                         <span className="flex items-center gap-1">
-                          <AppIcon name="bookOpen" className="h-3 w-3" />
+                          <AppIcon name="bookOpen" className="h-3 w-3 text-amber-400/80" />
                           {project.stats.episodes}
                         </span>
                       ) : null}
                       {project.stats?.images ? (
                         <span className="flex items-center gap-1">
-                          <AppIcon name="image" className="h-3 w-3" />
+                          <AppIcon name="image" className="h-3 w-3 text-amber-400/80" />
                           {project.stats.images}
                         </span>
                       ) : null}
                       {project.stats?.videos ? (
                         <span className="flex items-center gap-1">
-                          <AppIcon name="film" className="h-3 w-3" />
+                          <AppIcon name="film" className="h-3 w-3 text-amber-400/80" />
                           {project.stats.videos}
                         </span>
                       ) : null}
