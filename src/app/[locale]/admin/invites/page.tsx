@@ -161,15 +161,18 @@ export default function AdminInvitesPage() {
             ← 後台首頁
           </a>
           <div className="flex items-center gap-1 rounded-md border border-[var(--glass-border)] bg-[var(--glass-tone-info-bg)]/30 p-1">
-            <a
-              href="../users"
-              className="rounded-sm px-4 py-1.5 font-medium text-sm text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]"
-            >
-              使用者管理
+            <a href="../users" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+              使用者
             </a>
-            <span className="rounded-sm bg-[var(--glass-tone-info-fg)]/15 px-4 py-1.5 font-medium text-sm text-[var(--glass-tone-info-fg)]">
-              邀請碼管理
+            <span className="rounded-sm bg-[var(--glass-tone-info-fg)]/15 px-3 py-1.5 font-medium text-xs text-[var(--glass-tone-info-fg)]">
+              邀請碼
             </span>
+            <a href="../projects" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+              所有專案
+            </a>
+            <a href="../runs" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+              失敗任務
+            </a>
           </div>
         </div>
         <header className="flex items-end justify-between mb-6 gap-4 flex-wrap">
