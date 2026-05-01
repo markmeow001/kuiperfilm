@@ -363,11 +363,49 @@ export async function updateTaskBillingInfo(taskId: string, billingInfo: TaskBil
   })
 }
 
+/**
+ * Read existing task.payload, deep-merge meta sub-object so callers that
+ * only know "their slice" of meta don't blow away unrelated meta keys
+ * (locale, route, userTier, runId, provider, etc.) written by upstream
+ * layers. Other top-level fields are still replaced — callers that want
+ * to extend a top-level field must spread it explicitly.
+ *
+ * Adds one DB read per call; only callers that pass non-null payload
+ * pay it.
+ */
+async function mergePayloadMetaWithExisting(
+  taskId: string,
+  payload: Record<string, unknown> | null,
+): Promise<Record<string, unknown> | null> {
+  if (!payload) return payload
+  const existing = await taskModel.findUnique({
+    where: { id: taskId },
+    select: { payload: true },
+  })
+  const existingPayload =
+    existing?.payload && typeof existing.payload === 'object' && !Array.isArray(existing.payload)
+      ? (existing.payload as Record<string, unknown>)
+      : {}
+  const existingMeta =
+    existingPayload.meta && typeof existingPayload.meta === 'object' && !Array.isArray(existingPayload.meta)
+      ? (existingPayload.meta as Record<string, unknown>)
+      : {}
+  const incomingMeta =
+    payload.meta && typeof payload.meta === 'object' && !Array.isArray(payload.meta)
+      ? (payload.meta as Record<string, unknown>)
+      : {}
+  return {
+    ...payload,
+    meta: { ...existingMeta, ...incomingMeta },
+  }
+}
+
 export async function updateTaskPayload(taskId: string, payload: Record<string, unknown> | null) {
+  const merged = await mergePayloadMetaWithExisting(taskId, payload)
   return await taskModel.update({
     where: { id: taskId },
     data: {
-      payload: toNullableJson(payload as unknown as Prisma.InputJsonValue),
+      payload: toNullableJson(merged as unknown as Prisma.InputJsonValue),
     },
   })
 }
@@ -431,11 +469,16 @@ export async function touchTaskHeartbeat(taskId: string) {
 }
 
 export async function tryUpdateTaskProgress(taskId: string, progress: number, payload?: Record<string, unknown> | null) {
+  // payload meta keys (locale, route, userTier, runId, provider, etc.)
+  // are owned across multiple layers — merge instead of replace so
+  // worker progress events don't blow away upstream writes. See
+  // mergePayloadMetaWithExisting for the canonical merge behaviour.
+  const merged = payload ? await mergePayloadMetaWithExisting(taskId, payload) : payload
   const result = await taskModel.updateMany({
     where: activeTaskWhere(taskId),
     data: {
       progress,
-      ...(payload ? { payload: toNullableJson(payload) } : {}),
+      ...(merged ? { payload: toNullableJson(merged) } : {}),
     },
   })
   return result.count > 0

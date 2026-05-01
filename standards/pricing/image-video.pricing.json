@@ -6073,5 +6073,143 @@
       "mode": "flat",
       "flatAmount": 0.012
     }
+  },
+  {
+    "apiType": "image",
+    "provider": "tencent-vod",
+    "modelId": "GEM-3.1",
+    "pricing": {
+      "mode": "capability",
+      "tiers": [
+        {
+          "when": {
+            "resolution": "512"
+          },
+          "amount": 0.04
+        },
+        {
+          "when": {
+            "resolution": "1k"
+          },
+          "amount": 0.06
+        },
+        {
+          "when": {
+            "resolution": "2k"
+          },
+          "amount": 0.1
+        },
+        {
+          "when": {
+            "resolution": "4k"
+          },
+          "amount": 0.16
+        }
+      ]
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-3.0",
+    "pricing": {
+      "mode": "capability",
+      "tiers": [
+        {
+          "when": {
+            "resolution": "720p",
+            "duration": 5
+          },
+          "amount": 0.14
+        },
+        {
+          "when": {
+            "resolution": "720p",
+            "duration": 10
+          },
+          "amount": 0.28
+        },
+        {
+          "when": {
+            "resolution": "1080p",
+            "duration": 5
+          },
+          "amount": 0.21
+        },
+        {
+          "when": {
+            "resolution": "1080p",
+            "duration": 10
+          },
+          "amount": 0.42
+        },
+        {
+          "when": {
+            "resolution": "4k",
+            "duration": 5
+          },
+          "amount": 0.7
+        },
+        {
+          "when": {
+            "resolution": "4k",
+            "duration": 10
+          },
+          "amount": 1.4
+        }
+      ]
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "tencent-vod",
+    "modelId": "Kling-3.0-Omni",
+    "pricing": {
+      "mode": "capability",
+      "tiers": [
+        {
+          "when": {
+            "resolution": "720p",
+            "duration": 5
+          },
+          "amount": 0.14
+        },
+        {
+          "when": {
+            "resolution": "720p",
+            "duration": 10
+          },
+          "amount": 0.28
+        },
+        {
+          "when": {
+            "resolution": "1080p",
+            "duration": 5
+          },
+          "amount": 0.21
+        },
+        {
+          "when": {
+            "resolution": "1080p",
+            "duration": 10
+          },
+          "amount": 0.42
+        },
+        {
+          "when": {
+            "resolution": "4k",
+            "duration": 5
+          },
+          "amount": 0.7
+        },
+        {
+          "when": {
+            "resolution": "4k",
+            "duration": 10
+          },
+          "amount": 1.4
+        }
+      ]
+    }
   }
 ]

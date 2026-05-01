@@ -65,6 +65,14 @@ function parseModelId(model: string): string {
   return parsed?.modelId || model
 }
 
+// Capability fields whose values are case-insensitive in practice.
+// The pricing catalog convention is lowercase (720p / 1080p / 4k), but
+// the capability catalog (and most user-facing UI) historically stores
+// them uppercase for display ('720P' / '1080P' / '4K'). Without
+// normalising here, any ('720P','1080P','4K') flowing through billing
+// fails the strict `===` match in lookup.matchTier and the request 500s.
+const CASE_INSENSITIVE_CAPABILITY_FIELDS = new Set<string>(['resolution'])
+
 function normalizeCapabilitySelections(
   metadata: Record<string, unknown> | undefined,
 ): Record<string, CapabilityValue> {
@@ -72,7 +80,11 @@ function normalizeCapabilitySelections(
 
   const selections: Record<string, CapabilityValue> = {}
   for (const [field, value] of Object.entries(metadata)) {
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    if (typeof value === 'string') {
+      selections[field] = CASE_INSENSITIVE_CAPABILITY_FIELDS.has(field)
+        ? value.toLowerCase()
+        : value
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
       selections[field] = value
     }
   }
@@ -413,7 +425,9 @@ export function calcVideo(
     typeof selections.resolution !== 'string'
     && videoCapabilitySupportsField(model, 'resolution')
   ) {
-    selections.resolution = resolution
+    // Case-normalize the fallback the same way normalizeCapabilitySelections
+    // does for resolution-like fields (see CASE_INSENSITIVE_CAPABILITY_FIELDS).
+    selections.resolution = resolution.toLowerCase()
   }
   if (
     typeof selections.generationMode !== 'string'

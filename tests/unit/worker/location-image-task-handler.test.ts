@@ -123,7 +123,11 @@ describe('worker location-image-task-handler behavior', () => {
 
     expect(sharedMock.generateLabeledImageToCos).toHaveBeenCalledWith(
       expect.objectContaining({
-        prompt: '雨夜街道',
+        // Session A's 56a857c prepends a no-people / no-animals scene spec
+        // to the raw description so Tencent VOD GEM-3.1 doesn't paint
+        // characters into pure environment shots. The user description
+        // itself is still preserved at the end.
+        prompt: expect.stringContaining('雨夜街道'),
         label: 'Old Town',
         targetId: 'location-image-1',
         options: expect.objectContaining({ aspectRatio: '1:1' }),
