@@ -82,15 +82,43 @@ interface TencentVODSubjectInfo {
 }
 
 /**
- * Kling 3.0 / 3.0-Omni 智能分鏡參數。
- * 透過 ExtInfo 序列化送出 — Tencent VOD 文件 2026-02-14 新增。
- *   - multi_shot="intelligence" 表示模型自動依 prompt 切多鏡頭
- *   - short_type / multi_prompt 為短劇場景擴充參數
+ * Kling 3.0 / 3.0-Omni 多鏡頭參數。
+ *
+ * Two operating modes per Tencent VOD AIGC doc (2026-02-14, updated
+ * 2026-04-24):
+ *
+ *   1. Intelligence mode — model decides shot boundaries on its own:
+ *        { multi_shot: 'intelligence' }                            (legacy form)
+ *      or
+ *        { multi_shot: true, shot_type: 'intelligence' }           (current spec form)
+ *      with the top-level Prompt holding the combined script.
+ *
+ *   2. Customize mode — caller supplies per-shot prompt + duration:
+ *        { multi_shot: true, shot_type: 'customize',
+ *          multi_prompt: [{ index, prompt, duration }, ...] }
+ *      Top-level Prompt is ignored. Sum of durations must equal the
+ *      task's total Duration; each shot 1-15s; max 6 shots; each
+ *      prompt ≤512 chars.
  */
+type KlingMultiShotMode = boolean | 'intelligence' | string
+
+interface KlingMultiShotPromptEntry {
+    index: number
+    prompt: string
+    duration: number | string
+}
+
 interface KlingMultiShotOptions {
-    multi_shot?: 'intelligence' | string
+    multi_shot?: KlingMultiShotMode
+    shot_type?: 'intelligence' | 'customize' | string
+    /** @deprecated typo on the older changelog; kept for back-compat read */
     short_type?: string
-    multi_prompt?: string
+    /**
+     * Customize-mode shot list. When provided the generator embeds it
+     * as an array (per spec); the older string form is still accepted
+     * for callers built before the array shape was documented.
+     */
+    multi_prompt?: KlingMultiShotPromptEntry[] | string
 }
 
 type ToggleFlag = 'Enabled' | 'Disabled'

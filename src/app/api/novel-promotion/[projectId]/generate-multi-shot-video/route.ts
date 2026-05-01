@@ -55,6 +55,59 @@ export const POST = apiHandler(async (
     })
   }
 
+  // Optional multi-shot mode (B-path only). Defaults to model-decides
+  // when omitted; passing it explicitly is required to send
+  // panelDurations through with non-default behaviour.
+  const multiShotMode =
+    body.multiShotMode === 'customize' || body.multiShotMode === 'intelligence'
+      ? body.multiShotMode
+      : undefined
+
+  // Optional per-shot durations (B-path customize mode). Length must
+  // match panelIds; each ≥1; sum 5-15s (Kling Omni constraint). Heavy
+  // validation lives in the worker; route only screens the shape so
+  // bad input fails fast with a clear field name.
+  let panelDurations: number[] | undefined
+  if (body.panelDurations !== undefined) {
+    if (!Array.isArray(body.panelDurations)) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'PANEL_DURATIONS_INVALID',
+        field: 'panelDurations',
+        details: { message: 'panelDurations must be an array of numbers' },
+      })
+    }
+    if (body.panelDurations.length !== panelIds.length) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'PANEL_DURATIONS_LENGTH_MISMATCH',
+        field: 'panelDurations',
+        details: {
+          expected: panelIds.length,
+          got: body.panelDurations.length,
+        },
+      })
+    }
+    const arr: number[] = []
+    for (const d of body.panelDurations) {
+      if (typeof d !== 'number' || !Number.isFinite(d) || d < 1) {
+        throw new ApiError('INVALID_PARAMS', {
+          code: 'PANEL_DURATION_INVALID',
+          field: 'panelDurations',
+          details: { message: 'each duration must be a finite number ≥1' },
+        })
+      }
+      arr.push(d)
+    }
+    const total = arr.reduce((a, b) => a + b, 0)
+    if (total < 5 || total > 15) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'PANEL_DURATIONS_TOTAL_OUT_OF_RANGE',
+        field: 'panelDurations',
+        details: { total, min: 5, max: 15 },
+      })
+    }
+    panelDurations = arr
+  }
+
   // Verify all panels exist and have imageUrl
   const panels = await prisma.novelPromotionPanel.findMany({
     where: { id: { in: panelIds } },
@@ -114,6 +167,8 @@ export const POST = apiHandler(async (
       mode: typeof body.mode === 'string' ? body.mode : undefined,
       sound: typeof body.sound === 'boolean' ? body.sound : undefined,
       aspectRatio: typeof body.aspectRatio === 'string' ? body.aspectRatio : undefined,
+      ...(multiShotMode ? { multiShotMode } : {}),
+      ...(panelDurations ? { panelDurations } : {}),
     },
     dedupeKey: `video_multi_shot:${storyboard.id}`,
   })

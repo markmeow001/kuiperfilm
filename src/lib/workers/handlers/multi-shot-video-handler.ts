@@ -81,6 +81,19 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   const mode = (payload.mode as 'std' | 'pro') || undefined
   const sound = typeof payload.sound === 'boolean' ? payload.sound : undefined
   const aspectRatio = (payload.aspectRatio as string) || undefined
+  // B-path-only multi-shot mode (intelligence vs customize). Named
+  // distinctly from `mode` above (Kling resolution std/pro) to avoid
+  // collision in payload validation.
+  const multiShotMode =
+    payload.multiShotMode === 'customize' ? 'customize'
+      : payload.multiShotMode === 'intelligence' ? 'intelligence'
+        : undefined
+  // Optional per-shot durations matching panelIds order. Validated again
+  // in distributeShotDurations; we only screen the shape here.
+  const panelDurations = Array.isArray(payload.panelDurations)
+    && (payload.panelDurations as unknown[]).every((d) => typeof d === 'number')
+    ? (payload.panelDurations as number[])
+    : undefined
 
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
@@ -134,6 +147,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       videoModel,
       sound,
       aspectRatio,
+      ...(multiShotMode ? { multiShotMode } : {}),
+      ...(panelDurations ? { panelDurations } : {}),
     })
   }
 
