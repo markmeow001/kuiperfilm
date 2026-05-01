@@ -14,13 +14,16 @@
  */
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
 import { useRegenerateSingleCharacterImage } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useRegenerateSingleLocationImage } from '@/lib/query/mutations/location-image-mutations'
 import { useConfirmProjectCharacterProfile } from '@/lib/query/mutations/character-profile-mutations'
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
+import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
+import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
 type Tab = 'character' | 'scene' | 'prop'
@@ -71,6 +74,7 @@ function pickLocationImage(l: LocationLike): string | null {
 }
 
 export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
+  const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('character')
   const charactersQuery = useProjectCharacters(projectId)
   const locationsQuery = useProjectLocations(projectId)
@@ -80,6 +84,40 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const analyze = useAnalyzeProjectAssets(projectId)
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
 
+  // Server-side task snapshot — survives page navigation, polled while
+  // the worker is in flight, and used as the source of truth for the
+  // analyze status banner (instead of the component-local mutation state
+  // that resets on unmount).
+  const taskSnapshot = useTaskSnapshot({
+    projectId,
+    targetType: 'NovelPromotionProject',
+    targetId: projectId,
+    type: ['analyze_novel'],
+  })
+  const taskStatus = taskSnapshot.data?.status ?? null
+  const taskProgress = taskSnapshot.data?.progress ?? 0
+  const isAnalyzing = taskStatus === 'queued' || taskStatus === 'processing'
+  const taskError = taskSnapshot.data?.errorMessage ?? null
+  const taskUpdatedAt = taskSnapshot.data?.updatedAt ?? null
+
+  // Poll the snapshot every 3s while worker is running, so the
+  // queued → processing → completed transition is observable.
+  useEffect(() => {
+    if (!isAnalyzing) return
+    const interval = setInterval(() => { void taskSnapshot.refetch() }, 3000)
+    return () => clearInterval(interval)
+  }, [isAnalyzing, taskSnapshot])
+
+  // Detect transition into 'completed' and invalidate character/location
+  // queries so the grid picks up the freshly-written rows.
+  const previousTaskStatus = useRef(taskStatus)
+  useEffect(() => {
+    if (previousTaskStatus.current !== 'completed' && taskStatus === 'completed') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
+    }
+    previousTaskStatus.current = taskStatus
+  }, [taskStatus, projectId, queryClient])
+
   const characters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
   const locations = (locationsQuery.data ?? []) as unknown as LocationLike[]
 
@@ -88,7 +126,16 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       alert('還沒有任何集數 — 請先到「劇本」step 貼劇本並儲存')
       return
     }
-    analyze.mutate({ episodeId: currentEpisodeId })
+    analyze.mutate(
+      { episodeId: currentEpisodeId },
+      {
+        onSuccess: () => {
+          // Pull the new task into the snapshot immediately so the banner
+          // flips from idle → queued without waiting for the 5s staleTime.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId) })
+        },
+      },
+    )
   }
 
   function handleRegenChar(c: CharacterLike) {
@@ -133,11 +180,17 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           <button
             type="button"
             onClick={handleAnalyze}
-            disabled={analyze.isPending || !currentEpisodeId}
+            disabled={analyze.isPending || isAnalyzing || !currentEpisodeId}
             className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2.5 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className="h-4 w-4" />
-            {analyze.isPending ? '分析中…' : '一鍵分析'}
+            {analyze.isPending
+              ? '提交中…'
+              : isAnalyzing
+                ? `分析中… ${taskProgress}%`
+                : taskStatus === 'completed'
+                  ? '重新分析'
+                  : '一鍵分析'}
           </button>
           <Link
             href={`/${locale}/workspace/asset-hub`}
@@ -147,14 +200,23 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           </Link>
         </div>
       </div>
+
+      {/* Status banner — reads from server task snapshot, persists across navigation */}
       {analyze.isError ? (
         <div className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
-          分析失敗:{(analyze.error as Error)?.message ?? '未知錯誤'}
+          提交失敗:{(analyze.error as Error)?.message ?? '未知錯誤'}
         </div>
-      ) : null}
-      {analyze.isSuccess ? (
+      ) : taskStatus === 'failed' ? (
+        <div className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
+          分析任務失敗:{taskError ?? '未知錯誤'}
+        </div>
+      ) : isAnalyzing ? (
+        <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
+          ⏳ 分析中… 進度 {taskProgress}% (LLM 跑完約 30-90 秒,完成後角色/場景會自動出現)
+        </div>
+      ) : taskStatus === 'completed' ? (
         <div className="mb-6 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
-          ✓ 已送出分析任務,結果稍後出現在下方卡片(可同時切到分鏡 step)
+          ✓ 上次分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} — 角色 / 場景已寫入下方卡片
         </div>
       ) : null}
 
