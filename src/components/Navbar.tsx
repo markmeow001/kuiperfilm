@@ -54,7 +54,7 @@ export default function Navbar() {
                 <ThemeToggle />
                 {isAdmin && (
                   <Link
-                    href="/admin/users"
+                    href="/admin"
                     className="text-sm text-[var(--glass-tone-info-fg)] hover:text-[var(--glass-text-primary)] font-medium transition-colors flex items-center gap-1"
                     title={t('admin')}
                   >

@@ -156,13 +156,22 @@ export default function AdminInvitesPage() {
     <div className="glass-page min-h-screen">
       <Navbar />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <nav className="mb-4 flex items-center gap-3 font-mono text-[10px] tracking-wider text-[var(--glass-text-secondary)]">
-          <a href="../" className="hover:text-amber-400">← 後台首頁</a>
-          <span>·</span>
-          <a href="../users" className="hover:text-amber-400">使用者管理</a>
-          <span>·</span>
-          <span className="text-amber-400">邀請碼管理</span>
-        </nav>
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <a href="../" className="font-mono text-[10px] tracking-wider text-[var(--glass-text-secondary)] hover:text-amber-400">
+            ← 後台首頁
+          </a>
+          <div className="flex items-center gap-1 rounded-md border border-[var(--glass-border)] bg-[var(--glass-tone-info-bg)]/30 p-1">
+            <a
+              href="../users"
+              className="rounded-sm px-4 py-1.5 font-medium text-sm text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]"
+            >
+              使用者管理
+            </a>
+            <span className="rounded-sm bg-[var(--glass-tone-info-fg)]/15 px-4 py-1.5 font-medium text-sm text-[var(--glass-tone-info-fg)]">
+              邀請碼管理
+            </span>
+          </div>
+        </div>
         <header className="flex items-end justify-between mb-6 gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-[var(--glass-text-primary)]">
