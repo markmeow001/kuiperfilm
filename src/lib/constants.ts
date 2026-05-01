@@ -308,7 +308,7 @@ export const CHARACTER_PROMPT_SUFFIX = '【最重要 — 構圖規格,禁止違�
 // 「咖啡店」等空間描述偶爾會自動補進角色 / 路人,這對下游 storyboard 拼接
 // 是 noise(角色由分鏡層管,場景圖只負責空間)。明確排除人物 + 動物 + 主動
 // 物件遮擋,讓場景圖回歸純空間 plate。
-export const LOCATION_PROMPT_SUFFIX = '【場景空間圖,純空鏡】畫面中**絕對不能出現人物、人形、人影、剪影、人類臉孔、人手或腳的局部**;沒有寵物、動物、機器人或任何生命體。鏡頭描繪的是空無一人的場景空間本身,著重在建築結構、家具陳設、光影氛圍、材質紋理。'
+export const LOCATION_PROMPT_SUFFIX = '【場景空間圖,16:9 寬景全景空鏡頭】畫面中**絕對不能出現人物、人形、人影、剪影、人類臉孔、人手或腳的局部**;沒有寵物、動物、機器人或任何生命體。鏡頭描繪的是空無一人的場景空間本身,**採用寬景電影感橫向構圖,完整呈現整個空間的左中右三區**(可看到不同方位的牆面、門窗、家具與通道,提供多個視覺焦點),著重在建築結構、家具陳設、光影氛圍、材質紋理。鏡頭高度為人眼平視高度,背景遠近層次分明,作為後續分鏡可從不同角度切入的「主場景參考圖」。'
 
 // 角色图片生成比例（16:9横版，左侧面部特写+右侧全身）
 export const CHARACTER_IMAGE_RATIO = '16:9'
@@ -317,12 +317,15 @@ export const CHARACTER_IMAGE_SIZE = '3840x2160'  // 16:9 横版
 // 角色图片尺寸（用于Banana API）
 export const CHARACTER_IMAGE_BANANA_RATIO = '3:2'
 
-// 场景图片生成比例（1:1 正方形单张场景）
-export const LOCATION_IMAGE_RATIO = '1:1'
-// 场景图片尺寸（用于Seedream API）- 4K
-export const LOCATION_IMAGE_SIZE = '4096x4096'  // 1:1 正方形 4K
-// 场景图片尺寸（用于Banana API）
-export const LOCATION_IMAGE_BANANA_RATIO = '1:1'
+// 场景图片生成比例 — Approach A 寬景:同一場景下角色站不同位置,
+// panel 從寬景 ref 不同區域切入,背景才會有微差。1:1 太擠,16:9 給了
+// 左中右三區的橫向空間。21:9 更寬但 Tencent VOD GEM-3.1 不一定支援,
+// 16:9 是各家圖像模型公認都吃的安全值。
+export const LOCATION_IMAGE_RATIO = '16:9'
+// 場景圖片尺寸(用於 Seedream API)— 16:9 4K
+export const LOCATION_IMAGE_SIZE = '4096x2304'
+// 場景圖片尺寸(用於 Banana API)
+export const LOCATION_IMAGE_BANANA_RATIO = '16:9'
 
 // 从提示词中移除角色系统后缀（用于显示给用户）
 export function removeCharacterPromptSuffix(prompt: string): string {

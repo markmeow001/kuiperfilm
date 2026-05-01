@@ -1,6 +1,6 @@
 import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { addLocationPromptSuffix } from '@/lib/constants'
+import { addLocationPromptSuffix, LOCATION_IMAGE_RATIO } from '@/lib/constants'
 import { type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 import {
@@ -145,7 +145,10 @@ export async function handleLocationImageTask(job: Job<TaskJobData>) {
       targetId: item.id,
       keyPrefix: 'location',
       options: {
-        aspectRatio: '1:1',
+        // Approach A 寬景參考圖 — 16:9 給了左中右三區的橫向空間,
+        // 後續 panel 從不同 viewport 切入時才有「同場景不同位置」的
+        // 視覺一致性可以引用。1:1 過去太擠,場景看起來像置物櫃內景。
+        aspectRatio: LOCATION_IMAGE_RATIO,
       },
       styleProfile,
     })
