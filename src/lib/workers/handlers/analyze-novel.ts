@@ -45,15 +45,30 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
     projectAnalysisModel: novelData.analysisModel,
   })
 
-  const firstEpisode = await prisma.novelPromotionEpisode.findFirst({
-    where: { novelPromotionProjectId: novelData.id },
-    orderBy: { createdAt: 'asc' },
-    select: {
-      novelText: true,
-    },
-  })
+  // Stage C — honour the episodeId the caller asked for so users can
+  // analyze any episode, not just the earliest. Falls back to the first
+  // episode (legacy behaviour) when no episodeId supplied. globalAssetText
+  // remains as a tertiary fallback for older projects that pre-date the
+  // per-episode novelText storage.
+  const requestedEpisodeId =
+    typeof job.data.episodeId === 'string' && job.data.episodeId
+      ? job.data.episodeId
+      : typeof payload.episodeId === 'string' && payload.episodeId
+        ? (payload.episodeId as string)
+        : null
 
-  let contentToAnalyze = readText(novelData.globalAssetText) || readText(firstEpisode?.novelText)
+  const targetEpisode = requestedEpisodeId
+    ? await prisma.novelPromotionEpisode.findFirst({
+        where: { id: requestedEpisodeId, novelPromotionProjectId: novelData.id },
+        select: { id: true, novelText: true },
+      })
+    : await prisma.novelPromotionEpisode.findFirst({
+        where: { novelPromotionProjectId: novelData.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, novelText: true },
+      })
+
+  let contentToAnalyze = readText(targetEpisode?.novelText) || readText(novelData.globalAssetText)
   if (!contentToAnalyze.trim()) {
     throw new Error('请先填写全局资产设定或剧本内容')
   }
@@ -161,9 +176,15 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
 
   const charactersData = parseJsonResponse(characterResponseText)
   const locationsData = parseJsonResponse(locationResponseText)
-  const parsedCharacters = Array.isArray(charactersData.characters)
-    ? (charactersData.characters as Array<Record<string, unknown>>)
-    : []
+  // The character prompt (NP_AGENT_CHARACTER_PROFILE) emits the new
+  // structured shape `{ new_characters: [...], updated_characters: [...] }`.
+  // Older fixtures used a flat `characters` key; accept both so legacy
+  // test data and prompt regressions don't silently produce empty results.
+  const parsedCharacters = Array.isArray(charactersData.new_characters)
+    ? (charactersData.new_characters as Array<Record<string, unknown>>)
+    : Array.isArray(charactersData.characters)
+      ? (charactersData.characters as Array<Record<string, unknown>>)
+      : []
   const parsedLocations = Array.isArray(locationsData.locations)
     ? (locationsData.locations as Array<Record<string, unknown>>)
     : []
