@@ -147,10 +147,16 @@ export function useProjectCharacters(projectId: string | null) {
         queryKey: queryKeys.projectAssets.characters(projectId || ''),
         queryFn: async () => {
             if (!projectId) throw new Error('Project ID is required')
-            const res = await fetch(`/api/novel-promotion/${projectId}/characters`)
+            // Endpoint is /api/novel-promotion/[id]/assets (returns BOTH
+            // characters and locations with their appearances / images).
+            // The plural /characters path never existed and was 404'ing
+            // silently — leaving v2 SubjectsPage permanently empty even
+            // when the worker had written rows. Pick the characters field
+            // out of the aggregated response.
+            const res = await fetch(`/api/novel-promotion/${projectId}/assets`)
             if (!res.ok) throw new Error('Failed to fetch characters')
-            const data = await res.json()
-            return data.characters as Character[]
+            const data = await res.json() as { characters?: Character[] }
+            return (data.characters ?? []) as Character[]
         },
         enabled: !!projectId,
     })
@@ -164,10 +170,13 @@ export function useProjectLocations(projectId: string | null) {
         queryKey: queryKeys.projectAssets.locations(projectId || ''),
         queryFn: async () => {
             if (!projectId) throw new Error('Project ID is required')
-            const res = await fetch(`/api/novel-promotion/${projectId}/locations`)
+            // Same fix as useProjectCharacters above — the plural
+            // /locations URL never existed. Pick the locations field
+            // out of the aggregated /assets response.
+            const res = await fetch(`/api/novel-promotion/${projectId}/assets`)
             if (!res.ok) throw new Error('Failed to fetch locations')
-            const data = await res.json()
-            return data.locations as Location[]
+            const data = await res.json() as { locations?: Location[] }
+            return (data.locations ?? []) as Location[]
         },
         enabled: !!projectId,
     })
