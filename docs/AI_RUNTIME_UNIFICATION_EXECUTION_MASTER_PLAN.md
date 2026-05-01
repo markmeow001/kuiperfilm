@@ -818,8 +818,9 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 - ⚠️ 回归门禁未全绿：存在 3 个历史/并行改动引入的失败用例，导致 `test:regression` 无法通过。
 - ⚠️ 本地构建环境 Redis 未监听 `127.0.0.1:16379`，`next build` 期间出现大量连接拒绝日志，但构建产物仍成功输出。
 - ⚠️ Q-002（pre-existing，非本 phase 引入）：ripgrep 未裝 → `scripts/check-api-handler.ts` 用 `rg --files` 報 `command not found` → `npm run test:guards` 連帶失敗 → `npm run test:regression` 同樣中斷在第一步。建議解法：`brew install ripgrep` 或讓 guard fallback 到 `grep`。
-- ⚠️ Q-003（pre-existing，非本 phase 引入）：worker handler test prisma mock 缺欄位導致 3 個用例 fail：`tests/unit/worker/panel-image-task-handler.test.ts:188`（`prismaMock.novelPromotionPanel.update` 期望被呼叫一次，實際參數對不上）+ `tests/unit/worker/script-to-storyboard.test.ts` 兩個 case（`Cannot read properties of undefined (reading 'deleteMany')` on `prisma.novelPromotionStoryboard.deleteMany`，看起來 mock factory 漏 model）。屬 Phase 8（複雜鏈路遷移）範疇。
+- ✅ Q-003(已修,Session B,2026-05-01):worker test prisma mock 跟 handler 行为对齐 (commit `6bf6f4b`)。5 个 test files 修复:`analyze-novel.test.ts`(加 characterAppearance + episodeCharacter mock + cascadedToClipsBuild return)、`character-image-task-handler.test.ts`(加 novelPromotionProject + novelPromotionEpisode mock)、`character-profile.test.ts`(create→upsert 切换)、`clips-build.test.ts`(cascadedToStoryboard return)、`panel-image-task-handler.test.ts`(regen single-candidate 直接替换 imageUrl 行为)、`script-to-storyboard.test.ts`(orchestrator onClipComplete callback + persistSingleClipStoryboard mock)。120/120 worker tests 全綠。
 - ✅ Q-004(已修,Session B,2026-04-30):`src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts` 改走 `executeAiTextStep` (ai-runtime),不再直連 `chatCompletion`。`node scripts/guards/no-api-direct-llm-call.mjs` OK。
+- ✅ Q-005(已修,Session B,2026-05-01):cascade chain locale heisenbug + Tencent VOD multi-shot video 500 — 详见 `docs/ai-runtime/08-open-gaps.md` 「E2E pipeline 验证」段。Commits `871d560` (workers/shared.ts withFlowFields preserve locale) + `eaadf9f` (billing/task-policy.ts 寬容 uncatalogued video pricing)。E2E 脚本 `scripts/e2e/cascade-smoke.sh` 落地,deploy 后跑一次 ~15 min 验证主链路。
 
 # 5:备注
 - 本文档是唯一执行来源，必须与代码库保持同步。

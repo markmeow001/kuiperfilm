@@ -67,3 +67,53 @@ Stage 2-3 等 Session A 在 v2 创作流程稳定后再接,避免与他们的 ch
 Session A 在 `9b68107` 把既有 `CHARACTER_REFERENCE_TO_SHEET` worker(已支援 3 视角输出)wire 进 V2CharacterEditModal「上传并转多视角」CTA,重用 `CharacterAppearance.imageUrls` JSON array(3 张图一笔 row),**0 schema 改动**完成需求。
 
 跟我之前规划的 `viewType` column 路径不同 — 他们更轻量。Phase 11.4 视为完成,本条移除。
+
+---
+
+## E2E pipeline 验证 — 2026-05-01 跑通
+
+完整 cascade pipeline 端到端跑通(admin 帐户、prod art.kuiperfilmailab.com):
+
+```
+project → episode → novelText →
+analyze_novel (43s) → clips_build (129s) → script_to_storyboard_run (587s) →
+image_character (~3min) → image_panel (30s) → video_multi_shot Kling-Omni B-path (105s)
+```
+
+3 角色 / 4 场景 / 3 storyboards / 21 panels / 1 character image / 1 panel image / 1 multi-shot mp4。
+
+测试脚本落地在 `scripts/e2e/cascade-smoke.sh`,deploy 后跑一次能在 ~15 分钟验证主链路是否还通。
+
+### 期间发现 + 修了 2 个 bug
+
+**Bug #1 — locale heisenbug(`871d560`)**
+
+`src/lib/workers/shared.ts` 的 `withFlowFields` 只 merge flow 字段(flowId / runId / 等),没把 `jobData.locale` 注 payload.meta。worker 进度更新走 `tryUpdateTaskProgress` 直接覆写 `task.payload` 整块,导致 `submitTask` 入库时写好的 `meta.locale` 被丢掉。
+
+后果:任何 task 跑到一半被 reconcile / instrumentation re-enqueue 撿起来时,`resolveTaskLocaleFromPayload(task.payload)` 找不到 locale → 标 `TASK_LOCALE_REQUIRED FAILED`,**真正失败原因被这个 secondary error 蓋掉**。E2E 跑 storyboard 跑了 8 分钟最后看到的就是这个误导错误,实际可能是 LLM 超时 / OOM / 其他。
+
+修法:`withFlowFields` 强制把 `jobData.locale` 注 outgoing payload.meta。jobData.locale 在 BullMQ job 上一定有(submitter 写进去),这是 canonical source。
+
+**Bug #2 — 不寬容 video pricing(`eaadf9f`)**
+
+`src/lib/billing/task-policy.ts:buildDefaultTaskBillingInfo` 只 catch `BILLING_UNKNOWN_MODEL`,对 `BILLING_UNKNOWN_VIDEO_RESOLUTION` / `BILLING_UNKNOWN_VIDEO_CAPABILITY_COMBINATION` / `BILLING_CAPABILITY_PRICE_NOT_FOUND` 直接 throw 出去,500 给 client。
+
+Tencent VOD Kling-3.0-Omni 在 capability catalog 里 priceLabel='--'(没设 pricing),所以**所有** multi-shot video 触发都 500。`/generate-multi-shot-video` endpoint payload schema 又没传 resolution,task-policy 默认 '720p'(小写)跟 capability key '720P'(大写)mismatch,即使 pricing 在 catalog 里也会 fail。
+
+修法:catch list 扩大到上述 3 个 code,跟 `BILLING_UNKNOWN_MODEL` 同样 fallback 语义 — task 跑、不算钱,等 pricing 入库再开账。
+
+### 还没测的下游
+
+- **voice-analyze + voice-line generation**: storyboard 跑完后会自动产 voice 任务,这次 e2e 没主动验证 voice 走完整流程
+- **lip-sync (fal)**: admin 帐户 fal apiKey 是空的,这步直接 skip。等 fal 接上再测
+- **stitch-mp4 (Phase 12.7)**: 全集 ffmpeg 拼接,需要前面所有 panel 都有 video
+
+### 下次 deploy 后 SOP
+
+```bash
+# 在 dev 机或 droplet 上
+E2E_USERNAME=admin E2E_PASSWORD=... ./scripts/e2e/cascade-smoke.sh
+# 完整 ~15 min(含 8min 视频),~$0.05–0.15 LLM/image 费用 + Tencent VOD 配额
+```
+
+详细使用见 `scripts/e2e/README.md`。
