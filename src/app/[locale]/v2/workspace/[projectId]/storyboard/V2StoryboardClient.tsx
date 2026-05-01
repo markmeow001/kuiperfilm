@@ -109,7 +109,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // falls back to first episode when none is selected.
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
 
-  const storyboardsQuery = useStoryboards(currentEpisodeId)
+  const storyboardsQuery = useStoryboards(projectId, currentEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
   const regenPanel = useRegenerateProjectPanelImage(projectId)
   const autoGroup = useAutoGroupMultiShot(projectId)

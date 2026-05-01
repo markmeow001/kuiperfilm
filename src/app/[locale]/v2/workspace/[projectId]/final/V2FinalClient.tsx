@@ -62,7 +62,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   const { currentEpisodeId } = useCurrentEpisode(projectId)
   const episodes = project?.novelPromotionData?.episodes ?? []
   const currentEpisode = episodes.find((ep) => ep?.id === currentEpisodeId) ?? episodes[0] ?? null
-  const storyboardsQuery = useStoryboards(currentEpisode?.id ?? null)
+  const storyboardsQuery = useStoryboards(projectId, currentEpisode?.id ?? null)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
   const stitchMp4 = useStitchEpisodeMp4(projectId)
 

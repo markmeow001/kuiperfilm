@@ -188,7 +188,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // a clear "→ 進入分鏡頁" CTA so the user knows the next step is one
   // click away. Polled with the assets so it shows up the moment
   // panels appear without a manual refresh.
-  const storyboardsQuery = useStoryboards(currentEpisodeId)
+  const storyboardsQuery = useStoryboards(projectId, currentEpisodeId)
   const storyboardData = storyboardsQuery.data as
     | { storyboards?: Array<{ panels?: Array<{ id: string }> }> }
     | undefined

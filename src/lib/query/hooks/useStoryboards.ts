@@ -60,18 +60,36 @@ interface BatchVideoGenerationParams {
 
 /**
  * 获取分镜数据
+ *
+ * The actual API lives at `/api/novel-promotion/[projectId]/storyboards?episodeId=...`
+ * (project-scoped for auth). The earlier non-existent path
+ * `/api/novel-promotion/episodes/[episodeId]/storyboards` returned 404
+ * silently, which is why the V2 storyboard step always rendered empty
+ * even after the worker successfully wrote panels — see user report
+ * 「重新整理出來還是這樣, 沒有生成分鏡」 on a project with 18 panels
+ * confirmed in DB.
+ *
+ * `projectId` is now required so the hook can build the auth-correct URL.
+ * For back-compat with stale call sites that haven't been updated, we
+ * accept null projectId by disabling the query entirely (same as null
+ * episodeId) instead of falling back to the broken legacy path.
  */
-export function useStoryboards(episodeId: string | null) {
+export function useStoryboards(
+    projectId: string | null,
+    episodeId: string | null,
+) {
     return useQuery({
         queryKey: queryKeys.storyboards.all(episodeId || ''),
         queryFn: async () => {
-            if (!episodeId) throw new Error('Episode ID is required')
-            const res = await fetch(`/api/novel-promotion/episodes/${episodeId}/storyboards`)
+            if (!projectId || !episodeId) throw new Error('Project ID and Episode ID are required')
+            const res = await fetch(
+                `/api/novel-promotion/${projectId}/storyboards?episodeId=${encodeURIComponent(episodeId)}`,
+            )
             if (!res.ok) throw new Error('Failed to fetch storyboards')
             const data = await res.json()
             return data as StoryboardData
         },
-        enabled: !!episodeId,
+        enabled: !!projectId && !!episodeId,
     })
 }
 

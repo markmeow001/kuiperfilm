@@ -46,7 +46,7 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
   const locsQuery = useProjectLocations(projectId)
   const project = projectQuery.data as ProjectShape | undefined
   const firstEpisodeId = project?.novelPromotionData?.episodes?.[0]?.id ?? null
-  const storyboardsQuery = useStoryboards(firstEpisodeId)
+  const storyboardsQuery = useStoryboards(projectId, firstEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: Array<{ panels?: PanelLike[] }> } | undefined
 
   const allPanels = (storyboardsData?.storyboards ?? []).flatMap((s) => s.panels ?? [])
