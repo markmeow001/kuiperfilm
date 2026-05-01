@@ -14,8 +14,10 @@
  * touching panel character references.
  */
 
+import { useState } from 'react'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import {
+  useCreateCharacterAppearance,
   useEpisodeCharacterBindings,
   useUpdateEpisodeCharacterBinding,
 } from '@/lib/query/mutations/episode-character-binding-mutations'
@@ -54,52 +56,136 @@ export function V2CharacterAppearancesPanel({
     return (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0)
   })
 
-  if (appearances.length <= 1) {
-    return (
-      <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
-        <div className="mb-1 font-mono text-[10px] tracking-wider text-stone-500">
-          每集造型綁定
-        </div>
-        <div className="font-body text-[11px] italic text-stone-500">
-          此角色只有一個造型 — 加 +新增造型 後才需要綁定到不同集數。
-        </div>
-      </div>
-    )
-  }
-
-  if (episodes.length === 0) {
-    return (
-      <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
-        <div className="mb-1 font-mono text-[10px] tracking-wider text-stone-500">
-          每集造型綁定
-        </div>
-        <div className="font-body text-[11px] italic text-stone-500">
-          專案還沒有集數 — 新建劇集後可在此分配造型。
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[10px] tracking-wider text-stone-500">
-          每集造型綁定 ({episodes.length})
+          造型管理 ({appearances.length})
         </div>
-        <div className="font-mono text-[9px] text-stone-600">
-          未綁定 = 用第一個造型
-        </div>
+        <AddAppearanceButton
+          projectId={projectId}
+          characterId={characterId}
+          existingAppearanceCount={appearances.length}
+        />
       </div>
-      <div className="space-y-1.5">
-        {episodes.map((ep) => (
-          <EpisodeBindingRow
-            key={ep.id}
-            projectId={projectId}
-            characterId={characterId}
-            episode={ep}
-            appearances={appearances}
-          />
-        ))}
+
+      {appearances.length <= 1 ? (
+        <div className="font-body text-[11px] italic text-stone-500">
+          目前只有一個造型。點「+新增造型」加上換裝(例:時間跳轉後的新形象、戰鬥裝、年老回憶等),然後在下方為各集綁定。
+        </div>
+      ) : episodes.length === 0 ? (
+        <div className="font-body text-[11px] italic text-stone-500">
+          已有 {appearances.length} 個造型,但專案還沒有集數 — 新建劇集後可在此分配。
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between border-t border-stone-800/40 pt-2 font-mono text-[9px] text-stone-600">
+            <span>每集綁定({episodes.length} 集)</span>
+            <span>未綁定 = 用第一個造型</span>
+          </div>
+          <div className="space-y-1.5">
+            {episodes.map((ep) => (
+              <EpisodeBindingRow
+                key={ep.id}
+                projectId={projectId}
+                characterId={characterId}
+                episode={ep}
+                appearances={appearances}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function AddAppearanceButton({
+  projectId,
+  characterId,
+  existingAppearanceCount,
+}: {
+  projectId: string
+  characterId: string
+  existingAppearanceCount: number
+}) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [desc, setDesc] = useState('')
+  const create = useCreateCharacterAppearance(projectId)
+
+  function handleSave() {
+    const trimmedReason = reason.trim()
+    const trimmedDesc = desc.trim()
+    if (!trimmedReason || !trimmedDesc) {
+      alert('造型名稱和描述都要填')
+      return
+    }
+    create.mutate(
+      { characterId, changeReason: trimmedReason, description: trimmedDesc },
+      {
+        onSuccess: () => {
+          setOpen(false)
+          setReason('')
+          setDesc('')
+        },
+        onError: (err) => {
+          alert(`新增造型失敗:${(err as Error)?.message ?? '未知'}`)
+        },
+      },
+    )
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20"
+      >
+        + 新增造型
+      </button>
+    )
+  }
+
+  const suggestedReason = existingAppearanceCount === 1 ? '時間跳轉造型' : `造型 ${existingAppearanceCount + 1}`
+
+  return (
+    <div className="flex flex-1 flex-col gap-2 rounded-sm border border-amber-500/40 bg-stone-950/60 p-2">
+      <div className="font-mono text-[10px] tracking-wider text-amber-400">新增造型</div>
+      <input
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder={`造型名稱(例:${suggestedReason})`}
+        className="rounded-sm border border-stone-800 bg-stone-950/80 px-2 py-1 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
+        disabled={create.isPending}
+      />
+      <textarea
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        rows={3}
+        placeholder="外觀描述(同 visual_description 格式 — 種族/年齡/服裝/配件,越具體越穩)"
+        className="resize-none rounded-sm border border-stone-800 bg-stone-950/80 px-2 py-1 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
+        disabled={create.isPending}
+      />
+      <div className="flex items-center justify-end gap-2 font-mono text-[10px]">
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setReason(''); setDesc('') }}
+          disabled={create.isPending}
+          className="text-stone-500 transition-colors hover:text-stone-300 disabled:opacity-50"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={create.isPending || !reason.trim() || !desc.trim()}
+          className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {create.isPending ? '建立中…' : '建立造型'}
+        </button>
       </div>
     </div>
   )

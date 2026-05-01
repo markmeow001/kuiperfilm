@@ -38,6 +38,42 @@ export function useEpisodeCharacterBindings(
   })
 }
 
+/**
+ * Phase 11.4 — create a new CharacterAppearance row for an existing
+ * character. Adds a 「造型 N+1」 the user can then bind per-episode via
+ * useUpdateEpisodeCharacterBinding above.
+ *
+ * After creation the user typically follows up with:
+ *   1) /character/appearance PATCH to fill the visual_description prompt
+ *   2) regenerate-single-image to actually generate the new outfit's
+ *      reference sheet
+ *   3) episode-character-binding PATCH to assign the new appearance to
+ *      the correct episode range.
+ */
+export function useCreateCharacterAppearance(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      characterId: string
+      changeReason: string
+      description: string
+    }) => {
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/character/appearance`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        },
+        'Failed to create new appearance',
+      )
+    },
+    onSuccess: () => {
+      invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+    },
+  })
+}
+
 export function useUpdateEpisodeCharacterBinding(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation({

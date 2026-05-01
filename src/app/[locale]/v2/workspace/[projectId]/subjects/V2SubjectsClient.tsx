@@ -42,6 +42,7 @@ import {
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
+import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
@@ -133,6 +134,18 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
+
+  // After the analyze cascade lands clips + storyboard panels, surface
+  // a clear "→ 進入分鏡頁" CTA so the user knows the next step is one
+  // click away. Polled with the assets so it shows up the moment
+  // panels appear without a manual refresh.
+  const storyboardsQuery = useStoryboards(currentEpisodeId)
+  const storyboardData = storyboardsQuery.data as
+    | { storyboards?: Array<{ panels?: Array<{ id: string }> }> }
+    | undefined
+  const storyboardPanelCount = (storyboardData?.storyboards ?? [])
+    .reduce((sum, sb) => sum + (sb.panels?.length ?? 0), 0)
+  const hasStoryboardPanels = storyboardPanelCount > 0
   const [batchGenInFlight, setBatchGenInFlight] = useState<'characters' | 'locations' | null>(null)
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null)
 
@@ -176,13 +189,16 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     })
   }
 
-  // While any target is in-flight, poll the assets endpoint every 5s
+  // While any target is in-flight, poll the assets endpoint every 3s
   // so a finished worker's new image url appears without a manual refresh.
+  // (Tightened from 5s — single image takes ~50-60s end-to-end and the
+  // post-completion COS upload window is the user-visible "still spinner
+  // even though image is done" gap; 3s shaves ~2s off perceived latency.)
   useEffect(() => {
     if (regenInFlight.size === 0) return
     const interval = setInterval(() => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
-    }, 5000)
+    }, 3000)
     return () => clearInterval(interval)
   }, [regenInFlight.size, projectId, queryClient])
 
@@ -574,9 +590,22 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           ⚙️ 分析完成 — 後台正在自動重新生成 <strong>{serverInflightIds.size}</strong> 張角色圖,
           每張約 30-90 秒,完成後卡片會自動更新(別離開頁面也沒關係,任務在 server 端跑)
         </div>
+      ) : taskStatus === 'completed' && hasStoryboardPanels ? (
+        <div className="mb-6 flex flex-col gap-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="font-serif-cn text-sm text-emerald-300">
+            ✓ 分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} —
+            角色 / 場景 / <strong>分鏡 {storyboardPanelCount} 個</strong> 都好了
+          </div>
+          <Link
+            href={`/${locale}/v2/workspace/${projectId}/storyboard`}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/20 px-4 py-1.5 font-mono text-[10px] tracking-wider text-emerald-200 transition-all hover:bg-emerald-500/30"
+          >
+            → 進入分鏡頁 <AppIcon name="chevronRight" className="h-3 w-3" />
+          </Link>
+        </div>
       ) : taskStatus === 'completed' ? (
         <div className="mb-6 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
-          ✓ 上次分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} — 角色 / 場景已寫入下方卡片
+          ✓ 上次分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} — 角色 / 場景已寫入下方卡片(分鏡正在後台繼續處理)
         </div>
       ) : null}
 
