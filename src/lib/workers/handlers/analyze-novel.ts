@@ -234,6 +234,26 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
       },
       select: { id: true },
     })
+
+    // Seed the primary CharacterAppearance row so downstream consumers
+    // (regenerate-group / upload-asset-image / SubjectsPage cards) have
+    // an appearanceId to bind to. The image is generated lazily when the
+    // user clicks 重新生成 / 一鍵生圖. expected_appearances from the LLM
+    // may carry additional change_reason entries; we honour the first
+    // one here and leave secondary appearances for the multi-appearance
+    // workflow (saved as project_kuiperai_multi_appearance_plan memory).
+    const expectedAppearances = Array.isArray(item.expected_appearances)
+      ? (item.expected_appearances as Array<{ id?: number; change_reason?: string }>)
+      : []
+    const initialChangeReason = readText(expectedAppearances[0]?.change_reason).trim() || '初始形象'
+    await prisma.characterAppearance.create({
+      data: {
+        characterId: created.id,
+        appearanceIndex: 0, // PRIMARY_APPEARANCE_INDEX
+        changeReason: initialChangeReason,
+      },
+      select: { id: true },
+    })
     createdCharacters.push(created)
   }
 
