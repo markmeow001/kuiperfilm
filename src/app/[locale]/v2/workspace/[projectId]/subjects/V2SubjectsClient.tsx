@@ -29,6 +29,7 @@ import {
 } from '@/lib/query/mutations/location-image-mutations'
 import { useUploadProjectCharacterImage } from '@/lib/query/mutations/character-base-mutations'
 import { useConfirmProjectCharacterProfile } from '@/lib/query/mutations/character-profile-mutations'
+import { useUpdateProjectAppearanceDescription } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
 import { queryKeys } from '@/lib/query/keys'
@@ -41,6 +42,18 @@ interface V2SubjectsClientProps {
   locale: string
 }
 
+interface CharacterAppearanceLike {
+  id: string
+  appearanceIndex?: number
+  description?: string | null
+  changeReason?: string | null
+  imageUrl?: string | null
+  // After /api/.../assets the server has already signed each entry and
+  // converted the field from a JSON-string to an array. The raw DB shape
+  // is JSON-string, so accept both forms here defensively.
+  imageUrls?: string | string[] | null
+}
+
 interface CharacterLike {
   id: string
   name?: string | null
@@ -48,15 +61,7 @@ interface CharacterLike {
   description?: string | null
   imageUrl?: string | null
   profileConfirmed?: boolean | null
-  appearances?: Array<{
-    id: string
-    appearanceIndex?: number
-    imageUrl?: string | null
-    // After /api/.../assets the server has already signed each entry and
-    // converted the field from a JSON-string to an array. The raw DB shape
-    // is JSON-string, so accept both forms here defensively.
-    imageUrls?: string | string[] | null
-  }> | null
+  appearances?: CharacterAppearanceLike[] | null
 }
 
 interface LocationLike {
@@ -108,10 +113,60 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const uploadCharImage = useUploadProjectCharacterImage(projectId)
   const uploadLocImage = useUploadProjectLocationImage(projectId)
   const confirmProfile = useConfirmProjectCharacterProfile(projectId)
+  const updateAppearanceDesc = useUpdateProjectAppearanceDescription(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
   const [batchGenInFlight, setBatchGenInFlight] = useState<'characters' | 'locations' | null>(null)
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null)
+
+  // Per-target in-flight tracking. The shared mutation `isPending` flag
+  // is only true for the ~1s submission phase; the actual worker takes
+  // 30-90s. We keep a Set of target ids (appearanceId for characters,
+  // locationId for scenes) and show "生成中…" overlay until the asset
+  // refetch surfaces a new image, or a 120s safety timeout clears it.
+  const [regenInFlight, setRegenInFlight] = useState<Set<string>>(new Set())
+  const [uploadInFlight, setUploadInFlight] = useState<Set<string>>(new Set())
+  const [zoomImage, setZoomImage] = useState<string | null>(null)
+  const [editingDescId, setEditingDescId] = useState<string | null>(null) // appearanceId
+  const [editingDescDraft, setEditingDescDraft] = useState<string>('')
+
+  function markRegenStart(targetId: string) {
+    setRegenInFlight((prev) => {
+      const next = new Set(prev)
+      next.add(targetId)
+      return next
+    })
+    // Safety cleanup — most regens finish in 30-90s, but Tencent retry
+    // can extend to ~3-5min. Clear after 5min regardless so the overlay
+    // doesn't sit forever if asset refetch never sees a new url.
+    window.setTimeout(() => {
+      setRegenInFlight((prev) => {
+        if (!prev.has(targetId)) return prev
+        const next = new Set(prev)
+        next.delete(targetId)
+        return next
+      })
+    }, 300_000)
+  }
+
+  function markUploadDone(targetId: string) {
+    setUploadInFlight((prev) => {
+      if (!prev.has(targetId)) return prev
+      const next = new Set(prev)
+      next.delete(targetId)
+      return next
+    })
+  }
+
+  // While any target is in-flight, poll the assets endpoint every 5s
+  // so a finished worker's new image url appears without a manual refresh.
+  useEffect(() => {
+    if (regenInFlight.size === 0) return
+    const interval = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [regenInFlight.size, projectId, queryClient])
 
   // Server-side task snapshot — survives page navigation, polled while
   // the worker is in flight, and used as the source of truth for the
@@ -173,11 +228,47 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       alert('此角色還沒有 appearance,請先回劇本 step 跑分析')
       return
     }
+    markRegenStart(appearanceId)
     regenChar.mutate({ characterId: c.id, appearanceId, imageIndex: 0 })
   }
 
   function handleRegenLoc(l: LocationLike) {
+    markRegenStart(l.id)
     regenLoc.mutate({ locationId: l.id, imageIndex: 0 })
+  }
+
+  function handleEditDescStart(c: CharacterLike) {
+    const ap = c.appearances?.[0]
+    if (!ap) {
+      alert('此角色還沒有 appearance,請先點重新生成建立首張 appearance')
+      return
+    }
+    setEditingDescId(ap.id)
+    setEditingDescDraft(ap.description ?? c.description ?? '')
+  }
+
+  function handleEditDescCancel() {
+    setEditingDescId(null)
+    setEditingDescDraft('')
+  }
+
+  function handleEditDescSave(c: CharacterLike) {
+    const ap = c.appearances?.[0]
+    if (!ap) return
+    const description = editingDescDraft.trim()
+    if (!description) {
+      alert('描述不能為空')
+      return
+    }
+    updateAppearanceDesc.mutate(
+      { characterId: c.id, appearanceId: ap.id, description, descriptionIndex: 0 },
+      {
+        onSuccess: () => {
+          setEditingDescId(null)
+          setEditingDescDraft('')
+        },
+      },
+    )
   }
 
   function handleConfirmProfile(c: CharacterLike) {
@@ -246,16 +337,38 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }
 
   function handleUploadChar(c: CharacterLike, file: File) {
-    const appearanceId = c.appearances?.[0]?.id
-    if (!appearanceId) {
+    const ap = c.appearances?.[0]
+    if (!ap?.id) {
       alert('此角色還沒有 appearance,請先點「重新生成」建立首張 appearance')
       return
     }
-    uploadCharImage.mutate({ file, characterId: c.id, appearanceId, imageIndex: 0 })
+    setUploadInFlight((prev) => new Set(prev).add(ap.id))
+    // labelText is required by /upload-asset-image. Use a deterministic
+    // human-readable label so it appears the same way generated images do.
+    const labelText = `${c.name ?? '角色'} - ${ap.changeReason ?? '形象'}`
+    uploadCharImage.mutate(
+      { file, characterId: c.id, appearanceId: ap.id, imageIndex: 0, labelText },
+      {
+        onSettled: () => markUploadDone(ap.id),
+        onError: (err) => {
+          alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
   }
 
   function handleUploadLoc(l: LocationLike, file: File) {
-    uploadLocImage.mutate({ file, locationId: l.id, imageIndex: 0 })
+    setUploadInFlight((prev) => new Set(prev).add(l.id))
+    const labelText = `${l.name ?? '場景'}`
+    uploadLocImage.mutate(
+      { file, locationId: l.id, imageIndex: 0, labelText },
+      {
+        onSettled: () => markUploadDone(l.id),
+        onError: (err) => {
+          alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
   }
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
@@ -380,34 +493,50 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         <p className="font-mono text-xs tracking-wider text-stone-500">載入中…</p>
       ) : tab === 'character' ? (
         <SubjectGrid
-          items={characters.map((c) => ({
-            id: c.id,
-            name: c.name ?? '未命名角色',
-            caption: c.role ?? '角色',
-            description: c.description ?? null,
-            imageUrl: pickCharacterImage(c),
-            onRegenerate: () => handleRegenChar(c),
-            isRegenerating: regenChar.isPending,
-            isLocked: Boolean(c.profileConfirmed),
-            onLock: () => handleConfirmProfile(c),
-            isLocking: confirmProfile.isPending,
-            onUpload: (file) => handleUploadChar(c, file),
-            isUploading: uploadCharImage.isPending,
-          }))}
+          items={characters.map((c) => {
+            const ap = c.appearances?.[0]
+            const apId = ap?.id ?? ''
+            const apDescription = ap?.description ?? c.description ?? null
+            return {
+              id: c.id,
+              targetId: apId,
+              name: c.name ?? '未命名角色',
+              caption: c.role ?? '角色',
+              description: apDescription,
+              imageUrl: pickCharacterImage(c),
+              onRegenerate: () => handleRegenChar(c),
+              isRegenerating: regenInFlight.has(apId),
+              isLocked: Boolean(c.profileConfirmed),
+              onLock: () => handleConfirmProfile(c),
+              isLocking: confirmProfile.isPending,
+              onUpload: (file) => handleUploadChar(c, file),
+              isUploading: uploadInFlight.has(apId),
+              onZoom: (url) => setZoomImage(url),
+              onEditDescription: () => handleEditDescStart(c),
+              isEditingDescription: editingDescId === apId && apId.length > 0,
+              descriptionDraft: editingDescId === apId ? editingDescDraft : '',
+              onDescriptionDraftChange: setEditingDescDraft,
+              onDescriptionSave: () => handleEditDescSave(c),
+              onDescriptionCancel: handleEditDescCancel,
+              isSavingDescription: updateAppearanceDesc.isPending,
+            }
+          })}
           emptyHint="此項目還沒有角色 — 點上方「一鍵分析」抽出此集的角色,或從素材庫導入"
         />
       ) : tab === 'scene' ? (
         <SubjectGrid
           items={locations.map((l) => ({
             id: l.id,
+            targetId: l.id,
             name: l.name ?? '未命名場景',
             caption: '場景',
             description: l.description ?? null,
             imageUrl: pickLocationImage(l),
             onRegenerate: () => handleRegenLoc(l),
-            isRegenerating: regenLoc.isPending,
+            isRegenerating: regenInFlight.has(l.id),
             onUpload: (file) => handleUploadLoc(l, file),
-            isUploading: uploadLocImage.isPending,
+            isUploading: uploadInFlight.has(l.id),
+            onZoom: (url) => setZoomImage(url),
           }))}
           emptyHint="此項目還沒有場景 — 點上方「一鍵分析」抽出此集的場景,或從素材庫導入"
         />
@@ -418,12 +547,33 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           <p className="mt-2 font-mono text-[10px] tracking-wider text-stone-600">PROP_ASSETS · COMING SOON</p>
         </div>
       )}
+
+      {zoomImage ? (
+        <button
+          type="button"
+          aria-label="關閉預覽"
+          onClick={() => setZoomImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/90 p-6 backdrop-blur-md"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={zoomImage}
+            alt="預覽"
+            className="max-h-full max-w-full object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <span className="absolute right-6 top-6 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 font-mono text-[10px] tracking-wider text-stone-300">
+            ESC / 點背景關閉
+          </span>
+        </button>
+      ) : null}
     </div>
   )
 }
 
 interface SubjectItem {
   id: string
+  targetId: string
   name: string
   caption: string
   description: string | null
@@ -435,6 +585,15 @@ interface SubjectItem {
   isLocking?: boolean
   onUpload?: (file: File) => void
   isUploading?: boolean
+  onZoom?: (url: string) => void
+  // Description editor (character cards only).
+  onEditDescription?: () => void
+  isEditingDescription?: boolean
+  descriptionDraft?: string
+  onDescriptionDraftChange?: (next: string) => void
+  onDescriptionSave?: () => void
+  onDescriptionCancel?: () => void
+  isSavingDescription?: boolean
 }
 
 function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: string }) {
@@ -453,7 +612,14 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
           key={item.id}
           className="group overflow-hidden rounded-sm border border-stone-800/50 bg-stone-900/30 transition-all hover:border-amber-500/40"
         >
-          <div className="relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900">
+          <div
+            className={`relative aspect-[3/4] overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900 ${
+              item.imageUrl && item.onZoom ? 'cursor-zoom-in' : ''
+            }`}
+            onClick={() => {
+              if (item.imageUrl && item.onZoom) item.onZoom(item.imageUrl)
+            }}
+          >
             {item.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -473,14 +639,74 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
             <div className="absolute bottom-3 left-3 right-3">
               <div className="font-fraunces text-[11px] italic text-amber-300/90">{item.caption}</div>
             </div>
-          </div>
-          <div className="px-4 py-3">
-            <div className="font-serif-cn text-base text-stone-100">{item.name}</div>
-            {item.description ? (
-              <div className="mt-1 line-clamp-2 font-body text-xs leading-relaxed text-stone-500">
-                {item.description}
+            {item.isRegenerating ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
+                <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
+                <div className="font-mono text-[10px] tracking-wider text-amber-300">生圖中…</div>
+                <div className="px-4 text-center font-serif-cn text-[10px] text-stone-400">
+                  Tencent VOD AIGC 30-90 秒,撞並發限制會自動重試
+                </div>
+              </div>
+            ) : item.isUploading ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
+                <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-amber-400" />
+                <div className="font-mono text-[10px] tracking-wider text-amber-300">上傳中…</div>
               </div>
             ) : null}
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="truncate font-serif-cn text-base text-stone-100">{item.name}</div>
+              {item.onEditDescription && !item.isEditingDescription ? (
+                <button
+                  type="button"
+                  onClick={item.onEditDescription}
+                  className="flex flex-shrink-0 items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+                  title="編輯角色描述詞 — 下次「重新生成」會用新描述"
+                >
+                  <AppIcon name="edit" className="h-3 w-3" />
+                  改描述
+                </button>
+              ) : null}
+            </div>
+            {item.isEditingDescription ? (
+              <div className="mt-2 space-y-2">
+                <textarea
+                  value={item.descriptionDraft ?? ''}
+                  onChange={(e) => item.onDescriptionDraftChange?.(e.target.value)}
+                  rows={4}
+                  className="w-full resize-none rounded-sm border border-amber-500/40 bg-stone-900/80 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
+                  placeholder="描述外觀:髮色、髮型、衣著、年齡、體態、表情… 越具體生圖越穩定"
+                  disabled={item.isSavingDescription}
+                />
+                <div className="flex items-center justify-end gap-2 font-mono text-[10px] tracking-wider">
+                  <button
+                    type="button"
+                    onClick={item.onDescriptionCancel}
+                    disabled={item.isSavingDescription}
+                    className="text-stone-500 transition-colors hover:text-stone-300 disabled:opacity-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={item.onDescriptionSave}
+                    disabled={item.isSavingDescription}
+                    className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {item.isSavingDescription ? '儲存中…' : '儲存描述'}
+                  </button>
+                </div>
+              </div>
+            ) : item.description ? (
+              <div className="mt-1 line-clamp-3 font-body text-xs leading-relaxed text-stone-500">
+                {item.description}
+              </div>
+            ) : (
+              <div className="mt-1 font-body text-xs italic text-stone-600">
+                (還沒有描述 — 點「改描述」加上)
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3 border-t border-stone-800/50 px-4 pb-3 pt-2 font-mono text-[10px] tracking-wider">
             {item.onRegenerate ? (
