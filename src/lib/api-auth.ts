@@ -34,6 +34,45 @@ function bindAuthLogContext(session: AuthSession, projectId?: string) {
     })
 }
 
+/**
+ * Cheap admin-role check, used by `requireProjectAuth` /
+ * `requireProjectAuthLight` to allow admin to access any project for
+ * support/debug purposes — sister rule to the multi-user inheritance
+ * (member inherits admin's keys + models). Only ever called on the
+ * cross-user code path (project.userId !== session.user.id), so the
+ * extra prisma roundtrip stays off the hot owner-match path.
+ */
+async function sessionUserIsAdmin(userId: string): Promise<boolean> {
+    const user = await withPrismaRetry(() =>
+        prisma.user.findUnique({
+            where: { id: userId },
+            select: { role: true, isActive: true },
+        })
+    )
+    if (!user) return false
+    if ((user as { isActive?: boolean }).isActive === false) return false
+    return (user as { role?: string | null }).role === 'admin'
+}
+
+/**
+ * Annotate the log context whenever an admin reaches a project they
+ * don't own. LogContext is strictly typed (no free-form fields), so
+ * we just rebind the standard userId/projectId pair — the wrapper
+ * audit log around requireProjectAuth* already records action+module,
+ * which combined with userId being admin's id (vs project ownership
+ * inferable from projectId) gives ops enough trail. If we ever need
+ * an explicit `adminCrossUser` boolean, extend LogContext first.
+ */
+function bindAdminCrossUserLog(
+    session: AuthSession,
+    projectId: string,
+    _projectOwnerId: string,
+) {
+    const context = getLogContext()
+    if (!context.requestId) return
+    setLogContext({ userId: session.user.id, projectId })
+}
+
 async function getInternalTaskSession(): Promise<AuthSession | null> {
     const expectedToken = process.env.INTERNAL_TASK_TOKEN || ''
 
@@ -252,9 +291,11 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
         return notFound('Project')
     }
 
-    // 5. 所有权验证
+    // 5. 所有权验证 (with admin override for multi-user demo)
     if (project.userId !== session.user.id) {
-        return forbidden()
+        const allowed = await sessionUserIsAdmin(session.user.id)
+        if (!allowed) return forbidden()
+        bindAdminCrossUserLog(session, projectId, project.userId)
     }
 
     // 6. NovelPromotionData 检查
@@ -353,7 +394,9 @@ export async function requireProjectAuthLight(
     }
 
     if (project.userId !== session.user.id) {
-        return forbidden()
+        const allowed = await sessionUserIsAdmin(session.user.id)
+        if (!allowed) return forbidden()
+        bindAdminCrossUserLog(session, projectId, project.userId)
     }
 
     return { session, project }
