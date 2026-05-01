@@ -77,6 +77,12 @@ interface CharacterLike {
   imageUrl?: string | null
   profileConfirmed?: boolean | null
   appearances?: CharacterAppearanceLike[] | null
+  // Voice reference + LLM-extracted profile JSON. Surfaced in the
+  // V2CharacterEditModal as the audio uploader and the tag chips.
+  customVoiceUrl?: string | null
+  voiceId?: string | null
+  voiceType?: string | null
+  profileData?: string | null
 }
 
 interface LocationLike {

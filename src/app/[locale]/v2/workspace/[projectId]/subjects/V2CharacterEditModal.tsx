@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { V2CharacterAppearancesPanel } from './V2CharacterAppearancesPanel'
+import { useUploadProjectCharacterVoice } from '@/lib/query/mutations/character-voice-mutations'
 
 interface CharacterAppearanceLike {
   id: string
@@ -43,6 +44,15 @@ interface CharacterLike {
   imageUrl?: string | null
   profileConfirmed?: boolean | null
   appearances?: CharacterAppearanceLike[] | null
+  // Voice + LLM-extracted profile metadata.
+  customVoiceUrl?: string | null
+  voiceId?: string | null
+  voiceType?: string | null
+  // profileData is the JSON string written by analyze-novel; contains
+  // personality_tags / archetype / era_period / costume_tier / etc. We
+  // surface a few of these as chips so the user can sanity-check the
+  // LLM's read of the script without having to dig into raw JSON.
+  profileData?: string | null
 }
 
 export interface V2CharacterEditModalProps {
@@ -369,6 +379,14 @@ export function V2CharacterEditModal({
               </div>
             </div>
 
+            <CharacterTagsSection profileData={character.profileData ?? null} />
+
+            <CharacterVoiceSection
+              projectId={projectId}
+              characterId={character.id}
+              customVoiceUrl={character.customVoiceUrl ?? null}
+            />
+
             {/* Phase 11.4 — multi-appearance per-episode binding */}
             <V2CharacterAppearancesPanel
               projectId={projectId}
@@ -401,6 +419,128 @@ export function V2CharacterEditModal({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * LLM-extracted profile chip strip — surfaces a few of the most useful
+ * fields from analyze-novel's profileData JSON (personality tags,
+ * archetype, era, costume tier) so the user can sanity-check the
+ * model's read without opening raw JSON. Read-only for now; editing
+ * these would require a schema-aware editor and isn't shipping in
+ * this round.
+ */
+function CharacterTagsSection({ profileData }: { profileData: string | null }) {
+  let parsed: Record<string, unknown> = {}
+  if (profileData) {
+    try { parsed = JSON.parse(profileData) as Record<string, unknown> } catch { /* swallow */ }
+  }
+  const personalityTags = Array.isArray(parsed.personality_tags)
+    ? (parsed.personality_tags as unknown[]).filter((v): v is string => typeof v === 'string')
+    : []
+  const visualKeywords = Array.isArray(parsed.visual_keywords)
+    ? (parsed.visual_keywords as unknown[]).filter((v): v is string => typeof v === 'string')
+    : []
+  const archetype = typeof parsed.archetype === 'string' ? parsed.archetype : null
+  const eraPeriod = typeof parsed.era_period === 'string' ? parsed.era_period : null
+  const costumeTier = typeof parsed.costume_tier === 'number' ? parsed.costume_tier : null
+  const ageRange = typeof parsed.age_range === 'string' ? parsed.age_range : null
+
+  const hasAnyTag = personalityTags.length > 0 || visualKeywords.length > 0 || archetype || eraPeriod || costumeTier !== null
+  if (!hasAnyTag) return null
+
+  return (
+    <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="font-mono text-[10px] tracking-wider text-stone-500">LLM 角色標籤</div>
+        <div className="font-mono text-[9px] text-stone-600">分析時自動抽取</div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {archetype ? <Chip color="amber">{archetype}</Chip> : null}
+        {eraPeriod ? <Chip color="violet">{eraPeriod}</Chip> : null}
+        {costumeTier !== null ? <Chip color="emerald">服裝層級 {costumeTier}/5</Chip> : null}
+        {ageRange ? <Chip color="stone">{ageRange}</Chip> : null}
+        {personalityTags.map((t) => <Chip key={`p-${t}`} color="rose">{t}</Chip>)}
+        {visualKeywords.map((t) => <Chip key={`v-${t}`} color="sky">{t}</Chip>)}
+      </div>
+    </div>
+  )
+}
+
+function Chip({ children, color }: { children: React.ReactNode; color: 'amber' | 'rose' | 'emerald' | 'violet' | 'sky' | 'stone' }) {
+  const palette = {
+    amber: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+    rose: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
+    emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
+    violet: 'border-violet-500/40 bg-violet-500/10 text-violet-300',
+    sky: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+    stone: 'border-stone-700 bg-stone-900/60 text-stone-300',
+  }[color]
+  return (
+    <span className={`rounded-sm border px-2 py-0.5 font-mono text-[10px] tracking-wider ${palette}`}>
+      {children}
+    </span>
+  )
+}
+
+/**
+ * Voice reference uploader. Sits inside V2CharacterEditModal under the
+ * tags strip. When a voice file is uploaded, customVoiceUrl is written
+ * on the character and downstream voice-line generation can use it as
+ * the reference timbre. Existing audio plays inline.
+ */
+function CharacterVoiceSection({
+  projectId,
+  characterId,
+  customVoiceUrl,
+}: {
+  projectId: string
+  characterId: string
+  customVoiceUrl: string | null
+}) {
+  const upload = useUploadProjectCharacterVoice(projectId)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  function handleFile(file: File) {
+    upload.mutate({ file, characterId }, {
+      onError: (err) => alert(`音色上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`),
+    })
+  }
+
+  return (
+    <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="font-mono text-[10px] tracking-wider text-stone-500">參考音色</div>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={upload.isPending}
+          className="flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <AppIcon name="cloudUpload" className="h-3 w-3" />
+          {upload.isPending ? '上傳中…' : customVoiceUrl ? '替換' : '上傳音色'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="audio/mpeg,audio/wav,audio/x-m4a,audio/mp4,audio/aac"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleFile(file)
+            if (inputRef.current) inputRef.current.value = ''
+          }}
+        />
+      </div>
+      {customVoiceUrl ? (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <audio src={customVoiceUrl} controls className="w-full max-w-md" />
+      ) : (
+        <div className="font-body text-[11px] italic text-stone-500">
+          (還沒上傳音色 — 配音生成會用預設嗓音。支援 MP3 / WAV / M4A 等。)
+        </div>
+      )}
     </div>
   )
 }
