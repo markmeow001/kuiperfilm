@@ -23,6 +23,7 @@ import {
   parseLocationSummary,
   type LocationMetadata,
 } from '@/lib/location-metadata'
+import { V2LocationViewsPanel } from './V2LocationViewsPanel'
 
 interface LocationImageLike {
   id: string
@@ -60,6 +61,25 @@ export interface V2LocationEditModalProps {
   /** PATCH first image's description (the AI prompt). */
   onSaveDescription: (description: string) => void
   isSavingDescription: boolean
+
+  // Approach B-Standard 多視角:額外視角的 CRUD + 重生委派給父層,
+  // 因為它跟既有的 regenLoc / 場景圖任務生命週期糾纏在一起,modal
+  // 自己拉 mutation 反而造成 cascade 不一致。
+  views?: ViewLikeForModal[]
+  onCreateView?: (params: { viewName: string; description: string }) => Promise<void> | void
+  isCreatingView?: boolean
+  onRegenerateView?: (imageIndex: number) => void
+  onDeleteView?: (imageIndex: number) => Promise<void> | void
+  isViewRegenerating?: (imageIndex: number) => boolean
+  isDeletingView?: boolean
+}
+
+interface ViewLikeForModal {
+  id: string
+  imageIndex: number
+  viewName?: string | null
+  description?: string | null
+  imageUrl?: string | null
 }
 
 export function V2LocationEditModal({
@@ -75,6 +95,13 @@ export function V2LocationEditModal({
   isSavingBasics,
   onSaveDescription,
   isSavingDescription,
+  views,
+  onCreateView,
+  isCreatingView,
+  onRegenerateView,
+  onDeleteView,
+  isViewRegenerating,
+  isDeletingView,
 }: V2LocationEditModalProps) {
   const initial = useMemo(() => parseLocationSummary(location.summary || null), [location.summary])
   const firstImage = location.images?.[0] ?? null
@@ -363,6 +390,20 @@ export function V2LocationEditModal({
                 </button>
               </div>
             </div>
+
+            {views && onCreateView && onRegenerateView && onDeleteView && isViewRegenerating ? (
+              <V2LocationViewsPanel
+                locationName={location.name ?? '場景'}
+                images={views}
+                onCreateView={onCreateView}
+                isCreating={!!isCreatingView}
+                onRegenerateView={onRegenerateView}
+                onDeleteView={onDeleteView}
+                isRegenerating={isViewRegenerating}
+                isDeleting={!!isDeletingView}
+                onZoomImage={onZoomImage}
+              />
+            ) : null}
           </div>
         </div>
       </div>

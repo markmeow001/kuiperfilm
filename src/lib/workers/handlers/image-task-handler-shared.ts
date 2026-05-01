@@ -201,6 +201,45 @@ export function findCharacterByName<T extends { name: string }>(characters: T[],
  * Character portraits are NOT included — they would be treated as the base image to edit,
  * producing character-only outputs instead of scenes.
  */
+/**
+ * Approach B-Standard 場景多視角:把 panel.location 拆成
+ *   <locationName>             → 主視角(imageIndex=0)
+ *   <locationName>#<viewName>  → 找這個 location 下 viewName 命中的 image
+ *
+ * panel.location 是 panel 自己的位置欄位。LLM 預設只填 locationName,
+ * 但用戶或進階流程可以手動把 panel.location 改成「客廳#窗邊」之類的
+ * 帶 view 註記字串。worker 看到 # 就會切。
+ *
+ * 沒有 # 或 # 後 viewName 沒命中時,fallback 主視角(legacy 行為)。
+ */
+function parseLocationViewHint(raw: string | null | undefined): { name: string; view: string | null } {
+  const text = (raw || '').trim()
+  if (!text) return { name: '', view: null }
+  const hashIdx = text.indexOf('#')
+  if (hashIdx === -1) return { name: text, view: null }
+  return {
+    name: text.slice(0, hashIdx).trim(),
+    view: text.slice(hashIdx + 1).trim() || null,
+  }
+}
+
+interface LocationImageWithView {
+  imageUrl?: string | null
+  isSelected?: boolean | null
+  viewName?: string | null
+}
+
+function pickLocationImageRef(
+  images: LocationImageWithView[],
+  viewHint: string | null,
+): LocationImageWithView | null {
+  if (viewHint) {
+    const match = images.find((img) => (img.viewName || '').toLowerCase() === viewHint.toLowerCase())
+    if (match) return match
+  }
+  return images.find((img) => img.isSelected) || images[0] || null
+}
+
 export async function collectPanelSceneBase(projectData: NovelProjectData, panel: PanelLike) {
   const refs: string[] = []
 
@@ -213,13 +252,14 @@ export async function collectPanelSceneBase(projectData: NovelProjectData, panel
 
   // Fall back to location/scene image as the base for editing
   if (panel.location) {
+    const { name: locName, view: viewHint } = parseLocationViewHint(panel.location)
     const location = (projectData.locations || []).find(
-      (loc) => loc.name.toLowerCase() === panel.location!.toLowerCase(),
+      (loc) => loc.name.toLowerCase() === locName.toLowerCase(),
     )
     if (location) {
-      const images = location.images || []
-      const selected = images.find((img) => img.isSelected) || images[0]
-      const signed = toSignedUrlIfCos(selected?.imageUrl, 3600)
+      const images = (location.images || []) as LocationImageWithView[]
+      const picked = pickLocationImageRef(images, viewHint)
+      const signed = toSignedUrlIfCos(picked?.imageUrl, 3600)
       if (signed) refs.push(signed)
     }
   }
@@ -285,11 +325,12 @@ export async function collectPanelReferenceImages(
   }
 
   if (panel.location) {
-    const location = (projectData.locations || []).find((loc) => loc.name.toLowerCase() === panel.location!.toLowerCase())
+    const { name: locName, view: viewHint } = parseLocationViewHint(panel.location)
+    const location = (projectData.locations || []).find((loc) => loc.name.toLowerCase() === locName.toLowerCase())
     if (location) {
-      const images = location.images || []
-      const selected = images.find((img) => img.isSelected) || images[0]
-      const signed = toSignedUrlIfCos(selected?.imageUrl, 3600)
+      const images = (location.images || []) as LocationImageWithView[]
+      const picked = pickLocationImageRef(images, viewHint)
+      const signed = toSignedUrlIfCos(picked?.imageUrl, 3600)
       if (signed) refs.push(signed)
     }
   }

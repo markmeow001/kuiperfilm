@@ -77,19 +77,30 @@ function buildSceneDescription(params: {
     lines.push(`角色：${charDescs.join('、')}`)
   }
 
-  // Location
+  // Location — supports the "<name>#<viewName>" hint syntax for
+  // Approach B-Standard 多視角. When viewName matches a sub-image of
+  // the location, we surface that image's description instead of the
+  // main view's so the prompt reflects the angle the user chose.
   if (params.panel.location) {
+    const rawLoc = params.panel.location
+    const hashIdx = rawLoc.indexOf('#')
+    const baseLocName = hashIdx === -1 ? rawLoc : rawLoc.slice(0, hashIdx).trim()
+    const viewHint = hashIdx === -1 ? null : (rawLoc.slice(hashIdx + 1).trim() || null)
     const matchedLocation = (params.projectData.locations || []).find(
-      (item) => item.name.toLowerCase() === params.panel.location!.toLowerCase(),
+      (item) => item.name.toLowerCase() === baseLocName.toLowerCase(),
     )
     const locDesc = matchedLocation
       ? (() => {
-          const selectedImage = (matchedLocation.images || []).find((img) => img.isSelected) || matchedLocation.images?.[0]
-          return selectedImage?.description
-            ? `${matchedLocation.name}：${selectedImage.description}`
-            : matchedLocation.name
+          const images = matchedLocation.images || []
+          let pick = null
+          if (viewHint) {
+            pick = images.find((img) => ((img as { viewName?: string | null }).viewName || '').toLowerCase() === viewHint.toLowerCase()) || null
+          }
+          if (!pick) pick = images.find((img) => img.isSelected) || images[0] || null
+          const label = viewHint ? `${matchedLocation.name}（${viewHint}視角）` : matchedLocation.name
+          return pick?.description ? `${label}：${pick.description}` : label
         })()
-      : params.panel.location
+      : rawLoc
     lines.push(`场景：${locDesc}`)
   }
 

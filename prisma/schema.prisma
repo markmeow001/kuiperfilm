@@ -60,6 +60,12 @@ model LocationImage {
   id                  String                   @id @default(uuid())
   locationId          String
   imageIndex          Int
+  // Approach B-Standard 場景多視角:同一個 location 可有多張圖,
+  // imageIndex=0 為主視角(legacy 的單張圖),imageIndex>=1 為額外
+  // 視角(如「窗邊」、「正門」、「夜晚」)。viewName 為 nullable
+  // string 標籤,worker 端 panel handler 解析 panel description
+  // 比對 viewName 命中時改抓對應 imageUrl 當 ref。null 視為主視角。
+  viewName            String?                  @db.VarChar(255)
   description         String?                  @db.Text
   imageUrl            String?                  @db.Text
   isSelected          Boolean                  @default(false)

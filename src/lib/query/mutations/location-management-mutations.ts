@@ -104,6 +104,43 @@ export function useUpdateProjectLocationName(projectId: string) {
 }
 
 /**
+ * Approach B-Standard 場景多視角:新增 / 刪除一個 LocationImage 視角。
+ * 主視角(imageIndex=0)由 analyze / regen 流程管理,這裡只處理 1+。
+ */
+export function useCreateLocationView(projectId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (params: { locationId: string; viewName: string; description?: string }) => {
+            return await requestJsonWithError(
+                `/api/novel-promotion/${projectId}/location/view`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params),
+                },
+                'Failed to create location view',
+            )
+        },
+        onSuccess: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
+
+export function useDeleteLocationView(projectId: string) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (params: { locationId: string; imageIndex: number }) => {
+            const url = `/api/novel-promotion/${projectId}/location/view?locationId=${encodeURIComponent(params.locationId)}&imageIndex=${params.imageIndex}`
+            return await requestVoidWithError(url, { method: 'DELETE' }, 'Failed to delete location view')
+        },
+        onSuccess: () => {
+            invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+        },
+    })
+}
+
+/**
  * 更新場景基本資料 — name + 簡短備註(note) + 環境設置 metadata。
  * 一次 PATCH 帶過去,server 端會 merge 進現有 summary 欄位的 JSON。
  * Modal 端配合 buildMetaForSave 計算 metadata,null 表示清空(回到

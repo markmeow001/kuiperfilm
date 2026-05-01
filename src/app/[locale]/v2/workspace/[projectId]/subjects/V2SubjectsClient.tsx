@@ -46,6 +46,8 @@ import { V2LocationEditModal } from './V2LocationEditModal'
 import {
   useUpdateProjectLocationBasics,
   useUpdateProjectLocationDescription,
+  useCreateLocationView,
+  useDeleteLocationView,
 } from '@/lib/query/mutations/location-management-mutations'
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
@@ -98,9 +100,16 @@ interface CharacterLike {
 interface LocationLike {
   id: string
   name?: string | null
+  summary?: string | null
   description?: string | null
   imageUrl?: string | null
-  images?: Array<{ imageUrl?: string | null }> | null
+  images?: Array<{
+    id?: string
+    imageIndex?: number | null
+    viewName?: string | null
+    description?: string | null
+    imageUrl?: string | null
+  }> | null
 }
 
 function pickCharacterImage(c: CharacterLike): string | null {
@@ -167,6 +176,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const updateAppearanceDesc = useUpdateProjectAppearanceDescription(projectId)
   const updateLocBasics = useUpdateProjectLocationBasics(projectId)
   const updateLocDescription = useUpdateProjectLocationDescription(projectId)
+  const createLocationView = useCreateLocationView(projectId)
+  const deleteLocationView = useDeleteLocationView(projectId)
   const updateCharIntro = useUpdateProjectCharacterIntroduction(projectId)
   const deleteCharacter = useDeleteProjectCharacter(projectId)
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
@@ -959,6 +970,45 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               )
             }}
             isSavingDescription={updateLocDescription.isPending}
+            views={(l.images ?? [])
+              .filter((img): img is { id: string; imageIndex: number; viewName?: string | null; description?: string | null; imageUrl?: string | null } =>
+                typeof img.id === 'string' && typeof img.imageIndex === 'number',
+              )
+              .sort((a, b) => a.imageIndex - b.imageIndex)}
+            onCreateView={async (params) => {
+              try {
+                const res = await createLocationView.mutateAsync({
+                  locationId: l.id,
+                  viewName: params.viewName,
+                  description: params.description || undefined,
+                })
+                // After create, immediately trigger image generation against
+                // the newly-created LocationImage row. The create API only
+                // returns the metadata row; worker has to actually generate
+                // the image. We grab the new imageIndex from the response.
+                const newImage = (res as { image?: { imageIndex?: number } } | null)?.image
+                if (newImage && typeof newImage.imageIndex === 'number') {
+                  markRegenStart(l.id)
+                  regenLoc.mutate({ locationId: l.id, imageIndex: newImage.imageIndex })
+                }
+              } catch (err) {
+                alert(err instanceof Error ? err.message : '建立視角失敗')
+              }
+            }}
+            isCreatingView={createLocationView.isPending}
+            onRegenerateView={(imageIndex) => {
+              markRegenStart(l.id)
+              regenLoc.mutate({ locationId: l.id, imageIndex })
+            }}
+            onDeleteView={async (imageIndex) => {
+              try {
+                await deleteLocationView.mutateAsync({ locationId: l.id, imageIndex })
+              } catch (err) {
+                alert(err instanceof Error ? err.message : '刪除視角失敗')
+              }
+            }}
+            isViewRegenerating={(_imageIndex) => regenInFlight.has(l.id) || serverInflightIds.has(l.id)}
+            isDeletingView={deleteLocationView.isPending}
           />
         )
       })() : null}
