@@ -99,6 +99,12 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   const rawPrompt = typeof payload.rawPrompt === 'string' && payload.rawPrompt.trim()
     ? payload.rawPrompt.trim()
     : undefined
+  // Intelligence-mode prompt style. Default 'auto-seedance' applied in
+  // the worker when undefined; 'panel-numbered' is the legacy opt-out.
+  const promptStyle =
+    payload.promptStyle === 'auto-seedance' || payload.promptStyle === 'panel-numbered'
+      ? payload.promptStyle
+      : undefined
 
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
@@ -119,6 +125,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
           videoPrompt: true,
           characters: true,
           location: true,
+          shotType: true,
+          cameraMove: true,
           imageUrl: true,
           storyboardId: true,
         },
@@ -156,6 +164,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(multiShotMode ? { multiShotMode } : {}),
       ...(panelDurations ? { panelDurations } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
+      ...(promptStyle ? { promptStyle } : {}),
     })
   }
 

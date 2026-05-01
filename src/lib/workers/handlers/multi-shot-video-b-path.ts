@@ -41,6 +41,10 @@ interface BPathPanel {
    * We use the bare name to look up Location entities for SubjectInfos.
    */
   location: string | null
+  /** "平视中景" / "仰拍特写" / "越肩近景" — passed straight to the prompt. */
+  shotType: string | null
+  /** "缓缓推近" / "手持跟随" / "猛然拉远" — appended after the visual body. */
+  cameraMove: string | null
   imageUrl: string | null
   storyboardId: string
 }
@@ -108,6 +112,99 @@ function buildShotBody(
     .map((d) => `${d.speaker}说："${d.content}"`)
     .join(' ')
   return dialogues ? `${visual}\n${dialogues}`.trim() : visual
+}
+
+/**
+ * Auto-assemble a Seedance-style 5-element prompt from existing panel
+ * data — time-indexed segments, entity tags `[name]` matching
+ * SubjectInfos.N, dialogue inline as `[speaker]: "line"`. Used by
+ * intelligence mode by default so Kling's parser gets a structured
+ * prompt that mirrors the format we manually validated produced the
+ * cleanest action sequences.
+ *
+ * Time slices fall through `distributeShotDurations` → 3s/panel default,
+ * capped at 15s total. Caller-supplied durations win when provided
+ * (length must match panels).
+ *
+ * Format per shot:
+ *   `<start>-<end> seconds: [scene] - [character1] [character2] body. (cameraMove). [speaker]: "dialogue"`
+ *
+ * Example:
+ *   0-3 seconds: [废弃工业区_破晓] - [劉浩] 近景：劉浩眉頭緊鎖大吼出聲 (急速推近) [劉浩]: "操！"
+ *
+ * Notes:
+ * - Scene tag uses the bare location name (strips `#viewHint`).
+ * - Entity name brackets are 1:1 with SubjectInfos.N.Name so Kling can
+ *   anchor visuals — same fix that resolved the wrong-character-falls
+ *   bug on 2026-05-01.
+ * - cameraMove is wrapped in parens to keep it grammatically
+ *   self-contained when missing.
+ * - Empty visual + no dialogue panels are dropped (consistent with
+ *   buildBPathCombinedPrompt) and time slices recompute around them.
+ */
+export function buildSeedancePrompt(
+  panels: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt' | 'characters' | 'location' | 'shotType' | 'cameraMove'>[],
+  dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
+  requestedDurations?: number[],
+): string {
+  // Drop empty panels first so time accounting matches what makes it
+  // into the output.
+  const nonEmpty = panels.filter((p) => {
+    const visual = (p.description || p.videoPrompt || '').trim()
+    if (visual) return true
+    return (dialogueByPanelId.get(p.id) ?? []).length > 0
+  })
+  if (nonEmpty.length === 0) return ''
+
+  // Filter durations to non-empty panel positions if caller supplied
+  // an array sized for the original panels list.
+  let trimmedDurations: number[] | undefined
+  if (requestedDurations && requestedDurations.length === panels.length) {
+    trimmedDurations = []
+    panels.forEach((p, idx) => {
+      if (nonEmpty.includes(p)) trimmedDurations!.push(requestedDurations[idx])
+    })
+  } else if (requestedDurations) {
+    trimmedDurations = requestedDurations
+  }
+
+  const { durations } = distributeShotDurations(nonEmpty.length, trimmedDurations)
+
+  const lines: string[] = []
+  let cursor = 0
+  for (let i = 0; i < nonEmpty.length; i++) {
+    const panel = nonEmpty[i]
+    const start = cursor
+    const end = cursor + durations[i]
+    cursor = end
+
+    const sceneRaw = (panel.location || '').trim()
+    const sceneName = sceneRaw.includes('#') ? sceneRaw.split('#')[0].trim() : sceneRaw
+    const sceneTag = sceneName ? `[${sceneName}]` : ''
+
+    const charRefs = parsePanelCharacterReferences(panel.characters)
+    const charTags = charRefs.map((r) => `[${r.name}]`).join(' ')
+
+    const visual = (panel.description || panel.videoPrompt || '').trim()
+    const camMove = (panel.cameraMove || '').trim()
+
+    const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
+      .map((d) => `[${d.speaker}]: "${d.content}"`)
+      .join(' ')
+
+    const parts: string[] = [`${start}-${end} seconds:`]
+    if (sceneTag) {
+      parts.push(sceneTag)
+      if (charTags) parts.push('-')
+    }
+    if (charTags) parts.push(charTags)
+    if (visual) parts.push(visual)
+    if (camMove) parts.push(`(${camMove})`)
+    if (dialogues) parts.push(dialogues)
+
+    lines.push(parts.join(' '))
+  }
+  return lines.join('\n\n')
 }
 
 /**
@@ -268,7 +365,20 @@ export async function runMultiShotBPath(params: {
    * automatic append, omit the relevant panels from panelIds.
    */
   rawPrompt?: string
-}): Promise<{ storyboardId: string; multiShotVideoUrl: string; shotCount: number; subjectCount: number; path: 'B'; multiShotMode: 'intelligence' | 'customize'; durations?: number[]; promptSource?: 'panels' | 'raw' }> {
+  /**
+   * Intelligence-mode prompt assembly strategy. Ignored when rawPrompt
+   * is provided (caller wins) or when multiShotMode is 'customize'.
+   *
+   * - 'auto-seedance' (DEFAULT, 2026-05-01): time-indexed
+   *   `Xs-Ys: [scene] - [char] body (cameraMove). [speaker]: "line"`
+   *   format. Designed to give Kling intelligence's parser the same
+   *   shape as Seedance 2.0's manually validated 5-element method.
+   * - 'panel-numbered': legacy `镜头1: ... 镜头2: ...` concatenation
+   *   for callers that haven't migrated yet (kept bit-for-bit
+   *   compatible with pre-Seedance behaviour).
+   */
+  promptStyle?: 'auto-seedance' | 'panel-numbered'
+}): Promise<{ storyboardId: string; multiShotVideoUrl: string; shotCount: number; subjectCount: number; path: 'B'; multiShotMode: 'intelligence' | 'customize'; durations?: number[]; promptSource?: 'panels' | 'raw' | 'seedance' }> {
   const { job, validPanels, projectData, videoModel, sound, aspectRatio, panelDurations, rawPrompt } = params
   // Implicit promotion: caller passing panelDurations means they care
   // about per-shot timing; force customize regardless of the mode flag.
@@ -415,7 +525,7 @@ export async function runMultiShotBPath(params: {
   let generateOptions: Record<string, unknown>
   let resolvedDurations: number[] | undefined
   let resolvedTotal: number
-  let intelligencePromptSource: 'panels' | 'raw' = 'panels'
+  let intelligencePromptSource: 'panels' | 'raw' | 'seedance' = 'seedance'
 
   if (multiShotMode === 'customize') {
     const { durations, totalDuration } = distributeShotDurations(validPanels.length, panelDurations)
@@ -462,16 +572,16 @@ export async function runMultiShotBPath(params: {
       outputComplianceCheck: 'Enabled',
     }
   } else {
-    // Intelligence mode. Two prompt sources:
-    //  1. Auto-built `镜头N:` combined prompt from panels (default)
-    //  2. Caller-supplied raw prompt (Seedance-style 5-element format
-    //     with time markers like "0-5 seconds:") — bypasses panel
-    //     concatenation and feeds the prompt straight to Kling so its
-    //     intelligence parser can choose internal cut points based on
-    //     the time annotations. Dialogue is still appended after the
-    //     raw prompt body so generate_audio:true still dubs the script.
+    // Intelligence mode. Three prompt sources:
+    //  1. Caller-supplied rawPrompt — wins over everything (e.g. user
+    //     paste of a hand-crafted Seedance segment).
+    //  2. promptStyle='auto-seedance' (default) — auto-assemble
+    //     time-indexed entity-tagged prompt from panel data.
+    //  3. promptStyle='panel-numbered' — legacy `镜头N:` concatenation
+    //     kept for back-compat with pre-2026-05-01 callers.
+    const promptStyle = params.promptStyle ?? 'auto-seedance'
     let primaryPrompt: string
-    let promptSource: 'panels' | 'raw'
+    let promptSource: 'panels' | 'raw' | 'seedance'
     if (typeof rawPrompt === 'string' && rawPrompt.trim().length > 0) {
       promptSource = 'raw'
       const trimmed = rawPrompt.trim()
@@ -480,6 +590,9 @@ export async function runMultiShotBPath(params: {
         .map((d) => `${d.speaker}说："${d.content}"`)
         .join(' ')
       primaryPrompt = dialogueAppendix ? `${trimmed}\n\n${dialogueAppendix}` : trimmed
+    } else if (promptStyle === 'auto-seedance') {
+      promptSource = 'seedance'
+      primaryPrompt = buildSeedancePrompt(validPanels, dialogueByPanel)
     } else {
       promptSource = 'panels'
       primaryPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel)
@@ -487,11 +600,13 @@ export async function runMultiShotBPath(params: {
     if (!primaryPrompt.trim()) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
     }
-    // Raw prompt likely covers the full 15s window; legacy panel-driven
-    // path keeps the conservative 10s default to preserve compatibility.
-    resolvedTotal = promptSource === 'raw'
-      ? KLING_OMNI_MAX_TOTAL_DURATION
-      : (validPanels.length >= 3 ? 10 : 5)
+    // Auto-seedance and rawPrompt cover the full 15s window (each shot
+    // gets a guaranteed slice via distributeShotDurations); legacy
+    // panel-numbered keeps the conservative 10s default to preserve
+    // pre-2026-05-01 behaviour for opted-out callers.
+    resolvedTotal = promptSource === 'panels'
+      ? (validPanels.length >= 3 ? 10 : 5)
+      : KLING_OMNI_MAX_TOTAL_DURATION
 
     logger.info({
       message: 'B path multi-shot submit (intelligence)',

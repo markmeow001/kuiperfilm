@@ -63,6 +63,14 @@ export const POST = apiHandler(async (
       ? body.multiShotMode
       : undefined
 
+  // Optional intelligence-mode prompt style. Defaults to auto-seedance
+  // in the worker when undefined; only the explicit opt-out value
+  // 'panel-numbered' falls back to the legacy `镜头N:` concatenation.
+  const promptStyle =
+    body.promptStyle === 'auto-seedance' || body.promptStyle === 'panel-numbered'
+      ? body.promptStyle
+      : undefined
+
   // Optional caller-supplied prompt for intelligence mode (Seedance-style
   // 5-element 15s segment). Worker still appends matched dialogue.
   let rawPrompt: string | undefined
@@ -197,6 +205,7 @@ export const POST = apiHandler(async (
       ...(multiShotMode ? { multiShotMode } : {}),
       ...(panelDurations ? { panelDurations } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
+      ...(promptStyle ? { promptStyle } : {}),
     },
     dedupeKey: `video_multi_shot:${storyboard.id}`,
   })
