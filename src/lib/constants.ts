@@ -303,7 +303,12 @@ export function getArtStylePrompt(
 export const CHARACTER_PROMPT_SUFFIX = '【最重要 — 構圖規格,禁止違反】角色設定圖規格,僅一張圖且必須嚴格遵守以下版型: 畫面分為左右兩個區域: 【左側區域】佔約 1/3 寬度,是角色的正面特寫(如果是人類則展示完整正臉,如果是動物/生物則展示最具辨識度的正面形態);【右側區域】佔約 2/3 寬度,是角色三視圖橫向排列(從左到右依次為: 正面全身、側面全身、背面全身),三視圖高度一致。⚠️ 左側特寫和右側三視圖必須是完全相同的角色,面部五官、髮型、髮色、膚色完全一致,只是角度不同。【背景必須是純白色】,無街景、無建築、無傢俱、無其他人物、無背景人群、無城市場景、無店面、無自然風景。整張圖只有此角色與純白背景。'
 
 // 场景图片生成的系统后缀（已禁用四视图，直接生成单张场景图）
-export const LOCATION_PROMPT_SUFFIX = ''
+//
+// 強化:加上「無人物」硬性條件。Tencent VOD GEM-3.1 對含「餐桌」「客廳」
+// 「咖啡店」等空間描述偶爾會自動補進角色 / 路人,這對下游 storyboard 拼接
+// 是 noise(角色由分鏡層管,場景圖只負責空間)。明確排除人物 + 動物 + 主動
+// 物件遮擋,讓場景圖回歸純空間 plate。
+export const LOCATION_PROMPT_SUFFIX = '【場景空間圖,純空鏡】畫面中**絕對不能出現人物、人形、人影、剪影、人類臉孔、人手或腳的局部**;沒有寵物、動物、機器人或任何生命體。鏡頭描繪的是空無一人的場景空間本身,著重在建築結構、家具陳設、光影氛圍、材質紋理。'
 
 // 角色图片生成比例（16:9横版，左侧面部特写+右侧全身）
 export const CHARACTER_IMAGE_RATIO = '16:9'
@@ -346,12 +351,16 @@ export function removeLocationPromptSuffix(prompt: string): string {
 }
 
 // 添加场景系统后缀到提示词（用于生成图片）
+// Location format spec goes FIRST (same reasoning as addCharacterPromptSuffix
+// — leading tokens carry more weight on Tencent VOD GEM-3.1).
 export function addLocationPromptSuffix(prompt: string): string {
   // 后缀为空时直接返回原提示词
   if (!LOCATION_PROMPT_SUFFIX) return prompt || ''
   if (!prompt) return LOCATION_PROMPT_SUFFIX
   const cleanPrompt = removeLocationPromptSuffix(prompt)
-  return `${cleanPrompt}${cleanPrompt ? '，' : ''}${LOCATION_PROMPT_SUFFIX}`
+  return cleanPrompt
+    ? `${LOCATION_PROMPT_SUFFIX}\n\n【場景具體描述】\n${cleanPrompt}`
+    : LOCATION_PROMPT_SUFFIX
 }
 
 /**
