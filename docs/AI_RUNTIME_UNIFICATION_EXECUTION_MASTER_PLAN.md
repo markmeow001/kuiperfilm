@@ -266,11 +266,10 @@
 
 来源：reviewer round 1 + round 2 提的 follow-up + Q-3 B 拍板拆出来的 reorder API。每一项独立可推进，不互相阻塞。
 
-- ⏸ 任务：Episode reorder API + drag-and-drop UI（Q-3 B 拆过来）
-  - 文件：`src/app/api/novel-promotion/[projectId]/episodes/reorder/route.ts`（新）
-  - 文件：`src/components/ui/EpisodeTabBar.tsx`（加 reorder UI）
-  - 逻辑：transaction 处理 episodeNumber `@@unique` 约束（先升再写：把目标号段先 +1000 暂存避撞 unique，再写最终值）
-  - 验收：drag-and-drop 顺序、unique 冲突 graceful 处理（不暴露 db error）、optimistic update 失败回滚
+- 🔄 任务：Episode reorder API + drag-and-drop UI（Q-3 B 拆过来）
+  - ✅ Backend API 完成(commit `a4xxxxxx`,Session B 2026-04-30):`POST /episodes/reorder` body `{ order: string[] }` — 5 個 regression 測試全綠;two-phase park (+1000) → place 寫法避免 `@@unique` 衝突;驗證重複 id / 未知 id / 部分 reorder 全部 reject;包在 $transaction 裡 mid-flight crash 留 +1000 parked state 易恢復
+  - ⏸ 文件：`src/components/ui/EpisodeTabBar.tsx`(加 reorder UI)— deferred 等 Session A 收尾
+  - 验收(API 部分):全部 PASS;UI 部分等 drag-and-drop 接通
 
 - ⏸ 任务：GET `/episodes` 拆 lean / wizard-rehydrate 两条路径
   - 问题：dashboard 用 `useQuery` 拉 episodes 拉到 N 集 `novelText` `@db.Text`，N=50 集就 50 个 large blob 上 wire
