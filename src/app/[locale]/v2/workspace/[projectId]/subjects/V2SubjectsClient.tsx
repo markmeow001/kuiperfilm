@@ -240,12 +240,17 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // "✓ 分析完成" then waits in confusion as cards silently regenerate.
   const activeImageTasks = useActiveTasks({
     projectId,
-    type: ['image_character', 'regenerate_group', 'reference_to_character'],
+    type: ['image_character', 'image_location', 'regenerate_group', 'reference_to_character'],
   })
   const serverInflightIds = useMemo(() => {
+    // Single Set for both CharacterAppearance.id and Location.id —
+    // they're disjoint UUID spaces, so collision-free, and lets the
+    // location render path read the same gating signal that the
+    // character path uses without having to thread two state shapes.
     const set = new Set<string>()
     for (const t of activeImageTasks.data ?? []) {
-      if (t.targetType === 'CharacterAppearance' && typeof t.targetId === 'string') {
+      if (typeof t.targetId !== 'string') continue
+      if (t.targetType === 'CharacterAppearance' || t.targetType === 'LocationImage') {
         set.add(t.targetId)
       }
     }
@@ -793,7 +798,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             description: l.description ?? null,
             imageUrl: pickLocationImage(l),
             onRegenerate: () => handleRegenLoc(l),
-            isRegenerating: regenInFlight.has(l.id),
+            isRegenerating: regenInFlight.has(l.id) || serverInflightIds.has(l.id),
             onUpload: (file) => handleUploadLoc(l, file),
             isUploading: uploadInFlight.has(l.id),
             onZoom: (url) => setZoomImage(url),
