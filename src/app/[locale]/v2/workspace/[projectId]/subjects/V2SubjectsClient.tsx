@@ -51,7 +51,11 @@ interface CharacterLike {
   appearances?: Array<{
     id: string
     appearanceIndex?: number
-    imageUrls?: string | null
+    imageUrl?: string | null
+    // After /api/.../assets the server has already signed each entry and
+    // converted the field from a JSON-string to an array. The raw DB shape
+    // is JSON-string, so accept both forms here defensively.
+    imageUrls?: string | string[] | null
   }> | null
 }
 
@@ -64,11 +68,22 @@ interface LocationLike {
 }
 
 function pickCharacterImage(c: CharacterLike): string | null {
+  // Character itself doesn't carry imageUrl in the schema, but the legacy
+  // payload sometimes attached one — keep the fallback for safety.
   if (c.imageUrl) return c.imageUrl
   const first = c.appearances?.[0]
-  if (!first?.imageUrls) return null
+  if (!first) return null
+  // Prefer the appearance's singular imageUrl (already signed by attach).
+  if (first.imageUrl) return first.imageUrl
+  // Else read from imageUrls. The API returns an Array<string> after
+  // signing; the raw DB shape is a JSON-string. Handle both.
+  const raw = first.imageUrls
+  if (!raw) return null
+  if (Array.isArray(raw)) {
+    return raw.find((u) => typeof u === 'string' && u.length > 0) || null
+  }
   try {
-    const parsed = JSON.parse(first.imageUrls) as string[]
+    const parsed = JSON.parse(raw) as string[]
     return Array.isArray(parsed) && parsed.length > 0 ? parsed[0] : null
   } catch {
     return null
