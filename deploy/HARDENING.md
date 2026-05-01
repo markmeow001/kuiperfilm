@@ -43,18 +43,28 @@ apt-get install -y awscli
 # 3. Smoke-test
 cd /opt/kuiperAI/deploy
 ./db-backup.sh
+./r2-sync.sh
 
-# 4. Add to root crontab (daily at 03:00 UTC)
+# 4. Add to root crontab (daily, staggered so they don't collide)
 crontab -e
 # Append:
-# 0 3 * * * cd /opt/kuiperAI/deploy && ./db-backup.sh >> /var/log/kuiper-backup.log 2>&1
+# 0 3 * * * cd /opt/kuiperAI/deploy && ./db-backup.sh  >> /var/log/kuiper-backup.log  2>&1
+# 0 4 * * * cd /opt/kuiperAI/deploy && ./r2-sync.sh    >> /var/log/kuiper-r2-sync.log 2>&1
 ```
 
-The script:
+`db-backup.sh`:
 - runs `mysqldump --single-transaction` so it doesn't lock writes
 - pipes through gzip directly (no uncompressed copy on disk — saves IO)
-- uploads to R2
+- uploads to R2 backup bucket under `db/`
 - keeps the 14 most recent local copies
+
+`r2-sync.sh`:
+- mirrors `kuiperfilm-storage` → `kuiperfilm-backups/storage/` daily
+- idempotent: HEADs each source key, only PUTs what's missing in the
+  backup bucket (cheap to rerun, no duplicate transfers)
+- compensates for R2 not exposing Object Versioning in the dashboard:
+  if the main bucket is wiped (leaked token, accidental delete), the
+  backup bucket has up to a 24h-old mirror
 
 ### Take a DO snapshot before risky operations
 
