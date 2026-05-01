@@ -712,7 +712,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
           <div className="overflow-hidden rounded-sm border border-stone-800/60 bg-stone-900/30">
             <div className="relative aspect-video bg-gradient-to-br from-stone-800 to-stone-900">
-              {selected?.imageUrl ? (
+              {selected?.videoUrl ? (
+                // Video player when videoUrl is present. Use the still
+                // imageUrl as poster so first paint is the same frame
+                // the user is used to seeing while idle, then switch to
+                // playing video on user click.
+                <video
+                  key={selected.id + ':' + selected.videoUrl}
+                  src={selected.videoUrl}
+                  poster={selected.imageUrl ?? undefined}
+                  controls
+                  preload="metadata"
+                  className="h-full w-full object-cover"
+                />
+              ) : selected?.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={selected.imageUrl} alt="selected" className="h-full w-full object-cover" />
               ) : (
