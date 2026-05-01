@@ -34,32 +34,46 @@ export const POST = apiHandler(async (
   const appearanceId = body?.appearanceId
   const imageIndex = body?.imageIndex
 
-  if (!type || !id || imageIndex === undefined) {
+  if (!type || !id) {
+    throw new ApiError('INVALID_PARAMS')
+  }
+  // Props don't carry an imageIndex (one image per prop). For
+  // character/location the field is still required.
+  if (type !== 'prop' && imageIndex === undefined) {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  if (type !== 'character' && type !== 'location') {
+  if (type !== 'character' && type !== 'location' && type !== 'prop') {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  const taskType = type === 'character' ? TASK_TYPE.IMAGE_CHARACTER : TASK_TYPE.IMAGE_LOCATION
-  const targetType = type === 'character' ? 'CharacterAppearance' : 'LocationImage'
+  const taskType =
+    type === 'character' ? TASK_TYPE.IMAGE_CHARACTER
+    : type === 'location' ? TASK_TYPE.IMAGE_LOCATION
+    : TASK_TYPE.IMAGE_PROP
+  const targetType =
+    type === 'character' ? 'CharacterAppearance'
+    : type === 'location' ? 'LocationImage'
+    : 'NovelPromotionProp'
   const targetId = type === 'character' ? (appearanceId || id) : id
   const parsedImageIndex = toNumber(imageIndex)
-  const hasOutputAtStart = type === 'character'
-    ? await hasCharacterAppearanceOutput({
-      appearanceId: targetId,
-      characterId: id
-    })
-    : await hasLocationImageOutput({
-      locationId: id,
-      imageIndex: parsedImageIndex
-    })
+  const hasOutputAtStart =
+    type === 'character'
+      ? await hasCharacterAppearanceOutput({
+          appearanceId: targetId,
+          characterId: id,
+        })
+      : type === 'location'
+        ? await hasLocationImageOutput({
+            locationId: id,
+            imageIndex: parsedImageIndex,
+          })
+        : false
 
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
   const imageModel = type === 'character'
     ? projectModelConfig.characterModel
-    : projectModelConfig.locationModel
+    : projectModelConfig.locationModel  // prop reuses locationModel
 
   let billingPayload: Record<string, unknown>
   try {
@@ -85,7 +99,7 @@ export const POST = apiHandler(async (
       intent: 'regenerate',
       hasOutputAtStart
     }),
-    dedupeKey: `${taskType}:${targetId}:single:${imageIndex}`,
+    dedupeKey: `${taskType}:${targetId}:single:${imageIndex ?? 0}`,
     billingInfo: buildDefaultTaskBillingInfo(taskType, billingPayload)
   })
 

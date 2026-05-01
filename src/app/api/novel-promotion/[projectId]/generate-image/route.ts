@@ -37,33 +37,44 @@ export const POST = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
-  if (type !== 'character' && type !== 'location') {
+  if (type !== 'character' && type !== 'location' && type !== 'prop') {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  const taskType = type === 'character' ? TASK_TYPE.IMAGE_CHARACTER : TASK_TYPE.IMAGE_LOCATION
-  const targetType = type === 'character' ? 'CharacterAppearance' : 'LocationImage'
+  const taskType =
+    type === 'character' ? TASK_TYPE.IMAGE_CHARACTER
+    : type === 'location' ? TASK_TYPE.IMAGE_LOCATION
+    : TASK_TYPE.IMAGE_PROP
+  const targetType =
+    type === 'character' ? 'CharacterAppearance'
+    : type === 'location' ? 'LocationImage'
+    : 'NovelPromotionProp'
   const targetId = type === 'character' ? (appearanceId || id) : id
 
   if (!targetId) {
     throw new ApiError('INVALID_PARAMS')
   }
   const imageIndex = toNumber(body?.imageIndex)
+  // Props don't have an existing-output detector (no per-prop image
+  // index — at most one image per prop). Treat as "no prior output"
+  // for the billing UI hint.
   const hasOutputAtStart = type === 'character'
     ? await hasCharacterAppearanceOutput({
       appearanceId: targetId,
       characterId: id,
       appearanceIndex: toNumber(body?.appearanceIndex)
     })
-    : await hasLocationImageOutput({
-      locationId: id,
-      imageIndex
-    })
+    : type === 'location'
+      ? await hasLocationImageOutput({
+        locationId: id,
+        imageIndex
+      })
+      : false
 
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
   const imageModel = type === 'character'
     ? projectModelConfig.characterModel
-    : projectModelConfig.locationModel
+    : projectModelConfig.locationModel  // prop reuses locationModel — same visual style class
 
   let billingPayload: Record<string, unknown>
   try {

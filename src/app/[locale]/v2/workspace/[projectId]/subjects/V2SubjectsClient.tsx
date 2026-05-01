@@ -29,6 +29,10 @@ import {
   useUploadProjectLocationImage,
 } from '@/lib/query/mutations/location-image-mutations'
 import {
+  useGenerateProjectPropImage,
+  useRegenerateSinglePropImage,
+} from '@/lib/query/mutations/prop-image-mutations'
+import {
   useUploadProjectCharacterImage,
   useDeleteProjectCharacter,
 } from '@/lib/query/mutations/character-base-mutations'
@@ -169,6 +173,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const propsQuery = useProjectProps(projectId)
   const regenChar = useRegenerateSingleCharacterImage(projectId)
   const regenLoc = useRegenerateSingleLocationImage(projectId)
+  const generateProp = useGenerateProjectPropImage(projectId)
+  const regenProp = useRegenerateSinglePropImage(projectId)
   const regenCharGroup = useRegenerateCharacterGroup(projectId)
   const regenLocGroup = useRegenerateLocationGroup(projectId)
   const uploadCharImage = useUploadProjectCharacterImage(projectId)
@@ -288,17 +294,21 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // "✓ 分析完成" then waits in confusion as cards silently regenerate.
   const activeImageTasks = useActiveTasks({
     projectId,
-    type: ['image_character', 'image_location', 'regenerate_group', 'reference_to_character'],
+    type: ['image_character', 'image_location', 'image_prop', 'regenerate_group', 'reference_to_character'],
   })
   const serverInflightIds = useMemo(() => {
-    // Single Set for both CharacterAppearance.id and Location.id —
-    // they're disjoint UUID spaces, so collision-free, and lets the
-    // location render path read the same gating signal that the
-    // character path uses without having to thread two state shapes.
+    // Single Set for CharacterAppearance.id, Location.id, and
+    // NovelPromotionProp.id — they're all disjoint UUID spaces, safe
+    // to merge so the render path can ask one Set "is this id
+    // in-flight?" regardless of asset class.
     const set = new Set<string>()
     for (const t of activeImageTasks.data ?? []) {
       if (typeof t.targetId !== 'string') continue
-      if (t.targetType === 'CharacterAppearance' || t.targetType === 'LocationImage') {
+      if (
+        t.targetType === 'CharacterAppearance'
+        || t.targetType === 'LocationImage'
+        || t.targetType === 'NovelPromotionProp'
+      ) {
         set.add(t.targetId)
       }
     }
@@ -898,9 +908,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             caption: '道具',
             description: p.summary ?? null,
             imageUrl: p.imageUrl ?? null,
-            // Image regen / upload not wired yet — Stage C 之前,點按
-            // 鈕會 noop。先讓 grid 顯示道具的描述卡片,user 至少能看到
-            // analyze 抽出來的東西 + 後續刪除。
+            onRegenerate: () => {
+              markRegenStart(p.id)
+              const mut = p.imageUrl ? regenProp : generateProp
+              mut.mutate({ propId: p.id })
+            },
+            isRegenerating: regenInFlight.has(p.id) || serverInflightIds.has(p.id),
             onZoom: (url) => setZoomImage(url),
           }))}
           emptyHint="此項目還沒有道具 — 點上方「一鍵分析」抽出此集的道具(刀/信封/戒指等劇情關鍵物件)"

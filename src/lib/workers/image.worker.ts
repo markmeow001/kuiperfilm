@@ -11,6 +11,7 @@ import {
   handleModifyAssetImageTask,
   handlePanelImageTask,
   handlePanelVariantTask,
+  handlePropImageTask,
 } from './handlers/image-task-handlers'
 
 type AnyObj = Record<string, unknown>
@@ -23,6 +24,8 @@ async function processImageTask(job: Job<TaskJobData>) {
       return await handleCharacterImageTask(job)
     case TASK_TYPE.IMAGE_LOCATION:
       return await handleLocationImageTask(job)
+    case TASK_TYPE.IMAGE_PROP:
+      return await handlePropImageTask(job)
     case TASK_TYPE.REGENERATE_GROUP: {
       const payload = (job.data.payload || {}) as AnyObj
       if (payload.type === 'character') {

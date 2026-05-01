@@ -327,6 +327,26 @@ export const LOCATION_IMAGE_SIZE = '4096x2304'
 // 場景圖片尺寸(用於 Banana API)
 export const LOCATION_IMAGE_BANANA_RATIO = '16:9'
 
+// Phase 11.3 道具:1:1 純色背景 product-shot,後續 panel handler 把
+// 道具當 reference 合進畫面。1:1 中心構圖最容易讓 panel 模型理解
+// 「這是個物件」並重新組合到場景裡。
+export const PROP_IMAGE_RATIO = '1:1'
+export const PROP_PROMPT_SUFFIX = '【道具產品圖,純色背景】物品居中,**畫面中絕對沒有人物、人手、人影、剪影、人類臉孔**;沒有寵物、動物;**沒有複雜場景**(不要餐桌/房間/路邊環境)。背景為純白或淺灰柔光,只強調物品本身的材質、顏色、磨損、裝飾細節。3D 寫實風格,光影柔和,如電商產品圖。'
+
+export function removePropPromptSuffix(prompt: string): string {
+  if (!prompt) return ''
+  return prompt.replace(PROP_PROMPT_SUFFIX, '').replace(/，$/, '').trim()
+}
+
+export function addPropPromptSuffix(prompt: string): string {
+  if (!PROP_PROMPT_SUFFIX) return prompt || ''
+  if (!prompt) return PROP_PROMPT_SUFFIX
+  const cleanPrompt = removePropPromptSuffix(prompt)
+  return cleanPrompt
+    ? `${PROP_PROMPT_SUFFIX}\n\n【道具具體描述】\n${cleanPrompt}`
+    : PROP_PROMPT_SUFFIX
+}
+
 // 从提示词中移除角色系统后缀（用于显示给用户）
 export function removeCharacterPromptSuffix(prompt: string): string {
   if (!prompt) return ''

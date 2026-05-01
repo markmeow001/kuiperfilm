@@ -40,6 +40,7 @@ export const TASK_TYPE = {
   IMAGE_PANEL: 'image_panel',
   IMAGE_CHARACTER: 'image_character',
   IMAGE_LOCATION: 'image_location',
+  IMAGE_PROP: 'image_prop',
   VIDEO_PANEL: 'video_panel',
   LIP_SYNC: 'lip_sync',
   VOICE_LINE: 'voice_line',
