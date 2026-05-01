@@ -43,7 +43,10 @@ import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigM
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
-import { useEpisodeCharacterBindings } from '@/lib/query/mutations/episode-character-binding-mutations'
+import {
+  useEpisodeCharacterBindings,
+  useEpisodeLocationBindings,
+} from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
@@ -348,28 +351,40 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   }, [isAnalyzing, taskStatus, activeImageTasks])
 
   const allCharacters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
-  const locations = (locationsQuery.data ?? []) as unknown as LocationLike[]
+  const allLocations = (locationsQuery.data ?? []) as unknown as LocationLike[]
 
-  // Phase 11.4 fix: Subjects now filters the character grid to only
-  // those linked to the current episode via EpisodeCharacter. Without
-  // this, ep1 + ep2 characters appeared together on every tab and
-  // looked like "ep2's analyze leaked into ep1". Each episode's
-  // analyze run also writes EpisodeCharacter rows so this filter has
-  // data to work with.
+  // Subjects filters BOTH the character and 場景 grid to only those
+  // linked to the current episode via EpisodeCharacter / EpisodeLocation.
+  // Each new episode starts empty until 一鍵分析 runs against it — that's
+  // the analyze handler's job (it writes both junction tables for any
+  // character/location it extracted or matched against the existing
+  // library). Without strict filtering, ep1's cast + scenes leaked into
+  // ep2 the moment ep2 was created and made the per-episode UX broken
+  // (user complaint: "第二集的人物場景應該是空的").
+  //
+  // Note: legacy data created before EpisodeCharacter / EpisodeLocation
+  // backfill will show as empty here. The fix is to re-run 一鍵分析 on
+  // that episode — the empty-hint banner from SubjectGrid points users
+  // there.
   const episodeBindingsQuery = useEpisodeCharacterBindings(projectId, currentEpisodeId)
   const episodeBindingIds = useMemo(() => {
     const set = new Set<string>()
     for (const b of episodeBindingsQuery.data ?? []) set.add(b.characterId)
     return set
   }, [episodeBindingsQuery.data])
-  // If the bindings query hasn't returned yet (or this episode has no
-  // links — e.g. legacy data created before this fix), fall back to
-  // showing all project characters so the user isn't presented with an
-  // empty grid. The hint banner below tells them what's filtered.
-  const characters: CharacterLike[] = episodeBindingIds.size > 0
+  const episodeLocationBindingsQuery = useEpisodeLocationBindings(projectId, currentEpisodeId)
+  const episodeLocationBindingIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const b of episodeLocationBindingsQuery.data ?? []) set.add(b.locationId)
+    return set
+  }, [episodeLocationBindingsQuery.data])
+  const characters: CharacterLike[] = currentEpisodeId
     ? allCharacters.filter((c) => episodeBindingIds.has(c.id))
     : allCharacters
-  const isFilteringByEpisode = episodeBindingIds.size > 0
+  const locations: LocationLike[] = currentEpisodeId
+    ? allLocations.filter((l) => episodeLocationBindingIds.has(l.id))
+    : allLocations
+  const isFilteringByEpisode = !!currentEpisodeId
   const hiddenInThisEpisodeCount = isFilteringByEpisode
     ? allCharacters.length - characters.length
     : 0
@@ -610,7 +625,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     { id: 'prop', label: '道具', count: 0 },
   ]
 
-  const isLoading = charactersQuery.isLoading || locationsQuery.isLoading
+  // Include binding queries — without them, the strict per-episode filter
+  // briefly returns [] during the binding-query inflight window and the
+  // grid flashes "empty" before the real cast/scenes arrive.
+  const isLoading =
+    charactersQuery.isLoading
+    || locationsQuery.isLoading
+    || (!!currentEpisodeId && (episodeBindingsQuery.isLoading || episodeLocationBindingsQuery.isLoading))
 
   return (
     <div className="px-12 py-10">

@@ -38,6 +38,37 @@ export function useEpisodeCharacterBindings(
   })
 }
 
+interface EpisodeLocationBindingRow {
+  locationId: string
+  role: string | null
+}
+
+/**
+ * Read-side hook: which locations are bound to a given episode via
+ * EpisodeLocation. Mirrors useEpisodeCharacterBindings so V2 SubjectsPage
+ * can filter the 場景 grid the same way it filters the 角色 grid.
+ */
+export function useEpisodeLocationBindings(
+  projectId: string,
+  episodeId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: episodeId
+      ? ([...queryKeys.tasks.all(projectId), 'episode-location-bindings', episodeId] as const)
+      : (['episode-location-bindings', 'no-episode'] as const),
+    enabled: !!episodeId,
+    staleTime: 10_000,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/novel-promotion/${projectId}/episodes/${episodeId}/locations`,
+      )
+      if (!res.ok) throw new Error('Failed to fetch episode-location bindings')
+      const data = (await res.json()) as { bindings?: EpisodeLocationBindingRow[] }
+      return data.bindings || []
+    },
+  })
+}
+
 /**
  * Phase 11.4 — create a new CharacterAppearance row for an existing
  * character. Adds a 「造型 N+1」 the user can then bind per-episode via

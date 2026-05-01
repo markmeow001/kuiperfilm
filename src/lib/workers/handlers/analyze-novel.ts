@@ -266,6 +266,44 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
     novelPromotionProjectId: novelData.id,
   })
 
+  // Link every location that was created OR matched against the existing
+  // library in this analyze pass to the *current* episode via
+  // EpisodeLocation. Without this, the V2 SubjectsPage 場景 grid (which
+  // shows only locations bound to the active episode) would stay empty
+  // after analyze and only fill in once storyboard panels persist —
+  // making the user think analyze "didn't extract scenes". Mirrors the
+  // EpisodeCharacter link a few lines above (see line ~245).
+  if (targetEpisode?.id) {
+    const matchedExistingLocationIds: string[] = []
+    for (const item of parsedLocations) {
+      const name = readText((item as Record<string, unknown>).name).trim()
+      if (!name) continue
+      const existing = (novelData.locations || []).find((l) => l.name === name)
+      if (existing) matchedExistingLocationIds.push(existing.id)
+    }
+    const allLocationIds = [
+      ...createdLocations.map((l) => l.id),
+      ...matchedExistingLocationIds,
+    ]
+    if (allLocationIds.length > 0) {
+      try {
+        await prisma.episodeLocation.createMany({
+          data: allLocationIds.map((locationId) => ({
+            episodeId: targetEpisode.id,
+            locationId,
+            role: 'analyze-extracted',
+          })),
+          skipDuplicates: true,
+        })
+      } catch (err) {
+        _ulogError('[analyze-novel] EpisodeLocation link failed', err, {
+          episodeId: targetEpisode.id,
+          locationCount: allLocationIds.length,
+        })
+      }
+    }
+  }
+
   // Phase 11.5: artStylePrompt 已 deprecated（被 styleProfile 三栏取代）。
   // 此处不再写入 artStylePrompt — 风格统一由 PATCH /api/projects/{id}/style-profile 管理。
 
