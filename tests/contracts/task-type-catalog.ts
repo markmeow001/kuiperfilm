@@ -48,6 +48,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER]: 'tests/unit/worker/reference-to-character.test.ts',
   [TASK_TYPE.VIDEO_MULTI_SHOT]: 'tests/unit/worker/video-worker.test.ts',
   [TASK_TYPE.VIDEO_EDITOR_RENDER]: 'tests/unit/worker/video-worker.test.ts',
+  [TASK_TYPE.EPISODE_STITCH_MP4]: 'tests/unit/worker/episode-package-zip.test.ts',
 } as const satisfies Record<TaskType, string>
 
 export const TASK_TYPE_CATALOG: ReadonlyArray<TaskTypeCoverageEntry> = (Object.values(TASK_TYPE) as TaskType[])

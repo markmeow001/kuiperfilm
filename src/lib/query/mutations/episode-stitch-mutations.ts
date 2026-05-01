@@ -1,11 +1,13 @@
 /**
  * Phase 12.7.x — useStitchEpisodeMp4
  *
- * Submits an EPISODE_STITCH_MP4 task to assemble all panel videos in
- * an episode into a single mp4. Returns the task envelope; on success
- * the worker writes the resulting URL to episode.stitchedVideoUrl.
- * Caller should invalidate project-data + storyboards query to pick
- * up the new URL once the task completes.
+ * Submits an EPISODE_STITCH_MP4 task. Despite the legacy hook name,
+ * the worker now packages all panel videos + storyboard images +
+ * dialogue script into a zip (final cutting moved to CapCut/剪映 on
+ * the user's machine — server-side ffmpeg was retired). On success
+ * the worker writes the zip key to episode.stitchedVideoUrl. Caller
+ * should invalidate project-data + storyboards queries to pick up
+ * the new URL once the task completes.
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
@@ -27,7 +29,7 @@ export function useStitchEpisodeMp4(projectId: string) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({}),
         },
-        '匯出全集失敗',
+        '打包素材包失敗',
       )
       return await resolveTaskResponse<{
         episodeId?: string

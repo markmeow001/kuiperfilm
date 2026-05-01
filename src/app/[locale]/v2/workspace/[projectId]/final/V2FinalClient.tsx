@@ -3,15 +3,15 @@
 /**
  * Phase 12.7 — v2 FinalPage.
  *
- * Minimum viable: native HTML5 video player on the left
- * (auto-picks the first panel that has a videoUrl), 12-segment
- * timeline strip below it, stats panel + export CTAs on the right.
+ * Native HTML5 video player on the left (auto-picks the first panel
+ * that has a videoUrl), 12-segment timeline strip below it, stats
+ * panel + export CTAs on the right.
  *
- * Real全集 stitching / export pipeline is wiring through the
- * existing FFmpeg-based video editor — Phase 12.7.x will hook
- * the export button to that. For now the export button is
- * disabled with a tooltip pointing at the legacy /workspace
- * "全集合成" CTA.
+ * Export model: KuiperAI does not stitch the final mp4. Instead we
+ * package every panel video + storyboard image + dialogue script into
+ * one zip; users finish the cut in CapCut/剪映. The legacy column
+ * `episode.stitchedVideoUrl` now holds the zip key (semantic carry-over
+ * to avoid a schema migration).
  */
 
 import { useMemo, useState } from 'react'
@@ -221,26 +221,24 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
 
           {currentEpisode?.stitchedVideoUrl ? (
             <div className="space-y-2">
-              <video
-                src={currentEpisode.stitchedVideoUrl}
-                controls
-                className="w-full rounded-sm border border-amber-500/30 bg-stone-950"
-              />
               <a
                 href={currentEpisode.stitchedVideoUrl}
-                download={`episode-${currentEpisode.id}.mp4`}
+                download={`episode-${currentEpisode.id}.zip`}
                 className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
               >
                 <AppIcon name="download" className="h-4 w-4" />
-                下載成片 MP4
+                下載素材包 ZIP
               </a>
+              <p className="rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-2 font-serif-cn text-xs text-stone-400">
+                包含全部分鏡 mp4 + 參考圖 + 對白腳本，拖進剪映/CapCut 即可剪輯。
+              </p>
               <button
                 type="button"
                 disabled={stitchMp4.isPending || !currentEpisodeId || panelsWithVideo.length === 0}
                 onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
                 className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {stitchMp4.isPending ? '重新合成中…' : '↻ 重新合成'}
+                {stitchMp4.isPending ? '重新打包中…' : '↻ 重新打包素材包'}
               </button>
             </div>
           ) : (
@@ -255,22 +253,22 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
               onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
               title={
                 panelsWithVideo.length === 0
-                  ? '需先生成至少 1 個分鏡視頻才能匯出全集'
-                  : 'FFmpeg 把所有分鏡視頻按順序串成一支 mp4 上傳到 R2'
+                  ? '需先生成至少 1 個分鏡視頻才能打包素材包'
+                  : '把所有分鏡視頻 + 參考圖 + 對白腳本打包成 zip,直接下載到剪映/CapCut 剪輯'
               }
               className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="download" className="h-4 w-4" />
               {stitchMp4.isPending
-                ? '合成中…'
+                ? '打包中…'
                 : currentEpisode?.stitchStatus === 'rendering'
-                  ? '後台合成中…'
-                  : `匯出 MP4 · ${panelsWithVideo.length} 段`}
+                  ? '後台打包中…'
+                  : `打包素材包 · ${panelsWithVideo.length} 段`}
             </button>
           )}
           {stitchMp4.isError ? (
             <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-              {(stitchMp4.error as Error)?.message ?? '合成失敗'}
+              {(stitchMp4.error as Error)?.message ?? '打包失敗'}
             </p>
           ) : null}
 

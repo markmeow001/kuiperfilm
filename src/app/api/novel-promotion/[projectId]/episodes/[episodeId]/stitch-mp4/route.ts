@@ -1,9 +1,13 @@
 /**
  * Phase 12.7.x — POST /api/novel-promotion/[projectId]/episodes/[episodeId]/stitch-mp4
  *
- * Submits an EPISODE_STITCH_MP4 task to the video queue. The worker
- * downloads every panel videoUrl in the episode, ffmpeg-concats them,
- * uploads to COS, and writes the URL back to episode.stitchedVideoUrl.
+ * Submits an EPISODE_STITCH_MP4 task to the video queue. Despite the
+ * legacy route name, the worker now packages every panel video +
+ * storyboard image + dialogue script into a single zip and uploads it.
+ * The output zip key is written back to `episode.stitchedVideoUrl`
+ * (column name preserved to avoid migration). Final cutting happens
+ * in CapCut/剪映 on the user's machine — the server no longer runs
+ * ffmpeg.
  *
  * Returns the standard task envelope so the client can resolve via
  * resolveTaskResponse / poll runs status.
