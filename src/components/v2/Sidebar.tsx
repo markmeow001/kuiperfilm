@@ -151,13 +151,22 @@ function SidebarUser() {
           </div>
         </div>
         {isAdmin ? (
-          <a
-            href={adminHref}
-            className="rounded text-amber-500/70 transition-all hover:text-amber-300"
-            title="管理員後台"
-          >
-            <AppIcon name="settingsHex" className="h-4 w-4" />
-          </a>
+          <>
+            <a
+              href="/zh/profile"
+              className="rounded text-stone-500 transition-all hover:text-amber-400"
+              title="設定中心(provider keys / 預設模型)"
+            >
+              <AppIcon name="userRoundCog" className="h-4 w-4" />
+            </a>
+            <a
+              href={adminHref}
+              className="rounded text-amber-500/70 transition-all hover:text-amber-300"
+              title="管理員後台"
+            >
+              <AppIcon name="settingsHex" className="h-4 w-4" />
+            </a>
+          </>
         ) : null}
         <button
           type="button"

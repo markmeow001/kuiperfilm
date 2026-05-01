@@ -47,6 +47,10 @@ interface V2HomeClientProps {
 export function V2HomeClient({ locale }: V2HomeClientProps) {
   const router = useRouter()
   const { data: session, status } = useSession()
+  // Role gate — admin sees 設定中心 + 管理後台, members see only the
+  // logout button. Mirrors the Navbar contract.
+  const role = (session?.user as { role?: string } | undefined)?.role
+  const isAdmin = role === 'admin'
   const [projects, setProjects] = useState<ProjectRow[]>([])
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState<Pagination>({
@@ -147,8 +151,32 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               AI · MANHUA · STUDIO
             </div>
           </div>
-          <div className="flex items-center gap-4 font-mono text-[11px] tracking-wider">
+          <div className="flex items-center gap-3 font-mono text-[11px] tracking-wider">
             <span className="text-stone-200">{session.user?.name ?? session.user?.email ?? ''}</span>
+            {/* Admin-only nav: profile (provider keys + default models)
+                and the admin console. Members hide both — their config
+                cascades from admin so they never need /profile, and
+                they have no business in /admin. Logout always shows. */}
+            {isAdmin ? (
+              <>
+                <Link
+                  href={`/${locale}/profile`}
+                  className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+                  title="設定中心"
+                >
+                  <AppIcon name="userRoundCog" className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">設定中心</span>
+                </Link>
+                <Link
+                  href={`/${locale}/admin`}
+                  className="flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-amber-300 transition-colors hover:bg-amber-500/20"
+                  title="管理後台"
+                >
+                  <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">管理後台</span>
+                </Link>
+              </>
+            ) : null}
             <button
               type="button"
               onClick={() => void signOut({ callbackUrl: `/${locale}/auth/signin` })}
