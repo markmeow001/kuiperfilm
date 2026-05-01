@@ -19,12 +19,9 @@ import { V2_STEPS, type V2StepId, v2StepIndex } from './v2-types'
 interface SidebarProps {
   currentStep: V2StepId
   onSelect: (stepId: V2StepId) => void
-  /** Provided by the shell so the legacy escape link can deep-link
-      back to the same project. Not user-facing. */
-  legacyHref?: string
 }
 
-export function Sidebar({ currentStep, onSelect, legacyHref }: SidebarProps) {
+export function Sidebar({ currentStep, onSelect }: SidebarProps) {
   const currentIdx = v2StepIndex(currentStep)
 
   return (
@@ -88,18 +85,6 @@ export function Sidebar({ currentStep, onSelect, legacyHref }: SidebarProps) {
           )
         })}
       </nav>
-
-      {/* Legacy escape link */}
-      {legacyHref ? (
-        <div className="border-t border-amber-900/15 px-5 pt-3">
-          <a
-            href={legacyHref}
-            className="block text-center font-mono text-[10px] tracking-wider text-stone-600 transition-all hover:text-amber-500"
-          >
-            ↩ 切回舊版工作區
-          </a>
-        </div>
-      ) : null}
 
       {/* User block — auto from NextAuth session */}
       <SidebarUser />
