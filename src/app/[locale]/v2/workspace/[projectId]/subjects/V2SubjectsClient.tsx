@@ -18,8 +18,16 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
-import { useRegenerateSingleCharacterImage } from '@/lib/query/mutations/character-image-ops-mutations'
-import { useRegenerateSingleLocationImage } from '@/lib/query/mutations/location-image-mutations'
+import {
+  useRegenerateSingleCharacterImage,
+  useRegenerateCharacterGroup,
+} from '@/lib/query/mutations/character-image-ops-mutations'
+import {
+  useRegenerateSingleLocationImage,
+  useRegenerateLocationGroup,
+  useUploadProjectLocationImage,
+} from '@/lib/query/mutations/location-image-mutations'
+import { useUploadProjectCharacterImage } from '@/lib/query/mutations/character-base-mutations'
 import { useConfirmProjectCharacterProfile } from '@/lib/query/mutations/character-profile-mutations'
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
@@ -80,9 +88,15 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const locationsQuery = useProjectLocations(projectId)
   const regenChar = useRegenerateSingleCharacterImage(projectId)
   const regenLoc = useRegenerateSingleLocationImage(projectId)
+  const regenCharGroup = useRegenerateCharacterGroup(projectId)
+  const regenLocGroup = useRegenerateLocationGroup(projectId)
+  const uploadCharImage = useUploadProjectCharacterImage(projectId)
+  const uploadLocImage = useUploadProjectLocationImage(projectId)
   const confirmProfile = useConfirmProjectCharacterProfile(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
+  const [batchGenInFlight, setBatchGenInFlight] = useState<'characters' | 'locations' | null>(null)
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null)
 
   // Server-side task snapshot — survives page navigation, polled while
   // the worker is in flight, and used as the source of truth for the
@@ -154,6 +168,79 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   function handleConfirmProfile(c: CharacterLike) {
     if (c.profileConfirmed) return // already locked — no-op (un-lock not exposed yet)
     confirmProfile.mutate({ characterId: c.id, generateImage: false })
+  }
+
+  async function handleBatchRegenCharacters() {
+    if (batchGenInFlight) return
+    if (characters.length === 0) {
+      alert('沒有角色 — 先到上方點「一鍵分析」')
+      return
+    }
+    setBatchGenInFlight('characters')
+    setBatchProgress({ done: 0, total: characters.length })
+    try {
+      let done = 0
+      // Sequential to avoid hammering the image provider; switch to
+      // Promise.all if user wants pure parallel later.
+      for (const c of characters) {
+        const appearanceId = c.appearances?.[0]?.id
+        if (!appearanceId) {
+          done++
+          setBatchProgress({ done, total: characters.length })
+          continue
+        }
+        try {
+          await regenCharGroup.mutateAsync({ characterId: c.id, appearanceId })
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[batch-regen] character', c.id, err)
+        }
+        done++
+        setBatchProgress({ done, total: characters.length })
+      }
+    } finally {
+      setBatchGenInFlight(null)
+      setTimeout(() => setBatchProgress(null), 3000)
+    }
+  }
+
+  async function handleBatchRegenLocations() {
+    if (batchGenInFlight) return
+    if (locations.length === 0) {
+      alert('沒有場景 — 先到上方點「一鍵分析」')
+      return
+    }
+    setBatchGenInFlight('locations')
+    setBatchProgress({ done: 0, total: locations.length })
+    try {
+      let done = 0
+      for (const l of locations) {
+        try {
+          await regenLocGroup.mutateAsync({ locationId: l.id })
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[batch-regen] location', l.id, err)
+        }
+        done++
+        setBatchProgress({ done, total: locations.length })
+      }
+    } finally {
+      setBatchGenInFlight(null)
+      setTimeout(() => setBatchProgress(null), 3000)
+    }
+  }
+
+  function handleUploadChar(c: CharacterLike, file: File) {
+    const appearanceId = c.appearances?.[0]?.id
+    if (!appearanceId) {
+      alert('此角色還沒有 appearance,請先點「重新生成」建立首張 appearance')
+      return
+    }
+    uploadCharImage.mutate({ file, characterId: c.id, appearanceId, imageIndex: 0 })
+  }
+
+  function handleUploadLoc(l: LocationLike, file: File) {
+    uploadLocImage.mutate({ file, locationId: l.id, imageIndex: 0 })
   }
 
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
@@ -238,12 +325,40 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             </button>
           ))}
         </div>
-        <Link
-          href={`/${locale}/v2/workspace/${projectId}/storyboard`}
-          className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-5 py-2 font-serif-cn text-sm text-amber-400 transition-all hover:border-amber-500/60 hover:bg-amber-500/15"
-        >
-          下一步 → 分鏡 <AppIcon name="chevronRight" className="h-4 w-4" />
-        </Link>
+        <div className="flex items-center gap-2">
+          {tab === 'character' && characters.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleBatchRegenCharacters}
+              disabled={!!batchGenInFlight}
+              className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-4 w-4" />
+              {batchGenInFlight === 'characters' && batchProgress
+                ? `生成中… ${batchProgress.done}/${batchProgress.total}`
+                : '一鍵生圖所有角色'}
+            </button>
+          ) : null}
+          {tab === 'scene' && locations.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleBatchRegenLocations}
+              disabled={!!batchGenInFlight}
+              className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-4 w-4" />
+              {batchGenInFlight === 'locations' && batchProgress
+                ? `生成中… ${batchProgress.done}/${batchProgress.total}`
+                : '一鍵生圖所有場景'}
+            </button>
+          ) : null}
+          <Link
+            href={`/${locale}/v2/workspace/${projectId}/storyboard`}
+            className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/50 hover:text-amber-300"
+          >
+            下一步 → 分鏡 <AppIcon name="chevronRight" className="h-4 w-4" />
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (
@@ -261,6 +376,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             isLocked: Boolean(c.profileConfirmed),
             onLock: () => handleConfirmProfile(c),
             isLocking: confirmProfile.isPending,
+            onUpload: (file) => handleUploadChar(c, file),
+            isUploading: uploadCharImage.isPending,
           }))}
           emptyHint="此項目還沒有角色 — 點上方「一鍵分析」抽出此集的角色,或從素材庫導入"
         />
@@ -274,6 +391,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             imageUrl: pickLocationImage(l),
             onRegenerate: () => handleRegenLoc(l),
             isRegenerating: regenLoc.isPending,
+            onUpload: (file) => handleUploadLoc(l, file),
+            isUploading: uploadLocImage.isPending,
           }))}
           emptyHint="此項目還沒有場景 — 點上方「一鍵分析」抽出此集的場景,或從素材庫導入"
         />
@@ -299,6 +418,8 @@ interface SubjectItem {
   isLocked?: boolean
   onLock?: () => void
   isLocking?: boolean
+  onUpload?: (file: File) => void
+  isUploading?: boolean
 }
 
 function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: string }) {
@@ -346,37 +467,97 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
               </div>
             ) : null}
           </div>
-          {item.onRegenerate ? (
-            <div className="flex items-center justify-between border-t border-stone-800/50 px-4 pb-3 pt-2">
+          <div className="flex flex-wrap items-center gap-3 border-t border-stone-800/50 px-4 pb-3 pt-2 font-mono text-[10px] tracking-wider">
+            {item.onRegenerate ? (
               <button
                 type="button"
                 disabled={item.isRegenerating}
                 onClick={item.onRegenerate}
-                className="font-mono text-[10px] tracking-wider text-stone-500 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                title="用 AI 重新生成此圖"
               >
-                {item.isRegenerating ? '提交中…' : '重新生成'}
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                {item.isRegenerating ? '生成中…' : '重新生成'}
               </button>
-              {item.onLock ? (
-                <button
-                  type="button"
-                  disabled={item.isLocking || item.isLocked}
-                  onClick={item.onLock}
-                  title={item.isLocked ? '已鎖定 — 之後分鏡會優先綁定此角色檔案' : '鎖定後分鏡會優先綁定此角色檔案'}
-                  className={`font-mono text-[10px] tracking-wider transition-all disabled:cursor-not-allowed ${
-                    item.isLocked
-                      ? 'text-amber-400'
-                      : 'text-stone-500 hover:text-amber-400'
-                  } ${item.isLocking ? 'opacity-50' : ''}`}
-                >
-                  {item.isLocking ? '鎖定中…' : item.isLocked ? '✓ 已鎖定' : '⊙ 鎖定'}
-                </button>
-              ) : (
-                <span className="font-mono text-[10px] tracking-wider text-stone-700">—</span>
-              )}
-            </div>
-          ) : null}
+            ) : null}
+
+            {item.onUpload ? (
+              <UploadButton
+                disabled={!!item.isUploading}
+                onFile={item.onUpload}
+                label={item.isUploading ? '上傳中…' : '上傳替換'}
+              />
+            ) : null}
+
+            {item.imageUrl ? (
+              <a
+                href={item.imageUrl}
+                download={`${item.name}.png`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400"
+                title="下載原圖"
+              >
+                <AppIcon name="cloudUpload" className="h-3 w-3 rotate-180" />
+                下載
+              </a>
+            ) : null}
+
+            <span className="ml-auto" />
+            {item.onLock ? (
+              <button
+                type="button"
+                disabled={item.isLocking || item.isLocked}
+                onClick={item.onLock}
+                title={item.isLocked ? '已鎖定 — 之後分鏡會優先綁定此角色檔案' : '鎖定後分鏡會優先綁定此角色檔案'}
+                className={`transition-all disabled:cursor-not-allowed ${
+                  item.isLocked ? 'text-amber-400' : 'text-stone-400 hover:text-amber-400'
+                } ${item.isLocking ? 'opacity-50' : ''}`}
+              >
+                {item.isLocking ? '鎖定中…' : item.isLocked ? '✓ 已鎖定' : '⊙ 鎖定'}
+              </button>
+            ) : null}
+          </div>
         </div>
       ))}
     </div>
+  )
+}
+
+function UploadButton({
+  onFile,
+  disabled,
+  label,
+}: {
+  onFile: (file: File) => void
+  disabled: boolean
+  label: string
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) onFile(file)
+          // Reset so re-uploading the same file fires onChange again.
+          if (inputRef.current) inputRef.current.value = ''
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+        className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+        title="上傳自製圖片替換"
+      >
+        <AppIcon name="cloudUpload" className="h-3 w-3" />
+        {label}
+      </button>
+    </>
   )
 }
