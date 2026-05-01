@@ -14,7 +14,7 @@
  */
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
@@ -41,7 +41,7 @@ import {
 } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
-import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
+import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
@@ -209,6 +209,40 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     const interval = setInterval(() => { void taskSnapshot.refetch() }, 3000)
     return () => clearInterval(interval)
   }, [isAnalyzing, taskSnapshot])
+
+  // Server-side image_character tasks (from analyze rescue path or any
+  // backend trigger). Merged with local regenInFlight so the per-card
+  // overlay shows whether the user clicked regen OR the backend
+  // auto-submitted a backfill regen — without this the user sees
+  // "✓ 分析完成" then waits in confusion as cards silently regenerate.
+  const activeImageTasks = useActiveTasks({
+    projectId,
+    type: ['image_character', 'regenerate_group', 'reference_to_character'],
+  })
+  const serverInflightIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const t of activeImageTasks.data ?? []) {
+      if (t.targetType === 'CharacterAppearance' && typeof t.targetId === 'string') {
+        set.add(t.targetId)
+      }
+    }
+    return set
+  }, [activeImageTasks.data])
+  // Poll active tasks every 4s while any are running.
+  useEffect(() => {
+    if (serverInflightIds.size === 0) return
+    const interval = setInterval(() => { void activeImageTasks.refetch() }, 4000)
+    return () => clearInterval(interval)
+  }, [serverInflightIds.size, activeImageTasks])
+  // When server in-flight set drops to 0, also refresh assets so the
+  // freshly-generated images surface immediately.
+  const previousServerInflight = useRef(serverInflightIds.size)
+  useEffect(() => {
+    if (previousServerInflight.current > 0 && serverInflightIds.size === 0) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
+    }
+    previousServerInflight.current = serverInflightIds.size
+  }, [serverInflightIds.size, projectId, queryClient])
 
   // Detect transition into 'completed' and invalidate character/location
   // queries so the grid picks up the freshly-written rows.
@@ -511,6 +545,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
           ⏳ 分析中… 進度 {taskProgress}% (LLM 跑完約 30-90 秒,完成後角色/場景會自動出現)
         </div>
+      ) : taskStatus === 'completed' && serverInflightIds.size > 0 ? (
+        <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
+          ⚙️ 分析完成 — 後台正在自動重新生成 <strong>{serverInflightIds.size}</strong> 張角色圖,
+          每張約 30-90 秒,完成後卡片會自動更新(別離開頁面也沒關係,任務在 server 端跑)
+        </div>
       ) : taskStatus === 'completed' ? (
         <div className="mb-6 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
           ✓ 上次分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} — 角色 / 場景已寫入下方卡片
@@ -593,7 +632,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               visualPrompt,
               imageUrl: pickCharacterImage(c),
               onRegenerate: () => handleRegenChar(c),
-              isRegenerating: regenInFlight.has(apId),
+              isRegenerating: regenInFlight.has(apId) || serverInflightIds.has(apId),
               isLocked: Boolean(c.profileConfirmed),
               onLock: () => handleConfirmProfile(c),
               isLocking: confirmProfile.isPending,
