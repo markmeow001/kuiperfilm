@@ -68,15 +68,23 @@ export const POST = apiHandler(async (
     })
   }
 
-  const panelsWithoutImage = panels.filter((p) => !p.imageUrl)
-  if (panelsWithoutImage.length > 0) {
-    throw new ApiError('INVALID_PARAMS', {
-      code: 'PANELS_MISSING_IMAGE',
-      details: {
-        panelIds: panelsWithoutImage.map((p) => p.id),
-        message: 'All panels must have a generated image before multi-shot video generation',
-      },
-    })
+  // Panel imageUrl is required only on the C path (KieAI / image-to-video).
+  // On the B path (Tencent VOD Kling-3 / Omni with multi_shot=intelligence)
+  // the model is text-to-video and SubjectInfos.N carries the per-character
+  // reference, so we accept text-only panels. Detect by videoModel string —
+  // mirrors shouldUseTencentBPath in the worker handler.
+  const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
+  if (!isBPath) {
+    const panelsWithoutImage = panels.filter((p) => !p.imageUrl)
+    if (panelsWithoutImage.length > 0) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'PANELS_MISSING_IMAGE',
+        details: {
+          panelIds: panelsWithoutImage.map((p) => p.id),
+          message: 'All panels must have a generated image before multi-shot video generation',
+        },
+      })
+    }
   }
 
   // Use the storyboard of the first panel as target

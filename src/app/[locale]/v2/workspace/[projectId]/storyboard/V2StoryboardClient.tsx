@@ -232,11 +232,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       })
       return
     }
-    const eligible = allPanels.filter((p) => Boolean(p.imageUrl))
+    // B path = Tencent VOD Kling-3 / Omni / O1 (text-to-video with
+    // multi_shot=intelligence). Panels without imageUrl are still
+    // eligible because the model goes straight from text to video.
+    // C path needs imageUrl for first-frame i2v.
+    const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
+    const eligible = isBPath
+      ? allPanels
+      : allPanels.filter((p) => Boolean(p.imageUrl))
     if (eligible.length < 2) {
       setMultiShotState({
         status: 'error',
-        message: '至少需要 2 個有圖的分鏡才能跑 multi-shot',
+        message: isBPath
+          ? '至少需要 2 個分鏡才能跑 multi-shot(B path)'
+          : '至少需要 2 個有圖的分鏡才能跑 multi-shot(或切到 Kling-3.0-Omni 走 t2v B path,免生圖)',
       })
       return
     }
@@ -518,12 +527,23 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               onClick={() => handleSubmitMultiShot()}
               disabled={multiShotState.status === 'submitting'}
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-500 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title="把所有有圖的分鏡 5 個一組送 Kling multi-shot=intelligence"
+              title={(() => {
+                const m = project?.novelPromotionData?.videoModel ?? ''
+                if (/^tencent-vod::Kling-(3|O1)/i.test(m)) {
+                  return `B 路徑(Tencent VOD ${m.split('::')[1]}):t2v + SubjectInfos.N + multi_shot=intelligence,免生圖直接出多鏡頭視頻`
+                }
+                return '把所有有圖的分鏡 5 個一組送 Kling multi-shot=intelligence(C 路徑 i2v)'
+              })()}
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {multiShotState.status === 'submitting'
                 ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
-                : 'Kling 多鏡頭(批次)'}
+                : (() => {
+                    const m = project?.novelPromotionData?.videoModel ?? ''
+                    return /^tencent-vod::Kling-(3|O1)/i.test(m)
+                      ? '智能多鏡頭 (B 路徑)'
+                      : 'Kling 多鏡頭(批次)'
+                  })()}
             </button>
           </div>
           {multiShotState.status === 'done' ? (

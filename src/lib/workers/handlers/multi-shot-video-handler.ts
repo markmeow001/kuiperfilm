@@ -2,6 +2,8 @@ import { type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { type TaskJobData } from '@/lib/task/types'
 import { createScopedLogger } from '@/lib/logging/core'
+import { parseModelKeyStrict } from '@/lib/model-config-contract'
+import { runMultiShotBPath } from './multi-shot-video-b-path'
 import {
   parsePanelCharacterReferences,
   findCharacterByName,
@@ -48,6 +50,23 @@ function sanitizeName(name: string): string {
     .slice(0, 30)
 }
 
+/**
+ * Decide whether the configured videoModel is Kling Omni (Tencent VOD)
+ * with native multi_shot=intelligence support. When true, the B path
+ * fires: a single t2v submission with SubjectInfos.N for character
+ * consistency and ExtInfo.multi_shot='intelligence' that lets the model
+ * decide its own shot transitions, no per-panel imageUrl required.
+ *
+ * Otherwise we fall back to the existing C path (KieAI Kling i2v).
+ */
+function shouldUseTencentBPath(videoModel: string): boolean {
+  const parsed = parseModelKeyStrict(videoModel)
+  if (!parsed) return false
+  if (parsed.provider !== 'tencent-vod') return false
+  // Kling-3.0-Omni / Kling-3.0 / Kling-O1 all support multi_shot=intelligence.
+  return /^Kling-(3|O1)/i.test(parsed.modelId)
+}
+
 export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
   const { projectId, userId } = job.data
@@ -66,6 +85,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
   }
+
+  const useBPath = shouldUseTencentBPath(videoModel)
 
   await reportTaskProgress(job, 5, { stage: 'load_panels' })
 
@@ -88,15 +109,39 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   for (let i = 0; i < panels.length; i++) {
     if (!panels[i]) throw new Error(`Panel not found: ${panelIds[i]}`)
-    if (!panels[i]!.imageUrl) throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
+    // C path requires every panel to have a generated reference image
+    // (used as the first-frame). B path is t2v so panels can be
+    // text-only — skip the imageUrl check entirely.
+    if (!useBPath && !panels[i]!.imageUrl) {
+      throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
+    }
   }
 
   const validPanels = panels as NonNullable<(typeof panels)[number]>[]
 
   await reportTaskProgress(job, 15, { stage: 'collect_characters' })
 
-  // 2. 收集角色，去重後構建 kling_elements
   const projectData = await resolveNovelData(projectId)
+
+  // ──────────────────────────── B PATH ────────────────────────────
+  // Tencent VOD Kling Omni — t2v with multi_shot=intelligence + SubjectInfos.
+  // See multi-shot-video-b-path.ts for the full implementation.
+  if (useBPath) {
+    return await runMultiShotBPath({
+      job,
+      validPanels,
+      projectData,
+      videoModel,
+      sound,
+      aspectRatio,
+    })
+  }
+
+  // ──────────────────────────── C PATH ────────────────────────────
+  // KieAI Kling i2v — uses each panel's generated image as first frame.
+  // Existing implementation. No changes below.
+
+  // 2. 收集角色，去重後構建 kling_elements
   const seenCharacters = new Map<string, KlingElement>()
 
   for (const panel of validPanels) {
