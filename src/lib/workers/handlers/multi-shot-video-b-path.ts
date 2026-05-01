@@ -353,10 +353,14 @@ export async function runMultiShotBPath(params: {
       },
     })
 
+    // Tencent API treats top-level Prompt as semantically ignored in
+    // customize mode but still validates non-empty (fails with ret:1201
+    // "prompt cannot be empty" otherwise). Use the combined prompt as a
+    // safe non-empty payload — the model uses multi_prompt entries for
+    // actual generation.
+    const placeholderPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel)
     generateOptions = {
-      // Customize mode ignores top-level Prompt per Tencent doc, but the
-      // generator's required field still expects a string — pass empty.
-      prompt: '',
+      prompt: placeholderPrompt,
       duration: finalTotal,
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
