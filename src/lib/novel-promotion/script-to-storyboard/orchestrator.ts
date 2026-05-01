@@ -87,6 +87,35 @@ export class JsonParseError extends Error {
   }
 }
 
+// Strict JSON.parse rejects unescaped control chars (raw \t \n \r) inside
+// string literals — the LLM output occasionally contains them, especially
+// for long visual prompts that wrap. Walk char-by-char tracking in-string
+// state and rewrite control chars to their escape sequences. Mirrors the
+// helper in analyze-novel-utils.ts; duplicated here to keep this module
+// free of cross-tree imports for an unrelated handler.
+function sanitizeJsonControlChars(text: string): string {
+  let out = ''
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (escaped) { out += ch; escaped = false; continue }
+    if (inString && ch === '\\') { out += ch; escaped = true; continue }
+    if (ch === '"') { inString = !inString; out += ch; continue }
+    if (inString) {
+      const code = text.charCodeAt(i)
+      if (code === 0x09) { out += '\\t'; continue }
+      if (code === 0x0a) { out += '\\n'; continue }
+      if (code === 0x0d) { out += '\\r'; continue }
+      if (code === 0x08) { out += '\\b'; continue }
+      if (code === 0x0c) { out += '\\f'; continue }
+      if (code < 0x20) continue
+    }
+    out += ch
+  }
+  return out
+}
+
 function parseJsonArray<T extends JsonRecord>(responseText: string, label: string): T[] {
   let jsonText = responseText.trim()
   jsonText = jsonText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '')
@@ -99,7 +128,7 @@ function parseJsonArray<T extends JsonRecord>(responseText: string, label: strin
 
   let parsed: unknown
   try {
-    parsed = JSON.parse(jsonText.slice(firstBracket, lastBracket + 1))
+    parsed = JSON.parse(sanitizeJsonControlChars(jsonText.slice(firstBracket, lastBracket + 1)))
   } catch (e) {
     throw new JsonParseError(
       `${label}: JSON parse error: ${e instanceof Error ? e.message : String(e)}`,
