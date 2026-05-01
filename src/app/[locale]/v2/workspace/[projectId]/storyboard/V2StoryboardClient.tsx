@@ -142,21 +142,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const analyzeError = analyzeSnapshot.data?.errorMessage ?? null
 
   // Poll while EITHER (a) the snapshot reports an active task OR (b) we
-  // just submitted one ourselves. Without (b) the chicken-and-egg bug
-  // bites: when the previous run failed (e.g. container restart marked
-  // it stalled), snapshot returns status='failed', isAnalyzing is false,
-  // polling never starts, and the next 重新分析 click submits a fresh
-  // task that the UI never observes — user sees the OLD failed task's
-  // 90% progress frozen on screen even though the new task already
-  // completed in the worker. Polling on submit lets ~1 tick elapse then
-  // catches the freshly-queued/processing task and the loop self-
-  // sustains as before.
-  const shouldPollForAnalyze = isAnalyzing || analyzeState.status === 'submitted' || analyzeState.status === 'submitting'
+  // just submitted one ourselves. Active tasks get a faster 3s tick,
+  // idle pages still get a slower 8s baseline so cascades triggered
+  // OUTSIDE this page (e.g. subjects 一鍵分析 → clips_build →
+  // script_to_storyboard_run) surface within ~8s instead of "never"
+  // (chicken-and-egg: status was 'failed' from prior run, isAnalyzing
+  // false, polling never starts, user sees frozen 90% from the old
+  // failed task even though a fresh task is mid-flight).
+  const isActivelySubmitting = analyzeState.status === 'submitted' || analyzeState.status === 'submitting'
+  const pollInterval = isAnalyzing || isActivelySubmitting ? 3000 : 8000
   useEffect(() => {
-    if (!shouldPollForAnalyze) return
-    const interval = setInterval(() => { void analyzeSnapshot.refetch() }, 3000)
+    const interval = setInterval(() => { void analyzeSnapshot.refetch() }, pollInterval)
     return () => clearInterval(interval)
-  }, [shouldPollForAnalyze, analyzeSnapshot])
+  }, [pollInterval, analyzeSnapshot])
 
   const previousAnalyzeStatus = useRef(analyzeStatus)
   useEffect(() => {
