@@ -229,7 +229,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       return
     }
     analyze.mutate(
-      { episodeId: currentEpisodeId },
+      // V2 path opts in to the full analyze → CLIPS_BUILD → SCRIPT_TO_STORYBOARD_RUN
+      // cascade. Without this, the storyboard worker would later fail with
+      // "No clips found" because Session B made the cascade opt-in for
+      // legacy /workspace flows.
+      { episodeId: currentEpisodeId, cascadeToStoryboard: true },
       {
         onSuccess: () => {
           // Pull the new task into the snapshot immediately so the banner
