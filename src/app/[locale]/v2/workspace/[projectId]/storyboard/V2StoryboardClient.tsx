@@ -216,10 +216,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       { onError: (err) => alert(err instanceof Error ? err.message : '儲存對話失敗') },
     )
   }
-  // Track per-panel video gen in-flight so the user sees a clear
-  // "視頻生成中…" indicator after clicking the button. Without this the
-  // mutation submits silently and the user doesn't know whether the
-  // click registered (worker takes 30-60s before videoUrl appears).
+  // Track per-panel image / video gen in-flight so the user sees a clear
+  // overlay the instant they click the button. Without local state, the
+  // overlay relies on the server-side useActiveTasks polling (3s tick),
+  // so users see a 0-3s gap between click and overlay appearing — felt
+  // like the click "didn't register". Local state covers the gap until
+  // the next poll surfaces the task; once the server set picks it up,
+  // both sources agree and the overlay stays consistent.
+  const [imageInFlight, setImageInFlight] = useState<Set<string>>(new Set())
   const [videoInFlight, setVideoInFlight] = useState<Set<string>>(new Set())
 
   // Server-side image / video panel tasks. These survive page navigation
@@ -312,6 +316,23 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (changed) setVideoInFlight(next)
   }, [allPanels, videoInFlight])
 
+  // Same drop-on-completion sync for image regen — release the local
+  // imageInFlight slot once the worker has actually written the new
+  // imageUrl onto the panel. Without this, the local overlay would
+  // hang around even after the image is back on screen.
+  useEffect(() => {
+    if (imageInFlight.size === 0) return
+    const next = new Set(imageInFlight)
+    let changed = false
+    for (const p of allPanels) {
+      if (imageInFlight.has(p.id) && p.imageUrl && !serverInflightPanelImageIds.has(p.id)) {
+        next.delete(p.id)
+        changed = true
+      }
+    }
+    if (changed) setImageInFlight(next)
+  }, [allPanels, imageInFlight, serverInflightPanelImageIds])
+
   function handleGenerateVideo() {
     if (!selected) return
     const videoModel = project?.novelPromotionData?.videoModel
@@ -342,7 +363,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const isCurrentPanelVideoInFlight =
     !!selected && (videoInFlight.has(selected.id) || serverInflightPanelVideoIds.has(selected.id))
   const isCurrentPanelImageInFlight =
-    !!selected && serverInflightPanelImageIds.has(selected.id)
+    !!selected && (imageInFlight.has(selected.id) || serverInflightPanelImageIds.has(selected.id))
 
   // Distinct group ids in the order panels appear, for stable colour cycling.
   const orderedGroupIds = useMemo(() => {
@@ -649,14 +670,23 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   <div className="absolute left-2 top-1.5 rounded bg-stone-950/50 px-1.5 py-0.5 font-mono text-[10px] text-stone-200 backdrop-blur-sm">
                     #{String(i + 1).padStart(2, '0')}
                   </div>
-                  {serverInflightPanelImageIds.has(p.id) || serverInflightPanelVideoIds.has(p.id) ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
-                      <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                      <div className="font-mono text-[9px] tracking-wider text-amber-300">
-                        {serverInflightPanelVideoIds.has(p.id) ? '視頻生成中' : '圖生成中'}
+                  {(() => {
+                    const localImg = imageInFlight.has(p.id)
+                    const localVid = videoInFlight.has(p.id)
+                    const remoteImg = serverInflightPanelImageIds.has(p.id)
+                    const remoteVid = serverInflightPanelVideoIds.has(p.id)
+                    const isImg = localImg || remoteImg
+                    const isVid = localVid || remoteVid
+                    if (!isImg && !isVid) return null
+                    return (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
+                        <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+                        <div className="font-mono text-[9px] tracking-wider text-amber-300">
+                          {isVid ? '視頻生成中' : '圖生成中'}
+                        </div>
                       </div>
-                    </div>
-                  ) : null}
+                    )
+                  })()}
                 </div>
                 <div className="bg-stone-900/40 px-2 py-2">
                   <div className="truncate font-serif-cn text-xs text-stone-200">
@@ -855,7 +885,22 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               disabled={!selected || regenPanel.isPending}
               onClick={() => {
                 if (!selected) return
-                regenPanel.mutate({ panelId: selected.id })
+                const panelIdAtSubmit = selected.id
+                regenPanel.mutate(
+                  { panelId: panelIdAtSubmit },
+                  {
+                    onSuccess: () => {
+                      setImageInFlight((prev) => {
+                        const next = new Set(prev)
+                        next.add(panelIdAtSubmit)
+                        return next
+                      })
+                      // Trigger an immediate activeImageTasks refetch so the
+                      // server-side set catches up faster than its 3s tick.
+                      void activePanelImageTasks.refetch()
+                    },
+                  },
+                )
               }}
               className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 bg-stone-900/50 py-2.5 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
