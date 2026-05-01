@@ -13,12 +13,15 @@
  * Read-only for now — clicking panels just changes the selection.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
+import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
+import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
 interface V2StoryboardClientProps {
@@ -59,6 +62,12 @@ type MultiShotState =
   | { status: 'done'; sent: number; failures: number }
   | { status: 'error'; message: string }
 
+type AnalyzeState =
+  | { status: 'idle' }
+  | { status: 'submitting' }
+  | { status: 'submitted' }
+  | { status: 'error'; message: string }
+
 const KLING_GROUP_SIZE = 5 // panel/group; API allows 2-6
 
 // 6 distinct accent colours for multi-shot group ribbons. Cycles if more
@@ -93,11 +102,12 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
+  const queryClient = useQueryClient()
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLikeFull | undefined
   // Episode picked via the V2WorkspaceShell tab bar (URL ?episode=<id>);
   // falls back to first episode when none is selected.
-  const { currentEpisodeId } = useCurrentEpisode(projectId)
+  const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
 
   const storyboardsQuery = useStoryboards(currentEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
@@ -105,6 +115,36 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const autoGroup = useAutoGroupMultiShot(projectId)
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
+  const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
+
+  // Server-side task snapshot for script_to_storyboard_run, scoped to the
+  // current episode. Survives navigation and is the source of truth for
+  // the analyze status banner — same pattern as V2SubjectsClient.
+  const analyzeSnapshot = useTaskSnapshot({
+    projectId,
+    targetType: currentEpisodeId ? 'NovelPromotionEpisode' : null,
+    targetId: currentEpisodeId,
+    type: ['script_to_storyboard_run'],
+    enabled: Boolean(currentEpisodeId),
+  })
+  const analyzeStatus = analyzeSnapshot.data?.status ?? null
+  const analyzeProgress = analyzeSnapshot.data?.progress ?? 0
+  const isAnalyzing = analyzeStatus === 'queued' || analyzeStatus === 'processing'
+  const analyzeError = analyzeSnapshot.data?.errorMessage ?? null
+
+  useEffect(() => {
+    if (!isAnalyzing) return
+    const interval = setInterval(() => { void analyzeSnapshot.refetch() }, 3000)
+    return () => clearInterval(interval)
+  }, [isAnalyzing, analyzeSnapshot])
+
+  const previousAnalyzeStatus = useRef(analyzeStatus)
+  useEffect(() => {
+    if (previousAnalyzeStatus.current !== 'completed' && analyzeStatus === 'completed' && currentEpisodeId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId) })
+    }
+    previousAnalyzeStatus.current = analyzeStatus
+  }, [analyzeStatus, currentEpisodeId, queryClient])
 
   const allPanels = useMemo<PanelLike[]>(() => {
     const sb = storyboardsData?.storyboards ?? []
@@ -135,6 +175,37 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   }, [allPanels])
   const hasGroups = orderedGroupIds.length > 0
   const groupedPanelCount = allPanels.filter((p) => p.multiShotGroupId).length
+
+  async function handleAnalyzeStoryboard() {
+    if (!currentEpisodeId) {
+      setAnalyzeState({ status: 'error', message: '請先選擇集數並貼好劇本' })
+      return
+    }
+    setAnalyzeState({ status: 'submitting' })
+    try {
+      const res = await fetch(`/api/novel-promotion/${projectId}/script-to-storyboard-stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          episodeId: currentEpisodeId,
+          displayMode: 'detail',
+          async: true,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(text || `HTTP ${res.status}`)
+      }
+      setAnalyzeState({ status: 'submitted' })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId), exact: false })
+      void analyzeSnapshot.refetch()
+    } catch (err) {
+      setAnalyzeState({
+        status: 'error',
+        message: err instanceof Error ? err.message : '提交失敗',
+      })
+    }
+  }
 
   async function handleAutoGroup() {
     if (!currentEpisodeId) return
@@ -246,12 +317,50 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   }
 
   if (allPanels.length === 0) {
+    const submitDisabled = analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId
+    const ctaLabel = analyzeState.status === 'submitting'
+      ? '提交中…'
+      : isAnalyzing
+        ? `分析中… ${analyzeProgress}%`
+        : analyzeStatus === 'failed'
+          ? '重新分析'
+          : '一鍵生成分鏡'
     return (
       <div className="px-12 py-10">
-        <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
-          <p className="font-fraunces text-base italic text-stone-400">
-            還沒有分鏡資料 — 請回劇本 step 點「生成劇本」
-          </p>
+        <div className="rounded-sm border border-amber-500/30 bg-amber-500/5 p-8 text-center">
+          <div className="mx-auto max-w-xl space-y-4">
+            <div className="font-fraunces text-lg italic text-amber-400">
+              {currentEpisode ? `為「${currentEpisode.name}」生成分鏡` : '一鍵生成分鏡'}
+            </div>
+            <p className="font-serif-cn text-sm leading-relaxed text-stone-400">
+              從劇本自動拆解成多個鏡頭 — 由 LLM 依場景/角色連續性切組,
+              生成後可在每個分鏡卡片做圖像 / 視頻 / 提示詞調整。
+            </p>
+            <button
+              type="button"
+              onClick={handleAnalyzeStoryboard}
+              disabled={submitDisabled}
+              className="inline-flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-2.5 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-4 w-4" />
+              {ctaLabel}
+            </button>
+            {analyzeState.status === 'error' ? (
+              <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                提交失敗:{analyzeState.message}
+              </p>
+            ) : null}
+            {analyzeStatus === 'failed' && analyzeError ? (
+              <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                上次分析失敗:{analyzeError}
+              </p>
+            ) : null}
+            {!currentEpisodeId ? (
+              <p className="font-mono text-[10px] tracking-wider text-stone-500">
+                沒有可用集數 — 請先回上方分頁建立或選擇集數,並到劇本 step 貼劇本
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
     )
@@ -273,6 +382,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
+              onClick={handleAnalyzeStoryboard}
+              title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              {analyzeState.status === 'submitting'
+                ? '提交中…'
+                : isAnalyzing
+                  ? `分析中… ${analyzeProgress}%`
+                  : '↻ 重新分析'}
+            </button>
+            <button
+              type="button"
               disabled={autoGroup.isPending || allPanels.length < 2}
               onClick={handleAutoGroup}
               title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群,提升 Kling 多鏡頭品質"
@@ -286,6 +409,16 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </div>
           </div>
         </div>
+        {isAnalyzing ? (
+          <div className="mb-2 rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+            正在重新分析劇本… {analyzeProgress}% — 完成後分鏡會自動刷新
+          </div>
+        ) : null}
+        {analyzeState.status === 'error' ? (
+          <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
+            提交失敗:{analyzeState.message}
+          </div>
+        ) : null}
         {autoGroup.isError ? (
           <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
             切組失敗:{(autoGroup.error as Error)?.message ?? '未知錯誤'}
