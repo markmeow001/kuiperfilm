@@ -4,13 +4,23 @@ export interface VideoPricingTier {
   when: Record<string, CapabilityValue>
 }
 
+// Case-insensitive string compare; matches the rule used in lookup.ts/matchTier.
+// Capability catalog files mix "720P" / "720p" — pricing tier matching must
+// tolerate both so requests aren't rejected as VIDEO_CAPABILITY_COMBINATION_UNSUPPORTED.
+function capabilityValuesEqual(a: CapabilityValue, b: CapabilityValue): boolean {
+  if (typeof a === 'string' && typeof b === 'string') {
+    return a.toLowerCase() === b.toLowerCase()
+  }
+  return a === b
+}
+
 function matchesFixedSelections(
   tier: VideoPricingTier,
   fixedSelections: Record<string, CapabilityValue>,
 ): boolean {
   for (const [field, expectedValue] of Object.entries(fixedSelections)) {
     const tierValue = tier.when[field]
-    if (tierValue !== undefined && tierValue !== expectedValue) {
+    if (tierValue !== undefined && !capabilityValuesEqual(tierValue, expectedValue)) {
       return false
     }
   }

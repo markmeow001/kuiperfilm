@@ -137,7 +137,13 @@ export function validateCapabilitySelectionForModel(input: {
     }
 
     const allowedValues = optionFields[field]
-    if (!allowedValues.includes(value)) {
+    // Case-insensitive match for strings: capability catalog files mix
+    // "720P" / "720p", and pricing tiers use lowercase, so strict
+    // `.includes()` rejects valid combos. Numbers / booleans use strict ===.
+    const allowed = typeof value === 'string'
+      ? allowedValues.some((opt) => typeof opt === 'string' && opt.toLowerCase() === value.toLowerCase())
+      : allowedValues.includes(value)
+    if (!allowed) {
       issues.push({
         code: 'CAPABILITY_VALUE_NOT_ALLOWED',
         field: `capabilities.${input.modelKey}.${field}`,

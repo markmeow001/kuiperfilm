@@ -52,13 +52,34 @@ function cloneSelections(
   return next
 }
 
+/**
+ * Compare two capability values for tier matching.
+ *
+ * Case-insensitive when both sides are strings — capability catalog files
+ * historically mix `"720P"` (uppercase, e.g. tencent-vod entries) with `"720p"`
+ * (lowercase, e.g. fal/ark entries), and pricing tiers were authored almost
+ * exclusively in lowercase. Without this normalization a request resolved to
+ * `resolution: "720P"` against a pricing tier `{ resolution: "720p" }` returns
+ * `missing_capability_match` and the API rejects with
+ * `VIDEO_CAPABILITY_COMBINATION_UNSUPPORTED`, even though the combo is valid.
+ *
+ * Strings are the only type that has cosmetic case variation; numbers and
+ * booleans use strict equality.
+ */
+function capabilityValuesEqual(a: CapabilityValue, b: CapabilityValue): boolean {
+  if (typeof a === 'string' && typeof b === 'string') {
+    return a.toLowerCase() === b.toLowerCase()
+  }
+  return a === b
+}
+
 function matchTier(
   entry: BuiltinPricingCatalogEntry,
   selections: Record<string, CapabilityValue>,
 ): number | null {
   const tiers = entry.pricing.tiers || []
   for (const tier of tiers) {
-    const matched = Object.entries(tier.when).every(([field, expectedValue]) => selections[field] === expectedValue)
+    const matched = Object.entries(tier.when).every(([field, expectedValue]) => capabilityValuesEqual(selections[field], expectedValue))
     if (matched) return tier.amount
   }
   return null
