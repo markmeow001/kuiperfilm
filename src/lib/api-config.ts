@@ -219,6 +219,53 @@ async function readUserConfig(userId: string): Promise<{ models: CustomModel[]; 
   }
 }
 
+/**
+ * Admin-config cascade. In multi-user mode, only the admin needs to
+ * configure provider API keys + default models. Members inherit from
+ * admin so they don't need to fill provider keys themselves.
+ *
+ * Looks up the first user with role='admin' and returns their config.
+ * Returns null if no admin (shouldn't happen in production, but be
+ * defensive — the bootstrap-admin step always creates one).
+ *
+ * Cached briefly per process to avoid hitting prisma on every
+ * getProviderConfig call. The cache invalidates on its own after the
+ * TTL — it's a hot read with rare writes (admin updates keys), and
+ * stale data for ~60s is acceptable.
+ */
+let cachedAdminConfig: {
+  userId: string
+  models: CustomModel[]
+  providers: CustomProvider[]
+  expiresAt: number
+} | null = null
+const ADMIN_CONFIG_CACHE_TTL_MS = 60_000
+
+async function readAdminConfig(): Promise<{ userId: string; models: CustomModel[]; providers: CustomProvider[] } | null> {
+  const now = Date.now()
+  if (cachedAdminConfig && cachedAdminConfig.expiresAt > now) {
+    return {
+      userId: cachedAdminConfig.userId,
+      models: cachedAdminConfig.models,
+      providers: cachedAdminConfig.providers,
+    }
+  }
+  const admin = await prisma.user.findFirst({
+    where: { role: 'admin' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  })
+  if (!admin) return null
+  const config = await readUserConfig(admin.id)
+  cachedAdminConfig = {
+    userId: admin.id,
+    models: config.models,
+    providers: config.providers,
+    expiresAt: now + ADMIN_CONFIG_CACHE_TTL_MS,
+  }
+  return { userId: admin.id, ...config }
+}
+
 function findModelByKey(models: CustomModel[], modelKey: string): CustomModel | null {
   const parsed = assertModelKey(modelKey, 'model')
   return models.find((model) => model.modelId === parsed.modelId && model.provider === parsed.provider) || null
@@ -311,9 +358,33 @@ export interface ProviderConfig {
 }
 
 export async function getProviderConfig(userId: string, providerId: string): Promise<ProviderConfig> {
-  const { providers } = await readUserConfig(userId)
-  const provider = pickProviderStrict(providers, providerId)
+  // First try the user's own config. Admin users always reach this
+  // path; members usually have no providers of their own.
+  const { providers: userProviders } = await readUserConfig(userId)
+  const userProvider = userProviders.find((p) => p.id === providerId) ?? null
 
+  // If the user has no entry for this provider, OR has an entry but no
+  // apiKey, fall back to the admin's config. Multi-user demo: only
+  // admin maintains keys; everyone inherits.
+  if (!userProvider || !userProvider.apiKey) {
+    const adminConfig = await readAdminConfig()
+    if (adminConfig && adminConfig.userId !== userId) {
+      const adminProvider = adminConfig.providers.find((p) => p.id === providerId) ?? null
+      if (adminProvider?.apiKey) {
+        return {
+          id: adminProvider.id,
+          name: adminProvider.name,
+          apiKey: decryptApiKey(adminProvider.apiKey),
+          baseUrl: normalizeProviderBaseUrl(adminProvider.id, adminProvider.baseUrl),
+          apiMode: adminProvider.apiMode,
+        }
+      }
+    }
+  }
+
+  // No admin fallback (or admin doesn't have it either) — fall back to
+  // the original strict path so the error message stays consistent.
+  const provider = pickProviderStrict(userProviders, providerId)
   if (!provider.apiKey) {
     throw new Error(`PROVIDER_API_KEY_MISSING: ${provider.id}`)
   }

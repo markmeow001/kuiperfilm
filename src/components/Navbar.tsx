@@ -7,7 +7,7 @@
  */
 
 import Link from 'next/link'
-import { useSession } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeToggle from './ThemeToggle'
@@ -61,14 +61,22 @@ export default function Navbar() {
                     {t('assetHub')}
                   </Link>
                 ) : null}
-                <Link
-                  href="/profile"
-                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
-                  title={t('profile')}
-                >
-                  <AppIcon name="userRoundCog" className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('profile')}</span>
-                </Link>
+                {/* 設置中心 (/profile) — admin only.
+                    Members never need to touch provider keys or default models;
+                    those cascade from admin's settings via the worker config
+                    helpers. Hiding the link removes the surface area where a
+                    member could accidentally clear a working config and break
+                    their own image generation. */}
+                {isAdmin ? (
+                  <Link
+                    href="/profile"
+                    className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
+                    title={t('profile')}
+                  >
+                    <AppIcon name="userRoundCog" className="h-4 w-4" />
+                    <span className="hidden sm:inline">{t('profile')}</span>
+                  </Link>
+                ) : null}
                 <ThemeToggle />
                 {isAdmin ? (
                   <Link
@@ -81,6 +89,18 @@ export default function Navbar() {
                   </Link>
                 ) : null}
                 <LanguageSwitcher />
+                {/* Logout — present for every logged-in user so non-admin
+                    accounts (which now hide /profile) still have a clear
+                    way out. */}
+                <button
+                  type="button"
+                  onClick={() => void signOut({ callbackUrl: '/' })}
+                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+                  title="登出"
+                >
+                  <AppIcon name="logout" className="h-4 w-4" />
+                  <span className="hidden sm:inline">登出</span>
+                </button>
               </>
             ) : (
               <>

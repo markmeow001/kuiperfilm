@@ -117,31 +117,70 @@ export interface UserModelConfig {
 }
 
 /**
+ * Multi-user cascade: resolve admin's UserPreference for default-model
+ * fallback. Members can leave their own preferences blank and inherit
+ * whatever the admin configured in /profile. Cached briefly to avoid
+ * a prisma round-trip on every model lookup.
+ */
+let cachedAdminPref: { row: Awaited<ReturnType<typeof prisma.userPreference.findUnique>>; expiresAt: number } | null = null
+const ADMIN_PREF_CACHE_TTL_MS = 60_000
+
+async function readAdminPreference() {
+  const now = Date.now()
+  if (cachedAdminPref && cachedAdminPref.expiresAt > now) return cachedAdminPref.row
+  const admin = await prisma.user.findFirst({
+    where: { role: 'admin' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  })
+  if (!admin) {
+    cachedAdminPref = { row: null, expiresAt: now + ADMIN_PREF_CACHE_TTL_MS }
+    return null
+  }
+  const row = await prisma.userPreference.findUnique({ where: { userId: admin.id } })
+  cachedAdminPref = { row, expiresAt: now + ADMIN_PREF_CACHE_TTL_MS }
+  return row
+}
+
+/**
  * 获取项目级模型配置
  */
 export async function getProjectModelConfig(
   projectId: string,
   userId: string,
 ): Promise<ProjectModelConfig> {
-  const [projectData, userPref] = await Promise.all([
+  const [projectData, userPref, adminPref] = await Promise.all([
     prisma.novelPromotionProject.findUnique({ where: { projectId } }),
     prisma.userPreference.findUnique({ where: { userId } }),
+    readAdminPreference(),
   ])
 
+  // Three-tier resolution per field:
+  //   1. Project override (set per-project, beats everything)
+  //   2. User's own preference (set in /profile)
+  //   3. Admin's preference (multi-user inheritance)
+  // Without (3), members would see IMAGE_MODEL_CAPABILITY_NOT_CONFIGURED
+  // until they manually pick defaults — and we hide /profile from them.
+  const adminFallback = adminPref && adminPref.userId !== userId ? adminPref : null
+  const pick = (
+    project: string | null | undefined,
+    user: string | null | undefined,
+    admin: string | null | undefined,
+  ) =>
+    extractModelKey(project) || extractModelKey(user) || extractModelKey(admin) || null
+
   return {
-    // For every default-model field: project-level override wins, otherwise
-    // fall back to the user's preference. Without the fallback a brand-new
-    // project sees null even though the user already picked defaults in
-    // /profile, surfacing as IMAGE_MODEL_CAPABILITY_NOT_CONFIGURED.
-    analysisModel: extractModelKey(projectData?.analysisModel) || extractModelKey(userPref?.analysisModel) || null,
-    characterModel: extractModelKey(projectData?.characterModel) || extractModelKey(userPref?.characterModel) || null,
-    locationModel: extractModelKey(projectData?.locationModel) || extractModelKey(userPref?.locationModel) || null,
-    storyboardModel: extractModelKey(projectData?.storyboardModel) || extractModelKey(userPref?.storyboardModel) || null,
-    editModel: extractModelKey(projectData?.editModel) || extractModelKey(userPref?.editModel) || null,
-    videoModel: extractModelKey(projectData?.videoModel) || extractModelKey(userPref?.videoModel) || null,
+    analysisModel: pick(projectData?.analysisModel, userPref?.analysisModel, adminFallback?.analysisModel),
+    characterModel: pick(projectData?.characterModel, userPref?.characterModel, adminFallback?.characterModel),
+    locationModel: pick(projectData?.locationModel, userPref?.locationModel, adminFallback?.locationModel),
+    storyboardModel: pick(projectData?.storyboardModel, userPref?.storyboardModel, adminFallback?.storyboardModel),
+    editModel: pick(projectData?.editModel, userPref?.editModel, adminFallback?.editModel),
+    videoModel: pick(projectData?.videoModel, userPref?.videoModel, adminFallback?.videoModel),
     videoRatio: projectData?.videoRatio || '16:9',
     artStyle: projectData?.artStyle || null,
-    capabilityDefaults: parseCapabilitySelections(userPref?.capabilityDefaults),
+    capabilityDefaults: parseCapabilitySelections(
+      userPref?.capabilityDefaults ?? adminFallback?.capabilityDefaults,
+    ),
     capabilityOverrides: parseCapabilitySelections(projectData?.capabilityOverrides),
   }
 }
@@ -150,18 +189,24 @@ export async function getProjectModelConfig(
  * 获取用户级模型配置（无项目时使用）
  */
 export async function getUserModelConfig(userId: string): Promise<UserModelConfig> {
-  const userPref = await prisma.userPreference.findUnique({
-    where: { userId },
-  })
+  const [userPref, adminPref] = await Promise.all([
+    prisma.userPreference.findUnique({ where: { userId } }),
+    readAdminPreference(),
+  ])
+  const adminFallback = adminPref && adminPref.userId !== userId ? adminPref : null
+  const pick = (user: string | null | undefined, admin: string | null | undefined) =>
+    extractModelKey(user) || extractModelKey(admin) || null
 
   return {
-    analysisModel: extractModelKey(userPref?.analysisModel) || null,
-    characterModel: extractModelKey(userPref?.characterModel) || null,
-    locationModel: extractModelKey(userPref?.locationModel) || null,
-    storyboardModel: extractModelKey(userPref?.storyboardModel) || null,
-    editModel: extractModelKey(userPref?.editModel) || null,
-    videoModel: extractModelKey(userPref?.videoModel) || null,
-    capabilityDefaults: parseCapabilitySelections(userPref?.capabilityDefaults),
+    analysisModel: pick(userPref?.analysisModel, adminFallback?.analysisModel),
+    characterModel: pick(userPref?.characterModel, adminFallback?.characterModel),
+    locationModel: pick(userPref?.locationModel, adminFallback?.locationModel),
+    storyboardModel: pick(userPref?.storyboardModel, adminFallback?.storyboardModel),
+    editModel: pick(userPref?.editModel, adminFallback?.editModel),
+    videoModel: pick(userPref?.videoModel, adminFallback?.videoModel),
+    capabilityDefaults: parseCapabilitySelections(
+      userPref?.capabilityDefaults ?? adminFallback?.capabilityDefaults,
+    ),
   }
 }
 
