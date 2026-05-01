@@ -327,9 +327,17 @@ export async function resolveImageSourceFromGeneration(
     callerOptionsRest[key] = value
   }
 
+  // Spread order matters here. capabilityOptions auto-fills missing
+  // required fields with the FIRST allowed value (e.g. aspectRatio → '16:9'
+  // for Tencent VOD GEM-3.1), so it must come first / lowest priority.
+  // callerOptionsRest carries the panel handler's project.videoRatio
+  // (e.g. '9:16' for vertical projects) — we want that to WIN against
+  // the auto-fill default. Earlier order had it the other way around,
+  // and the user reported 「一開始已經選擇9:16, 為什麼現在分鏡這邊都是16:9」
+  // because every panel was silently downgraded to the model default.
   const generateOptions: Parameters<typeof generateImage>[3] = {
-    ...callerOptionsRest,
     ...capabilityOptions,
+    ...callerOptionsRest,
     ...(mergedReferenceImages.length > 0 ? { referenceImages: mergedReferenceImages } : {}),
     ...(finalNegativePrompt !== null ? { negativePrompt: finalNegativePrompt } : {}),
   }

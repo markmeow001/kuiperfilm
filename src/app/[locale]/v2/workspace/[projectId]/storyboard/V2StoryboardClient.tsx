@@ -218,6 +218,37 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       { onError: (err) => alert(err instanceof Error ? err.message : '儲存對話失敗') },
     )
   }
+  // Track per-panel video gen in-flight so the user sees a clear
+  // "視頻生成中…" indicator after clicking the button. Without this the
+  // mutation submits silently and the user doesn't know whether the
+  // click registered (worker takes 30-60s before videoUrl appears).
+  const [videoInFlight, setVideoInFlight] = useState<Set<string>>(new Set())
+
+  // Poll storyboards while any panel video is in flight so the new
+  // videoUrl surfaces and the indicator clears automatically.
+  useEffect(() => {
+    if (videoInFlight.size === 0) return
+    const interval = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId || '') })
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [videoInFlight.size, queryClient, currentEpisodeId])
+
+  // Sync against panel.videoUrl arriving — drop panels that completed
+  // from the in-flight set so the indicator clears.
+  useEffect(() => {
+    if (videoInFlight.size === 0) return
+    const next = new Set(videoInFlight)
+    let changed = false
+    for (const p of allPanels) {
+      if (videoInFlight.has(p.id) && p.videoUrl) {
+        next.delete(p.id)
+        changed = true
+      }
+    }
+    if (changed) setVideoInFlight(next)
+  }, [allPanels, videoInFlight])
+
   function handleGenerateVideo() {
     if (!selected) return
     const videoModel = project?.novelPromotionData?.videoModel
@@ -225,16 +256,27 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       alert('專案還沒選 video model — 請到首頁設定中選擇 Kling 系列模型')
       return
     }
+    const panelIdAtSubmit = selected.id
     generateVideo.mutate(
       {
-        panelId: selected.id,
+        panelId: panelIdAtSubmit,
         storyboardId: selected.storyboardId ?? '',
         panelIndex: selected.panelIndex ?? 0,
         videoModel,
       },
-      { onError: (err) => alert(err instanceof Error ? err.message : '提交視頻生成失敗') },
+      {
+        onSuccess: () => {
+          setVideoInFlight((prev) => {
+            const next = new Set(prev)
+            next.add(panelIdAtSubmit)
+            return next
+          })
+        },
+        onError: (err) => alert(err instanceof Error ? err.message : '提交視頻生成失敗'),
+      },
     )
   }
+  const isCurrentPanelVideoInFlight = !!selected && videoInFlight.has(selected.id)
 
   // Distinct group ids in the order panels appear, for stable colour cycling.
   const orderedGroupIds = useMemo(() => {
@@ -689,6 +731,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 <div className="mt-1 font-mono text-[10px] tracking-wider text-amber-500">
                   ✓ 視頻已生成
                 </div>
+              ) : isCurrentPanelVideoInFlight ? (
+                <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-amber-400">
+                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+                  視頻生成中… 30-60 秒,完成後自動更新
+                </div>
               ) : selected?.imageUrl ? (
                 <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">
                   圖已生成,視頻待跑
@@ -714,17 +761,25 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled={!selected || !selected.imageUrl || generateVideo.isPending}
+              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
               onClick={handleGenerateVideo}
               title={
                 !selected?.imageUrl
                   ? '需要先有靜態圖才能生影片 — 請先點「重新生成圖」'
-                  : '把這個鏡頭的圖送 video model(專案預設 Kling)生成 5 秒影片'
+                  : isCurrentPanelVideoInFlight
+                    ? '視頻生成中,請等 worker 完成(~60s)'
+                    : '把這個鏡頭的圖送 video model(專案預設 Kling)生成 5 秒影片'
               }
               className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2.5 font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="play" className="h-3.5 w-3.5" />
-              {generateVideo.isPending ? '提交中…' : selected?.videoUrl ? '↻ 重生視頻' : '生成視頻'}
+              {generateVideo.isPending
+                ? '提交中…'
+                : isCurrentPanelVideoInFlight
+                  ? '生成中…'
+                  : selected?.videoUrl
+                    ? '↻ 重生視頻'
+                    : '生成視頻'}
             </button>
           </div>
           {regenPanel.isError ? (
