@@ -27,10 +27,17 @@ import {
   useRegenerateLocationGroup,
   useUploadProjectLocationImage,
 } from '@/lib/query/mutations/location-image-mutations'
-import { useUploadProjectCharacterImage } from '@/lib/query/mutations/character-base-mutations'
-import { useConfirmProjectCharacterProfile } from '@/lib/query/mutations/character-profile-mutations'
+import {
+  useUploadProjectCharacterImage,
+  useDeleteProjectCharacter,
+} from '@/lib/query/mutations/character-base-mutations'
+import {
+  useConfirmProjectCharacterProfile,
+  useUpdateProjectCharacterIntroduction,
+} from '@/lib/query/mutations/character-profile-mutations'
 import { useUpdateProjectAppearanceDescription } from '@/lib/query/mutations/character-image-ops-mutations'
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
+import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
@@ -118,6 +125,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const uploadLocImage = useUploadProjectLocationImage(projectId)
   const confirmProfile = useConfirmProjectCharacterProfile(projectId)
   const updateAppearanceDesc = useUpdateProjectAppearanceDescription(projectId)
+  const updateCharIntro = useUpdateProjectCharacterIntroduction(projectId)
+  const deleteCharacter = useDeleteProjectCharacter(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
   const [batchGenInFlight, setBatchGenInFlight] = useState<'characters' | 'locations' | null>(null)
@@ -133,6 +142,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const [zoomImage, setZoomImage] = useState<string | null>(null)
   const [editingDescId, setEditingDescId] = useState<string | null>(null) // appearanceId
   const [editingDescDraft, setEditingDescDraft] = useState<string>('')
+  const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null)
 
   function markRegenStart(targetId: string) {
     setRegenInFlight((prev) => {
@@ -239,6 +249,45 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   function handleRegenLoc(l: LocationLike) {
     markRegenStart(l.id)
     regenLoc.mutate({ locationId: l.id, imageIndex: 0 })
+  }
+
+  function handleOpenCharacterModal(c: CharacterLike) {
+    setEditingCharacterId(c.id)
+  }
+
+  function handleCloseCharacterModal() {
+    setEditingCharacterId(null)
+  }
+
+  function handleSaveIntroduction(characterId: string, introduction: string) {
+    updateCharIntro.mutate(
+      { characterId, introduction },
+      {
+        onError: (err) => {
+          alert(`儲存角色描述失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
+  }
+
+  function handleSaveVisualPromptFromModal(characterId: string, appearanceId: string, visualPrompt: string) {
+    updateAppearanceDesc.mutate(
+      { characterId, appearanceId, description: visualPrompt, descriptionIndex: 0 },
+      {
+        onError: (err) => {
+          alert(`儲存外觀提示詞失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
+  }
+
+  function handleDeleteCharacterFromModal(characterId: string) {
+    deleteCharacter.mutate(characterId, {
+      onSuccess: () => setEditingCharacterId(null),
+      onError: (err) => {
+        alert(`刪除失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+      },
+    })
   }
 
   function handleEditDescStart(c: CharacterLike) {
@@ -522,6 +571,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               onUpload: (file) => handleUploadChar(c, file),
               isUploading: uploadInFlight.has(apId),
               onZoom: (url) => setZoomImage(url),
+              onOpenEditor: () => handleOpenCharacterModal(c),
               onEditDescription: () => handleEditDescStart(c),
               isEditingDescription: editingDescId === apId && apId.length > 0,
               descriptionDraft: editingDescId === apId ? editingDescDraft : '',
@@ -557,6 +607,39 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           <p className="mt-2 font-mono text-[10px] tracking-wider text-stone-600">PROP_ASSETS · COMING SOON</p>
         </div>
       )}
+
+      {editingCharacterId ? (() => {
+        const c = characters.find((ch) => ch.id === editingCharacterId)
+        if (!c) return null
+        const ap = c.appearances?.[0]
+        const apId = ap?.id ?? ''
+        return (
+          <V2CharacterEditModal
+            character={c}
+            imageUrl={pickCharacterImage(c)}
+            onClose={handleCloseCharacterModal}
+            onZoomImage={(url) => setZoomImage(url)}
+            onRegenerate={() => handleRegenChar(c)}
+            onUploadFile={(file) => handleUploadChar(c, file)}
+            isRegenerating={regenInFlight.has(apId)}
+            isUploading={uploadInFlight.has(apId)}
+            onSaveIntroduction={(intro) => handleSaveIntroduction(c.id, intro)}
+            onSaveVisualPrompt={(prompt) => {
+              if (!apId) {
+                alert('此角色還沒有 appearance — 請先點重新生成建立首張')
+                return
+              }
+              handleSaveVisualPromptFromModal(c.id, apId, prompt)
+            }}
+            isSavingIntroduction={updateCharIntro.isPending}
+            isSavingVisualPrompt={updateAppearanceDesc.isPending}
+            onToggleLock={() => handleConfirmProfile(c)}
+            isLocking={confirmProfile.isPending}
+            onDelete={() => handleDeleteCharacterFromModal(c.id)}
+            isDeleting={deleteCharacter.isPending}
+          />
+        )
+      })() : null}
 
       {zoomImage ? (
         <button
@@ -601,6 +684,8 @@ interface SubjectItem {
   onUpload?: (file: File) => void
   isUploading?: boolean
   onZoom?: (url: string) => void
+  // Open the full edit modal (character cards only).
+  onOpenEditor?: () => void
   // Visual-prompt editor (character cards only).
   onEditDescription?: () => void
   isEditingDescription?: boolean
@@ -671,18 +756,38 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
           </div>
           <div className="px-4 py-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="truncate font-serif-cn text-base text-stone-100">{item.name}</div>
-              {item.onEditDescription && !item.isEditingDescription ? (
-                <button
-                  type="button"
-                  onClick={item.onEditDescription}
-                  className="flex flex-shrink-0 items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
-                  title="編輯外觀提示詞 — 下次「重新生成」會用此 prompt"
-                >
-                  <AppIcon name="edit" className="h-3 w-3" />
-                  改外觀
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={item.onOpenEditor}
+                disabled={!item.onOpenEditor}
+                title={item.onOpenEditor ? '點擊編輯角色完整檔案' : undefined}
+                className="truncate text-left font-serif-cn text-base text-stone-100 transition-colors enabled:hover:text-amber-300 disabled:cursor-default"
+              >
+                {item.name}
+              </button>
+              <div className="flex items-center gap-2">
+                {item.onOpenEditor ? (
+                  <button
+                    type="button"
+                    onClick={item.onOpenEditor}
+                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+                    title="開啟完整編輯器 — 改名/描述/外觀提示詞/刪除"
+                  >
+                    <AppIcon name="edit" className="h-3 w-3" />
+                    編輯
+                  </button>
+                ) : null}
+                {item.onEditDescription && !item.isEditingDescription ? (
+                  <button
+                    type="button"
+                    onClick={item.onEditDescription}
+                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+                    title="只快速改外觀提示詞"
+                  >
+                    改外觀
+                  </button>
+                ) : null}
+              </div>
             </div>
             {item.description ? (
               <div className="mt-1 line-clamp-2 font-body text-xs leading-relaxed text-stone-400">
