@@ -77,7 +77,10 @@ Output format (JSON only):
     {
       "name": "Existing Canonical Name",
       "updated_introduction": "Updated intro with newly discovered mapping",
-      "updated_aliases": ["new alias 1", "new alias 2"]
+      "updated_aliases": ["new alias 1", "new alias 2"],
+      "visual_description": "Full visual prompt (same 80-150 word format as new_characters, era-grounded, no period-mismatch). Always emit this field even for existing characters; the worker only fills it when the character has no existing visual prompt and never overwrites user edits.",
+      "gender": "male/female/other",
+      "era_period": "modern/fantasy/historical/sci-fi"
     }
   ]
 }
@@ -86,4 +89,5 @@ Strict constraints:
 1. JSON only.
 2. If no valid character is found, return empty arrays.
 3. Keep all strings in English.
-4. visual_description is required and must stay consistent with era_period (no historical attire in modern stories, no modern attire in historical stories).
+4. visual_description is required for both new_characters AND updated_characters, and must stay consistent with era_period (no historical attire in modern stories, no modern attire in historical stories).
+5. Always emit visual_description on updated_characters even when the character looks complete. The worker fills it only when the character's existing visual prompt is empty (rescue path for legacy data); user edits are preserved.

@@ -2,16 +2,17 @@ import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { executeAiTextStep } from '@/lib/ai-runtime'
 import { withInternalLLMStreamCallbacks } from '@/lib/llm-observe/internal-stream-context'
-import { removeLocationPromptSuffix } from '@/lib/constants'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
-import type { TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
-import { readText, toStringArray, nameMatchesWithAlias, parseJsonResponse } from './analyze-novel-utils'
+import { readText, parseJsonResponse } from './analyze-novel-utils'
+import { processNewCharacters } from './analyze-novel-create-characters'
+import { processNewLocations } from './analyze-novel-create-locations'
+import { processUpdatedCharacters } from './analyze-novel-update-characters'
 import { submitTask } from '@/lib/task/submitter'
-import { TASK_TYPE } from '@/lib/task/types'
+import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
@@ -199,129 +200,29 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
   })
   await assertTaskActive(job, 'analyze_novel_persist')
 
-  const createdCharacters: Array<{ id: string }> = []
-  for (const item of parsedCharacters) {
-    const name = readText(item.name).trim()
-    if (!name) continue
+  const createdCharacters = await processNewCharacters({
+    parsedCharacters,
+    existingCharacters: novelData.characters || [],
+    novelPromotionProjectId: novelData.id,
+  })
 
-    const existsInLibrary = (novelData.characters || []).some(
-      (character) => nameMatchesWithAlias(character.name, name),
-    )
-    if (existsInLibrary) continue
+  // Update + backfill existing characters (legacy rescue path).
+  // See processUpdatedCharacters for full rationale.
+  const parsedUpdated = Array.isArray(charactersData.updated_characters)
+    ? (charactersData.updated_characters as Array<Record<string, unknown>>)
+    : []
+  const updateResult = await processUpdatedCharacters({
+    job,
+    parsedUpdated,
+    existingCharacters: novelData.characters || [],
+    projectId,
+  })
 
-    const profileData = {
-      role_level: item.role_level,
-      archetype: item.archetype,
-      personality_tags: toStringArray(item.personality_tags),
-      era_period: item.era_period,
-      social_class: item.social_class,
-      occupation: item.occupation,
-      costume_tier: item.costume_tier,
-      suggested_colors: toStringArray(item.suggested_colors),
-      primary_identifier: item.primary_identifier,
-      visual_keywords: toStringArray(item.visual_keywords),
-      gender: item.gender,
-      age_range: item.age_range,
-    }
-
-    const introduction = readText(item.introduction).trim() || null
-    const created = await prisma.novelPromotionCharacter.create({
-      data: {
-        novelPromotionProjectId: novelData.id,
-        name,
-        aliases: JSON.stringify(toStringArray(item.aliases)),
-        profileData: JSON.stringify(profileData),
-        profileConfirmed: false,
-        // introduction is the human-readable role/relationship summary
-        // shown on the SubjectsPage card. The prompt produces it but the
-        // legacy handler dropped it on the floor; downstream consumers
-        // (V2 cards, edit modal) had no source for the role description.
-        introduction,
-      },
-      select: { id: true },
-    })
-
-    // Seed the primary CharacterAppearance row so downstream consumers
-    // (regenerate-group / upload-asset-image / SubjectsPage cards) have
-    // an appearanceId to bind to. The image is generated lazily when the
-    // user clicks 重新生成 / 一鍵生圖. expected_appearances from the LLM
-    // may carry additional change_reason entries; we honour the first
-    // one here and leave secondary appearances for the multi-appearance
-    // workflow (saved as project_kuiperai_multi_appearance_plan memory).
-    const expectedAppearances = Array.isArray(item.expected_appearances)
-      ? (item.expected_appearances as Array<{ id?: number; change_reason?: string }>)
-      : []
-    const initialChangeReason = readText(expectedAppearances[0]?.change_reason).trim() || '初始形象'
-    // visual_description is the LLM-authored, era-grounded image prompt for
-    // the initial appearance. Without it, the image worker fed an empty
-    // userPrompt to the generator and got generic Tencent VOD output (a
-    // contemporary drama could surface battlefield armor, robes, etc.).
-    // Keep both `description` (singular, used as fallback prompt source)
-    // and `descriptions` (JSON array, the canonical multi-prompt store)
-    // in sync so either consumer works.
-    const visualDescription = readText(item.visual_description).trim()
-    await prisma.characterAppearance.create({
-      data: {
-        characterId: created.id,
-        appearanceIndex: 0, // PRIMARY_APPEARANCE_INDEX
-        changeReason: initialChangeReason,
-        description: visualDescription || null,
-        descriptions: visualDescription ? JSON.stringify([visualDescription]) : null,
-        // image-urls contract requires JSON-strings in DB for both
-        // imageUrls AND previousImageUrls — null on either field breaks
-        // attachMediaFieldsToProject and cascades a 500 to the project
-        // /data endpoint, blanking the v2 home name + step status.
-        imageUrls: '[]',
-        previousImageUrls: '[]',
-      },
-      select: { id: true },
-    })
-    createdCharacters.push(created)
-  }
-
-  const createdLocations: Array<{ id: string }> = []
-  for (const item of parsedLocations) {
-    const name = readText(item.name).trim()
-    if (!name) continue
-
-    const descriptionsRaw = Array.isArray(item.descriptions)
-      ? (item.descriptions as unknown[])
-      : (readText(item.description) ? [readText(item.description)] : [])
-    const descriptions = descriptionsRaw
-      .map((value) => readText(value))
-      .filter(Boolean)
-    const firstDescription = descriptions[0] || ''
-    const invalidKeywords = ['幻想', '抽象', '无明确', '空间锚点', '未说明', '不明确']
-    const isInvalid = invalidKeywords.some((keyword) => name.includes(keyword) || firstDescription.includes(keyword))
-    if (isInvalid) continue
-
-    const existsInLibrary = (novelData.locations || []).some(
-      (location) => nameMatchesWithAlias(location.name, name),
-    )
-    if (existsInLibrary) continue
-
-    const created = await prisma.novelPromotionLocation.create({
-      data: {
-        novelPromotionProjectId: novelData.id,
-        name,
-        summary: readText(item.summary) || null,
-      },
-      select: { id: true },
-    })
-
-    const cleanDescriptions = descriptions.map((value) => removeLocationPromptSuffix(value || ''))
-    for (let i = 0; i < cleanDescriptions.length; i += 1) {
-      await prisma.locationImage.create({
-        data: {
-          locationId: created.id,
-          imageIndex: i,
-          description: cleanDescriptions[i],
-        },
-      })
-    }
-
-    createdLocations.push(created)
-  }
+  const createdLocations = await processNewLocations({
+    parsedLocations,
+    existingLocations: novelData.locations || [],
+    novelPromotionProjectId: novelData.id,
+  })
 
   // Phase 11.5: artStylePrompt 已 deprecated（被 styleProfile 三栏取代）。
   // 此处不再写入 artStylePrompt — 风格统一由 PATCH /api/projects/{id}/style-profile 管理。

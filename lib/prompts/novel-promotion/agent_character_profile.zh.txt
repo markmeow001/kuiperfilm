@@ -208,7 +208,10 @@ D级（群众演员）：
     {
       "name": "已有角色名（必须与资产库中的名字完全一致）",
       "updated_introduction": "更新后的角色介绍（补充新发现的关系、称呼、真名等）",
-      "updated_aliases": ["新发现的别名1", "新发现的别名2"]
+      "updated_aliases": ["新发现的别名1", "新发现的别名2"],
+      "visual_description": "完整的外观提示词（与 new_characters 同格式，80-150 字，紧扣 era_period/social_class/occupation/costume_tier/suggested_colors/visual_keywords/primary_identifier，时装剧禁古装/盔甲/战场装）。即便是已有角色也输出此字段；worker 仅在角色尚无外观提示词时填入，已有提示词不会被覆盖。",
+      "gender": "男/女",
+      "era_period": "现代都市/古代唐朝/未来科幻"
     }
   ]
 }
@@ -227,6 +230,8 @@ D级（群众演员）：
    → 更新双方的 introduction 添加关系信息
 
 4. **不要重复创建**：如果发现"林墨"其实就是已有的"我"，不要创建新角色，而是更新"我"的介绍和别名
+
+5. **总是回填 visual_description**：updated_characters 中**每个**条目都必须输出 visual_description，即使你认为该角色已经被分析过。理由：原始分析可能在 prompt 还不要求 visual_description 时就完成，导致 DB 里没有外观提示词、生图模型只能瞎猜（结果错性别/错时代）。worker 端只会在该角色「目前外观提示词为空」时回填，所以你重复输出不会覆盖用户已编辑的内容。
 
 【严格要求】
 1. 只返回JSON，不得有其他文字
