@@ -43,6 +43,34 @@ interface BPathProjectData {
   characters?: CharacterForBPath[]
 }
 
+interface BPathDialogueLine {
+  speaker: string
+  content: string
+}
+
+/**
+ * Build the combined `镜头N:` prompt that Kling Omni 3 ingests, including
+ * matched dialogue lines so generate_audio:true dubs the script's actual
+ * dialogue (otherwise the model invents talking sounds). Exposed for unit
+ * tests; the runtime path calls it from runMultiShotBPath below.
+ */
+export function buildBPathCombinedPrompt(
+  panels: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt'>[],
+  dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
+): string {
+  return panels
+    .map((panel, i) => {
+      const visual = (panel.videoPrompt || panel.description || '').trim()
+      const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
+        .map((d) => `${d.speaker}说："${d.content}"`)
+        .join(' ')
+      const body = dialogues ? `${visual}\n${dialogues}`.trim() : visual
+      return `镜头${i + 1}: ${body}`
+    })
+    .filter((line) => line.trim().length > `镜头N: `.length)
+    .join('\n\n')
+}
+
 /**
  * Tencent VOD Kling-Omni multi-shot path.
  *
@@ -130,15 +158,36 @@ export async function runMultiShotBPath(params: {
     .slice(0, 3)
     .map((s) => ({ name: s.name, imageUrls: [s.imageUrl] }))
 
+  // Pull dialogue lines that script_to_storyboard matched to any of the
+  // panels we're sending. Without this Kling Omni's generate_audio:true
+  // produces a generic ambient/talking soundtrack instead of the script's
+  // dialogue — the model has no idea what was supposed to be said. The
+  // 「角色说："对白"」 syntax is what Kling 3.0 Omni's prompt parser uses
+  // to drive lip-sync + dub when generate_audio is on (matches the
+  // examples in agent_storyboard_plan.zh.txt's 对话场景 section).
+  const panelIds = validPanels.map((p) => p.id)
+  const voiceLines = panelIds.length > 0
+    ? await prisma.novelPromotionVoiceLine.findMany({
+        where: { matchedPanelId: { in: panelIds } },
+        orderBy: [{ matchedPanelIndex: 'asc' }, { lineIndex: 'asc' }],
+        select: { matchedPanelId: true, speaker: true, content: true },
+      })
+    : []
+  const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
+  for (const line of voiceLines) {
+    if (!line.matchedPanelId) continue
+    const content = (line.content ?? '').trim()
+    if (!content) continue
+    const speaker = (line.speaker ?? '').trim() || '旁白'
+    const arr = dialogueByPanel.get(line.matchedPanelId) ?? []
+    arr.push({ speaker, content })
+    dialogueByPanel.set(line.matchedPanelId, arr)
+  }
+
   // Numbered combined prompt. Kling 3.0 Omni intelligence mode parses
-  // 镜头N: structure natively for shot ordering.
-  const combinedPrompt = validPanels
-    .map((panel, i) => {
-      const text = (panel.videoPrompt || panel.description || '').trim()
-      return `镜头${i + 1}: ${text}`
-    })
-    .filter((line) => line.trim().length > `镜头N: `.length)
-    .join('\n\n')
+  // 镜头N: structure natively for shot ordering and dubs dialogue from
+  // 「角色说："对白"」 phrasing when generate_audio is true.
+  const combinedPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel)
 
   if (!combinedPrompt.trim()) {
     throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
@@ -151,6 +200,7 @@ export async function runMultiShotBPath(params: {
       shotCount: validPanels.length,
       subjectCount: subjectInfos.length,
       promptLength: combinedPrompt.length,
+      dialogueLineCount: voiceLines.length,
     },
   })
 
