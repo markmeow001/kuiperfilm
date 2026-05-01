@@ -563,17 +563,55 @@
 
 **已 deploy build 13/14/15/16/17(rebuild 12.x 系列)**,droplet `art.kuiperfilmailab.com` 訪問 dashboard 點 project 預設進新 UI。
 
+### 🚦 Active session lock zones(parallel agents,2026-04-30 17:00+)
+
+兩個 Claude session 同時在 `feature/phase-11`。**動工前先看這段、不要踩另一個的檔案**。
+
+**Session A — Tencent VOD(EpisodeTabBar 整合)**:
+- 已宣告 commit `cfb2e3a`,⏳ 12.x.x v2 EpisodeTabBar(見下方)
+- 🔒 Lock zone(其他 session 別動):
+  - `src/components/v2/V2WorkspaceShell.tsx`(掛 EpisodeTabBar)
+  - `src/app/[locale]/v2/workspace/[projectId]/V2*Client.tsx` 的 episode 解析段落
+    (`firstEpisodeId = episodes[0]?.id` → `useCurrentEpisode` URL hook)
+  - 新增 hooks(`useCurrentEpisode` 等)在 `src/app/[locale]/v2/workspace/[projectId]/hooks/`
+- 🟢 自由動:其他所有 v2 client 的非-episode 段落(prompt builder / export / lock chip / etc)、
+  backend / schema / API routes / workers / mutations / prompt files 都不在 lock zone
+
+**Session B — backend / schema(本 session,Anthropic CLI)**:
+- 完成的 commits(2026-04-30):`9102ee1` `e315457` `f65e8d3` `b8c6647` `16902d7`
+  `b61a653` `276fb2a`
+- 接下來工作(`feature/phase-11`,backend-first,**會避開 v2 client TSX**):
+  1. 多人帳號 data-isolation audit(API auth layer 純後端)
+  2. Hunyuan 文本 LLM provider 接入(`src/lib/ai-runtime/`、`src/lib/api-config.ts`)
+  3. Phase 11.4 角色三視圖 schema + analyze prompt + worker handler(V2 UI tab 等
+     Session A 的 EpisodeTabBar 落地後再加)
+  4. Q-004 safe-rewrite chatCompletion guard 修
+- 🔒 Lock zone:
+  - `prisma/schema.prisma`(Session B 改 schema 時 Session A 別動)
+  - `src/lib/workers/handlers/*-stitch-*` `*auto-group*`(Session B 已建)
+  - `lib/prompts/novel-promotion/auto_group_multi_shot.*`
+- 🟢 自由動:v2 client TSX(Session A lock zone 已涵蓋的 episode 段除外)
+
+**衝突解析準則**:
+- 兩邊都改同檔案時,**後 push 的人 rebase 並手動 merge**,不要 force push 蓋掉
+- schema.prisma 變動先在 master plan 留 commit hash,另一邊 pull 後 `npx prisma generate`
+- 跑 `git fetch origin && git log --oneline origin/feature/phase-11 -5` 確認對方最新狀態再開工
+
+---
+
 **已知遺漏 / Phase 12.x.x 跟進**(均不阻塞 Phase 12 收工):
 - ⏳ 12.x.x v2 EpisodeTabBar 整合 — v2 workspace 每個 page 目前只認 `episodes[0]`(V2ScriptClient.tsx:76),沒有切集 / 新建集 UI。複用既有 `src/components/ui/EpisodeTabBar.tsx`(Phase 11.1 寫的 274 行,已支援 tab/新建/重命名/刪除/鍵盤導航),掛在 V2WorkspaceShell 上,當前 episode 走 URL `?episode=<id>`。**正在做(Tencent VOD session,2026-04-30)** — 預計 1-2 commits:(1) Shell 掛 tab bar + URL state hook + ScriptPage 切換 (2) Subjects/Storyboard/Voice/Final 同樣切換。
-- 12.5.3 LLM 自動依語意切 multi-shot group(目前是 client 側機械每 5 個一組)+ schema 加 panel.multiShotGroupId
+- ✅ 12.5.3 LLM 自動依語意切 multi-shot group + schema 加 `panel.multiShotGroupId / multiShotGroupOrder`(commit `276fb2a`,Session B,2026-04-30)
 - 12.6.x voice tuning slider 接 panel-level config + 套用至全部分鏡
-- 12.7.x FFmpeg 全集合成 + 匯出 mp4
+- ✅ 12.7.x FFmpeg 全集合成 + 匯出 mp4 + schema `episode.stitchedVideoUrl / stitchStatus / stitchedAt`(commit `b61a653`,Session B,2026-04-30)
 - 12.5.x video panel 「首尾幀生視頻」 CTA enable
 - 12.5.x prompt builder chips 接 capabilityOverrides PATCH
 - ✅ 12.x.x SubjectsPage 「鎖定」chip 接 character_profile_confirm(commit `e315457`,2026-04-30)
 - ✅ 12.x.x VoicePage audioRef 修正(避免重疊播放 + 換頁不停)(commit `e315457`,2026-04-30)
 - ✅ 12.x.x FinalPage 查看劇本 button → /v2/.../script Link(commit `e315457`,2026-04-30)
 - ✅ 12.x.x v2 client `episodes` path 修正(改讀 `novelPromotionData.episodes`)(commit `9102ee1`,2026-04-30)
+- ✅ 12.x.x v2 ScriptPage auto-create episode + novelText 改寫進 episode 行 + textarea load 從 episode + 已儲存指示(commits `f65e8d3` `b8c6647` `16902d7`,Session B,2026-04-30)
+- ✅ 12.x.x V2HomeClient script-step 偵測改讀 episode.novelText(commit `b61a653`,Session B,2026-04-30)
 
 (Phase 12 原始規劃保留下方供查閱 — 以下為當初 scope)
 
