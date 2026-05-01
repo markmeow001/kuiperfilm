@@ -332,6 +332,8 @@ model NovelPromotionProject {
   characters      NovelPromotionCharacter[]
   episodes        NovelPromotionEpisode[]
   locations       NovelPromotionLocation[]
+  // Phase 11.3 — props as first-class assets
+  props           NovelPromotionProp[]
   project         Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("novel_promotion_projects")
@@ -490,6 +492,8 @@ model User {
   globalCharacters   GlobalCharacter[]
   globalLocations    GlobalLocation[]
   globalVoices       GlobalVoice[]
+  // Phase 11.3 — props as first-class assets (knife / letter / ring etc).
+  globalProps        GlobalProp[]    @relation("UserGlobalProps")
   tasks              Task[]
   taskEvents         TaskEvent[]
   graphRuns          GraphRun[]
@@ -873,6 +877,8 @@ model GlobalAssetFolder {
   characters GlobalCharacter[]
   locations  GlobalLocation[]
   voices     GlobalVoice[]
+  // Phase 11.3 — props as first-class assets
+  props      GlobalProp[]      @relation("GlobalAssetFolderProps")
 
   @@index([userId])
   @@map("global_asset_folders")
@@ -982,6 +988,57 @@ model GlobalLocationImage {
   @@map("global_location_images")
 }
 
+// Phase 11.3 — Props as first-class assets (knife / letter / ring / car / pet etc).
+// Same shape as Locations: per-project Prop with optional reference image,
+// plus a GlobalProp asset-hub variant that can be imported into a project.
+// Different from characters: a prop has at most ONE primary image + a small
+// gallery (via images relation, mirrors GlobalLocationImage). No appearance
+// "outfit changes" because most props don't visually mutate over an episode.
+model NovelPromotionProp {
+  id                      String                @id @default(uuid())
+  novelPromotionProjectId String
+  name                    String
+  summary                 String?               @db.Text // brief description (purpose / who carries it)
+  imageUrl                String?               @db.Text
+  imageMediaId            String?
+  imageMedia              MediaObject?          @relation("NovelPromotionPropImageMedia", fields: [imageMediaId], references: [id], onDelete: SetNull)
+  // imageHistory: JSON array of historical generated images for "undo last regen"
+  imageHistory            String?               @db.Text
+  // sourceGlobalPropId: when imported from /asset-hub
+  sourceGlobalPropId      String?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @default(now()) @updatedAt
+  novelPromotionProject   NovelPromotionProject @relation(fields: [novelPromotionProjectId], references: [id], onDelete: Cascade)
+
+  @@index([novelPromotionProjectId])
+  @@index([imageMediaId])
+  @@map("novel_promotion_props")
+}
+
+// Asset-hub global prop — same shape as GlobalLocation (without images junction
+// for the demo MVP; if a prop needs multiple angles later we add GlobalPropImage
+// like GlobalLocationImage).
+model GlobalProp {
+  id           String             @id @default(uuid())
+  userId       String
+  folderId     String?
+  name         String
+  summary      String?            @db.Text
+  imageUrl     String?            @db.Text
+  imageMediaId String?
+  imageMedia   MediaObject?       @relation("GlobalPropImageMedia", fields: [imageMediaId], references: [id], onDelete: SetNull)
+  imageHistory String?            @db.Text
+  createdAt    DateTime           @default(now())
+  updatedAt   DateTime            @updatedAt
+  user         User               @relation("UserGlobalProps", fields: [userId], references: [id], onDelete: Cascade)
+  folder       GlobalAssetFolder? @relation("GlobalAssetFolderProps", fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([folderId])
+  @@index([imageMediaId])
+  @@map("global_props")
+}
+
 // 全局音色库
 model GlobalVoice {
   id             String   @id @default(uuid())
@@ -1046,6 +1103,9 @@ model MediaObject {
   globalLocationImageImages             GlobalLocationImage[]       @relation("GlobalLocationImageMedia")
   globalLocationImagePreviousImages     GlobalLocationImage[]       @relation("GlobalLocationImagePreviousImageMedia")
   globalVoiceCustomVoices               GlobalVoice[]               @relation("GlobalVoiceCustomVoiceMedia")
+  // Phase 11.3 — props
+  novelPromotionPropImages              NovelPromotionProp[]        @relation("NovelPromotionPropImageMedia")
+  globalPropImages                      GlobalProp[]                @relation("GlobalPropImageMedia")
 
   @@index([createdAt])
   @@index([uploadedByUserId])
