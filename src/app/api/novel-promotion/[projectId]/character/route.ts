@@ -24,20 +24,40 @@ export const PATCH = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json()
-  const { characterId, name, introduction } = body
+  const {
+    characterId,
+    name,
+    introduction,
+    voiceId,
+    voiceType,
+    customVoiceUrl,
+  } = body
 
   if (!characterId) {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  if (!name && introduction === undefined) {
+  // P0 #2 — voice binding from v2 VoicePage. The "voice" payload is
+  // optional and orthogonal to name/introduction; either group is a
+  // valid update.
+  const isVoiceUpdate = voiceId !== undefined || voiceType !== undefined || customVoiceUrl !== undefined
+  if (!name && introduction === undefined && !isVoiceUpdate) {
     throw new ApiError('INVALID_PARAMS')
   }
 
   // 构建更新数据
-  const updateData: { name?: string; introduction?: string } = {}
+  const updateData: {
+    name?: string
+    introduction?: string
+    voiceId?: string | null
+    voiceType?: string | null
+    customVoiceUrl?: string | null
+  } = {}
   if (name) updateData.name = name.trim()
   if (introduction !== undefined) updateData.introduction = introduction.trim()
+  if (voiceId !== undefined) updateData.voiceId = typeof voiceId === 'string' && voiceId ? voiceId : null
+  if (voiceType !== undefined) updateData.voiceType = typeof voiceType === 'string' && voiceType ? voiceType : null
+  if (customVoiceUrl !== undefined) updateData.customVoiceUrl = typeof customVoiceUrl === 'string' && customVoiceUrl ? customVoiceUrl : null
 
   // ⚠️ Multi-user isolation: ensure the character belongs to this project.
   const owned = await prisma.novelPromotionCharacter.findFirst({
