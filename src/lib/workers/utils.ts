@@ -524,11 +524,19 @@ export async function resolveVideoSourceFromGeneration(
     delete providerRequestOptions.negativePrompt
   }
 
+  // Spread order: capabilityOptions auto-fills missing required fields
+  // with the FIRST allowed value (e.g. aspectRatio → '16:9' for Kling)
+  // so it must spread FIRST. providerRequestOptions carries the caller's
+  // explicit aspectRatio: project.videoRatio (often '9:16' for vertical
+  // short-drama), which we want to win against the auto-fill default.
+  // Same bug + same fix as resolveImageSourceFromGeneration further up
+  // — user reported video staying 16:9 despite project being 9:16 even
+  // after the image-side fix landed.
   const result = await withLogContext(
     { projectId: job.data.projectId, taskId: job.data.taskId, userId: params.userId },
     () => generateVideo(params.userId, params.modelId, params.imageUrl, {
-      ...providerRequestOptions,
       ...providerCapabilityOptions,
+      ...providerRequestOptions,
     }),
   )
   if (!result.success) {
