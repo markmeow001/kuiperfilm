@@ -18,6 +18,27 @@ import {
   pickFirstString,
 } from './image-task-handler-shared'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
+import { detectScriptEthnicityHint } from './analyze-novel-utils'
+
+// Strings that indicate the description ALREADY specifies ethnicity. If
+// any of these appears we skip the runtime ethnicity prefix and trust
+// the existing prompt. Covers Chinese (亞洲/拉丁/歐美/黑人/混血/白人/etc),
+// English ethnicity descriptors, and a few common variants.
+const ETHNICITY_KEYWORDS = [
+  '亚洲', '亞洲', '华人', '華人', '东亚', '東亞',
+  '拉丁', 'hispanic', 'latino', 'latina',
+  '欧美', '歐美', '白人', 'caucasian', 'european',
+  '黑人', 'african',
+  '日本人', 'japanese', '韩国', '韓國', 'korean',
+  '混血', 'mixed-race', 'mixed race', 'biracial',
+  '中东', '中東', 'middle eastern', 'arab',
+  '南亚', '南亞', 'south asian', 'indian',
+] as const
+
+function descriptionHasEthnicity(description: string): boolean {
+  const lower = description.toLowerCase()
+  return ETHNICITY_KEYWORDS.some((kw) => lower.includes(kw))
+}
 
 interface CharacterAppearanceRecord {
   id: string
@@ -138,10 +159,44 @@ export async function handleCharacterImageTask(job: Job<TaskJobData>) {
   // userPrompt + raw styleProfile.
   const styleProfile = await loadStyleProfile(prisma, projectId)
 
+  // Runtime ethnicity backfill: if the stored visual_description was
+  // written before the era / dialogue language ethnicity rules were
+  // added to the prompt, it may be silent on race. Tencent VOD GEM-3.1
+  // then defaults to East-Asian faces — surprising for users whose
+  // dialogue language indicates a different background. We detect
+  // dialogue language from the project's first available episode text
+  // ONCE per task and prepend the ethnicity hint to any description
+  // that doesn't already specify one.
+  let runtimeEthnicityPrefix: string | null = null
+  const needsEthnicity = baseDescriptions.some((d) => d && !descriptionHasEthnicity(d))
+  if (needsEthnicity) {
+    const novelProject = await prisma.novelPromotionProject.findUnique({
+      where: { projectId },
+      select: { id: true, globalAssetText: true },
+    })
+    if (novelProject) {
+      const firstEpisode = await prisma.novelPromotionEpisode.findFirst({
+        where: { novelPromotionProjectId: novelProject.id },
+        orderBy: { createdAt: 'asc' },
+        select: { novelText: true },
+      })
+      const text = (firstEpisode?.novelText || novelProject.globalAssetText || '').toString()
+      if (text) {
+        const hint = detectScriptEthnicityHint(text)
+        if (hint.language !== 'unknown') {
+          runtimeEthnicityPrefix = `${hint.ethnicityHint},`
+        }
+      }
+    }
+  }
+
   for (let i = 0; i < indexes.length; i++) {
     const index = indexes[i]
-    const raw = baseDescriptions[index] || baseDescriptions[0]
-    const userPrompt = addCharacterPromptSuffix(raw)
+    const rawSource = baseDescriptions[index] || baseDescriptions[0]
+    const ethnicallyHinted = runtimeEthnicityPrefix && rawSource && !descriptionHasEthnicity(rawSource)
+      ? `${runtimeEthnicityPrefix} ${rawSource}`
+      : rawSource
+    const userPrompt = addCharacterPromptSuffix(ethnicallyHinted)
 
     await reportTaskProgress(job, 15 + Math.floor((i / Math.max(indexes.length, 1)) * 55), {
       stage: 'generate_character_image',

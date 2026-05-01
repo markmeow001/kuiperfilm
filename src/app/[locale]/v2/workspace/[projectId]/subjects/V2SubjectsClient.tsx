@@ -196,18 +196,18 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     })
   }
 
-  // While any target is in-flight, poll the assets endpoint every 3s
-  // so a finished worker's new image url appears without a manual refresh.
-  // (Tightened from 5s — single image takes ~50-60s end-to-end and the
-  // post-completion COS upload window is the user-visible "still spinner
-  // even though image is done" gap; 3s shaves ~2s off perceived latency.)
-  useEffect(() => {
-    if (regenInFlight.size === 0) return
-    const interval = setInterval(() => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [regenInFlight.size, projectId, queryClient])
+  // Per-target overlay polling. Runs whenever EITHER the local
+  // regenInFlight Set has entries (user clicked regen / upload-and-
+  // expand) OR the server-side useActiveTasks query found running
+  // image tasks (backfill auto-regen after analyze, or any task that
+  // surfaces from another tab / session). Without the server-side
+  // trigger, cards waited the full 5min safety timeout for new
+  // images to land — looked like "auto-refresh broken".
+  // 1.5s tick — Tencent VOD finishes in 28-37s but the post-
+  // completion COS upload + DB update window is what users see; a
+  // shorter poll closes the visible "spinner still on after image
+  // is actually done" gap further.
+  // We declare serverInflightIds before this effect (see below).
 
   // Server-side task snapshot — survives page navigation, polled while
   // the worker is in flight, and used as the source of truth for the
@@ -266,6 +266,21 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
     previousServerInflight.current = serverInflightIds.size
   }, [serverInflightIds.size, projectId, queryClient])
+
+  // Continuous projectAssets polling whenever EITHER set has entries.
+  // The earlier client-only-Set version missed analyze-cascade backfill
+  // (server submitted tasks without going through any local mutation),
+  // leaving cards stuck on the old image until the user manually
+  // refreshed. 2s tick — Tencent finishes in 28-37s and the
+  // post-completion COS upload + DB update window is what makes the
+  // overlay-while-image-already-ready feel slow.
+  useEffect(() => {
+    if (regenInFlight.size === 0 && serverInflightIds.size === 0) return
+    const interval = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [regenInFlight.size, serverInflightIds.size, projectId, queryClient])
 
   // Detect transition into 'completed' and invalidate both projectAssets
   // (so cards see the LLM-written introduction / visual_description) AND
