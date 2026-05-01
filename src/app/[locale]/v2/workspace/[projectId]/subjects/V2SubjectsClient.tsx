@@ -1087,7 +1087,7 @@ function SubjectGrid({ items, emptyHint }: { items: SubjectItem[]; emptyHint: st
                 type="button"
                 disabled={item.isLocking || item.isLocked}
                 onClick={item.onLock}
-                title={item.isLocked ? '已鎖定 — 之後分鏡會優先綁定此角色檔案' : '鎖定後分鏡會優先綁定此角色檔案'}
+                title={item.isLocked ? '已標記為「定稿」(純註記,沒有實際 binding 影響)' : '標記為「定稿」(純註記用)— 角色與集數的綁定是自動的,不需要鎖定'}
                 className={`transition-all disabled:cursor-not-allowed ${
                   item.isLocked ? 'text-amber-400' : 'text-stone-400 hover:text-amber-400'
                 } ${item.isLocking ? 'opacity-50' : ''}`}

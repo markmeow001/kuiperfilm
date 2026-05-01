@@ -293,7 +293,7 @@ export function V2CharacterEditModal({
                   ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
                   : 'border-stone-800 bg-stone-900/50 text-stone-300 hover:border-amber-500/40 hover:text-amber-400'
               }`}
-              title={character.profileConfirmed ? '已鎖定 — 分鏡會優先綁定此角色檔案' : '鎖定後分鏡會優先綁定此角色檔案'}
+              title={character.profileConfirmed ? '已標記為「定稿」— 純註記,沒有實際 binding 行為' : '標記為「定稿」— 純註記用,代表你確認這個角色設定完成。角色與集數的綁定是自動的(analyze + 分鏡時會自動建立 EpisodeCharacter),不需要先鎖定。'}
             >
               {isLocking ? '處理中…' : character.profileConfirmed ? '✓ 已鎖定檔案' : '⊙ 鎖定檔案'}
             </button>
