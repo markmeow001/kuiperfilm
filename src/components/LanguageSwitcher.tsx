@@ -100,15 +100,15 @@ export default function LanguageSwitcher() {
                     onClick={() => setIsMenuOpen((prev) => !prev)}
                     aria-label={SWITCH_CONFIRM_COPY[targetLocale].triggerLabel}
                     aria-expanded={isMenuOpen}
-                    className="glass-btn-base glass-btn-secondary inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
+                    className="inline-flex items-center gap-2 rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-1.5 font-mono text-[11px] tracking-wider text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-400"
                 >
-                    <AppIcon name="globe" className="h-4 w-4" />
+                    <AppIcon name="globe" className="h-3.5 w-3.5" />
                     <span>{LANGUAGE_LABELS[currentLocale]}</span>
-                    <AppIcon name="chevronDown" className="h-4 w-4 text-[var(--glass-text-tertiary)]" />
+                    <AppIcon name="chevronDown" className={`h-3 w-3 text-stone-500 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isMenuOpen ? (
-                    <div className="glass-surface-modal absolute right-0 z-50 mt-2 w-44 rounded-xl p-2">
+                    <div className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 p-1 shadow-2xl">
                         {(Object.entries(LANGUAGE_LABELS) as Array<[Locale, string]>).map(([locale, label]) => {
                             const isActive = locale === currentLocale
                             return (
@@ -116,9 +116,9 @@ export default function LanguageSwitcher() {
                                     key={locale}
                                     type="button"
                                     onClick={() => requestLanguageSwitch(locale)}
-                                    className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${isActive
-                                        ? 'bg-[var(--glass-fill-active)] text-[var(--glass-text-primary)]'
-                                        : 'text-[var(--glass-text-secondary)] hover:bg-[var(--glass-fill-hover)] hover:text-[var(--glass-text-primary)]'
+                                    className={`w-full rounded-sm px-3 py-2 text-left font-serif-cn text-sm transition-colors ${isActive
+                                        ? 'bg-amber-500/15 text-amber-400'
+                                        : 'text-stone-300 hover:bg-amber-500/10 hover:text-amber-300'
                                         }`}
                                 >
                                     {label}

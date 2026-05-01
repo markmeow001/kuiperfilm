@@ -68,7 +68,7 @@ export default function ThemeToggle() {
       onClick={handleClick}
       title={`主題:${labelFor(display)}(點擊循環:亮色 → 暗色 → 跟隨系統)`}
       aria-label={`切換主題,目前:${labelFor(display)}`}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--glass-stroke-base)] bg-[var(--glass-bg-muted)] text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-ghost-hover-bg)] hover:text-[var(--glass-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--glass-stroke-focus)]"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-sm border border-stone-800 bg-stone-900/40 text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/40"
     >
       <AppIcon name={iconNameFor(display)} className="h-4 w-4" />
       <span className="sr-only">{labelFor(display)}</span>
