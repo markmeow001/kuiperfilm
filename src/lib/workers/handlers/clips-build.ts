@@ -7,6 +7,7 @@ import { createClipContentMatcher } from '@/lib/novel-promotion/story-to-script/
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
+import { sanitizeJsonControlChars } from './analyze-novel-utils'
 import type { TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
@@ -25,14 +26,14 @@ function parseClipArrayResponse(responseText: string): Array<Record<string, unkn
   const firstBracket = cleaned.indexOf('[')
   const lastBracket = cleaned.lastIndexOf(']')
   if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-    const parsed = JSON.parse(cleaned.slice(firstBracket, lastBracket + 1))
+    const parsed = JSON.parse(sanitizeJsonControlChars(cleaned.slice(firstBracket, lastBracket + 1)))
     if (Array.isArray(parsed)) return parsed as Array<Record<string, unknown>>
   }
 
   const firstBrace = cleaned.indexOf('{')
   const lastBrace = cleaned.lastIndexOf('}')
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    const parsed = JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as { clips?: unknown }
+    const parsed = JSON.parse(sanitizeJsonControlChars(cleaned.slice(firstBrace, lastBrace + 1))) as { clips?: unknown }
     if (Array.isArray(parsed.clips)) return parsed.clips as Array<Record<string, unknown>>
   }
 

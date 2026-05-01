@@ -7,7 +7,7 @@ import { assertTaskActive } from '@/lib/workers/utils'
 import { createWorkerLLMStreamCallbacks, createWorkerLLMStreamContext } from './llm-stream'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { resolveAnalysisModel } from './resolve-analysis-model'
-import { readText, parseJsonResponse } from './analyze-novel-utils'
+import { readText, parseJsonResponse, detectScriptEthnicityHint } from './analyze-novel-utils'
 import { processNewCharacters } from './analyze-novel-create-characters'
 import { processNewLocations } from './analyze-novel-create-locations'
 import { processUpdatedCharacters } from './analyze-novel-update-characters'
@@ -84,12 +84,18 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
 
   const charactersLibName = (novelData.characters || []).map((item) => item.name).join(', ')
   const locationsLibName = (novelData.locations || []).map((item) => item.name).join(', ')
+  // Detect dominant script of the source so the LLM can default to a
+  // sensible ethnicity when the script doesn't explicitly call one out.
+  // Without this hint, Tencent VOD GEM-3.1 (East-Asian-trained) defaults
+  // to Asian faces even for English / Spanish dramas — surprising users.
+  const ethnicity = detectScriptEthnicityHint(contentToAnalyze)
   const characterPromptTemplate = buildPrompt({
     promptId: PROMPT_IDS.NP_AGENT_CHARACTER_PROFILE,
     locale: job.data.locale,
     variables: {
       input: contentToAnalyze,
       characters_lib_info: charactersLibName || '无',
+      default_ethnicity_hint: ethnicity.ethnicityHint,
     },
   })
   const locationPromptTemplate = buildPrompt({
