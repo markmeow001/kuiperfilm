@@ -122,6 +122,11 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
 
   const panel = await prisma.novelPromotionPanel.findUnique({
     where: { id: panelId },
+    include: {
+      // Phase 11.4 / multi-appearance: panel → storyboard.episodeId so we
+      // can resolve the episode's per-character appearance bindings.
+      storyboard: { select: { episodeId: true } },
+    },
   })
 
   if (!panel) throw new Error('Panel not found')
@@ -134,11 +139,13 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const candidateCount = clampCount(payload.candidateCount ?? payload.count, 1, 4, 1)
   const isFluxKontext = modelKey.startsWith('flux-kontext')
 
+  const episodeId = panel.storyboard?.episodeId ?? null
+
   // Flux Kontext: scene base only (it treats inputImage as edit base, not character ref)
   // Other models: full reference images (character + location)
   const refs = isFluxKontext
     ? await collectPanelSceneBase(projectData, panel)
-    : await collectPanelReferenceImages(projectData, panel)
+    : await collectPanelReferenceImages(projectData, panel, episodeId)
   const normalizedRefs = await normalizeReferenceImagesForGeneration(refs)
 
   const logger = createScopedLogger({

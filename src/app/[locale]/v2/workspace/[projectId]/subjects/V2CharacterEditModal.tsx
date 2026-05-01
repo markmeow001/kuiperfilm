@@ -23,6 +23,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import { V2CharacterAppearancesPanel } from './V2CharacterAppearancesPanel'
 
 interface CharacterAppearanceLike {
   id: string
@@ -45,6 +46,7 @@ interface CharacterLike {
 }
 
 export interface V2CharacterEditModalProps {
+  projectId: string
   character: CharacterLike
   imageUrl: string | null
   onClose: () => void
@@ -92,6 +94,7 @@ export function V2CharacterEditModal({
   isLocking,
   onDelete,
   isDeleting,
+  projectId,
 }: V2CharacterEditModalProps) {
   const ap = character.appearances?.[0]
   const initialIntroduction = character.introduction ?? character.description ?? ''
@@ -365,6 +368,17 @@ export function V2CharacterEditModal({
                 </div>
               </div>
             </div>
+
+            {/* Phase 11.4 — multi-appearance per-episode binding */}
+            <V2CharacterAppearancesPanel
+              projectId={projectId}
+              characterId={character.id}
+              appearances={(character.appearances ?? []).map((a) => ({
+                id: a.id,
+                appearanceIndex: a.appearanceIndex ?? null,
+                changeReason: a.changeReason ?? null,
+              }))}
+            />
           </div>
         </div>
 

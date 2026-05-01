@@ -707,6 +707,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         const apId = ap?.id ?? ''
         return (
           <V2CharacterEditModal
+            projectId={projectId}
             character={c}
             imageUrl={pickCharacterImage(c)}
             onClose={handleCloseCharacterModal}

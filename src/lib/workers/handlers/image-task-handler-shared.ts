@@ -13,6 +13,10 @@ import type { StyleProfile } from '@/lib/style-profile/loader'
 export type AnyObj = Record<string, unknown>
 
 interface CharacterAppearanceLike {
+  // Phase 11.4 / multi-appearance: id required so the episode-binding
+  // override (EpisodeCharacter.appearanceId) can resolve to a concrete
+  // appearance row.
+  id: string
   appearanceIndex?: number
   changeReason: string | null
   description?: string | null
@@ -23,6 +27,9 @@ interface CharacterAppearanceLike {
 }
 
 interface CharacterLike {
+  // Phase 11.4 / multi-appearance: id required so we can key the
+  // episode-binding lookup by characterId.
+  id: string
   name: string
   appearances?: CharacterAppearanceLike[]
 }
@@ -220,11 +227,33 @@ export async function collectPanelSceneBase(projectData: NovelProjectData, panel
   return refs
 }
 
-export async function collectPanelReferenceImages(projectData: NovelProjectData, panel: PanelLike) {
+export async function collectPanelReferenceImages(
+  projectData: NovelProjectData,
+  panel: PanelLike,
+  // Phase 11.4 / multi-appearance: when an episodeId is supplied, look
+  // up EpisodeCharacter.appearanceId for each character ref and use
+  // that appearance instead of appearances[0]. Lets users say
+  // "ep1-10 use appearance A, ep11+ use appearance B" without
+  // changing the panel character refs themselves.
+  episodeId?: string | null,
+) {
   const refs: string[] = []
 
   const sketch = toSignedUrlIfCos(panel.sketchImageUrl, 3600)
   if (sketch) refs.push(sketch)
+
+  // Pre-load EpisodeCharacter bindings for this episode once. Keyed by
+  // characterId so the per-character loop below can do a flat lookup.
+  let episodeBindings: Map<string, string> = new Map()
+  if (episodeId) {
+    const rows = await prisma.episodeCharacter.findMany({
+      where: { episodeId, appearanceId: { not: null } },
+      select: { characterId: true, appearanceId: true },
+    })
+    for (const row of rows) {
+      if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
+    }
+  }
 
   const panelCharacters = parsePanelCharacterReferences(panel.characters)
   for (const item of panelCharacters) {
@@ -233,7 +262,14 @@ export async function collectPanelReferenceImages(projectData: NovelProjectData,
 
     const appearances = character.appearances || []
     let appearance = appearances[0]
-    if (item.appearance) {
+    // Episode-level override wins over both panel-level appearance ref
+    // and the default first appearance — UI lets the user fix per-episode
+    // costume without rewriting every panel's character reference.
+    const boundAppearanceId = episodeBindings.get(character.id)
+    if (boundAppearanceId) {
+      const bound = appearances.find((a) => a.id === boundAppearanceId)
+      if (bound) appearance = bound
+    } else if (item.appearance) {
       const matched = appearances.find((a) => (a.changeReason || '').toLowerCase() === item.appearance!.toLowerCase())
       if (matched) appearance = matched
     }

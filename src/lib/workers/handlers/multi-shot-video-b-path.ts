@@ -8,6 +8,20 @@ import {
   findCharacterByName,
   parseImageUrls,
 } from './image-task-handler-shared'
+
+interface CharacterAppearanceForBPath {
+  id: string
+  changeReason: string | null
+  imageUrls: string | null
+  imageUrl: string | null
+  selectedIndex: number | null
+}
+
+interface CharacterForBPath {
+  id: string
+  name: string
+  appearances?: CharacterAppearanceForBPath[]
+}
 import {
   assertTaskActive,
   toSignedUrlIfCos,
@@ -26,15 +40,7 @@ interface BPathPanel {
 }
 
 interface BPathProjectData {
-  characters?: Array<{
-    name: string
-    appearances?: Array<{
-      changeReason?: string | null
-      imageUrls?: string | null
-      imageUrl?: string | null
-      selectedIndex?: number | null
-    }>
-  }>
+  characters?: CharacterForBPath[]
 }
 
 /**
@@ -66,6 +72,28 @@ export async function runMultiShotBPath(params: {
     action: 'multi_shot_video_b_path_generate',
   })
 
+  // Phase 11.4 / multi-appearance: pre-load EpisodeCharacter bindings
+  // for the storyboard's episode so per-character costume overrides
+  // apply to multi-shot generation too. All selected panels live under
+  // the same storyboard, which lives under one episode.
+  let episodeBindings = new Map<string, string>()
+  const firstStoryboardId = validPanels[0]?.storyboardId
+  if (firstStoryboardId) {
+    const sb = await prisma.novelPromotionStoryboard.findUnique({
+      where: { id: firstStoryboardId },
+      select: { episodeId: true },
+    })
+    if (sb?.episodeId) {
+      const rows = await prisma.episodeCharacter.findMany({
+        where: { episodeId: sb.episodeId, appearanceId: { not: null } },
+        select: { characterId: true, appearanceId: true },
+      })
+      for (const row of rows) {
+        if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
+      }
+    }
+  }
+
   // Collect unique characters in panel order, take their primary
   // appearance image for SubjectInfos. Cap at 3 (Tencent limit).
   const subjectMap = new Map<string, { name: string; imageUrl: string }>()
@@ -77,7 +105,11 @@ export async function runMultiShotBPath(params: {
       if (!character) continue
       const appearances = character.appearances || []
       let appearance = appearances[0]
-      if (ref.appearance) {
+      const boundAppearanceId = episodeBindings.get(character.id)
+      if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
+      } else if (ref.appearance) {
         const matched = appearances.find(
           (a) => (a.changeReason || '').toLowerCase() === ref.appearance!.toLowerCase(),
         )
