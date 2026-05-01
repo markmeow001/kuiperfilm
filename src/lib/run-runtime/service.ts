@@ -94,6 +94,7 @@ type GraphEventModel = {
 
 type GraphCheckpointModel = {
   create: (args: unknown) => Promise<unknown>
+  upsert: (args: unknown) => Promise<unknown>
   findMany: (args: unknown) => Promise<Array<{
     id: string
     runId: string
@@ -640,11 +641,32 @@ export async function createCheckpoint(params: {
   state: JsonRecord
 }) {
   const bytes = assertCheckpointStateSize(params.state)
-  return await runtimeClient.graphCheckpoint.create({
-    data: {
+  // Upsert instead of create — the (runId, nodeKey, version) tuple has a
+  // unique constraint, and a node can legitimately re-emit a checkpoint
+  // for the same attempt number when the worker is killed mid-run and
+  // BullMQ resumes (container restart on deploy is the most common trigger).
+  // The user surfaced this as "Invalid `prisma.graphCheckpoint.create()`
+  // invocation: Unique constraint failed on the constraint:
+  // `graph_checkpoints_runId_nodeKey_version_key`" after a deploy
+  // interrupted an analyze run. Upsert is idempotent — the latest write
+  // wins, which matches the semantics ("this is the state at the end of
+  // attempt N for this node").
+  return await runtimeClient.graphCheckpoint.upsert({
+    where: {
+      runId_nodeKey_version: {
+        runId: params.runId,
+        nodeKey: params.nodeKey,
+        version: params.version,
+      },
+    },
+    create: {
       runId: params.runId,
       nodeKey: params.nodeKey,
       version: params.version,
+      stateJson: params.state,
+      stateBytes: bytes,
+    },
+    update: {
       stateJson: params.state,
       stateBytes: bytes,
     },
