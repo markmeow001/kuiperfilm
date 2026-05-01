@@ -720,6 +720,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   <AppIcon name="image" className="h-8 w-8 text-stone-600" />
                 </div>
               )}
+              {isCurrentPanelVideoInFlight ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-stone-950/75 backdrop-blur-sm">
+                  <AppIcon name="sparklesAlt" className="h-8 w-8 animate-pulse text-amber-400" />
+                  <div className="font-fraunces text-base italic text-amber-300">視頻生成中</div>
+                  <div className="px-6 text-center font-serif-cn text-xs text-stone-300">
+                    Kling 模型 30-60 秒,完成後自動更新
+                  </div>
+                  {/* Indeterminate progress strip — animates left→right via the
+                      animate-[progress_2s_linear_infinite] CSS keyframe defined
+                      globally. Provides a "moving" cue without needing actual %. */}
+                  <div className="mt-1 h-0.5 w-48 overflow-hidden rounded-full bg-stone-800/60">
+                    <div className="h-full w-1/3 animate-[progressSlide_2s_linear_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="bg-stone-900/60 px-4 py-3">
               <div className="font-serif-cn text-stone-100">
