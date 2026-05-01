@@ -116,6 +116,10 @@ function SidebarUser() {
   const name = session.user.name ?? session.user.email ?? '使用者'
   const role = (session.user as { role?: string } | undefined)?.role ?? null
   const initial = name.charAt(0).toUpperCase()
+  const isAdmin = role === 'admin'
+  // Locale lives in the URL; signOut callbackUrl uses the base since the
+  // root middleware redirects to the right locale.
+  const adminHref = '/zh/admin'
   return (
     <div className="border-t border-amber-900/15 px-5 py-5">
       <div className="flex items-center gap-3">
@@ -128,6 +132,15 @@ function SidebarUser() {
             {role ? role.toUpperCase() : 'MEMBER'}
           </div>
         </div>
+        {isAdmin ? (
+          <a
+            href={adminHref}
+            className="rounded text-amber-500/70 transition-all hover:text-amber-300"
+            title="管理員後台"
+          >
+            <AppIcon name="settingsHex" className="h-4 w-4" />
+          </a>
+        ) : null}
         <button
           type="button"
           onClick={() => void signOut({ callbackUrl: '/' })}
