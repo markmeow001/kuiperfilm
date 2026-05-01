@@ -63,11 +63,23 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
     const hashedPassword = await bcrypt.hash(password, 12)
 
+    // Hard-cap registration to 'member' role regardless of what the
+    // invite carries. Background: the previous design let admins
+    // generate invites with role=admin, dispatched via UI dropdown,
+    // and any invite-bearer who registered inherited that role. User
+    // could (and did) accidentally leak admin privileges.
+    //
+    // New rule: invitations are pure access tokens — they let someone
+    // join the system, nothing more. To grant elevated roles, the
+    // owning admin promotes via /admin/users AFTER the user signs up.
+    // This applies even to invites previously generated with role=admin
+    // before the UI was tightened, so revoking + re-creating them is
+    // not required to clean up the legacy mistake.
     const newUser = await tx.user.create({
       data: {
         name,
         password: hashedPassword,
-        role: invite.role,
+        role: 'member',
         ...(typeof email === 'string' && email.length > 0 ? { email } : {}),
         ...(typeof displayName === 'string' && displayName.length > 0
           ? { displayName }
