@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, usePathname } from 'next/navigation'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { AppIcon } from '@/components/ui/icons'
 import { findV2Step, V2_STEPS, v2StepIndex, type V2StepId } from './v2-types'
@@ -109,6 +109,20 @@ function ProjectSwitcher({
   const [projects, setProjects] = useState<ProjectListRow[] | null>(null)
   const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const pathname = usePathname()
+  // Infer the current step from the URL so switching projects keeps the
+  // user in the same step instead of dumping them to project home.
+  // Pathname is /<locale>/v2/workspace/<projectId>(/<step>)?(?tab=...)?
+  // — we only honour known step segments to avoid forwarding garbage.
+  const currentStepSegment = (() => {
+    if (!pathname) return ''
+    const parts = pathname.split('/').filter(Boolean)
+    const wsIdx = parts.findIndex((p) => p === 'workspace')
+    if (wsIdx === -1 || wsIdx + 2 >= parts.length) return ''
+    const step = parts[wsIdx + 2]
+    const known = ['script', 'subjects', 'storyboard', 'voice', 'final']
+    return known.includes(step) ? step : ''
+  })()
 
   // Click-outside to close
   useEffect(() => {
@@ -189,7 +203,7 @@ function ProjectSwitcher({
               otherProjects.map((p) => (
                 <Link
                   key={p.id}
-                  href={`/${locale}/v2/workspace/${p.id}`}
+                  href={`/${locale}/v2/workspace/${p.id}${currentStepSegment ? `/${currentStepSegment}` : ''}`}
                   className="block px-4 py-2 font-serif-cn text-sm text-stone-300 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
                   onClick={() => setOpen(false)}
                 >

@@ -15,6 +15,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
@@ -133,7 +134,27 @@ function pickLocationImage(l: LocationLike): string | null {
 
 export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<Tab>('character')
+  // Tab persisted in URL ?tab= so F5 + bookmarks + cross-project
+  // navigation 都能落到對的 tab。Earlier we kept it in React state and
+  // the user reported "F5 後跑到首頁" — actual behaviour was that F5
+  // reset the local state to 'character', which felt like the page
+  // lost their place.
+  const router = useRouter()
+  const rawPathname = usePathname()
+  const searchParams = useSearchParams()
+  const pathname = rawPathname ?? ''
+  const tabParam = searchParams?.get('tab') ?? null
+  const tab: Tab = tabParam === 'scene' || tabParam === 'prop' ? tabParam : 'character'
+  const setTab = (next: Tab) => {
+    const sp = new URLSearchParams(searchParams?.toString() ?? '')
+    if (next === 'character') {
+      sp.delete('tab')
+    } else {
+      sp.set('tab', next)
+    }
+    const queryString = sp.toString()
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
+  }
   const charactersQuery = useProjectCharacters(projectId)
   const locationsQuery = useProjectLocations(projectId)
   const regenChar = useRegenerateSingleCharacterImage(projectId)
