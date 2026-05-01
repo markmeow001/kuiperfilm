@@ -33,6 +33,14 @@ export interface PollResult {
     downloadHeaders?: Record<string, string>
     error?: string
     /**
+     * Optional unified error code hint for failed results. When present, the
+     * poll consumer should stamp the thrown Error with this code so the
+     * lifecycle normalizer keeps the retryable bit intact instead of falling
+     * back to INTERNAL_ERROR. Currently used by Tencent VOD to surface
+     * RATE_LIMIT for error code 70000 (RequestLimitExceeded).
+     */
+    errorCode?: 'RATE_LIMIT' | 'EXTERNAL_ERROR' | 'SENSITIVE_CONTENT'
+    /**
      * Provider-side persistent file id, when the upstream service stores
      * the result and returns an internal handle. Currently populated only
      * by Tencent VOD when StorageMode=Permanent. Downstream pipeline stages
@@ -337,9 +345,18 @@ async function pollTencentVODTask(
         const errCode = task.ErrCode ?? 0
         const errCodeExt = task.ErrCodeExt || ''
         if (errCode !== 0 || (errCodeExt && errCodeExt !== '0')) {
+            // Tencent error code 70000 (RequestLimitExceeded) means the AIGC
+            // concurrency quota was hit while the task was running. The submit
+            // succeeded but the task was rejected at execution time. Surface
+            // the rate-limit signal explicitly so the lifecycle wrapper marks
+            // the failure retryable instead of falling back to INTERNAL_ERROR.
+            const isRateLimited = errCode === 70000
+              || /requestlimitexceeded|maximum concurrency/i.test(task.Message || '')
+              || /requestlimitexceeded|maximum concurrency/i.test(errCodeExt)
             return {
                 status: 'failed',
                 error: `Tencent VOD error ${errCode} (${errCodeExt}): ${task.Message || ''}`,
+                ...(isRateLimited ? { errorCode: 'RATE_LIMIT' as const } : {}),
             }
         }
         const firstFile = task.Output?.FileInfos?.[0]

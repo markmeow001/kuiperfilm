@@ -328,7 +328,10 @@ export function createVideoWorker() {
     async (job) => await withTaskLifecycle(job, processVideoTask),
     {
       connection: queueRedis,
-      concurrency: Number.parseInt(process.env.QUEUE_CONCURRENCY_VIDEO || '4', 10) || 4,
+      // Default 2 — same Tencent VOD AIGC concurrency-quota constraint as the
+      // image queue (Kling-3.0-Omni runs against the same per-account pool).
+      // Override via QUEUE_CONCURRENCY_VIDEO once quota is raised.
+      concurrency: Number.parseInt(process.env.QUEUE_CONCURRENCY_VIDEO || '2', 10) || 2,
     },
   )
 }

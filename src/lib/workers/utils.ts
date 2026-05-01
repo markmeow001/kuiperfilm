@@ -177,16 +177,22 @@ export async function waitExternalResult(
     }
 
     if (status.status === 'failed') {
+      // Carry the optional unified error code (e.g. RATE_LIMIT for Tencent
+      // VOD 70000) onto the thrown Error so the lifecycle normalizer keeps
+      // the retryable bit intact instead of falling back to INTERNAL_ERROR.
+      const propagatedCode = status.errorCode || 'EXTERNAL_ERROR'
       logger.error({
         message: status.error || 'external task failed',
-        errorCode: 'EXTERNAL_ERROR',
+        errorCode: propagatedCode,
         retryable: true,
         durationMs: Date.now() - startAt,
         details: {
           externalId,
         },
       })
-      throw new Error(status.error || `External task failed: ${externalId}`)
+      const err = new Error(status.error || `External task failed: ${externalId}`)
+      ;(err as unknown as { code: string }).code = propagatedCode
+      throw err
     }
 
     const elapsed = Date.now() - startAt

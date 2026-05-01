@@ -69,7 +69,7 @@ function inferCodeFromMessage(message: string): UnifiedErrorCode | null {
   if (containsAny(message, ['forbidden', 'permission denied', '403'])) return 'FORBIDDEN'
   if (containsAny(message, ['not found', '不存在', 'missing record'])) return 'NOT_FOUND'
   if (containsAny(message, ['invalid', 'missing', 'required', 'bad request', 'fieldinvalid'])) return 'INVALID_PARAMS'
-  if (containsAny(message, ['quota', 'rate limit', 'resource_exhausted', 'throttle', '429'])) return 'RATE_LIMIT'
+  if (containsAny(message, ['quota', 'rate limit', 'resource_exhausted', 'throttle', '429', 'requestlimitexceeded', 'maximum concurrency', 'reached the maximum'])) return 'RATE_LIMIT'
   if (containsAny(message, ['insufficient balance', 'creditinsufficient', 'balance is not enough', '402', 'insufficient credits', '余额不足', '余额不够', '请充值'])) return 'INSUFFICIENT_BALANCE'
   if (containsAny(message, ['sensitive', 'unsafe', 'safety', 'blocked', 'prohibited', 'policy_violation', 'moderation', 'harm', 'celebrity', 'likenesses', '敏感', '违规', '不当']) && !containsAny(message, ['case-sensitive', 'case sensitive'])) return 'SENSITIVE_CONTENT'
   if (containsAny(message, ['timeout', 'timed out', 'deadline exceeded'])) return 'GENERATION_TIMEOUT'

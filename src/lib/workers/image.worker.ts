@@ -51,7 +51,12 @@ export function createImageWorker() {
     async (job) => await withTaskLifecycle(job, processImageTask),
     {
       connection: queueRedis,
-      concurrency: Number.parseInt(process.env.QUEUE_CONCURRENCY_IMAGE || '20', 10) || 20,
+      // Default 2 — Tencent VOD AIGC has a low concurrency quota per account
+      // (often 1-2 by default). Set QUEUE_CONCURRENCY_IMAGE=N to raise once
+      // a higher quota is approved. Going beyond the upstream concurrency
+      // surfaces as error 70000 (RequestLimitExceeded) at task-execution
+      // time, which we now mark retryable so backoff kicks in either way.
+      concurrency: Number.parseInt(process.env.QUEUE_CONCURRENCY_IMAGE || '2', 10) || 2,
     },
   )
 }
