@@ -564,6 +564,7 @@
 **已 deploy build 13/14/15/16/17(rebuild 12.x 系列)**,droplet `art.kuiperfilmailab.com` 訪問 dashboard 點 project 預設進新 UI。
 
 **已知遺漏 / Phase 12.x.x 跟進**(均不阻塞 Phase 12 收工):
+- ⏳ 12.x.x v2 EpisodeTabBar 整合 — v2 workspace 每個 page 目前只認 `episodes[0]`(V2ScriptClient.tsx:76),沒有切集 / 新建集 UI。複用既有 `src/components/ui/EpisodeTabBar.tsx`(Phase 11.1 寫的 274 行,已支援 tab/新建/重命名/刪除/鍵盤導航),掛在 V2WorkspaceShell 上,當前 episode 走 URL `?episode=<id>`。**正在做(Tencent VOD session,2026-04-30)** — 預計 1-2 commits:(1) Shell 掛 tab bar + URL state hook + ScriptPage 切換 (2) Subjects/Storyboard/Voice/Final 同樣切換。
 - 12.5.3 LLM 自動依語意切 multi-shot group(目前是 client 側機械每 5 個一組)+ schema 加 panel.multiShotGroupId
 - 12.6.x voice tuning slider 接 panel-level config + 套用至全部分鏡
 - 12.7.x FFmpeg 全集合成 + 匯出 mp4
