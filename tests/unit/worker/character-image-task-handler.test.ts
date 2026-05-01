@@ -22,6 +22,17 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionCharacter: {
     findUnique: vi.fn(),
   },
+  novelPromotionProject: {
+    findUnique: vi.fn(async () => ({
+      id: 'np-project-1',
+      stylePositivePrompt: null,
+      styleNegativePrompt: null,
+      styleReferenceImagesJson: null,
+    })),
+  },
+  novelPromotionEpisode: {
+    findFirst: vi.fn(async () => ({ novelText: '' })),
+  },
 }))
 
 // Bug-4 chokepoint: generateLabeledImageToCos 接受 raw styleProfile 参数（chokepoint 内做 prepend + capability filter）。

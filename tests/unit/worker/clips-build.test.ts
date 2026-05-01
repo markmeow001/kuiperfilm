@@ -124,6 +124,7 @@ describe('worker clips-build behavior', () => {
     expect(result).toEqual({
       episodeId: 'episode-1',
       count: 1,
+      cascadedToStoryboard: false,
     })
 
     expect(prismaMock.novelPromotionClip.create).toHaveBeenCalledWith({

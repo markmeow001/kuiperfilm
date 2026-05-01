@@ -12,6 +12,17 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionCharacter: { create: vi.fn(async () => ({ id: 'char-new-1' })) },
   novelPromotionLocation: { create: vi.fn(async () => ({ id: 'loc-new-1' })) },
   locationImage: { create: vi.fn(async () => ({})) },
+  characterAppearance: {
+    create: vi.fn(async () => ({ id: 'appearance-new-1' })),
+    findFirst: vi.fn(async () => null),
+    findUnique: vi.fn(async () => null),
+    update: vi.fn(async () => ({})),
+    upsert: vi.fn(async () => ({ id: 'appearance-upsert-1' })),
+  },
+  episodeCharacter: {
+    upsert: vi.fn(async () => ({})),
+    findMany: vi.fn(async () => []),
+  },
 }))
 
 const llmMock = vi.hoisted(() => ({
@@ -139,6 +150,7 @@ describe('worker analyze-novel behavior', () => {
       locations: [{ id: 'loc-new-1' }],
       characterCount: 1,
       locationCount: 1,
+      cascadedToClipsBuild: false,
     })
 
     expect(prismaMock.novelPromotionCharacter.create).toHaveBeenCalledWith(

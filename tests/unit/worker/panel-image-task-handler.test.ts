@@ -179,6 +179,10 @@ describe('worker panel-image-task-handler behavior', () => {
     const job = buildJob({ candidateCount: 1 })
     const result = await handlePanelImageTask(job)
 
+    // Single-candidate regen now replaces imageUrl directly in DB so the
+    // user sees the new image immediately; previous-image is still
+    // stashed. The handler return keeps imageUrl: null on regen because
+    // the front-end uses the candidate path for re-pick UI.
     expect(result).toEqual({
       panelId: 'panel-1',
       candidateCount: 1,
@@ -189,7 +193,8 @@ describe('worker panel-image-task-handler behavior', () => {
       where: { id: 'panel-1' },
       data: {
         previousImageUrl: 'cos/panel-old.png',
-        candidateImages: JSON.stringify(['cos/panel-regenerated.png']),
+        imageUrl: 'cos/panel-regenerated.png',
+        candidateImages: null,
       },
     })
   })

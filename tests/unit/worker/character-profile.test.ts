@@ -10,6 +10,7 @@ const prismaMock = vi.hoisted(() => ({
   },
   characterAppearance: {
     create: vi.fn(async () => ({})),
+    upsert: vi.fn(async () => ({ id: 'appearance-upsert-1' })),
   },
 }))
 
@@ -138,14 +139,21 @@ describe('worker character-profile behavior', () => {
     const job = buildJob(TASK_TYPE.CHARACTER_PROFILE_CONFIRM, { characterId: 'character-1' })
     const result = await handleCharacterProfileTask(job)
 
-    expect(prismaMock.characterAppearance.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        characterId: 'character-1',
-        appearanceIndex: 0,
-        changeReason: '默认形象',
-        description: '黑发，冷静，风衣',
+    expect(prismaMock.characterAppearance.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          characterId_appearanceIndex: {
+            characterId: 'character-1',
+            appearanceIndex: 0,
+          },
+        },
+        create: expect.objectContaining({
+          characterId: 'character-1',
+          appearanceIndex: 0,
+          description: '黑发，冷静，风衣',
+        }),
       }),
-    })
+    )
 
     expect(prismaMock.novelPromotionCharacter.update).toHaveBeenCalledWith({
       where: { id: 'character-1' },
@@ -169,6 +177,6 @@ describe('worker character-profile behavior', () => {
       success: true,
       count: 2,
     })
-    expect(prismaMock.characterAppearance.create).toHaveBeenCalledTimes(2)
+    expect(prismaMock.characterAppearance.upsert).toHaveBeenCalledTimes(2)
   })
 })
