@@ -293,8 +293,8 @@ export default function ProfilePage() {
 
   if (status === 'loading' || !session) {
     return (
-      <div className="glass-page flex min-h-screen items-center justify-center">
-        <div className="text-[var(--glass-text-secondary)]">{tc('loading')}</div>
+      <div className="font-body grain flex min-h-screen items-center justify-center bg-stone-950 text-stone-200">
+        <div className="font-fraunces text-base italic text-stone-500">{tc('loading')}</div>
       </div>
     )
   }
@@ -306,23 +306,29 @@ export default function ProfilePage() {
   const availableTypes = [...new Set(projectDetails?.recentRecords?.map(r => r.apiType) || [])]
 
   return (
-    <div className="glass-page min-h-screen">
+    <div className="font-body grain min-h-screen bg-stone-950 text-stone-200">
       <Navbar />
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex gap-6 h-[calc(100vh-140px)]">
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        <div className="flex h-[calc(100vh-140px)] gap-6">
 
           {/* 左侧侧边栏 */}
-          <div className="w-64 flex-shrink-0">
-            <div className="glass-surface-elevated h-full flex flex-col p-5">
+          <div className="w-72 flex-shrink-0">
+            <div className="flex h-full flex-col rounded-sm border border-amber-900/25 bg-stone-900/40 p-6">
 
               {/* 用户信息 */}
-              <div className="mb-6">
-                <div className="mb-4">
-                  <h2 className="font-semibold text-[var(--glass-text-primary)]">{session.user?.name || t('user')}</h2>
-                  <p className="text-xs text-[var(--glass-text-tertiary)]">{t('personalAccount')}</p>
+              <div className="mb-8">
+                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-amber-600/80">
+                  {t('personalAccount')}
                 </div>
-
+                <h2 className="mt-2 font-serif-cn text-xl font-medium text-stone-100">
+                  {session.user?.name || t('user')}
+                </h2>
+                {(session.user as { role?: string } | undefined)?.role ? (
+                  <div className="mt-1 font-mono text-[10px] tracking-wider text-amber-500/70">
+                    {((session.user as { role?: string }).role ?? '').toUpperCase()}
+                  </div>
+                ) : null}
               </div>
 
               {/* 导航菜单 */}
@@ -330,13 +336,13 @@ export default function ProfilePage() {
                 {isAdmin && (
                   <button
                     onClick={() => setActiveSection('apiConfig')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all cursor-pointer ${activeSection === 'apiConfig'
-                      ? 'glass-btn-base glass-btn-tone-info'
-                      : 'text-[var(--glass-text-secondary)] hover:bg-[var(--glass-bg-muted)]'
+                    className={`flex w-full items-center gap-3 rounded-sm px-4 py-3 text-left transition-all ${activeSection === 'apiConfig'
+                      ? 'border border-amber-500/40 bg-amber-500/10 text-amber-300'
+                      : 'border border-transparent text-stone-300 hover:border-stone-700 hover:bg-stone-900/60'
                       }`}
                   >
-                    <AppIcon name="settingsHexAlt" className="w-5 h-5" />
-                    <span className="font-medium">{t('apiConfig')}</span>
+                    <AppIcon name="settingsHexAlt" className="h-5 w-5" />
+                    <span className="font-serif-cn text-base">{t('apiConfig')}</span>
                   </button>
                 )}
               </nav>
@@ -344,17 +350,17 @@ export default function ProfilePage() {
               {/* 退出登录 */}
               <button
                 onClick={() => signOut({ callbackUrl: '/' })}
-                className="glass-btn-base glass-btn-tone-danger mt-auto flex items-center gap-2 px-4 py-3 text-sm rounded-xl transition-all cursor-pointer"
+                className="mt-auto flex items-center justify-center gap-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-base text-rose-300 transition-all hover:bg-rose-500/20"
               >
-                <AppIcon name="logout" className="w-4 h-4" />
+                <AppIcon name="logout" className="h-4 w-4" />
                 {t('logout')}
               </button>
             </div>
           </div>
 
           {/* 右侧内容区 */}
-          <div className="flex-1 min-w-0">
-            <div className="glass-surface-elevated h-full flex flex-col">
+          <div className="min-w-0 flex-1">
+            <div className="flex h-full flex-col rounded-sm border border-amber-900/25 bg-stone-900/40">
 
               {activeSection === 'apiConfig' && isAdmin ? (
                 <ApiConfigTab />

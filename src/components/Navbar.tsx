@@ -44,20 +44,26 @@ export default function Navbar() {
               <>
                 <Link
                   href="/zh/v2"
-                  className="font-mono text-[11px] uppercase tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+                  className="font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
                 >
                   {t('workspace')}
                 </Link>
-                <Link
-                  href="/workspace/asset-hub"
-                  className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400 transition-colors hover:text-amber-400"
-                >
-                  <AppIcon name="folderHeart" className="h-3.5 w-3.5" />
-                  {t('assetHub')}
-                </Link>
+                {/* 資產中心 — admin only. K3b made this team-shared, but for
+                    demo phase regular users get distracted by an empty hub
+                    that duplicates project SubjectsPage. Curators (admin)
+                    keep access; the URL still works for them when typed. */}
+                {isAdmin ? (
+                  <Link
+                    href="/workspace/asset-hub"
+                    className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
+                  >
+                    <AppIcon name="folderHeart" className="h-4 w-4" />
+                    {t('assetHub')}
+                  </Link>
+                ) : null}
                 <Link
                   href="/profile"
-                  className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
                   title={t('profile')}
                 >
                   <AppIcon name="userRoundCog" className="h-4 w-4" />

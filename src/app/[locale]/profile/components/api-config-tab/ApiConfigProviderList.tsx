@@ -62,17 +62,22 @@ export function ApiConfigProviderList({
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <h2 className="text-base font-bold text-[var(--glass-text-primary)]">{labels.providerPool}</h2>
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-amber-600/80">
+              PROVIDER · POOL
+            </div>
+            <h2 className="mt-1 font-serif-cn text-xl font-medium text-stone-100">{labels.providerPool}</h2>
+          </div>
           <button
             onClick={onAddGeminiProvider}
-            className="glass-btn-base glass-btn-primary cursor-pointer px-3 py-1.5 text-sm font-semibold"
+            className="cursor-pointer rounded-sm bg-amber-500 px-5 py-2.5 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400"
           >
-            {labels.addGeminiProvider}
+            + {labels.addGeminiProvider}
           </button>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {modelProviders.map((provider) => (
             <ProviderCard
               key={provider.id}
@@ -94,12 +99,17 @@ export function ApiConfigProviderList({
 
       {hasOtherProviders && (
         <div className="pt-4">
-          <h2 className="mb-4 px-1 text-base font-bold text-[var(--glass-text-primary)]">
-            {labels.otherProviders}
-            <span className="ml-2 text-sm font-normal text-[var(--glass-text-tertiary)]">
-              ({labels.audioCategory})
-            </span>
-          </h2>
+          <div className="mb-4">
+            <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-amber-600/80">
+              OTHER · PROVIDERS
+            </div>
+            <h2 className="mt-1 font-serif-cn text-xl font-medium text-stone-100">
+              {labels.otherProviders}
+              <span className="ml-2 font-fraunces text-sm italic text-stone-500">
+                ({labels.audioCategory})
+              </span>
+            </h2>
+          </div>
           <div className="space-y-4">
             {hasAudioProviders && (
               <ProviderSection

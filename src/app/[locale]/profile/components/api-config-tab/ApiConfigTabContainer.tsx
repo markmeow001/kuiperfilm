@@ -28,7 +28,7 @@ type DefaultModelField =
   | 'lipSyncModel'
 
 const MONO_ICON_BADGE =
-  'inline-flex items-center justify-center rounded-lg bg-[var(--glass-bg-surface)] p-1 text-[var(--glass-text-secondary)]'
+  'inline-flex items-center justify-center rounded-sm border border-stone-800 bg-stone-900/60 p-1.5 text-stone-300'
 
 const Icons = {
   settings: () => (
@@ -220,18 +220,20 @@ export function ApiConfigTabContainer() {
       />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl space-y-6 p-6">
-          <div className="glass-surface rounded-2xl p-3.5">
-            <div className="mb-1 flex items-center gap-2 px-1">
-              <span className="glass-surface-soft inline-flex h-6 w-6 items-center justify-center rounded-lg text-[var(--glass-text-secondary)]">
+        <div className="mx-auto max-w-5xl space-y-8 p-8">
+          <div className="rounded-sm border border-amber-900/25 bg-stone-900/40 p-6">
+            <div className="mb-3 flex items-center gap-3">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-400">
                 <Icons.settings />
               </span>
-              <h2 className="text-[15px] font-semibold text-[var(--glass-text-primary)]">{t('defaultModels')}</h2>
+              <div>
+                <h2 className="font-serif-cn text-xl font-medium text-stone-100">{t('defaultModels')}</h2>
+                <p className="mt-1 font-fraunces text-sm italic text-stone-400">
+                  {t('defaultModel.hint')}
+                </p>
+              </div>
             </div>
-            <p className="mb-2.5 px-1 text-[12px] text-[var(--glass-text-secondary)]">
-              {t('defaultModel.hint')}
-            </p>
-            <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {defaultModelCards.map((card) => {
                 const options = getEnabledModelsByType(card.modelType)
                 const currentKey = defaultModels[card.field]
@@ -256,13 +258,13 @@ export function ApiConfigTabContainer() {
                 return (
                   <div
                     key={card.field}
-                    className="glass-surface-soft rounded-xl p-2.5"
+                    className="rounded-sm border border-stone-800 bg-stone-900/30 p-4"
                   >
-                    <div className="mb-2 flex items-center gap-2">
+                    <div className="mb-3 flex items-center gap-2">
                       <span className={MONO_ICON_BADGE}>
                         <ModelIcon />
                       </span>
-                      <span className="text-[12px] font-semibold text-[var(--glass-text-primary)]">
+                      <span className="font-serif-cn text-base font-medium text-stone-100">
                         {card.title}
                       </span>
                     </div>
@@ -320,7 +322,7 @@ export function ApiConfigTabContainer() {
                           <select
                             value={normalizedKey}
                             onChange={(event) => updateDefaultModel(card.field, event.target.value)}
-                            className="glass-select-base w-full cursor-pointer appearance-none py-1.5 pl-2.5 pr-7 text-[12px]"
+                            className="w-full cursor-pointer appearance-none rounded-sm border border-stone-800 bg-stone-950 py-2 pl-3 pr-8 font-serif-cn text-sm text-stone-200 focus:border-amber-500/60 focus:outline-none"
                           >
                             <option value="">{t('selectDefault')}</option>
                             {options.map((option, index) => (
@@ -332,13 +334,13 @@ export function ApiConfigTabContainer() {
                               </option>
                             ))}
                           </select>
-                          <div className="pointer-events-none absolute right-2.5 top-2 text-[var(--glass-text-tertiary)]">
+                          <div className="pointer-events-none absolute right-3 top-2.5 text-stone-500">
                             <Icons.chevronDown />
                           </div>
                         </div>
                         {current && card.modelType !== 'lipsync' && (
-                          <div className="mt-1.5 flex items-center justify-between px-0.5">
-                            <span className="text-[11px] text-[var(--glass-text-tertiary)]">
+                          <div className="mt-2 flex items-center justify-between px-0.5">
+                            <span className="font-mono text-xs tracking-wider text-stone-500">
                               {current.providerName}
                             </span>
                           </div>
@@ -386,13 +388,13 @@ export function ApiConfigTabContainer() {
           <div className="flex justify-end gap-2">
             <button
               onClick={handleCancelAddGeminiProvider}
-              className="glass-btn-base glass-btn-secondary px-3 py-1.5 text-sm"
+              className="rounded-sm border border-stone-700 px-4 py-2 font-serif-cn text-sm text-stone-300 hover:border-stone-600"
             >
               {tc('cancel')}
             </button>
             <button
               onClick={handleAddGeminiProvider}
-              className="glass-btn-base glass-btn-primary px-3 py-1.5 text-sm"
+              className="rounded-sm bg-amber-500 px-4 py-2 font-serif-cn text-sm font-medium text-stone-950 hover:bg-amber-400"
             >
               {tp('add')}
             </button>
