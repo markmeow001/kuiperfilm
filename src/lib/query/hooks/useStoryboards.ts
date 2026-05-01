@@ -327,6 +327,40 @@ export function useSelectPanelCandidate(episodeId: string | null) {
 }
 
 /**
+ * V2 storyboard 編輯器:更新 panel 的 description(場景/構圖描述詞)+
+ * srtSegment(對話/字幕),透過 PATCH /api/novel-promotion/:projectId/panel
+ * 的 panelId 路徑。兩個欄位獨立可選 — 想只改 dialogue 不動 description
+ * 就只送 srtSegment,反之亦然。
+ */
+export function useUpdatePanelText(projectId: string | null, episodeId: string | null) {
+    const queryClient = useQueryClient()
+    return useMutation({
+        mutationFn: async (params: {
+            panelId: string
+            description?: string
+            srtSegment?: string
+        }) => {
+            if (!projectId) throw new Error('Project ID is required')
+            const res = await fetch(`/api/novel-promotion/${projectId}/panel`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params),
+            })
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}))
+                throw new Error(data?.error || 'Failed to update panel text')
+            }
+            return res.json()
+        },
+        onSuccess: () => {
+            if (episodeId) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(episodeId) })
+            }
+        },
+    })
+}
+
+/**
  * 刷新分镜数据
  */
 export function useRefreshStoryboards(episodeId: string | null) {

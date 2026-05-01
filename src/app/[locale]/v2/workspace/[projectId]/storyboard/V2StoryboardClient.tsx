@@ -17,7 +17,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
-import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
+import {
+  useStoryboards,
+  useUpdatePanelText,
+  useGenerateVideo,
+} from '@/lib/query/hooks/useStoryboards'
 import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import { useTaskSnapshot } from '@/lib/query/hooks/useTaskStatus'
@@ -30,7 +34,10 @@ interface V2StoryboardClientProps {
 
 interface PanelLike {
   id: string
+  storyboardId?: string | null
+  panelIndex?: number | null
   description?: string | null
+  srtSegment?: string | null
   imageUrl?: string | null
   videoUrl?: string | null
   prompt?: string | null
@@ -112,6 +119,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const storyboardsQuery = useStoryboards(projectId, currentEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
   const regenPanel = useRegenerateProjectPanelImage(projectId)
+  const updatePanelText = useUpdatePanelText(projectId, currentEpisodeId)
+  const generateVideo = useGenerateVideo(projectId, currentEpisodeId)
   const autoGroup = useAutoGroupMultiShot(projectId)
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
@@ -182,6 +191,50 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const selected = allPanels.find((p) => p.id === selectedId) ?? null
   const selectedIndex = allPanels.findIndex((p) => p.id === selectedId)
+
+  // V2 storyboard editor — local drafts for the panel's description (場景
+  // 描述詞) and srtSegment (對話/字幕). Re-seeded whenever the user picks
+  // a different panel so editing one doesn't leak into another.
+  const [descDraft, setDescDraft] = useState<string>('')
+  const [dialogueDraft, setDialogueDraft] = useState<string>('')
+  useEffect(() => {
+    setDescDraft(selected?.description ?? selected?.prompt ?? '')
+    setDialogueDraft(selected?.srtSegment ?? '')
+  }, [selected?.id, selected?.description, selected?.prompt, selected?.srtSegment])
+  const descChanged = descDraft !== (selected?.description ?? selected?.prompt ?? '')
+  const dialogueChanged = dialogueDraft !== (selected?.srtSegment ?? '')
+
+  function handleSaveDescription() {
+    if (!selected) return
+    updatePanelText.mutate(
+      { panelId: selected.id, description: descDraft },
+      { onError: (err) => alert(err instanceof Error ? err.message : '儲存描述詞失敗') },
+    )
+  }
+  function handleSaveDialogue() {
+    if (!selected) return
+    updatePanelText.mutate(
+      { panelId: selected.id, srtSegment: dialogueDraft },
+      { onError: (err) => alert(err instanceof Error ? err.message : '儲存對話失敗') },
+    )
+  }
+  function handleGenerateVideo() {
+    if (!selected) return
+    const videoModel = project?.novelPromotionData?.videoModel
+    if (!videoModel) {
+      alert('專案還沒選 video model — 請到首頁設定中選擇 Kling 系列模型')
+      return
+    }
+    generateVideo.mutate(
+      {
+        panelId: selected.id,
+        storyboardId: selected.storyboardId ?? '',
+        panelIndex: selected.panelIndex ?? 0,
+        videoModel,
+      },
+      { onError: (err) => alert(err instanceof Error ? err.message : '提交視頻生成失敗') },
+    )
+  }
 
   // Distinct group ids in the order panels appear, for stable colour cycling.
   const orderedGroupIds = useMemo(() => {
@@ -505,12 +558,49 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         {/* Left: prompt builder placeholder */}
         <div className="col-span-3 space-y-5">
           <div>
-            <div className="mb-2 font-mono text-[10px] tracking-wider text-amber-600">
-              SHOT {String(selectedIndex + 1).padStart(2, '0')} · 提示詞
+            <div className="mb-2 flex items-center justify-between">
+              <div className="font-mono text-[10px] tracking-wider text-amber-600">
+                SHOT {String(selectedIndex + 1).padStart(2, '0')} · 描述詞
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveDescription}
+                disabled={!descChanged || updatePanelText.isPending || !selected}
+                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {updatePanelText.isPending ? '儲存中…' : '儲存'}
+              </button>
             </div>
-            <div className="rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300">
-              {selected?.prompt ?? selected?.description ?? '(無 prompt)'}
+            <textarea
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              rows={5}
+              placeholder="這個鏡頭的場景/構圖描述,生圖會用到。例:近景 — CATHERINE 穿舊圍裙,目光看向鏡頭,雙手扶在工作台前"
+              className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
+            />
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="font-mono text-[10px] tracking-wider text-amber-600">
+                SHOT {String(selectedIndex + 1).padStart(2, '0')} · 對話
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveDialogue}
+                disabled={!dialogueChanged || updatePanelText.isPending || !selected}
+                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {updatePanelText.isPending ? '儲存中…' : '儲存'}
+              </button>
             </div>
+            <textarea
+              value={dialogueDraft}
+              onChange={(e) => setDialogueDraft(e.target.value)}
+              rows={3}
+              placeholder="這個鏡頭播放時的台詞 / 旁白 / 字幕。空白即為無對白。"
+              className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
+            />
           </div>
 
           <PromptChipGroup label="視角" options={['平視', '仰視', '俯視', '傾斜']} cols={2} active={0} />
@@ -624,12 +714,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled
-              className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2.5 font-serif-cn text-sm text-amber-400 opacity-60"
-              title="12.5.2 接 video pipeline"
+              disabled={!selected || !selected.imageUrl || generateVideo.isPending}
+              onClick={handleGenerateVideo}
+              title={
+                !selected?.imageUrl
+                  ? '需要先有靜態圖才能生影片 — 請先點「重新生成圖」'
+                  : '把這個鏡頭的圖送 video model(專案預設 Kling)生成 5 秒影片'
+              }
+              className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2.5 font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="play" className="h-3.5 w-3.5" />
-              首尾幀生視頻
+              {generateVideo.isPending ? '提交中…' : selected?.videoUrl ? '↻ 重生視頻' : '生成視頻'}
             </button>
           </div>
           {regenPanel.isError ? (

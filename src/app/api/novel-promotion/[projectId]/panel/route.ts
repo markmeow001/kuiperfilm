@@ -229,7 +229,15 @@ export const PATCH = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json()
-  const { panelId, storyboardId, panelIndex, videoPrompt, firstLastFramePrompt } = body
+  const {
+    panelId,
+    storyboardId,
+    panelIndex,
+    videoPrompt,
+    firstLastFramePrompt,
+    description, // V2 storyboard editor — scene/composition prompt
+    srtSegment,  // V2 storyboard editor — dialogue/subtitle text
+  } = body
 
   // 🔥 方式1：通过 panelId 直接更新（优先）
   if (panelId) {
@@ -249,9 +257,19 @@ export const PATCH = apiHandler(async (
     const updateData: {
       videoPrompt?: string | null
       firstLastFramePrompt?: string | null
+      description?: string | null
+      srtSegment?: string | null
     } = {}
     if (videoPrompt !== undefined) updateData.videoPrompt = videoPrompt
     if (firstLastFramePrompt !== undefined) updateData.firstLastFramePrompt = firstLastFramePrompt
+    if (description !== undefined) {
+      const trimmed = typeof description === 'string' ? description : null
+      updateData.description = trimmed
+    }
+    if (srtSegment !== undefined) {
+      const trimmed = typeof srtSegment === 'string' ? srtSegment : null
+      updateData.srtSegment = trimmed
+    }
 
     await prisma.novelPromotionPanel.update({
       where: { id: panelId },
