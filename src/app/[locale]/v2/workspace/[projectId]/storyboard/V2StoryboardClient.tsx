@@ -167,6 +167,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
   const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
 
+  // Layout mode toggle — Gallery (V3 style, default) for portrait /
+  // 9:16 short-drama; Timeline (V4 style, current behavior) for
+  // landscape / 16:9. Persisted in localStorage so the user's choice
+  // sticks across navigation. Default is gallery per user decision
+  // 「V3變成主板」.
+  const [layoutMode, setLayoutMode] = useState<'gallery' | 'timeline'>(() => {
+    if (typeof window === 'undefined') return 'gallery'
+    const stored = window.localStorage.getItem('v2-storyboard-layout')
+    return stored === 'timeline' ? 'timeline' : 'gallery'
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem('v2-storyboard-layout', layoutMode)
+  }, [layoutMode])
+
   // Server-side task snapshot for script_to_storyboard_run, scoped to the
   // current episode. Survives navigation and is the source of truth for
   // the analyze status banner — same pattern as V2SubjectsClient.
@@ -620,6 +635,344 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     )
   }
 
+  // Shared layout toggle widget — both layout branches render this in
+  // their toolbar so the user can flip between Gallery and Timeline
+  // without leaving the page.
+  const layoutToggleNode = (
+    <div className="flex items-center gap-0 overflow-hidden rounded-sm border border-stone-800">
+      <button
+        type="button"
+        onClick={() => setLayoutMode('gallery')}
+        title="畫廊版面 — 直幅 9:16 友善"
+        className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
+          layoutMode === 'gallery'
+            ? 'bg-amber-500/15 text-amber-300'
+            : 'text-stone-500 hover:text-amber-400'
+        }`}
+      >
+        ▦ 畫廊
+      </button>
+      <button
+        type="button"
+        onClick={() => setLayoutMode('timeline')}
+        title="時間軸版面 — 橫幅 16:9 友善"
+        className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
+          layoutMode === 'timeline'
+            ? 'bg-amber-500/15 text-amber-300'
+            : 'text-stone-500 hover:text-amber-400'
+        }`}
+      >
+        ☰ 時間軸
+      </button>
+    </div>
+  )
+
+  // ─── Gallery layout (default) ────────────────────────────────────
+  // 60/40 split: left main grid of panel cards at the project's
+  // actual videoRatio, right side selected-shot preview + edit form.
+  if (layoutMode === 'gallery') {
+    const selectedIdxForGallery = allPanels.findIndex((p) => p.id === selected?.id)
+    return (
+      <div className="flex h-full flex-col">
+        {/* Top toolbar — analyze + autogroup + layout toggle */}
+        <div className="border-b border-amber-900/15 px-8 pb-3 pt-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="font-fraunces text-sm italic text-amber-500/80">分鏡</div>
+              {hasGroups ? (
+                <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400">
+                  {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+                </span>
+              ) : null}
+              <div className="font-mono text-[10px] tracking-wider text-stone-500">
+                {allPanels.length} SHOTS · 比例 {projectVideoRatio}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {layoutToggleNode}
+              <button
+                type="button"
+                disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
+                onClick={handleAnalyzeStoryboard}
+                title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
+                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                {analyzeState.status === 'submitting'
+                  ? '提交中…'
+                  : isAnalyzing
+                    ? `分析中… ${analyzeProgress}%`
+                    : '↻ 重新分析'}
+              </button>
+              <button
+                type="button"
+                disabled={autoGroup.isPending || allPanels.length < 2}
+                onClick={handleAutoGroup}
+                title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群"
+                className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSubmitMultiShot()}
+                disabled={multiShotState.status === 'submitting'}
+                title="把分鏡送 Kling multi-shot 一次出多鏡頭視頻"
+                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                {multiShotState.status === 'submitting'
+                  ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
+                  : '智能多鏡頭'}
+              </button>
+            </div>
+          </div>
+          {isAnalyzing ? (
+            <div className="mt-2 rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+              正在重新分析劇本… {analyzeProgress}% — 完成後分鏡會自動刷新
+            </div>
+          ) : null}
+          {multiShotState.status === 'done' ? (
+            <div className="mt-2 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
+              ✓ 已送出 {multiShotState.sent} 個 multi-shot 任務
+              {multiShotState.failures > 0 ? `(${multiShotState.failures} 組失敗)` : ''}
+            </div>
+          ) : null}
+          {multiShotState.status === 'error' ? (
+            <div className="mt-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
+              {multiShotState.message}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Main 60/40 split */}
+        <div className="grid flex-1 grid-cols-[1.5fr_1fr] gap-0 overflow-hidden">
+          {/* Left: gallery grid */}
+          <div className="overflow-y-auto px-8 py-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+              {allPanels.map((p, i) => {
+                const active = p.id === selected?.id
+                const accent = accentForGroupId(p.multiShotGroupId, orderedGroupIds)
+                const localImg = imageInFlight.has(p.id)
+                const localVid = videoInFlight.has(p.id)
+                const remoteImg = serverInflightPanelImageIds.has(p.id)
+                const remoteVid = serverInflightPanelVideoIds.has(p.id)
+                const isImg = localImg || remoteImg
+                const isVid = localVid || remoteVid
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedId(p.id)}
+                    className={`group flex flex-col overflow-hidden rounded-sm border-l-4 border-y border-r text-left transition-all ${accent} ${
+                      active
+                        ? 'border-amber-500/60 ring-2 ring-amber-500/20'
+                        : 'border-stone-800/60 hover:border-amber-500/40'
+                    }`}
+                  >
+                    <div className={`relative ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
+                      {p.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imageUrl} alt={`#${i + 1}`} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <AppIcon name="image" className="h-7 w-7 text-stone-600" />
+                        </div>
+                      )}
+                      <div className="absolute left-2 top-2 rounded bg-stone-950/60 px-2 py-0.5 font-mono text-[10px] text-stone-200 backdrop-blur-sm">
+                        #{String(i + 1).padStart(2, '0')}
+                      </div>
+                      {p.videoUrl ? (
+                        <div className="absolute bottom-2 right-2 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[9px] text-stone-950 backdrop-blur-sm">
+                          ▶ 視頻
+                        </div>
+                      ) : null}
+                      {isImg || isVid ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
+                          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+                          <div className="font-mono text-[9px] tracking-wider text-amber-300">
+                            {isVid ? '視頻生成中' : '圖生成中'}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="bg-stone-900/40 px-3 py-2">
+                      <div className="line-clamp-2 font-serif-cn text-xs leading-snug text-stone-200">
+                        {p.description?.slice(0, 60) ?? `分鏡 ${i + 1}`}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Right: selected shot detail */}
+          <aside className="overflow-y-auto border-l border-amber-900/15 bg-stone-950/40 px-6 py-6">
+            {selected ? (
+              <>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="font-fraunces text-base italic text-amber-500/80">
+                    鏡頭 {String(selectedIdxForGallery + 1).padStart(2, '0')}
+                  </div>
+                  <div className="font-mono text-[10px] tracking-wider text-stone-500">
+                    {selected.videoUrl ? '✓ 視頻已生成' : selected.imageUrl ? '圖已生成' : '尚未生成'}
+                  </div>
+                </div>
+                <div className={`relative mx-auto max-h-[480px] max-w-[280px] overflow-hidden rounded-sm border border-stone-800 ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
+                  {selected.videoUrl ? (
+                    <video
+                      key={selected.id + ':' + selected.videoUrl}
+                      src={selected.videoUrl}
+                      poster={selected.imageUrl ?? undefined}
+                      controls
+                      preload="metadata"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : selected.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={selected.imageUrl} alt="selected" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <AppIcon name="image" className="h-8 w-8 text-stone-600" />
+                    </div>
+                  )}
+                  {isCurrentPanelVideoInFlight || isCurrentPanelImageInFlight ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/75 backdrop-blur-sm">
+                      <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
+                      <div className="font-fraunces text-sm italic text-amber-300">
+                        {isCurrentPanelVideoInFlight ? '視頻生成中' : '圖片生成中'}
+                      </div>
+                      <div className="px-3 text-center font-serif-cn text-[10px] text-stone-300">
+                        30-60 秒,完成後自動更新
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={!selected || regenPanel.isPending}
+                    onClick={() => {
+                      if (!selected) return
+                      const panelIdAtSubmit = selected.id
+                      regenPanel.mutate(
+                        { panelId: panelIdAtSubmit },
+                        {
+                          onSuccess: () => {
+                            setImageInFlight((prev) => {
+                              const next = new Set(prev)
+                              next.add(panelIdAtSubmit)
+                              return next
+                            })
+                            void activePanelImageTasks.refetch()
+                          },
+                        },
+                      )
+                    }}
+                    className="rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
+                  >
+                    {regenPanel.isPending ? '提交中…' : '重新生成圖'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+                    onClick={handleGenerateVideo}
+                    className="rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-serif-cn text-xs text-amber-300 transition-all hover:bg-amber-500/20 disabled:opacity-50"
+                  >
+                    {generateVideo.isPending
+                      ? '提交中…'
+                      : isCurrentPanelVideoInFlight
+                        ? '生成中…'
+                        : selected.videoUrl
+                          ? '↻ 重生視頻'
+                          : '生成視頻'}
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <div className="font-mono text-[10px] tracking-wider text-amber-600">描述詞</div>
+                      <button
+                        type="button"
+                        onClick={handleSaveDescription}
+                        disabled={!descChanged || updatePanelText.isPending || !selected}
+                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                      >
+                        {updatePanelText.isPending ? '儲存中…' : '儲存'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={descDraft}
+                      onChange={(e) => setDescDraft(e.target.value)}
+                      rows={4}
+                      className="w-full rounded-sm border border-stone-800 bg-stone-900/50 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500/50"
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <div className="font-mono text-[10px] tracking-wider text-amber-600">對話</div>
+                      <button
+                        type="button"
+                        onClick={handleSaveDialogue}
+                        disabled={!dialogueChanged || updatePanelText.isPending || !selected}
+                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                      >
+                        {updatePanelText.isPending ? '儲存中…' : '儲存'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={dialogueDraft}
+                      onChange={(e) => setDialogueDraft(e.target.value)}
+                      rows={3}
+                      placeholder="這個鏡頭的台詞 / 旁白 / 字幕"
+                      className="w-full rounded-sm border border-stone-800 bg-stone-900/50 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <a
+                    href={selected.imageUrl ?? '#'}
+                    download={selected.imageUrl ? `panel-${(selectedIdxForGallery + 1).toString().padStart(2, '0')}.jpg` : undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-disabled={!selected.imageUrl}
+                    onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[10px] tracking-wider transition-all ${selected.imageUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
+                  >
+                    <AppIcon name="download" className="h-3 w-3" />
+                    下載圖
+                  </a>
+                  <a
+                    href={selected.videoUrl ?? '#'}
+                    download={selected.videoUrl ? `panel-${(selectedIdxForGallery + 1).toString().padStart(2, '0')}.mp4` : undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-disabled={!selected.videoUrl}
+                    onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[10px] tracking-wider transition-all ${selected.videoUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
+                  >
+                    <AppIcon name="download" className="h-3 w-3" />
+                    下載影片
+                  </a>
+                </div>
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center text-center">
+                <p className="font-fraunces text-sm italic text-stone-500">點左邊任一分鏡進行編輯</p>
+              </div>
+            )}
+          </aside>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Timeline layout (existing) ──────────────────────────────────
   return (
     <div className="flex h-full flex-col">
       {/* Top: panel strip */}
@@ -658,6 +1011,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
             </button>
+            {layoutToggleNode}
             <div className="font-mono text-[10px] tracking-wider text-stone-500">
               {allPanels.length} SHOTS · DRAFT 03
             </div>
