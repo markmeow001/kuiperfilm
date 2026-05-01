@@ -132,19 +132,41 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const isAnalyzing = analyzeStatus === 'queued' || analyzeStatus === 'processing'
   const analyzeError = analyzeSnapshot.data?.errorMessage ?? null
 
+  // Poll while EITHER (a) the snapshot reports an active task OR (b) we
+  // just submitted one ourselves. Without (b) the chicken-and-egg bug
+  // bites: when the previous run failed (e.g. container restart marked
+  // it stalled), snapshot returns status='failed', isAnalyzing is false,
+  // polling never starts, and the next 重新分析 click submits a fresh
+  // task that the UI never observes — user sees the OLD failed task's
+  // 90% progress frozen on screen even though the new task already
+  // completed in the worker. Polling on submit lets ~1 tick elapse then
+  // catches the freshly-queued/processing task and the loop self-
+  // sustains as before.
+  const shouldPollForAnalyze = isAnalyzing || analyzeState.status === 'submitted' || analyzeState.status === 'submitting'
   useEffect(() => {
-    if (!isAnalyzing) return
+    if (!shouldPollForAnalyze) return
     const interval = setInterval(() => { void analyzeSnapshot.refetch() }, 3000)
     return () => clearInterval(interval)
-  }, [isAnalyzing, analyzeSnapshot])
+  }, [shouldPollForAnalyze, analyzeSnapshot])
 
   const previousAnalyzeStatus = useRef(analyzeStatus)
   useEffect(() => {
     if (previousAnalyzeStatus.current !== 'completed' && analyzeStatus === 'completed' && currentEpisodeId) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId) })
     }
+    // Once the server confirms the new task has actually surfaced in the
+    // snapshot (active or terminal), drop the local 'submitted' flag so
+    // polling can wind down. Without this, polling keeps firing every 3s
+    // forever after one analyze click.
+    if (
+      (analyzeStatus === 'queued' || analyzeStatus === 'processing' ||
+        analyzeStatus === 'completed' || analyzeStatus === 'failed') &&
+      analyzeState.status === 'submitted'
+    ) {
+      setAnalyzeState({ status: 'idle' })
+    }
     previousAnalyzeStatus.current = analyzeStatus
-  }, [analyzeStatus, currentEpisodeId, queryClient])
+  }, [analyzeStatus, currentEpisodeId, queryClient, analyzeState.status])
 
   const allPanels = useMemo<PanelLike[]>(() => {
     const sb = storyboardsData?.storyboards ?? []
