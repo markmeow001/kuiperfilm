@@ -24,6 +24,7 @@ import { useUpdateProjectConfig, useAnalyzeProjectAssets } from '@/lib/query/mut
 import { useStyleProfile } from '@/lib/query/hooks/useStyleProfile'
 import { useUpdateStyleProfile } from '@/lib/query/mutations/updateStyleProfile'
 import { queryKeys } from '@/lib/query/keys'
+import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import {
   STYLE_PROFILE_PRESETS,
   PRESET_ORDER_BY_CATEGORY,
@@ -73,27 +74,22 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
 
   const project = projectQuery.data as ProjectDataLike | undefined
   const novelData = project?.novelPromotionData ?? null
-  const firstEpisodeId = novelData?.episodes?.[0]?.id ?? null
+  const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
 
   const [novelText, setNovelText] = useState('')
   const [activeMethod, setActiveMethod] = useState<string>('novel')
-  const [hasInitialized, setHasInitialized] = useState(false)
   const [savedText, setSavedText] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // Re-sync the textarea whenever the user switches episodes via the tab bar.
+  // The textarea is local state for fast typing; we hydrate from the
+  // currently-selected episode's novelText each time the active id changes.
   useEffect(() => {
-    if (hasInitialized) return
     if (!novelData) return
-    // Read from the FIRST episode's novelText — that's where v2 writes go
-    // (project.novelText is never set because PATCH /api/novel-promotion/[id]
-    //  silently drops the field). Fall back to project.novelText only for
-    // legacy data shaped before this fix.
-    const fromEpisode = novelData.episodes?.[0]?.novelText ?? null
-    const initial = fromEpisode ?? novelData.novelText ?? ''
-    setNovelText(initial)
-    setSavedText(initial)
-    setHasInitialized(true)
-  }, [hasInitialized, novelData])
+    const text = currentEpisode?.novelText ?? novelData.novelText ?? ''
+    setNovelText(text)
+    setSavedText(text)
+  }, [currentEpisodeId, currentEpisode?.novelText, novelData])
 
   const videoRatio = novelData?.videoRatio ?? '9:16'
   const selectedPresetKey = (styleQuery.data?.stylePresetKey ?? null) as PresetKey | null
@@ -137,12 +133,12 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
   }
 
   function handleSaveNovelText() {
-    // Debounced manual save — store the textarea value into the FIRST episode's
-    // novelText (only if the episode already exists). Project-level PATCH does
-    // NOT accept novelText (allowedProjectFields whitelist), so going through
-    // /episodes/[id] PATCH is the only path the analyze worker can read.
-    if (!firstEpisodeId) return // nothing to save into yet — handleAnalyze creates one
-    void saveNovelTextToEpisode(firstEpisodeId, novelText)
+    // Debounced manual save — write the textarea value into the CURRENT
+    // episode's novelText. Project-level PATCH does NOT accept novelText
+    // (allowedProjectFields whitelist), so /episodes/[id] PATCH is the only
+    // path the analyze worker can read.
+    if (!currentEpisodeId) return // nothing to save into yet — handleAnalyze creates one
+    void saveNovelTextToEpisode(currentEpisodeId, novelText)
   }
 
   function handleRatioChange(value: string) {
@@ -159,7 +155,7 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
   }
 
   async function ensureEpisode(): Promise<string | null> {
-    if (firstEpisodeId) return firstEpisodeId
+    if (currentEpisodeId) return currentEpisodeId
     setCreatingEpisode(true)
     try {
       const res = await fetch(`/api/novel-promotion/${projectId}/episodes`, {
@@ -249,7 +245,7 @@ export function V2ScriptClient({ projectId }: V2ScriptClientProps) {
             <div className="font-fraunces text-sm italic text-amber-500/80">Your Spark</div>
             <div className="flex items-center gap-3 font-mono text-[10px] text-stone-600">
               <span>{charCount} chars</span>
-              {firstEpisodeId ? (
+              {currentEpisodeId ? (
                 saving ? (
                   <span className="text-amber-500/70">儲存中…</span>
                 ) : savedText !== null && savedText === novelText && novelText.length > 0 ? (

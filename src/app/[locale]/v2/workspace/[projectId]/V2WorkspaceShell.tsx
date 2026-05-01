@@ -12,6 +12,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/v2/Sidebar'
 import { TopBar } from '@/components/v2/TopBar'
 import type { V2StepId } from '@/components/v2/v2-types'
+import { V2EpisodeTabBar } from './V2EpisodeTabBar'
 
 interface V2WorkspaceShellProps {
   projectId: string
@@ -53,6 +54,9 @@ export function V2WorkspaceShell({
           projectName={projectName}
           draftNumber={draftNumber}
         />
+        {currentStep !== 'home' ? (
+          <V2EpisodeTabBar projectId={projectId} locale={locale} projectName={projectName} />
+        ) : null}
         <div className="flex-1 overflow-y-auto">{children}</div>
       </main>
     </div>
