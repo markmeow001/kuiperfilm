@@ -575,18 +575,33 @@
   backend / schema / API routes / workers / mutations / prompt files 都不在 lock zone
 
 **Session B — backend / schema(本 session,Anthropic CLI)**:
-- 完成的 commits(2026-04-30):`9102ee1` `e315457` `f65e8d3` `b8c6647` `16902d7`
-  `b61a653` `276fb2a`
-- 接下來工作(`feature/phase-11`,backend-first,**會避開 v2 client TSX**):
-  1. 多人帳號 data-isolation audit(API auth layer 純後端)
-  2. Hunyuan 文本 LLM provider 接入(`src/lib/ai-runtime/`、`src/lib/api-config.ts`)
-  3. Phase 11.4 角色三視圖 schema + analyze prompt + worker handler(V2 UI tab 等
-     Session A 的 EpisodeTabBar 落地後再加)
-  4. ✅ Q-004 safe-rewrite chatCompletion guard 修(2026-04-30 完成,改走 executeAiTextStep)
+- 完成的 commits(2026-04-30 大批):
+  - Phase 12 follow-up: `9102ee1` `e315457` `f65e8d3` `b8c6647` `16902d7` `b61a653` `276fb2a` `829ff12`
+  - Multi-user isolation: `df24e2f`(11+1 routes 修)+ `c9f3220`(7 個 regression 測試)
+  - Q-004 + 11.5 P2 cleanup: `7896c26`
+  - Admin dashboard: `924bd3d` `b2b2191` `aa48169` `6ca1bc5` `89a746e`
+  - **P0 #1** analyze→clips→storyboard cascade: `4bdccf2`
+  - **P0 #2** PATCH /character voice 欄位 silent-drop fix: `eb19bfa`
+  - **P1** 多造型 Stage 1 schema + resolver + binding API: `b5d9f42`
+  - **V2 nav escape**(Sidebar logo / 「← 所有專案」link / TopBar 專案 dropdown): `9b0f75e`
+  - **新 regression 測試**(13 個 admin + multi-appearance API): `0f91658`
+- ✅ 已完成項目:
+  1. ✅ 多人帳號 data-isolation audit(11+1 routes 修 + 7 regression)
+  2. ⏸ Hunyuan 文本 LLM provider 接入(等 user 確認騰訊帳號實名類型)
+  3. ⏸ Phase 11.4 角色三視圖(2-3 週,need 產品定義,deferred)
+  4. ✅ Q-004 safe-rewrite chatCompletion guard 修(改走 executeAiTextStep)
+  5. ✅ P0 #1 cascade analyze→clips→storyboard
+  6. ✅ P0 #2 voice 欄位 silent-drop
+  7. ✅ P1 多造型 Stage 1(schema + resolver + binding API)
 - 🔒 Lock zone:
   - `prisma/schema.prisma`(Session B 改 schema 時 Session A 別動)
   - `src/lib/workers/handlers/*-stitch-*` `*auto-group*`(Session B 已建)
   - `lib/prompts/novel-promotion/auto_group_multi_shot.*`
+  - `src/components/v2/Sidebar.tsx` `TopBar.tsx`(SidebarUser 齒輪 + 切換專案 dropdown)
+  - `src/app/[locale]/admin/**`(整個 admin 區)
+  - `src/app/api/admin/**`(整個 admin API)
+  - `src/lib/character-appearance-resolver.ts`
+  - `src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/{stitch-mp4,auto-group-multi-shot,character-appearance}`
 - 🟢 自由動:v2 client TSX(Session A lock zone 已涵蓋的 episode 段除外)
 
 **衝突解析準則**:
