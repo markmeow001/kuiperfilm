@@ -27,6 +27,7 @@ import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-sh
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
+import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -166,6 +167,66 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
   const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
+
+  // Stage 1 chip-rail bookkeeping. We persist the most-recent
+  // multi-shot taskId per groupId so the chip rail survives page
+  // refresh without re-running the worker. Storage key includes
+  // projectId+episodeId so different episodes don't smear into each
+  // other's bindings.
+  const taskByGroupStorageKey = currentEpisodeId
+    ? `multi-shot-task-by-group:${projectId}:${currentEpisodeId}`
+    : null
+  const [taskByGroup, setTaskByGroup] = useState<Record<string, string>>(() => {
+    if (typeof window === 'undefined' || !taskByGroupStorageKey) return {}
+    try {
+      const raw = window.localStorage.getItem(taskByGroupStorageKey)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === 'string') out[k] = v
+      }
+      return out
+    } catch {
+      return {}
+    }
+  })
+  // Reload bookkeeping when the active episode changes — different
+  // episodes have different group IDs and tasks.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !taskByGroupStorageKey) {
+      setTaskByGroup({})
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(taskByGroupStorageKey)
+      if (!raw) {
+        setTaskByGroup({})
+        return
+      }
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setTaskByGroup({})
+        return
+      }
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed)) {
+        if (typeof v === 'string') out[k] = v
+      }
+      setTaskByGroup(out)
+    } catch {
+      setTaskByGroup({})
+    }
+  }, [taskByGroupStorageKey])
+  useEffect(() => {
+    if (typeof window === 'undefined' || !taskByGroupStorageKey) return
+    try {
+      window.localStorage.setItem(taskByGroupStorageKey, JSON.stringify(taskByGroup))
+    } catch {
+      // Quota error or private mode; ignore — bookkeeping is best-effort.
+    }
+  }, [taskByGroup, taskByGroupStorageKey])
 
   // Layout mode toggle — Gallery (V3 style, default) for portrait /
   // 9:16 short-drama; Timeline (V4 style, current behavior) for
@@ -436,6 +497,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const hasGroups = orderedGroupIds.length > 0
   const groupedPanelCount = allPanels.filter((p) => p.multiShotGroupId).length
 
+  // Stage 1 chip rail target: which multi-shot taskId belongs to the
+  // currently-selected panel's group? Resolves null when the panel
+  // either isn't grouped (mechanical chunk) or no multi-shot has been
+  // submitted for this group yet — the rail stays hidden in that case.
+  const selectedGroupId = selected?.multiShotGroupId ?? null
+  const selectedGroupTaskId = selectedGroupId ? (taskByGroup[selectedGroupId] ?? null) : null
+  const selectedGroupOrdinal = selectedGroupId ? orderedGroupIds.indexOf(selectedGroupId) : -1
+  const selectedGroupLabel = selectedGroupOrdinal >= 0
+    ? `GROUP ${String(selectedGroupOrdinal + 1).padStart(2, '0')}`
+    : null
+
   async function handleAnalyzeStoryboard() {
     if (!currentEpisodeId) {
       setAnalyzeState({ status: 'error', message: '請先選擇集數並貼好劇本' })
@@ -512,8 +584,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
     // Prefer LLM-assigned groups (Phase 12.5.3): if any panel has a
     // multiShotGroupId, group everything by that, otherwise fall back to
-    // mechanical chunk(5).
-    let groups: string[][]
+    // mechanical chunk(5). When LLM-assigned, we also keep the groupId
+    // so the chip rail can later look up the resulting bindings keyed
+    // by the same ID — mechanical chunks stay anonymous and just won't
+    // light up a rail (still get the video, just no binding affordance).
+    type SubmitGroup = { groupId: string | null; panelIds: string[] }
+    let groups: SubmitGroup[]
     const grouped = new Map<string, PanelLike[]>()
     let anyAssigned = false
     for (const p of eligible) {
@@ -525,18 +601,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       }
     }
     if (anyAssigned) {
-      groups = Array.from(grouped.values()).map((panels) =>
-        panels
+      const tmp: SubmitGroup[] = []
+      for (const [groupId, panels] of grouped.entries()) {
+        const sorted = panels
           .slice()
           .sort((a, b) => (a.multiShotGroupOrder ?? 0) - (b.multiShotGroupOrder ?? 0))
-          .map((p) => p.id),
-      )
-      // Drop any group < 2 (Kling rejects). Drop any group > 6 (slice).
-      groups = groups
-        .filter((g) => g.length >= 2)
-        .map((g) => (g.length > 6 ? g.slice(0, 6) : g))
+        if (sorted.length < 2) continue
+        const ids = (sorted.length > 6 ? sorted.slice(0, 6) : sorted).map((p) => p.id)
+        tmp.push({ groupId, panelIds: ids })
+      }
+      groups = tmp
     } else {
-      groups = chunk(eligible.map((p) => p.id), KLING_GROUP_SIZE)
+      groups = chunk(eligible.map((p) => p.id), KLING_GROUP_SIZE).map((panelIds) => ({
+        groupId: null,
+        panelIds,
+      }))
     }
     if (groups.length === 0) {
       setMultiShotState({
@@ -548,19 +627,37 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     setMultiShotState({ status: 'submitting', sent: 0, total: groups.length })
     let sent = 0
     let failures = 0
-    for (const groupIds of groups) {
+    const submittedTaskIds: Record<string, string> = {}
+    for (const group of groups) {
       try {
         const res = await fetch(`/api/novel-promotion/${projectId}/generate-multi-shot-video`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ panelIds: groupIds, videoModel, async: true }),
+          body: JSON.stringify({ panelIds: group.panelIds, videoModel, async: true }),
         })
-        if (!res.ok) failures += 1
+        if (!res.ok) {
+          failures += 1
+        } else if (group.groupId) {
+          // Capture taskId per groupId so the chip rail can show
+          // bindings as soon as the worker completes.
+          try {
+            const body = (await res.json()) as { taskId?: unknown }
+            if (body && typeof body.taskId === 'string' && body.taskId.length > 0) {
+              submittedTaskIds[group.groupId] = body.taskId
+            }
+          } catch {
+            // Ignore JSON parse failure — still counts as sent;
+            // chip rail just won't light up for this group.
+          }
+        }
       } catch {
         failures += 1
       }
       sent += 1
       setMultiShotState({ status: 'submitting', sent, total: groups.length })
+    }
+    if (Object.keys(submittedTaskIds).length > 0) {
+      setTaskByGroup((prev) => ({ ...prev, ...submittedTaskIds }))
     }
     setMultiShotState({ status: 'done', sent, failures })
   }
@@ -933,6 +1030,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     />
                   </div>
                 </div>
+
+                {selectedGroupTaskId ? (
+                  <div className="mt-3">
+                    <MultiShotBindingsRail
+                      taskId={selectedGroupTaskId}
+                      groupLabel={selectedGroupLabel}
+                    />
+                  </div>
+                ) : null}
 
                 <div className="mt-3 flex gap-2">
                   <a
@@ -1380,6 +1486,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
         {/* Right: inspector placeholder */}
         <div className="col-span-3 space-y-5">
+          {selectedGroupTaskId ? (
+            <MultiShotBindingsRail
+              taskId={selectedGroupTaskId}
+              groupLabel={selectedGroupLabel}
+            />
+          ) : null}
+
           <div>
             <div className="mb-2 font-mono text-[10px] tracking-wider text-amber-600">主體 · CAST</div>
             {Array.isArray(selected?.characters) && selected.characters.length > 0 ? (
