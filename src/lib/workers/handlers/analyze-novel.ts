@@ -224,6 +224,42 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
     projectId,
   })
 
+  // Link every character that was either created OR matched against the
+  // existing library in this analyze pass to the *current* episode via
+  // EpisodeCharacter. Without this, the V2 SubjectsPage filter (which
+  // shows only characters in the active episode tab) would miss
+  // episode-2 characters when the user expects "this episode's cast".
+  if (targetEpisode?.id) {
+    const matchedExistingIds: string[] = []
+    for (const item of parsedUpdated) {
+      const name = readText(item.name).trim()
+      if (!name) continue
+      const existing = (novelData.characters || []).find((c) => c.name === name)
+      if (existing) matchedExistingIds.push(existing.id)
+    }
+    const allCharacterIds = [
+      ...createdCharacters.map((c) => c.id),
+      ...matchedExistingIds,
+    ]
+    if (allCharacterIds.length > 0) {
+      try {
+        await prisma.episodeCharacter.createMany({
+          data: allCharacterIds.map((characterId) => ({
+            episodeId: targetEpisode.id,
+            characterId,
+            role: 'analyze-extracted',
+          })),
+          skipDuplicates: true,
+        })
+      } catch (err) {
+        _ulogError('[analyze-novel] EpisodeCharacter link failed', err, {
+          episodeId: targetEpisode.id,
+          characterCount: allCharacterIds.length,
+        })
+      }
+    }
+  }
+
   const createdLocations = await processNewLocations({
     parsedLocations,
     existingLocations: novelData.locations || [],

@@ -43,6 +43,7 @@ import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigM
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
+import { useEpisodeCharacterBindings } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 
@@ -300,8 +301,32 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }, [isAnalyzing, taskStatus, activeImageTasks])
 
-  const characters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
+  const allCharacters = (charactersQuery.data ?? []) as unknown as CharacterLike[]
   const locations = (locationsQuery.data ?? []) as unknown as LocationLike[]
+
+  // Phase 11.4 fix: Subjects now filters the character grid to only
+  // those linked to the current episode via EpisodeCharacter. Without
+  // this, ep1 + ep2 characters appeared together on every tab and
+  // looked like "ep2's analyze leaked into ep1". Each episode's
+  // analyze run also writes EpisodeCharacter rows so this filter has
+  // data to work with.
+  const episodeBindingsQuery = useEpisodeCharacterBindings(projectId, currentEpisodeId)
+  const episodeBindingIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const b of episodeBindingsQuery.data ?? []) set.add(b.characterId)
+    return set
+  }, [episodeBindingsQuery.data])
+  // If the bindings query hasn't returned yet (or this episode has no
+  // links — e.g. legacy data created before this fix), fall back to
+  // showing all project characters so the user isn't presented with an
+  // empty grid. The hint banner below tells them what's filtered.
+  const characters: CharacterLike[] = episodeBindingIds.size > 0
+    ? allCharacters.filter((c) => episodeBindingIds.has(c.id))
+    : allCharacters
+  const isFilteringByEpisode = episodeBindingIds.size > 0
+  const hiddenInThisEpisodeCount = isFilteringByEpisode
+    ? allCharacters.length - characters.length
+    : 0
 
   function handleAnalyze() {
     if (!currentEpisodeId) {
@@ -668,6 +693,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           </Link>
         </div>
       </div>
+
+      {tab === 'character' && currentEpisode && isFilteringByEpisode && hiddenInThisEpisodeCount > 0 ? (
+        <div className="mb-4 rounded-sm border border-stone-800/50 bg-stone-900/40 px-3 py-2 font-mono text-[10px] tracking-wider text-stone-400">
+          只顯示「{currentEpisode.name}」出現的 {characters.length} 個角色 ·
+          其他集數有 {hiddenInThisEpisodeCount} 個隱藏 · 切到其他集數 tab 可看到那邊的角色
+        </div>
+      ) : null}
 
       {isLoading ? (
         <p className="font-mono text-xs tracking-wider text-stone-500">載入中…</p>
