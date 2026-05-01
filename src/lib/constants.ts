@@ -297,7 +297,10 @@ export function getArtStylePrompt(
 }
 
 // 角色形象生成的系统后缀（始终添加到提示词末尾，不显示给用户）- 左侧面部特写+右侧三视图
-export const CHARACTER_PROMPT_SUFFIX = '角色设定图，画面分为左右两个区域：【左侧区域】占约1/3宽度，是角色的正面特写（如果是人类则展示完整正脸，如果是动物/生物则展示最具辨识度的正面形态）；【右侧区域】占约2/3宽度，是角色三视图横向排列（从左到右依次为：正面全身、侧面全身、背面全身），三视图高度一致。极其重要：左侧特写和右侧三视图必须是完全相同的角色，面部五官、发型、发色、肤色完全一致，只是角度不同。纯白色背景，无其他元素。'
+// 強化版:加上明確負面條件防止 Tencent VOD 誤判成街景人物。觀察到女性
+// 角色描述含「都市女孩」「妆容精致」等詞時偶爾會生出單張街拍而非三視圖,
+// 加負面詞 + 純白背景 + 無人類雜物的硬性約束改善穩定度。
+export const CHARACTER_PROMPT_SUFFIX = '【最重要 — 構圖規格,禁止違反】角色設定圖規格,僅一張圖且必須嚴格遵守以下版型: 畫面分為左右兩個區域: 【左側區域】佔約 1/3 寬度,是角色的正面特寫(如果是人類則展示完整正臉,如果是動物/生物則展示最具辨識度的正面形態);【右側區域】佔約 2/3 寬度,是角色三視圖橫向排列(從左到右依次為: 正面全身、側面全身、背面全身),三視圖高度一致。⚠️ 左側特寫和右側三視圖必須是完全相同的角色,面部五官、髮型、髮色、膚色完全一致,只是角度不同。【背景必須是純白色】,無街景、無建築、無傢俱、無其他人物、無背景人群、無城市場景、無店面、無自然風景。整張圖只有此角色與純白背景。'
 
 // 场景图片生成的系统后缀（已禁用四视图，直接生成单张场景图）
 export const LOCATION_PROMPT_SUFFIX = ''
@@ -323,10 +326,17 @@ export function removeCharacterPromptSuffix(prompt: string): string {
 }
 
 // 添加角色系统后缀到提示词（用于生成图片）
+// Format spec goes FIRST so the model treats the 三视图 + 純白背景 contract
+// as the leading instruction. Tencent VOD GEM-3.1 weights leading tokens
+// more strongly; trailing format hints were occasionally drowned out by
+// adjective-heavy descriptions ("都市女孩" / "光鮮亮麗" → single street
+// shot instead of a sheet).
 export function addCharacterPromptSuffix(prompt: string): string {
   if (!prompt) return CHARACTER_PROMPT_SUFFIX
   const cleanPrompt = removeCharacterPromptSuffix(prompt)
-  return `${cleanPrompt}${cleanPrompt ? '，' : ''}${CHARACTER_PROMPT_SUFFIX}`
+  return cleanPrompt
+    ? `${CHARACTER_PROMPT_SUFFIX}\n\n【角色具體描述】\n${cleanPrompt}`
+    : CHARACTER_PROMPT_SUFFIX
 }
 
 // 从提示词中移除场景系统后缀（用于显示给用户）
