@@ -30,6 +30,15 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     update: vi.fn(),
   },
+  // Augmented in 6ca1bc5: GET /api/admin/users now joins UserBalance +
+  // MediaObject aggregates. Mocks return empty by default so existing
+  // tests that don't care about balance / storage still pass.
+  userBalance: {
+    findMany: vi.fn(async () => []),
+  },
+  mediaObject: {
+    groupBy: vi.fn(async () => []),
+  },
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
@@ -41,6 +50,9 @@ beforeEach(() => {
   installAuthMocks()
   mockAuthenticated('admin-1')
   mockRole('admin')
+  // Re-arm the default empty implementations after clearAllMocks wipes them.
+  prismaMock.userBalance.findMany.mockImplementation(async () => [])
+  prismaMock.mediaObject.groupBy.mockImplementation(async () => [])
 })
 
 afterEach(() => {
@@ -63,7 +75,17 @@ describe('GET /api/admin/users', () => {
     })
     expect(res.status).toBe(200)
     const body = await res.json()
-    expect(body.users).toEqual(sample)
+    // Augmented in 6ca1bc5 — each row now carries balance + storage, but
+    // the caller's identifying fields are unchanged. Verify the sample
+    // ids/roles round-trip and the new fields default sanely.
+    expect(body.users).toHaveLength(2)
+    expect(body.users.map((u: { id: string; role: string }) => ({ id: u.id, role: u.role }))).toEqual(
+      sample.map((s) => ({ id: s.id, role: s.role })),
+    )
+    for (const row of body.users as Array<{ balance: unknown; storage: { bytes: string; objectCount: number } }>) {
+      expect(row.balance).toBeNull()
+      expect(row.storage).toEqual({ bytes: '0', objectCount: 0 })
+    }
     expect(prismaMock.user.findMany).toHaveBeenCalledTimes(1)
   })
 
