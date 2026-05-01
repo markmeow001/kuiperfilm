@@ -30,43 +30,75 @@ export type PersistedStoryboard = {
  * 從 LLM 輸出的 source_text 抽出真正的對話。
  *
  * Background: agent_storyboard_plan prompt 規定每個 panel 都要有 source_text
- * (對應原文片段),所以 LLM 把場景描述如「编号1 特写: 一个插着...」也塞進
- * 這個欄位。我們把整個 source_text 寫進 srtSegment 後,UI 上 SHOT 01 對話框
- * 就出現了「编号1 特写: ...」這種敘述,user 抗議「這不是對話」。
+ * (對應原文片段),所以 LLM 把場景描述如「特写: 一个插着...」、
+ * 「全景: 餐桌上一片死寂。BRUCE...」、「编号1 ...」也塞進這個欄位,跟真
+ * 對話混在一行。我們直接寫 srtSegment 結果 V2 對話框出現一堆敘述。
  *
- * 觀察到的兩種模式:
- *   ❌ 描述行:以「编号N」/「鏡頭N」開頭 + 含 \t scene header
- *   ✅ 對話行:以說話者名字 + 「:」開頭(NAME: / 中文角色名:)
+ * 觀察到的混雜模式(real prod data,project 17b1f037):
+ *   ❌ 「特写: 一个插着"45"数字蜡烛的蛋糕被端上桌。CATHERINE: ¡Sorpresa!...」
+ *      → 一行內前段是場景敘述,後段才是對話
+ *   ❌ 「全景: 餐桌上一片死寂。BRUCE(丈夫)盯着平板...沒人看蛋糕一眼」
+ *      → 一行內全是敘述沒真對話(BRUCE 後面是定語不是冒號)
+ *   ❌ 「编号3 TOBY 戴着大耳机...」
+ *      → 「TOBY」雖是角色名但這裡是「關於 TOBY 的描述」非「TOBY 說的話」
+ *   ✅ 「TOBY: Mamá, estás tapando la luz...」
+ *      → 標準說話者:對話
  *
- * 抽法:
- *   1. 拆 newlines
- *   2. 找出符合「<說話者>: <內容>」格式的行
- *   3. 全部都符合或都不符合 → 整段傳回 / null
- *   4. 部分符合 → 只保留對話行(混合 description+dialogue 的 panel)
- *
- * 嚴格 conservative — 寧可漏抽留 null 讓 user 手動補對話,也不要把場景敘述
- * 當成對話塞進 srtSegment 干擾 voice analyze TTS。
+ * 抽法 v2 — match-all + 場景詞 denylist:
+ *   1. 全文 regex 找出所有 `<說話者>:<內容>` segment(可在一行內多個)
+ *   2. 說話者必須是「全大寫拉丁字母 ≥ 2」或「短中文(1-4 字)且不在場景詞 denylist」
+ *   3. 抽出後重組為 `說話者: 內容` 換行串接
+ *   4. 整段沒命中 → null(留空對話框,讓 user 手動補)
  */
+const SCENE_KEYWORDS = new Set<string>([
+  '特写', '特寫', '大特写', '大特寫',
+  '近景', '中近景', '中景', '全景', '远景', '遠景',
+  '空镜', '空鏡', '空镜头', '空鏡頭',
+  '俯视', '俯視', '仰视', '仰視', '平视', '平視',
+  '正反打', '反打', '过肩', '過肩',
+  '航拍', '推拉', '运镜', '運鏡',
+  '蒙太奇', '蒙太奇',
+  '场景', '場景', '镜头', '鏡頭',
+  '描述', '动作', '動作', '画外', '畫外', '画外音', '畫外音',
+  '编号', '編號',
+])
+
+function isLikelyScenePrefix(speaker: string): boolean {
+  const trimmed = speaker.trim()
+  if (!trimmed) return true
+  // Scene type literal
+  if (SCENE_KEYWORDS.has(trimmed)) return true
+  // "编号3" / "鏡頭5" / "Shot 7" / "Panel 12"
+  if (/^(编号|編號|镜头|鏡頭|场景|場景|Shot|Panel|Scene)\s*\d+/i.test(trimmed)) return true
+  // Pure digits like "1" / "01"
+  if (/^\d+$/.test(trimmed)) return true
+  return false
+}
+
 export function extractDialogueFromSourceText(raw: string | null | undefined): string | null {
   if (!raw) return null
   const trimmed = raw.trim()
   if (!trimmed) return null
-  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  if (lines.length === 0) return null
-  const SPEAKER_PREFIX = /^([A-ZÁÉÍÓÚÑÄÖÜ一-鿿][A-Za-zÁ-ÿ一-鿿·\s']{0,30})\s*[:：](.+)$/u
-  const dialogueLines = lines.filter((line) => SPEAKER_PREFIX.test(line))
-  if (dialogueLines.length === 0) return null
-  // Strip "编号N" or "鏡頭N" / scene-header artefacts from the captured
-  // dialogue lines just in case the LLM concatenated them onto the same
-  // line (e.g. "编号3 TOBY: ..." — keep only the TOBY: bit).
-  const cleaned = dialogueLines.map((line) => {
-    const match = line.match(SPEAKER_PREFIX)
-    if (!match) return line
-    const speaker = match[1].replace(/^(编号|編號|镜头|鏡頭|Shot|Panel)\s*\d+\s*/i, '').trim()
-    const content = match[2].trim()
-    return speaker ? `${speaker}: ${content}` : content
-  })
-  return cleaned.join('\n')
+
+  // Match candidate `<NAME>:<content>` segments anywhere in the text.
+  // NAME = ALL-CAPS Latin (>=2 chars, allows accented chars + spaces) OR
+  //        short Chinese block (1-4 chars).
+  // Content captured up to the next NAME: or end of string.
+  // The 'gus' flags let . cross newlines and a global match find every
+  // occurrence so we catch panels with multiple speakers concatenated.
+  const SEGMENT_RE = /([A-ZÁÉÍÓÚÑÄÖÜ][A-ZÁÉÍÓÚÑÄÖÜa-zá-ÿ\s']{1,30}|[一-鿿]{1,4})\s*[:：]\s*([\s\S]+?)(?=(?:[A-ZÁÉÍÓÚÑÄÖÜ][A-ZÁÉÍÓÚÑÄÖÜa-zá-ÿ\s']{1,30}|[一-鿿]{1,4})\s*[:：]|$)/gu
+
+  const dialogues: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = SEGMENT_RE.exec(trimmed)) !== null) {
+    const speaker = m[1].trim()
+    const content = m[2].trim()
+    if (isLikelyScenePrefix(speaker)) continue
+    if (!content) continue
+    dialogues.push(`${speaker}: ${content}`)
+  }
+  if (dialogues.length === 0) return null
+  return dialogues.join('\n')
 }
 
 export function parseEffort(value: unknown): 'minimal' | 'low' | 'medium' | 'high' | null {
