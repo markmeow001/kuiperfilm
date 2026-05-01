@@ -84,6 +84,15 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
 
   const charactersLibName = (novelData.characters || []).map((item) => item.name).join(', ')
   const locationsLibName = (novelData.locations || []).map((item) => item.name).join(', ')
+  // Phase 11.3 Stage A — props are also a first-class asset now.
+  // Existing project rows form the dedup catalogue passed to the LLM
+  // (so the same "怀表" / "信封" doesn't get re-extracted as a new row
+  // each analyze run).
+  const novelPropsLib = await prisma.novelPromotionProp.findMany({
+    where: { novelPromotionProjectId: novelData.id },
+    select: { name: true },
+  })
+  const propsLibName = novelPropsLib.map((p) => p.name).join(', ')
   // Detect dominant script of the source so the LLM can default to a
   // sensible ethnicity when the script doesn't explicitly call one out.
   // Without this hint, Tencent VOD GEM-3.1 (East-Asian-trained) defaults
@@ -106,6 +115,14 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
       locations_lib_name: locationsLibName || '无',
     },
   })
+  const propsPromptTemplate = buildPrompt({
+    promptId: PROMPT_IDS.NP_EXTRACT_PROPS,
+    locale: job.data.locale,
+    variables: {
+      input: contentToAnalyze,
+      props_lib_name: propsLibName || '无',
+    },
+  })
 
   await reportTaskProgress(job, 20, {
     stage: 'analyze_novel_prepare',
@@ -116,7 +133,7 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
 
   const streamContext = createWorkerLLMStreamContext(job, 'analyze_novel')
   const streamCallbacks = createWorkerLLMStreamCallbacks(job, streamContext)
-  const [characterCompletion, locationCompletion] = await (async () => {
+  const [characterCompletion, locationCompletion, propsCompletion] = await (async () => {
     try {
       return await withInternalLLMStreamCallbacks(
         streamCallbacks,
@@ -133,7 +150,7 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
                 stepId: 'analyze_characters',
                 stepTitle: '角色分析',
                 stepIndex: 1,
-                stepTotal: 2,
+                stepTotal: 3,
               },
             }),
             executeAiTextStep({
@@ -147,7 +164,21 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
                 stepId: 'analyze_locations',
                 stepTitle: '场景分析',
                 stepIndex: 2,
-                stepTotal: 2,
+                stepTotal: 3,
+              },
+            }),
+            executeAiTextStep({
+              userId: job.data.userId,
+              model: analysisModel,
+              messages: [{ role: 'user', content: propsPromptTemplate }],
+              temperature: 0.7,
+              projectId,
+              action: 'analyze_props',
+              meta: {
+                stepId: 'analyze_props',
+                stepTitle: '道具分析',
+                stepIndex: 3,
+                stepTotal: 3,
               },
             }),
           ]),
@@ -197,6 +228,10 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
       : []
   const parsedLocations = Array.isArray(locationsData.locations)
     ? (locationsData.locations as Array<Record<string, unknown>>)
+    : []
+  const propsData = parseJsonResponse(propsCompletion.text)
+  const parsedProps = Array.isArray(propsData.props)
+    ? (propsData.props as Array<Record<string, unknown>>)
     : []
 
   await reportTaskProgress(job, 75, {
@@ -300,6 +335,37 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
           episodeId: targetEpisode.id,
           locationCount: allLocationIds.length,
         })
+      }
+    }
+  }
+
+  // Phase 11.3 Stage A — persist newly-extracted props.
+  // Dedup by name against the existing project library so re-analyzing
+  // the same script doesn't pile up duplicate "信封" rows. visual_description
+  // goes into the new `description` column (image-gen prompt source);
+  // summary goes into `summary` (human-facing context).
+  const createdProps: Array<{ id: string; name: string }> = []
+  if (parsedProps.length > 0) {
+    const existingPropNames = new Set(novelPropsLib.map((p) => p.name))
+    for (const item of parsedProps) {
+      const name = readText(item.name).trim()
+      if (!name) continue
+      if (existingPropNames.has(name)) continue
+      const summary = readText(item.summary).trim() || null
+      const description = readText(item.visual_description).trim() || null
+      try {
+        const created = await prisma.novelPromotionProp.create({
+          data: {
+            novelPromotionProjectId: novelData.id,
+            name,
+            summary,
+            description,
+          },
+          select: { id: true, name: true },
+        })
+        createdProps.push(created)
+      } catch (err) {
+        _ulogError('[analyze-novel] NovelPromotionProp create failed', err, { name })
       }
     }
   }

@@ -39,6 +39,12 @@ export const PROMPT_IDS = {
    * strict JSON: { groups: [{ id, panelIds: [...] }, ...] }.
    */
   NP_AUTO_GROUP_MULTI_SHOT: 'np_auto_group_multi_shot',
+  /**
+   * Phase 11.3 Stage A — extract first-class props from a script clip /
+   * episode. Outputs `{ props: [{ name, summary, visual_description }] }`.
+   * Backed by `lib/prompts/novel-promotion/extract_props.{zh,en}.txt`.
+   */
+  NP_EXTRACT_PROPS: 'np_extract_props',
 } as const
 
 export type PromptId = (typeof PROMPT_IDS)[keyof typeof PROMPT_IDS]

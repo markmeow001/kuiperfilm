@@ -147,4 +147,8 @@ export const PROMPT_CATALOG: Record<PromptId, PromptCatalogEntry> = {
     pathStem: 'novel-promotion/auto_group_multi_shot',
     variableKeys: ['panels_json', 'panel_count'],
   },
+  [PROMPT_IDS.NP_EXTRACT_PROPS]: {
+    pathStem: 'novel-promotion/extract_props',
+    variableKeys: ['input', 'props_lib_name'],
+  },
 }

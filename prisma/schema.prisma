@@ -1005,6 +1005,11 @@ model NovelPromotionProp {
   novelPromotionProjectId String
   name                    String
   summary                 String?               @db.Text // brief description (purpose / who carries it)
+  // Phase 11.3 Stage A: visual prompt produced by extract_props LLM —
+  // close-up of the object on neutral background, used as the image-gen
+  // prompt when the user later regenerates. summary is human-facing; this
+  // is what the AI reads.
+  description             String?               @db.Text
   imageUrl                String?               @db.Text
   imageMediaId            String?
   imageMedia              MediaObject?          @relation("NovelPromotionPropImageMedia", fields: [imageMediaId], references: [id], onDelete: SetNull)
