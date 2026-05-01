@@ -271,14 +271,22 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
     return set
   }, [activeImageTasks.data])
-  // Poll active tasks every 2s while any are running so the overlay
-  // clears within ~2s of the worker marking the task completed (4s
-  // before — overlay lingered too visibly past image arrival).
+  // Poll active tasks every 2s while EITHER set has entries. The earlier
+  // version gated only on serverInflightIds.size, but that's derived
+  // FROM activeImageTasks.data — chicken-and-egg: when the user just
+  // clicked 重新生成, regenInFlight goes to {locId} but activeImageTasks
+  // hasn't been refetched yet so serverInflightIds stays empty. Without
+  // a refetch trigger, the new task row in DB never surfaces, the
+  // drop-detection effect never fires, and the local overlay hangs on
+  // the full 5-min safety timeout. Including regenInFlight.size in the
+  // trigger means the user's click immediately starts the polling, after
+  // ~2s activeImageTasks sees the new task, serverInflightIds picks
+  // it up, and the loop self-sustains until completion drops it.
   useEffect(() => {
-    if (serverInflightIds.size === 0) return
+    if (regenInFlight.size === 0 && serverInflightIds.size === 0) return
     const interval = setInterval(() => { void activeImageTasks.refetch() }, 2000)
     return () => clearInterval(interval)
-  }, [serverInflightIds.size, activeImageTasks])
+  }, [regenInFlight.size, serverInflightIds.size, activeImageTasks])
   // When server in-flight set drops to 0, also refresh assets so the
   // freshly-generated images surface immediately.
   const previousServerInflight = useRef(serverInflightIds.size)
