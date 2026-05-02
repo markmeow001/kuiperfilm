@@ -173,6 +173,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
   const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
+  // Lightbox: when set, render a full-screen overlay of this URL. Lets
+  // the timeline-view Selected Shot stay tile-sized (matching the
+  // multi-shot 9:16 player on the right) while preserving zoom-in for
+  // detail inspection.
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null)
 
   // Stage 1 chip-rail bookkeeping. We persist the most-recent
   // multi-shot taskId per groupId so the chip rail survives page
@@ -1424,7 +1429,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     : 'border-stone-800/60 hover:border-stone-700'
                 } ${groupBoundary ? 'ml-2' : ''}`}
               >
-                <div className={`relative ${thumbHeightClass} ${aspectClass} overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900`}>
+                <div
+                  className={`relative ${thumbHeightClass} overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900`}
+                  // Inline aspectRatio (instead of Tailwind aspect-[9/16])
+                  // because user-reported "thumbs render 16:9 even though
+                  // project is 9:16" — Tailwind arbitrary aspect classes
+                  // can be silently dropped if the JIT scanner doesn't
+                  // see the literal at build time, and falling back to
+                  // the parent's intrinsic ratio is exactly the
+                  // landscape-looking-thumb bug. Inline style is
+                  // bulletproof.
+                  style={{ aspectRatio: projectVideoRatio.replace(':', '/') }}
+                >
                   {hasImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.imageUrl ?? ''} alt={`panel ${i + 1}`} className="h-full w-full object-cover" />
@@ -1583,8 +1599,24 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </div>
           ) : null}
 
-          <div className="overflow-hidden rounded-sm border border-stone-800/60 bg-stone-900/30">
-            <div className={`relative ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
+          {/*
+            Selected Shot — sized as a thumbnail-with-controls (≈ same
+            footprint as the right-column multi-shot 9:16 player at
+            180×320). User pointed out 2026-05-02 the previous full-
+            col-span-6 width was overwhelming and out of proportion
+            with the rest of the timeline page. Click on the
+            image/video to open a fullscreen lightbox with the
+            original-resolution asset for detailed inspection.
+          */}
+          <div
+            className={`overflow-hidden rounded-sm border border-stone-800/60 bg-stone-900/30 mx-auto ${
+              isPortraitRatio ? 'max-w-[260px]' : 'max-w-[480px]'
+            }`}
+          >
+            <div
+              className="relative bg-gradient-to-br from-stone-800 to-stone-900"
+              style={{ aspectRatio: projectVideoRatio.replace(':', '/') }}
+            >
               {selected?.videoUrl ? (
                 // Video player when videoUrl is present. Use the still
                 // imageUrl as poster so first paint is the same frame
@@ -1600,7 +1632,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 />
               ) : selected?.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={selected.imageUrl} alt="selected" className="h-full w-full object-cover" />
+                <img
+                  src={selected.imageUrl}
+                  alt="selected"
+                  className="h-full w-full cursor-zoom-in object-cover"
+                  onClick={() => selected.imageUrl && setZoomImageUrl(selected.imageUrl)}
+                  title="點擊放大"
+                />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
                   <AppIcon name="image" className="h-8 w-8 text-stone-600" />
@@ -1788,6 +1826,34 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           </div>
         </div>
       </div>
+      {/*
+        Click-to-zoom lightbox for the Selected Shot. Renders only when
+        the user has tapped the thumbnail-sized preview. Click anywhere
+        (or hit Esc) to dismiss. Image is fit-contain so a 9:16 still
+        stays inside the viewport without cropping.
+      */}
+      {zoomImageUrl ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setZoomImageUrl(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setZoomImageUrl(null)
+          }}
+          tabIndex={-1}
+          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-stone-950/95 p-8"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={zoomImageUrl}
+            alt="Zoomed"
+            className="max-h-full max-w-full object-contain"
+          />
+          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[10px] uppercase tracking-wider text-stone-400">
+            click anywhere or press esc to close
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
