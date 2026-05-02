@@ -556,6 +556,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     let cancelled = false
     void (async () => {
       const recovered: Record<string, { taskId: string; createdAt: string }> = {}
+      let totalTasksScanned = 0
+      let httpErrors = 0
       for (const sbId of storyboardIds) {
         try {
           const params = new URLSearchParams()
@@ -564,9 +566,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           params.append('type', 'video_multi_shot')
           params.set('limit', '50')
           const res = await fetch(`/api/tasks?${params.toString()}`)
-          if (!res.ok) continue
+          if (!res.ok) {
+            httpErrors += 1
+            continue
+          }
           const json = (await res.json()) as { tasks?: Array<Record<string, unknown>> }
           const tasks = Array.isArray(json.tasks) ? json.tasks : []
+          totalTasksScanned += tasks.length
           for (const t of tasks) {
             const taskId = typeof t.id === 'string' ? t.id : null
             const createdAt = typeof t.createdAt === 'string' ? t.createdAt : ''
@@ -583,16 +589,29 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               recovered[groupId] = { taskId, createdAt }
             }
           }
-        } catch {
-          // ignore — best-effort recovery
+        } catch (err) {
+          // Visible breadcrumb so cross-browser issues are debuggable
+          // from the browser console without a server hit.
+          // eslint-disable-next-line no-console
+          console.warn('[multi-shot-recovery] fetch failed for storyboard', sbId, err)
         }
       }
       if (cancelled) return
       const recoveredMap: Record<string, string> = {}
       for (const [g, v] of Object.entries(recovered)) recoveredMap[g] = v.taskId
+      // eslint-disable-next-line no-console
+      console.info(
+        '[multi-shot-recovery]',
+        `storyboards=${storyboardIds.length}`,
+        `tasks=${totalTasksScanned}`,
+        `httpErrors=${httpErrors}`,
+        `mappedGroups=${Object.keys(recoveredMap).length}`,
+      )
       if (Object.keys(recoveredMap).length === 0) return
-      // Local state wins — recovery only fills gaps (groups without an
-      // explicit localStorage entry).
+      // Server is the source of truth for cross-browser consistency,
+      // but a fresh-from-this-tab submit captured into localStorage
+      // wins because the server query may lag behind it by a few
+      // hundred ms.
       setTaskByGroup((prev) => ({ ...recoveredMap, ...prev }))
     })()
     return () => {
@@ -725,7 +744,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         const res = await fetch(`/api/novel-promotion/${projectId}/generate-multi-shot-video`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ panelIds: group.panelIds, videoModel, async: true }),
+          body: JSON.stringify({
+            panelIds: group.panelIds,
+            videoModel,
+            aspectRatio: projectVideoRatio,
+            meta: { locale: 'zh-TW' },
+            async: true,
+          }),
         })
         if (!res.ok) {
           failures += 1
@@ -943,6 +968,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             const body: Record<string, unknown> = {
               panelIds,
               videoModel: projectVideoModel,
+              aspectRatio: projectVideoRatio,
               async: true,
               meta: { locale: 'zh-TW' },
             }

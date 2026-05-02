@@ -293,6 +293,9 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
                 duration: opts.duration,
                 resolution: opts.resolution,
                 aspectRatio: opts.aspectRatio,
+                subjectInfoCount: Array.isArray(req.SubjectInfos) ? req.SubjectInfos.length : 0,
+                hasMultiShot: Boolean((req.ExtInfo as string | undefined)?.includes('multi_shot')),
+                outputAspectRatio: (outputConfig as { AspectRatio?: string }).AspectRatio ?? null,
             },
         })
 
