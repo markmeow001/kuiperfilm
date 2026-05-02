@@ -772,6 +772,26 @@ export async function runMultiShotBPath(params: {
     // Stash for the function's return shape.
     intelligencePromptSource = promptSource
   }
+  // Diagnostic: snapshot exactly what we're about to hand off to
+  // generateVideo so we can prove subjectInfos / klingMultiShot /
+  // aspectRatio / generateAudio survive the spread chain into the
+  // Tencent VOD generator. Logged at info to remain visible in prod.
+  logger.info({
+    message: 'B path generateOptions snapshot',
+    details: {
+      keys: Object.keys(generateOptions),
+      subjectInfosLen: Array.isArray(generateOptions.subjectInfos)
+        ? (generateOptions.subjectInfos as unknown[]).length
+        : 0,
+      subjectNames: Array.isArray(generateOptions.subjectInfos)
+        ? (generateOptions.subjectInfos as Array<{ name?: string }>).map((s) => s.name ?? '?')
+        : [],
+      hasKlingMultiShot: !!generateOptions.klingMultiShot,
+      aspectRatio: generateOptions.aspectRatio ?? null,
+      generateAudio: generateOptions.generateAudio ?? null,
+      duration: generateOptions.duration ?? null,
+    },
+  })
   // generateVideo's option type is intentionally narrow (only standard
   // fields). Tencent-specific keys (subjectInfos / klingMultiShot /
   // outputComplianceCheck) ride through as extras and are picked up by
