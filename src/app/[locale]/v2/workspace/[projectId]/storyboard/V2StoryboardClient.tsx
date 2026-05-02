@@ -22,7 +22,10 @@ import {
   useUpdatePanelText,
   useGenerateVideo,
 } from '@/lib/query/hooks/useStoryboards'
-import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
+import {
+  useRegenerateProjectPanelImage,
+  useUpdateProjectPanel,
+} from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
@@ -45,6 +48,9 @@ interface PanelLike {
   videoUrl?: string | null
   prompt?: string | null
   videoPrompt?: string | null
+  shotType?: string | null
+  cameraMove?: string | null
+  location?: string | null
   characters?: string[] | null
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
@@ -167,6 +173,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const characterRoster = projectAssetsQuery.data?.characters ?? []
   const locationRoster = projectAssetsQuery.data?.locations ?? []
   const regenPanel = useRegenerateProjectPanelImage(projectId)
+  const updatePanel = useUpdateProjectPanel(projectId)
   const updatePanelText = useUpdatePanelText(projectId, currentEpisodeId)
   const generateVideo = useGenerateVideo(projectId, currentEpisodeId)
   const autoGroup = useAutoGroupMultiShot(projectId)
@@ -1689,31 +1696,59 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             />
           </div>
 
-          <PromptChipGroup label="視角" options={['平視', '仰視', '俯視', '傾斜']} cols={2} active={0} />
-          <PromptChipGroup label="景別" options={['遠景', '全景', '中景', '近景', '特寫']} cols={3} active={2} />
+          {/*
+            Functional chip groups:
+              - 景別  → panel.shotType   (DB column shotType)
+              - 運鏡  → panel.cameraMove (DB column cameraMove)
+            Click to set, click the active one again to clear. Saved
+            immediately via useUpdateProjectPanel — no separate save
+            button. The previous static `active={N}` props rendered
+            decorative-only chips that did nothing on click and
+            misled the user into thinking they were saving (reported
+            2026-05-02).
+
+            視角 / 質量詞 chip groups intentionally NOT rendered: there's
+            no backing schema column for either field, so wiring them
+            would require either a migration or appending tag prefixes
+            to panel.description (which pollutes the user's text). Will
+            ship in a follow-up commit when the schema gains
+            viewAngle / qualityTags fields.
+          */}
+          <PromptChipGroup
+            label="景別"
+            options={['遠景', '全景', '中景', '近景', '特寫']}
+            cols={3}
+            active={selected?.shotType ?? null}
+            onChange={(value) => {
+              if (!selected || selected.storyboardId == null || selected.panelIndex == null) return
+              updatePanel.mutate({
+                storyboardId: selected.storyboardId,
+                panelIndex: selected.panelIndex,
+                shotType: value,
+              })
+            }}
+          />
           <PromptChipGroup
             label="運鏡"
             options={['中度推進', '搖降', '手持', '快速變焦', '升格']}
             cols={1}
-            active={0}
+            active={selected?.cameraMove ?? null}
+            onChange={(value) => {
+              if (!selected || selected.storyboardId == null || selected.panelIndex == null) return
+              updatePanel.mutate({
+                storyboardId: selected.storyboardId,
+                panelIndex: selected.panelIndex,
+                cameraMove: value,
+              })
+            }}
           />
-          <div>
-            <div className="mb-2 font-mono text-[10px] tracking-wider text-stone-500">質量詞</div>
-            <div className="flex flex-wrap gap-1.5">
-              {['逆光', '丁達爾', '粒子', '4K', '電影感'].map((q, i) => (
-                <span
-                  key={q}
-                  className={`rounded-sm border px-2 py-1 font-serif-cn text-[11px] ${
-                    i < 3
-                      ? 'border-amber-500/30 bg-amber-500/5 text-amber-400'
-                      : 'border-stone-800 text-stone-500'
-                  }`}
-                >
-                  {q}
-                </span>
-              ))}
+          {updatePanel.isPending ? (
+            <div className="font-mono text-[9px] tracking-wider text-stone-500">儲存中…</div>
+          ) : updatePanel.isError ? (
+            <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-mono text-[9px] tracking-wider text-rose-300">
+              儲存失敗:{(updatePanel.error as Error)?.message ?? '未知'}
             </div>
-          </div>
+          ) : null}
         </div>
 
         {/* Selected Shot — visually leftmost (order-1).
@@ -2034,25 +2069,38 @@ function PromptChipGroup({
   options,
   cols,
   active,
+  onChange,
+  disabled,
 }: {
   label: string
   options: string[]
   cols: number
-  active: number
+  active: string | null
+  onChange?: (value: string | null) => void
+  disabled?: boolean
 }) {
   return (
     <div>
       <div className="mb-2 font-mono text-[10px] tracking-wider text-stone-500">{label}</div>
       <div className={`grid gap-1.5 ${cols === 1 ? '' : cols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-        {options.map((v, i) => (
+        {options.map((v) => (
           <button
             key={v}
             type="button"
-            disabled
+            disabled={disabled || !onChange}
+            onClick={() => {
+              if (!onChange) return
+              // Toggle off if user re-clicks the active chip — lets
+              // them clear a setting rather than being locked into
+              // one of the options forever.
+              onChange(active === v ? null : v)
+            }}
             className={`rounded-sm border px-2 py-1.5 text-left font-serif-cn text-xs transition-all ${
-              i === active
+              active === v
                 ? 'border-amber-500/50 bg-amber-500/5 text-amber-400'
-                : 'border-stone-800 text-stone-500'
+                : disabled || !onChange
+                  ? 'border-stone-800 text-stone-500'
+                  : 'border-stone-800 text-stone-300 hover:border-amber-500/40 hover:text-amber-300'
             }`}
           >
             {v}
