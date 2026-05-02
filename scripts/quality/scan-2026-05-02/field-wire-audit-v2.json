@@ -1,0 +1,773 @@
+{
+  "scan_date": "2026-05-02",
+  "counts": {
+    "frontend_keys_sent": 54,
+    "api_keys_read": 155,
+    "matched": 45,
+    "sent_not_read": 9,
+    "read_not_sent": 110
+  },
+  "sent_not_read": [
+    {
+      "key": "async",
+      "files": [
+        "src/lib/query/mutations/useProjectConfigMutations.ts"
+      ]
+    },
+    {
+      "key": "audioBase64",
+      "files": [
+        "src/lib/query/mutations/character-voice-mutations.ts"
+      ]
+    },
+    {
+      "key": "audio_url",
+      "files": [
+        "src/lib/kling.ts"
+      ]
+    },
+    {
+      "key": "characterName",
+      "files": [
+        "src/app/api/asset-hub/characters/route.ts",
+        "src/app/api/novel-promotion/[projectId]/character/route.ts"
+      ]
+    },
+    {
+      "key": "delta",
+      "files": [
+        "src/app/[locale]/admin/users/page.tsx"
+      ]
+    },
+    {
+      "key": "locale",
+      "files": [
+        "src/app/api/asset-hub/characters/route.ts",
+        "src/app/api/asset-hub/locations/route.ts",
+        "src/app/api/novel-promotion/[projectId]/character/route.ts",
+        "src/app/api/novel-promotion/[projectId]/generate-character-image/route.ts",
+        "src/app/api/novel-promotion/[projectId]/location/route.ts"
+      ]
+    },
+    {
+      "key": "model",
+      "files": [
+        "src/lib/ark-llm.ts"
+      ]
+    },
+    {
+      "key": "quality",
+      "files": [
+        "src/features/video-editor/hooks/useEditorActions.ts"
+      ]
+    },
+    {
+      "key": "video_url",
+      "files": [
+        "src/lib/kling.ts"
+      ]
+    }
+  ],
+  "read_not_sent": [
+    {
+      "key": "actingNotes",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "action",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/select-candidate/route.ts"
+      ]
+    },
+    {
+      "key": "aliases",
+      "routes": [
+        "src/app/api/asset-hub/characters/[characterId]/route.ts"
+      ]
+    },
+    {
+      "key": "aspectRatio",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "audioModel",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/voice-generate/route.ts"
+      ]
+    },
+    {
+      "key": "audioUrl",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts",
+        "src/app/api/novel-promotion/[projectId]/speaker-voice/route.ts",
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "cameraMove",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "capabilityOverrides",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/route.ts"
+      ]
+    },
+    {
+      "key": "changeReason",
+      "routes": [
+        "src/app/api/asset-hub/appearances/route.ts",
+        "src/app/api/asset-hub/characters/[characterId]/appearances/[appearanceIndex]/route.ts",
+        "src/app/api/novel-promotion/[projectId]/character/appearance/route.ts"
+      ]
+    },
+    {
+      "key": "characterOverrides",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "characters",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/clips/[clipId]/route.ts",
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "clearExisting",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/episodes/batch/route.ts"
+      ]
+    },
+    {
+      "key": "clipId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/storyboard-group/route.ts"
+      ]
+    },
+    {
+      "key": "composition",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "content",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/clips/[clipId]/route.ts",
+        "src/app/api/novel-promotion/[projectId]/episodes/split-by-markers/route.ts",
+        "src/app/api/novel-promotion/[projectId]/episodes/split/route.ts",
+        "src/app/api/novel-promotion/[projectId]/story-to-script-stream/route.ts",
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "count",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/regenerate-panel-image/route.ts"
+      ]
+    },
+    {
+      "key": "currentPrompt",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/ai-modify-shot-prompt/route.ts"
+      ]
+    },
+    {
+      "key": "descriptionIndex",
+      "routes": [
+        "src/app/api/asset-hub/characters/[characterId]/appearances/[appearanceIndex]/route.ts",
+        "src/app/api/novel-promotion/[projectId]/character/appearance/route.ts",
+        "src/app/api/novel-promotion/[projectId]/update-appearance/route.ts"
+      ]
+    },
+    {
+      "key": "dialogue",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "direction",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/storyboard-group/route.ts"
+      ]
+    },
+    {
+      "key": "displayName",
+      "routes": [
+        "src/app/api/auth/register/route.ts"
+      ]
+    },
+    {
+      "key": "duration",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "editor",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "email",
+      "routes": [
+        "src/app/api/auth/register/route.ts"
+      ]
+    },
+    {
+      "key": "emotionPrompt",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "emotionStrength",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "episodeIds",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/character/bind-appearance-bulk/route.ts"
+      ]
+    },
+    {
+      "key": "episodes",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/episodes/batch/route.ts"
+      ]
+    },
+    {
+      "key": "expires_hours",
+      "routes": [
+        "src/app/api/admin/invites/route.ts"
+      ]
+    },
+    {
+      "key": "firstLastFrame",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-video/route.ts"
+      ]
+    },
+    {
+      "key": "firstLastFramePrompt",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "generateFromReference",
+      "routes": [
+        "src/app/api/asset-hub/characters/route.ts",
+        "src/app/api/novel-promotion/[projectId]/character/route.ts"
+      ]
+    },
+    {
+      "key": "generationOptions",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-video/route.ts"
+      ]
+    },
+    {
+      "key": "globalAssetId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/copy-from-global/route.ts"
+      ]
+    },
+    {
+      "key": "globalCharacterId",
+      "routes": [
+        "src/app/api/projects/[projectId]/import-character/route.ts"
+      ]
+    },
+    {
+      "key": "globalLocationId",
+      "routes": [
+        "src/app/api/projects/[projectId]/import-location/route.ts"
+      ]
+    },
+    {
+      "key": "globalVoiceId",
+      "routes": [
+        "src/app/api/asset-hub/characters/[characterId]/route.ts"
+      ]
+    },
+    {
+      "key": "importStatus",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/episodes/batch/route.ts"
+      ]
+    },
+    {
+      "key": "includeAppearances",
+      "routes": [
+        "src/app/api/projects/[projectId]/import-character/route.ts"
+      ]
+    },
+    {
+      "key": "includeImages",
+      "routes": [
+        "src/app/api/projects/[projectId]/import-location/route.ts"
+      ]
+    },
+    {
+      "key": "initialImageUrl",
+      "routes": [
+        "src/app/api/asset-hub/characters/route.ts"
+      ]
+    },
+    {
+      "key": "insertAfterPanelId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/insert-panel/route.ts",
+        "src/app/api/novel-promotion/[projectId]/panel-variant/route.ts"
+      ]
+    },
+    {
+      "key": "insertIndex",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/storyboard-group/route.ts"
+      ]
+    },
+    {
+      "key": "intent",
+      "routes": [
+        "src/app/api/sse/route.ts"
+      ]
+    },
+    {
+      "key": "introduction",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/character/route.ts"
+      ]
+    },
+    {
+      "key": "lineId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/voice-generate/route.ts",
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "linked",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel-link/route.ts"
+      ]
+    },
+    {
+      "key": "lipSyncModel",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/lip-sync/route.ts"
+      ]
+    },
+    {
+      "key": "location",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/clips/[clipId]/route.ts",
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "locationImageId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/modify-asset-image/route.ts"
+      ]
+    },
+    {
+      "key": "locationOverrides",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "matchedPanelId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "metadata",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/location/route.ts"
+      ]
+    },
+    {
+      "key": "modifyInstruction",
+      "routes": [
+        "src/app/api/asset-hub/ai-modify-character/route.ts",
+        "src/app/api/asset-hub/ai-modify-location/route.ts",
+        "src/app/api/novel-promotion/[projectId]/ai-modify-appearance/route.ts",
+        "src/app/api/novel-promotion/[projectId]/ai-modify-location/route.ts",
+        "src/app/api/novel-promotion/[projectId]/ai-modify-shot-prompt/route.ts"
+      ]
+    },
+    {
+      "key": "multiShotMode",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "newDescription",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/update-appearance/route.ts",
+        "src/app/api/novel-promotion/[projectId]/update-location/route.ts"
+      ]
+    },
+    {
+      "key": "note",
+      "routes": [
+        "src/app/api/admin/invites/route.ts"
+      ]
+    },
+    {
+      "key": "novelText",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts"
+      ]
+    },
+    {
+      "key": "ownerEditorId",
+      "routes": [
+        "src/app/api/workspaces/[workspaceId]/route.ts"
+      ]
+    },
+    {
+      "key": "ownerUserId",
+      "routes": [
+        "src/app/api/organizations/[organizationId]/route.ts"
+      ]
+    },
+    {
+      "key": "panelDurations",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "panelIds",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "panelNumber",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "panelPreferences",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/video-urls/route.ts"
+      ]
+    },
+    {
+      "key": "password",
+      "routes": [
+        "src/app/api/auth/register/route.ts"
+      ]
+    },
+    {
+      "key": "photographyPlan",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/photography-plan/route.ts"
+      ]
+    },
+    {
+      "key": "photographyRules",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "preferredName",
+      "routes": [
+        "src/app/api/asset-hub/voice-design/route.ts",
+        "src/app/api/novel-promotion/[projectId]/voice-design/route.ts"
+      ]
+    },
+    {
+      "key": "previewText",
+      "routes": [
+        "src/app/api/asset-hub/voice-design/route.ts",
+        "src/app/api/novel-promotion/[projectId]/voice-design/route.ts"
+      ]
+    },
+    {
+      "key": "profileConfirmed",
+      "routes": [
+        "src/app/api/asset-hub/characters/[characterId]/route.ts"
+      ]
+    },
+    {
+      "key": "profileData",
+      "routes": [
+        "src/app/api/asset-hub/characters/[characterId]/route.ts"
+      ]
+    },
+    {
+      "key": "prompt",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "promptStyle",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "propId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/prop/route.ts"
+      ]
+    },
+    {
+      "key": "rawPrompt",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "referenceImageUrl",
+      "routes": [
+        "src/app/api/asset-hub/characters/route.ts",
+        "src/app/api/asset-hub/reference-to-character/route.ts",
+        "src/app/api/novel-promotion/[projectId]/character/route.ts",
+        "src/app/api/novel-promotion/[projectId]/reference-to-character/route.ts"
+      ]
+    },
+    {
+      "key": "scene",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "screenplay",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/clips/[clipId]/route.ts"
+      ]
+    },
+    {
+      "key": "select",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/select-candidate/route.ts"
+      ]
+    },
+    {
+      "key": "selectedAssets",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/modify-storyboard-image/route.ts"
+      ]
+    },
+    {
+      "key": "selectedImageUrl",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/select-candidate/route.ts"
+      ]
+    },
+    {
+      "key": "shotId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/update-prompt/route.ts"
+      ]
+    },
+    {
+      "key": "shotType",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "sound",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts"
+      ]
+    },
+    {
+      "key": "sourcePanelId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel-variant/route.ts"
+      ]
+    },
+    {
+      "key": "speaker",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/speaker-voice/route.ts",
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "srtContent",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts"
+      ]
+    },
+    {
+      "key": "srtEnd",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "srtSegment",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "srtStart",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "storyboard",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "subtitle",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts"
+      ]
+    },
+    {
+      "key": "summary",
+      "routes": [
+        "src/app/api/asset-hub/locations/[locationId]/route.ts",
+        "src/app/api/asset-hub/locations/route.ts",
+        "src/app/api/asset-hub/props/[id]/route.ts",
+        "src/app/api/asset-hub/props/route.ts",
+        "src/app/api/novel-promotion/[projectId]/location/route.ts",
+        "src/app/api/novel-promotion/[projectId]/prop/route.ts"
+      ]
+    },
+    {
+      "key": "targetId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/copy-from-global/route.ts",
+        "src/app/api/runs/route.ts",
+        "src/app/api/task-target-states/route.ts"
+      ]
+    },
+    {
+      "key": "targetType",
+      "routes": [
+        "src/app/api/runs/route.ts",
+        "src/app/api/task-target-states/route.ts"
+      ]
+    },
+    {
+      "key": "targets",
+      "routes": [
+        "src/app/api/task-target-states/route.ts"
+      ]
+    },
+    {
+      "key": "taskId",
+      "routes": [
+        "src/app/api/runs/route.ts"
+      ]
+    },
+    {
+      "key": "taskIds",
+      "routes": [
+        "src/app/api/tasks/dismiss/route.ts"
+      ]
+    },
+    {
+      "key": "taskType",
+      "routes": [
+        "src/app/api/runs/route.ts"
+      ]
+    },
+    {
+      "key": "types",
+      "routes": [
+        "src/app/api/task-target-states/route.ts"
+      ]
+    },
+    {
+      "key": "ui",
+      "routes": [
+        "src/app/api/sse/route.ts"
+      ]
+    },
+    {
+      "key": "userId",
+      "routes": [
+        "src/app/api/workspaces/[workspaceId]/members/route.ts"
+      ]
+    },
+    {
+      "key": "userInstruction",
+      "routes": [
+        "src/app/api/asset-hub/ai-design-character/route.ts",
+        "src/app/api/asset-hub/ai-design-location/route.ts",
+        "src/app/api/novel-promotion/[projectId]/ai-create-character/route.ts",
+        "src/app/api/novel-promotion/[projectId]/ai-create-location/route.ts"
+      ]
+    },
+    {
+      "key": "variant",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel-variant/route.ts"
+      ]
+    },
+    {
+      "key": "videoModel",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts",
+        "src/app/api/novel-promotion/[projectId]/generate-video/route.ts"
+      ]
+    },
+    {
+      "key": "videoPrompt",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/panel/route.ts",
+        "src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts"
+      ]
+    },
+    {
+      "key": "viewName",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/location/view/route.ts"
+      ]
+    },
+    {
+      "key": "voiceDesign",
+      "routes": [
+        "src/app/api/asset-hub/character-voice/route.ts",
+        "src/app/api/novel-promotion/[projectId]/character-voice/route.ts"
+      ]
+    },
+    {
+      "key": "voicePresetId",
+      "routes": [
+        "src/app/api/novel-promotion/[projectId]/voice-lines/route.ts"
+      ]
+    },
+    {
+      "key": "workflowType",
+      "routes": [
+        "src/app/api/runs/route.ts"
+      ]
+    }
+  ]
+}
