@@ -126,11 +126,14 @@ describe('worker location-image-task-handler behavior', () => {
         // Session A's 56a857c prepends a no-people / no-animals scene spec
         // to the raw description so Tencent VOD GEM-3.1 doesn't paint
         // characters into pure environment shots. The user description
-        // itself is still preserved at the end.
+        // itself is still preserved at the end (asserted via `雨夜街道`).
+        // A later commit also widened scenes to 16:9 (cinematic horizontal
+        // composition spec is in the prefix), so the option value moves
+        // from 1:1 → 16:9 here too.
         prompt: expect.stringContaining('雨夜街道'),
         label: 'Old Town',
         targetId: 'location-image-1',
-        options: expect.objectContaining({ aspectRatio: '1:1' }),
+        options: expect.objectContaining({ aspectRatio: '16:9' }),
       }),
     )
 

@@ -23,6 +23,12 @@ const prismaMock = vi.hoisted(() => ({
     upsert: vi.fn(async () => ({})),
     findMany: vi.fn(async () => []),
   },
+  // Session A's df611c8 (props/A) added a prop dedupe lookup at the top
+  // of analyze-novel — handler now reads existing prop names so
+  // re-runs don't re-extract the same "怀表" / "信封". Default to empty.
+  novelPromotionProp: {
+    findMany: vi.fn(async () => []),
+  },
 }))
 
 const llmMock = vi.hoisted(() => ({
