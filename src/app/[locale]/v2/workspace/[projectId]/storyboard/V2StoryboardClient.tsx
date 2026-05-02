@@ -748,6 +748,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             panelIds: group.panelIds,
             videoModel,
             aspectRatio: projectVideoRatio,
+            sound: true,
             meta: { locale: 'zh-TW' },
             async: true,
           }),
@@ -969,6 +970,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               panelIds,
               videoModel: projectVideoModel,
               aspectRatio: projectVideoRatio,
+              sound: true,
               async: true,
               meta: { locale: 'zh-TW' },
             }
