@@ -97,6 +97,18 @@ export function useUpdateProjectPanel(projectId: string) {
             ),
         onSettled: () => {
             invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+            // 2026-05-02 — also bust the storyboards cache. The
+            // V2StoryboardClient's `selected` panel is read out of
+            // useStoryboards(episodeId), and chip groups (景別/運鏡)
+            // saving via this mutation didn't update that cache,
+            // so the chip's amber highlight stayed on the old
+            // value even though the DB write succeeded — user
+            // reported "點了之後沒看到那個按鈕啟動的樣子, 這樣使用者
+            // 根本不知道有沒有按到". Invalidating by the parent
+            // ['storyboards'] prefix matches every (episodeId)-keyed
+            // sub-query without forcing the call site to thread
+            // episodeId through.
+            void queryClient.invalidateQueries({ queryKey: ['storyboards'] })
         },
     })
 }
