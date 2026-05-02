@@ -611,33 +611,13 @@ export async function runMultiShotBPath(params: {
     validPanels,
     projectData,
     videoModel,
-    sound: _ignoredSound,
+    sound,
     aspectRatio,
     panelDurations,
     rawPrompt,
     characterOverrides,
     locationOverrides,
   } = params
-  // ── B-path audio policy (2026-05-02) ──
-  // Tencent VOD's Kling Omni TTS is effectively CN+EN only. Spanish /
-  // French / Japanese dialogue lines either come back as Mandarin (when
-  // surrounding visual prompt is Chinese — pre-fix) or as English fallback
-  // (post-fix once we switched to native `Speaker: "line"` syntax). User
-  // requirement is that the dub follows the line language, AND that no
-  // background music shows up in the output.
-  //
-  // Both requirements are satisfied by forcing the auto-audio off here:
-  //   - generateAudio:false → silent video (no wrong-language TTS, no music)
-  //   - voice composition is handled by a follow-up phase that runs the
-  //     existing voice_line pipeline per dialogue and ffmpeg-mixes the
-  //     clips onto the silent track at the panel duration offsets.
-  //
-  // The `sound` caller flag is intentionally ignored on this path; if the
-  // upstream dispatcher passed `true` we'd end up with the exact regression
-  // user reported on 2026-05-02. Single-shot Kling (non-multi-shot) keeps
-  // its caller-provided sound behaviour because that path doesn't have
-  // multi-line dialogue and doesn't suffer the language pivot.
-  const sound: boolean = false
   const charOverrideById = new Map<string, string | undefined>()
   for (const o of characterOverrides ?? []) {
     if (typeof o.characterId === 'string' && o.characterId) {
