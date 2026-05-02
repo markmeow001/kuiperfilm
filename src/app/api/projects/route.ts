@@ -177,10 +177,32 @@ export const POST = apiHandler(async (request: NextRequest) => {
     throw new ApiError('INVALID_PARAMS')
   }
 
-  // 获取用户偏好配置
-  const userPreference = await prisma.userPreference.findUnique({
-    where: { userId: session.user.id }
-  })
+  // 获取用户偏好配置 + admin 偏好（multi-user 繼承用）。
+  // 新建專案時複製預設模型欄位:
+  //   1. 優先用 user 自己 preference 的值
+  //   2. user 沒設(member 帳號預設全 null) → 退到 admin pref
+  //   3. 都沒設 → null,worker 端再用 resolve-analysis-model 等 helper 兜底
+  // 沒這個 fallback 新建帳號的所有專案 model 欄位都會是 null,
+  // 然後 character_profile_confirm / shot_ai_persist 等 task 跑出來
+  // throw "请先在项目设置中配置分析模型"。
+  const [userPreference, adminUser] = await Promise.all([
+    prisma.userPreference.findUnique({ where: { userId: session.user.id } }),
+    prisma.user.findFirst({
+      where: { role: 'admin' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    }),
+  ])
+  const adminPreference =
+    adminUser && adminUser.id !== session.user.id
+      ? await prisma.userPreference.findUnique({ where: { userId: adminUser.id } })
+      : null
+
+  function pick<K extends keyof NonNullable<typeof userPreference>>(
+    field: K,
+  ): NonNullable<typeof userPreference>[K] | null | undefined {
+    return userPreference?.[field] ?? adminPreference?.[field]
+  }
 
   // 创建基础项目（mode 固定为 novel-promotion）
   const project = await prisma.project.create({
@@ -200,17 +222,15 @@ export const POST = apiHandler(async (request: NextRequest) => {
   await prisma.novelPromotionProject.create({
     data: {
       projectId: project.id,
-      ...(userPreference && {
-        analysisModel: userPreference.analysisModel,
-        characterModel: userPreference.characterModel,
-        locationModel: userPreference.locationModel,
-        storyboardModel: userPreference.storyboardModel,
-        editModel: userPreference.editModel,
-        videoModel: userPreference.videoModel,
-        videoRatio: userPreference.videoRatio,
-        artStyle: userPreference.artStyle || 'american-comic',
-        ttsRate: userPreference.ttsRate
-      })
+      analysisModel: pick('analysisModel'),
+      characterModel: pick('characterModel'),
+      locationModel: pick('locationModel'),
+      storyboardModel: pick('storyboardModel'),
+      editModel: pick('editModel'),
+      videoModel: pick('videoModel'),
+      videoRatio: pick('videoRatio') ?? undefined,
+      artStyle: pick('artStyle') || 'american-comic',
+      ttsRate: pick('ttsRate') ?? undefined,
     }
   })
 

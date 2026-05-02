@@ -53,6 +53,28 @@ export async function resolveProjectModel(projectId: string, userId?: string) {
   if (!project.novelPromotionData.analysisModel && userPreference?.analysisModel) {
     project.novelPromotionData.analysisModel = userPreference.analysisModel
   }
+  // Multi-user inheritance: if member's project + own pref are both
+  // empty, fall back to admin's analysisModel. Mirrors the 4-tier
+  // resolution in resolve-analysis-model.ts and getUserModelConfig.
+  // Without this, character_profile_confirm fails for any non-admin
+  // user with errorMessage "请先在项目设置中配置分析模型" even though
+  // admin has analysisModel configured globally.
+  if (!project.novelPromotionData.analysisModel && userId) {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'admin' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    if (admin && admin.id !== userId) {
+      const adminPref = await prisma.userPreference.findUnique({
+        where: { userId: admin.id },
+        select: { analysisModel: true },
+      })
+      if (adminPref?.analysisModel) {
+        project.novelPromotionData.analysisModel = adminPref.analysisModel
+      }
+    }
+  }
   if (!project.novelPromotionData.analysisModel) throw new Error('请先在项目设置中配置分析模型')
   return project
 }

@@ -1142,7 +1142,13 @@ export const GET = apiHandler(async () => {
   const { session } = authResult
   const userId = session.user.id
 
-  const pref = await prisma.userPreference.findUnique({
+  // Multi-user inheritance: fresh members have no own customModels /
+  // customProviders, so the API config page would render empty (no
+  // providers, no models, blank default-model dropdowns). Fall back
+  // to admin's record so members see + can pick from admin's catalog
+  // — same pattern as /api/user/models GET and getProviderConfig.
+  // Member-owned settings (when they exist) still win.
+  const ownPref = await prisma.userPreference.findUnique({
     where: { userId },
     select: {
       customModels: true,
@@ -1157,6 +1163,43 @@ export const GET = apiHandler(async () => {
       capabilityDefaults: true,
     },
   })
+
+  const ownHasAny =
+    !!ownPref?.customModels
+    || !!ownPref?.customProviders
+    || !!ownPref?.analysisModel
+    || !!ownPref?.characterModel
+    || !!ownPref?.locationModel
+    || !!ownPref?.storyboardModel
+    || !!ownPref?.editModel
+    || !!ownPref?.videoModel
+    || !!ownPref?.lipSyncModel
+  let pref = ownPref
+  if (!ownHasAny) {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'admin' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    if (admin && admin.id !== userId) {
+      const adminPref = await prisma.userPreference.findUnique({
+        where: { userId: admin.id },
+        select: {
+          customModels: true,
+          customProviders: true,
+          analysisModel: true,
+          characterModel: true,
+          locationModel: true,
+          storyboardModel: true,
+          editModel: true,
+          videoModel: true,
+          lipSyncModel: true,
+          capabilityDefaults: true,
+        },
+      })
+      if (adminPref) pref = adminPref
+    }
+  }
 
   const providers = parseStoredProviders(pref?.customProviders).map((provider) => ({
     ...provider,

@@ -159,13 +159,39 @@ export const GET = apiHandler(async () => {
   const { session } = authResult
   const userId = session.user.id
 
+  // Multi-user inheritance: when the member has no own customModels /
+  // customProviders configured, surface admin's catalog so the project
+  // settings dropdowns and analysisModel pickers actually show options.
+  // Without this, every fresh member account opens the project model
+  // dropdown and sees "no models", then can't pick anything → all
+  // generation tasks throw NOT_CONFIGURED downstream. Mirrors the
+  // admin fallback already in getProviderConfig + getUserModels.
   const pref = await prisma.userPreference.findUnique({
     where: { userId },
     select: { customModels: true, customProviders: true },
   })
+  const ownModels = parseStoredModels(pref?.customModels)
+  const ownProviders = parseStoredProviders(pref?.customProviders)
 
-  const modelsRaw: StoredModel[] = parseStoredModels(pref?.customModels)
-  const providers: StoredProvider[] = parseStoredProviders(pref?.customProviders)
+  let effectiveModels = ownModels
+  let effectiveProviders = ownProviders
+  if (ownModels.length === 0 && ownProviders.length === 0) {
+    const admin = await prisma.user.findFirst({
+      where: { role: 'admin' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    if (admin && admin.id !== userId) {
+      const adminPref = await prisma.userPreference.findUnique({
+        where: { userId: admin.id },
+        select: { customModels: true, customProviders: true },
+      })
+      effectiveModels = parseStoredModels(adminPref?.customModels)
+      effectiveProviders = parseStoredProviders(adminPref?.customProviders)
+    }
+  }
+  const modelsRaw: StoredModel[] = effectiveModels
+  const providers: StoredProvider[] = effectiveProviders
 
   const providerNameMap = new Map<string, string>()
   const providerIdsWithApiKey = new Set<string>()
