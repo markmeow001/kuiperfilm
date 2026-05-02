@@ -475,6 +475,34 @@ export function isErrorResponse(result: unknown): result is NextResponse {
 export type Role = 'admin' | 'editor' | 'member'
 
 /**
+ * 角色階級 (2026-05-02 多人化重構):
+ *
+ *   admin > editor > member
+ *
+ * `roleAtLeast(role, threshold)` 回傳 `role` 是否至少達到 `threshold`:
+ *   - threshold='admin'  → 只認 admin
+ *   - threshold='editor' → 認 admin 或 editor (admin 自動覆蓋 editor 權限)
+ *   - threshold='member' → 認任何已 active 的角色
+ *
+ * 使用情境:
+ *   - 工作區 / Org CRUD 入口檢查 (editor 跟 admin 都能建)
+ *   - 加 / 踢 workspace member (workspace owner 跟 admin 都能做)
+ *   - admin-only routes 直接 requireAdminAuth() 就好,這個 helper 是
+ *     給「至少要 editor」這種兩級允許場景。
+ *
+ * 不查 isActive (假設 caller 已 requireUserAuth 拿過 session,
+ * isActive 由 NextAuth signin flow 攔截)。也不查 DB,純參數函式。
+ */
+export function roleAtLeast(
+    role: string | null | undefined,
+    threshold: 'admin' | 'editor' | 'member',
+): boolean {
+    if (threshold === 'admin') return role === 'admin'
+    if (threshold === 'editor') return role === 'admin' || role === 'editor'
+    return role === 'admin' || role === 'editor' || role === 'member'
+}
+
+/**
  * 验证用户至少拥有指定角色之一。admin 自动通过任何角色检查。
  *
  * 角色含义（与团队共享语义对齐）：

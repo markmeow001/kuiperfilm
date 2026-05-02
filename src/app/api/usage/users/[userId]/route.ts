@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { getUserUsageStats } from '@/lib/usage/usage-stats'
 
@@ -27,7 +27,7 @@ export const GET = apiHandler(async (
       where: { id: session.user.id },
       select: { role: true },
     })
-    const isAdmin = requester?.role === 'admin'
+    const isAdmin = roleAtLeast(requester?.role, 'admin')
     if (!isAdmin) {
       const editorAccess = await prisma.workspace.findFirst({
         where: {

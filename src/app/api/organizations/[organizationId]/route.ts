@@ -7,7 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
 async function requireOrgAccess(orgId: string, userId: string, mode: 'read' | 'write') {
@@ -19,7 +19,7 @@ async function requireOrgAccess(orgId: string, userId: string, mode: 'read' | 'w
     prisma.user.findUnique({ where: { id: userId }, select: { role: true } }),
   ])
   if (!org) throw new ApiError('NOT_FOUND', { code: 'ORGANIZATION_NOT_FOUND' })
-  const isAdmin = requester?.role === 'admin'
+  const isAdmin = roleAtLeast(requester?.role, 'admin')
   const isOwner = org.ownerUserId === userId
   if (isAdmin || isOwner) return { org, requester, role: isAdmin ? 'admin' : 'owner' as const }
   if (mode === 'write') {
@@ -73,6 +73,36 @@ export const PATCH = apiHandler(async (
     data.description = typeof body.description === 'string'
       ? body.description.trim().slice(0, 2000) || null
       : null
+  }
+  // Admin-only: transfer org ownership to another user. New owner can
+  // be admin or editor (role lookup defends against re-assigning to
+  // a member who would then be unable to manage the org).
+  if (body.ownerUserId !== undefined) {
+    const requesterRow = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true },
+    })
+    if (!roleAtLeast(requesterRow?.role, 'admin')) {
+      throw new ApiError('FORBIDDEN', {
+        code: 'TRANSFER_REQUIRES_ADMIN',
+        details: { reason: 'Only admin can change organization.ownerUserId' },
+      })
+    }
+    if (typeof body.ownerUserId !== 'string' || !body.ownerUserId.trim()) {
+      throw new ApiError('INVALID_PARAMS', { code: 'FIELD_REQUIRED', field: 'ownerUserId' })
+    }
+    const newOwner = await prisma.user.findUnique({
+      where: { id: body.ownerUserId.trim() },
+      select: { role: true },
+    })
+    if (!newOwner) throw new ApiError('NOT_FOUND', { code: 'NEW_OWNER_NOT_FOUND' })
+    if (!roleAtLeast(newOwner.role, 'editor')) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'NEW_OWNER_INSUFFICIENT_ROLE',
+        details: { required: 'admin | editor', got: newOwner.role },
+      })
+    }
+    data.ownerUserId = body.ownerUserId.trim()
   }
   if (Object.keys(data).length === 0) {
     throw new ApiError('INVALID_PARAMS', { code: 'NO_UPDATABLE_FIELDS' })

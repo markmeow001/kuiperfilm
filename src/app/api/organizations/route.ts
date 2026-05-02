@@ -10,7 +10,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
 function readString(value: unknown, field: string, max = 255): string {
@@ -31,11 +31,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   // Only admin or editor may create orgs (members are participants, not
   // owners). Per-spec member is "added by editor", not self-service.
+  // Hierarchy: admin > editor > member; admin always covers editor capability.
   const requester = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { role: true },
   })
-  if (!requester || (requester.role !== 'admin' && requester.role !== 'editor')) {
+  if (!roleAtLeast(requester?.role, 'editor')) {
     throw new ApiError('FORBIDDEN', {
       code: 'INSUFFICIENT_ROLE',
       details: { required: 'admin | editor' },
@@ -73,7 +74,7 @@ export const GET = apiHandler(async () => {
     select: { role: true },
   })
 
-  if (requester?.role === 'admin') {
+  if (roleAtLeast(requester?.role, 'admin')) {
     const all = await prisma.organization.findMany({
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { workspaces: true } } },

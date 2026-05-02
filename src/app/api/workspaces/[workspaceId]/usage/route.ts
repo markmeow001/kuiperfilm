@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { getMultiUserUsageStats } from '@/lib/usage/usage-stats'
 
@@ -31,7 +31,7 @@ export const GET = apiHandler(async (
   ])
   if (!ws) throw new ApiError('NOT_FOUND', { code: 'WORKSPACE_NOT_FOUND' })
 
-  const isAdmin = requester?.role === 'admin'
+  const isAdmin = roleAtLeast(requester?.role, 'admin')
   const isOwner = ws.ownerEditorId === session.user.id
   if (!isAdmin && !isOwner) {
     throw new ApiError('FORBIDDEN', { code: 'NOT_WORKSPACE_OWNER' })

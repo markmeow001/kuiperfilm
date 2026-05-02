@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
 export const POST = apiHandler(async (request: NextRequest) => {
@@ -14,11 +14,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 
+  // Hierarchy admin > editor > member: admin auto-covers editor here.
   const requester = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { role: true },
   })
-  if (!requester || (requester.role !== 'admin' && requester.role !== 'editor')) {
+  if (!roleAtLeast(requester?.role, 'editor')) {
     throw new ApiError('FORBIDDEN', {
       code: 'INSUFFICIENT_ROLE',
       details: { required: 'admin | editor' },
@@ -47,7 +48,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
     select: { id: true, ownerUserId: true },
   })
   if (!org) throw new ApiError('NOT_FOUND', { code: 'ORGANIZATION_NOT_FOUND' })
-  if (requester.role !== 'admin' && org.ownerUserId !== session.user.id) {
+  // admin bypasses org-owner check; mirrors org access pattern across
+  // workspace/member/projects routes.
+  if (!roleAtLeast(requester?.role, 'admin') && org.ownerUserId !== session.user.id) {
     throw new ApiError('FORBIDDEN', { code: 'NOT_ORG_OWNER' })
   }
 
@@ -74,7 +77,7 @@ export const GET = apiHandler(async () => {
     select: { role: true },
   })
 
-  if (requester?.role === 'admin') {
+  if (roleAtLeast(requester?.role, 'admin')) {
     const all = await prisma.workspace.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
