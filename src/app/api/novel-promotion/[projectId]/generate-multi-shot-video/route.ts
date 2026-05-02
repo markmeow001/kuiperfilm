@@ -268,7 +268,26 @@ export const POST = apiHandler(async (
       ...(characterOverrides ? { characterOverrides } : {}),
       ...(locationOverrides ? { locationOverrides } : {}),
     },
-    dedupeKey: `video_multi_shot:${storyboard.id}`,
+    // 2026-05-01: include the panel set in the dedupe key. Without
+    // this, every group on the same storyboard shared the same key
+    // (`video_multi_shot:<storyboardId>`) and submitTask collapsed
+    // them into a single in-flight task — user-reported all groups
+    // showing the same video. Groups have non-overlapping panel sets,
+    // so a sorted join of panelIds + an override fingerprint is a
+    // stable per-group identity that still dedupes accidental
+    // double-clicks on the same group with the same overrides.
+    dedupeKey: (() => {
+      const idsKey = [...panelIds].sort().join(',')
+      const overrideKey = JSON.stringify({
+        c: characterOverrides ?? null,
+        l: locationOverrides ?? null,
+        d: panelDurations ?? null,
+        m: multiShotMode ?? null,
+        p: promptStyle ?? null,
+        r: rawPrompt ?? null,
+      })
+      return `video_multi_shot:${storyboard.id}:${idsKey}:${overrideKey}`
+    })(),
   })
 
   return NextResponse.json(result)
