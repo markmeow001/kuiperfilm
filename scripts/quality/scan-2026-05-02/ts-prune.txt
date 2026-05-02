@@ -1,0 +1,1346 @@
+middleware.ts:4 - default
+middleware.ts:6 - config
+next.config.ts:16 - default
+vitest.config.ts:4 - default
+vitest.dom.config.ts:16 - default
+scripts/media-mapping.ts:1 - MediaFieldMapping (used in module)
+scripts/media-mapping.ts:6 - MediaModelMapping (used in module)
+src/i18n.ts:6 - Locale (used in module)
+src/i18n.ts:6 - routing (used in module)
+src/i18n.ts:9 - default (used in module)
+src/instrumentation.ts:4 - register
+src/middleware.ts:4 - default
+src/middleware.ts:18 - config
+.next/types/routes.d.ts:204 - ParamsOf
+.next/types/routes.d.ts:213 - PageRoutes (used in module)
+.next/types/routes.d.ts:213 - RedirectRoutes (used in module)
+.next/types/routes.d.ts:213 - RewriteRoutes (used in module)
+scripts/migrations/backfill-media-object-uploader.ts:38 - BackfillOptions (used in module)
+scripts/migrations/backfill-media-object-uploader.ts:42 - BackfillStats (used in module)
+scripts/migrations/migrate-artstyle-to-style-profile.ts:24 - MigrateOptions (used in module)
+src/contexts/ToastContext.tsx:132 - useToast
+src/contexts/ToastContext.tsx:32 - Toast (used in module)
+src/lib/admin-service.ts:56 - CreateInviteInput (used in module)
+src/lib/api-auth.ts:227 - unauthorized (used in module)
+src/lib/api-auth.ts:231 - forbidden (used in module)
+src/lib/api-auth.ts:235 - notFound (used in module)
+src/lib/api-auth.ts:239 - badRequest
+src/lib/api-auth.ts:243 - serverError
+src/lib/api-auth.ts:255 - getAuthSession (used in module)
+src/lib/api-auth.ts:266 - requireAuth
+src/lib/api-auth.ts:20 - AuthSession (used in module)
+src/lib/api-auth.ts:144 - ProjectAuthIncludes (used in module)
+src/lib/api-auth.ts:169 - NovelDataBase (used in module)
+src/lib/api-auth.ts:177 - NovelDataWithIncludes (used in module)
+src/lib/api-auth.ts:185 - ProjectAuthContextWithIncludes (used in module)
+src/lib/api-auth.ts:199 - ProjectAuthContext
+src/lib/api-config.ts:423 - getModelProvider
+src/lib/api-config.ts:432 - getModelsByType (used in module)
+src/lib/api-config.ts:440 - resolveModelId
+src/lib/api-config.ts:468 - getLipSyncApiKey
+src/lib/api-config.ts:476 - hasApiConfig
+src/lib/api-config.ts:18 - CustomModel (used in module)
+src/lib/api-config.ts:28 - ModelMediaType (used in module)
+src/lib/api-config.ts:30 - ModelSelection (used in module)
+src/lib/api-config.ts:352 - ProviderConfig (used in module)
+src/lib/api-errors.ts:341 - getIdempotencyKey
+src/lib/api-errors.ts:419 - normalizeError (used in module)
+src/lib/api-errors.ts:561 - throwApiError
+src/lib/api-errors.ts:565 - isApiError
+src/lib/api-errors.ts:371 - API_ERROR_CODES
+src/lib/api-errors.ts:391 - ApiErrorCode (used in module)
+src/lib/ark-api.ts:472 - arkQueryVideoTask
+src/lib/ark-api.ts:519 - fetchWithTimeoutAndRetry
+src/lib/ark-api.ts:538 - ARK_API_TIMEOUT_MS
+src/lib/ark-api.ts:539 - ARK_API_MAX_RETRIES
+src/lib/ark-llm.ts:5 - ArkResponsesOptions (used in module)
+src/lib/ark-llm.ts:15 - ArkResponsesResult (used in module)
+src/lib/async-poll.ts:28 - PollResult (used in module)
+src/lib/async-submit.ts:232 - queryArkVideoStatus (used in module)
+src/lib/async-submit.ts:311 - queryAsyncTaskStatus
+src/lib/async-submit.ts:301 - AsyncTaskProvider (used in module)
+src/lib/async-submit.ts:302 - AsyncTaskType
+src/lib/async-task-utils.ts:47 - queryBananaTaskStatus
+src/lib/async-task-utils.ts:10 - TaskStatus (used in module)
+src/lib/config-service.ts:24 - parseModelKey (used in module)
+src/lib/config-service.ts:36 - composeModelKey (used in module)
+src/lib/config-service.ts:43 - extractModelId
+src/lib/config-service.ts:213 - resolveModelCapabilityGenerationOptions (used in module)
+src/lib/config-service.ts:264 - checkRequiredModels
+src/lib/config-service.ts:292 - getMissingConfigError
+src/lib/config-service.ts:19 - ParsedModelKey (used in module)
+src/lib/config-service.ts:96 - ProjectModelConfig (used in module)
+src/lib/config-service.ts:109 - UserModelConfig (used in module)
+src/lib/constants.ts:336 - removePropPromptSuffix (used in module)
+src/lib/constants.ts:33 - ANALYSIS_MODELS
+src/lib/constants.ts:40 - IMAGE_MODELS
+src/lib/constants.ts:46 - IMAGE_MODEL_OPTIONS
+src/lib/constants.ts:59 - BANANA_RESOLUTION_OPTIONS
+src/lib/constants.ts:65 - BANANA_MODELS
+src/lib/constants.ts:67 - VIDEO_MODELS
+src/lib/constants.ts:85 - SEEDANCE_BATCH_MODELS
+src/lib/constants.ts:93 - AUDIO_SUPPORTED_MODELS
+src/lib/constants.ts:96 - FIRST_LAST_FRAME_MODELS
+src/lib/constants.ts:107 - VIDEO_RESOLUTIONS
+src/lib/constants.ts:112 - TTS_RATES
+src/lib/constants.ts:119 - TTS_VOICES
+src/lib/constants.ts:126 - ART_STYLES (used in module)
+src/lib/constants.ts:311 - LOCATION_PROMPT_SUFFIX (used in module)
+src/lib/constants.ts:314 - CHARACTER_IMAGE_RATIO
+src/lib/constants.ts:316 - CHARACTER_IMAGE_SIZE
+src/lib/constants.ts:326 - LOCATION_IMAGE_SIZE
+src/lib/constants.ts:328 - LOCATION_IMAGE_BANANA_RATIO
+src/lib/constants.ts:334 - PROP_PROMPT_SUFFIX (used in module)
+src/lib/crypto-utils.ts:125 - encryptApiKeyObject
+src/lib/crypto-utils.ts:154 - decryptApiKeyObject
+src/lib/episode-asset-bridge.ts:27 - EpisodeAssetRole (used in module)
+src/lib/episode-asset-bridge.ts:29 - CharacterMatchInput (used in module)
+src/lib/episode-asset-bridge.ts:36 - LocationMatchInput (used in module)
+src/lib/episode-asset-bridge.ts:43 - CharacterMatchResult (used in module)
+src/lib/episode-asset-bridge.ts:49 - LocationMatchResult (used in module)
+src/lib/episode-marker-detector.ts:8 - EpisodeMarkerMatch (used in module)
+src/lib/episode-marker-detector.ts:14 - PreviewSplit (used in module)
+src/lib/error-handler.ts:60 - handleApiError (used in module)
+src/lib/error-handler.ts:95 - isInsufficientBalanceError
+src/lib/error-handler.ts:4 - ERROR_CODES (used in module)
+src/lib/error-handler.ts:10 - ErrorCode (used in module)
+src/lib/error-utils.ts:42 - resolveClientError (used in module)
+src/lib/error-utils.ts:63 - safeAlert
+src/lib/fonts.ts:55 - getFontFamily
+src/lib/generator-api.ts:101 - generateAudio (used in module)
+src/lib/image-cache.ts:152 - preloadImagesParallel
+src/lib/image-cache.ts:216 - getImageCacheStats
+src/lib/image-cache.ts:244 - clearImageCache
+src/lib/image-label.ts:21 - updateImageLabel (used in module)
+src/lib/kling.ts:13 - LipSyncResult (used in module)
+src/lib/kling.ts:23 - LipSyncParams (used in module)
+src/lib/llm-client.ts:1 - ChatCompletionOptions
+src/lib/llm-client.ts:1 - ChatCompletionStreamCallbacks
+src/lib/llm-client.ts:4 - chatCompletionStream
+src/lib/llm-client.ts:6 - chatCompletionWithVisionStream
+src/lib/llm-client.ts:8 - getCompletionParts
+src/lib/location-metadata.ts:41 - ParsedLocationSummary (used in module)
+src/lib/media-process.ts:3 - ProcessMediaOptions (used in module)
+src/lib/model-config-contract.ts:463 - validateOptionValueAgainstAllowed
+src/lib/model-config-contract.ts:495 - isModelKey
+src/lib/model-config-contract.ts:6 - CapabilityValidationCode (used in module)
+src/lib/model-config-contract.ts:12 - CapabilityValidationIssue (used in module)
+src/lib/model-config-contract.ts:25 - CapabilityFieldI18nMap (used in module)
+src/lib/model-config-contract.ts:27 - LLMCapabilities (used in module)
+src/lib/model-config-contract.ts:32 - ImageCapabilities (used in module)
+src/lib/model-config-contract.ts:52 - AudioCapabilities (used in module)
+src/lib/model-config-contract.ts:58 - LipSyncCapabilities (used in module)
+src/lib/model-config-contract.ts:71 - ParsedModelKey (used in module)
+src/lib/modes.ts:27 - getModeConfig
+src/lib/modes.ts:4 - ProjectMode (used in module)
+src/lib/modes.ts:6 - ModeConfig (used in module)
+src/lib/modes.ts:15 - PROJECT_MODE (used in module)
+src/lib/modes.ts:25 - PROJECT_MODES
+src/lib/prisma-error.ts:22 - isPrismaErrorCode (used in module)
+src/lib/qwen-voice-design.ts:21 - VoiceDesignResult (used in module)
+src/lib/srt.ts:16 - parseSRT (used in module)
+src/lib/srt.ts:52 - sliceSRT
+src/lib/srt.ts:69 - calculateSRTDuration
+src/lib/srt.ts:105 - isValidSRT
+src/lib/srt.ts:119 - extractTextFromSRT
+src/lib/srt.ts:4 - SRTEntry (used in module)
+src/lib/storyboard-phases.ts:17 - StoryboardPhase
+src/lib/storyboard-phases.ts:140 - PHASE_PROGRESS
+src/lib/storyboard-phases.ts:148 - PhaseResult (used in module)
+src/lib/word-count.ts:42 - countCharacters
+src/lib/word-count.ts:52 - countCharactersNoSpaces
+src/pages/_document.tsx:3 - default
+src/types/project.ts:11 - BaseProject (used in module)
+src/types/project.ts:129 - WorkflowMode (used in module)
+src/types/project.ts:230 - NovelPromotionProject (used in module)
+src/types/storyboard-types.ts:19 - hasLoadedPanels (used in module)
+src/types/storyboard-types.ts:29 - getPanels
+src/types/storyboard-types.ts:40 - getPanelCandidates
+src/types/storyboard-types.ts:12 - StoryboardWithPanels (used in module)
+tests/contracts/requirements-matrix.ts:1 - RequirementPriority (used in module)
+tests/contracts/requirements-matrix.ts:3 - RequirementCoverageEntry (used in module)
+tests/contracts/route-behavior-matrix.ts:3 - RouteBehaviorMatrixEntry (used in module)
+tests/contracts/route-behavior-matrix.ts:40 - ROUTE_BEHAVIOR_MATRIX (used in module)
+tests/contracts/route-behavior-matrix.ts:50 - ROUTE_BEHAVIOR_COUNT
+tests/contracts/route-catalog.ts:1 - RouteCategory (used in module)
+tests/contracts/route-catalog.ts:11 - RouteContractGroup (used in module)
+tests/contracts/route-catalog.ts:246 - ROUTE_COUNT
+tests/contracts/task-type-catalog.ts:3 - TaskTestLayer (used in module)
+tests/contracts/task-type-catalog.ts:5 - TaskTypeCoverageEntry (used in module)
+tests/contracts/task-type-catalog.ts:62 - TASK_TYPE_COUNT
+tests/contracts/tasktype-behavior-matrix.ts:4 - TaskTypeBehaviorMatrixEntry (used in module)
+tests/contracts/tasktype-behavior-matrix.ts:97 - TASKTYPE_BEHAVIOR_MATRIX (used in module)
+tests/contracts/tasktype-behavior-matrix.ts:105 - TASKTYPE_BEHAVIOR_COUNT
+tests/helpers/assertions.ts:5 - expectBalance
+tests/helpers/auth.ts:160 - mockActive
+tests/helpers/db-reset.ts:17 - resetTaskState (used in module)
+tests/helpers/db-reset.ts:22 - resetAssetHubState (used in module)
+tests/helpers/db-reset.ts:31 - resetNovelPromotionState (used in module)
+tests/helpers/db-reset.ts:47 - resetSystemState
+tests/helpers/fixtures.ts:8 - createFixtureUser
+tests/helpers/fixtures.ts:18 - createFixtureProject
+tests/helpers/fixtures.ts:29 - createFixtureNovelProject
+tests/helpers/fixtures.ts:45 - createFixtureGlobalCharacter
+tests/helpers/fixtures.ts:56 - createFixtureGlobalCharacterAppearance
+tests/helpers/fixtures.ts:68 - createFixtureGlobalLocation
+tests/helpers/fixtures.ts:79 - createFixtureGlobalLocationImage
+tests/helpers/fixtures.ts:90 - createFixtureEpisode
+tests/setup/global-setup.ts:70 - default
+src/app/[locale]/layout.tsx:37 - generateMetadata
+src/app/[locale]/layout.tsx:52 - generateStaticParams
+src/app/[locale]/layout.tsx:56 - default
+src/components/llm-console/index.ts:1 - LLMStageStreamCard
+src/components/llm-console/index.ts:2 - LLMStageViewItem
+src/components/llm-console/index.ts:2 - LLMStageViewStatus
+src/components/llm-console/index.ts:2 - LLMStageStreamCardProps
+src/components/ui/CapsuleNav.tsx:160 - default
+src/components/ui/ConfigModals.tsx:1 - ConfigConfirmModal
+src/components/ui/ConfigModals.tsx:2 - ConfigDeleteModal
+src/components/ui/ConfigModals.tsx:3 - ConfigEditModal
+src/components/ui/EpisodeTabBar.tsx:27 - EpisodeTabBarProps (used in module)
+src/components/ui/SharedComponents.tsx:23 - GlassPanel
+src/components/ui/SharedComponents.tsx:43 - Button
+src/components/v2/UserMenu.tsx:24 - UserMenu
+src/components/v2/v2-types.ts:10 - V2Step (used in module)
+src/features/video-editor/index.ts:10 - ClipAttachment
+src/features/video-editor/index.ts:11 - ClipTransition
+src/features/video-editor/index.ts:12 - ClipMetadata
+src/features/video-editor/index.ts:13 - EditorConfig
+src/features/video-editor/index.ts:15 - ComputedClip
+src/features/video-editor/index.ts:16 - SaveEditorProjectRequest
+src/features/video-editor/index.ts:17 - RenderRequest
+src/features/video-editor/index.ts:18 - RenderStatus
+src/features/video-editor/index.ts:23 - calculateTimelineDuration
+src/features/video-editor/index.ts:24 - computeClipPositions
+src/features/video-editor/index.ts:25 - framesToTime
+src/features/video-editor/index.ts:26 - timeToFrames
+src/features/video-editor/index.ts:32 - migrateProjectData
+src/features/video-editor/index.ts:33 - validateProjectData
+src/features/video-editor/index.ts:37 - VideoEditorStage
+src/features/video-editor/index.ts:38 - TransitionPicker
+src/features/video-editor/index.ts:41 - useEditorState
+src/features/video-editor/index.ts:42 - useEditorActions
+src/features/video-editor/index.ts:42 - createProjectFromPanels
+src/hooks/common/useCandidateSystem.ts:17 - CandidateState (used in module)
+src/lib/ai-runtime/index.ts:1 - executeAiTextStep
+src/lib/ai-runtime/index.ts:1 - executeAiVisionStep
+src/lib/ai-runtime/index.ts:2 - toAiRuntimeError
+src/lib/ai-runtime/index.ts:4 - AiRuntimeError
+src/lib/ai-runtime/index.ts:5 - AiRuntimeErrorCode
+src/lib/ai-runtime/index.ts:6 - AiStepExecutionInput
+src/lib/ai-runtime/index.ts:7 - AiStepExecutionResult
+src/lib/ai-runtime/index.ts:8 - AiStepMeta
+src/lib/ai-runtime/index.ts:9 - AiTextMessages
+src/lib/ai-runtime/index.ts:11 - injectStyleProfile
+src/lib/ai-runtime/index.ts:13 - InjectionResult
+src/lib/ai-runtime/index.ts:14 - ModelStyleCapabilities
+src/lib/asset-utils/index.ts:6 - aiDesign
+src/lib/asset-utils/index.ts:6 - AssetType
+src/lib/asset-utils/index.ts:6 - AIDesignOptions
+src/lib/asset-utils/index.ts:6 - AIDesignResult
+src/lib/billing/cost.ts:24 - MARKUP (used in module)
+src/lib/billing/cost.ts:34 - MarkupCategory (used in module)
+src/lib/billing/cost.ts:39 - LlmCustomPricing (used in module)
+src/lib/billing/cost.ts:44 - MediaCustomPricing (used in module)
+src/lib/billing/currency.ts:3 - BillingCurrency
+src/lib/billing/errors.ts:13 - BillingOperationErrorCode (used in module)
+src/lib/billing/index.ts:1 - getBillingMode
+src/lib/billing/index.ts:1 - getBootBillingEnabled
+src/lib/billing/index.ts:2 - BILLING_CURRENCY
+src/lib/billing/index.ts:3 - InsufficientBalanceError
+src/lib/billing/index.ts:4 - getProjectCostDetails
+src/lib/billing/index.ts:4 - getProjectTotalCost
+src/lib/billing/index.ts:4 - getUserCostDetails
+src/lib/billing/index.ts:4 - getUserCostSummary
+src/lib/billing/index.ts:5 - addBalance
+src/lib/billing/index.ts:5 - getBalance
+src/lib/billing/index.ts:7 - handleBillingError
+src/lib/billing/index.ts:8 - prepareTaskBilling
+src/lib/billing/index.ts:9 - rollbackTaskBilling
+src/lib/billing/index.ts:10 - settleTaskBilling
+src/lib/billing/index.ts:11 - withImageBilling
+src/lib/billing/index.ts:12 - withLipSyncBilling
+src/lib/billing/index.ts:13 - withTextBilling
+src/lib/billing/index.ts:14 - withVideoBilling
+src/lib/billing/index.ts:15 - withVoiceBilling
+src/lib/billing/index.ts:16 - withVoiceDesignBilling
+src/lib/billing/index.ts:18 - buildDefaultTaskBillingInfo
+src/lib/billing/index.ts:18 - isBillableTaskType
+src/lib/billing/index.ts:19 - BillingMode
+src/lib/billing/index.ts:19 - BillingRecordParams
+src/lib/billing/index.ts:19 - BillingStatus
+src/lib/billing/index.ts:19 - TaskBillingInfo
+src/lib/billing/ledger.ts:100 - checkBalance
+src/lib/billing/ledger.ts:21 - FreezeSnapshot (used in module)
+src/lib/billing/types.ts:22 - AnyTaskBillingInfo
+src/lib/billing/types.ts:24 - BillingQuote
+src/lib/billing/types.ts:32 - TaskType
+src/lib/errors/codes.ts:1 - ERROR_CATEGORY (used in module)
+src/lib/errors/codes.ts:12 - ERROR_CATALOG (used in module)
+src/lib/errors/codes.ts:152 - LEGACY_ERROR_CODE_ALIASES (used in module)
+src/lib/errors/user-messages.ts:3 - USER_ERROR_MESSAGES_ZH (used in module)
+src/lib/generators/base.ts:12 - GenerateOptions (used in module)
+src/lib/generators/resolution-adapter.ts:121 - adaptVideoResolution
+src/lib/generators/resolution-adapter.ts:143 - getSupportedResolutions (used in module)
+src/lib/generators/resolution-adapter.ts:161 - isResolutionSupported
+src/lib/generators/resolution-adapter.ts:21 - VideoProvider (used in module)
+src/lib/llm/index.ts:2 - ChatCompletionOptions
+src/lib/llm/index.ts:3 - ChatCompletionStreamCallbacks
+src/lib/llm/index.ts:4 - ChatMessage
+src/lib/llm/index.ts:7 - buildReasoningAwareContent
+src/lib/llm/index.ts:8 - collectTextValue
+src/lib/llm/index.ts:9 - extractCompletionPartsFromContent
+src/lib/llm/index.ts:10 - extractStreamDeltaParts
+src/lib/llm/index.ts:11 - getConversationMessages
+src/lib/llm/index.ts:12 - getSystemPrompt
+src/lib/llm/index.ts:13 - mapReasoningEffort
+src/lib/llm/index.ts:16 - emitChunkedText
+src/lib/llm/index.ts:17 - emitStreamChunk
+src/lib/llm/index.ts:18 - emitStreamStage
+src/lib/llm/index.ts:19 - resolveStreamStepMeta
+src/lib/llm/index.ts:21 - arkResponsesCompletion
+src/lib/llm/index.ts:22 - extractGoogleText
+src/lib/llm/index.ts:22 - extractGoogleUsage
+src/lib/llm/index.ts:23 - buildOpenAIChatCompletion
+src/lib/llm/runtime-shared.ts:15 - LlmRawMessage (used in module)
+src/lib/llm/runtime-shared.ts:140 - ResolvedLlmRuntimeModel (used in module)
+src/lib/llm/stream-timeout.ts:14 - StreamChunkTimeoutError (used in module)
+src/lib/llm-observe/config.ts:30 - LLM_OBSERVE_LONG_TASK_THRESHOLD_MS (used in module)
+src/lib/llm-observe/config.ts:34 - LLM_OBSERVE_REASONING_VISIBLE (used in module)
+src/lib/llm-observe/internal-task.ts:7 - isInternalTaskExecution
+src/lib/llm-observe/route-task.ts:13 - toObject (used in module)
+src/lib/llm-observe/stage-pipeline.ts:143 - getTaskPipelineByFlowId (used in module)
+src/lib/llm-observe/stage-pipeline.ts:4 - LLMTaskPipelineStage (used in module)
+src/lib/llm-observe/stage-pipeline.ts:10 - LLMTaskPipeline (used in module)
+src/lib/llm-observe/stage-pipeline.ts:15 - LLMTaskFlowMeta (used in module)
+src/lib/llm-observe/task-policy.ts:4 - LLMTaskPolicy (used in module)
+src/lib/llm-observe/types.ts:12 - LLMObserveMeta (used in module)
+src/lib/llm-observe/types.ts:19 - LLMObservePayload
+src/lib/media/attach.ts:261 - firstMediaUrl
+src/lib/media/hash.ts:3 - sha256Hex (used in module)
+src/lib/media/outbound-image.ts:225 - unwrapNextImageDisplayUrl
+src/lib/media/outbound-image.ts:13 - OutboundImageInputIssue (used in module)
+src/lib/media/outbound-image.ts:20 - OutboundImageNormalizeStage (used in module)
+src/lib/media/outbound-image.ts:25 - OutboundImageNormalizeErrorCode (used in module)
+src/lib/media/outbound-image.ts:52 - OutboundImageNormalizationIssue (used in module)
+src/lib/media/service.ts:170 - getMediaObjectById (used in module)
+src/lib/media/service.ts:201 - extractStorageKeyFromLegacyValue (used in module)
+src/lib/media/service.ts:234 - resolveMediaRefsFromLegacyJsonArray
+src/lib/media/service.ts:255 - mediaUrlFromRef
+src/lib/media/service.ts:27 - MediaObjectOwnerContext (used in module)
+src/lib/model-capabilities/catalog.ts:221 - resetBuiltinCapabilityCatalogCacheForTest
+src/lib/model-capabilities/catalog.ts:10 - BuiltinCapabilityCatalogEntry (used in module)
+src/lib/model-capabilities/lookup.ts:67 - hasCapabilityOptions
+src/lib/model-capabilities/lookup.ts:11 - CapabilitySelectionValidationCode (used in module)
+src/lib/model-capabilities/lookup.ts:18 - CapabilitySelectionValidationIssue (used in module)
+src/lib/model-capabilities/video-effective.ts:14 - EffectiveVideoCapabilityField (used in module)
+src/lib/model-pricing/catalog.ts:265 - resetBuiltinPricingCatalogCacheForTest
+src/lib/model-pricing/catalog.ts:13 - BuiltinPricingTier (used in module)
+src/lib/model-pricing/catalog.ts:18 - BuiltinPricingDefinition (used in module)
+src/lib/model-pricing/lookup.ts:12 - PricingResolutionResolved (used in module)
+src/lib/model-pricing/lookup.ts:19 - PricingResolutionNotConfigured (used in module)
+src/lib/model-pricing/lookup.ts:23 - PricingResolutionAmbiguousModel (used in module)
+src/lib/model-pricing/lookup.ts:30 - PricingResolutionMissingCapabilityMatch (used in module)
+src/lib/model-pricing/lookup.ts:36 - PricingResolution (used in module)
+src/lib/multi-user/preference-inheritance.ts:161 - invalidateAdminPreferenceCache
+src/lib/novel-promotion/panel-ai-data-sync.ts:1 - PanelCharacterRef (used in module)
+src/lib/novel-promotion/panel-ai-data-sync.ts:126 - SyncPanelCharacterDependentJsonInput (used in module)
+src/lib/novel-promotion/panel-ai-data-sync.ts:133 - SyncPanelCharacterDependentJsonResult (used in module)
+src/lib/prompt-i18n/index.ts:1 - PROMPT_IDS
+src/lib/prompt-i18n/index.ts:1 - PromptId
+src/lib/prompt-i18n/index.ts:2 - buildPrompt
+src/lib/prompt-i18n/index.ts:3 - PROMPT_CATALOG
+src/lib/prompt-i18n/index.ts:4 - getPromptTemplate
+src/lib/prompt-i18n/index.ts:5 - PromptI18nError
+src/lib/prompt-i18n/index.ts:5 - PromptI18nErrorCode
+src/lib/prompt-i18n/index.ts:7 - BuildPromptInput
+src/lib/prompt-i18n/index.ts:8 - PromptCatalogEntry
+src/lib/prompt-i18n/index.ts:9 - PromptLocale
+src/lib/prompt-i18n/index.ts:10 - PromptVariables
+src/lib/query/client.ts:34 - getQueryClient
+src/lib/query/keys.ts:96 - QueryKeys
+src/lib/query/task-target-overlay.ts:6 - TASK_TARGET_OVERLAY_TTL_MS (used in module)
+src/lib/query/task-target-overlay.ts:8 - TaskTargetOverlayPhase (used in module)
+src/lib/query/task-target-overlay.ts:10 - TaskTargetOverlayState (used in module)
+src/lib/run-runtime/graph-executor.ts:12 - GraphNodeContext (used in module)
+src/lib/run-runtime/graph-executor.ts:21 - GraphNodeResult (used in module)
+src/lib/run-runtime/pipeline-graph.ts:10 - PipelineGraphInput (used in module)
+src/lib/run-runtime/publisher.ts:7 - getProjectRunChannel (used in module)
+src/lib/run-runtime/quick-run-graph.ts:15 - runQuickRunGraph
+src/lib/run-runtime/service.ts:612 - assertCheckpointStateSize (used in module)
+src/lib/run-runtime/service.ts:676 - listCheckpoints
+src/lib/run-runtime/types.ts:20 - RunStepStatus
+src/lib/run-runtime/types.ts:33 - RunEventType (used in module)
+src/lib/task/error-message.ts:5 - TaskErrorSummary (used in module)
+src/lib/task/intent.ts:12 - TASK_INTENTS (used in module)
+src/lib/task/presentation.ts:18 - isRunningPhase
+src/lib/task/presentation.ts:3 - TaskPresentationPhase (used in module)
+src/lib/task/presentation.ts:5 - TaskPresentationMode (used in module)
+src/lib/task/publisher.ts:231 - publishTaskLifecycleEvent (used in module)
+src/lib/task/state-service.ts:61 - extractTaskStateFields (used in module)
+src/lib/task/state-service.ts:77 - normalizeFailedError (used in module)
+src/lib/task/state-service.ts:11 - TaskTargetPhase (used in module)
+src/lib/task/state-service.ts:13 - TaskTargetState (used in module)
+src/lib/task/submitter.ts:22 - toObject (used in module)
+src/lib/usage/usage-stats.ts:22 - UsageWindow (used in module)
+src/lib/usage/usage-stats.ts:31 - UserUsageStats (used in module)
+src/lib/usage/usage-stats.ts:202 - ALL_CATEGORIES (used in module)
+src/lib/user-api/llm-test-connection.ts:19 - LlmConnectionTestResult (used in module)
+src/lib/workers/utils.ts:104 - parseJsonArray
+src/lib/workers/utils.ts:116 - sleep (used in module)
+src/lib/workers/utils.ts:723 - uploadAudioSourceToCos
+tests/helpers/fakes/llm.ts:11 - configureFakeLLM
+tests/helpers/fakes/llm.ts:16 - resetFakeLLM
+tests/helpers/fakes/llm.ts:21 - fakeChatCompletion
+tests/helpers/fakes/media.ts:11 - configureFakeMedia
+tests/helpers/fakes/media.ts:21 - resetFakeMedia
+tests/helpers/fakes/media.ts:27 - fakeGenerateImage
+tests/helpers/fakes/media.ts:31 - fakeGenerateVideo
+tests/helpers/fakes/media.ts:35 - fakeGenerateAudio
+tests/helpers/fakes/providers.ts:11 - configureFakeProviders
+tests/helpers/fakes/providers.ts:21 - resetFakeProviders
+tests/helpers/fakes/providers.ts:27 - getFakeProviderConfig
+.next/types/app/[locale]/page.ts:54 - PageProps (used in module)
+.next/types/app/[locale]/page.ts:58 - LayoutProps
+src/app/[locale]/admin/layout.tsx:14 - default
+src/app/[locale]/admin/page.tsx:77 - default
+src/app/[locale]/preview/page.tsx:1297 - default
+src/app/[locale]/v2/page.tsx:7 - default
+src/app/[locale]/workspaces/layout.tsx:16 - default
+src/app/[locale]/workspaces/page.tsx:75 - default
+src/app/api/organizations/route.ts:27 - POST
+src/app/api/organizations/route.ts:63 - GET
+src/app/api/workspaces/route.ts:12 - POST
+src/app/api/workspaces/route.ts:70 - GET
+src/components/shared/assets/index.ts:1 - CharacterCreationModal
+src/components/shared/assets/index.ts:2 - LocationCreationModal
+src/components/shared/assets/index.ts:3 - CharacterEditModal
+src/components/shared/assets/index.ts:4 - LocationEditModal
+src/components/shared/assets/index.ts:5 - CharacterCreationModalProps
+src/components/shared/assets/index.ts:6 - LocationCreationModalProps
+src/components/shared/assets/index.ts:7 - CharacterEditModalProps
+src/components/shared/assets/index.ts:8 - LocationEditModalProps
+src/components/ui/config-modals/config-modal-selectors.tsx:106 - StyleSelector
+src/components/ui/config-modals/ModelCapabilityDropdown.tsx:20 - ModelCapabilityOption (used in module)
+src/components/ui/config-modals/ModelCapabilityDropdown.tsx:33 - CapabilityFieldDefinition (used in module)
+src/components/ui/config-modals/ModelCapabilityDropdown.tsx:40 - CapabilityBooleanToggle (used in module)
+src/components/ui/config-modals/ModelCapabilityDropdown.tsx:49 - ModelCapabilityDropdownProps (used in module)
+src/components/ui/icons/custom.tsx:1 - CustomIconComponent
+src/components/ui/icons/custom.tsx:3 - CustomIcon001 (used in module)
+src/components/ui/icons/custom.tsx:3 - CustomIcon002 (used in module)
+src/components/ui/icons/custom.tsx:3 - CustomIcon003 (used in module)
+src/components/ui/icons/custom.tsx:3 - CustomIcon004 (used in module)
+src/components/ui/icons/custom.tsx:3 - CustomIcon005 (used in module)
+src/components/ui/icons/custom.tsx:4 - CustomIcon006 (used in module)
+src/components/ui/icons/custom.tsx:4 - CustomIcon007 (used in module)
+src/components/ui/icons/custom.tsx:4 - CustomIcon008 (used in module)
+src/components/ui/icons/custom.tsx:4 - CustomIcon009 (used in module)
+src/components/ui/icons/custom.tsx:4 - CustomIcon010 (used in module)
+src/components/ui/icons/custom.tsx:5 - CustomIcon011 (used in module)
+src/components/ui/icons/custom.tsx:5 - CustomIcon012 (used in module)
+src/components/ui/icons/custom.tsx:5 - CustomIcon013 (used in module)
+src/components/ui/icons/custom.tsx:5 - CustomIcon014 (used in module)
+src/components/ui/icons/custom.tsx:5 - CustomIcon015 (used in module)
+src/components/ui/icons/custom.tsx:6 - CustomIcon016 (used in module)
+src/components/ui/icons/custom.tsx:6 - CustomIcon017 (used in module)
+src/components/ui/icons/custom.tsx:6 - CustomIcon018 (used in module)
+src/components/ui/icons/custom.tsx:6 - CustomIcon019 (used in module)
+src/components/ui/icons/custom.tsx:6 - CustomIcon020 (used in module)
+src/components/ui/icons/custom.tsx:7 - CustomIcon021 (used in module)
+src/components/ui/icons/custom.tsx:7 - CustomIcon022 (used in module)
+src/components/ui/icons/custom.tsx:7 - CustomIcon023 (used in module)
+src/components/ui/icons/custom.tsx:7 - CustomIcon024 (used in module)
+src/components/ui/icons/custom.tsx:7 - CustomIcon025 (used in module)
+src/components/ui/icons/custom.tsx:8 - CustomIcon026 (used in module)
+src/components/ui/icons/custom.tsx:8 - CustomIcon027 (used in module)
+src/components/ui/icons/custom.tsx:8 - CustomIcon028 (used in module)
+src/components/ui/icons/custom.tsx:8 - CustomIcon029 (used in module)
+src/components/ui/icons/custom.tsx:8 - CustomIcon030 (used in module)
+src/components/ui/icons/custom.tsx:9 - CustomIcon031 (used in module)
+src/components/ui/icons/custom.tsx:9 - CustomIcon032 (used in module)
+src/components/ui/icons/custom.tsx:9 - CustomIcon033 (used in module)
+src/components/ui/icons/custom.tsx:9 - CustomIcon034 (used in module)
+src/components/ui/icons/custom.tsx:9 - CustomIcon035 (used in module)
+src/components/ui/icons/custom.tsx:10 - CustomIcon036 (used in module)
+src/components/ui/icons/custom.tsx:10 - CustomIcon037 (used in module)
+src/components/ui/icons/custom.tsx:10 - CustomIcon038 (used in module)
+src/components/ui/icons/custom.tsx:10 - CustomIcon039 (used in module)
+src/components/ui/icons/custom.tsx:10 - CustomIcon040 (used in module)
+src/components/ui/icons/custom.tsx:11 - CustomIcon041 (used in module)
+src/components/ui/icons/custom.tsx:11 - CustomIcon042 (used in module)
+src/components/ui/icons/custom.tsx:11 - CustomIcon043 (used in module)
+src/components/ui/icons/custom.tsx:11 - CustomIcon044 (used in module)
+src/components/ui/icons/custom.tsx:11 - CustomIcon045 (used in module)
+src/components/ui/icons/custom.tsx:12 - CustomIcon046 (used in module)
+src/components/ui/icons/custom.tsx:12 - CustomIcon047 (used in module)
+src/components/ui/icons/custom.tsx:12 - CustomIcon048 (used in module)
+src/components/ui/icons/custom.tsx:12 - CustomIcon049 (used in module)
+src/components/ui/icons/custom.tsx:12 - CustomIcon050 (used in module)
+src/components/ui/icons/custom.tsx:13 - CustomIcon051 (used in module)
+src/components/ui/icons/custom.tsx:13 - CustomIcon052 (used in module)
+src/components/ui/icons/custom.tsx:13 - CustomIcon053 (used in module)
+src/components/ui/icons/custom.tsx:13 - CustomIcon054 (used in module)
+src/components/ui/icons/custom.tsx:13 - CustomIcon055 (used in module)
+src/components/ui/icons/custom.tsx:14 - CustomIcon056 (used in module)
+src/components/ui/icons/custom.tsx:14 - CustomIcon057 (used in module)
+src/components/ui/icons/custom.tsx:14 - CustomIcon058 (used in module)
+src/components/ui/icons/custom.tsx:14 - CustomIcon059 (used in module)
+src/components/ui/icons/custom.tsx:14 - CustomIcon060 (used in module)
+src/components/ui/icons/custom.tsx:17 - CustomIcon061 (used in module)
+src/components/ui/icons/custom.tsx:17 - CustomIcon062 (used in module)
+src/components/ui/icons/custom.tsx:17 - CustomIcon063 (used in module)
+src/components/ui/icons/custom.tsx:17 - CustomIcon064 (used in module)
+src/components/ui/icons/custom.tsx:17 - CustomIcon065 (used in module)
+src/components/ui/icons/custom.tsx:18 - CustomIcon066 (used in module)
+src/components/ui/icons/custom.tsx:18 - CustomIcon067 (used in module)
+src/components/ui/icons/custom.tsx:18 - CustomIcon068 (used in module)
+src/components/ui/icons/custom.tsx:18 - CustomIcon069 (used in module)
+src/components/ui/icons/custom.tsx:18 - CustomIcon070 (used in module)
+src/components/ui/icons/custom.tsx:19 - CustomIcon071 (used in module)
+src/components/ui/icons/custom.tsx:19 - CustomIcon072 (used in module)
+src/components/ui/icons/custom.tsx:19 - CustomIcon073 (used in module)
+src/components/ui/icons/custom.tsx:19 - CustomIcon074 (used in module)
+src/components/ui/icons/custom.tsx:19 - CustomIcon075 (used in module)
+src/components/ui/icons/custom.tsx:20 - CustomIcon076 (used in module)
+src/components/ui/icons/custom.tsx:20 - CustomIcon077 (used in module)
+src/components/ui/icons/custom.tsx:20 - CustomIcon078 (used in module)
+src/components/ui/icons/custom.tsx:20 - CustomIcon079 (used in module)
+src/components/ui/icons/custom.tsx:20 - CustomIcon080 (used in module)
+src/components/ui/icons/custom.tsx:21 - CustomIcon081 (used in module)
+src/components/ui/icons/custom.tsx:21 - CustomIcon082 (used in module)
+src/components/ui/icons/custom.tsx:21 - CustomIcon083 (used in module)
+src/components/ui/icons/custom.tsx:21 - CustomIcon084 (used in module)
+src/components/ui/icons/custom.tsx:21 - CustomIcon085 (used in module)
+src/components/ui/icons/custom.tsx:22 - CustomIcon086 (used in module)
+src/components/ui/icons/custom.tsx:22 - CustomIcon087 (used in module)
+src/components/ui/icons/custom.tsx:22 - CustomIcon088 (used in module)
+src/components/ui/icons/custom.tsx:22 - CustomIcon089 (used in module)
+src/components/ui/icons/custom.tsx:22 - CustomIcon090 (used in module)
+src/components/ui/icons/custom.tsx:23 - CustomIcon091 (used in module)
+src/components/ui/icons/custom.tsx:23 - CustomIcon092 (used in module)
+src/components/ui/icons/custom.tsx:23 - CustomIcon093 (used in module)
+src/components/ui/icons/custom.tsx:23 - CustomIcon094 (used in module)
+src/components/ui/icons/custom.tsx:23 - CustomIcon095 (used in module)
+src/components/ui/icons/custom.tsx:24 - CustomIcon096 (used in module)
+src/components/ui/icons/custom.tsx:24 - CustomIcon097 (used in module)
+src/components/ui/icons/custom.tsx:24 - CustomIcon098 (used in module)
+src/components/ui/icons/index.ts:1 - AppIcon
+src/components/ui/icons/index.ts:1 - AppIconProps
+src/components/ui/icons/index.ts:2 - iconRegistry
+src/components/ui/icons/index.ts:2 - AppIconName
+src/components/ui/icons/index.ts:3 - IconGradientDefs
+src/components/ui/icons/index.ts:4 - RatioPreviewIcon
+src/components/ui/icons/index.ts:4 - RatioPreviewIconProps
+src/components/ui/icons/index.ts:5 - LucideIcon
+src/components/ui/icons/registry.ts:189 - satisfies
+src/components/ui/icons/registry.ts:189 - Record
+src/components/ui/patterns/index.ts:1 - StoryboardHeaderV2
+src/components/ui/patterns/index.ts:2 - StoryboardHeaderV2Props
+src/components/ui/patterns/index.ts:4 - PanelEditFormV2
+src/components/ui/patterns/index.ts:5 - PanelEditFormV2Props
+src/components/ui/patterns/index.ts:7 - PanelCardV2
+src/components/ui/patterns/index.ts:8 - PanelCardV2Props
+src/components/ui/patterns/index.ts:10 - UiPatternMode
+src/components/ui/primitives/index.ts:1 - GlassSurface
+src/components/ui/primitives/index.ts:2 - GlassSurfaceProps
+src/components/ui/primitives/index.ts:2 - UiDensity
+src/components/ui/primitives/index.ts:4 - GlassButton
+src/components/ui/primitives/index.ts:5 - GlassButtonProps
+src/components/ui/primitives/index.ts:7 - GlassField
+src/components/ui/primitives/index.ts:8 - GlassFieldProps
+src/components/ui/primitives/index.ts:10 - GlassInput
+src/components/ui/primitives/index.ts:11 - GlassInputProps
+src/components/ui/primitives/index.ts:13 - GlassTextarea
+src/components/ui/primitives/index.ts:14 - GlassTextareaProps
+src/components/ui/primitives/index.ts:16 - GlassChip
+src/components/ui/primitives/index.ts:17 - GlassChipProps
+src/components/ui/primitives/index.ts:17 - UiTone
+src/components/ui/primitives/index.ts:19 - GlassModalShell
+src/components/ui/primitives/index.ts:20 - GlassModalShellProps
+src/features/video-editor/components/TransitionPicker.tsx:124 - default
+src/features/video-editor/components/VideoEditorStage.tsx:444 - default
+src/features/video-editor/remotion/VideoComposition.tsx:236 - default
+src/lib/generators/audio/index.ts:5 - QwenTTSGenerator
+src/lib/generators/image/index.ts:10 - GoogleGeminiImageGenerator
+src/lib/generators/image/index.ts:10 - GoogleImagenGenerator
+src/lib/generators/image/index.ts:10 - GoogleGeminiBatchImageGenerator
+src/lib/generators/image/index.ts:11 - GeminiCompatibleImageGenerator
+src/lib/generators/image/index.ts:12 - OpenAICompatibleImageGenerator
+src/lib/generators/image/index.ts:16 - KieAIImageGenerator
+src/lib/generators/image/index.ts:17 - KieAINanoBananaGenerator
+src/lib/generators/image/index.ts:20 - TencentVODImageGenerator
+src/lib/generators/image/index.ts:23 - FalBananaGenerator
+src/lib/generators/image/index.ts:23 - FalImageGenerator
+src/lib/generators/image/index.ts:24 - ArkSeedreamGenerator
+src/lib/generators/image/index.ts:24 - ArkImageGenerator
+src/lib/generators/video/index.ts:10 - FalVideoGenerator
+src/lib/generators/video/index.ts:11 - ArkSeedanceVideoGenerator
+src/lib/generators/video/index.ts:11 - ArkVideoGenerator
+src/lib/generators/video/index.ts:12 - GoogleVeoVideoGenerator
+src/lib/generators/video/index.ts:13 - OpenAICompatibleVideoGenerator
+src/lib/generators/video/index.ts:14 - KieAIVideoGenerator
+src/lib/generators/video/index.ts:15 - KieAIKlingVideoGenerator
+src/lib/generators/video/index.ts:16 - AtlasCloudSeedanceVideoGenerator
+src/lib/generators/video/index.ts:17 - TencentVODVideoGenerator
+src/lib/generators/video/kieai-kling.ts:42 - MultiShotParams (used in module)
+src/lib/generators/video/openai-compatible.ts:117 - encodeProviderId (used in module)
+src/lib/llm/providers/google.ts:90 - extractGoogleReasoning
+src/lib/novel-promotion/script-to-storyboard/orchestrator.ts:41 - ScriptToStoryboardPromptTemplates (used in module)
+src/lib/novel-promotion/script-to-storyboard/orchestrator.ts:48 - ClipStoryboardPanels (used in module)
+src/lib/novel-promotion/script-to-storyboard/orchestrator.ts:54 - ScriptToStoryboardOrchestratorInput (used in module)
+src/lib/novel-promotion/story-to-script/clip-matching.ts:2 - TextMatchLevel (used in module)
+src/lib/novel-promotion/story-to-script/clip-matching.ts:4 - TextMarkerMatch (used in module)
+src/lib/novel-promotion/story-to-script/clip-matching.ts:11 - ClipBoundaryMatch (used in module)
+src/lib/novel-promotion/story-to-script/clip-matching.ts:18 - ClipContentMatcher (used in module)
+src/lib/novel-promotion/story-to-script/clip-matching.ts:22 - TextMarkerMatcher (used in module)
+src/lib/novel-promotion/story-to-script/orchestrator.ts:31 - StoryToScriptScreenplayResult (used in module)
+src/lib/novel-promotion/story-to-script/orchestrator.ts:39 - StoryToScriptPromptTemplates (used in module)
+src/lib/novel-promotion/story-to-script/orchestrator.ts:46 - StoryToScriptOrchestratorInput (used in module)
+src/lib/novel-promotion/story-to-script/types.ts:9 - StoryToScriptLane
+src/lib/novel-promotion/story-to-script/types.ts:10 - StoryToScriptRunEventType
+src/lib/novel-promotion/story-to-script/types.ts:11 - StoryToScriptRunStatus
+src/lib/novel-promotion/story-to-script/types.ts:12 - StoryToScriptStepStatus
+src/lib/novel-promotion/story-to-script/types.ts:13 - StoryToScriptStreamEvent
+src/lib/query/hooks/index.ts:10 - useGlobalCharacters
+src/lib/query/hooks/index.ts:11 - useGlobalLocations
+src/lib/query/hooks/index.ts:12 - useGlobalVoices
+src/lib/query/hooks/index.ts:13 - useGlobalFolders
+src/lib/query/hooks/index.ts:14 - useCreateFolder
+src/lib/query/hooks/index.ts:15 - useUpdateFolder
+src/lib/query/hooks/index.ts:16 - useDeleteFolder
+src/lib/query/hooks/index.ts:17 - useRefreshGlobalAssets
+src/lib/query/hooks/index.ts:18 - GlobalCharacter
+src/lib/query/hooks/index.ts:19 - GlobalCharacterAppearance
+src/lib/query/hooks/index.ts:20 - GlobalLocation
+src/lib/query/hooks/index.ts:21 - GlobalLocationImage
+src/lib/query/hooks/index.ts:22 - GlobalVoice
+src/lib/query/hooks/index.ts:23 - GlobalFolder
+src/lib/query/hooks/index.ts:26 - useGenerateCharacterImage
+src/lib/query/hooks/index.ts:27 - useModifyCharacterImage
+src/lib/query/hooks/index.ts:28 - useSelectCharacterImage
+src/lib/query/hooks/index.ts:29 - useUndoCharacterImage
+src/lib/query/hooks/index.ts:30 - useUploadCharacterImage
+src/lib/query/hooks/index.ts:31 - useDeleteCharacter
+src/lib/query/hooks/index.ts:32 - useDeleteCharacterAppearance
+src/lib/query/hooks/index.ts:33 - useUploadCharacterVoice
+src/lib/query/hooks/index.ts:34 - useGenerateLocationImage
+src/lib/query/hooks/index.ts:35 - useModifyLocationImage
+src/lib/query/hooks/index.ts:36 - useSelectLocationImage
+src/lib/query/hooks/index.ts:37 - useUndoLocationImage
+src/lib/query/hooks/index.ts:38 - useUploadLocationImage
+src/lib/query/hooks/index.ts:39 - useDeleteLocation
+src/lib/query/hooks/index.ts:40 - useDeleteVoice
+src/lib/query/hooks/index.ts:41 - useUpdateCharacterName
+src/lib/query/hooks/index.ts:42 - useUpdateLocationName
+src/lib/query/hooks/index.ts:43 - useUpdateCharacterAppearanceDescription
+src/lib/query/hooks/index.ts:44 - useUpdateLocationSummary
+src/lib/query/hooks/index.ts:45 - useAiModifyCharacterDescription
+src/lib/query/hooks/index.ts:46 - useAiModifyLocationDescription
+src/lib/query/hooks/index.ts:47 - useDesignAssetHubVoice
+src/lib/query/hooks/index.ts:48 - useSaveDesignedAssetHubVoice
+src/lib/query/hooks/index.ts:49 - useUploadAssetHubVoice
+src/lib/query/hooks/index.ts:50 - useAiDesignLocation
+src/lib/query/hooks/index.ts:51 - useCreateAssetHubLocation
+src/lib/query/hooks/index.ts:52 - useUploadAssetHubTempMedia
+src/lib/query/hooks/index.ts:53 - useAiDesignCharacter
+src/lib/query/hooks/index.ts:54 - useExtractAssetHubReferenceCharacterDescription
+src/lib/query/hooks/index.ts:55 - useCreateAssetHubCharacter
+src/lib/query/hooks/index.ts:60 - useProjectAssets
+src/lib/query/hooks/index.ts:61 - useProjectCharacters
+src/lib/query/hooks/index.ts:62 - useProjectLocations
+src/lib/query/hooks/index.ts:63 - useRefreshProjectAssets
+src/lib/query/hooks/index.ts:64 - ProjectAssetsData
+src/lib/query/hooks/index.ts:67 - useGenerateProjectCharacterImage
+src/lib/query/hooks/index.ts:68 - useModifyProjectCharacterImage
+src/lib/query/hooks/index.ts:69 - useRegenerateCharacterGroup
+src/lib/query/hooks/index.ts:70 - useRegenerateSingleCharacterImage
+src/lib/query/hooks/index.ts:71 - useSelectProjectCharacterImage
+src/lib/query/hooks/index.ts:72 - useUndoProjectCharacterImage
+src/lib/query/hooks/index.ts:73 - useUploadProjectCharacterImage
+src/lib/query/hooks/index.ts:74 - useDeleteProjectCharacter
+src/lib/query/hooks/index.ts:75 - useDeleteProjectAppearance
+src/lib/query/hooks/index.ts:76 - useUpdateProjectCharacterName
+src/lib/query/hooks/index.ts:77 - useUploadProjectCharacterVoice
+src/lib/query/hooks/index.ts:78 - useGenerateProjectLocationImage
+src/lib/query/hooks/index.ts:79 - useModifyProjectLocationImage
+src/lib/query/hooks/index.ts:80 - useRegenerateLocationGroup
+src/lib/query/hooks/index.ts:81 - useRegenerateSingleLocationImage
+src/lib/query/hooks/index.ts:82 - useSelectProjectLocationImage
+src/lib/query/hooks/index.ts:83 - useUndoProjectLocationImage
+src/lib/query/hooks/index.ts:84 - useUploadProjectLocationImage
+src/lib/query/hooks/index.ts:85 - useDeleteProjectLocation
+src/lib/query/hooks/index.ts:86 - useUpdateProjectLocationName
+src/lib/query/hooks/index.ts:87 - useUpdateProjectAppearanceDescription
+src/lib/query/hooks/index.ts:88 - useUpdateProjectLocationDescription
+src/lib/query/hooks/index.ts:89 - useUpdateProjectCharacterIntroduction
+src/lib/query/hooks/index.ts:90 - useAiModifyProjectAppearanceDescription
+src/lib/query/hooks/index.ts:91 - useAiModifyProjectLocationDescription
+src/lib/query/hooks/index.ts:92 - useAiCreateProjectLocation
+src/lib/query/hooks/index.ts:93 - useCreateProjectLocation
+src/lib/query/hooks/index.ts:94 - useAiCreateProjectCharacter
+src/lib/query/hooks/index.ts:95 - useUploadProjectTempMedia
+src/lib/query/hooks/index.ts:96 - useExtractProjectReferenceCharacterDescription
+src/lib/query/hooks/index.ts:97 - useCreateProjectCharacter
+src/lib/query/hooks/index.ts:98 - useCreateProjectCharacterAppearance
+src/lib/query/hooks/index.ts:99 - useAnalyzeProjectGlobalAssets
+src/lib/query/hooks/index.ts:100 - useCopyProjectAssetFromGlobal
+src/lib/query/hooks/index.ts:101 - useAiModifyProjectShotPrompt
+src/lib/query/hooks/index.ts:102 - useUpdateProjectConfig
+src/lib/query/hooks/index.ts:103 - useUpdateProjectEpisodeField
+src/lib/query/hooks/index.ts:104 - useAnalyzeProjectAssets
+src/lib/query/hooks/index.ts:105 - useGetProjectStoryboardStats
+src/lib/query/hooks/index.ts:106 - useUpdateProjectPanelVideoPrompt
+src/lib/query/hooks/index.ts:107 - useRegenerateProjectPanelImage
+src/lib/query/hooks/index.ts:108 - useModifyProjectStoryboardImage
+src/lib/query/hooks/index.ts:109 - useDownloadProjectImages
+src/lib/query/hooks/index.ts:110 - useUpdateProjectPanel
+src/lib/query/hooks/index.ts:111 - useCreateProjectPanel
+src/lib/query/hooks/index.ts:112 - useDeleteProjectPanel
+src/lib/query/hooks/index.ts:113 - useDeleteProjectStoryboardGroup
+src/lib/query/hooks/index.ts:114 - useRegenerateProjectStoryboardText
+src/lib/query/hooks/index.ts:115 - useCreateProjectStoryboardGroup
+src/lib/query/hooks/index.ts:116 - useMoveProjectStoryboardGroup
+src/lib/query/hooks/index.ts:117 - useInsertProjectPanel
+src/lib/query/hooks/index.ts:118 - useConfirmProjectCharacterSelection
+src/lib/query/hooks/index.ts:119 - useConfirmProjectLocationSelection
+src/lib/query/hooks/index.ts:120 - useConfirmProjectCharacterProfile
+src/lib/query/hooks/index.ts:121 - useBatchConfirmProjectCharacterProfiles
+src/lib/query/hooks/index.ts:122 - useUpdateProjectCharacterVoiceSettings
+src/lib/query/hooks/index.ts:123 - useSaveProjectDesignedVoice
+src/lib/query/hooks/index.ts:124 - useUpdateProjectClip
+src/lib/query/hooks/index.ts:125 - useFetchProjectVoiceStageData
+src/lib/query/hooks/index.ts:126 - useAnalyzeProjectVoice
+src/lib/query/hooks/index.ts:127 - useGenerateProjectVoice
+src/lib/query/hooks/index.ts:128 - useCreateProjectVoiceLine
+src/lib/query/hooks/index.ts:129 - useUpdateProjectVoiceLine
+src/lib/query/hooks/index.ts:130 - useDeleteProjectVoiceLine
+src/lib/query/hooks/index.ts:131 - useDownloadProjectVoices
+src/lib/query/hooks/index.ts:132 - useBatchGenerateCharacterImages
+src/lib/query/hooks/index.ts:133 - useBatchGenerateLocationImages
+src/lib/query/hooks/index.ts:134 - useDesignProjectVoice
+src/lib/query/hooks/index.ts:135 - useAnalyzeProjectShotVariants
+src/lib/query/hooks/index.ts:136 - useUpdateProjectPhotographyPlan
+src/lib/query/hooks/index.ts:137 - useUpdateProjectPanelActingNotes
+src/lib/query/hooks/index.ts:138 - useListProjectEpisodeVideoUrls
+src/lib/query/hooks/index.ts:139 - useUpdateProjectPanelLink
+src/lib/query/hooks/index.ts:140 - useListProjectEpisodes
+src/lib/query/hooks/index.ts:141 - useSplitProjectEpisodes
+src/lib/query/hooks/index.ts:142 - useSplitProjectEpisodesByMarkers
+src/lib/query/hooks/index.ts:143 - useSaveProjectEpisodesBatch
+src/lib/query/hooks/index.ts:144 - useDownloadRemoteBlob
+src/lib/query/hooks/index.ts:145 - useCreateProjectPanelVariant
+src/lib/query/hooks/index.ts:146 - useUploadProjectPanelImage
+src/lib/query/hooks/index.ts:147 - useClearProjectStoryboardError
+src/lib/query/hooks/index.ts:148 - useUpdateSpeakerVoice
+src/lib/query/hooks/index.ts:152 - Character
+src/lib/query/hooks/index.ts:153 - CharacterAppearance
+src/lib/query/hooks/index.ts:154 - Location
+src/lib/query/hooks/index.ts:155 - LocationImage
+src/lib/query/hooks/index.ts:160 - useStoryboards
+src/lib/query/hooks/index.ts:161 - useRegeneratePanelImage
+src/lib/query/hooks/index.ts:162 - useModifyPanelImage
+src/lib/query/hooks/index.ts:163 - useGenerateVideo
+src/lib/query/hooks/index.ts:164 - useBatchGenerateVideos
+src/lib/query/hooks/index.ts:165 - useSelectPanelCandidate
+src/lib/query/hooks/index.ts:166 - useRefreshStoryboards
+src/lib/query/hooks/index.ts:167 - StoryboardPanel
+src/lib/query/hooks/index.ts:168 - StoryboardGroup
+src/lib/query/hooks/index.ts:169 - StoryboardData
+src/lib/query/hooks/index.ts:170 - PanelCandidate
+src/lib/query/hooks/index.ts:175 - useVoiceLines
+src/lib/query/hooks/index.ts:176 - useMatchedVoiceLines
+src/lib/query/hooks/index.ts:177 - useGenerateVoice
+src/lib/query/hooks/index.ts:178 - useBatchGenerateVoices
+src/lib/query/hooks/index.ts:179 - useUpdateVoiceText
+src/lib/query/hooks/index.ts:180 - useRefreshVoiceLines
+src/lib/query/hooks/index.ts:181 - VoiceLine
+src/lib/query/hooks/index.ts:182 - MatchedVoiceLine
+src/lib/query/hooks/index.ts:183 - VoiceLinesData
+src/lib/query/hooks/index.ts:184 - MatchedVoiceLinesData
+src/lib/query/hooks/index.ts:189 - useSSE
+src/lib/query/hooks/index.ts:192 - useStoryToScriptRunStream
+src/lib/query/hooks/index.ts:195 - useScriptToStoryboardRunStream
+src/lib/query/hooks/index.ts:199 - useAssetTaskPresentation
+src/lib/query/hooks/index.ts:200 - useStoryboardTaskPresentation
+src/lib/query/hooks/index.ts:201 - useVideoTaskPresentation
+src/lib/query/hooks/index.ts:202 - useVoiceTaskPresentation
+src/lib/query/hooks/index.ts:203 - TaskPresentationTarget
+src/lib/query/hooks/index.ts:208 - useProjectData
+src/lib/query/hooks/index.ts:209 - useRefreshProjectData
+src/lib/query/hooks/index.ts:210 - useEpisodeData
+src/lib/query/hooks/index.ts:211 - useEpisodes
+src/lib/query/hooks/index.ts:212 - useRefreshEpisodeData
+src/lib/query/hooks/index.ts:213 - useRefreshAll
+src/lib/query/hooks/index.ts:214 - Episode
+src/lib/query/hooks/index.ts:218 - useUserModels
+src/lib/query/hooks/index.ts:219 - QueryUserModelOption
+src/lib/query/hooks/index.ts:220 - QueryUserModelsPayload
+src/lib/query/hooks/useMultiShotTask.ts:37 - MultiShotBindings (used in module)
+src/lib/query/hooks/useMultiShotTask.ts:42 - MultiShotTaskRecord (used in module)
+src/lib/query/hooks/useRunStreamState.ts:14 - RunState
+src/lib/query/hooks/useRunStreamState.ts:15 - RunStepState
+src/lib/query/hooks/useRunStreamState.ts:16 - UseRunStreamStateOptions
+src/lib/query/hooks/useScriptToStoryboardRunStream.ts:6 - ScriptToStoryboardRunParams (used in module)
+src/lib/query/hooks/useScriptToStoryboardRunStream.ts:14 - ScriptToStoryboardRunResult
+src/lib/query/hooks/useStoryToScriptRunStream.ts:6 - StoryToScriptRunParams (used in module)
+src/lib/query/hooks/useStoryToScriptRunStream.ts:15 - StoryToScriptRunResult
+src/lib/query/hooks/useStyleProfile.ts:13 - StyleProfileFetched (used in module)
+src/lib/query/hooks/useTaskStatus.ts:163 - useTaskStatus
+src/lib/query/hooks/useTaskStatus.ts:7 - TaskItem (used in module)
+src/lib/query/hooks/useTaskTargetStateMap-utils.ts:28 - TaskTargetStateBatchSubscriber (used in module)
+src/lib/query/hooks/useTaskTargetStateMap-utils.ts:34 - TaskTargetStateBatch (used in module)
+src/lib/query/mutations/auto-group-multi-shot-mutation.ts:16 - MultiShotGroup (used in module)
+src/lib/query/mutations/auto-group-multi-shot-mutation.ts:22 - AutoGroupResult (used in module)
+src/lib/query/mutations/character-base-mutations-utils.ts:16 - applyCharacterSelectionToCharacters (used in module)
+src/lib/query/mutations/index.ts:8 - useGenerateCharacterImage
+src/lib/query/mutations/index.ts:9 - useModifyCharacterImage
+src/lib/query/mutations/index.ts:10 - useSelectCharacterImage
+src/lib/query/mutations/index.ts:11 - useUndoCharacterImage
+src/lib/query/mutations/index.ts:12 - useUploadCharacterImage
+src/lib/query/mutations/index.ts:13 - useDeleteCharacter
+src/lib/query/mutations/index.ts:14 - useDeleteCharacterAppearance
+src/lib/query/mutations/index.ts:15 - useUploadCharacterVoice
+src/lib/query/mutations/index.ts:17 - useGenerateLocationImage
+src/lib/query/mutations/index.ts:18 - useModifyLocationImage
+src/lib/query/mutations/index.ts:19 - useSelectLocationImage
+src/lib/query/mutations/index.ts:20 - useUndoLocationImage
+src/lib/query/mutations/index.ts:21 - useUploadLocationImage
+src/lib/query/mutations/index.ts:22 - useDeleteLocation
+src/lib/query/mutations/index.ts:24 - useDeleteVoice
+src/lib/query/mutations/index.ts:26 - useUpdateCharacterName
+src/lib/query/mutations/index.ts:27 - useUpdateLocationName
+src/lib/query/mutations/index.ts:28 - useUpdateCharacterAppearanceDescription
+src/lib/query/mutations/index.ts:29 - useUpdateLocationSummary
+src/lib/query/mutations/index.ts:30 - useAiModifyCharacterDescription
+src/lib/query/mutations/index.ts:31 - useAiModifyLocationDescription
+src/lib/query/mutations/index.ts:32 - useUploadAssetHubTempMedia
+src/lib/query/mutations/index.ts:33 - useAiDesignCharacter
+src/lib/query/mutations/index.ts:34 - useExtractAssetHubReferenceCharacterDescription
+src/lib/query/mutations/index.ts:35 - useCreateAssetHubCharacter
+src/lib/query/mutations/index.ts:29 - useGenerateProjectCharacterImage
+src/lib/query/mutations/index.ts:69 - useUploadProjectCharacterImage
+src/lib/query/mutations/index.ts:95 - useSelectProjectCharacterImage
+src/lib/query/mutations/index.ts:167 - useUndoProjectCharacterImage
+src/lib/query/mutations/index.ts:192 - useDeleteProjectCharacter
+src/lib/query/mutations/index.ts:240 - useDeleteProjectAppearance
+src/lib/query/mutations/index.ts:261 - useUpdateProjectCharacterName
+src/lib/query/mutations/index.ts:13 - useModifyProjectCharacterImage
+src/lib/query/mutations/index.ts:61 - useRegenerateCharacterGroup
+src/lib/query/mutations/index.ts:101 - useRegenerateSingleCharacterImage
+src/lib/query/mutations/index.ts:150 - useUpdateProjectAppearanceDescription
+src/lib/query/mutations/index.ts:182 - useBatchGenerateCharacterImages
+src/lib/query/mutations/index.ts:234 - useUploadAndExpandCharacterToMultiView
+src/lib/query/mutations/index.ts:8 - useUploadProjectCharacterVoice
+src/lib/query/mutations/index.ts:28 - useUpdateProjectCharacterVoiceSettings
+src/lib/query/mutations/index.ts:58 - useSaveProjectDesignedVoice
+src/lib/query/mutations/index.ts:10 - useUpdateProjectCharacterIntroduction
+src/lib/query/mutations/index.ts:37 - useAiModifyProjectAppearanceDescription
+src/lib/query/mutations/index.ts:73 - useAiCreateProjectCharacter
+src/lib/query/mutations/index.ts:94 - useUploadProjectTempMedia
+src/lib/query/mutations/index.ts:114 - useExtractProjectReferenceCharacterDescription
+src/lib/query/mutations/index.ts:138 - useCreateProjectCharacter
+src/lib/query/mutations/index.ts:170 - useCreateProjectCharacterAppearance
+src/lib/query/mutations/index.ts:198 - useConfirmProjectCharacterSelection
+src/lib/query/mutations/index.ts:221 - useConfirmProjectCharacterProfile
+src/lib/query/mutations/index.ts:260 - useBatchConfirmProjectCharacterProfiles
+src/lib/query/mutations/index.ts:20 - useGenerateProjectLocationImage
+src/lib/query/mutations/index.ts:60 - useUploadProjectLocationImage
+src/lib/query/mutations/index.ts:85 - useModifyProjectLocationImage
+src/lib/query/mutations/index.ts:132 - useRegenerateLocationGroup
+src/lib/query/mutations/index.ts:171 - useRegenerateSingleLocationImage
+src/lib/query/mutations/index.ts:211 - useSelectProjectLocationImage
+src/lib/query/mutations/index.ts:281 - useUndoProjectLocationImage
+src/lib/query/mutations/index.ts:24 - useDeleteProjectLocation
+src/lib/query/mutations/index.ts:72 - useUpdateProjectLocationName
+src/lib/query/mutations/index.ts:110 - useCreateLocationView
+src/lib/query/mutations/index.ts:130 - useDeleteLocationView
+src/lib/query/mutations/index.ts:149 - useUpdateProjectLocationBasics
+src/lib/query/mutations/index.ts:181 - useUpdateProjectLocationDescription
+src/lib/query/mutations/index.ts:214 - useAiModifyProjectLocationDescription
+src/lib/query/mutations/index.ts:250 - useAiCreateProjectLocation
+src/lib/query/mutations/index.ts:271 - useCreateProjectLocation
+src/lib/query/mutations/index.ts:299 - useConfirmProjectLocationSelection
+src/lib/query/mutations/index.ts:322 - useBatchGenerateLocationImages
+src/lib/query/mutations/index.ts:10 - useAiModifyProjectShotPrompt
+src/lib/query/mutations/index.ts:50 - useAnalyzeProjectShotVariants
+src/lib/query/mutations/index.ts:87 - useUpdateProjectPhotographyPlan
+src/lib/query/mutations/index.ts:109 - useUpdateProjectPanelActingNotes
+src/lib/query/mutations/index.ts:132 - useSelectProjectPanelCandidate
+src/lib/query/mutations/index.ts:23 - useRegenerateProjectPanelImage
+src/lib/query/mutations/index.ts:53 - useModifyProjectStoryboardImage
+src/lib/query/mutations/index.ts:73 - useDownloadProjectImages
+src/lib/query/mutations/index.ts:84 - useUpdateProjectPanel
+src/lib/query/mutations/index.ts:120 - useCreateProjectPanel
+src/lib/query/mutations/index.ts:140 - useDeleteProjectPanel
+src/lib/query/mutations/index.ts:158 - useDeleteProjectStoryboardGroup
+src/lib/query/mutations/index.ts:178 - useRegenerateProjectStoryboardText
+src/lib/query/mutations/index.ts:199 - useCreateProjectStoryboardGroup
+src/lib/query/mutations/index.ts:219 - useMoveProjectStoryboardGroup
+src/lib/query/mutations/index.ts:239 - useInsertProjectPanel
+src/lib/query/mutations/index.ts:259 - useCreateProjectPanelVariant
+src/lib/query/mutations/index.ts:279 - useUploadProjectPanelImage
+src/lib/query/mutations/index.ts:293 - useClearProjectStoryboardError
+src/lib/query/mutations/index.ts:8 - useListProjectEpisodeVideoUrls
+src/lib/query/mutations/index.ts:29 - useUpdateProjectPanelLink
+src/lib/query/mutations/index.ts:51 - useUpdateProjectPanelVideoPrompt
+src/lib/query/mutations/index.ts:40 - useDesignProjectVoice
+src/lib/query/mutations/index.ts:72 - useFetchProjectVoiceStageData
+src/lib/query/mutations/index.ts:110 - useAnalyzeProjectVoice
+src/lib/query/mutations/index.ts:131 - useGenerateProjectVoice
+src/lib/query/mutations/index.ts:158 - useCreateProjectVoiceLine
+src/lib/query/mutations/index.ts:182 - useUpdateProjectVoiceLine
+src/lib/query/mutations/index.ts:201 - useDeleteProjectVoiceLine
+src/lib/query/mutations/index.ts:218 - useDownloadProjectVoices
+src/lib/query/mutations/index.ts:233 - useUpdateSpeakerVoice
+src/lib/query/mutations/index.ts:11 - useAnalyzeProjectGlobalAssets
+src/lib/query/mutations/index.ts:37 - useCopyProjectAssetFromGlobal
+src/lib/query/mutations/index.ts:66 - useUpdateProjectConfig
+src/lib/query/mutations/index.ts:113 - useAnalyzeProjectAssets
+src/lib/query/mutations/index.ts:156 - useGetProjectStoryboardStats
+src/lib/query/mutations/index.ts:18 - useListProjectEpisodes
+src/lib/query/mutations/index.ts:47 - useSplitProjectEpisodes
+src/lib/query/mutations/index.ts:75 - useSplitProjectEpisodesByMarkers
+src/lib/query/mutations/index.ts:101 - useSaveProjectEpisodesBatch
+src/lib/query/mutations/index.ts:128 - useUpdateProjectEpisodeField
+src/lib/query/mutations/index.ts:206 - useUpdateProjectClip
+src/lib/query/mutations/index.ts:263 - useDownloadRemoteBlob
+src/lib/query/mutations/location-image-mutations-utils.ts:11 - applyLocationSelectionToLocations (used in module)
+src/lib/query/mutations/mutation-shared.ts:21 - MutationRequestError (used in module)
+src/lib/query/mutations/updateStyleProfile.ts:11 - StyleProfileUpdatePayload (used in module)
+src/lib/query/mutations/updateStyleProfile.ts:18 - StyleProfileUpdateResponse (used in module)
+src/lib/query/mutations/useProjectMutations.ts:234 - useUploadAndExpandCharacterToMultiView
+src/lib/query/mutations/useProjectMutations.ts:110 - useCreateLocationView
+src/lib/query/mutations/useProjectMutations.ts:130 - useDeleteLocationView
+src/lib/query/mutations/useProjectMutations.ts:149 - useUpdateProjectLocationBasics
+src/lib/workers/handlers/analyze-global-parse.ts:38 - parseJsonResponse (used in module)
+src/lib/workers/handlers/analyze-global-persist.ts:12 - AnalyzeGlobalStats (used in module)
+src/lib/workers/handlers/analyze-global-prompt.ts:5 - AnalyzeGlobalPromptTemplates (used in module)
+src/lib/workers/handlers/image-task-handler-shared.ts:61 - PanelCharacterReference (used in module)
+src/lib/workers/handlers/llm-stream.ts:10 - WorkerLLMStreamContext (used in module)
+src/lib/workers/handlers/llm-stream.ts:15 - WorkerInternalLLMStreamCallbacks (used in module)
+src/lib/workers/handlers/multi-shot-video-b-path.ts:82 - BPathShotPromptEntry (used in module)
+src/lib/workers/handlers/panel-image-task-handler-utils.ts:13 - parseDescriptionList (used in module)
+src/lib/workers/handlers/script-to-storyboard-helpers.ts:78 - extractDialogueFromSourceText (used in module)
+src/lib/workers/handlers/script-to-storyboard-helpers.ts:11 - ClipPanelsResult (used in module)
+src/lib/workers/handlers/story-to-script-utils.ts:16 - StoryToScriptGraphState (used in module)
+src/lib/workers/handlers/voice-analyze-helpers.ts:1 - StoryboardPanelLike (used in module)
+src/lib/workers/handlers/voice-analyze-helpers.ts:8 - StoryboardLike (used in module)
+src/lib/workers/handlers/voice-analyze-helpers.ts:13 - VoiceLineMatchedPanel (used in module)
+tests/integration/api/helpers/call-route.ts:11 - callRoute
+.next/types/app/[locale]/profile/page.ts:54 - PageProps (used in module)
+.next/types/app/[locale]/profile/page.ts:58 - LayoutProps
+.next/types/app/[locale]/workspace/page.ts:54 - PageProps (used in module)
+.next/types/app/[locale]/workspace/page.ts:58 - LayoutProps
+.next/types/app/api/projects/route.ts:313 - PageProps
+.next/types/app/api/projects/route.ts:317 - LayoutProps
+.next/types/app/api/runs/route.ts:313 - PageProps
+.next/types/app/api/runs/route.ts:317 - LayoutProps
+.next/types/app/api/sse/route.ts:313 - PageProps
+.next/types/app/api/sse/route.ts:317 - LayoutProps
+.next/types/app/api/task-target-states/route.ts:313 - PageProps
+.next/types/app/api/task-target-states/route.ts:317 - LayoutProps
+.next/types/app/api/tasks/route.ts:313 - PageProps
+.next/types/app/api/tasks/route.ts:317 - LayoutProps
+.next/types/app/api/user-preference/route.ts:313 - PageProps
+.next/types/app/api/user-preference/route.ts:317 - LayoutProps
+.next/types/app/m/[publicId]/route.ts:313 - PageProps
+.next/types/app/m/[publicId]/route.ts:317 - LayoutProps
+src/app/[locale]/admin/invites/page.tsx:54 - default
+src/app/[locale]/admin/projects/page.tsx:35 - default
+src/app/[locale]/admin/runs/page.tsx:54 - default
+src/app/[locale]/admin/users/page.tsx:79 - default
+src/app/[locale]/v2/new/page.tsx:7 - default
+src/app/[locale]/workspace/[projectId]/episode-selection.ts:1 - EpisodeLike (used in module)
+src/app/api/admin/projects/route.ts:16 - GET
+src/app/api/admin/storage-stats/route.ts:16 - GET
+src/app/api/organizations/[organizationId]/route.ts:40 - GET
+src/app/api/organizations/[organizationId]/route.ts:53 - PATCH
+src/app/api/organizations/[organizationId]/route.ts:118 - DELETE
+src/app/api/usage/me/route.ts:13 - GET
+src/app/api/workspaces/[workspaceId]/route.ts:38 - GET
+src/app/api/workspaces/[workspaceId]/route.ts:51 - PATCH
+src/app/api/workspaces/[workspaceId]/route.ts:117 - DELETE
+src/features/video-editor/components/Preview/index.ts:1 - RemotionPreview
+src/features/video-editor/components/Preview/RemotionPreview.tsx:160 - default
+src/features/video-editor/components/Timeline/index.ts:1 - Timeline
+src/features/video-editor/components/Timeline/Timeline.tsx:378 - default
+src/features/video-editor/remotion/transitions/index.tsx:15 - TransitionWrapper (used in module)
+src/features/video-editor/remotion/transitions/index.tsx:61 - CrossDissolve (used in module)
+src/features/video-editor/remotion/transitions/index.tsx:83 - SlideTransition (used in module)
+src/features/video-editor/remotion/transitions/index.tsx:115 - default
+src/lib/novel-promotion/stages/contracts/video-stage-contract.ts:3 - VideoStageContract
+src/lib/novel-promotion/stages/contracts/voice-stage-contract.ts:3 - VoiceStageContract
+src/lib/novel-promotion/stages/video-stage-runtime/types.ts:23 - VideoModelOption (used in module)
+src/lib/query/hooks/run-stream/event-parser.ts:39 - readStepField (used in module)
+src/lib/query/hooks/run-stream/event-parser.ts:86 - mapTaskSSEEventToRunEvents
+src/lib/query/hooks/run-stream/run-event-adapter.ts:31 - parseRunApiEventsPayload (used in module)
+src/lib/query/hooks/run-stream/run-event-adapter.ts:5 - RunApiEvent (used in module)
+src/lib/query/hooks/run-stream/run-stream-view.ts:6 - DerivedRunStreamView (used in module)
+src/lib/query/hooks/run-stream/snapshot.ts:3 - SNAPSHOT_TTL_MS (used in module)
+src/lib/query/hooks/run-stream/state-machine.ts:13 - toTimestamp (used in module)
+src/lib/query/hooks/run-stream/task-terminal-poll.ts:12 - pollTaskTerminalState
+.next/types/app/[locale]/auth/signin/page.ts:54 - PageProps (used in module)
+.next/types/app/[locale]/auth/signin/page.ts:58 - LayoutProps
+.next/types/app/[locale]/auth/signup/page.ts:54 - PageProps (used in module)
+.next/types/app/[locale]/auth/signup/page.ts:58 - LayoutProps
+.next/types/app/[locale]/workspace/[projectId]/page.ts:54 - PageProps (used in module)
+.next/types/app/[locale]/workspace/[projectId]/page.ts:58 - LayoutProps
+.next/types/app/[locale]/workspace/asset-hub/page.ts:54 - PageProps (used in module)
+.next/types/app/[locale]/workspace/asset-hub/page.ts:58 - LayoutProps
+.next/types/app/api/asset-hub/ai-design-character/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/ai-design-character/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/ai-design-location/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/ai-design-location/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/ai-modify-character/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/ai-modify-character/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/ai-modify-location/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/ai-modify-location/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/appearances/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/appearances/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/character-voice/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/character-voice/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/characters/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/characters/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/folders/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/folders/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/generate-image/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/generate-image/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/locations/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/locations/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/modify-image/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/modify-image/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/picker/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/picker/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/reference-to-character/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/reference-to-character/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/select-image/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/select-image/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/undo-image/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/undo-image/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/update-asset-label/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/update-asset-label/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/upload-image/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/upload-image/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/upload-temp/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/upload-temp/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/voice-design/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/voice-design/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/voices/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/voices/route.ts:317 - LayoutProps
+.next/types/app/api/auth/[...nextauth]/route.ts:313 - PageProps
+.next/types/app/api/auth/[...nextauth]/route.ts:317 - LayoutProps
+.next/types/app/api/auth/register/route.ts:313 - PageProps
+.next/types/app/api/auth/register/route.ts:317 - LayoutProps
+.next/types/app/api/cos/image/route.ts:313 - PageProps
+.next/types/app/api/cos/image/route.ts:317 - LayoutProps
+.next/types/app/api/files/[...path]/route.ts:313 - PageProps
+.next/types/app/api/files/[...path]/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/route.ts:317 - LayoutProps
+.next/types/app/api/projects/[projectId]/route.ts:313 - PageProps
+.next/types/app/api/projects/[projectId]/route.ts:317 - LayoutProps
+.next/types/app/api/runs/[runId]/route.ts:313 - PageProps
+.next/types/app/api/runs/[runId]/route.ts:317 - LayoutProps
+.next/types/app/api/system/boot-id/route.ts:313 - PageProps
+.next/types/app/api/system/boot-id/route.ts:317 - LayoutProps
+.next/types/app/api/tasks/[taskId]/route.ts:313 - PageProps
+.next/types/app/api/tasks/[taskId]/route.ts:317 - LayoutProps
+.next/types/app/api/tasks/dismiss/route.ts:313 - PageProps
+.next/types/app/api/tasks/dismiss/route.ts:317 - LayoutProps
+.next/types/app/api/user/api-config/route.ts:313 - PageProps
+.next/types/app/api/user/api-config/route.ts:317 - LayoutProps
+.next/types/app/api/user/balance/route.ts:313 - PageProps
+.next/types/app/api/user/balance/route.ts:317 - LayoutProps
+.next/types/app/api/user/costs/route.ts:313 - PageProps
+.next/types/app/api/user/costs/route.ts:317 - LayoutProps
+.next/types/app/api/user/models/route.ts:313 - PageProps
+.next/types/app/api/user/models/route.ts:317 - LayoutProps
+.next/types/app/api/user/transactions/route.ts:313 - PageProps
+.next/types/app/api/user/transactions/route.ts:317 - LayoutProps
+src/app/[locale]/profile/components/api-config/index.ts:1 - ProviderSection
+src/app/[locale]/profile/components/api-config/index.ts:2 - DefaultModelSection
+src/app/[locale]/profile/components/api-config/index.ts:3 - ProviderCard
+src/app/[locale]/profile/components/api-config/index.ts:4 - useProviders
+src/app/[locale]/profile/components/api-config/index.ts:5 - CustomModel
+src/app/[locale]/profile/components/api-config/index.ts:5 - Provider
+src/app/[locale]/profile/components/api-config/index.ts:6 - getProviderDisplayName
+src/app/[locale]/profile/components/api-config/index.ts:6 - getProviderKey
+src/app/[locale]/profile/components/api-config/index.ts:6 - PRESET_PROVIDERS
+src/app/[locale]/profile/components/api-config/index.ts:6 - encodeModelKey
+src/app/[locale]/profile/components/api-config/index.ts:6 - parseModelKey
+src/app/[locale]/profile/components/api-config/index.ts:6 - matchesModelKey
+src/app/[locale]/profile/components/api-config/pricingDisplay.ts:3 - isRecord (used in module)
+src/app/[locale]/profile/components/api-config/pricingDisplay.ts:7 - composePricingDisplayKey (used in module)
+src/app/[locale]/profile/components/api-config/pricingDisplay.ts:41 - resolvePricingDisplay (used in module)
+src/app/[locale]/profile/components/api-config/pricingDisplay.ts:37 - PRICING_DISPLAY_ALIASES (used in module)
+src/app/[locale]/profile/components/api-config/ProviderCard.tsx:52 - default
+src/app/[locale]/profile/components/api-config/types.ts:424 - getGoogleCompatiblePresetModels
+src/app/[locale]/profile/components/api-config/types.ts:21 - LlmCustomPricing (used in module)
+src/app/[locale]/profile/components/api-config/types.ts:26 - MediaCustomPricing (used in module)
+src/app/[locale]/profile/components/api-config/types.ts:32 - CustomModelPricing (used in module)
+src/app/[locale]/profile/components/api-config/types.ts:67 - ApiConfig
+src/app/[locale]/profile/components/api-config/types.ts:301 - TutorialStep (used in module)
+src/app/[locale]/profile/components/api-config/types.ts:307 - ProviderTutorial (used in module)
+src/app/[locale]/profile/components/api-config/types.ts:314 - PROVIDER_TUTORIALS (used in module)
+src/app/[locale]/v2/workspace/[projectId]/page.tsx:8 - default
+src/app/[locale]/workspace/[projectId]/components/EpisodeList.tsx:25 - EpisodeListProps (used in module)
+src/app/[locale]/workspace/[projectId]/components/OverviewView.tsx:37 - OverviewViewProps (used in module)
+src/app/[locale]/workspace/[projectId]/components/ProjectAssets.tsx:11 - ProjectAssetsProps (used in module)
+src/app/[locale]/workspace/[projectId]/components/Sidebar.tsx:28 - default
+src/app/[locale]/workspace/[projectId]/components/StyleProfilePanel.tsx:28 - StyleProfilePanelProps (used in module)
+src/app/[locale]/workspace/[projectId]/hooks/useProject.ts:36 - useProject
+src/app/[locale]/workspace/[projectId]/hooks/useProject.ts:11 - RefreshScope (used in module)
+src/app/[locale]/workspace/[projectId]/hooks/useProject.ts:18 - RefreshMode (used in module)
+src/app/[locale]/workspace/[projectId]/hooks/useProject.ts:23 - RefreshOptions (used in module)
+src/app/[locale]/workspace/asset-hub/components/AddLocationModal.tsx:27 - AddLocationModal
+src/app/[locale]/workspace/asset-hub/components/CharacterEditModal.tsx:32 - CharacterEditModal (used in module)
+src/app/[locale]/workspace/asset-hub/components/CharacterEditModal.tsx:306 - default
+src/app/[locale]/workspace/asset-hub/components/LocationCard.tsx:379 - default
+src/app/[locale]/workspace/asset-hub/components/LocationEditModal.tsx:32 - LocationEditModal (used in module)
+src/app/[locale]/workspace/asset-hub/components/LocationEditModal.tsx:292 - default
+src/app/[locale]/workspace/asset-hub/components/VoiceCard.tsx:152 - default
+src/app/[locale]/workspace/asset-hub/components/VoiceCreationModal.tsx:5 - VoiceCreationModalProps
+src/app/api/novel-promotion/[projectId]/safe-rewrite/route.ts:32 - POST
+src/app/api/usage/admin/users/route.ts:19 - GET
+src/app/api/usage/users/[userId]/route.ts:16 - GET
+src/app/api/workspaces/[workspaceId]/members/route.ts:26 - GET
+src/app/api/workspaces/[workspaceId]/members/route.ts:63 - POST
+src/app/api/workspaces/[workspaceId]/projects/route.ts:18 - GET
+src/app/api/workspaces/[workspaceId]/usage/route.ts:13 - GET
+.next/types/app/api/asset-hub/characters/[characterId]/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/characters/[characterId]/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/folders/[folderId]/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/folders/[folderId]/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/locations/[locationId]/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/locations/[locationId]/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/voices/[id]/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/voices/[id]/route.ts:317 - LayoutProps
+.next/types/app/api/asset-hub/voices/upload/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/voices/upload/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/ai-create-character/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/ai-create-character/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/ai-create-location/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/ai-create-location/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/ai-modify-appearance/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/ai-modify-appearance/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/ai-modify-location/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/ai-modify-location/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/ai-modify-shot-prompt/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/ai-modify-shot-prompt/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/analyze/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/analyze/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/analyze-global/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/analyze-global/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/analyze-shot-variants/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/analyze-shot-variants/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/assets/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/assets/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/character/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/character/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/character-voice/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/character-voice/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/cleanup-unselected-images/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/cleanup-unselected-images/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/clips/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/clips/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/copy-from-global/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/copy-from-global/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/download-images/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/download-images/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/download-videos/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/download-videos/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/download-voices/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/download-voices/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/editor/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/editor/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/generate-character-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/generate-character-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/generate-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/generate-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/generate-multi-shot-video/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/generate-video/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/generate-video/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/insert-panel/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/insert-panel/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/lip-sync/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/lip-sync/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/location/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/location/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/modify-asset-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/modify-asset-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/modify-storyboard-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/modify-storyboard-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/panel/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/panel/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/panel-link/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/panel-link/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/panel-variant/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/panel-variant/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/photography-plan/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/photography-plan/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/reference-to-character/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/reference-to-character/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-group/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-group/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-panel-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-panel-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-single-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-single-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-storyboard-text/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/regenerate-storyboard-text/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/screenplay-conversion/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/screenplay-conversion/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/script-to-storyboard-stream/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/script-to-storyboard-stream/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/select-character-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/select-character-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/select-location-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/select-location-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/speaker-voice/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/speaker-voice/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/story-to-script-stream/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/story-to-script-stream/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/storyboard-group/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/storyboard-group/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/storyboards/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/storyboards/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/undo-regenerate/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/undo-regenerate/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/update-appearance/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/update-appearance/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/update-asset-label/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/update-asset-label/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/update-location/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/update-location/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/update-prompt/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/update-prompt/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/upload-asset-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/upload-asset-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/upload-panel-image/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/upload-panel-image/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/video-proxy/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/video-proxy/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/video-urls/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/video-urls/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/voice-analyze/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/voice-analyze/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/voice-design/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/voice-design/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/voice-generate/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/voice-generate/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/voice-lines/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/voice-lines/route.ts:317 - LayoutProps
+.next/types/app/api/projects/[projectId]/assets/route.ts:313 - PageProps
+.next/types/app/api/projects/[projectId]/assets/route.ts:317 - LayoutProps
+.next/types/app/api/projects/[projectId]/costs/route.ts:313 - PageProps
+.next/types/app/api/projects/[projectId]/costs/route.ts:317 - LayoutProps
+.next/types/app/api/projects/[projectId]/data/route.ts:313 - PageProps
+.next/types/app/api/projects/[projectId]/data/route.ts:317 - LayoutProps
+.next/types/app/api/runs/[runId]/cancel/route.ts:313 - PageProps
+.next/types/app/api/runs/[runId]/cancel/route.ts:317 - LayoutProps
+.next/types/app/api/runs/[runId]/events/route.ts:313 - PageProps
+.next/types/app/api/runs/[runId]/events/route.ts:317 - LayoutProps
+.next/types/app/api/user/api-config/test-connection/route.ts:313 - PageProps
+.next/types/app/api/user/api-config/test-connection/route.ts:317 - LayoutProps
+.next/types/app/api/user/costs/details/route.ts:313 - PageProps
+.next/types/app/api/user/costs/details/route.ts:317 - LayoutProps
+src/app/[locale]/profile/components/api-config/provider-card/ModelRow.tsx:23 - getModelPriceTexts (used in module)
+src/app/[locale]/profile/components/api-config/provider-card/ModelRow.tsx:8 - ModelRowProps (used in module)
+src/app/[locale]/profile/components/api-config/provider-card/types.ts:3 - ProviderCardDefaultModels (used in module)
+src/app/[locale]/v2/workspace/[projectId]/final/page.tsx:8 - default
+src/app/[locale]/v2/workspace/[projectId]/hooks/useCurrentEpisode.ts:21 - CurrentEpisode (used in module)
+src/app/[locale]/v2/workspace/[projectId]/script/page.tsx:8 - default
+src/app/[locale]/v2/workspace/[projectId]/storyboard/page.tsx:8 - default
+src/app/[locale]/v2/workspace/[projectId]/subjects/page.tsx:8 - default
+src/app/[locale]/v2/workspace/[projectId]/subjects/V2CharacterEditModal.tsx:58 - V2CharacterEditModalProps (used in module)
+src/app/[locale]/v2/workspace/[projectId]/subjects/V2LocationEditModal.tsx:42 - V2LocationEditModalProps (used in module)
+src/app/[locale]/v2/workspace/[projectId]/voice/page.tsx:8 - default
+src/app/[locale]/v3/workspace/[projectId]/storyboard/page.tsx:7 - default
+src/app/[locale]/v4/workspace/[projectId]/storyboard/page.tsx:7 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/StageNavigation.tsx:24 - StageNavigation
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/types.ts:8 - Episode (used in module)
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/WorkspaceStageRuntimeContext.tsx:8 - WorkspaceStageVideoModelOption (used in module)
+src/app/api/admin/users/[id]/balance/route.ts:31 - GET
+src/app/api/novel-promotion/[projectId]/character/bind-appearance-bulk/route.ts:23 - POST
+src/app/api/novel-promotion/[projectId]/location/view/route.ts:25 - POST
+src/app/api/novel-promotion/[projectId]/location/view/route.ts:69 - DELETE
+src/app/api/workspaces/[workspaceId]/members/[userId]/route.ts:11 - DELETE
+.next/types/app/api/novel-promotion/[projectId]/character/appearance/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/character/appearance/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/character/confirm-selection/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/character/confirm-selection/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/character-profile/batch-confirm/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/character-profile/batch-confirm/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/character-profile/confirm/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/character-profile/confirm/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/clips/[clipId]/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/clips/[clipId]/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/editor/render/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/editor/render/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/batch/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/batch/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/split/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/split/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/split-by-markers/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/episodes/split-by-markers/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/location/confirm-selection/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/location/confirm-selection/route.ts:317 - LayoutProps
+.next/types/app/api/novel-promotion/[projectId]/panel/select-candidate/route.ts:313 - PageProps
+.next/types/app/api/novel-promotion/[projectId]/panel/select-candidate/route.ts:317 - LayoutProps
+src/app/[locale]/profile/components/api-config/provider-card/hooks/buildCustomPricing.ts:9 - BuildCustomPricingResult (used in module)
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/AssetLibrary.tsx:21 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/PromptsStage.tsx:7 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/PromptsStage.tsx:5 - PromptsStageProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/VideoStage.tsx:5 - VideoStageProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/VoiceStage.tsx:5 - VoiceStageProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceUserModels.ts:9 - UserModelOption (used in module)
+src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/locations/route.ts:25 - GET
+.next/types/app/api/asset-hub/characters/[characterId]/appearances/[appearanceIndex]/route.ts:313 - PageProps
+.next/types/app/api/asset-hub/characters/[characterId]/appearances/[appearanceIndex]/route.ts:317 - LayoutProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/AddLocationModal.tsx:45 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/CharacterEditModal.tsx:24 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/LocationEditModal.tsx:17 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/script-view/clip-asset-utils.ts:6 - ParsedClipAssets (used in module)
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/AIDataModal.tsx:11 - AIDataModalProps (used in module)
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/AIDataModal.tsx:12 - AIDataSavePayload
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/AIDataModal.tsx:13 - PhotographyRules
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/AIDataModal.tsx:14 - ActingCharacter
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/AIDataModal.tsx:15 - ActingNotes
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/CandidateSelector.tsx:22 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/index.tsx:25 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/InsertPanelButton.tsx:15 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:1 - VideoToolbar
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:2 - VideoPanelCard
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:3 - FirstLastFramePanel
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:6 - VideoModelOption
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:16 - VideoGenerationMode
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:18 - TextPanel
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:32 - Panel
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:61 - Storyboard
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:72 - Clip
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:79 - VideoPanel
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:101 - MatchedVoiceLine
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:111 - FirstLastFrameParams
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:118 - VideoGenerationOptionValue
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:119 - VideoGenerationOptions
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts:121 - BatchVideoGenerationParams
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/VideoPanelCard.tsx:6 - VideoPanelCardProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/VideoPromptModal.tsx:16 - default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/hooks/index.ts:6 - useCharacterActions
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/hooks/index.ts:7 - useLocationActions
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/hooks/index.ts:8 - useAssetsCopyFromHub
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/hooks/index.ts:9 - useAssetsGlobalActions
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/hooks/index.ts:10 - useAssetsImageEdit
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/hooks/usePromptStageActions.tsx:5 - getErrorMessage
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/contracts.ts:4 - StoryboardPanelUpdateContract
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/panel-save-coordinator.ts:21 - PanelSaveCoordinatorCallbacks (used in module)
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/storyboard-state-utils.ts:21 - areStoryboardsEquivalent
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/storyboard-state-utils.ts:30 - buildStoryboardSyncSignature
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/useAIDataModalState.ts:23 - DirtyField (used in module)
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/useAIDataModalState.ts:31 - AIDataModalDraftState (used in module)
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/usePanelCrudActions.ts:32 - PanelSaveStatus (used in module)

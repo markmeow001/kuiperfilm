@@ -1,0 +1,371 @@
+Unused files (65)
+prisma/schema.sqlit.prisma: prisma/schema.sqlit.prisma
+scripts/bootstrap-admin.ts: scripts/bootstrap-admin.ts
+scripts/migrate-cancelled-to-failed.ts: scripts/migrate-cancelled-to-failed.ts
+scripts/migrations/migrate-user-role-to-member.ts: scripts/migrations/migrate-user-role-to-member.ts
+scripts/reset-password.ts: scripts/reset-password.ts
+scripts/tmp-cleanup-project-models.mjs: scripts/tmp-cleanup-project-models.mjs
+scripts/tmp-find-old-model.mjs: scripts/tmp-find-old-model.mjs
+src/app/[locale]/workspace/[projectId]/components/Sidebar.tsx: src/app/[locale]/workspace/[projectId]/components/Sidebar.tsx
+src/app/[locale]/workspace/[projectId]/hooks/useProject.ts: src/app/[locale]/workspace/[projectId]/hooks/useProject.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/StageNavigation.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/StageNavigation.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/AssetLibrary.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/AssetLibrary.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/PromptsStage.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/PromptsStage.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/AddLocationModal.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/AddLocationModal.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/CharacterEditModal.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/CharacterEditModal.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/LocationEditModal.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/LocationEditModal.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/hooks/index.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/assets/hooks/index.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptEditorPanel.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptEditorPanel.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptListCardView.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptListCardView.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptListPanel.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptListPanel.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptListTableView.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptListTableView.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptsStageLayout.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptsStageLayout.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptsStageShell.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/PromptsStageShell.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/hooks/usePromptStageActions.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/hooks/usePromptStageActions.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptAiModifyFlow.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptAiModifyFlow.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptAppendFlow.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptAppendFlow.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptAssetMention.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptAssetMention.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptDraftByShot.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptDraftByShot.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptEditorRuntime.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/hooks/usePromptEditorRuntime.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/promptStageRuntime.types.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/promptStageRuntime.types.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/promptStageRuntime.utils.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/promptStageRuntime.utils.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/promptStageRuntimeCore.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/prompts-stage/runtime/promptStageRuntimeCore.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/CandidateSelector.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/CandidateSelector.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/InsertPanelButton.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/InsertPanelButton.tsx
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/contracts.ts: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/contracts.ts
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/VideoPromptModal.tsx: src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/VideoPromptModal.tsx
+src/app/[locale]/workspace/asset-hub/components/AddLocationModal.tsx: src/app/[locale]/workspace/asset-hub/components/AddLocationModal.tsx
+src/app/[locale]/workspace/asset-hub/components/CharacterEditModal.tsx: src/app/[locale]/workspace/asset-hub/components/CharacterEditModal.tsx
+src/app/[locale]/workspace/asset-hub/components/LocationEditModal.tsx: src/app/[locale]/workspace/asset-hub/components/LocationEditModal.tsx
+src/components/llm-console/index.ts: src/components/llm-console/index.ts
+src/components/ui/patterns/PanelCardV2.tsx: src/components/ui/patterns/PanelCardV2.tsx
+src/components/ui/patterns/StoryboardHeaderV2.tsx: src/components/ui/patterns/StoryboardHeaderV2.tsx
+src/components/ui/patterns/index.ts: src/components/ui/patterns/index.ts
+src/components/v2/UserMenu.tsx: src/components/v2/UserMenu.tsx
+src/features/video-editor/remotion/index.tsx: src/features/video-editor/remotion/index.tsx
+src/features/video-editor/remotion/transitions/index.tsx: src/features/video-editor/remotion/transitions/index.tsx
+src/lib/generators/resolution-adapter.ts: src/lib/generators/resolution-adapter.ts
+src/lib/llm-observe/internal-task.ts: src/lib/llm-observe/internal-task.ts
+src/lib/llm/index.ts: src/lib/llm/index.ts
+src/lib/modes.ts: src/lib/modes.ts
+src/lib/novel-promotion/stages/contracts/video-stage-contract.ts: src/lib/novel-promotion/stages/contracts/video-stage-contract.ts
+src/lib/novel-promotion/stages/contracts/voice-stage-contract.ts: src/lib/novel-promotion/stages/contracts/voice-stage-contract.ts
+src/lib/novel-promotion/story-to-script/types.ts: src/lib/novel-promotion/story-to-script/types.ts
+src/lib/query/hooks/run-stream/task-terminal-poll.ts: src/lib/query/hooks/run-stream/task-terminal-poll.ts
+src/lib/run-runtime/pipeline-graph.ts: src/lib/run-runtime/pipeline-graph.ts
+src/lib/run-runtime/quick-run-graph.ts: src/lib/run-runtime/quick-run-graph.ts
+src/lib/srt.ts: src/lib/srt.ts
+src/types/storyboard-types.ts: src/types/storyboard-types.ts
+tests/contracts/route-behavior-matrix.ts: tests/contracts/route-behavior-matrix.ts
+tests/contracts/task-type-catalog.ts: tests/contracts/task-type-catalog.ts
+tests/contracts/tasktype-behavior-matrix.ts: tests/contracts/tasktype-behavior-matrix.ts
+tests/helpers/fakes/llm.ts: tests/helpers/fakes/llm.ts
+tests/helpers/fakes/media.ts: tests/helpers/fakes/media.ts
+tests/helpers/fakes/providers.ts: tests/helpers/fakes/providers.ts
+tests/helpers/fixtures.ts: tests/helpers/fixtures.ts
+tests/integration/api/helpers/call-route.ts: tests/integration/api/helpers/call-route.ts
+Unused dependencies (1)
+package.json: @ai-sdk/google, @openrouter/sdk, @remotion/cli, @types/bcryptjs, file-saver, mammoth, react-hot-toast
+Unused devDependencies (1)
+package.json: @swc/helpers, @types/file-saver, eslint-config-next
+Unlisted dependencies (14)
+postcss.config.mjs: postcss
+src/app/api/asset-hub/update-asset-label/route.ts: sharp
+src/app/api/asset-hub/upload-image/route.ts: sharp
+src/app/api/novel-promotion/[projectId]/update-asset-label/route.ts: sharp
+src/app/api/novel-promotion/[projectId]/upload-asset-image/route.ts: sharp
+src/app/api/novel-promotion/[projectId]/upload-panel-image/route.ts: sharp
+src/app/api/projects/[projectId]/style-profile/route.ts: zod
+src/features/video-editor/components/Timeline/Timeline.tsx: @dnd-kit/utilities
+src/lib/cos.ts: sharp
+src/lib/fonts.ts: sharp
+src/lib/image-cache.ts: lru-cache
+src/lib/image-label.ts: sharp
+src/lib/workers/index.ts: dotenv
+src/lib/workers/utils.ts: sharp
+Unused exports (123)
+src/app/[locale]/profile/components/api-config/DefaultModelSection.tsx: DefaultModelSection
+src/app/[locale]/profile/components/api-config/ProviderCard.tsx: default
+src/app/[locale]/profile/components/api-config/index.ts: DefaultModelSection, matchesModelKey
+src/app/[locale]/profile/components/api-config/pricingDisplay.ts: isRecord, composePricingDisplayKey, PRICING_DISPLAY_ALIASES, resolvePricingDisplay
+src/app/[locale]/profile/components/api-config/provider-card/ModelRow.tsx: getModelPriceTexts
+src/app/[locale]/profile/components/api-config/types.ts: PROVIDER_TUTORIALS, getGoogleCompatiblePresetModels
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/storyboard-state-utils.ts: areStoryboardsEquivalent, buildStoryboardSyncSignature
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/FirstLastFramePanel.tsx: default
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/index.ts: FirstLastFramePanel
+src/app/[locale]/workspace/asset-hub/components/LocationCard.tsx: default
+src/app/[locale]/workspace/asset-hub/components/VoiceCard.tsx: default
+src/components/ui/CapsuleNav.tsx: default
+src/components/ui/ConfigModals.tsx: ConfigConfirmModal, ConfigDeleteModal, ConfigEditModal
+src/components/ui/SharedComponents.tsx: GlassPanel, Button
+src/components/ui/config-modals/ConfigDeleteModal.tsx: ConfigDeleteModal
+src/components/ui/config-modals/ConfigEditModal.tsx: ConfigEditModal
+src/components/ui/config-modals/config-modal-selectors.tsx: StyleSelector
+src/components/ui/icons/custom-content-icons.tsx: IconGradientDefs
+src/components/ui/icons/custom.tsx: CustomIcon001, CustomIcon002, CustomIcon003, CustomIcon004, CustomIcon005, CustomIcon006, CustomIcon007, CustomIcon008, CustomIcon009, CustomIcon010, CustomIcon011, CustomIcon012, CustomIcon013, CustomIcon014, CustomIcon015, CustomIcon016, CustomIcon017, CustomIcon018, CustomIcon019, CustomIcon020, CustomIcon021, CustomIcon022, CustomIcon023, CustomIcon024, CustomIcon025, CustomIcon026, CustomIcon027, CustomIcon028, CustomIcon029, CustomIcon030, CustomIcon031, CustomIcon032, CustomIcon033, CustomIcon034, CustomIcon035, CustomIcon036, CustomIcon037, CustomIcon038, CustomIcon039, CustomIcon040, CustomIcon041, CustomIcon042, CustomIcon043, CustomIcon044, CustomIcon045, CustomIcon046, CustomIcon047, CustomIcon048, CustomIcon049, CustomIcon050, CustomIcon051, CustomIcon052, CustomIcon053, CustomIcon054, CustomIcon055, CustomIcon056, CustomIcon057, CustomIcon058, CustomIcon059, CustomIcon060, CustomIcon061, CustomIcon062, CustomIcon063, CustomIcon064, CustomIcon065, CustomIcon066, CustomIcon067, CustomIcon068, CustomIcon069, CustomIcon070, CustomIcon071, CustomIcon072, CustomIcon073, CustomIcon074, CustomIcon075, CustomIcon076, CustomIcon077, CustomIcon078, CustomIcon079, CustomIcon080, CustomIcon081, CustomIcon082, CustomIcon083, CustomIcon084, CustomIcon085, CustomIcon086, CustomIcon087, CustomIcon088, CustomIcon089, CustomIcon090, CustomIcon091, CustomIcon092, CustomIcon093, CustomIcon094, CustomIcon095, CustomIcon096, CustomIcon097, CustomIcon098, IconGradientDefs
+src/components/ui/icons/index.ts: IconGradientDefs
+src/contexts/ToastContext.tsx: useToast
+src/features/video-editor/components/Preview/RemotionPreview.tsx: default
+src/features/video-editor/components/Timeline/Timeline.tsx: default
+src/features/video-editor/components/TransitionPicker.tsx: default
+src/features/video-editor/components/VideoEditorStage.tsx: default
+src/features/video-editor/index.ts: calculateTimelineDuration, computeClipPositions, framesToTime, timeToFrames, migrateProjectData, validateProjectData, VideoEditorStage, TransitionPicker, useEditorState, useEditorActions, createProjectFromPanels
+src/features/video-editor/remotion/VideoComposition.tsx: default
+src/features/video-editor/utils/migration.ts: migrateProjectData, validateProjectData
+src/features/video-editor/utils/time-utils.ts: timeToFrames
+src/i18n.ts: routing, default
+src/i18n/routing.ts: defaultLocale
+src/lib/ai-runtime/index.ts: toAiRuntimeError, injectStyleProfile
+src/lib/api-auth.ts: unauthorized, forbidden, notFound, badRequest, serverError, getAuthSession, requireAuth
+src/lib/api-config.ts: getModelProvider, getModelsByType, resolveModelId, getLipSyncApiKey, hasApiConfig
+src/lib/api-errors.ts: getIdempotencyKey, API_ERROR_CODES, normalizeError, throwApiError, isApiError
+src/lib/ark-api.ts: arkQueryVideoTask, fetchWithTimeoutAndRetry, ARK_API_TIMEOUT_MS, ARK_API_MAX_RETRIES
+src/lib/async-submit.ts: queryArkVideoStatus, queryAsyncTaskStatus
+src/lib/async-task-utils.ts: queryBananaTaskStatus
+src/lib/billing/cost.ts: MARKUP
+src/lib/billing/index.ts: getBillingMode, getBootBillingEnabled, BILLING_CURRENCY, getProjectTotalCost, addBalance, handleBillingError, withImageBilling, withLipSyncBilling, withVideoBilling, withVoiceBilling, withVoiceDesignBilling
+src/lib/billing/ledger.ts: checkBalance
+src/lib/billing/reporting.ts: getProjectTotalCost
+src/lib/billing/service.ts: withImageBilling, withVideoBilling, withVoiceDesignBilling, withLipSyncBilling
+src/lib/config-service.ts: parseModelKey, composeModelKey, extractModelId, resolveModelCapabilityGenerationOptions, checkRequiredModels, getMissingConfigError
+src/lib/constants.ts: ANALYSIS_MODELS, IMAGE_MODELS, IMAGE_MODEL_OPTIONS, BANANA_RESOLUTION_OPTIONS, BANANA_MODELS, VIDEO_MODELS, SEEDANCE_BATCH_MODELS, AUDIO_SUPPORTED_MODELS, FIRST_LAST_FRAME_MODELS, VIDEO_RESOLUTIONS, TTS_RATES, TTS_VOICES, ART_STYLES, LOCATION_PROMPT_SUFFIX, CHARACTER_IMAGE_RATIO, CHARACTER_IMAGE_SIZE, LOCATION_IMAGE_SIZE, LOCATION_IMAGE_BANANA_RATIO, PROP_PROMPT_SUFFIX, removePropPromptSuffix
+src/lib/crypto-utils.ts: encryptApiKeyObject, decryptApiKeyObject
+src/lib/env.ts: getApiUrl
+src/lib/error-handler.ts: ERROR_CODES, handleApiError, isInsufficientBalanceError
+src/lib/error-utils.ts: resolveClientError, safeAlert
+src/lib/errors/codes.ts: ERROR_CATEGORY, ERROR_CATALOG, LEGACY_ERROR_CODE_ALIASES
+src/lib/errors/user-messages.ts: USER_ERROR_MESSAGES_ZH
+src/lib/fonts.ts: getFontFamily
+src/lib/gemini-batch-utils.ts: queryGeminiBatchStatus
+src/lib/generator-api.ts: generateAudio
+src/lib/generators/ark.ts: ArkImageGenerator, ArkVideoGenerator
+src/lib/generators/fal.ts: FalImageGenerator
+src/lib/generators/image/index.ts: FalBananaGenerator, FalImageGenerator, ArkSeedreamGenerator, ArkImageGenerator
+src/lib/generators/video/index.ts: FalVideoGenerator, ArkSeedanceVideoGenerator, ArkVideoGenerator, GoogleVeoVideoGenerator, KieAIVideoGenerator, KieAIKlingVideoGenerator, AtlasCloudSeedanceVideoGenerator, TencentVODVideoGenerator
+src/lib/generators/video/openai-compatible.ts: encodeProviderId
+src/lib/image-cache.ts: preloadImagesParallel, getImageCacheStats, clearImageCache
+src/lib/image-label.ts: updateImageLabel
+src/lib/llm-client.ts: chatCompletionStream, chatCompletionWithVisionStream, getCompletionParts
+src/lib/llm-observe/config.ts: LLM_OBSERVE_LONG_TASK_THRESHOLD_MS, LLM_OBSERVE_REASONING_VISIBLE
+src/lib/llm-observe/route-task.ts: toObject
+src/lib/llm-observe/stage-pipeline.ts: getTaskPipelineByFlowId
+src/lib/llm/providers/google.ts: extractGoogleReasoning
+src/lib/llm/runtime.ts: chatCompletionStream, chatCompletionWithVisionStream, getCompletionParts
+src/lib/llm/stream-timeout.ts: StreamChunkTimeoutError
+src/lib/llm/utils.ts: collectTextValue
+src/lib/llm/vision.ts: chatCompletionWithVisionStream
+src/lib/logging/core.ts: logEvent, logDebug, logDebugCtx, logInfoCtx, logWarnCtx
+src/lib/media/attach.ts: firstMediaUrl
+src/lib/media/hash.ts: sha256Hex
+src/lib/media/outbound-image.ts: unwrapNextImageDisplayUrl
+src/lib/media/service.ts: getMediaObjectById, extractStorageKeyFromLegacyValue, resolveMediaRefsFromLegacyJsonArray, mediaUrlFromRef
+src/lib/model-capabilities/catalog.ts: resetBuiltinCapabilityCatalogCacheForTest
+src/lib/model-capabilities/lookup.ts: hasCapabilityOptions
+src/lib/model-config-contract.ts: validateOptionValueAgainstAllowed, isModelKey
+src/lib/model-pricing/catalog.ts: resetBuiltinPricingCatalogCacheForTest
+src/lib/multi-user/preference-inheritance.ts: invalidateAdminPreferenceCache
+src/lib/prisma-error.ts: isPrismaErrorCode
+src/lib/prompt-i18n/index.ts: PROMPT_CATALOG, PromptI18nError
+src/lib/query/client.ts: getQueryClient
+src/lib/query/hooks/index.ts: useCreateFolder, useUpdateFolder, useDeleteFolder, useRefreshGlobalAssets, useGenerateCharacterImage, useSelectCharacterImage, useUndoCharacterImage, useUploadCharacterImage, useDeleteCharacter, useDeleteCharacterAppearance, useUploadCharacterVoice, useGenerateLocationImage, useSelectLocationImage, useUndoLocationImage, useUploadLocationImage, useDeleteLocation, useDeleteVoice, useProjectCharacters, useProjectLocations, useUploadProjectCharacterImage, useUploadProjectCharacterVoice, useUploadProjectLocationImage, useAiModifyProjectShotPrompt, useBatchGenerateCharacterImages, useBatchGenerateLocationImages, useStoryboards, useRegeneratePanelImage, useModifyPanelImage, useGenerateVideo, useBatchGenerateVideos, useSelectPanelCandidate, useVoiceLines, useGenerateVoice, useBatchGenerateVoices, useUpdateVoiceText, useRefreshVoiceLines, useAssetTaskPresentation, useStoryboardTaskPresentation, useVideoTaskPresentation, useVoiceTaskPresentation, useRefreshProjectData, useEpisodes, useRefreshAll
+src/lib/query/hooks/run-stream/event-parser.ts: readTextField, readStepField, mapTaskSSEEventToRunEvents
+src/lib/query/hooks/run-stream/run-event-adapter.ts: parseRunApiEventsPayload
+src/lib/query/hooks/run-stream/snapshot.ts: SNAPSHOT_TTL_MS
+src/lib/query/hooks/run-stream/state-machine.ts: toTimestamp
+src/lib/query/hooks/useGlobalAssets.ts: useCreateFolder, useUpdateFolder, useDeleteFolder, useRefreshGlobalAssets
+src/lib/query/hooks/useProjectData.ts: useRefreshProjectData, useEpisodes, useRefreshAll
+src/lib/query/hooks/useStoryboards.ts: useRegeneratePanelImage, useModifyPanelImage, useSelectPanelCandidate
+src/lib/query/hooks/useTaskPresentation.ts: useAssetTaskPresentation
+src/lib/query/hooks/useTaskStatus.ts: useTaskStatus
+src/lib/query/hooks/useVoiceLines.ts: useVoiceLines, useGenerateVoice, useBatchGenerateVoices, useUpdateVoiceText, useRefreshVoiceLines
+src/lib/query/mutations/character-base-mutations-utils.ts: applyCharacterSelectionToCharacters
+src/lib/query/mutations/character-image-ops-mutations.ts: useBatchGenerateCharacterImages
+src/lib/query/mutations/index.ts: useModifyCharacterImage, useModifyLocationImage, useUpdateCharacterName, useUpdateLocationName, useUpdateCharacterAppearanceDescription, useUpdateLocationSummary, useAiModifyCharacterDescription, useAiModifyLocationDescription, useUploadAssetHubTempMedia, useAiDesignCharacter, useExtractAssetHubReferenceCharacterDescription, useCreateAssetHubCharacter
+src/lib/query/mutations/location-image-mutations-utils.ts: applyLocationSelectionToLocations
+src/lib/query/mutations/location-management-mutations.ts: useBatchGenerateLocationImages
+src/lib/query/mutations/storyboard-prompt-mutations.ts: useAiModifyProjectShotPrompt
+src/lib/query/task-target-overlay.ts: TASK_TARGET_OVERLAY_TTL_MS
+src/lib/run-runtime/publisher.ts: getProjectRunChannel
+src/lib/run-runtime/service.ts: assertCheckpointStateSize, listCheckpoints
+src/lib/storyboard-phases.ts: PHASE_PROGRESS
+src/lib/task/intent.ts: TASK_INTENTS
+src/lib/task/presentation.ts: isRunningPhase
+src/lib/task/publisher.ts: publishTaskLifecycleEvent
+src/lib/task/queues.ts: getQueueTypeByTaskType, getQueueByType
+src/lib/task/reconcile.ts: reconcileActiveTasks
+src/lib/task/service.ts: getActiveTasksForTarget, markTaskProcessing, updateTaskProgress, markTaskCompleted
+src/lib/task/state-service.ts: extractTaskStateFields, normalizeFailedError
+src/lib/task/submitter.ts: toObject
+src/lib/task/types.ts: TASK_LIFECYCLE_EVENT_TYPES
+src/lib/usage/usage-stats.ts: ALL_CATEGORIES
+src/lib/word-count.ts: countCharacters, countCharactersNoSpaces
+src/lib/workers/handlers/analyze-global-parse.ts: parseJsonResponse
+src/lib/workers/handlers/panel-image-task-handler-utils.ts: parseDescriptionList
+src/lib/workers/handlers/script-to-storyboard-helpers.ts: extractDialogueFromSourceText
+src/lib/workers/utils.ts: parseJsonArray, sleep, uploadAudioSourceToCos
+tests/contracts/route-catalog.ts: ROUTE_COUNT
+tests/helpers/assertions.ts: expectBalance
+tests/helpers/auth.ts: mockActive
+tests/helpers/db-reset.ts: resetTaskState, resetAssetHubState, resetNovelPromotionState, resetSystemState
+Unused exported types (148)
+scripts/media-mapping.ts: MediaFieldMapping, MediaModelMapping
+scripts/migrations/backfill-media-object-uploader.ts: BackfillOptions, BackfillStats
+scripts/migrations/migrate-artstyle-to-style-profile.ts: MigrateOptions
+src/app/[locale]/profile/components/api-config/provider-card/ModelRow.tsx: ModelRowProps
+src/app/[locale]/profile/components/api-config/provider-card/hooks/buildCustomPricing.ts: BuildCustomPricingResult
+src/app/[locale]/profile/components/api-config/provider-card/types.ts: ProviderCardDefaultModels
+src/app/[locale]/profile/components/api-config/types.ts: LlmCustomPricing, MediaCustomPricing, CustomModelPricing, ApiConfig, TutorialStep, ProviderTutorial
+src/app/[locale]/v2/workspace/[projectId]/hooks/useCurrentEpisode.ts: CurrentEpisode
+src/app/[locale]/v2/workspace/[projectId]/subjects/V2CharacterEditModal.tsx: V2CharacterEditModalProps
+src/app/[locale]/v2/workspace/[projectId]/subjects/V2LocationEditModal.tsx: V2LocationEditModalProps
+src/app/[locale]/workspace/[projectId]/components/EpisodeList.tsx: EpisodeListProps
+src/app/[locale]/workspace/[projectId]/components/OverviewView.tsx: OverviewViewProps
+src/app/[locale]/workspace/[projectId]/components/ProjectAssets.tsx: ProjectAssetsProps
+src/app/[locale]/workspace/[projectId]/components/StyleProfilePanel.tsx: StyleProfilePanelProps
+src/app/[locale]/workspace/[projectId]/episode-selection.ts: EpisodeLike
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/WorkspaceStageRuntimeContext.tsx: WorkspaceStageVideoModelOption
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/VideoStage.tsx: VideoStageProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/VoiceStage.tsx: VoiceStageProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/script-view/clip-asset-utils.ts: ParsedClipAssets
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/AIDataModal.tsx: AIDataModalProps, AIDataSavePayload, PhotographyRules, ActingCharacter, ActingNotes
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/panel-save-coordinator.ts: PanelSaveCoordinatorCallbacks
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/useAIDataModalState.ts: DirtyField, AIDataModalDraftState
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/storyboard/hooks/usePanelCrudActions.ts: PanelSaveStatus
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/VideoPanelCard.tsx: VideoPanelCardProps
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/components/video/types.ts: VideoGenerationMode, TextPanel, Panel
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/hooks/useWorkspaceUserModels.ts: UserModelOption
+src/app/[locale]/workspace/[projectId]/modes/novel-promotion/types.ts: Episode
+src/app/[locale]/workspace/asset-hub/components/VoiceCreationModal.tsx: VoiceCreationModalProps
+src/components/llm-console/LLMStageStreamCard.tsx: LLMStageViewStatus, LLMStageStreamCardProps
+src/components/shared/assets/CharacterCreationModal.tsx: CharacterCreationModalProps
+src/components/shared/assets/CharacterEditModal.tsx: CharacterEditModalProps
+src/components/shared/assets/LocationCreationModal.tsx: LocationCreationModalProps
+src/components/shared/assets/LocationEditModal.tsx: LocationEditModalProps
+src/components/shared/assets/index.ts: CharacterCreationModalProps, LocationCreationModalProps, CharacterEditModalProps, LocationEditModalProps
+src/components/ui/EpisodeTabBar.tsx: EpisodeTabBarProps
+src/components/ui/config-modals/ModelCapabilityDropdown.tsx: ModelCapabilityOption, CapabilityFieldDefinition, CapabilityBooleanToggle, ModelCapabilityDropdownProps
+src/components/ui/icons/AppIcon.tsx: AppIconProps
+src/components/ui/icons/RatioPreviewIcon.tsx: RatioPreviewIconProps
+src/components/ui/icons/custom.tsx: CustomIconComponent
+src/components/ui/icons/index.ts: AppIconProps, RatioPreviewIconProps
+src/components/ui/patterns/PanelEditFormV2.tsx: PanelEditFormV2Props
+src/components/ui/primitives/GlassButton.tsx: GlassButtonProps
+src/components/ui/primitives/GlassChip.tsx: UiTone, GlassChipProps
+src/components/ui/primitives/GlassField.tsx: GlassFieldProps
+src/components/ui/primitives/GlassInput.tsx: GlassInputProps
+src/components/ui/primitives/GlassModalShell.tsx: GlassModalShellProps
+src/components/ui/primitives/GlassSurface.tsx: UiDensity, GlassSurfaceProps
+src/components/ui/primitives/GlassTextarea.tsx: GlassTextareaProps
+src/components/ui/primitives/index.ts: GlassSurfaceProps, UiDensity, GlassButtonProps, GlassFieldProps, GlassInputProps, GlassTextareaProps, GlassChipProps, UiTone, GlassModalShellProps
+src/components/v2/v2-types.ts: V2Step
+src/contexts/ToastContext.tsx: Toast
+src/features/video-editor/index.ts: ClipAttachment, ClipTransition, ClipMetadata, EditorConfig, ComputedClip, SaveEditorProjectRequest, RenderRequest, RenderStatus
+src/features/video-editor/types/editor.types.ts: ClipAttachment, ClipTransition, ClipMetadata, SaveEditorProjectRequest, RenderRequest, RenderStatus
+src/hooks/common/useCandidateSystem.ts: CandidateState
+src/i18n.ts: Locale
+src/lib/admin-service.ts: CreateInviteInput
+src/lib/ai-runtime/index.ts: AiRuntimeError, AiRuntimeErrorCode, AiStepExecutionInput, AiStepExecutionResult, AiStepMeta, AiTextMessages, InjectionResult, ModelStyleCapabilities
+src/lib/ai-runtime/types.ts: AiStepMeta, AiTextMessages
+src/lib/api-auth.ts: AuthSession, ProjectAuthIncludes, NovelDataBase, NovelDataWithIncludes, ProjectAuthContextWithIncludes, ProjectAuthContext
+src/lib/api-config.ts: CustomModel, ModelMediaType, ModelSelection, ProviderConfig
+src/lib/api-errors.ts: ApiErrorCode
+src/lib/ark-llm.ts: ArkResponsesOptions, ArkResponsesResult
+src/lib/asset-utils/ai-design.ts: AssetType, AIDesignOptions, AIDesignResult
+src/lib/asset-utils/index.ts: AssetType, AIDesignOptions, AIDesignResult
+src/lib/async-poll.ts: PollResult
+src/lib/async-submit.ts: AsyncTaskProvider, AsyncTaskType
+src/lib/async-task-utils.ts: TaskStatus
+src/lib/billing/cost.ts: MarkupCategory, LlmCustomPricing, MediaCustomPricing
+src/lib/billing/currency.ts: BillingCurrency
+src/lib/billing/errors.ts: BillingOperationErrorCode
+src/lib/billing/index.ts: BillingMode, BillingRecordParams, BillingStatus, TaskBillingInfo
+src/lib/billing/ledger.ts: FreezeSnapshot
+src/lib/billing/types.ts: BillingStatus, AnyTaskBillingInfo, BillingQuote, TaskType
+src/lib/config-service.ts: ParsedModelKey, ProjectModelConfig, UserModelConfig
+src/lib/episode-asset-bridge.ts: EpisodeAssetRole, CharacterMatchInput, LocationMatchInput, CharacterMatchResult, LocationMatchResult
+src/lib/episode-marker-detector.ts: EpisodeMarkerMatch, PreviewSplit
+src/lib/error-handler.ts: ErrorCode
+src/lib/generators/base.ts: GenerateOptions
+src/lib/generators/video/kieai-kling.ts: MultiShotParams
+src/lib/kling.ts: LipSyncResult, LipSyncParams
+src/lib/llm-client.ts: ChatCompletionOptions, ChatCompletionStreamCallbacks
+src/lib/llm-observe/stage-pipeline.ts: LLMTaskPipelineStage, LLMTaskPipeline, LLMTaskFlowMeta
+src/lib/llm-observe/task-policy.ts: LLMTaskPolicy
+src/lib/llm-observe/types.ts: LLMObserveMeta, LLMObservePayload
+src/lib/llm/runtime-shared.ts: LlmRawMessage, ResolvedLlmRuntimeModel
+src/lib/location-metadata.ts: ParsedLocationSummary
+src/lib/logging/core.ts: ScopedLogger
+src/lib/media-process.ts: ProcessMediaOptions
+src/lib/media/outbound-image.ts: OutboundImageInputIssue, OutboundImageNormalizeStage, OutboundImageNormalizeErrorCode, OutboundImageNormalizationIssue
+src/lib/media/service.ts: MediaObjectOwnerContext
+src/lib/model-capabilities/catalog.ts: BuiltinCapabilityCatalogEntry
+src/lib/model-capabilities/lookup.ts: CapabilitySelectionValidationCode, CapabilitySelectionValidationIssue
+src/lib/model-capabilities/video-effective.ts: EffectiveVideoCapabilityField
+src/lib/model-config-contract.ts: CapabilityValidationCode, CapabilityValidationIssue, CapabilityFieldI18nMap, LLMCapabilities, ImageCapabilities, AudioCapabilities, LipSyncCapabilities, ParsedModelKey
+src/lib/model-pricing/catalog.ts: BuiltinPricingTier, BuiltinPricingDefinition
+src/lib/model-pricing/lookup.ts: PricingResolutionResolved, PricingResolutionNotConfigured, PricingResolutionAmbiguousModel, PricingResolutionMissingCapabilityMatch, PricingResolution
+src/lib/novel-promotion/panel-ai-data-sync.ts: PanelCharacterRef, SyncPanelCharacterDependentJsonInput, SyncPanelCharacterDependentJsonResult
+src/lib/novel-promotion/run-stream/types.ts: RunStreamEventType
+src/lib/novel-promotion/script-to-storyboard/orchestrator.ts: ScriptToStoryboardPromptTemplates, ClipStoryboardPanels, ScriptToStoryboardOrchestratorInput
+src/lib/novel-promotion/stages/video-stage-runtime/types.ts: VideoModelOption
+src/lib/novel-promotion/story-to-script/clip-matching.ts: TextMatchLevel, TextMarkerMatch, ClipBoundaryMatch, ClipContentMatcher, TextMarkerMatcher
+src/lib/novel-promotion/story-to-script/orchestrator.ts: StoryToScriptScreenplayResult, StoryToScriptPromptTemplates, StoryToScriptOrchestratorInput
+src/lib/prompt-i18n/errors.ts: PromptI18nErrorCode
+src/lib/prompt-i18n/index.ts: PromptId, PromptI18nErrorCode, BuildPromptInput, PromptCatalogEntry, PromptLocale, PromptVariables
+src/lib/prompt-i18n/types.ts: PromptVariables
+src/lib/query/hooks/index.ts: GlobalCharacterAppearance, GlobalLocation, GlobalLocationImage, GlobalVoice, GlobalFolder, ProjectAssetsData, CharacterAppearance, LocationImage, StoryboardPanel, StoryboardGroup, StoryboardData, PanelCandidate, VoiceLine, MatchedVoiceLine, VoiceLinesData, MatchedVoiceLinesData, TaskPresentationTarget, Episode, QueryUserModelOption, QueryUserModelsPayload
+src/lib/query/hooks/run-stream/run-event-adapter.ts: RunApiEvent
+src/lib/query/hooks/run-stream/run-stream-state-runtime.ts: RunState, RunStepState, UseRunStreamStateOptions
+src/lib/query/hooks/run-stream/run-stream-view.ts: DerivedRunStreamView
+src/lib/query/hooks/useGlobalAssets.ts: GlobalCharacterAppearance, GlobalLocationImage, GlobalVoice, GlobalFolder
+src/lib/query/hooks/useMultiShotTask.ts: MultiShotBindings, MultiShotTaskRecord
+src/lib/query/hooks/useProjectData.ts: Episode
+src/lib/query/hooks/useScriptToStoryboardRunStream.ts: ScriptToStoryboardRunParams, ScriptToStoryboardRunResult
+src/lib/query/hooks/useStoryToScriptRunStream.ts: StoryToScriptRunParams, StoryToScriptRunResult
+src/lib/query/hooks/useStoryboards.ts: PanelCandidate, StoryboardPanel, StoryboardGroup, StoryboardData
+src/lib/query/hooks/useStyleProfile.ts: StyleProfileFetched
+src/lib/query/hooks/useTaskPresentation.ts: TaskPresentationTarget
+src/lib/query/hooks/useTaskStatus.ts: TaskItem
+src/lib/query/hooks/useTaskTargetStateMap-utils.ts: TaskTargetStateBatchSubscriber, TaskTargetStateBatch
+src/lib/query/hooks/useUserModels.ts: UserModelOption, UserModelsPayload
+src/lib/query/hooks/useVoiceLines.ts: VoiceLine, VoiceLinesData, MatchedVoiceLine
+src/lib/query/keys.ts: QueryKeys
+src/lib/query/mutations/auto-group-multi-shot-mutation.ts: MultiShotGroup, AutoGroupResult
+src/lib/query/mutations/mutation-shared.ts: MutationRequestError
+src/lib/query/mutations/updateStyleProfile.ts: StyleProfileUpdatePayload, StyleProfileUpdateResponse
+src/lib/query/task-target-overlay.ts: TaskTargetOverlayPhase, TaskTargetOverlayState
+src/lib/qwen-voice-design.ts: VoiceDesignResult
+src/lib/run-runtime/graph-executor.ts: GraphNodeContext, GraphNodeResult, GraphNode, GraphExecutorInput
+src/lib/run-runtime/types.ts: RunStepStatus, RunEventType
+src/lib/storyboard-phases.ts: StoryboardPhase, PhaseResult
+src/lib/task/error-message.ts: TaskErrorSummary
+src/lib/task/presentation.ts: TaskPresentationPhase, TaskPresentationMode
+src/lib/task/rate-limit.ts: EnforceRateLimitParams
+src/lib/task/state-service.ts: TaskTargetPhase, TaskTargetState
+src/lib/task/types.ts: TaskSSEEventType, BillingMode
+src/lib/usage/usage-stats.ts: UsageWindow, UserUsageStats
+src/lib/user-api/llm-test-connection.ts: LlmConnectionTestResult
+src/lib/workers/handlers/analyze-global-persist.ts: AnalyzeGlobalStats
+src/lib/workers/handlers/analyze-global-prompt.ts: AnalyzeGlobalPromptTemplates
+src/lib/workers/handlers/image-task-handler-shared.ts: PanelCharacterReference
+src/lib/workers/handlers/llm-stream.ts: WorkerLLMStreamContext, WorkerInternalLLMStreamCallbacks
+src/lib/workers/handlers/multi-shot-video-b-path.ts: BPathShotPromptEntry
+src/lib/workers/handlers/script-to-storyboard-helpers.ts: ClipPanelsResult
+src/lib/workers/handlers/story-to-script-utils.ts: StoryToScriptGraphState
+src/lib/workers/handlers/voice-analyze-helpers.ts: StoryboardPanelLike, StoryboardLike, VoiceLineMatchedPanel
+src/types/project.ts: ProjectMode, BaseProject, LocationImage, AssetLibraryCharacter, AssetLibraryLocation, WorkflowMode, NovelPromotionProject
+tests/contracts/requirements-matrix.ts: RequirementPriority, RequirementCoverageEntry
+tests/contracts/route-catalog.ts: RouteCategory, RouteContractGroup, RouteCatalogEntry
+Duplicate exports (12)
+src/app/[locale]/profile/components/api-config/ProviderCard.tsx: ProviderCard, default
+src/app/[locale]/workspace/asset-hub/components/LocationCard.tsx: LocationCard, default
+src/app/[locale]/workspace/asset-hub/components/VoiceCard.tsx: VoiceCard, default
+src/components/ui/CapsuleNav.tsx: CapsuleNav, default
+src/features/video-editor/components/Preview/RemotionPreview.tsx: RemotionPreview, default
+src/features/video-editor/components/Timeline/Timeline.tsx: Timeline, default
+src/features/video-editor/components/TransitionPicker.tsx: TransitionPicker, default
+src/features/video-editor/components/VideoEditorStage.tsx: VideoEditorStage, default
+src/features/video-editor/remotion/VideoComposition.tsx: VideoComposition, default
+src/lib/generators/ark.ts: ArkVideoGenerator, ArkSeedanceVideoGenerator
+src/lib/generators/ark.ts: ArkImageGenerator, ArkSeedreamGenerator
+src/lib/generators/fal.ts: FalImageGenerator, FalBananaGenerator
