@@ -253,6 +253,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     window.localStorage.setItem('v2-storyboard-layout', layoutMode)
   }, [layoutMode])
 
+  // Smart default: if videoModel is a Kling-3 / Omni / O1 (B-path
+  // text-to-video), and the user hasn't explicitly stored a layout
+  // preference, switch to 'groups' on first render. We only do this
+  // BEFORE any user interaction — once the user picks a mode, that
+  // localStorage entry locks the choice. MUST sit above all early
+  // returns so hooks call order stays stable across renders.
+  const isBPathModel = /^tencent-vod::Kling-(3|O1)/i.test(projectVideoModel)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = window.localStorage.getItem('v2-storyboard-layout')
+    if (stored) return
+    if (isBPathModel) setLayoutMode('groups')
+  }, [isBPathModel])
+
   // Server-side task snapshot for script_to_storyboard_run, scoped to the
   // current episode. Survives navigation and is the source of truth for
   // the analyze status banner — same pattern as V2SubjectsClient.
@@ -853,19 +867,6 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       </button>
     </div>
   )
-
-  // Smart default: if videoModel is a Kling-3 / Omni / O1 (B-path
-  // text-to-video), and the user hasn't explicitly stored a layout
-  // preference, switch to 'groups' on first render. We only do this
-  // BEFORE any user interaction — once the user picks a mode, that
-  // localStorage entry locks the choice.
-  const isBPathModel = /^tencent-vod::Kling-(3|O1)/i.test(projectVideoModel)
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const stored = window.localStorage.getItem('v2-storyboard-layout')
-    if (stored) return
-    if (isBPathModel) setLayoutMode('groups')
-  }, [isBPathModel])
 
   // ─── Groups layout (text-driven multi-shot) ──────────────────────
   if (layoutMode === 'groups') {
