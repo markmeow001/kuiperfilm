@@ -152,6 +152,9 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
           cameraMove: true,
           imageUrl: true,
           storyboardId: true,
+          // 2026-05-01: pull user-edited dialogue so the b-path
+          // handler can prefer it over the auto-extracted voiceLines.
+          srtSegment: true,
         },
       }),
     ),

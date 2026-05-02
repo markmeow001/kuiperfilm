@@ -45,6 +45,12 @@ interface BPathPanel {
   shotType: string | null
   /** "缓缓推近" / "手持跟随" / "猛然拉远" — appended after the visual body. */
   cameraMove: string | null
+  /**
+   * User-edited dialogue / SRT segment for this panel. Wins over
+   * NovelPromotionVoiceLine when non-empty so the user can fix
+   * mis-translated dialogue from the UI without re-running analysis.
+   */
+  srtSegment?: string | null
   imageUrl: string | null
   storyboardId: string
 }
@@ -113,6 +119,124 @@ function escapeRegex(s: string): string {
 }
 
 /**
+ * Detect whether a dialogue line is primarily Chinese. If yes, the
+ * Kling Omni TTS expects 「说」 syntax; if no, an English-style
+ * `says:` token leads the parser to a non-Chinese voice. Without
+ * this, mixed Chinese-Spanish content (e.g. user-reported
+ * "SARAH嘴巴张大... SARAH: Dios mío... ¿Catherine?") tripped Kling
+ * into Mandarin TTS regardless of the actual line language.
+ *
+ * Heuristic: any CJK code point in the content range counts as
+ * Chinese. Pure-Latin / Cyrillic / Arabic content goes to the
+ * non-Chinese branch.
+ */
+function isChineseLine(content: string): boolean {
+  return /[一-鿿㐀-䶿]/.test(content)
+}
+
+function formatDialogueForKling(speaker: string, content: string): string {
+  return isChineseLine(content)
+    ? `${speaker}说："${content}"`
+    : `${speaker} says: "${content}"`
+}
+
+/**
+ * Strip stage directions from a panel.srtSegment so only the actual
+ * spoken line reaches Kling's TTS. The analyze worker sometimes
+ * dumps mixed narration + dialogue into srtSegment, e.g.:
+ *
+ *   "SARAH嘴巴张大，震惊不已。 SARAH: Dios mío... ¿Catherine?"
+ *   "慢镜头：CATHERINE面对高墙，没有减速，单脚蹬墙..." (no dialogue)
+ *
+ * We try in order:
+ *   1. quoted spans `「...」` / `"..."` / `"..."` — usually the line
+ *   2. text after `<NAME>: ` or `<NAME>说："..."` — speaker-tagged
+ *   3. drop the whole content if it looks like pure stage direction
+ *      (no dialogue indicators)
+ *
+ * Returns `{ speaker, content }` where speaker overrides the panel
+ * default when a name was tagged in the segment, and content is the
+ * cleaned-up line. Returns `null` when no actual dialogue could be
+ * found — caller should treat the panel as silent rather than
+ * dubbing the stage direction.
+ */
+function extractSpokenLineFromSrtSegment(
+  raw: string,
+  fallbackSpeaker: string,
+): { speaker: string; content: string } | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const QUOTE_OPEN = '「"“”'
+  const QUOTE_CLOSE = '」"”“'
+
+  // 1. Speaker-tagged dialogue with explicit quoting:
+  //    `SPEAKER说："line"` / `SPEAKER说"line"` / `SPEAKER:「line」`
+  const taggedQuoted = trimmed.match(
+    /([一-鿿A-Za-z][一-鿿A-Za-z\d_]*)\s*(?:说|says?)\s*[:：]?\s*[「"“”]([\s\S]+?)[」"”“]/i,
+  )
+  if (taggedQuoted) {
+    const content = taggedQuoted[2].trim()
+    if (content) return { speaker: taggedQuoted[1].trim() || fallbackSpeaker, content }
+  }
+
+  // 2. Speaker-tagged colon style: `SPEAKER: spoken text...`
+  //    Greedy to end of segment unless another bracketed action shows
+  //    up (`(stage direction)` etc.). Skip if the trailing content
+  //    itself reads like a description (no spoken-line indicators).
+  const taggedColon = trimmed.match(
+    /([一-鿿A-Za-z][一-鿿A-Za-z\d_]*)\s*[:：]\s*([\s\S]+)$/,
+  )
+  if (taggedColon) {
+    let content = taggedColon[2].trim()
+    // Strip any leading/trailing quote characters around the captured line.
+    content = content.replace(new RegExp(`^[${QUOTE_OPEN}]|[${QUOTE_CLOSE}]$`, 'g'), '').trim()
+    if (content && !looksLikeStageDirection(content)) {
+      return { speaker: taggedColon[1].trim() || fallbackSpeaker, content }
+    }
+  }
+
+  // 3. Plain quoted span anywhere in the text — strip everything else
+  //    and dub just that span.
+  const bareQuoted = trimmed.match(new RegExp(`[${QUOTE_OPEN}]([\\s\\S]+?)[${QUOTE_CLOSE}]`))
+  if (bareQuoted) {
+    const content = bareQuoted[1].trim()
+    if (content && !looksLikeStageDirection(content)) {
+      return { speaker: fallbackSpeaker, content }
+    }
+  }
+
+  // 4. Pure stage direction with no dialogue — silent panel.
+  return null
+}
+
+/**
+ * Quick heuristic to drop a line that's clearly a camera / action
+ * description rather than spoken dialogue. We err on the side of
+ * letting things through (false positives skip dub for a real line)
+ * rather than letting stage directions reach Kling's TTS (which
+ * dubs them as if they were speech — broken UX).
+ */
+function looksLikeStageDirection(content: string): boolean {
+  if (!content.trim()) return true
+  const STAGE_KEYWORDS = [
+    '镜头', '特写', '近景', '中景', '全景', '远景', '俯拍', '仰拍', '俯视', '仰视',
+    '推近', '拉远', '跟随', '环绕', '推轨', '运镜', '画面', '光影', '焦点',
+    '慢动作', '慢镜头', '快速', '定格', '过场', '剪辑', '转场',
+    '画外音', '旁白', '字幕',
+    'CAMERA', 'CLOSE-UP', 'WIDE SHOT', 'PAN', 'CUT TO', 'FADE',
+  ] as const
+  for (const kw of STAGE_KEYWORDS) {
+    if (content.includes(kw)) return true
+  }
+  // Pure narration tends to be long and end with `。` or `.` while
+  // not containing any spoken-line punctuation. Loose check: long
+  // (>40 chars) without speech markers (! ? 。? 「」 ""), drop it.
+  const hasSpeechMarker = /[！？!?「」"“”]/.test(content)
+  if (!hasSpeechMarker && content.length > 40) return true
+  return false
+}
+
+/**
  * Replace character / scene names in a visual prompt with Kling
  * 3.0-Omni's `<<<image_N>>>` reference syntax. Per VOD AIGC 接入指南
  * §3.9.2 example 2 (multi-image 参考生视频):
@@ -153,7 +277,7 @@ function buildShotBody(
     ? substituteImageRefs(rawVisual, nameToImageIndex)
     : rawVisual
   const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
-    .map((d) => `${d.speaker}说："${d.content}"`)
+    .map((d) => formatDialogueForKling(d.speaker, d.content))
     .join(' ')
   return dialogues ? `${visual}\n${dialogues}`.trim() : visual
 }
@@ -701,13 +825,23 @@ export async function runMultiShotBPath(params: {
     if (s.name) nameToImageIndex.set(s.name, i + 1)
   })
 
-  // Pull dialogue lines that script_to_storyboard matched to any of the
-  // panels we're sending. Without this Kling Omni's generate_audio:true
-  // produces a generic ambient/talking soundtrack instead of the script's
-  // dialogue — the model has no idea what was supposed to be said. The
-  // 「角色说："对白"」 syntax is what Kling 3.0 Omni's prompt parser uses
-  // to drive lip-sync + dub when generate_audio is on (matches the
-  // examples in agent_storyboard_plan.zh.txt's 对话场景 section).
+  // Dialogue resolution. Two sources, in priority order:
+  //
+  //   1. panel.srtSegment (user-edited in the Storyboard UI). This is
+  //      the source of truth for "what should be said in this shot"
+  //      because the user can fix mismatched / mis-translated lines
+  //      directly. Voice lines from script_to_storyboard go stale once
+  //      a user edits.
+  //   2. NovelPromotionVoiceLine (matched by matchedPanelId) — the
+  //      auto-extracted dialogue from script analysis. Used only when
+  //      panel.srtSegment is empty.
+  //
+  // Without (1), Kling Omni was dubbing whatever the original analysis
+  // produced — even if the user fixed the dialogue panel in the UI,
+  // the voice generation path read from voiceLines and ignored the
+  // edit. Reported as "對話顯示西班牙文卻發出中文" — voiceLines had a
+  // stale Spanish-mixed line and the UI showed the user's Chinese
+  // edit.
   const panelIds = validPanels.map((p) => p.id)
   const voiceLines = panelIds.length > 0
     ? await prisma.novelPromotionVoiceLine.findMany({
@@ -716,15 +850,48 @@ export async function runMultiShotBPath(params: {
         select: { matchedPanelId: true, speaker: true, content: true },
       })
     : []
-  const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
+  const voiceLinesByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
   for (const line of voiceLines) {
     if (!line.matchedPanelId) continue
     const content = (line.content ?? '').trim()
     if (!content) continue
     const speaker = (line.speaker ?? '').trim() || '旁白'
-    const arr = dialogueByPanel.get(line.matchedPanelId) ?? []
+    const arr = voiceLinesByPanel.get(line.matchedPanelId) ?? []
     arr.push({ speaker, content })
-    dialogueByPanel.set(line.matchedPanelId, arr)
+    voiceLinesByPanel.set(line.matchedPanelId, arr)
+  }
+  const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
+  for (const panel of validPanels) {
+    const userEdited = (panel.srtSegment ?? '').trim()
+    const charRefs = parsePanelCharacterReferences(panel.characters)
+    const fallbackSpeaker = charRefs[0]?.name?.trim() || '旁白'
+    if (userEdited) {
+      // Run the loose srtSegment through extractSpokenLineFromSrtSegment
+      // so stage directions ("慢动作中景:CATHERINE单脚蹬墙...",
+      // "SARAH嘴巴张大,震惊不已") don't end up dubbed by Kling. Returns
+      // null when the segment is pure narration — falls through to
+      // voiceLines instead of polluting the audio track.
+      const extracted = extractSpokenLineFromSrtSegment(userEdited, fallbackSpeaker)
+      if (extracted) {
+        dialogueByPanel.set(panel.id, [extracted])
+        continue
+      }
+      // srtSegment exists but is pure narration — DON'T fall back to
+      // voiceLines (which is also probably wrong if the user bothered
+      // to edit srtSegment). Treat as silent.
+      continue
+    }
+    const fallback = voiceLinesByPanel.get(panel.id)
+    if (!fallback?.length) continue
+    // Voice-line content can also have mixed narration+dialogue (the
+    // analyze worker sometimes dumps both). Run each through the
+    // same extractor before sending to Kling.
+    const cleaned: Array<{ speaker: string; content: string }> = []
+    for (const line of fallback) {
+      const extracted = extractSpokenLineFromSrtSegment(line.content, line.speaker || fallbackSpeaker)
+      if (extracted) cleaned.push(extracted)
+    }
+    if (cleaned.length > 0) dialogueByPanel.set(panel.id, cleaned)
   }
 
   await reportTaskProgress(job, 30, { stage: 'submit_generation_b_path' })
@@ -801,7 +968,7 @@ export async function runMultiShotBPath(params: {
       const trimmed = rawPrompt.trim()
       const dialogueAppendix = Array.from(dialogueByPanel.values())
         .flat()
-        .map((d) => `${d.speaker}说："${d.content}"`)
+        .map((d) => formatDialogueForKling(d.speaker, d.content))
         .join(' ')
       primaryPrompt = dialogueAppendix ? `${trimmed}\n\n${dialogueAppendix}` : trimmed
     } else if (promptStyle === 'auto-seedance') {
