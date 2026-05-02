@@ -28,6 +28,7 @@ import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
+import { V2GroupsLayout } from './V2GroupsLayout'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -145,6 +146,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const project = projectQuery.data as ProjectLikeFull | undefined
   const projectVideoRatio = project?.novelPromotionData?.videoRatio ?? '16:9'
   const aspectClass = aspectClassFromRatio(projectVideoRatio)
+  const projectVideoModel = project?.novelPromotionData?.videoModel ?? ''
   // Heuristic for thumb sizing: portrait projects (9:16, 3:4, 2:3) get
   // a taller-narrower thumb; landscape stays compact-wide. Without this
   // 9:16 thumbs at h-24 fixed-height end up only ~54px wide — readable
@@ -228,15 +230,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     }
   }, [taskByGroup, taskByGroupStorageKey])
 
-  // Layout mode toggle — Gallery (V3 style, default) for portrait /
-  // 9:16 short-drama; Timeline (V4 style, current behavior) for
-  // landscape / 16:9. Persisted in localStorage so the user's choice
-  // sticks across navigation. Default is gallery per user decision
-  // 「V3變成主板」.
-  const [layoutMode, setLayoutMode] = useState<'gallery' | 'timeline'>(() => {
+  // Layout mode toggle — three modes:
+  //   gallery  — V3 portrait grid + right-side detail (image-driven)
+  //   timeline — V4 horizontal strip + 3-col body  (image-driven)
+  //   groups   — Phase 12.5.4 group-card stack     (text-driven Kling B-path)
+  //
+  // Persisted in localStorage so the user's choice sticks across
+  // navigation. Default is gallery per user decision 「V3變成主板」,
+  // but a smarter default kicks in below for B-path video models.
+  const [layoutMode, setLayoutMode] = useState<'gallery' | 'timeline' | 'groups'>(() => {
     if (typeof window === 'undefined') return 'gallery'
     const stored = window.localStorage.getItem('v2-storyboard-layout')
-    return stored === 'timeline' ? 'timeline' : 'gallery'
+    if (stored === 'timeline' || stored === 'groups') return stored
+    return 'gallery'
   })
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -800,15 +806,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     )
   }
 
-  // Shared layout toggle widget — both layout branches render this in
-  // their toolbar so the user can flip between Gallery and Timeline
-  // without leaving the page.
+  // Shared layout toggle widget — all layout branches render this in
+  // their toolbar so the user can flip between Gallery / Timeline /
+  // Groups without leaving the page.
   const layoutToggleNode = (
     <div className="flex items-center gap-0 overflow-hidden rounded-sm border border-stone-800">
       <button
         type="button"
         onClick={() => setLayoutMode('gallery')}
-        title="畫廊版面 — 直幅 9:16 友善"
+        title="畫廊版面 — 直幅 9:16 友善(每分鏡圖驅動)"
         className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
           layoutMode === 'gallery'
             ? 'bg-amber-500/15 text-amber-300'
@@ -820,7 +826,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       <button
         type="button"
         onClick={() => setLayoutMode('timeline')}
-        title="時間軸版面 — 橫幅 16:9 友善"
+        title="時間軸版面 — 橫幅 16:9 友善(每分鏡圖驅動)"
         className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
           layoutMode === 'timeline'
             ? 'bg-amber-500/15 text-amber-300'
@@ -829,8 +835,94 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       >
         ☰ 時間軸
       </button>
+      <button
+        type="button"
+        onClick={() => setLayoutMode('groups')}
+        title="多鏡頭版面 — 文字驅動(Kling-3 / Omni B-path,免生圖)"
+        className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
+          layoutMode === 'groups'
+            ? 'bg-amber-500/15 text-amber-300'
+            : 'text-stone-500 hover:text-amber-400'
+        }`}
+      >
+        ◷ 多鏡頭
+      </button>
     </div>
   )
+
+  // Smart default: if videoModel is a Kling-3 / Omni / O1 (B-path
+  // text-to-video), and the user hasn't explicitly stored a layout
+  // preference, switch to 'groups' on first render. We only do this
+  // BEFORE any user interaction — once the user picks a mode, that
+  // localStorage entry locks the choice.
+  const isBPathModel = /^tencent-vod::Kling-(3|O1)/i.test(projectVideoModel)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const stored = window.localStorage.getItem('v2-storyboard-layout')
+    if (stored) return
+    if (isBPathModel) setLayoutMode('groups')
+  }, [isBPathModel])
+
+  // ─── Groups layout (text-driven multi-shot) ──────────────────────
+  if (layoutMode === 'groups') {
+    const groupsToolbar = (
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="font-fraunces text-sm italic text-amber-500/80">多鏡頭</div>
+          {hasGroups ? (
+            <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400">
+              {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+            </span>
+          ) : null}
+          <div className="font-mono text-[10px] tracking-wider text-stone-500">
+            {projectVideoModel || '尚未設定 video model'} · 比例 {projectVideoRatio}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
+            onClick={handleAnalyzeStoryboard}
+            title="重新從劇本生成分鏡"
+            className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <AppIcon name="sparklesAlt" className="h-3 w-3" />
+            重新分析
+          </button>
+          <button
+            type="button"
+            disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2}
+            onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
+            title="把分鏡按角色 / 場景連續性切成 multi-shot 群"
+            className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {autoGroup.isPending ? '切組中…' : '自動切組'}
+          </button>
+          <button
+            type="button"
+            disabled={multiShotState.status === 'submitting'}
+            onClick={handleSubmitMultiShot}
+            title="把所有 group 一次送 Kling 多鏡頭"
+            className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <AppIcon name="sparklesAlt" className="h-3 w-3" />
+            {multiShotState.status === 'submitting'
+              ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
+              : '智能多鏡頭'}
+          </button>
+          {layoutToggleNode}
+        </div>
+      </div>
+    )
+    return (
+      <V2GroupsLayout
+        panels={allPanels}
+        orderedGroupIds={orderedGroupIds}
+        taskByGroup={taskByGroup}
+        toolbarNode={groupsToolbar}
+      />
+    )
+  }
 
   // ─── Gallery layout (default) ────────────────────────────────────
   // 60/40 split: left main grid of panel cards at the project's
