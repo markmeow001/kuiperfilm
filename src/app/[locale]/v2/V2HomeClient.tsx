@@ -153,6 +153,19 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
           </div>
           <div className="flex items-center gap-3 font-mono text-[11px] tracking-wider">
             <span className="text-stone-200">{session.user?.name ?? session.user?.email ?? ''}</span>
+            {/* 團隊 / Workspaces — visible to every signed-in role. The
+                target page (/[locale]/workspaces) hides creation /
+                management affordances when the requester isn't
+                authorised, so it's safe to surface here without a
+                role check. */}
+            <Link
+              href={`/${locale}/workspaces`}
+              className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+              title="工作區 / 團隊管理"
+            >
+              <AppIcon name="userAlt" className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">團隊</span>
+            </Link>
             {/* Admin-only nav: profile (provider keys + default models)
                 and the admin console. Members hide both — their config
                 cascades from admin so they never need /profile, and
