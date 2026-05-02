@@ -955,6 +955,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         updatePanelText={updatePanelText}
         characterRoster={characterRoster}
         locationRoster={locationRoster}
+        episodeNumber={(currentEpisode as { episodeNumber?: number } | null)?.episodeNumber ?? null}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: '尚未設定 video model — 請先到主控台選一個 Kling 模型' }

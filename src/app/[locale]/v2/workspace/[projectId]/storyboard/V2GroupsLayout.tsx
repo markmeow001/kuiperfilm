@@ -83,6 +83,8 @@ interface V2GroupsLayoutProps {
   updatePanelText: UpdatePanelTextMutation
   characterRoster?: CharacterRosterEntry[]
   locationRoster?: LocationRosterEntry[]
+  /** Used for download filename naming (`ep{N}_group{NN}.mp4`). */
+  episodeNumber?: number | null
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
@@ -113,6 +115,7 @@ export function V2GroupsLayout({
   updatePanelText,
   characterRoster,
   locationRoster,
+  episodeNumber,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -174,6 +177,7 @@ export function V2GroupsLayout({
                   updatePanelText={updatePanelText}
                   characterRoster={characterRoster}
                   locationRoster={locationRoster}
+                  episodeNumber={episodeNumber}
                   onRegenerate={(panelIds, overrides) =>
                     onRegenerateGroup(g.groupId, panelIds, overrides)
                   }

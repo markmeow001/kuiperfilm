@@ -30,6 +30,11 @@ interface MultiShotBindingsRailProps {
   // /api/novel-promotion/{projectId}/video-proxy?key=... — the
   // route requires projectId for auth, hence this prop.
   projectId?: string
+  // Optional human-friendly download filename (without extension).
+  // Routed through the proxy as `&filename=...` so the response
+  // emits Content-Disposition with a saner name than the URL
+  // segment. Falls back to a `multi-shot-<taskHash>` slug.
+  downloadFilenameBase?: string
   // commit 3 — when provided, chips become buttons that open the
   // appearance / view picker. Caller wires to the modals.
   onCharacterChipClick?: (binding: MultiShotCharacterBinding) => void
@@ -47,21 +52,31 @@ interface MultiShotBindingsRailProps {
  * route so the browser can stream + the server enforces auth.
  *
  * If the value already looks like a full URL we leave it alone.
+ *
+ * `downloadFilenameBase` is appended as a `filename` query param so
+ * the proxy emits Content-Disposition with the user-friendly name
+ * (e.g. `ep1_group01.mp4`) instead of the URL segment "video-proxy".
  */
 function resolveVideoSrc(
   raw: string | null | undefined,
   projectId: string | undefined,
+  downloadFilenameBase?: string,
 ): string | null {
   if (!raw) return null
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
   if (!projectId) return null
-  return `/api/novel-promotion/${projectId}/video-proxy?key=${encodeURIComponent(raw)}`
+  const params = new URLSearchParams({ key: raw })
+  if (downloadFilenameBase && downloadFilenameBase.trim().length > 0) {
+    params.set('filename', downloadFilenameBase.trim())
+  }
+  return `/api/novel-promotion/${projectId}/video-proxy?${params.toString()}`
 }
 
 export function MultiShotBindingsRail({
   taskId,
   groupLabel,
   projectId,
+  downloadFilenameBase,
   onCharacterChipClick,
   onSceneChipClick,
   characterOverrideAppearanceById,
@@ -75,7 +90,7 @@ export function MultiShotBindingsRail({
   const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled'
   const bindings = data?.result?.bindings ?? null
   const rawVideoKey = data?.result?.multiShotVideoUrl ?? null
-  const videoUrl = resolveVideoSrc(rawVideoKey, projectId)
+  const videoUrl = resolveVideoSrc(rawVideoKey, projectId, downloadFilenameBase)
   const shotCount = data?.result?.shotCount ?? null
   const characters = bindings?.characters ?? []
   const scenes = bindings?.scenes ?? []
@@ -156,7 +171,11 @@ export function MultiShotBindingsRail({
             </div>
             <a
               href={videoUrl}
-              download={`multi-shot-${taskId.slice(0, 8)}.mp4`}
+              // Don't override the proxy's Content-Disposition with
+              // the `download` attribute — when the response sets
+              // its own filename, the browser respects that. Empty
+              // string still triggers the download flow.
+              download=""
               target="_blank"
               rel="noopener noreferrer"
               className="font-mono text-[9px] tracking-wider text-stone-400 transition-colors hover:text-amber-400"

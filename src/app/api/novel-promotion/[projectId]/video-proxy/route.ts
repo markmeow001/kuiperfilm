@@ -15,6 +15,10 @@ export const GET = apiHandler(async (
     const { projectId } = await context.params
     const { searchParams } = new URL(request.url)
     const videoKey = searchParams.get('key')
+    // Optional caller-supplied filename. Falls back to a sane default
+    // when omitted so the browser still saves the file as .mp4 instead
+    // of "video-proxy" (the route segment) or "video-proxy.html".
+    const callerFilename = searchParams.get('filename')
 
     if (!videoKey) {
         throw new ApiError('INVALID_PARAMS')
@@ -43,10 +47,32 @@ export const GET = apiHandler(async (
     const contentType = response.headers.get('content-type') || 'video/mp4'
     const contentLength = response.headers.get('content-length')
 
-    // 流式返回视频数据
+    // Sanitize filename to ASCII-safe + always end with `.mp4` so the
+    // browser saves it as a real video file regardless of how it
+    // arrived. Strip path separators / control chars / quotes that
+    // would corrupt the Content-Disposition header.
+    const safeFilenameBase = (() => {
+        const fallback = `video-${(videoKey.split('/').pop() || 'multi-shot').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 60)}`
+        const raw = (callerFilename || '').trim()
+        if (!raw) return fallback
+        const cleaned = raw
+            .replace(/\.mp4$/i, '')
+            .replace(/[\\\/\r\n\t"'<>]/g, '_')
+            .replace(/[^一-鿿A-Za-z0-9._\- ]+/g, '_')
+            .trim()
+        return cleaned.length > 0 ? cleaned.slice(0, 80) : fallback
+    })()
+    const downloadFilename = `${safeFilenameBase}.mp4`
+
+    // 流式返回视频数据 — Content-Disposition: attachment so the
+    // browser triggers a download dialog instead of inline playback,
+    // and `filename*=UTF-8''<encoded>` so non-ASCII names (Chinese
+    // episode names) round-trip correctly. Browsers that don't grok
+    // the RFC 5987 form fall back to the bare `filename=` token.
     const headers: HeadersInit = {
         'Content-Type': contentType,
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'Content-Disposition': `attachment; filename="${downloadFilename}"; filename*=UTF-8''${encodeURIComponent(downloadFilename)}`,
     }
     if (contentLength) {
         headers['Content-Length'] = contentLength

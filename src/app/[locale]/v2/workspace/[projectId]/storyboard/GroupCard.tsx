@@ -98,6 +98,12 @@ interface GroupCardProps {
    * referenced. Defaults to 15s when not provided.
    */
   segmentDurationSeconds?: number
+  /**
+   * Episode number (1-indexed) — folded into the download filename
+   * as `ep{N}_group{NN}.mp4` so user keeps a sane archive across
+   * multi-episode projects.
+   */
+  episodeNumber?: number | null
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
@@ -125,6 +131,7 @@ export function GroupCard({
   characterRoster,
   locationRoster,
   segmentDurationSeconds = 15,
+  episodeNumber,
   onRegenerate,
 }: GroupCardProps) {
   // Collapsed by default — the user referenced the Seedance 2.0
@@ -574,6 +581,10 @@ export function GroupCard({
             taskId={taskId}
             groupLabel={null}
             projectId={projectId}
+            downloadFilenameBase={(() => {
+              const epPart = episodeNumber && episodeNumber > 0 ? `ep${episodeNumber}_` : ''
+              return `${epPart}group${String(groupOrdinal).padStart(2, '0')}`
+            })()}
             characterOverrideAppearanceById={characterOverrides}
             locationOverrideViewByLocationId={locationOverrides}
             onCharacterChipClick={(binding) => {
