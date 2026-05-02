@@ -29,7 +29,7 @@
 
 import { useMemo } from 'react'
 import { AppIcon } from '@/components/ui/icons'
-import { GroupCard } from './GroupCard'
+import { GroupCard, type GroupRegenOverrides } from './GroupCard'
 import type { UseMutationResult } from '@tanstack/react-query'
 
 interface PanelLike {
@@ -49,6 +49,30 @@ type UpdatePanelTextMutation = UseMutationResult<
   { panelId: string; description?: string; srtSegment?: string }
 >
 
+interface CharacterRosterEntry {
+  id: string
+  name: string
+  appearances?: Array<{
+    id: string
+    appearanceIndex?: number
+    changeReason?: string | null
+    description?: string | null
+    imageUrl?: string | null
+  }>
+}
+
+interface LocationRosterEntry {
+  id: string
+  name: string
+  images?: Array<{
+    id: string
+    imageIndex?: number
+    description?: string | null
+    imageUrl?: string | null
+    viewName?: string | null
+  }>
+}
+
 interface V2GroupsLayoutProps {
   panels: PanelLike[]
   orderedGroupIds: string[]
@@ -56,9 +80,12 @@ interface V2GroupsLayoutProps {
   toolbarNode: React.ReactNode
   emptyHint?: React.ReactNode
   updatePanelText: UpdatePanelTextMutation
+  characterRoster?: CharacterRosterEntry[]
+  locationRoster?: LocationRosterEntry[]
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
+    overrides: GroupRegenOverrides,
   ) => Promise<{ taskId: string | null; error?: string }>
 }
 
@@ -82,6 +109,8 @@ export function V2GroupsLayout({
   toolbarNode,
   emptyHint,
   updatePanelText,
+  characterRoster,
+  locationRoster,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -140,7 +169,11 @@ export function V2GroupsLayout({
                   panels={g.panels}
                   taskId={taskId}
                   updatePanelText={updatePanelText}
-                  onRegenerate={(panelIds) => onRegenerateGroup(g.groupId, panelIds)}
+                  characterRoster={characterRoster}
+                  locationRoster={locationRoster}
+                  onRegenerate={(panelIds, overrides) =>
+                    onRegenerateGroup(g.groupId, panelIds, overrides)
+                  }
                 />
               )
             })}

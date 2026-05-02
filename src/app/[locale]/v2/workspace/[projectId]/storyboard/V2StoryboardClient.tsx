@@ -25,6 +25,7 @@ import {
 import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
+import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
@@ -162,6 +163,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const storyboardsQuery = useStoryboards(projectId, currentEpisodeId)
   const storyboardsData = storyboardsQuery.data as { storyboards?: StoryboardLike[] } | undefined
+  const projectAssetsQuery = useProjectAssets(projectId)
+  const characterRoster = projectAssetsQuery.data?.characters ?? []
+  const locationRoster = projectAssetsQuery.data?.locations ?? []
   const regenPanel = useRegenerateProjectPanelImage(projectId)
   const updatePanelText = useUpdatePanelText(projectId, currentEpisodeId)
   const generateVideo = useGenerateVideo(projectId, currentEpisodeId)
@@ -921,7 +925,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         taskByGroup={taskByGroup}
         toolbarNode={groupsToolbar}
         updatePanelText={updatePanelText}
-        onRegenerateGroup={async (groupId, panelIds) => {
+        characterRoster={characterRoster}
+        locationRoster={locationRoster}
+        onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: '尚未設定 video model — 請先到主控台選一個 Kling 模型' }
           }
@@ -932,17 +938,24 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             }
           }
           try {
+            const body: Record<string, unknown> = {
+              panelIds,
+              videoModel: projectVideoModel,
+              async: true,
+              meta: { locale: 'zh-TW' },
+            }
+            if (overrides.characterOverrides.length > 0) {
+              body.characterOverrides = overrides.characterOverrides
+            }
+            if (overrides.locationOverrides.length > 0) {
+              body.locationOverrides = overrides.locationOverrides
+            }
             const res = await fetch(
               `/api/novel-promotion/${projectId}/generate-multi-shot-video`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  panelIds,
-                  videoModel: projectVideoModel,
-                  async: true,
-                  meta: { locale: 'zh-TW' },
-                }),
+                body: JSON.stringify(body),
               },
             )
             if (!res.ok) {
@@ -956,9 +969,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               }
               return { taskId: null, error: errMessage }
             }
-            const body = (await res.json()) as { taskId?: unknown }
-            const taskId = typeof body?.taskId === 'string' && body.taskId.length > 0
-              ? body.taskId
+            const respBody = (await res.json()) as { taskId?: unknown }
+            const taskId = typeof respBody?.taskId === 'string' && respBody.taskId.length > 0
+              ? respBody.taskId
               : null
             if (taskId) {
               setTaskByGroup((prev) => ({ ...prev, [groupId]: taskId }))

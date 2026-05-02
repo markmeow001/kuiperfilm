@@ -16,14 +16,34 @@
  */
 
 import { AppIcon } from '@/components/ui/icons'
-import { useMultiShotTask } from '@/lib/query/hooks/useMultiShotTask'
+import {
+  useMultiShotTask,
+  type MultiShotCharacterBinding,
+  type MultiShotSceneBinding,
+} from '@/lib/query/hooks/useMultiShotTask'
 
 interface MultiShotBindingsRailProps {
   taskId: string | null | undefined
   groupLabel?: string | null
+  // commit 3 — when provided, chips become buttons that open the
+  // appearance / view picker. Caller wires to the modals.
+  onCharacterChipClick?: (binding: MultiShotCharacterBinding) => void
+  onSceneChipClick?: (binding: MultiShotSceneBinding) => void
+  // Highlight chips that have a pending override applied locally
+  // (so the user can see "this will swap on next regen"). Keys are
+  // characterId / locationId.
+  characterOverrideAppearanceById?: Record<string, string | null>
+  locationOverrideViewByLocationId?: Record<string, string | null>
 }
 
-export function MultiShotBindingsRail({ taskId, groupLabel }: MultiShotBindingsRailProps) {
+export function MultiShotBindingsRail({
+  taskId,
+  groupLabel,
+  onCharacterChipClick,
+  onSceneChipClick,
+  characterOverrideAppearanceById,
+  locationOverrideViewByLocationId,
+}: MultiShotBindingsRailProps) {
   const { data, isLoading } = useMultiShotTask(taskId)
 
   if (!taskId) return null
@@ -109,28 +129,59 @@ export function MultiShotBindingsRail({ taskId, groupLabel }: MultiShotBindingsR
                 Cast · {characters.length}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {characters.map((c) => (
-                  <div
-                    key={c.id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-900/30 bg-stone-950/40 py-0.5 pl-0.5 pr-2"
-                    title={`${c.name} · ${c.appearanceLabel ?? '默認造型'}`}
-                  >
-                    <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={c.imageUrl}
-                        alt={c.name}
-                        className="h-full w-full object-cover"
-                      />
+                {characters.map((c) => {
+                  const overrideAppearanceId = characterOverrideAppearanceById?.[c.id]
+                  const hasOverride = overrideAppearanceId !== undefined
+                    && overrideAppearanceId !== c.appearanceId
+                  const baseClass =
+                    'inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2'
+                  const stateClass = hasOverride
+                    ? 'border-violet-500/60 bg-violet-500/10'
+                    : 'border-amber-900/30 bg-stone-950/40'
+                  const interactive = onCharacterChipClick
+                    ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-amber-500/60 hover:bg-amber-500/10`
+                    : `${baseClass} ${stateClass}`
+                  const title = hasOverride
+                    ? `${c.name} — 下次重生會改用新造型(尚未送出)`
+                    : `${c.name} · ${c.appearanceLabel ?? '默認造型'}${onCharacterChipClick ? ' — 點擊換造型' : ''}`
+                  if (onCharacterChipClick) {
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => onCharacterChipClick(c)}
+                        className={interactive}
+                        title={title}
+                      >
+                        <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
+                        </div>
+                        <span className="font-serif-cn text-[10px] text-stone-200">{c.name}</span>
+                        <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                          {c.appearanceLabel ?? '默認造型'}
+                        </span>
+                        {hasOverride ? (
+                          <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                            ✏ 已改
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  }
+                  return (
+                    <div key={c.id} className={interactive} title={title}>
+                      <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
+                      </div>
+                      <span className="font-serif-cn text-[10px] text-stone-200">{c.name}</span>
+                      <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                        {c.appearanceLabel ?? '默認造型'}
+                      </span>
                     </div>
-                    <span className="font-serif-cn text-[10px] text-stone-200">
-                      {c.name}
-                    </span>
-                    <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
-                      {c.appearanceLabel ?? '默認造型'}
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ) : null}
@@ -141,28 +192,58 @@ export function MultiShotBindingsRail({ taskId, groupLabel }: MultiShotBindingsR
                 Scenes · {scenes.length}
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {scenes.map((s) => (
-                  <div
-                    key={s.id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-900/30 bg-stone-950/40 py-0.5 pl-0.5 pr-2"
-                    title={`${s.name} · ${s.viewName ?? '主視角'}`}
-                  >
-                    <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={s.imageUrl}
-                        alt={s.name}
-                        className="h-full w-full object-cover"
-                      />
+                {scenes.map((s) => {
+                  const overrideView = locationOverrideViewByLocationId?.[s.id]
+                  const hasOverride = overrideView !== undefined && overrideView !== s.viewName
+                  const baseClass =
+                    'inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2'
+                  const stateClass = hasOverride
+                    ? 'border-violet-500/60 bg-violet-500/10'
+                    : 'border-amber-900/30 bg-stone-950/40'
+                  const interactive = onSceneChipClick
+                    ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-amber-500/60 hover:bg-amber-500/10`
+                    : `${baseClass} ${stateClass}`
+                  const title = hasOverride
+                    ? `${s.name} — 下次重生會改用新視角(尚未送出)`
+                    : `${s.name} · ${s.viewName ?? '主視角'}${onSceneChipClick ? ' — 點擊換視角' : ''}`
+                  if (onSceneChipClick) {
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => onSceneChipClick(s)}
+                        className={interactive}
+                        title={title}
+                      >
+                        <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={s.imageUrl} alt={s.name} className="h-full w-full object-cover" />
+                        </div>
+                        <span className="font-serif-cn text-[10px] text-stone-200">{s.name}</span>
+                        <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                          {s.viewName ?? '主視角'}
+                        </span>
+                        {hasOverride ? (
+                          <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                            ✏ 已改
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  }
+                  return (
+                    <div key={s.id} className={interactive} title={title}>
+                      <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={s.imageUrl} alt={s.name} className="h-full w-full object-cover" />
+                      </div>
+                      <span className="font-serif-cn text-[10px] text-stone-200">{s.name}</span>
+                      <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                        {s.viewName ?? '主視角'}
+                      </span>
                     </div>
-                    <span className="font-serif-cn text-[10px] text-stone-200">
-                      {s.name}
-                    </span>
-                    <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
-                      {s.viewName ?? '主視角'}
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           ) : null}

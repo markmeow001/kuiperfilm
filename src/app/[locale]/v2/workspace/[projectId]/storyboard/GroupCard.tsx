@@ -15,9 +15,11 @@
  * subject identity.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
+import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
+import { LocationViewPickerModal } from './LocationViewPickerModal'
 import type { UseMutationResult } from '@tanstack/react-query'
 
 interface PanelLike {
@@ -30,11 +32,44 @@ interface PanelLike {
   multiShotGroupOrder?: number | null
 }
 
+interface CharacterAppearanceRef {
+  id: string
+  appearanceIndex?: number
+  changeReason?: string | null
+  description?: string | null
+  imageUrl?: string | null
+}
+
+interface CharacterRef {
+  id: string
+  name: string
+  appearances?: CharacterAppearanceRef[]
+}
+
+interface LocationImageRef {
+  id: string
+  imageIndex?: number
+  description?: string | null
+  imageUrl?: string | null
+  viewName?: string | null
+}
+
+interface LocationRef {
+  id: string
+  name: string
+  images?: LocationImageRef[]
+}
+
 type UpdatePanelTextMutation = UseMutationResult<
   unknown,
   Error,
   { panelId: string; description?: string; srtSegment?: string }
 >
+
+export interface GroupRegenOverrides {
+  characterOverrides: Array<{ characterId: string; appearanceId?: string }>
+  locationOverrides: Array<{ locationId: string; viewName?: string }>
+}
 
 interface GroupCardProps {
   groupId: string
@@ -44,7 +79,12 @@ interface GroupCardProps {
   panels: PanelLike[]
   taskId: string | null
   updatePanelText: UpdatePanelTextMutation
-  onRegenerate: (panelIds: string[]) => Promise<{ taskId: string | null; error?: string }>
+  characterRoster?: CharacterRef[]
+  locationRoster?: LocationRef[]
+  onRegenerate: (
+    panelIds: string[],
+    overrides: GroupRegenOverrides,
+  ) => Promise<{ taskId: string | null; error?: string }>
 }
 
 export function GroupCard({
@@ -55,8 +95,38 @@ export function GroupCard({
   panels,
   taskId,
   updatePanelText,
+  characterRoster,
+  locationRoster,
   onRegenerate,
 }: GroupCardProps) {
+  // Override state: keys are characterId / locationId, values are
+  // the user's override choice (undefined = no override).
+  // null = explicit "revert to default" via the modal's bottom button.
+  const [characterOverrides, setCharacterOverrides] = useState<Record<string, string | null>>({})
+  const [locationOverrides, setLocationOverrides] = useState<Record<string, string | null>>({})
+
+  const [pickerCharacter, setPickerCharacter] = useState<{
+    character: CharacterRef
+    currentAppearanceId: string | null
+  } | null>(null)
+  const [pickerLocation, setPickerLocation] = useState<{
+    location: LocationRef
+    currentViewName: string | null
+  } | null>(null)
+
+  const characterById = useMemo(() => {
+    const map = new Map<string, CharacterRef>()
+    for (const c of characterRoster ?? []) map.set(c.id, c)
+    return map
+  }, [characterRoster])
+  const locationById = useMemo(() => {
+    const map = new Map<string, LocationRef>()
+    for (const l of locationRoster ?? []) map.set(l.id, l)
+    return map
+  }, [locationRoster])
+
+  const overrideCount =
+    Object.keys(characterOverrides).length + Object.keys(locationOverrides).length
   // Local drafts keyed by panel id. Re-seeded whenever the panel's
   // server-side description / dialogue changes (e.g. analyze
   // re-cascades after a description edit somewhere upstream).
@@ -114,12 +184,31 @@ export function GroupCard({
       setRegenState({ status: 'submitting' })
     }
     const ids = panels.slice(0, 6).map((p) => p.id)
-    const result = await onRegenerate(ids)
+    const overrides: GroupRegenOverrides = {
+      characterOverrides: Object.entries(characterOverrides)
+        .filter(([, app]) => app !== undefined)
+        .map(([characterId, appearanceId]) =>
+          appearanceId === null ? { characterId } : { characterId, appearanceId },
+        ),
+      locationOverrides: Object.entries(locationOverrides)
+        .filter(([, view]) => view !== undefined)
+        .map(([locationId, viewName]) =>
+          viewName === null ? { locationId } : { locationId, viewName },
+        ),
+    }
+    const result = await onRegenerate(ids, overrides)
     if (result.error) {
       setRegenState({ status: 'error', message: result.error })
     } else {
       setRegenState({ status: 'done' })
+      // Keep overrides visible so the user can see what just got
+      // applied; manually reset via the chips if needed.
     }
+  }
+
+  function handleResetOverrides() {
+    setCharacterOverrides({})
+    setLocationOverrides({})
   }
 
   return (
@@ -154,7 +243,44 @@ export function GroupCard({
 
       <div className="grid grid-cols-12 gap-4 p-4">
         <div className="col-span-12 lg:col-span-7">
-          <MultiShotBindingsRail taskId={taskId} groupLabel={null} />
+          <MultiShotBindingsRail
+            taskId={taskId}
+            groupLabel={null}
+            characterOverrideAppearanceById={characterOverrides}
+            locationOverrideViewByLocationId={locationOverrides}
+            onCharacterChipClick={(binding) => {
+              const character = characterById.get(binding.id)
+              if (!character) return
+              const currentAppearanceId =
+                characterOverrides[binding.id] !== undefined
+                  ? characterOverrides[binding.id]
+                  : binding.appearanceId
+              setPickerCharacter({ character, currentAppearanceId })
+            }}
+            onSceneChipClick={(binding) => {
+              const location = locationById.get(binding.id)
+              if (!location) return
+              const currentViewName =
+                locationOverrides[binding.id] !== undefined
+                  ? locationOverrides[binding.id]
+                  : binding.viewName
+              setPickerLocation({ location, currentViewName })
+            }}
+          />
+          {overrideCount > 0 ? (
+            <div className="mt-2 flex items-center justify-between rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1.5">
+              <div className="font-mono text-[9px] tracking-wider text-violet-300">
+                ✏ 已修改 {overrideCount} 個綁定 — 「重新生成」會套用
+              </div>
+              <button
+                type="button"
+                onClick={handleResetOverrides}
+                className="font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-violet-300"
+              >
+                清空
+              </button>
+            </div>
+          ) : null}
           {regenState.status === 'error' ? (
             <div className="mt-2 rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1 font-serif-cn text-[11px] text-rose-300">
               {regenState.message}
@@ -245,6 +371,30 @@ export function GroupCard({
           </div>
         </div>
       </div>
+
+      <CharacterAppearancePickerModal
+        open={pickerCharacter !== null}
+        onClose={() => setPickerCharacter(null)}
+        character={pickerCharacter?.character ?? null}
+        currentAppearanceId={pickerCharacter?.currentAppearanceId ?? null}
+        onSelect={(appearanceId) => {
+          if (!pickerCharacter) return
+          const characterId = pickerCharacter.character.id
+          setCharacterOverrides((prev) => ({ ...prev, [characterId]: appearanceId }))
+        }}
+      />
+
+      <LocationViewPickerModal
+        open={pickerLocation !== null}
+        onClose={() => setPickerLocation(null)}
+        location={pickerLocation?.location ?? null}
+        currentViewName={pickerLocation?.currentViewName ?? null}
+        onSelect={(viewName) => {
+          if (!pickerLocation) return
+          const locationId = pickerLocation.location.id
+          setLocationOverrides((prev) => ({ ...prev, [locationId]: viewName }))
+        }}
+      />
     </article>
   )
 }
