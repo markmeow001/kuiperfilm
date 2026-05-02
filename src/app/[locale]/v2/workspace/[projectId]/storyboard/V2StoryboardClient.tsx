@@ -27,7 +27,7 @@ import {
   useUpdateProjectPanel,
 } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
-import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
+import { useTaskSnapshot, useActiveTasks, useTaskList } from '@/lib/query/hooks/useTaskStatus'
 import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
@@ -412,6 +412,60 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     }
     return set
   }, [activePanelImageTasks.data])
+  // 2026-05-02 — recently-failed panel tasks. User reported a batch
+  // generate run where two thumbnails ended without an image and
+  // without any error indicator — looked like the click "didn't
+  // register". The tasks were actually status=failed in DB
+  // (Tencent VOD RATE_LIMIT after 5 retries, or content-policy
+  // ViolationContent rejection). Surfacing this set as a Set<panelId>
+  // lets the strip render a rose-coloured "失敗 ✗" overlay so users
+  // know to retry instead of assuming the system silently dropped
+  // their click.
+  const failedPanelTasks = useTaskList({
+    projectId,
+    type: ['image_panel', 'video_panel'],
+    statuses: ['failed'],
+    limit: 50,
+  })
+  const failedPanelImageIds = useMemo(() => {
+    const map = new Map<string, { errorCode: string | null; errorMessage: string | null }>()
+    for (const t of failedPanelTasks.data ?? []) {
+      if (
+        t.targetType === 'NovelPromotionPanel'
+        && typeof t.targetId === 'string'
+        && t.type === 'image_panel'
+      ) {
+        // Latest failure wins per-panel (the API sorts by createdAt
+        // desc by default). The Map key is the panel id, value is
+        // a brief error packet for the tooltip.
+        if (!map.has(t.targetId)) {
+          map.set(t.targetId, {
+            errorCode: t.errorCode ?? null,
+            errorMessage: t.errorMessage ?? null,
+          })
+        }
+      }
+    }
+    return map
+  }, [failedPanelTasks.data])
+  const failedPanelVideoIds = useMemo(() => {
+    const map = new Map<string, { errorCode: string | null; errorMessage: string | null }>()
+    for (const t of failedPanelTasks.data ?? []) {
+      if (
+        t.targetType === 'NovelPromotionPanel'
+        && typeof t.targetId === 'string'
+        && t.type === 'video_panel'
+      ) {
+        if (!map.has(t.targetId)) {
+          map.set(t.targetId, {
+            errorCode: t.errorCode ?? null,
+            errorMessage: t.errorMessage ?? null,
+          })
+        }
+      }
+    }
+    return map
+  }, [failedPanelTasks.data])
   // Poll while any in-flight, including video tracked locally — that way
   // we catch tasks no matter where they were submitted from.
   useEffect(() => {
@@ -1606,15 +1660,53 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     const remoteVid = serverInflightPanelVideoIds.has(p.id)
                     const isImg = localImg || remoteImg
                     const isVid = localVid || remoteVid
-                    if (!isImg && !isVid) return null
-                    return (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
-                        <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                        <div className="font-mono text-[9px] tracking-wider text-amber-300">
-                          {isVid ? '視頻生成中' : '圖生成中'}
+                    if (isImg || isVid) {
+                      return (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
+                          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+                          <div className="font-mono text-[9px] tracking-wider text-amber-300">
+                            {isVid ? '視頻生成中' : '圖生成中'}
+                          </div>
                         </div>
-                      </div>
-                    )
+                      )
+                    }
+                    // Failure overlay — only show when there's no
+                    // current in-flight retry AND there's no successful
+                    // image/video yet. Image failures dominate over
+                    // video failures (you regenerate image first).
+                    const failedImg = !p.imageUrl && failedPanelImageIds.get(p.id)
+                    const failedVid = !!p.imageUrl && !p.videoUrl && failedPanelVideoIds.get(p.id)
+                    const failed = failedImg || failedVid
+                    if (failed) {
+                      const code = failed.errorCode ?? ''
+                      // Friendlier 2-line label than the raw error
+                      // dump. RATE_LIMIT happens often in the user's
+                      // Tencent quota world; ViolationContent is a
+                      // content-policy rejection and means "edit the
+                      // description, then retry". Anything else falls
+                      // through to a generic 失敗 with a tooltip.
+                      const label = code === 'RATE_LIMIT'
+                        ? '配額限制'
+                        : /Violation|Content/i.test(failed.errorMessage ?? '')
+                          ? '內容違規'
+                          : '失敗'
+                      const tooltip = `${code || ''}${code ? ' — ' : ''}${failed.errorMessage ?? '點重試'}`
+                      return (
+                        <div
+                          title={tooltip}
+                          className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-rose-950/80 backdrop-blur-sm"
+                        >
+                          <AppIcon name="alert" className="h-5 w-5 text-rose-300" />
+                          <div className="font-mono text-[9px] tracking-wider text-rose-200">
+                            ✗ {label}
+                          </div>
+                          <div className="font-mono text-[8px] tracking-wider text-rose-400/80">
+                            點 {failedImg ? '生成圖片' : '生成視頻'} 重試
+                          </div>
+                        </div>
+                      )
+                    }
+                    return null
                   })()}
                 </div>
                 {/*
@@ -1856,7 +1948,40 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     <div className="h-full w-1/3 animate-[progressSlide_2s_linear_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
                   </div>
                 </div>
-              ) : null}
+              ) : (() => {
+                // Failure overlay for the Selected Shot — same logic as
+                // the strip thumbnail. Renders only when the panel has
+                // a recent failed task AND no live retry in flight.
+                if (!selected) return null
+                const failedImg = !selected.imageUrl && failedPanelImageIds.get(selected.id)
+                const failedVid = !!selected.imageUrl && !selected.videoUrl && failedPanelVideoIds.get(selected.id)
+                const failed = failedImg || failedVid
+                if (!failed) return null
+                const code = failed.errorCode ?? ''
+                const isRateLimit = code === 'RATE_LIMIT'
+                const isViolation = /Violation|Content/i.test(failed.errorMessage ?? '')
+                const headline = isRateLimit
+                  ? 'Tencent VOD 配額限制'
+                  : isViolation
+                    ? '內容審核被擋'
+                    : '生成失敗'
+                const detail = isRateLimit
+                  ? '同時跑太多任務,Tencent 拒絕了。等 1-2 分鐘後點下方按鈕重試。'
+                  : isViolation
+                    ? '描述詞被內容過濾擋下。請編輯左側「描述詞」,移除可能違規的字眼後重試。'
+                    : (failed.errorMessage ?? '點下方按鈕重試')
+                return (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-rose-950/85 backdrop-blur-sm">
+                    <AppIcon name="alert" className="h-8 w-8 text-rose-300" />
+                    <div className="font-fraunces text-base italic text-rose-200">
+                      ✗ {headline}
+                    </div>
+                    <div className="px-6 text-center font-serif-cn text-xs text-rose-300/90">
+                      {detail}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             <div className="bg-stone-900/60 px-4 py-3">
               <div className="font-serif-cn text-stone-100">
