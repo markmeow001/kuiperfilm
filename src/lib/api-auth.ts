@@ -73,6 +73,49 @@ function bindAdminCrossUserLog(
     setLogContext({ userId: session.user.id, projectId })
 }
 
+/**
+ * Workspace-based access helper. Editor sees + edits any project owned
+ * by a user that is a member of any workspace the editor manages.
+ *
+ * Cheap pattern: single indexed prisma lookup against workspace +
+ * workspace_member. Only ever called on the cross-user code path
+ * (project.userId !== requester.id) AFTER the admin override fails,
+ * so the hot owner-match path stays free of extra queries.
+ *
+ * Multi-tenant org → workspace → member spec (2026-05-02):
+ *   - editor creates workspaces (1:N)
+ *   - members can join multiple workspaces (M:N)
+ *   - editor has full RW on member projects within their workspace
+ */
+async function editorCanAccessProject(
+    requesterId: string,
+    projectOwnerId: string,
+): Promise<boolean> {
+    if (requesterId === projectOwnerId) return true
+    const found = await prisma.workspace.findFirst({
+        where: {
+            ownerEditorId: requesterId,
+            members: { some: { userId: projectOwnerId } },
+        },
+        select: { id: true },
+    })
+    return !!found
+}
+
+/**
+ * Same intent as bindAdminCrossUserLog — log breadcrumb when an editor
+ * reaches a project they don't own via workspace membership.
+ */
+function bindEditorCrossUserLog(
+    session: AuthSession,
+    projectId: string,
+    _projectOwnerId: string,
+) {
+    const context = getLogContext()
+    if (!context.requestId) return
+    setLogContext({ userId: session.user.id, projectId })
+}
+
 async function getInternalTaskSession(): Promise<AuthSession | null> {
     const expectedToken = process.env.INTERNAL_TASK_TOKEN || ''
 
@@ -291,11 +334,18 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
         return notFound('Project')
     }
 
-    // 5. 所有权验证 (with admin override for multi-user demo)
+    // 5. 所有权验证 (multi-tier multi-user override)
+    //    - admin: full cross-user
+    //    - editor: cross-user via workspace membership (org → workspace → member)
     if (project.userId !== session.user.id) {
-        const allowed = await sessionUserIsAdmin(session.user.id)
-        if (!allowed) return forbidden()
-        bindAdminCrossUserLog(session, projectId, project.userId)
+        const isAdmin = await sessionUserIsAdmin(session.user.id)
+        if (isAdmin) {
+            bindAdminCrossUserLog(session, projectId, project.userId)
+        } else {
+            const editorAccess = await editorCanAccessProject(session.user.id, project.userId)
+            if (!editorAccess) return forbidden()
+            bindEditorCrossUserLog(session, projectId, project.userId)
+        }
     }
 
     // 6. NovelPromotionData 检查
@@ -394,9 +444,14 @@ export async function requireProjectAuthLight(
     }
 
     if (project.userId !== session.user.id) {
-        const allowed = await sessionUserIsAdmin(session.user.id)
-        if (!allowed) return forbidden()
-        bindAdminCrossUserLog(session, projectId, project.userId)
+        const isAdmin = await sessionUserIsAdmin(session.user.id)
+        if (isAdmin) {
+            bindAdminCrossUserLog(session, projectId, project.userId)
+        } else {
+            const editorAccess = await editorCanAccessProject(session.user.id, project.userId)
+            if (!editorAccess) return forbidden()
+            bindEditorCrossUserLog(session, projectId, project.userId)
+        }
     }
 
     return { session, project }
