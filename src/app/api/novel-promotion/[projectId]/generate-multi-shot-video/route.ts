@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
@@ -273,12 +274,19 @@ export const POST = apiHandler(async (
     // (`video_multi_shot:<storyboardId>`) and submitTask collapsed
     // them into a single in-flight task — user-reported all groups
     // showing the same video. Groups have non-overlapping panel sets,
-    // so a sorted join of panelIds + an override fingerprint is a
-    // stable per-group identity that still dedupes accidental
-    // double-clicks on the same group with the same overrides.
+    // so a stable hash of (panelIds, overrides, mode, durations,
+    // prompt) gives each submission its own identity while still
+    // deduping rapid double-clicks with identical inputs.
+    //
+    // Hashed (not raw) because dedupeKey is VARCHAR(191) and a
+    // stringified override payload easily exceeds that — Prisma
+    // P2000 the moment a user passes rawPrompt or even mid-size
+    // characterOverrides. SHA-256 sliced to 16 hex chars = 64 bits
+    // of entropy, plenty for collision-free dedupe within a
+    // project's task set.
     dedupeKey: (() => {
-      const idsKey = [...panelIds].sort().join(',')
-      const overrideKey = JSON.stringify({
+      const fingerprint = JSON.stringify({
+        ids: [...panelIds].sort(),
         c: characterOverrides ?? null,
         l: locationOverrides ?? null,
         d: panelDurations ?? null,
@@ -286,7 +294,8 @@ export const POST = apiHandler(async (
         p: promptStyle ?? null,
         r: rawPrompt ?? null,
       })
-      return `video_multi_shot:${storyboard.id}:${idsKey}:${overrideKey}`
+      const hash = createHash('sha256').update(fingerprint).digest('hex').slice(0, 16)
+      return `video_multi_shot:${storyboard.id}:${hash}`
     })(),
   })
 
