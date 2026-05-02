@@ -20,6 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { attachMediaFieldsToProp } from '@/lib/media/attach'
 
 export const GET = apiHandler(async (
   _request: NextRequest,
@@ -43,7 +44,16 @@ export const GET = apiHandler(async (
     orderBy: { createdAt: 'asc' },
   })
 
-  return NextResponse.json({ props })
+  // Sign each prop's imageUrl. The worker stores raw COS keys
+  // (`images/prop-...jpg`) which the browser would 404 if rendered as
+  // a relative URL. attachMediaFieldsToProp routes through
+  // resolveMediaRef so the FE receives a signed COS URL ready to
+  // <img src=...>.
+  const propsWithSignedUrls = await Promise.all(
+    (props as unknown as Array<Record<string, unknown>>).map(attachMediaFieldsToProp),
+  )
+
+  return NextResponse.json({ props: propsWithSignedUrls })
 })
 
 export const POST = apiHandler(async (

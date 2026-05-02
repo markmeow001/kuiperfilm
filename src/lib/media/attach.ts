@@ -154,6 +154,30 @@ async function attachMediaFieldsToProjectCharacter<T extends Record<string, unkn
   }
 }
 
+/**
+ * Phase 11.3 Stage C — Prop image URL signing.
+ *
+ * Worker handlers (prop-image-task-handler) write raw COS keys (e.g.
+ * `images/prop-<uuid>-<ts>-<rand>.jpg`) to NovelPromotionProp.imageUrl
+ * mirroring how character / location images are stored. Without
+ * routing the value through resolveMediaRef the front-end ends up
+ * with `<img src="images/prop-...">` and the browser issues a
+ * relative-path 404 → broken-image icon (user-reported 2026-05-02).
+ *
+ * Returns the prop with imageUrl replaced by a signed COS URL when
+ * possible, falling back to the original raw value if resolution
+ * fails so the response shape stays consistent.
+ */
+export async function attachMediaFieldsToProp<T extends Record<string, unknown>>(prop: T) {
+  const imageMedia = await resolveMediaRef(prop.imageMediaId, prop.imageUrl)
+  return {
+    ...prop,
+    media: imageMedia,
+    imageMedia,
+    imageUrl: imageMedia?.url || prop.imageUrl || null,
+  }
+}
+
 async function attachMediaFieldsToProjectLocation<T extends Record<string, unknown>>(location: T) {
   const images = await Promise.all(
     ((location.images as Array<Record<string, unknown>>) || []).map(async (img) => {
@@ -207,6 +231,9 @@ export async function attachMediaFieldsToProject<T extends Record<string, unknow
   const locations = await Promise.all(
     ((projectLike.locations as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToProjectLocation),
   )
+  const props = await Promise.all(
+    ((projectLike.props as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToProp),
+  )
   const shots = await Promise.all(
     ((projectLike.shots as Array<Record<string, unknown>>) || []).map(attachMediaFieldsToShot),
   )
@@ -224,6 +251,7 @@ export async function attachMediaFieldsToProject<T extends Record<string, unknow
     audioUrl: audioMedia?.url || projectLike.audioUrl || null,
     characters,
     locations,
+    props,
     shots,
     storyboards,
     voiceLines,
