@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
+import { applyAdminFallbackToNovelPromotionProject } from '@/lib/multi-user/preference-inheritance'
 
 /**
  * 统一的项目数据加载API
@@ -71,6 +72,19 @@ export const GET = apiHandler(async (
 
   // 转换为稳定媒体 URL（并保留兼容字段）
   const novelPromotionDataWithSignedUrls = await attachMediaFieldsToProject(novelPromotionData)
+
+  // Multi-user inheritance: any model field still NULL on this project
+  // gets filled from admin's UserPreference at read time. Without this,
+  // projects created by non-admin members BEFORE the project-creation
+  // write-side fallback (commit a15bad0) would surface NULL videoModel /
+  // characterModel / etc. and the v2 storyboard UI would gate the
+  // multi-shot button with "請先在 profile / 預設模型配置 中選擇視頻模型".
+  // The injection is response-only — DB rows stay NULL so an admin
+  // changing the team default propagates without per-project rewrites.
+  await applyAdminFallbackToNovelPromotionProject({
+    requestUserId: session.user.id,
+    data: novelPromotionDataWithSignedUrls as Record<string, unknown>,
+  })
 
   const fullProject = {
     ...project,
