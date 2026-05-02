@@ -980,6 +980,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             if (overrides.locationOverrides.length > 0) {
               body.locationOverrides = overrides.locationOverrides
             }
+            // Phase 2 segment-level overrides — flow through to the
+            // multi-shot API contract Session A defined.
+            if (overrides.rawPrompt && overrides.rawPrompt.length > 0) {
+              body.rawPrompt = overrides.rawPrompt
+            }
+            if (
+              Array.isArray(overrides.panelDurations)
+              && overrides.panelDurations.length === panelIds.length
+            ) {
+              body.panelDurations = overrides.panelDurations
+            }
             const res = await fetch(
               `/api/novel-promotion/${projectId}/generate-multi-shot-video`,
               {

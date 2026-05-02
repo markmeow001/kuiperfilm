@@ -69,6 +69,14 @@ type UpdatePanelTextMutation = UseMutationResult<
 export interface GroupRegenOverrides {
   characterOverrides: Array<{ characterId: string; appearanceId?: string }>
   locationOverrides: Array<{ locationId: string; viewName?: string }>
+  // Phase 2 — segment-level merged narrative + duration override.
+  // When `rawPrompt` is non-empty the worker bypasses per-panel
+  // prompt assembly and uses this verbatim (intelligence mode).
+  rawPrompt?: string
+  // Length must equal panelIds.length, sum 5-15. Triggers customize
+  // multi-shot mode in the worker so each panel slice gets its own
+  // duration anchor in Kling Omni's multi_prompt array.
+  panelDurations?: number[]
 }
 
 interface GroupCardProps {
@@ -152,9 +160,56 @@ export function GroupCard({
 
   const overrideCount =
     Object.keys(characterOverrides).length + Object.keys(locationOverrides).length
+
+  // ── Phase 2 — segment-level merged narrative editor ──
+  //
+  // The user referenced the Seedance 2.0 视频方案编辑器 layout where
+  // each segment is one editable narrative paragraph (time-indexed
+  // 0-5/5-10/10-15s) instead of N separate panel boxes. Panels stay
+  // in the data model — they drive analyze, group splitting, and
+  // bindings — but the EDITING unit at this stage is the merged
+  // segment. Anything the user types here goes through the
+  // `rawPrompt` field on regen so the worker bypasses per-panel
+  // prompt assembly.
+  const [totalDurationDraft, setTotalDurationDraft] = useState<number>(15)
+  const buildInitialNarrative = (): string => {
+    const count = panels.length
+    if (count === 0) return ''
+    const total = totalDurationDraft
+    const base = Math.max(1, Math.floor(total / count))
+    const remainder = Math.max(0, total - base * count)
+    const lines: string[] = []
+    let cursor = 0
+    for (let i = 0; i < count; i++) {
+      const dur = base + (i < remainder ? 1 : 0)
+      const start = cursor
+      const end = cursor + dur
+      cursor = end
+      const p = panels[i]
+      const desc = (p.description ?? p.prompt ?? '').trim()
+      const dialog = (p.srtSegment ?? '').trim()
+      const segments: string[] = [`${start}-${end} seconds:`]
+      if (desc) segments.push(desc)
+      if (dialog) segments.push(dialog)
+      lines.push(segments.join(' '))
+    }
+    return lines.join('\n\n')
+  }
+  const [narrativeDraft, setNarrativeDraft] = useState<string>('')
+  const [narrativeDirty, setNarrativeDirty] = useState<boolean>(false)
+  // Re-seed the narrative when panels or duration change AND the user
+  // hasn't edited it locally — avoids clobbering an in-progress edit.
+  useEffect(() => {
+    if (narrativeDirty) return
+    setNarrativeDraft(buildInitialNarrative())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panels, totalDurationDraft])
+
   // Local drafts keyed by panel id. Re-seeded whenever the panel's
   // server-side description / dialogue changes (e.g. analyze
   // re-cascades after a description edit somewhere upstream).
+  // Still used by the Phase 1 fallback editor (kept behind the
+  // 「進階分鏡編輯」 toggle for power users).
   const [descDrafts, setDescDrafts] = useState<Record<string, string>>({})
   const [dialogueDrafts, setDialogueDrafts] = useState<Record<string, string>>({})
   useEffect(() => {
@@ -167,6 +222,7 @@ export function GroupCard({
     setDescDrafts(nextDesc)
     setDialogueDrafts(nextDial)
   }, [panels])
+  const [showAdvancedEditor, setShowAdvancedEditor] = useState<boolean>(false)
 
   const [savingPanelId, setSavingPanelId] = useState<string | null>(null)
   function handleSaveDescription(panelId: string) {
@@ -209,7 +265,27 @@ export function GroupCard({
       setRegenState({ status: 'submitting' })
     }
     const ids = panels.slice(0, 6).map((p) => p.id)
+    // Phase 2: distribute the segment's total duration evenly across
+    // its panel slices. Worker enters customize mode when
+    // panelDurations is present so each multi_prompt[] entry gets the
+    // right per-shot anchor in Kling Omni.
+    const panelDurations: number[] = (() => {
+      const count = ids.length
+      const total = Math.max(count, Math.min(15, totalDurationDraft))
+      const base = Math.max(1, Math.floor(total / count))
+      const remainder = Math.max(0, total - base * count)
+      const out: number[] = []
+      for (let i = 0; i < count; i++) {
+        out.push(base + (i < remainder ? 1 : 0))
+      }
+      return out
+    })()
+    const trimmedNarrative = narrativeDraft.trim()
     const overrides: GroupRegenOverrides = {
+      ...(narrativeDirty && trimmedNarrative.length > 0
+        ? { rawPrompt: trimmedNarrative }
+        : {}),
+      panelDurations,
       characterOverrides: Object.entries(characterOverrides)
         .filter(([, app]) => app !== undefined)
         .map(([characterId, appearanceId]) =>
@@ -362,81 +438,147 @@ export function GroupCard({
           ) : null}
         </div>
 
-        <div className="col-span-12 space-y-2 lg:col-span-5">
-          <div className="font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
-            分鏡描述 · {panels.length} 鏡
-          </div>
-          <div className="space-y-2">
-            {panels.map((p, panelIdx) => {
-              const descValue = descDrafts[p.id] ?? ''
-              const dialValue = dialogueDrafts[p.id] ?? ''
-              const descOriginal = p.description ?? p.prompt ?? ''
-              const dialOriginal = p.srtSegment ?? ''
-              const descChanged = descValue !== descOriginal
-              const dialChanged = dialValue !== dialOriginal
-              const isSavingThis = savingPanelId === p.id
-              return (
-                <div
-                  key={p.id}
-                  className="rounded-sm border border-stone-800/60 bg-stone-950/40 p-2"
+        <div className="col-span-12 space-y-3 lg:col-span-5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              叙事提示词
+              <span className="text-stone-500">· {narrativeDraft.length} 字</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-stone-400">
+                <AppIcon name="play" className="h-3 w-3" />
+                时长
+                <select
+                  value={totalDurationDraft}
+                  onChange={(e) => {
+                    setTotalDurationDraft(Number.parseInt(e.target.value, 10) || 15)
+                    // Re-seed narrative so the time slices match the
+                    // new total. Skipped when the user has dirty edits
+                    // — protected by buildInitialNarrative guard.
+                    setNarrativeDirty(false)
+                  }}
+                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[10px] text-stone-200 outline-none focus:border-amber-500/40"
                 >
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-[9px] tracking-wider text-amber-500/60">
-                        #{String(panelIdx + 1).padStart(2, '0')}
-                      </span>
-                      {Array.isArray(p.characters) && p.characters.length > 0 ? (
-                        <span className="font-mono text-[9px] tracking-wider text-stone-500">
-                          {p.characters.join(' / ')}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
+                  <option value={5}>5s</option>
+                  <option value={10}>10s</option>
+                  <option value={15}>15s</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setNarrativeDraft(buildInitialNarrative())
+                  setNarrativeDirty(false)
+                }}
+                title="從分鏡描述重新生成這段敘事"
+                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[9px] tracking-wider text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-400"
+              >
+                ↻ 重生敘事
+              </button>
+            </div>
+          </div>
 
-                  <textarea
-                    value={descValue}
-                    onChange={(e) =>
-                      setDescDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
-                    }
-                    rows={2}
-                    placeholder="鏡頭描述 — 例:近景,CATHERINE 雙手扶著工作台,目光看向鏡頭"
-                    className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-1.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
-                  />
-                  {descChanged ? (
-                    <button
-                      type="button"
-                      disabled={isSavingThis}
-                      onClick={() => handleSaveDescription(p.id)}
-                      className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+          <textarea
+            value={narrativeDraft}
+            onChange={(e) => {
+              setNarrativeDraft(e.target.value)
+              setNarrativeDirty(true)
+            }}
+            rows={panels.length >= 4 ? 14 : 9}
+            placeholder="0-5 seconds: 角色 + 場景 + 動作 + 鏡頭 + 氛圍&#10;5-10 seconds: ...&#10;10-15 seconds: ..."
+            className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-2.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
+          />
+          {narrativeDirty ? (
+            <div className="font-mono text-[9px] tracking-wider text-violet-300">
+              ✏ 敘事已修改 — 「重新生成」會以這段為主 prompt(覆蓋分鏡描述)
+            </div>
+          ) : (
+            <div className="font-mono text-[9px] tracking-wider text-stone-600">
+              預設由 {panels.length} 個分鏡描述自動拼接。直接編輯這段即可,送出時會以你寫的為準。
+            </div>
+          )}
+
+          <div className="border-t border-stone-800/60 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedEditor((v) => !v)}
+              className="flex items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+            >
+              {showAdvancedEditor ? '▼' : '▶'} 進階分鏡編輯({panels.length} 鏡 · 編輯各分鏡描述 / 對白)
+            </button>
+            {showAdvancedEditor ? (
+              <div className="mt-2 space-y-2">
+                {panels.map((p, panelIdx) => {
+                  const descValue = descDrafts[p.id] ?? ''
+                  const dialValue = dialogueDrafts[p.id] ?? ''
+                  const descOriginal = p.description ?? p.prompt ?? ''
+                  const dialOriginal = p.srtSegment ?? ''
+                  const descChanged = descValue !== descOriginal
+                  const dialChanged = dialValue !== dialOriginal
+                  const isSavingThis = savingPanelId === p.id
+                  return (
+                    <div
+                      key={p.id}
+                      className="rounded-sm border border-stone-800/60 bg-stone-950/40 p-2"
                     >
-                      {isSavingThis ? '儲存中…' : '儲存描述'}
-                    </button>
-                  ) : null}
-
-                  <div className="mt-1.5">
-                    <textarea
-                      value={dialValue}
-                      onChange={(e) =>
-                        setDialogueDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
-                      }
-                      rows={1}
-                      placeholder="對白(可空白) — 例:CATHERINE「就這樣吧。」"
-                      className="w-full resize-none rounded-sm border border-amber-500/15 bg-amber-500/5 p-1.5 font-serif-cn text-[11px] leading-relaxed italic text-amber-300/80 outline-none focus:border-amber-500/40"
-                    />
-                    {dialChanged ? (
-                      <button
-                        type="button"
-                        disabled={isSavingThis}
-                        onClick={() => handleSaveDialogue(p.id)}
-                        className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
-                      >
-                        {isSavingThis ? '儲存中…' : '儲存對白'}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              )
-            })}
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[9px] tracking-wider text-amber-500/60">
+                            #{String(panelIdx + 1).padStart(2, '0')}
+                          </span>
+                          {Array.isArray(p.characters) && p.characters.length > 0 ? (
+                            <span className="font-mono text-[9px] tracking-wider text-stone-500">
+                              {p.characters.join(' / ')}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <textarea
+                        value={descValue}
+                        onChange={(e) =>
+                          setDescDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
+                        }
+                        rows={2}
+                        placeholder="鏡頭描述"
+                        className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-1.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
+                      />
+                      {descChanged ? (
+                        <button
+                          type="button"
+                          disabled={isSavingThis}
+                          onClick={() => handleSaveDescription(p.id)}
+                          className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+                        >
+                          {isSavingThis ? '儲存中…' : '儲存描述'}
+                        </button>
+                      ) : null}
+                      <div className="mt-1.5">
+                        <textarea
+                          value={dialValue}
+                          onChange={(e) =>
+                            setDialogueDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
+                          }
+                          rows={1}
+                          placeholder="對白(可空白)"
+                          className="w-full resize-none rounded-sm border border-amber-500/15 bg-amber-500/5 p-1.5 font-serif-cn text-[11px] leading-relaxed italic text-amber-300/80 outline-none focus:border-amber-500/40"
+                        />
+                        {dialChanged ? (
+                          <button
+                            type="button"
+                            disabled={isSavingThis}
+                            onClick={() => handleSaveDialogue(p.id)}
+                            className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+                          >
+                            {isSavingThis ? '儲存中…' : '儲存對白'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
