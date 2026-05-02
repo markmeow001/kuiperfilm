@@ -13,7 +13,7 @@
  */
 
 import Link from 'next/link'
-import { signOut, useSession } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
 import { V2_STEPS, type V2StepId, v2StepIndex } from './v2-types'
 
@@ -125,89 +125,28 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
         })}
       </nav>
 
-      {/* User block — auto from NextAuth session */}
-      <SidebarUser />
+      {/* 2026-05-02: User block moved to TopBar UserMenu — frees up the
+          narrow w-52 column footer for future entries and matches
+          Linear/Notion convention (avatar top-right). Sidebar keeps a
+          minimal signed-out CTA so an unauthenticated user reaching a
+          v2 page (rare; layout normally redirects) still sees a way
+          back into auth. */}
+      <SidebarSignedOutCTA />
     </aside>
   )
 }
 
-function SidebarUser() {
+function SidebarSignedOutCTA() {
   const { data: session, status } = useSession()
-  if (status === 'loading') {
-    return (
-      <div className="border-t border-amber-900/15 px-5 py-5">
-        <div className="font-mono text-[14px] tracking-wider text-stone-600">載入帳號中…</div>
-      </div>
-    )
-  }
-  if (!session?.user) {
-    return (
-      <div className="border-t border-amber-900/15 px-5 py-5">
-        <a
-          href="/auth/signin"
-          className="block rounded-md border border-amber-500/30 px-3 py-2 text-center font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/10"
-        >
-          登入帳號
-        </a>
-      </div>
-    )
-  }
-  const name = session.user.name ?? session.user.email ?? '使用者'
-  const role = (session.user as { role?: string } | undefined)?.role ?? null
-  const initial = name.charAt(0).toUpperCase()
-  const isAdmin = role === 'admin'
-  // Locale lives in the URL; signOut callbackUrl uses the base since the
-  // root middleware redirects to the right locale.
-  const adminHref = '/zh/admin'
+  if (status === 'loading' || session?.user) return null
   return (
     <div className="border-t border-amber-900/15 px-5 py-5">
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-rose-700 font-display text-sm text-stone-100">
-          {initial}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-body text-sm text-stone-200">{name}</div>
-          <div className="mt-0.5 font-mono text-[14px] text-amber-600/70">
-            {role ? role.toUpperCase() : 'MEMBER'}
-          </div>
-        </div>
-        {/* Workspaces / 團隊 — visible to every signed-in role; the
-            target page hides creation/management affordances when the
-            requester isn't authorised. */}
-        <a
-          href="/zh/workspaces"
-          className="rounded text-stone-500 transition-all hover:text-amber-400"
-          title="工作區 / 團隊管理"
-        >
-          <AppIcon name="userAlt" className="h-4 w-4" />
-        </a>
-        {isAdmin ? (
-          <>
-            <a
-              href="/zh/profile"
-              className="rounded text-stone-500 transition-all hover:text-amber-400"
-              title="設定中心(provider keys / 預設模型)"
-            >
-              <AppIcon name="userRoundCog" className="h-4 w-4" />
-            </a>
-            <a
-              href={adminHref}
-              className="rounded text-amber-500/70 transition-all hover:text-amber-300"
-              title="管理員後台"
-            >
-              <AppIcon name="settingsHex" className="h-4 w-4" />
-            </a>
-          </>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => void signOut({ callbackUrl: '/' })}
-          className="rounded text-stone-600 transition-all hover:text-amber-400"
-          title="登出"
-        >
-          <AppIcon name="logout" className="h-4 w-4" />
-        </button>
-      </div>
+      <a
+        href="/auth/signin"
+        className="block rounded-md border border-amber-500/30 px-3 py-2 text-center font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/10"
+      >
+        登入帳號
+      </a>
     </div>
   )
 }

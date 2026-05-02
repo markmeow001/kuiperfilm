@@ -20,6 +20,7 @@ import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { AppIcon } from '@/components/ui/icons'
+import { UserMenu } from './UserMenu'
 import { findV2Step, V2_STEPS, v2StepIndex, type V2StepId } from './v2-types'
 
 interface TopBarProps {
@@ -66,13 +67,16 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
             </span>
           </h1>
         </div>
-        <ProjectSwitcher
-          currentProjectId={projectId}
-          currentProjectName={resolvedName}
-          locale={locale}
-          draftLabel={draftLabel}
-          totalSteps={totalSteps}
-        />
+        <div className="flex items-end gap-3">
+          <ProjectSwitcher
+            currentProjectId={projectId}
+            currentProjectName={resolvedName}
+            locale={locale}
+            draftLabel={draftLabel}
+            totalSteps={totalSteps}
+          />
+          <UserMenu />
+        </div>
       </div>
 
       {/* Progress strip */}
