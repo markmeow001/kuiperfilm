@@ -82,15 +82,31 @@ interface GroupCardProps {
   updatePanelText: UpdatePanelTextMutation
   characterRoster?: CharacterRef[]
   locationRoster?: LocationRef[]
+  /**
+   * Approximate per-group runtime in seconds. Used to compute a
+   * cumulative time range badge in the collapsed header so the
+   * editor reads like the Seedance 2.0 video plan UI the user
+   * referenced. Defaults to 15s when not provided.
+   */
+  segmentDurationSeconds?: number
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
   ) => Promise<{ taskId: string | null; error?: string }>
 }
 
+function formatTimeRange(startSec: number, endSec: number): string {
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m}:${String(sec).padStart(2, '0')}`
+  }
+  return `${fmt(startSec)}-${fmt(endSec)}`
+}
+
 export function GroupCard({
   groupId: _groupId,
-  groupOrdinal: _groupOrdinal,
+  groupOrdinal,
   groupLabel,
   accentClass,
   panels,
@@ -99,8 +115,15 @@ export function GroupCard({
   updatePanelText,
   characterRoster,
   locationRoster,
+  segmentDurationSeconds = 15,
   onRegenerate,
 }: GroupCardProps) {
+  // Collapsed by default — the user referenced the Seedance 2.0
+  // 视频方案编辑器 layout where each segment is a list row that
+  // expands on click. Helps a multi-group episode (8+ groups) stay
+  // readable instead of scrolling through cards.
+  const [expanded, setExpanded] = useState<boolean>(false)
+
   // Override state: keys are characterId / locationId, values are
   // the user's override choice (undefined = no override).
   // null = explicit "revert to default" via the modal's bottom button.
@@ -213,36 +236,79 @@ export function GroupCard({
     setLocationOverrides({})
   }
 
+  // Cumulative time range for the segment header. groupOrdinal is
+  // 1-indexed and we model each segment as `segmentDurationSeconds`
+  // long until the user customises panelDurations (Phase 2).
+  const segmentStart = (groupOrdinal - 1) * segmentDurationSeconds
+  const segmentEnd = segmentStart + segmentDurationSeconds
+  const timeRangeLabel = formatTimeRange(segmentStart, segmentEnd)
+  const briefDescription = (() => {
+    const head = panels[0]?.description ?? panels[0]?.prompt ?? ''
+    const trimmed = head.replace(/\s+/g, ' ').trim()
+    return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed
+  })()
+  const statusLabel = (() => {
+    if (regenState.status === 'submitting') return { text: '送出中…', tone: 'pending' }
+    if (taskId) return { text: '已送出', tone: 'done' }
+    return { text: '尚未生成', tone: 'idle' }
+  })()
+  const statusToneClass =
+    statusLabel.tone === 'done'
+      ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400'
+      : statusLabel.tone === 'pending'
+        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+        : 'border-stone-800/60 bg-stone-900/30 text-stone-500'
+
   return (
     <article
       className={`overflow-hidden rounded-sm border-y border-r border-l-4 border-stone-800/60 bg-stone-900/30 ${accentClass}`}
     >
-      <header className="flex items-center justify-between border-b border-amber-900/15 bg-stone-950/40 px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <div className="font-mono text-[10px] uppercase tracking-wider text-amber-500/80">
+      <header
+        className="flex cursor-pointer select-none items-center justify-between gap-4 border-b border-amber-900/15 bg-stone-950/40 px-4 py-2.5 transition-colors hover:bg-stone-950/60"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <div className="flex flex-1 items-center gap-3 overflow-hidden">
+          <div className="flex-shrink-0 font-mono text-[10px] uppercase tracking-wider text-amber-500/80">
             {groupLabel}
           </div>
-          <div className="font-mono text-[9px] tracking-wider text-stone-500">
-            {panels.length} 鏡
+          <div className="flex flex-shrink-0 items-center gap-1 rounded-sm border border-stone-800 bg-stone-900/60 px-1.5 py-0.5 font-mono text-[9px] tracking-wider text-stone-400">
+            <AppIcon name="play" className="h-2.5 w-2.5" />
+            {timeRangeLabel}
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="font-mono text-[9px] tracking-wider text-stone-500">
-            {taskId ? `TASK ${taskId.slice(0, 8)}` : '尚未送多鏡頭'}
-          </div>
-          <button
-            type="button"
-            disabled={regenState.status === 'submitting' || panels.length < 2}
-            onClick={handleRegenerate}
-            title="重新送這個 group 跑 Kling 多鏡頭"
-            className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-2.5 py-1 font-mono text-[9px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+          <div
+            className={`flex-shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[9px] tracking-wider ${statusToneClass}`}
           >
-            <AppIcon name="sparklesAlt" className="h-3 w-3" />
-            {regenState.status === 'submitting' ? '送出中…' : '重新生成'}
-          </button>
+            ✓ {statusLabel.text}
+          </div>
+          {!expanded && briefDescription ? (
+            <div className="truncate font-serif-cn text-[12px] text-stone-300">
+              {briefDescription}
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {expanded ? (
+            <button
+              type="button"
+              disabled={regenState.status === 'submitting' || panels.length < 2}
+              onClick={(e) => {
+                e.stopPropagation()
+                void handleRegenerate()
+              }}
+              title="重新送這個 group 跑 Kling 多鏡頭"
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-2.5 py-1 font-mono text-[9px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              {regenState.status === 'submitting' ? '送出中…' : '重新生成'}
+            </button>
+          ) : null}
+          <div className="font-mono text-[10px] tracking-wider text-stone-500">
+            {expanded ? '▲' : '▼'}
+          </div>
         </div>
       </header>
 
+      {!expanded ? null : (
       <div className="grid grid-cols-12 gap-4 p-4">
         <div className="col-span-12 lg:col-span-7">
           <MultiShotBindingsRail
@@ -374,6 +440,7 @@ export function GroupCard({
           </div>
         </div>
       </div>
+      )}
 
       <CharacterAppearancePickerModal
         open={pickerCharacter !== null}
