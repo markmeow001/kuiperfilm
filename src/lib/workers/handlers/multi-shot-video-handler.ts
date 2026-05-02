@@ -177,10 +177,17 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   // Tencent VOD Kling Omni — t2v with multi_shot=intelligence + SubjectInfos.
   // See multi-shot-video-b-path.ts for the full implementation.
   if (useBPath) {
+    // resolveNovelData returns Locations via prisma include, which always
+    // carries `id` on the row even though the shared NovelProjectData
+    // interface in image-task-handler-shared.ts does not surface it
+    // (kept narrow there for the image handlers that don't need it).
+    // Cast through unknown to avoid widening the shared type — the
+    // runtime shape is correct and B-path needs the id for bindings.
+    const bPathProjectData = projectData as unknown as Parameters<typeof runMultiShotBPath>[0]['projectData']
     return await runMultiShotBPath({
       job,
       validPanels,
-      projectData,
+      projectData: bPathProjectData,
       videoModel,
       sound,
       aspectRatio,

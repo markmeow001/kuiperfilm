@@ -31,6 +31,8 @@ export function MultiShotBindingsRail({ taskId, groupLabel }: MultiShotBindingsR
   const status = data?.status ?? null
   const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled'
   const bindings = data?.result?.bindings ?? null
+  const videoUrl = data?.result?.multiShotVideoUrl ?? null
+  const shotCount = data?.result?.shotCount ?? null
   const characters = bindings?.characters ?? []
   const scenes = bindings?.scenes ?? []
   const hasContent = characters.length > 0 || scenes.length > 0
@@ -60,15 +62,42 @@ export function MultiShotBindingsRail({ taskId, groupLabel }: MultiShotBindingsR
         </div>
       </div>
 
-      {!isTerminal && !hasContent ? (
+      {!isTerminal && !hasContent && !videoUrl ? (
         <div className="font-serif-cn text-[11px] italic text-stone-500">
-          視頻生成完成後會顯示這個多鏡頭實際綁定的角色造型與場景視角。
+          多鏡頭視頻生成中(約 3-5 分鐘) — 完成後會顯示視頻播放器與綁定的角色造型 / 場景視角。
         </div>
       ) : null}
 
       {status === 'failed' ? (
         <div className="rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1.5 font-serif-cn text-[11px] text-rose-300">
           {data?.error?.message || data?.errorMessage || '視頻生成失敗 — 重試後綁定才會更新'}
+        </div>
+      ) : null}
+
+      {videoUrl ? (
+        <div className="mb-2.5 overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            key={videoUrl}
+            src={videoUrl}
+            controls
+            playsInline
+            className="block h-auto w-full"
+          />
+          <div className="flex items-center justify-between border-t border-amber-900/20 bg-stone-900/40 px-2 py-1">
+            <div className="font-mono text-[9px] tracking-wider text-amber-500/70">
+              MULTI-SHOT VIDEO {shotCount ? `· ${shotCount} 鏡` : ''}
+            </div>
+            <a
+              href={videoUrl}
+              download={`multi-shot-${taskId.slice(0, 8)}.mp4`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-[9px] tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+            >
+              下載
+            </a>
+          </div>
         </div>
       ) : null}
 

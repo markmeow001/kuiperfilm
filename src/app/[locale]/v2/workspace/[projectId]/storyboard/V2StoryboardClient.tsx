@@ -508,6 +508,74 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     ? `GROUP ${String(selectedGroupOrdinal + 1).padStart(2, '0')}`
     : null
 
+  // Recover server-side multi-shot tasks that were submitted before
+  // localStorage tracking was wired (or from another browser / device).
+  // Strategy: query video_multi_shot tasks for each storyboard, look
+  // at task.payload.panelIds[0], cross-reference panel → groupId,
+  // pick most-recent task per groupId. Local state wins on conflict
+  // so a fresh submit doesn't get clobbered by a slightly-older
+  // server view.
+  const storyboardIds = useMemo(() => {
+    const sb = storyboardsData?.storyboards ?? []
+    return sb.map((s) => s.id).filter(Boolean)
+  }, [storyboardsData])
+  const storyboardKey = storyboardIds.join(',')
+
+  useEffect(() => {
+    if (!currentEpisodeId || storyboardIds.length === 0) return
+    const panelToGroup = new Map<string, string>()
+    for (const p of allPanels) {
+      if (p.multiShotGroupId) panelToGroup.set(p.id, p.multiShotGroupId)
+    }
+    if (panelToGroup.size === 0) return
+
+    let cancelled = false
+    void (async () => {
+      const recovered: Record<string, { taskId: string; createdAt: string }> = {}
+      for (const sbId of storyboardIds) {
+        try {
+          const params = new URLSearchParams()
+          params.set('targetType', 'NovelPromotionStoryboard')
+          params.set('targetId', sbId)
+          params.append('type', 'video_multi_shot')
+          params.set('limit', '50')
+          const res = await fetch(`/api/tasks?${params.toString()}`)
+          if (!res.ok) continue
+          const json = (await res.json()) as { tasks?: Array<Record<string, unknown>> }
+          const tasks = Array.isArray(json.tasks) ? json.tasks : []
+          for (const t of tasks) {
+            const taskId = typeof t.id === 'string' ? t.id : null
+            const createdAt = typeof t.createdAt === 'string' ? t.createdAt : ''
+            const payload = (t.payload && typeof t.payload === 'object' && !Array.isArray(t.payload))
+              ? (t.payload as Record<string, unknown>)
+              : null
+            const panelIds = Array.isArray(payload?.panelIds) ? (payload!.panelIds as unknown[]) : []
+            const firstPanelId = typeof panelIds[0] === 'string' ? (panelIds[0] as string) : null
+            if (!taskId || !firstPanelId) continue
+            const groupId = panelToGroup.get(firstPanelId)
+            if (!groupId) continue
+            const existing = recovered[groupId]
+            if (!existing || createdAt > existing.createdAt) {
+              recovered[groupId] = { taskId, createdAt }
+            }
+          }
+        } catch {
+          // ignore — best-effort recovery
+        }
+      }
+      if (cancelled) return
+      const recoveredMap: Record<string, string> = {}
+      for (const [g, v] of Object.entries(recovered)) recoveredMap[g] = v.taskId
+      if (Object.keys(recoveredMap).length === 0) return
+      // Local state wins — recovery only fills gaps (groups without an
+      // explicit localStorage entry).
+      setTaskByGroup((prev) => ({ ...recoveredMap, ...prev }))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currentEpisodeId, storyboardKey, allPanels, storyboardIds])
+
   async function handleAnalyzeStoryboard() {
     if (!currentEpisodeId) {
       setAnalyzeState({ status: 'error', message: '請先選擇集數並貼好劇本' })
