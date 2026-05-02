@@ -1,7 +1,7 @@
 import { Worker, type Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { queueRedis } from '@/lib/redis'
-import { QUEUE_NAME } from '@/lib/task/queues'
+import { QUEUE_NAME, rateLimitAwareBackoff } from '@/lib/task/queues'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress, withTaskLifecycle } from './shared'
 import {
@@ -332,6 +332,11 @@ export function createVideoWorker() {
       // image queue (Kling-3.0-Omni runs against the same per-account pool).
       // Override via QUEUE_CONCURRENCY_VIDEO once quota is raised.
       concurrency: Number.parseInt(process.env.QUEUE_CONCURRENCY_VIDEO || '2', 10) || 2,
+      settings: {
+        // Rate-limit-aware backoff: 60/120/240/480/600s for RATE_LIMIT,
+        // 2/4/8/16/32s for everything else. See queues.ts.
+        backoffStrategy: rateLimitAwareBackoff,
+      },
     },
   )
 }

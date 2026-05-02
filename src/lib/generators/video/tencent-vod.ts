@@ -315,7 +315,26 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
             },
         })
 
-        const resp = await client.CreateAigcVideoTask(req as never)
+        let resp: unknown
+        try {
+            resp = await client.CreateAigcVideoTask(req as never)
+        } catch (err) {
+            // Tencent SDK surfaces 70000 (RequestLimitExceeded) at submit
+            // time when the account-level concurrency quota is full
+            // BEFORE the task even gets queued. Tag the thrown error
+            // with code='RATE_LIMIT' so BullMQ's rate-limit-aware
+            // backoff (60/120/240s ramp) kicks in instead of the
+            // default 2/4/8s exponential — same treatment as a
+            // post-submit FINISH-state 70000.
+            const msg = err instanceof Error ? err.message : String(err)
+            const isRateLimit = /70000|requestlimitexceeded|maximum concurrency/i.test(msg)
+            if (isRateLimit) {
+                const wrapped = new Error(`Tencent VOD submit rate-limited: ${msg}`)
+                ;(wrapped as unknown as { code: string }).code = 'RATE_LIMIT'
+                throw wrapped
+            }
+            throw err
+        }
         const taskId = (resp as { TaskId?: string }).TaskId
         if (!taskId) {
             throw new Error('TENCENT_VOD_NO_TASK_ID: CreateAigcVideoTask returned empty TaskId')

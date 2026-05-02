@@ -1,6 +1,6 @@
 import { Worker, type Job } from 'bullmq'
 import { queueRedis } from '@/lib/redis'
-import { QUEUE_NAME } from '@/lib/task/queues'
+import { QUEUE_NAME, rateLimitAwareBackoff } from '@/lib/task/queues'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress, withTaskLifecycle } from './shared'
 import {
@@ -60,6 +60,11 @@ export function createImageWorker() {
       // surfaces as error 70000 (RequestLimitExceeded) at task-execution
       // time, which we now mark retryable so backoff kicks in either way.
       concurrency: Number.parseInt(process.env.QUEUE_CONCURRENCY_IMAGE || '2', 10) || 2,
+      settings: {
+        // Rate-limit-aware backoff: 60/120/240/480/600s for RATE_LIMIT,
+        // 2/4/8/16/32s for everything else. See queues.ts.
+        backoffStrategy: rateLimitAwareBackoff,
+      },
     },
   )
 }
