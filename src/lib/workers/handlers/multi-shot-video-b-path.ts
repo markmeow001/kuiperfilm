@@ -118,26 +118,19 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/**
- * Detect whether a dialogue line is primarily Chinese. If yes, the
- * Kling Omni TTS expects 「说」 syntax; if no, an English-style
- * `says:` token leads the parser to a non-Chinese voice. Without
- * this, mixed Chinese-Spanish content (e.g. user-reported
- * "SARAH嘴巴张大... SARAH: Dios mío... ¿Catherine?") tripped Kling
- * into Mandarin TTS regardless of the actual line language.
- *
- * Heuristic: any CJK code point in the content range counts as
- * Chinese. Pure-Latin / Cyrillic / Arabic content goes to the
- * non-Chinese branch.
- */
-function isChineseLine(content: string): boolean {
-  return /[一-鿿㐀-䶿]/.test(content)
-}
-
 function formatDialogueForKling(speaker: string, content: string): string {
-  return isChineseLine(content)
-    ? `${speaker}说："${content}"`
-    : `${speaker} says: "${content}"`
+  // Kling Omni's native dialogue format (klingai.com webUI / direct API)
+  // is `Character: "line"` — speaker name, colon, then the quoted line
+  // verbatim. Earlier this function inserted "says" / 「说」 + full-width
+  // 「」 quotes in an attempt to *help* Kling identify dialogue language;
+  // user-reported behaviour was the opposite — Spanish lines came back
+  // as Mandarin TTS. The most likely cause is that the non-native
+  // markers (`says`, `说`, full-width `"…"`) confuse Kling's per-shot
+  // parser into treating the line as visual narration to dub in the
+  // dominant language of the surrounding shot prompt (heavily 中文 in
+  // our pipeline). Falling back to the bare native format for both CJK
+  // and non-CJK lines so Kling's own language detector decides per-line.
+  return `${speaker}: "${content}"`
 }
 
 /**
@@ -965,12 +958,16 @@ export async function runMultiShotBPath(params: {
     let promptSource: 'panels' | 'raw' | 'seedance'
     if (typeof rawPrompt === 'string' && rawPrompt.trim().length > 0) {
       promptSource = 'raw'
-      const trimmed = rawPrompt.trim()
-      const dialogueAppendix = Array.from(dialogueByPanel.values())
-        .flat()
-        .map((d) => formatDialogueForKling(d.speaker, d.content))
-        .join(' ')
-      primaryPrompt = dialogueAppendix ? `${trimmed}\n\n${dialogueAppendix}` : trimmed
+      // Trust the user's narrative verbatim. Earlier we appended a
+      // dialogue-only block via formatDialogueForKling so the worker
+      // could "make sure" speakers reached Kling, but the user's
+      // narrative (built by GroupCard.buildInitialNarrative) ALREADY
+      // embeds `Character: line` per time-slice. Re-appending the same
+      // lines in a slightly different format pushed Kling's per-shot
+      // parser into picking the dominant prompt language (中文) for
+      // TTS instead of the actual line language (e.g. Spanish dialogue
+      // arriving as Mandarin voice, user-reported 2026-05-02).
+      primaryPrompt = rawPrompt.trim()
     } else if (promptStyle === 'auto-seedance') {
       promptSource = 'seedance'
       primaryPrompt = buildSeedancePrompt(validPanels, dialogueByPanel, undefined, nameToImageIndex)

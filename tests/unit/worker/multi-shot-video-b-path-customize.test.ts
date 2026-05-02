@@ -73,7 +73,7 @@ describe('buildBPathCustomizePrompts', () => {
     const out = buildBPathCustomizePrompts(panels, dialogues, [3, 4])
     expect(out).toEqual([
       { index: 1, prompt: '中景：男子起床', duration: 3 },
-      { index: 2, prompt: '全景：女友端早餐进门\n陳雅婷说："志明，你還好嗎？"', duration: 4 },
+      { index: 2, prompt: '全景：女友端早餐进门\n陳雅婷: "志明，你還好嗎？"', duration: 4 },
     ])
   })
 
