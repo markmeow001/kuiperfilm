@@ -1,4 +1,5 @@
 import { UnrecoverableError, type Job } from 'bullmq'
+import { rateLimitAwareBackoff } from '@/lib/task/queues'
 import { prisma } from '@/lib/prisma'
 import { createScopedLogger } from '@/lib/logging/core'
 import type { LLMStreamChunk } from '@/lib/llm-observe/types'
@@ -121,7 +122,11 @@ function resolveAttemptsMade(job: Job<TaskJobData>): number {
   return Math.max(0, value)
 }
 
-function resolveNextBackoffMs(job: Job<TaskJobData>, failedAttempt: number): number | null {
+function resolveNextBackoffMs(
+  job: Job<TaskJobData>,
+  failedAttempt: number,
+  err?: Error,
+): number | null {
   const backoff = job.opts?.backoff
   if (typeof backoff === 'number' && Number.isFinite(backoff) && backoff > 0) {
     return Math.floor(backoff)
@@ -129,12 +134,21 @@ function resolveNextBackoffMs(job: Job<TaskJobData>, failedAttempt: number): num
   if (!backoff || typeof backoff !== 'object') return null
 
   const backoffRecord = backoff as { type?: unknown; delay?: unknown }
+  const type = typeof backoffRecord.type === 'string' ? backoffRecord.type : 'fixed'
+
+  // 'custom' is resolved by the worker's registered backoffStrategy
+  // (rateLimitAwareBackoff). Mirror it here so the log shows the
+  // value BullMQ will actually wait — without this the log printed
+  // the static base delay (2s) and made RATE_LIMIT retries look
+  // like they fired every 2s when they actually waited a minute+.
+  if (type === 'custom') {
+    return rateLimitAwareBackoff(failedAttempt, type, err)
+  }
+
   const baseDelay = typeof backoffRecord.delay === 'number' && Number.isFinite(backoffRecord.delay)
     ? Math.max(0, Math.floor(backoffRecord.delay))
     : 0
   if (baseDelay <= 0) return null
-
-  const type = typeof backoffRecord.type === 'string' ? backoffRecord.type : 'fixed'
   if (type === 'exponential') {
     const exponent = Math.max(0, failedAttempt - 1)
     return baseDelay * Math.pow(2, exponent)
@@ -145,6 +159,7 @@ function resolveNextBackoffMs(job: Job<TaskJobData>, failedAttempt: number): num
 function shouldRetryInQueue(params: {
   job: Job<TaskJobData>
   normalizedError: NormalizedError
+  rawError?: Error
 }): {
   enabled: boolean
   failedAttempt: number
@@ -158,7 +173,7 @@ function shouldRetryInQueue(params: {
     enabled,
     failedAttempt,
     maxAttempts,
-    nextBackoffMs: resolveNextBackoffMs(params.job, failedAttempt),
+    nextBackoffMs: resolveNextBackoffMs(params.job, failedAttempt, params.rawError),
   }
 }
 
@@ -347,9 +362,11 @@ export async function withTaskLifecycle(job: Job<TaskJobData>, handler: (job: Jo
     }
 
     const normalizedError = normalizeAnyError(error, { context: 'worker' })
+    const rawError = error instanceof Error ? error : undefined
     const retryDecision = shouldRetryInQueue({
       job,
       normalizedError,
+      rawError,
     })
     const errorCauseChain = buildErrorCauseChain(error)
     const workerFailureLog = {
