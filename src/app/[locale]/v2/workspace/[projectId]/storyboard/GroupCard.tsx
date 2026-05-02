@@ -543,7 +543,7 @@ export function GroupCard({
         ) : null}
 
       <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-7">
+        <div className="col-span-12 lg:col-span-5">
           <MultiShotBindingsRail
             taskId={taskId}
             groupLabel={null}
@@ -587,7 +587,7 @@ export function GroupCard({
               under the player. See above. */}
         </div>
 
-        <div className="col-span-12 space-y-3 lg:col-span-5">
+        <div className="col-span-12 space-y-3 lg:col-span-7">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
