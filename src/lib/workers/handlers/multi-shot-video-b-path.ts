@@ -103,11 +103,55 @@ export const KLING_OMNI_MAX_SHOTS = 6
  * uneven-duration regen of panels 1-5 had Chen Zihao falling instead
  * of Liu Hao because videoPrompt only said "另一名年轻男子".
  */
+/**
+ * Escape regex metacharacters in a literal string. Character names
+ * may contain `()`, `.`, `?`, etc. (e.g. "Mary J. Blige"); raw
+ * concatenation into a regex would mis-match.
+ */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Replace character / scene names in a visual prompt with Kling
+ * 3.0-Omni's `<<<image_N>>>` reference syntax. Per VOD AIGC 接入指南
+ * §3.9.2 example 2 (multi-image 参考生视频):
+ *
+ *   "Prompt": "让 <<<image_1>>> 牵着 <<<image_2>>> 转圈圈"
+ *
+ * The N is positional and 1-indexed against FileInfos array order;
+ * the caller passes a map built from subjectInfos so the slot order
+ * stays in sync.
+ *
+ * Longer names get substituted first so "CATHERINE" doesn't clobber
+ * "CATH" matches accidentally. Match is case-insensitive because
+ * panel descriptions sometimes lowercase the entity name.
+ *
+ * Dialogue speakers are NOT substituted — Kling Omni's audio dub
+ * pipeline parses `${speaker}说："${content}"` to identify the
+ * voice owner, and `<<<image_N>>>说："..."` is not recognised.
+ */
+function substituteImageRefs(text: string, nameToImageIndex: ReadonlyMap<string, number>): string {
+  if (!text || nameToImageIndex.size === 0) return text
+  const sortedNames = Array.from(nameToImageIndex.keys()).sort((a, b) => b.length - a.length)
+  let out = text
+  for (const name of sortedNames) {
+    const idx = nameToImageIndex.get(name)
+    if (!idx) continue
+    out = out.replace(new RegExp(escapeRegex(name), 'gi'), `<<<image_${idx}>>>`)
+  }
+  return out
+}
+
 function buildShotBody(
   panel: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt'>,
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
+  nameToImageIndex?: ReadonlyMap<string, number>,
 ): string {
-  const visual = (panel.description || panel.videoPrompt || '').trim()
+  const rawVisual = (panel.description || panel.videoPrompt || '').trim()
+  const visual = nameToImageIndex
+    ? substituteImageRefs(rawVisual, nameToImageIndex)
+    : rawVisual
   const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
     .map((d) => `${d.speaker}说："${d.content}"`)
     .join(' ')
@@ -146,6 +190,7 @@ export function buildSeedancePrompt(
   panels: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt' | 'characters' | 'location' | 'shotType' | 'cameraMove'>[],
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
   requestedDurations?: number[],
+  nameToImageIndex?: ReadonlyMap<string, number>,
 ): string {
   // Drop empty panels first so time accounting matches what makes it
   // into the output.
@@ -185,7 +230,10 @@ export function buildSeedancePrompt(
     const charRefs = parsePanelCharacterReferences(panel.characters)
     const charTags = charRefs.map((r) => `[${r.name}]`).join(' ')
 
-    const visual = (panel.description || panel.videoPrompt || '').trim()
+    const rawVisual = (panel.description || panel.videoPrompt || '').trim()
+    const visual = nameToImageIndex
+      ? substituteImageRefs(rawVisual, nameToImageIndex)
+      : rawVisual
     const camMove = (panel.cameraMove || '').trim()
 
     const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
@@ -216,10 +264,11 @@ export function buildSeedancePrompt(
 export function buildBPathCombinedPrompt(
   panels: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt'>[],
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
+  nameToImageIndex?: ReadonlyMap<string, number>,
 ): string {
   return panels
     .map((panel, i) => {
-      const body = buildShotBody(panel, dialogueByPanelId)
+      const body = buildShotBody(panel, dialogueByPanelId, nameToImageIndex)
       return `镜头${i + 1}: ${body}`
     })
     .filter((line) => line.trim().length > `镜头N: `.length)
@@ -293,6 +342,7 @@ export function buildBPathCustomizePrompts(
   panels: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt'>[],
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
   durations: number[],
+  nameToImageIndex?: ReadonlyMap<string, number>,
 ): BPathShotPromptEntry[] {
   if (panels.length !== durations.length) {
     throw new Error(
@@ -301,7 +351,7 @@ export function buildBPathCustomizePrompts(
   }
   const out: BPathShotPromptEntry[] = []
   panels.forEach((panel, i) => {
-    const body = buildShotBody(panel, dialogueByPanelId)
+    const body = buildShotBody(panel, dialogueByPanelId, nameToImageIndex)
     if (!body.trim()) return
     out.push({ index: out.length + 1, prompt: body, duration: durations[i] })
   })
@@ -641,6 +691,16 @@ export async function runMultiShotBPath(params: {
   const activeCharacterBindings = characterBindings.slice(0, usedCharCount)
   const activeSceneBindings = sceneBindings.slice(0, usedSceneCount)
 
+  // 1-indexed name → FileInfos position. Order is character refs
+  // first, then scene refs — must mirror the referenceImageUrls
+  // order so prompt's <<<image_N>>> stays in sync. We also map the
+  // location name (sceneBindings[i].name) so visual descriptions
+  // mentioning the place get a `<<<image_N>>>` substitution too.
+  const nameToImageIndex = new Map<string, number>()
+  subjectInfos.forEach((s, i) => {
+    if (s.name) nameToImageIndex.set(s.name, i + 1)
+  })
+
   // Pull dialogue lines that script_to_storyboard matched to any of the
   // panels we're sending. Without this Kling Omni's generate_audio:true
   // produces a generic ambient/talking soundtrack instead of the script's
@@ -680,7 +740,7 @@ export async function runMultiShotBPath(params: {
 
   if (multiShotMode === 'customize') {
     const { durations, totalDuration } = distributeShotDurations(validPanels.length, panelDurations)
-    const multiPrompt = buildBPathCustomizePrompts(validPanels, dialogueByPanel, durations)
+    const multiPrompt = buildBPathCustomizePrompts(validPanels, dialogueByPanel, durations, nameToImageIndex)
     if (multiPrompt.length === 0) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
     }
@@ -708,7 +768,7 @@ export async function runMultiShotBPath(params: {
     // "prompt cannot be empty" otherwise). Use the combined prompt as a
     // safe non-empty payload — the model uses multi_prompt entries for
     // actual generation.
-    const placeholderPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel)
+    const placeholderPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex)
     generateOptions = {
       prompt: placeholderPrompt,
       duration: finalTotal,
@@ -746,10 +806,10 @@ export async function runMultiShotBPath(params: {
       primaryPrompt = dialogueAppendix ? `${trimmed}\n\n${dialogueAppendix}` : trimmed
     } else if (promptStyle === 'auto-seedance') {
       promptSource = 'seedance'
-      primaryPrompt = buildSeedancePrompt(validPanels, dialogueByPanel)
+      primaryPrompt = buildSeedancePrompt(validPanels, dialogueByPanel, undefined, nameToImageIndex)
     } else {
       promptSource = 'panels'
-      primaryPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel)
+      primaryPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex)
     }
     if (!primaryPrompt.trim()) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
@@ -802,6 +862,18 @@ export async function runMultiShotBPath(params: {
       aspectRatio: generateOptions.aspectRatio ?? null,
       generateAudio: generateOptions.generateAudio ?? null,
       duration: generateOptions.duration ?? null,
+      // Truncated prompt preview so we can verify <<<image_N>>>
+      // substitution actually rewrote the panel descriptions before
+      // hitting Kling. Cap at 600 chars to keep the log readable.
+      promptHead: typeof generateOptions.prompt === 'string'
+        ? (generateOptions.prompt as string).slice(0, 600)
+        : null,
+      // Sanity checks that the substitution fired and that any leftover
+      // bare names were uncatchable (typos, alias drift).
+      hasImageRefSyntax: typeof generateOptions.prompt === 'string'
+        ? /<<<image_\d+>>>/.test(generateOptions.prompt as string)
+        : false,
+      nameToImageIndex: Array.from(nameToImageIndex.entries()),
     },
   })
   // generateVideo's option type is intentionally narrow (only standard

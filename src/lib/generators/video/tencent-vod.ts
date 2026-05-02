@@ -231,10 +231,26 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
             fileInfos.push({ Type: 'Url', Category: 'Image', Url: imageUrl, Usage: usage })
         }
         if (opts.referenceImageUrls?.length) {
-            for (const url of opts.referenceImageUrls) {
-                if (!url) continue
-                fileInfos.push({ Type: 'Url', Category: 'Image', Url: url, Usage: 'Reference' })
-            }
+            // Per VOD AIGC 接入指南 §3.9.2:
+            //   "②若希望实现参考生视频...多图情况下，默认参考生视频"
+            //   "ObjectId不为空即可，value自定义"
+            //
+            // Kling 3.0-Omni's multi-image anchoring expects each
+            // FileInfo to carry an ObjectId so the prompt's
+            // `<<<image_N>>>` placeholders can resolve to the right
+            // image (1-indexed, matches FileInfos array order).
+            // Without ObjectId, Kling treats single-image refs as
+            // first-frame mode and ignores the rest.
+            opts.referenceImageUrls.forEach((url, idx) => {
+                if (!url) return
+                fileInfos.push({
+                    Type: 'Url',
+                    Category: 'Image',
+                    Url: url,
+                    Usage: 'Reference',
+                    ObjectId: `ref_${idx + 1}`,
+                })
+            })
         }
 
         const outputConfig: Record<string, unknown> = {
