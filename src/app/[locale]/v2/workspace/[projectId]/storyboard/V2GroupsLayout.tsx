@@ -29,7 +29,8 @@
 
 import { useMemo } from 'react'
 import { AppIcon } from '@/components/ui/icons'
-import { MultiShotBindingsRail } from './MultiShotBindingsRail'
+import { GroupCard } from './GroupCard'
+import type { UseMutationResult } from '@tanstack/react-query'
 
 interface PanelLike {
   id: string
@@ -42,12 +43,23 @@ interface PanelLike {
   multiShotGroupOrder?: number | null
 }
 
+type UpdatePanelTextMutation = UseMutationResult<
+  unknown,
+  Error,
+  { panelId: string; description?: string; srtSegment?: string }
+>
+
 interface V2GroupsLayoutProps {
   panels: PanelLike[]
   orderedGroupIds: string[]
   taskByGroup: Record<string, string>
   toolbarNode: React.ReactNode
   emptyHint?: React.ReactNode
+  updatePanelText: UpdatePanelTextMutation
+  onRegenerateGroup: (
+    groupId: string,
+    panelIds: string[],
+  ) => Promise<{ taskId: string | null; error?: string }>
 }
 
 const GROUP_ACCENTS = [
@@ -69,6 +81,8 @@ export function V2GroupsLayout({
   taskByGroup,
   toolbarNode,
   emptyHint,
+  updatePanelText,
+  onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
     const byGroupId = new Map<string, PanelLike[]>()
@@ -117,69 +131,17 @@ export function V2GroupsLayout({
               const accent = accentForOrdinal(idx)
               const groupLabel = `GROUP ${String(ordinal).padStart(2, '0')}`
               return (
-                <article
+                <GroupCard
                   key={g.groupId}
-                  className={`overflow-hidden rounded-sm border-y border-r border-l-4 border-stone-800/60 bg-stone-900/30 ${accent}`}
-                >
-                  <header className="flex items-center justify-between border-b border-amber-900/15 bg-stone-950/40 px-4 py-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="font-mono text-[10px] uppercase tracking-wider text-amber-500/80">
-                        {groupLabel}
-                      </div>
-                      <div className="font-mono text-[9px] tracking-wider text-stone-500">
-                        {g.panels.length} 鏡 · {g.panels.length * 2}-{g.panels.length * 3}s
-                      </div>
-                    </div>
-                    <div className="font-mono text-[9px] tracking-wider text-stone-500">
-                      {taskId ? `TASK ${taskId.slice(0, 8)}` : '尚未送多鏡頭'}
-                    </div>
-                  </header>
-
-                  <div className="grid grid-cols-12 gap-4 p-4">
-                    <div className="col-span-12 lg:col-span-7">
-                      <MultiShotBindingsRail taskId={taskId} groupLabel={null} />
-                    </div>
-
-                    <div className="col-span-12 space-y-2 lg:col-span-5">
-                      <div className="font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
-                        分鏡描述 · {g.panels.length} 鏡
-                      </div>
-                      <div className="space-y-1.5">
-                        {g.panels.map((p, panelIdx) => (
-                          <div
-                            key={p.id}
-                            className="rounded-sm border border-stone-800/60 bg-stone-950/40 px-2.5 py-1.5"
-                          >
-                            <div className="mb-1 flex items-center gap-2">
-                              <span className="font-mono text-[9px] tracking-wider text-amber-500/60">
-                                #{String(panelIdx + 1).padStart(2, '0')}
-                              </span>
-                              {Array.isArray(p.characters) && p.characters.length > 0 ? (
-                                <span className="font-mono text-[9px] tracking-wider text-stone-500">
-                                  · {p.characters.join(' / ')}
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="font-serif-cn text-[12px] leading-relaxed text-stone-200">
-                              {p.description ?? p.prompt ?? '(無描述)'}
-                            </div>
-                            {p.srtSegment ? (
-                              <div className="mt-1 border-l-2 border-amber-500/30 pl-2 font-serif-cn text-[11px] italic text-amber-300/80">
-                                「{p.srtSegment}」
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <footer className="flex items-center justify-end gap-2 border-t border-amber-900/15 bg-stone-950/30 px-4 py-2">
-                    <div className="font-mono text-[9px] tracking-wider text-stone-500">
-                      Commit 2 將加入「重新生成」+ 描述編輯;Commit 3 加入「換造型 / 換視角」
-                    </div>
-                  </footer>
-                </article>
+                  groupId={g.groupId}
+                  groupOrdinal={ordinal}
+                  groupLabel={groupLabel}
+                  accentClass={accent}
+                  panels={g.panels}
+                  taskId={taskId}
+                  updatePanelText={updatePanelText}
+                  onRegenerate={(panelIds) => onRegenerateGroup(g.groupId, panelIds)}
+                />
               )
             })}
 

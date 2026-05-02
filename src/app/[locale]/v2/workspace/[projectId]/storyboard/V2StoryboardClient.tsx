@@ -920,6 +920,57 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         orderedGroupIds={orderedGroupIds}
         taskByGroup={taskByGroup}
         toolbarNode={groupsToolbar}
+        updatePanelText={updatePanelText}
+        onRegenerateGroup={async (groupId, panelIds) => {
+          if (!projectVideoModel) {
+            return { taskId: null, error: '尚未設定 video model — 請先到主控台選一個 Kling 模型' }
+          }
+          if (!/kling/i.test(projectVideoModel)) {
+            return {
+              taskId: null,
+              error: `多鏡頭只支援 Kling 系列模型,目前是 ${projectVideoModel}`,
+            }
+          }
+          try {
+            const res = await fetch(
+              `/api/novel-promotion/${projectId}/generate-multi-shot-video`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  panelIds,
+                  videoModel: projectVideoModel,
+                  async: true,
+                  meta: { locale: 'zh-TW' },
+                }),
+              },
+            )
+            if (!res.ok) {
+              let errMessage = `送出失敗 (${res.status})`
+              try {
+                const errBody = await res.json()
+                if (errBody && typeof errBody.message === 'string') errMessage = errBody.message
+                else if (errBody?.error?.code) errMessage = `送出失敗:${errBody.error.code}`
+              } catch {
+                // body not JSON — keep status fallback
+              }
+              return { taskId: null, error: errMessage }
+            }
+            const body = (await res.json()) as { taskId?: unknown }
+            const taskId = typeof body?.taskId === 'string' && body.taskId.length > 0
+              ? body.taskId
+              : null
+            if (taskId) {
+              setTaskByGroup((prev) => ({ ...prev, [groupId]: taskId }))
+            }
+            return { taskId }
+          } catch (err) {
+            return {
+              taskId: null,
+              error: err instanceof Error ? err.message : '送出失敗',
+            }
+          }
+        }}
       />
     )
   }
