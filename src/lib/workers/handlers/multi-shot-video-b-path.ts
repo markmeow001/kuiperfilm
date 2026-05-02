@@ -617,7 +617,22 @@ export async function runMultiShotBPath(params: {
 
   // Tencent's 3-slot cap applies to the *combined* list. Trim bindings
   // identically so the response shape mirrors what Kling actually saw.
+  //
+  // 2026-05-01: SDK doc rabbit-hole resolution. Kling does NOT honor
+  // SubjectInfos[].ImageUrls — that field is documented `仅Vidu有效`
+  // (Vidu only). For Kling, training-free reference comes through
+  // FileInfos[].Url with `Usage: 'Reference'`. SubjectInfos[].Id
+  // works for Kling but requires a pre-trained Subject from
+  // CreateAigcSubject (heavy, multi-step).
+  //
+  // We were sending SubjectInfos = [{Name, ImageUrls}] which Kling
+  // silently dropped → refCount=0 → identity completely lost. Switch
+  // to referenceImageUrls so the existing tencent-vod.ts path that
+  // pushes FileInfos with Usage='Reference' runs.
   const subjectInfos = [...characterSubjects, ...sceneSubjects].slice(0, 3)
+  const referenceImageUrls = subjectInfos
+    .map((s) => (Array.isArray(s.imageUrls) ? s.imageUrls[0] : null))
+    .filter((u): u is string => typeof u === 'string' && u.length > 0)
   const usedCharCount = Math.min(characterBindings.length, subjectInfos.length)
   const usedSceneCount = Math.min(
     sceneBindings.length,
@@ -699,7 +714,7 @@ export async function runMultiShotBPath(params: {
       duration: finalTotal,
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
-      subjectInfos,
+      ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
       klingMultiShot: {
         multi_shot: true,
         shot_type: 'customize',
@@ -765,7 +780,7 @@ export async function runMultiShotBPath(params: {
       duration: resolvedTotal,
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
-      subjectInfos,
+      ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
       klingMultiShot: { multi_shot: 'intelligence' },
       outputComplianceCheck: 'Enabled',
     }
@@ -773,19 +788,16 @@ export async function runMultiShotBPath(params: {
     intelligencePromptSource = promptSource
   }
   // Diagnostic: snapshot exactly what we're about to hand off to
-  // generateVideo so we can prove subjectInfos / klingMultiShot /
+  // generateVideo so we can prove referenceImageUrls / klingMultiShot /
   // aspectRatio / generateAudio survive the spread chain into the
   // Tencent VOD generator. Logged at info to remain visible in prod.
   logger.info({
     message: 'B path generateOptions snapshot',
     details: {
       keys: Object.keys(generateOptions),
-      subjectInfosLen: Array.isArray(generateOptions.subjectInfos)
-        ? (generateOptions.subjectInfos as unknown[]).length
+      referenceImageUrlsLen: Array.isArray(generateOptions.referenceImageUrls)
+        ? (generateOptions.referenceImageUrls as unknown[]).length
         : 0,
-      subjectNames: Array.isArray(generateOptions.subjectInfos)
-        ? (generateOptions.subjectInfos as Array<{ name?: string }>).map((s) => s.name ?? '?')
-        : [],
       hasKlingMultiShot: !!generateOptions.klingMultiShot,
       aspectRatio: generateOptions.aspectRatio ?? null,
       generateAudio: generateOptions.generateAudio ?? null,
