@@ -130,6 +130,8 @@ export function MultiShotBindingsRail({
       {status === 'failed' ? (() => {
         const rawMsg = data?.error?.message || data?.errorMessage || ''
         const isRateLimit = /70000|requestlimitexceeded|maximum concurrency/i.test(rawMsg)
+        const isOrphaned = /queue job (already terminated|missing).*db/i.test(rawMsg)
+          || /queue job missing.*restart/i.test(rawMsg)
         return (
           <div className="rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1.5 font-serif-cn text-[11px] text-rose-300">
             {isRateLimit ? (
@@ -141,6 +143,17 @@ export function MultiShotBindingsRail({
                     <li>等 30-60 秒後點上方「重新生成」</li>
                     <li>不要一次送多個 group(改成一次跑一組)</li>
                     <li>長期解法:聯絡 Tencent 提高並發配額</li>
+                  </ul>
+                </div>
+              </>
+            ) : isOrphaned ? (
+              <>
+                <strong className="text-rose-200">任務被中斷(可能是部署期間)</strong>
+                <div className="mt-0.5 text-[10px] text-rose-300/80">
+                  這個任務原本在跑,但因為 server restart 被中止。系統自動清掉了 zombie task。
+                  <ul className="mt-0.5 list-inside list-disc space-y-0.5">
+                    <li>點上方「重新生成」就會送新 task</li>
+                    <li>(剛剛我們 deploy 了新版本,所以中斷了正在跑的任務)</li>
                   </ul>
                 </div>
               </>
