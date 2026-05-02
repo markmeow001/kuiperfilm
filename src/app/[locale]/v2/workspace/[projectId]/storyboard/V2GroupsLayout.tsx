@@ -74,6 +74,7 @@ interface LocationRosterEntry {
 }
 
 interface V2GroupsLayoutProps {
+  projectId: string
   panels: PanelLike[]
   orderedGroupIds: string[]
   taskByGroup: Record<string, string>
@@ -103,6 +104,7 @@ function accentForOrdinal(ordinal: number): string {
 }
 
 export function V2GroupsLayout({
+  projectId,
   panels,
   orderedGroupIds,
   taskByGroup,
@@ -168,6 +170,7 @@ export function V2GroupsLayout({
                   accentClass={accent}
                   panels={g.panels}
                   taskId={taskId}
+                  projectId={projectId}
                   updatePanelText={updatePanelText}
                   characterRoster={characterRoster}
                   locationRoster={locationRoster}

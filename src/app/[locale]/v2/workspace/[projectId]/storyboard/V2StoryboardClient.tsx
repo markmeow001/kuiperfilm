@@ -921,6 +921,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     )
     return (
       <V2GroupsLayout
+        projectId={projectId}
         panels={allPanels}
         orderedGroupIds={orderedGroupIds}
         taskByGroup={taskByGroup}
@@ -1261,6 +1262,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     <MultiShotBindingsRail
                       taskId={selectedGroupTaskId}
                       groupLabel={selectedGroupLabel}
+                      projectId={projectId}
                     />
                   </div>
                 ) : null}
@@ -1715,6 +1717,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <MultiShotBindingsRail
               taskId={selectedGroupTaskId}
               groupLabel={selectedGroupLabel}
+              projectId={projectId}
             />
           ) : null}
 

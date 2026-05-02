@@ -78,6 +78,7 @@ interface GroupCardProps {
   accentClass: string
   panels: PanelLike[]
   taskId: string | null
+  projectId: string
   updatePanelText: UpdatePanelTextMutation
   characterRoster?: CharacterRef[]
   locationRoster?: LocationRef[]
@@ -94,6 +95,7 @@ export function GroupCard({
   accentClass,
   panels,
   taskId,
+  projectId,
   updatePanelText,
   characterRoster,
   locationRoster,
@@ -246,6 +248,7 @@ export function GroupCard({
           <MultiShotBindingsRail
             taskId={taskId}
             groupLabel={null}
+            projectId={projectId}
             characterOverrideAppearanceById={characterOverrides}
             locationOverrideViewByLocationId={locationOverrides}
             onCharacterChipClick={(binding) => {

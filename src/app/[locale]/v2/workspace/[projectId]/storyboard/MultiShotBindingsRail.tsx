@@ -25,6 +25,11 @@ import {
 interface MultiShotBindingsRailProps {
   taskId: string | null | undefined
   groupLabel?: string | null
+  // The worker stores result.multiShotVideoUrl as a raw COS key
+  // (not a signed URL), so the rail has to route playback through
+  // /api/novel-promotion/{projectId}/video-proxy?key=... — the
+  // route requires projectId for auth, hence this prop.
+  projectId?: string
   // commit 3 — when provided, chips become buttons that open the
   // appearance / view picker. Caller wires to the modals.
   onCharacterChipClick?: (binding: MultiShotCharacterBinding) => void
@@ -36,9 +41,27 @@ interface MultiShotBindingsRailProps {
   locationOverrideViewByLocationId?: Record<string, string | null>
 }
 
+/**
+ * Worker returns the COS key untouched (e.g. "images/multi-shot-...")
+ * — not a public URL. Rewrite it through the project's video-proxy
+ * route so the browser can stream + the server enforces auth.
+ *
+ * If the value already looks like a full URL we leave it alone.
+ */
+function resolveVideoSrc(
+  raw: string | null | undefined,
+  projectId: string | undefined,
+): string | null {
+  if (!raw) return null
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
+  if (!projectId) return null
+  return `/api/novel-promotion/${projectId}/video-proxy?key=${encodeURIComponent(raw)}`
+}
+
 export function MultiShotBindingsRail({
   taskId,
   groupLabel,
+  projectId,
   onCharacterChipClick,
   onSceneChipClick,
   characterOverrideAppearanceById,
@@ -51,7 +74,8 @@ export function MultiShotBindingsRail({
   const status = data?.status ?? null
   const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled'
   const bindings = data?.result?.bindings ?? null
-  const videoUrl = data?.result?.multiShotVideoUrl ?? null
+  const rawVideoKey = data?.result?.multiShotVideoUrl ?? null
+  const videoUrl = resolveVideoSrc(rawVideoKey, projectId)
   const shotCount = data?.result?.shotCount ?? null
   const characters = bindings?.characters ?? []
   const scenes = bindings?.scenes ?? []
