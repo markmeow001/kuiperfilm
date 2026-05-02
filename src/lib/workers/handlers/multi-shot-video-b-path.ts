@@ -118,6 +118,30 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * Strip parenthetical stage directions from a dialogue line so they
+ * don't reach Kling's TTS engine and get dubbed as if they were spoken
+ * words.
+ *
+ * Examples (all should be removed):
+ *   "(Susurrando) Feliz cumpleaños"      → "Feliz cumpleaños"
+ *   "(softly) Are you sure?"              → "Are you sure?"
+ *   "（在心里）我恨你"                    → "我恨你"
+ *   "I love you (sobbing)"                → "I love you"
+ *
+ * Cap parenthetical length at 30 chars to avoid eating legitimate
+ * inline parentheticals that happen to be part of dialogue (e.g.
+ * "I told you (and I meant it) — leave"). 30 chars covers all
+ * common stage-direction phrases without false positives.
+ */
+function stripParentheticalStageDirections(content: string): string {
+  return content
+    .replace(/\([^)]{1,30}\)/g, '')
+    .replace(/（[^）]{1,30}）/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function formatDialogueForKling(speaker: string, content: string): string {
   // Kling Omni's native dialogue format (klingai.com webUI / direct API)
   // is `Character: "line"` — speaker name, colon, then the quoted line
@@ -168,7 +192,7 @@ function extractSpokenLineFromSrtSegment(
     /([一-鿿A-Za-z][一-鿿A-Za-z\d_]*)\s*(?:说|says?)\s*[:：]?\s*[「"“”]([\s\S]+?)[」"”“]/i,
   )
   if (taggedQuoted) {
-    const content = taggedQuoted[2].trim()
+    const content = stripParentheticalStageDirections(taggedQuoted[2])
     if (content) return { speaker: taggedQuoted[1].trim() || fallbackSpeaker, content }
   }
 
@@ -183,6 +207,7 @@ function extractSpokenLineFromSrtSegment(
     let content = taggedColon[2].trim()
     // Strip any leading/trailing quote characters around the captured line.
     content = content.replace(new RegExp(`^[${QUOTE_OPEN}]|[${QUOTE_CLOSE}]$`, 'g'), '').trim()
+    content = stripParentheticalStageDirections(content)
     if (content && !looksLikeStageDirection(content)) {
       return { speaker: taggedColon[1].trim() || fallbackSpeaker, content }
     }
@@ -192,7 +217,7 @@ function extractSpokenLineFromSrtSegment(
   //    and dub just that span.
   const bareQuoted = trimmed.match(new RegExp(`[${QUOTE_OPEN}]([\\s\\S]+?)[${QUOTE_CLOSE}]`))
   if (bareQuoted) {
-    const content = bareQuoted[1].trim()
+    const content = stripParentheticalStageDirections(bareQuoted[1])
     if (content && !looksLikeStageDirection(content)) {
       return { speaker: fallbackSpeaker, content }
     }
@@ -720,6 +745,84 @@ export async function runMultiShotBPath(params: {
       })
     }
   }
+  // ── 2026-05-02 fix: pull speakers from panel.srtSegment as a fallback
+  // character source. The analyze pipeline sometimes misses a speaker in
+  // panel.characters JSON even when the panel description clearly stages
+  // them (user-reported group-04 had TOBY appear visually + speak, but
+  // panel.characters[] left TOBY out across all 5 panels). Without this
+  // fallback, TOBY would never get a reference image and Kling rendered
+  // a stranger lip-syncing TOBY's line.
+  //
+  // We re-use the same SRT-segment regexes as `extractSpokenLineFromSrtSegment`
+  // but only capture the speaker name. Names that already appear in
+  // characterBindings are skipped (seenCharIds dedup); names that don't
+  // resolve to a project character are dropped (they may be one-off
+  // narrators or typos).
+  const speakerNamePattern = /([一-鿿A-Za-z][一-鿿A-Za-z\d_]{0,30})\s*(?:说|says?)?\s*[:：]/g
+  for (const panel of validPanels) {
+    const srt = (panel.srtSegment ?? '').trim()
+    if (!srt) continue
+    speakerNamePattern.lastIndex = 0
+    const candidates = new Set<string>()
+    for (const m of srt.matchAll(speakerNamePattern)) {
+      const name = m[1]?.trim()
+      if (name) candidates.add(name)
+    }
+    for (const name of candidates) {
+      const character = findCharacterByName(projectData.characters || [], name)
+      if (!character || seenCharIds.has(character.id)) continue
+      const appearances = character.appearances || []
+      let appearance = appearances[0]
+      const overrideAppearanceId = charOverrideById.get(character.id)
+      const boundAppearanceId = episodeBindings.get(character.id)
+      if (overrideAppearanceId) {
+        const ov = appearances.find((a) => a.id === overrideAppearanceId)
+        if (ov) appearance = ov
+      } else if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
+      }
+      if (!appearance) continue
+      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
+      const selectedIndex = appearance.selectedIndex
+      const selectedUrl =
+        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
+      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
+      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
+      if (!publicUrl) continue
+      seenCharIds.add(character.id)
+      characterBindings.push({
+        id: character.id,
+        name: character.name,
+        appearanceId: appearance.id ?? null,
+        appearanceLabel: appearance.changeReason || null,
+        imageUrl: publicUrl,
+      })
+    }
+  }
+  // ── Speaker-priority sort BEFORE the 3-slot cap.
+  //
+  // Kling Omni accepts at most 3 reference images per task (Tencent
+  // VOD AIGC §1.1.1 + §3.9). When a group has >3 unique characters,
+  // dropping a SPEAKING character has a much louder visual+audio
+  // failure than dropping a background-only character (the speaker's
+  // body / lips will lip-sync to a stranger's face). Sort speakers
+  // first so the slice favours them.
+  const speakerNames = new Set<string>()
+  for (const panel of validPanels) {
+    const srt = (panel.srtSegment ?? '').trim()
+    if (!srt) continue
+    speakerNamePattern.lastIndex = 0
+    for (const m of srt.matchAll(speakerNamePattern)) {
+      const name = m[1]?.trim()?.toLowerCase()
+      if (name) speakerNames.add(name)
+    }
+  }
+  characterBindings.sort((a, b) => {
+    const aSpeaks = speakerNames.has(a.name.toLowerCase()) ? 0 : 1
+    const bSpeaks = speakerNames.has(b.name.toLowerCase()) ? 0 : 1
+    return aSpeaks - bSpeaks
+  })
   // Tencent caps SubjectInfos at 3 entries per CreateAigcVideoTask. Take
   // characters first (typically 1-3 speaking roles drive the visual),
   // then fill remaining slots with location/scene reference images so
@@ -1038,6 +1141,35 @@ export async function runMultiShotBPath(params: {
         ? /<<<image_\d+>>>/.test(generateOptions.prompt as string)
         : false,
       nameToImageIndex: Array.from(nameToImageIndex.entries()),
+      // Customize mode ignores the top-level prompt — real per-shot
+      // text (with dialogue) sits in klingMultiShot.multi_prompt[].
+      // Without surfacing those entries we can't tell whether dialogue
+      // language tagging or character refs reached Kling for each shot,
+      // which is exactly the diagnostic we need for the 2026-05-02
+      // language-pivot debug.
+      multiPromptPreview: (() => {
+        const km = generateOptions.klingMultiShot as
+          | { multi_prompt?: Array<{ index?: number; prompt?: string; duration?: number }> }
+          | undefined
+        const arr = km?.multi_prompt
+        if (!Array.isArray(arr)) return null
+        return arr.map((entry) => ({
+          index: entry.index ?? null,
+          duration: entry.duration ?? null,
+          // Cap each shot at 400 chars; with up to 6 shots × 400 the log
+          // line stays under most syslog limits.
+          prompt: typeof entry.prompt === 'string' ? entry.prompt.slice(0, 400) : null,
+        }))
+      })(),
+      // Surface character coverage vs Kling's hard 3-ref cap so it's
+      // obvious when a panel speaker got dropped. The 2026-05-02 group
+      // had CHLOE/CATHERINE/BRUCE/TOBY = 4 chars; TOBY fell out and the
+      // rendered clip showed a stranger lip-syncing TOBY's line.
+      characterCoverage: {
+        bound: characterBindings.map((c) => c.name),
+        sceneSlotsUsed: sceneBindings.map((s) => s.name),
+        capWasHit: characterBindings.length + sceneBindings.length > 3,
+      },
     },
   })
   // generateVideo's option type is intentionally narrow (only standard
