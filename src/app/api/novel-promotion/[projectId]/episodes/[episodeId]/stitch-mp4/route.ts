@@ -60,10 +60,27 @@ export const POST = apiHandler(async (
     .flatMap((sb) => sb.panels)
     .filter((p) => Boolean(p.videoUrl))
 
+  // Multi-shot B-path episodes have empty panel.videoUrl — the playable
+  // mp4 lives on the latest completed video_multi_shot task per group
+  // instead. Allow the package to proceed when either source exists so
+  // the worker can pull whichever videos are available.
+  let multiShotTaskCount = 0
   if (panelsWithVideo.length === 0) {
+    multiShotTaskCount = await prisma.task.count({
+      where: {
+        episodeId: episode.id,
+        type: TASK_TYPE.VIDEO_MULTI_SHOT,
+        status: 'completed',
+      },
+    })
+  }
+
+  if (panelsWithVideo.length === 0 && multiShotTaskCount === 0) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'NO_PANEL_VIDEOS',
-      details: { message: '此 episode 還沒有任何分鏡視頻,請先生成 panel videos' },
+      details: {
+        message: '此 episode 還沒有任何分鏡或多鏡頭視頻,請先生成 panel videos 或 multi-shot 群組',
+      },
     })
   }
 

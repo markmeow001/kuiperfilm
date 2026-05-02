@@ -31,6 +31,7 @@ interface PanelLike {
   id: string
   imageUrl?: string | null
   videoUrl?: string | null
+  multiShotGroupId?: string | null
 }
 
 interface StoryboardLike {
@@ -73,6 +74,18 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   const panelsWithVideo = allPanels.filter((p) => p.videoUrl)
   const panelsWithImage = allPanels.filter((p) => p.imageUrl)
   const firstVideoPanel = panelsWithVideo[0] ?? null
+  // Multi-shot B-path episodes have empty panel.videoUrl — the playable
+  // mp4 lives at the group level. Count distinct multiShotGroupIds so
+  // the package button still surfaces and the worker has something to
+  // pack.
+  const multiShotGroupCount = useMemo(() => {
+    const ids = new Set<string>()
+    for (const p of allPanels) {
+      if (p.multiShotGroupId) ids.add(p.multiShotGroupId)
+    }
+    return ids.size
+  }, [allPanels])
+  const hasPackageableContent = panelsWithVideo.length > 0 || multiShotGroupCount > 0
 
   const [active, setActive] = useState<string | null>(null)
   const activePanel = active ? allPanels.find((p) => p.id === active) ?? firstVideoPanel : firstVideoPanel
@@ -201,7 +214,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
               </p>
               <button
                 type="button"
-                disabled={stitchMp4.isPending || !currentEpisodeId || panelsWithVideo.length === 0}
+                disabled={stitchMp4.isPending || !currentEpisodeId || !hasPackageableContent}
                 onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
                 className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -214,14 +227,14 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
               disabled={
                 stitchMp4.isPending ||
                 !currentEpisodeId ||
-                panelsWithVideo.length === 0 ||
+                !hasPackageableContent ||
                 currentEpisode?.stitchStatus === 'rendering'
               }
               onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
               title={
-                panelsWithVideo.length === 0
-                  ? '需先生成至少 1 個分鏡視頻才能打包素材包'
-                  : '把所有分鏡視頻 + 參考圖 + 對白腳本打包成 zip,直接下載到剪映/CapCut 剪輯'
+                !hasPackageableContent
+                  ? '需先生成至少 1 個分鏡視頻或多鏡頭群組才能打包素材包'
+                  : '把所有分鏡 / 多鏡頭視頻 + 參考圖 + 對白腳本打包成 zip,直接下載到剪映/CapCut 剪輯'
               }
               className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -230,7 +243,13 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                 ? '打包中…'
                 : currentEpisode?.stitchStatus === 'rendering'
                   ? '後台打包中…'
-                  : `打包素材包 · ${panelsWithVideo.length} 段`}
+                  : (() => {
+                      const parts: string[] = []
+                      if (panelsWithVideo.length > 0) parts.push(`${panelsWithVideo.length} 分鏡`)
+                      if (multiShotGroupCount > 0) parts.push(`${multiShotGroupCount} 多鏡頭`)
+                      const summary = parts.length > 0 ? parts.join(' + ') : '0 段'
+                      return `打包素材包 · ${summary}`
+                    })()}
             </button>
           )}
           {stitchMp4.isError ? (
