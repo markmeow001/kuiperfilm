@@ -48,6 +48,17 @@ export default function Navbar() {
                 >
                   {t('workspace')}
                 </Link>
+                {/* 團隊 / Workspaces — Org → Workspace → Member 管理頁。
+                    所有登入 user 可見:member 看自己加入的工作區(read-
+                    only)、editor 看自己擁有的、admin 看全平台。 */}
+                <Link
+                  href="/zh/workspaces"
+                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
+                  title="工作區 / 團隊管理"
+                >
+                  <AppIcon name="userAlt" className="h-4 w-4" />
+                  <span className="hidden sm:inline">團隊</span>
+                </Link>
                 {/* 資產中心 — admin only. K3b made this team-shared, but for
                     demo phase regular users get distracted by an empty hub
                     that duplicates project SubjectsPage. Curators (admin)

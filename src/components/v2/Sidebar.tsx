@@ -150,6 +150,16 @@ function SidebarUser() {
             {role ? role.toUpperCase() : 'MEMBER'}
           </div>
         </div>
+        {/* Workspaces / 團隊 — visible to every signed-in role; the
+            target page hides creation/management affordances when the
+            requester isn't authorised. */}
+        <a
+          href="/zh/workspaces"
+          className="rounded text-stone-500 transition-all hover:text-amber-400"
+          title="工作區 / 團隊管理"
+        >
+          <AppIcon name="userAlt" className="h-4 w-4" />
+        </a>
         {isAdmin ? (
           <>
             <a
