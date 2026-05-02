@@ -480,10 +480,28 @@ export function GroupCard({
                 void handleRegenerate()
               }}
               title="重新送這個 group 跑 Kling 多鏡頭"
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-2.5 py-1 font-mono text-[9px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[9px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                regenState.status === 'submitting'
+                  ? 'border-amber-400 bg-amber-500/30 text-amber-100 ring-2 ring-amber-500/40'
+                  : regenState.status === 'done'
+                    ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+                    : regenState.status === 'error'
+                      ? 'border-rose-500/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
+                      : 'border-amber-500/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25'
+              }`}
             >
-              <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              {regenState.status === 'submitting' ? '送出中…' : '重新生成'}
+              {regenState.status === 'submitting' ? (
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border border-amber-400/40 border-t-amber-200" />
+              ) : (
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              )}
+              {regenState.status === 'submitting'
+                ? '送出中…'
+                : regenState.status === 'done'
+                  ? '✓ 已送出'
+                  : regenState.status === 'error'
+                    ? '⚠ 失敗,點重試'
+                    : '重新生成'}
             </button>
           ) : null}
           <div className="font-mono text-[10px] tracking-wider text-stone-500">
@@ -493,7 +511,38 @@ export function GroupCard({
       </header>
 
       {!expanded ? null : (
-      <div className="grid grid-cols-12 gap-4 p-4">
+      <div className="space-y-3 p-4">
+        {regenState.status === 'submitting' ? (
+          <div className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-400/40 border-t-amber-200" />
+            <div className="font-serif-cn text-[12px] text-amber-200">
+              送 Kling 中…task 已 queue,大約 30 秒進到 worker。Kling Omni 算 3-5 分鐘出影片,完成後左邊會自動刷新。
+            </div>
+          </div>
+        ) : regenState.status === 'done' ? (
+          <div className="flex items-center gap-2 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
+            <AppIcon name="check" className="h-3 w-3 text-emerald-300" />
+            <div className="font-serif-cn text-[12px] text-emerald-200">
+              ✓ 已送出 — Kling Omni 大約 3-5 分鐘出影片,進度會顯示在左邊綁定區。可以同時去其他 group 編輯。
+            </div>
+          </div>
+        ) : regenState.status === 'error' ? (
+          <div className="flex items-center gap-2 rounded-sm border border-rose-500/40 bg-rose-500/10 px-3 py-2">
+            <AppIcon name="alert" className="h-3 w-3 text-rose-300" />
+            <div className="flex-1 font-serif-cn text-[12px] text-rose-200">
+              ⚠ 送出失敗:{regenState.message}
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleRegenerate()}
+              className="rounded-sm border border-rose-500/50 bg-rose-500/15 px-2 py-0.5 font-mono text-[9px] tracking-wider text-rose-200 transition-colors hover:bg-rose-500/25"
+            >
+              重試
+            </button>
+          </div>
+        ) : null}
+
+      <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 lg:col-span-7">
           <MultiShotBindingsRail
             taskId={taskId}
@@ -534,16 +583,8 @@ export function GroupCard({
               </button>
             </div>
           ) : null}
-          {regenState.status === 'error' ? (
-            <div className="mt-2 rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1 font-serif-cn text-[11px] text-rose-300">
-              {regenState.message}
-            </div>
-          ) : null}
-          {regenState.status === 'done' ? (
-            <div className="mt-2 rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-1 font-serif-cn text-[11px] text-emerald-300">
-              已送出 — Kling 大約 3-5 分鐘出影片,進度會顯示在上方綁定區
-            </div>
-          ) : null}
+          {/* Banner moved to top of expanded body so it's not buried
+              under the player. See above. */}
         </div>
 
         <div className="col-span-12 space-y-3 lg:col-span-5">
@@ -801,6 +842,7 @@ export function GroupCard({
             ) : null}
           </div>
         </div>
+      </div>
       </div>
       )}
 
