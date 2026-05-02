@@ -173,18 +173,21 @@ export function MultiShotBindingsRail({
       })() : null}
 
       {videoUrl ? (
-        <div className="mx-auto mb-2.5 w-full max-w-[260px] overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950">
+        <div className="mx-auto mb-2.5 w-full max-w-[180px] overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950">
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video
             key={videoUrl}
             src={videoUrl}
             controls
             playsInline
-            // Cap height so 9:16 doesn't blow up the segment card —
-            // user reported the player taking up the whole screen.
-            // 420px keeps it readable on a 13" laptop without
-            // forcing the narrative pane out of the fold.
-            className="mx-auto block h-auto max-h-[420px] w-full object-contain"
+            // 9:16 reference player. Sized as a *thumbnail-with-controls*,
+            // not a primary viewing surface — the rail is for confirming
+            // the cut, not for watching it. 180×320 fits faces clearly
+            // on the timeline-view col-span-3 inspector without crowding
+            // out CAST chips and overrides below it. Earlier iterations
+            // shipped 260×420 which the user rightly called "way too
+            // big" on 2026-05-02.
+            className="mx-auto block h-auto max-h-[320px] w-full object-contain"
           />
           <div className="flex items-center justify-between border-t border-amber-900/20 bg-stone-900/40 px-2 py-1">
             <div className="font-mono text-[9px] tracking-wider text-amber-500/70">
