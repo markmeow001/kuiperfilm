@@ -1137,7 +1137,19 @@ function validateCapabilitySelectionsAgainstModels(
 }
 
 export const GET = apiHandler(async () => {
-  const authResult = await requireUserAuth()
+  // Admin-only — see SECURITY note. PUT was already admin-gated; GET
+  // was using requireUserAuth which leaked admin's decrypted provider
+  // keys to any non-admin who hit this endpoint via F12 / curl
+  // (the UI hides ApiConfigTab for non-admin in profile/page.tsx, but
+  // the API has to enforce the same boundary).
+  //
+  // Team-internal threat model: 10-20 trusted users + invite-only
+  // registration; the realistic risk isn't outside attack but a
+  // curious team member running fetch() in DevTools and finding
+  // admin's Tencent/OpenRouter/Fal keys in plaintext. Keep the admin
+  // fallback logic below as defense-in-depth in case this gate is
+  // ever loosened.
+  const authResult = await requireAdminAuth()
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
   const userId = session.user.id
