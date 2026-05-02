@@ -334,19 +334,83 @@ function substituteImageRefs(text: string, nameToImageIndex: ReadonlyMap<string,
   return out
 }
 
+/**
+ * Replace the bare names of project characters that did NOT make it
+ * into the 3-slot SubjectInfos cap with anonymous role placeholders.
+ *
+ * Why: when a multi-shot group has more than 3 unique characters,
+ * Tencent VOD's hard `FileInfos.N: 3` limit (Kling-Omni doc §1.1.1)
+ * means at least one character ships without a reference image.
+ * If we leave the unbound character's name in the visual prompt,
+ * Kling tries to invent that identity from scratch and the resulting
+ * face never matches what the user sees in their character roster
+ * — the 2026-05-02 GROUP 04 case where BRUCE rendered as a stranger.
+ *
+ * Replacing "BRUCE" with "另一名男子" (or "另一人") tells Kling to
+ * draw a generic background figure instead of attempting the wrong
+ * identity. We also append a brief framing hint so the camera keeps
+ * its focus on the bound speaker(s) rather than wide-shotting the
+ * unbound character.
+ *
+ * Order matters: longest names first to avoid clobbering shorter
+ * substrings (mirrors substituteImageRefs's behaviour).
+ */
+function rewriteForUnboundCharacters(
+  text: string,
+  unboundNames: ReadonlySet<string>,
+): { rewritten: string; hadUnbound: boolean } {
+  if (!text || unboundNames.size === 0) return { rewritten: text, hadUnbound: false }
+  const sortedNames = Array.from(unboundNames).sort((a, b) => b.length - a.length)
+  let out = text
+  let hadUnbound = false
+  for (const name of sortedNames) {
+    if (!name) continue
+    const re = new RegExp(escapeRegex(name), 'gi')
+    if (!re.test(out)) continue
+    hadUnbound = true
+    re.lastIndex = 0
+    out = out.replace(re, '另一人')
+  }
+  return { rewritten: out, hadUnbound }
+}
+
 function buildShotBody(
   panel: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt'>,
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
   nameToImageIndex?: ReadonlyMap<string, number>,
+  unboundNames?: ReadonlySet<string>,
 ): string {
   const rawVisual = (panel.description || panel.videoPrompt || '').trim()
-  const visual = nameToImageIndex
+  // Order: substitute bound characters with <<<image_N>>> first, THEN
+  // anonymise unbound names. Doing it the other way would replace the
+  // unbound names with "另一人" before substituteImageRefs sees them,
+  // which is fine, but doing image refs first lets us keep the speaker
+  // identity precise for the close-up directive.
+  let visual = nameToImageIndex
     ? substituteImageRefs(rawVisual, nameToImageIndex)
     : rawVisual
+  let unboundFraming = ''
+  if (unboundNames && unboundNames.size > 0) {
+    const { rewritten, hadUnbound } = rewriteForUnboundCharacters(visual, unboundNames)
+    visual = rewritten
+    if (hadUnbound) {
+      // Append a Chinese framing hint so Kling biases toward the bound
+      // speaker instead of giving the anonymised unbound character
+      // foreground real-estate. Keep it terse — long instructions hurt
+      // Kling's per-shot 512-char budget.
+      const speakerLine = dialogueByPanelId.get(panel.id) ?? []
+      const speakerName = speakerLine[0]?.speaker
+      const speakerSlot = speakerName && nameToImageIndex?.get(speakerName)
+      unboundFraming = speakerSlot
+        ? `\n[镜头聚焦于<<<image_${speakerSlot}>>>，其他人物虚化或在画外]`
+        : `\n[镜头聚焦于主体角色，其他人物虚化或在画外]`
+    }
+  }
   const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
     .map((d) => formatDialogueForKling(d.speaker, d.content))
     .join(' ')
-  return dialogues ? `${visual}\n${dialogues}`.trim() : visual
+  const body = dialogues ? `${visual}\n${dialogues}`.trim() : visual
+  return unboundFraming ? `${body}${unboundFraming}` : body
 }
 
 /**
@@ -456,10 +520,11 @@ export function buildBPathCombinedPrompt(
   panels: Pick<BPathPanel, 'id' | 'description' | 'videoPrompt'>[],
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
   nameToImageIndex?: ReadonlyMap<string, number>,
+  unboundNames?: ReadonlySet<string>,
 ): string {
   return panels
     .map((panel, i) => {
-      const body = buildShotBody(panel, dialogueByPanelId, nameToImageIndex)
+      const body = buildShotBody(panel, dialogueByPanelId, nameToImageIndex, unboundNames)
       return `镜头${i + 1}: ${body}`
     })
     .filter((line) => line.trim().length > `镜头N: `.length)
@@ -534,6 +599,7 @@ export function buildBPathCustomizePrompts(
   dialogueByPanelId: ReadonlyMap<string, BPathDialogueLine[]>,
   durations: number[],
   nameToImageIndex?: ReadonlyMap<string, number>,
+  unboundNames?: ReadonlySet<string>,
 ): BPathShotPromptEntry[] {
   if (panels.length !== durations.length) {
     throw new Error(
@@ -542,7 +608,7 @@ export function buildBPathCustomizePrompts(
   }
   const out: BPathShotPromptEntry[] = []
   panels.forEach((panel, i) => {
-    const body = buildShotBody(panel, dialogueByPanelId, nameToImageIndex)
+    const body = buildShotBody(panel, dialogueByPanelId, nameToImageIndex, unboundNames)
     if (!body.trim()) return
     out.push({ index: out.length + 1, prompt: body, duration: durations[i] })
   })
@@ -970,6 +1036,34 @@ export async function runMultiShotBPath(params: {
     if (s.name) nameToImageIndex.set(s.name, i + 1)
   })
 
+  // Names of project characters that were detected in this group's
+  // panels (or as dialogue speakers) but lost the 3-slot cap fight in
+  // characterBindings.slice above. Their bare names still show up in
+  // panel.description text — without anonymising, Kling tries to
+  // invent that identity from scratch and we get the GROUP 04 BRUCE
+  // "stranger lip-syncing" symptom. Pass this set down to the prompt
+  // builders so buildShotBody can rewrite mentions.
+  const unboundNames = new Set<string>()
+  const boundCharIds = new Set(activeCharacterBindings.map((c) => c.id))
+  for (const c of characterBindings) {
+    if (!boundCharIds.has(c.id) && c.name) unboundNames.add(c.name)
+  }
+  // Also walk the panels for any character mentioned in description
+  // text that's in projectData.characters but never made it into
+  // characterBindings at all (rare path: panel.characters[] AND
+  // dialogue both missed, but the description string names them).
+  for (const panel of validPanels) {
+    const desc = (panel.description ?? panel.videoPrompt ?? '').trim()
+    if (!desc) continue
+    for (const c of projectData.characters ?? []) {
+      if (boundCharIds.has(c.id)) continue
+      if (!c.name) continue
+      if (unboundNames.has(c.name)) continue
+      const re = new RegExp(escapeRegex(c.name), 'i')
+      if (re.test(desc)) unboundNames.add(c.name)
+    }
+  }
+
   // Dialogue resolution. Two sources, in priority order:
   //
   //   1. panel.srtSegment (user-edited in the Storyboard UI). This is
@@ -1052,7 +1146,7 @@ export async function runMultiShotBPath(params: {
 
   if (multiShotMode === 'customize') {
     const { durations, totalDuration } = distributeShotDurations(validPanels.length, panelDurations)
-    const multiPrompt = buildBPathCustomizePrompts(validPanels, dialogueByPanel, durations, nameToImageIndex)
+    const multiPrompt = buildBPathCustomizePrompts(validPanels, dialogueByPanel, durations, nameToImageIndex, unboundNames)
     if (multiPrompt.length === 0) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
     }
@@ -1080,7 +1174,7 @@ export async function runMultiShotBPath(params: {
     // "prompt cannot be empty" otherwise). Use the combined prompt as a
     // safe non-empty payload — the model uses multi_prompt entries for
     // actual generation.
-    const placeholderPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex)
+    const placeholderPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex, unboundNames)
     generateOptions = {
       prompt: placeholderPrompt,
       duration: finalTotal,
@@ -1125,7 +1219,7 @@ export async function runMultiShotBPath(params: {
       primaryPrompt = buildSeedancePrompt(validPanels, dialogueByPanel, undefined, nameToImageIndex)
     } else {
       promptSource = 'panels'
-      primaryPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex)
+      primaryPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex, unboundNames)
     }
     if (!primaryPrompt.trim()) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
@@ -1218,6 +1312,10 @@ export async function runMultiShotBPath(params: {
         bound: characterBindings.map((c) => c.name),
         sceneSlotsUsed: sceneBindings.map((s) => s.name),
         capWasHit: characterBindings.length + sceneBindings.length > 3,
+        // Names that lost the cap fight and got anonymized in shot
+        // descriptions via rewriteForUnboundCharacters. Empty when
+        // the group fits inside Kling's 3-ref limit.
+        unboundAnonymized: Array.from(unboundNames),
       },
     },
   })
