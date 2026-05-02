@@ -161,6 +161,114 @@ export function GroupCard({
   const overrideCount =
     Object.keys(characterOverrides).length + Object.keys(locationOverrides).length
 
+  // ── Phase 3 — segment-level cast / scenes chips (inline below
+  // the narrative). Source from this group's panels:
+  //   - panel.characters JSON → character names → resolve to roster
+  //   - panel.location → "<name>" or "<name>#<viewHint>" → roster
+  // Same swap modals as the left-column chip rail. Mirrors the
+  // Seedance "场景: [Park-Day] [Park-Inside] +" affordance the user
+  // referenced.
+  type CastChip = {
+    character: CharacterRef
+    appearanceId: string | null
+    appearanceLabel: string | null
+    avatarUrl: string | null
+  }
+  type SceneChip = {
+    location: LocationRef
+    viewName: string | null
+    avatarUrl: string | null
+  }
+  const groupCast = useMemo<CastChip[]>(() => {
+    const seen = new Set<string>()
+    const out: CastChip[] = []
+    for (const panel of panels) {
+      // Storyboards hook decodes panel.characters into string[] | null.
+      // Each item may be a bare name or, after analyze v2, a stringified
+      // `{name, appearance}` JSON. Handle both shapes loosely.
+      const charsRaw: unknown[] = Array.isArray(panel.characters) ? panel.characters : []
+      for (const item of charsRaw) {
+        let name: string | null = null
+        if (typeof item === 'string') {
+          const trimmed = item.trim()
+          if (trimmed.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(trimmed) as { name?: unknown }
+              if (typeof parsed.name === 'string') name = parsed.name
+            } catch {
+              name = trimmed
+            }
+          } else {
+            name = trimmed
+          }
+        } else if (item && typeof item === 'object') {
+          const r = item as { name?: unknown }
+          if (typeof r.name === 'string') name = r.name
+        }
+        if (!name) continue
+        const lower = name.trim().toLowerCase()
+        if (!lower || seen.has(lower)) continue
+        const char = (characterRoster ?? []).find(
+          (c) => c.name.toLowerCase().trim() === lower,
+        )
+        if (!char) continue
+        seen.add(lower)
+        const appearances = char.appearances ?? []
+        const overrideId = characterOverrides[char.id]
+        let chosen = overrideId
+          ? appearances.find((a) => a.id === overrideId) ?? appearances[0]
+          : appearances[0]
+        if (!chosen) {
+          out.push({
+            character: char,
+            appearanceId: null,
+            appearanceLabel: null,
+            avatarUrl: null,
+          })
+          continue
+        }
+        out.push({
+          character: char,
+          appearanceId: chosen.id ?? null,
+          appearanceLabel: chosen.changeReason ?? null,
+          avatarUrl: chosen.imageUrl ?? null,
+        })
+      }
+    }
+    return out
+  }, [panels, characterRoster, characterOverrides])
+  const groupScenes = useMemo<SceneChip[]>(() => {
+    const seen = new Set<string>()
+    const out: SceneChip[] = []
+    for (const panel of panels) {
+      const loc = (panel as { location?: string | null }).location ?? null
+      if (!loc) continue
+      const hashIdx = loc.indexOf('#')
+      const name = (hashIdx === -1 ? loc : loc.slice(0, hashIdx)).trim()
+      if (!name) continue
+      const lower = name.toLowerCase()
+      if (seen.has(lower)) continue
+      const locEntity = (locationRoster ?? []).find(
+        (l) => l.name.toLowerCase().trim() === lower,
+      )
+      if (!locEntity) continue
+      seen.add(lower)
+      const overrideView = locationOverrides[locEntity.id]
+      const images = locEntity.images ?? []
+      const matched = overrideView
+        ? images.find((img) => (img.viewName ?? '').toLowerCase() === overrideView.toLowerCase())
+        : null
+      const primary = images.find((img) => (img.imageIndex ?? 0) === 0) ?? images[0]
+      const picked = matched ?? primary
+      out.push({
+        location: locEntity,
+        viewName: overrideView !== undefined ? overrideView : (picked?.viewName ?? null),
+        avatarUrl: picked?.imageUrl ?? null,
+      })
+    }
+    return out
+  }, [panels, locationRoster, locationOverrides])
+
   // ── Phase 2 — segment-level merged narrative editor ──
   //
   // The user referenced the Seedance 2.0 视频方案编辑器 layout where
@@ -498,6 +606,118 @@ export function GroupCard({
               預設由 {panels.length} 個分鏡描述自動拼接。直接編輯這段即可,送出時會以你寫的為準。
             </div>
           )}
+
+          {(groupCast.length > 0 || groupScenes.length > 0) ? (
+            <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-950/30 p-2">
+              {groupCast.length > 0 ? (
+                <div>
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+                    <AppIcon name="user" className="h-3 w-3" />
+                    出場角色 · {groupCast.length}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupCast.map((c) => {
+                      const overridden = characterOverrides[c.character.id] !== undefined
+                        && characterOverrides[c.character.id] !== c.appearanceId
+                      const stateClass = overridden
+                        ? 'border-violet-500/60 bg-violet-500/10'
+                        : 'border-amber-900/30 bg-stone-950/40'
+                      return (
+                        <button
+                          key={c.character.id}
+                          type="button"
+                          onClick={() => {
+                            setPickerCharacter({
+                              character: c.character,
+                              currentAppearanceId: characterOverrides[c.character.id] !== undefined
+                                ? characterOverrides[c.character.id]
+                                : c.appearanceId,
+                            })
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
+                          title={`${c.character.name} · ${c.appearanceLabel ?? '默認造型'} — 點擊換造型`}
+                        >
+                          <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                            {c.avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={c.avatarUrl} alt={c.character.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <AppIcon name="user" className="h-3 w-3 m-auto text-stone-600" />
+                            )}
+                          </div>
+                          <span className="font-serif-cn text-[10px] text-stone-200">
+                            {c.character.name}
+                          </span>
+                          <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                            {c.appearanceLabel ?? '默認造型'}
+                          </span>
+                          {overridden ? (
+                            <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                              ✏ 已改
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {groupScenes.length > 0 ? (
+                <div>
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+                    <AppIcon name="image" className="h-3 w-3" />
+                    場景 · {groupScenes.length}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupScenes.map((s) => {
+                      const overridden = locationOverrides[s.location.id] !== undefined
+                        && locationOverrides[s.location.id] !== s.viewName
+                      const stateClass = overridden
+                        ? 'border-violet-500/60 bg-violet-500/10'
+                        : 'border-amber-900/30 bg-stone-950/40'
+                      return (
+                        <button
+                          key={s.location.id}
+                          type="button"
+                          onClick={() => {
+                            setPickerLocation({
+                              location: s.location,
+                              currentViewName: locationOverrides[s.location.id] !== undefined
+                                ? locationOverrides[s.location.id]
+                                : s.viewName,
+                            })
+                          }}
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
+                          title={`${s.location.name} · ${s.viewName ?? '主視角'} — 點擊換視角`}
+                        >
+                          <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
+                            {s.avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={s.avatarUrl} alt={s.location.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <AppIcon name="image" className="h-3 w-3 m-auto text-stone-600" />
+                            )}
+                          </div>
+                          <span className="font-serif-cn text-[10px] text-stone-200">
+                            {s.location.name}
+                          </span>
+                          <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                            {s.viewName ?? '主視角'}
+                          </span>
+                          {overridden ? (
+                            <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                              ✏ 已改
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="border-t border-stone-800/60 pt-2">
             <button
