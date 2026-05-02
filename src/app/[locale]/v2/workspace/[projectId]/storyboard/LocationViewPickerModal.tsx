@@ -71,7 +71,7 @@ export function LocationViewPickerModal({
       >
         <header className="flex items-center justify-between border-b border-amber-900/20 bg-stone-950/40 px-5 py-3">
           <div>
-            <div className="font-mono text-[10px] uppercase tracking-wider text-amber-500/70">
+            <div className="font-mono text-[14px] uppercase tracking-wider text-amber-500/70">
               換視角
             </div>
             <div className="mt-0.5 font-fraunces text-base italic text-amber-300">
@@ -128,7 +128,7 @@ export function LocationViewPickerModal({
                         </div>
                       )}
                       {isCurrent ? (
-                        <div className="absolute right-1.5 top-1.5 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[9px] tracking-wider text-stone-950">
+                        <div className="absolute right-1.5 top-1.5 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-950">
                           當前
                         </div>
                       ) : null}
@@ -136,7 +136,7 @@ export function LocationViewPickerModal({
                     <div className="bg-stone-900/80 px-2 py-1.5">
                       <div className="font-serif-cn text-xs text-stone-200">{label}</div>
                       {img.description ? (
-                        <div className="mt-0.5 line-clamp-1 font-mono text-[9px] tracking-wider text-stone-500">
+                        <div className="mt-0.5 line-clamp-1 font-mono text-[12px] tracking-wider text-stone-500">
                           {img.description}
                         </div>
                       ) : null}
@@ -155,14 +155,14 @@ export function LocationViewPickerModal({
               onSelect(null)
               onClose()
             }}
-            className="font-mono text-[10px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+            className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
           >
             還原預設(主視角)
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm border border-stone-800 px-3 py-1 font-mono text-[10px] tracking-wider text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
+            className="rounded-sm border border-stone-800 px-3 py-1 font-mono text-[14px] tracking-wider text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
           >
             取消
           </button>

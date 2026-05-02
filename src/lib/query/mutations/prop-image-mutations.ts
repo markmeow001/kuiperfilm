@@ -64,3 +64,34 @@ export function useRegenerateSinglePropImage(projectId: string) {
     onSettled: invalidateProjectAssets,
   })
 }
+
+/**
+ * Upload a user-supplied image and use it as the prop's imageUrl.
+ * Mirrors useUploadProjectLocationImage. POSTs multipart to
+ * /api/.../upload-asset-image with type='prop'. The endpoint
+ * processes the file (label bar + sharp re-encode), uploads to COS,
+ * and overwrites NovelPromotionProp.imageUrl with the new key. Read-
+ * side signing is handled by attachMediaFieldsToProp on the GET so
+ * the FE receives a usable URL right after the cache invalidates.
+ */
+export function useUploadProjectPropImage(projectId: string) {
+  const queryClient = useQueryClient()
+  const invalidateProjectAssets = () =>
+    invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+
+  return useMutation({
+    mutationFn: async (params: { file: File; propId: string; labelText?: string }) => {
+      const formData = new FormData()
+      formData.append('file', params.file)
+      formData.append('type', 'prop')
+      formData.append('id', params.propId)
+      if (params.labelText) formData.append('labelText', params.labelText)
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/upload-asset-image`,
+        { method: 'POST', body: formData },
+        'Failed to upload prop image',
+      )
+    },
+    onSuccess: invalidateProjectAssets,
+  })
+}

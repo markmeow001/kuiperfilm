@@ -1009,7 +1009,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               </p>
             ) : null}
             {!currentEpisodeId ? (
-              <p className="font-mono text-[10px] tracking-wider text-stone-500">
+              <p className="font-mono text-[14px] tracking-wider text-stone-500">
                 沒有可用集數 — 請先回上方分頁建立或選擇集數,並到劇本 step 貼劇本
               </p>
             ) : null}
@@ -1028,7 +1028,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         type="button"
         onClick={() => setLayoutMode('gallery')}
         title="畫廊版面 — 直幅 9:16 友善(每分鏡圖驅動)"
-        className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
+        className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
           layoutMode === 'gallery'
             ? 'bg-amber-500/15 text-amber-300'
             : 'text-stone-500 hover:text-amber-400'
@@ -1040,7 +1040,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         type="button"
         onClick={() => setLayoutMode('timeline')}
         title="時間軸版面 — 橫幅 16:9 友善(每分鏡圖驅動)"
-        className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
+        className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
           layoutMode === 'timeline'
             ? 'bg-amber-500/15 text-amber-300'
             : 'text-stone-500 hover:text-amber-400'
@@ -1052,7 +1052,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         type="button"
         onClick={() => setLayoutMode('groups')}
         title="多鏡頭版面 — 文字驅動(Kling-3 / Omni B-path,免生圖)"
-        className={`px-2.5 py-1.5 font-mono text-[10px] tracking-wider transition-colors ${
+        className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
           layoutMode === 'groups'
             ? 'bg-amber-500/15 text-amber-300'
             : 'text-stone-500 hover:text-amber-400'
@@ -1070,11 +1070,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         <div className="flex items-center gap-3">
           <div className="font-fraunces text-sm italic text-amber-500/80">多鏡頭</div>
           {hasGroups ? (
-            <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400">
+            <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
               {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
             </span>
           ) : null}
-          <div className="font-mono text-[10px] tracking-wider text-stone-500">
+          <div className="font-mono text-[14px] tracking-wider text-stone-500">
             {projectVideoModel || '尚未設定 video model'} · 比例 {projectVideoRatio}
           </div>
         </div>
@@ -1084,7 +1084,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
             onClick={handleAnalyzeStoryboard}
             title="重新從劇本生成分鏡"
-            className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className="h-3 w-3" />
             重新分析
@@ -1094,7 +1094,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2}
             onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
             title="把分鏡按角色 / 場景連續性切成 multi-shot 群"
-            className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {autoGroup.isPending ? '切組中…' : '自動切組'}
           </button>
@@ -1103,7 +1103,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             disabled={multiShotState.status === 'submitting'}
             onClick={handleSubmitMultiShot}
             title="把所有 group 一次送 Kling 多鏡頭"
-            className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className="h-3 w-3" />
             {multiShotState.status === 'submitting'
@@ -1212,11 +1212,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <div className="flex items-center gap-3">
               <div className="font-fraunces text-sm italic text-amber-500/80">分鏡</div>
               {hasGroups ? (
-                <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400">
+                <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
                   {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
                 </span>
               ) : null}
-              <div className="font-mono text-[10px] tracking-wider text-stone-500">
+              <div className="font-mono text-[14px] tracking-wider text-stone-500">
                 {allPanels.length} SHOTS · 比例 {projectVideoRatio}
               </div>
             </div>
@@ -1227,7 +1227,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
                 onClick={handleAnalyzeStoryboard}
                 title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
-                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {analyzeState.status === 'submitting'
@@ -1241,7 +1241,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 disabled={autoGroup.isPending || allPanels.length < 2}
                 onClick={handleAutoGroup}
                 title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群"
-                className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
@@ -1251,7 +1251,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 onClick={() => handleSubmitMultiShot()}
                 disabled={multiShotState.status === 'submitting'}
                 title="把分鏡送 Kling multi-shot 一次出多鏡頭視頻"
-                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {multiShotState.status === 'submitting'
@@ -1312,18 +1312,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                           <AppIcon name="image" className="h-7 w-7 text-stone-600" />
                         </div>
                       )}
-                      <div className="absolute left-2 top-2 rounded bg-stone-950/60 px-2 py-0.5 font-mono text-[10px] text-stone-200 backdrop-blur-sm">
+                      <div className="absolute left-2 top-2 rounded bg-stone-950/60 px-2 py-0.5 font-mono text-[14px] text-stone-200 backdrop-blur-sm">
                         #{String(i + 1).padStart(2, '0')}
                       </div>
                       {p.videoUrl ? (
-                        <div className="absolute bottom-2 right-2 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[9px] text-stone-950 backdrop-blur-sm">
+                        <div className="absolute bottom-2 right-2 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[12px] text-stone-950 backdrop-blur-sm">
                           ▶ 視頻
                         </div>
                       ) : null}
                       {isImg || isVid ? (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
                           <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                          <div className="font-mono text-[9px] tracking-wider text-amber-300">
+                          <div className="font-mono text-[12px] tracking-wider text-amber-300">
                             {isVid ? '視頻生成中' : '圖生成中'}
                           </div>
                         </div>
@@ -1348,7 +1348,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   <div className="font-fraunces text-base italic text-amber-500/80">
                     鏡頭 {String(selectedIdxForGallery + 1).padStart(2, '0')}
                   </div>
-                  <div className="font-mono text-[10px] tracking-wider text-stone-500">
+                  <div className="font-mono text-[14px] tracking-wider text-stone-500">
                     {selected.videoUrl ? '✓ 視頻已生成' : selected.imageUrl ? '圖已生成' : '尚未生成'}
                   </div>
                 </div>
@@ -1376,7 +1376,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       <div className="font-fraunces text-sm italic text-amber-300">
                         {isCurrentPanelVideoInFlight ? '視頻生成中' : '圖片生成中'}
                       </div>
-                      <div className="px-3 text-center font-serif-cn text-[10px] text-stone-300">
+                      <div className="px-3 text-center font-serif-cn text-[14px] text-stone-300">
                         30-60 秒,完成後自動更新
                       </div>
                     </div>
@@ -1431,12 +1431,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 <div className="mt-4 space-y-4">
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[10px] tracking-wider text-amber-600">描述詞</div>
+                      <div className="font-mono text-[14px] tracking-wider text-amber-600">描述詞</div>
                       <button
                         type="button"
                         onClick={handleSaveDescription}
                         disabled={!descChanged || updatePanelText.isPending || !selected}
-                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
                       >
                         {updatePanelText.isPending ? '儲存中…' : '儲存'}
                       </button>
@@ -1450,12 +1450,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   </div>
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[10px] tracking-wider text-amber-600">對話</div>
+                      <div className="font-mono text-[14px] tracking-wider text-amber-600">對話</div>
                       <button
                         type="button"
                         onClick={handleSaveDialogue}
                         disabled={!dialogueChanged || updatePanelText.isPending || !selected}
-                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
                       >
                         {updatePanelText.isPending ? '儲存中…' : '儲存'}
                       </button>
@@ -1488,7 +1488,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     rel="noopener noreferrer"
                     aria-disabled={!selected.imageUrl}
                     onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[10px] tracking-wider transition-all ${selected.imageUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.imageUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
                   >
                     <AppIcon name="download" className="h-3 w-3" />
                     下載圖
@@ -1500,7 +1500,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     rel="noopener noreferrer"
                     aria-disabled={!selected.videoUrl}
                     onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[10px] tracking-wider transition-all ${selected.videoUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.videoUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
                   >
                     <AppIcon name="download" className="h-3 w-3" />
                     下載影片
@@ -1527,7 +1527,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           <div className="flex items-center gap-3">
             <div className="font-fraunces text-sm italic text-amber-500/80">Storyboard Strip</div>
             {hasGroups ? (
-              <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-400">
+              <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
                 {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
               </span>
             ) : null}
@@ -1538,7 +1538,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
               onClick={handleAnalyzeStoryboard}
               title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {analyzeState.status === 'submitting'
@@ -1552,7 +1552,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               disabled={autoGroup.isPending || allPanels.length < 2}
               onClick={handleAutoGroup}
               title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群,提升 Kling 多鏡頭品質"
-              className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
@@ -1573,7 +1573,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   disabled={batchImageState !== null || regenPanel.isPending}
                   onClick={handleBatchGenerateImages}
                   title={`一鍵把還沒有圖的 ${missingImages} 個分鏡都送去生圖(每張 30-60s,後台跑)`}
-                  className="flex items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <AppIcon name="image" className="h-3 w-3" />
                   {batchImageState
@@ -1593,7 +1593,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   disabled={batchVideoState !== null || generateVideo.isPending}
                   onClick={handleBatchGenerateVideos}
                   title={`一鍵把已有圖、還沒有影片的 ${eligibleForVideo} 個分鏡都送去生 5 秒影片`}
-                  className="flex items-center gap-1.5 rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-sky-300 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex items-center gap-1.5 rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-sky-300 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <AppIcon name="play" className="h-3 w-3" />
                   {batchVideoState
@@ -1603,7 +1603,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               )
             })()}
             {layoutToggleNode}
-            <div className="font-mono text-[10px] tracking-wider text-stone-500">
+            <div className="font-mono text-[14px] tracking-wider text-stone-500">
               {allPanels.length} SHOTS · DRAFT 03
             </div>
           </div>
@@ -1663,7 +1663,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-950/90 via-transparent to-transparent" />
-                  <div className="absolute left-2 top-1.5 rounded bg-stone-950/50 px-1.5 py-0.5 font-mono text-[10px] text-stone-200 backdrop-blur-sm">
+                  <div className="absolute left-2 top-1.5 rounded bg-stone-950/50 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 backdrop-blur-sm">
                     #{String(i + 1).padStart(2, '0')}
                   </div>
                   {(() => {
@@ -1677,7 +1677,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       return (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
                           <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                          <div className="font-mono text-[9px] tracking-wider text-amber-300">
+                          <div className="font-mono text-[12px] tracking-wider text-amber-300">
                             {isVid ? '視頻生成中' : '圖生成中'}
                           </div>
                         </div>
@@ -1710,7 +1710,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                           className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-rose-950/80 backdrop-blur-sm"
                         >
                           <AppIcon name="alert" className="h-5 w-5 text-rose-300" />
-                          <div className="font-mono text-[9px] tracking-wider text-rose-200">
+                          <div className="font-mono text-[12px] tracking-wider text-rose-200">
                             ✗ {label}
                           </div>
                           <div className="font-mono text-[8px] tracking-wider text-rose-400/80">
@@ -1757,14 +1757,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         <div className="col-span-5 space-y-5 order-2">
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[10px] tracking-wider text-amber-600">
+              <div className="font-mono text-[14px] tracking-wider text-amber-600">
                 SHOT {String(selectedIndex + 1).padStart(2, '0')} · 描述詞
               </div>
               <button
                 type="button"
                 onClick={handleSaveDescription}
                 disabled={!descChanged || updatePanelText.isPending || !selected}
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {updatePanelText.isPending ? '儲存中…' : '儲存'}
               </button>
@@ -1780,14 +1780,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[10px] tracking-wider text-amber-600">
+              <div className="font-mono text-[14px] tracking-wider text-amber-600">
                 SHOT {String(selectedIndex + 1).padStart(2, '0')} · 對話
               </div>
               <button
                 type="button"
                 onClick={handleSaveDialogue}
                 disabled={!dialogueChanged || updatePanelText.isPending || !selected}
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {updatePanelText.isPending ? '儲存中…' : '儲存'}
               </button>
@@ -1848,9 +1848,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             }}
           />
           {updatePanel.isPending ? (
-            <div className="font-mono text-[9px] tracking-wider text-stone-500">儲存中…</div>
+            <div className="font-mono text-[12px] tracking-wider text-stone-500">儲存中…</div>
           ) : updatePanel.isError ? (
-            <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-mono text-[9px] tracking-wider text-rose-300">
+            <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-mono text-[12px] tracking-wider text-rose-300">
               儲存失敗:{(updatePanel.error as Error)?.message ?? '未知'}
             </div>
           ) : null}
@@ -1869,7 +1869,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               type="button"
               onClick={() => handleSubmitMultiShot()}
               disabled={multiShotState.status === 'submitting'}
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-amber-500 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-500 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               title={(() => {
                 const m = project?.novelPromotionData?.videoModel ?? ''
                 if (/^tencent-vod::Kling-(3|O1)/i.test(m)) {
@@ -2001,20 +2001,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 鏡頭 {String(selectedIndex + 1).padStart(2, '0')}
               </div>
               {selected?.videoUrl ? (
-                <div className="mt-1 font-mono text-[10px] tracking-wider text-amber-500">
+                <div className="mt-1 font-mono text-[14px] tracking-wider text-amber-500">
                   ✓ 視頻已生成
                 </div>
               ) : isCurrentPanelVideoInFlight ? (
-                <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] tracking-wider text-amber-400">
+                <div className="mt-1 flex items-center gap-1.5 font-mono text-[14px] tracking-wider text-amber-400">
                   <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
                   視頻生成中… 30-60 秒,完成後自動更新
                 </div>
               ) : selected?.imageUrl ? (
-                <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">
+                <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
                   圖已生成,視頻待跑
                 </div>
               ) : (
-                <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">尚未生成</div>
+                <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">尚未生成</div>
               )}
             </div>
           </div>
@@ -2089,7 +2089,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 rel="noopener noreferrer"
                 aria-disabled={!selected.imageUrl}
                 onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all ${
                   selected.imageUrl
                     ? 'hover:border-amber-500/40 hover:text-amber-400'
                     : 'cursor-not-allowed opacity-40'
@@ -2105,7 +2105,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 rel="noopener noreferrer"
                 aria-disabled={!selected.videoUrl}
                 onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all ${
+                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all ${
                   selected.videoUrl
                     ? 'hover:border-amber-500/40 hover:text-amber-400'
                     : 'cursor-not-allowed opacity-40'
@@ -2144,7 +2144,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           ) : null}
 
           <div>
-            <div className="mb-2 font-mono text-[10px] tracking-wider text-amber-600">主體 · CAST</div>
+            <div className="mb-2 font-mono text-[14px] tracking-wider text-amber-600">主體 · CAST</div>
             {Array.isArray(selected?.characters) && selected.characters.length > 0 ? (
               <div className="space-y-1.5">
                 {selected.characters.map((name, i) => (
@@ -2163,7 +2163,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           </div>
 
           <div>
-            <div className="mb-2 font-mono text-[10px] tracking-wider text-amber-600">註記 · NOTES</div>
+            <div className="mb-2 font-mono text-[14px] tracking-wider text-amber-600">註記 · NOTES</div>
             <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-2 font-serif-cn text-xs leading-relaxed text-stone-400">
               {selected?.videoPrompt ?? '(無註記)'}
             </div>
@@ -2193,7 +2193,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             alt="Zoomed"
             className="max-h-full max-w-full object-contain"
           />
-          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[10px] uppercase tracking-wider text-stone-400">
+          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[14px] uppercase tracking-wider text-stone-400">
             click anywhere or press esc to close
           </div>
         </div>
@@ -2219,7 +2219,7 @@ function PromptChipGroup({
 }) {
   return (
     <div>
-      <div className="mb-2 font-mono text-[10px] tracking-wider text-stone-500">{label}</div>
+      <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">{label}</div>
       <div className={`grid gap-1.5 ${cols === 1 ? '' : cols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
         {options.map((v) => (
           <button

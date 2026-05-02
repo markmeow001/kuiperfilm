@@ -174,7 +174,7 @@ function ProjectSwitcher({
           <div className="font-fraunces text-sm italic text-stone-300 group-hover:text-amber-300">
             《{currentProjectName}》
           </div>
-          <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-600">
+          <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-600">
             DRAFT · {draftLabel}/{String(totalSteps).padStart(2, '0')}
           </div>
         </div>
@@ -186,13 +186,13 @@ function ProjectSwitcher({
 
       {open ? (
         <div className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
-          <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600">
+          <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
             切換專案
           </div>
 
           <div className="max-h-72 overflow-y-auto py-1">
             {loading ? (
-              <div className="px-4 py-3 font-mono text-[10px] tracking-wider text-stone-500">
+              <div className="px-4 py-3 font-mono text-[14px] tracking-wider text-stone-500">
                 載入中…
               </div>
             ) : otherProjects.length === 0 ? (

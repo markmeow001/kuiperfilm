@@ -157,13 +157,13 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
               <div className="font-fraunces text-sm italic text-amber-500/80">
                 {currentEpisode ? `${currentEpisode.name}` : '尚未選集'}
               </div>
-              <div className="mt-0.5 font-mono text-[10px] tracking-wider text-stone-600">
+              <div className="mt-0.5 font-mono text-[14px] tracking-wider text-stone-600">
                 {episodes.length === 0
                   ? '點上方「+ 新建劇集」開始,或直接貼劇本後按「儲存」自動建立第 1 集'
                   : '在這裡貼上這一集的劇本,按「儲存」寫入'}
               </div>
             </div>
-            <div className="flex items-center gap-3 font-mono text-[10px]">
+            <div className="flex items-center gap-3 font-mono text-[14px]">
               <span className="text-stone-600">{charCount} chars</span>
               {currentEpisodeId ? (
                 saving ? (
@@ -221,7 +221,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
         <aside className="space-y-4 self-start rounded-sm border border-stone-800/60 bg-stone-900/30 p-5">
           <div>
             <div className="mb-1 font-fraunces text-sm italic text-amber-500/80">Workflow</div>
-            <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-stone-600">
+            <div className="font-mono text-[12px] uppercase tracking-[0.2em] text-stone-600">
               貼劇本 → 主體 → 分鏡
             </div>
           </div>

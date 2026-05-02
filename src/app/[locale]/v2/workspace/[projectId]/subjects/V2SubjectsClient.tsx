@@ -31,6 +31,7 @@ import {
 import {
   useGenerateProjectPropImage,
   useRegenerateSinglePropImage,
+  useUploadProjectPropImage,
 } from '@/lib/query/mutations/prop-image-mutations'
 import {
   useUploadProjectCharacterImage,
@@ -175,6 +176,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const regenLoc = useRegenerateSingleLocationImage(projectId)
   const generateProp = useGenerateProjectPropImage(projectId)
   const regenProp = useRegenerateSinglePropImage(projectId)
+  const uploadPropImage = useUploadProjectPropImage(projectId)
   const regenCharGroup = useRegenerateCharacterGroup(projectId)
   const regenLocGroup = useRegenerateLocationGroup(projectId)
   const uploadCharImage = useUploadProjectCharacterImage(projectId)
@@ -698,6 +700,20 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     )
   }
 
+  function handleUploadProp(p: { id: string; name: string }, file: File) {
+    setUploadInFlight((prev) => new Set(prev).add(p.id))
+    const labelText = `${p.name ?? '道具'}`
+    uploadPropImage.mutate(
+      { file, propId: p.id, labelText },
+      {
+        onSettled: () => markUploadDone(p.id),
+        onError: (err) => {
+          alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
+  }
+
   const props = (propsQuery.data ?? []) as Array<{
     id: string
     name: string
@@ -727,7 +743,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           <div className="font-fraunces text-sm italic text-amber-400">
             分析{currentEpisode ? `「${currentEpisode.name}」` : '當前集'}的劇本
           </div>
-          <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">
+          <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
             從劇本自動抽出角色 / 場景 / 道具 — 完成後可在下方卡片點「重新生成」/「鎖定」/上傳替換
           </div>
         </div>
@@ -749,7 +765,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           </button>
           <Link
             href={`/${locale}/workspace/asset-hub`}
-            className="font-mono text-[10px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
+            className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
           >
             或從素材庫導入 →
           </Link>
@@ -801,7 +817,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           </div>
           <Link
             href={`/${locale}/v2/workspace/${projectId}/storyboard`}
-            className="flex flex-shrink-0 items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/20 px-4 py-1.5 font-mono text-[10px] tracking-wider text-emerald-200 transition-all hover:bg-emerald-500/30"
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/20 px-4 py-1.5 font-mono text-[14px] tracking-wider text-emerald-200 transition-all hover:bg-emerald-500/30"
           >
             → 進入分鏡頁 <AppIcon name="chevronRight" className="h-3 w-3" />
           </Link>
@@ -826,7 +842,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               }`}
             >
               {t.label}
-              <span className="ml-2 font-mono text-[10px] opacity-60">{t.count}</span>
+              <span className="ml-2 font-mono text-[14px] opacity-60">{t.count}</span>
             </button>
           ))}
         </div>
@@ -867,7 +883,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       </div>
 
       {tab === 'character' && currentEpisode && isFilteringByEpisode && hiddenInThisEpisodeCount > 0 ? (
-        <div className="mb-4 rounded-sm border border-stone-800/50 bg-stone-900/40 px-3 py-2 font-mono text-[10px] tracking-wider text-stone-400">
+        <div className="mb-4 rounded-sm border border-stone-800/50 bg-stone-900/40 px-3 py-2 font-mono text-[14px] tracking-wider text-stone-400">
           只顯示「{currentEpisode.name}」出現的 {characters.length} 個角色 ·
           其他集數有 {hiddenInThisEpisodeCount} 個隱藏 · 切到其他集數 tab 可看到那邊的角色
         </div>
@@ -949,6 +965,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               mut.mutate({ propId: p.id })
             },
             isRegenerating: regenInFlight.has(p.id) || serverInflightIds.has(p.id),
+            onUpload: (file) => handleUploadProp(p, file),
+            isUploading: uploadInFlight.has(p.id),
             onZoom: (url) => setZoomImage(url),
           }))}
           emptyHint="此項目還沒有道具 — 點上方「一鍵分析」抽出此集的道具(刀/信封/戒指等劇情關鍵物件)"
@@ -1094,7 +1112,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             className="max-h-full max-w-full object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
-          <span className="absolute right-6 top-6 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 font-mono text-[10px] tracking-wider text-stone-300">
+          <span className="absolute right-6 top-6 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300">
             ESC / 點背景關閉
           </span>
         </button>
@@ -1185,7 +1203,7 @@ function SubjectGrid({
               </div>
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-stone-950/95 via-stone-950/30 to-transparent" />
-            <div className="absolute left-3 top-3 rounded-sm bg-stone-950/40 px-2 py-1 font-mono text-[9px] tracking-[0.2em] text-stone-300/80 backdrop-blur-sm">
+            <div className="absolute left-3 top-3 rounded-sm bg-stone-950/40 px-2 py-1 font-mono text-[12px] tracking-[0.2em] text-stone-300/80 backdrop-blur-sm">
               {String(i + 1).padStart(3, '0')}
             </div>
             <div className="absolute bottom-3 left-3 right-3">
@@ -1194,15 +1212,15 @@ function SubjectGrid({
             {item.isRegenerating ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
                 <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                <div className="font-mono text-[10px] tracking-wider text-amber-300">生圖中…</div>
-                <div className="px-4 text-center font-serif-cn text-[10px] text-stone-400">
+                <div className="font-mono text-[14px] tracking-wider text-amber-300">生圖中…</div>
+                <div className="px-4 text-center font-serif-cn text-[14px] text-stone-400">
                   Tencent VOD AIGC 30-90 秒,撞並發限制會自動重試
                 </div>
               </div>
             ) : item.isUploading ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
                 <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-amber-400" />
-                <div className="font-mono text-[10px] tracking-wider text-amber-300">上傳中…</div>
+                <div className="font-mono text-[14px] tracking-wider text-amber-300">上傳中…</div>
               </div>
             ) : null}
           </div>
@@ -1222,7 +1240,7 @@ function SubjectGrid({
                   <button
                     type="button"
                     onClick={item.onOpenEditor}
-                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
                     title="開啟完整編輯器 — 改名/描述/外觀提示詞/刪除"
                   >
                     <AppIcon name="edit" className="h-3 w-3" />
@@ -1233,7 +1251,7 @@ function SubjectGrid({
                   <button
                     type="button"
                     onClick={item.onEditDescription}
-                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
                     title="只快速改外觀提示詞"
                   >
                     改外觀
@@ -1248,7 +1266,7 @@ function SubjectGrid({
             ) : null}
             {item.isEditingDescription ? (
               <div className="mt-3 space-y-2 rounded-sm border border-amber-500/30 bg-stone-950/40 p-2">
-                <div className="flex items-center justify-between font-mono text-[9px] tracking-wider text-amber-500/70">
+                <div className="flex items-center justify-between font-mono text-[12px] tracking-wider text-amber-500/70">
                   <span>外觀提示詞 (image prompt)</span>
                   <span className="text-stone-600">{item.descriptionDraft?.length ?? 0} 字</span>
                 </div>
@@ -1260,7 +1278,7 @@ function SubjectGrid({
                   placeholder="例:三十岁中年男性,黑短发,商务衬衫卷袖,深灰西裤,腕表,神情冷峻... (越具體越穩)"
                   disabled={item.isSavingDescription}
                 />
-                <div className="flex items-center justify-end gap-2 font-mono text-[10px] tracking-wider">
+                <div className="flex items-center justify-end gap-2 font-mono text-[14px] tracking-wider">
                   <button
                     type="button"
                     onClick={item.onDescriptionCancel}
@@ -1281,7 +1299,7 @@ function SubjectGrid({
               </div>
             ) : item.visualPrompt ? (
               <div className="mt-2 rounded-sm border border-stone-800/40 bg-stone-950/30 p-2">
-                <div className="mb-1 font-mono text-[9px] tracking-wider text-stone-500">
+                <div className="mb-1 font-mono text-[12px] tracking-wider text-stone-500">
                   外觀提示詞
                 </div>
                 <div className="line-clamp-3 font-body text-[11px] leading-relaxed text-stone-400">
@@ -1294,7 +1312,7 @@ function SubjectGrid({
               </div>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-3 border-t border-stone-800/50 px-4 pb-3 pt-2 font-mono text-[10px] tracking-wider">
+          <div className="flex flex-wrap items-center gap-3 border-t border-stone-800/50 px-4 pb-3 pt-2 font-mono text-[14px] tracking-wider">
             {item.onRegenerate ? (
               <button
                 type="button"

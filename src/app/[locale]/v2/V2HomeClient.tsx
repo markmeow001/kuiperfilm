@@ -147,7 +147,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
             <div className="font-fraunces text-2xl italic tracking-tight text-amber-400">
               Kuiper <span className="not-italic font-serif-cn">影界</span>
             </div>
-            <div className="mt-0.5 font-mono text-[10px] tracking-[0.2em] text-stone-400">
+            <div className="mt-0.5 font-mono text-[14px] tracking-[0.2em] text-stone-400">
               AI · MANHUA · STUDIO
             </div>
           </div>
@@ -281,7 +281,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
                     </p>
                   )}
 
-                  <div className="mt-auto flex items-center justify-between font-mono text-[10px] text-stone-400">
+                  <div className="mt-auto flex items-center justify-between font-mono text-[14px] text-stone-400">
                     <div className="flex items-center gap-3">
                       {project.stats?.episodes ? (
                         <span className="flex items-center gap-1">

@@ -90,7 +90,7 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
         {/* Filter rail */}
         <div className="col-span-1 space-y-6">
           <div>
-            <div className="mb-3 font-mono text-[10px] tracking-wider text-amber-600">篩選 · 性別</div>
+            <div className="mb-3 font-mono text-[14px] tracking-wider text-amber-600">篩選 · 性別</div>
             <div className="grid grid-cols-3 gap-2">
               {GENDER_FILTERS.map((g) => (
                 <button
@@ -110,7 +110,7 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
           </div>
 
           <div>
-            <div className="mb-3 font-mono text-[10px] tracking-wider text-amber-600">篩選 · 情緒</div>
+            <div className="mb-3 font-mono text-[14px] tracking-wider text-amber-600">篩選 · 情緒</div>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -152,7 +152,7 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
         <div className="col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <div className="font-fraunces text-sm italic text-amber-500/80">音色列表</div>
-            <div className="font-mono text-[10px] tracking-wider text-stone-500">
+            <div className="font-mono text-[14px] tracking-wider text-stone-500">
               {voices.length} VOICES · {filtered.length} SHOWING
             </div>
           </div>
@@ -198,7 +198,7 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
                           {v.name ?? '未命名音色'}
                         </div>
                         {v.metadata?.gender ? (
-                          <div className="font-mono text-[10px] tracking-wider text-stone-600">
+                          <div className="font-mono text-[14px] tracking-wider text-stone-600">
                             {v.metadata.gender} · {v.metadata.age ?? '—'}
                           </div>
                         ) : null}

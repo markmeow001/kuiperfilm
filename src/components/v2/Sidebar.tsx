@@ -42,7 +42,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
           </div>
           <div className="font-serif-cn text-xl font-medium text-stone-100">影界</div>
         </div>
-        <div className="mt-1 font-mono text-[10px] tracking-[0.2em] text-stone-500">
+        <div className="mt-1 font-mono text-[14px] tracking-[0.2em] text-stone-500">
           AI · MANHUA · STUDIO
         </div>
       </Link>
@@ -51,7 +51,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
           subtle "click the logo" pattern. */}
       <Link
         href={projectsHref}
-        className="group flex items-center gap-2 border-b border-amber-900/10 px-7 py-3 font-mono text-[10px] tracking-wider text-stone-500 transition-colors hover:bg-stone-900/40 hover:text-amber-400"
+        className="group flex items-center gap-2 border-b border-amber-900/10 px-7 py-3 font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:bg-stone-900/40 hover:text-amber-400"
       >
         <AppIcon name="chevronLeft" className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
         <span>所有專案 · 切換</span>
@@ -74,7 +74,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
               }`}
             >
               <div
-                className={`w-6 font-mono text-[10px] tracking-wider ${
+                className={`w-6 font-mono text-[14px] tracking-wider ${
                   active ? 'text-amber-400' : completed ? 'text-amber-700' : 'text-stone-600'
                 }`}
               >
@@ -94,7 +94,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
                 >
                   {step.label}
                 </div>
-                <div className="mt-0.5 font-fraunces text-[10px] italic text-stone-600">
+                <div className="mt-0.5 font-fraunces text-[14px] italic text-stone-600">
                   {step.subtitle}
                 </div>
               </div>
@@ -115,7 +115,7 @@ function SidebarUser() {
   if (status === 'loading') {
     return (
       <div className="border-t border-amber-900/15 px-5 py-5">
-        <div className="font-mono text-[10px] tracking-wider text-stone-600">載入帳號中…</div>
+        <div className="font-mono text-[14px] tracking-wider text-stone-600">載入帳號中…</div>
       </div>
     )
   }
@@ -146,7 +146,7 @@ function SidebarUser() {
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate font-body text-sm text-stone-200">{name}</div>
-          <div className="mt-0.5 font-mono text-[10px] text-amber-600/70">
+          <div className="mt-0.5 font-mono text-[14px] text-amber-600/70">
             {role ? role.toUpperCase() : 'MEMBER'}
           </div>
         </div>

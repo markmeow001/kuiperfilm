@@ -230,7 +230,7 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
                 }`}
                 title={`${episode.name}（雙擊重命名)`}
               >
-                <span className={`font-mono text-[10px] ${isActive ? 'text-amber-500' : 'text-stone-600'}`}>
+                <span className={`font-mono text-[14px] ${isActive ? 'text-amber-500' : 'text-stone-600'}`}>
                   {String(episode.episodeNumber).padStart(2, '0')}
                 </span>
                 <span>{episode.name}</span>
@@ -240,7 +240,7 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
                 <button
                   type="button"
                   onClick={() => void handleDelete(episode.id)}
-                  className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full border border-stone-700 bg-stone-900 text-[10px] text-stone-400 transition-colors hover:border-rose-500/50 hover:bg-rose-500/15 hover:text-rose-300 group-hover:flex"
+                  className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full border border-stone-700 bg-stone-900 text-[14px] text-stone-400 transition-colors hover:border-rose-500/50 hover:bg-rose-500/15 hover:text-rose-300 group-hover:flex"
                   title="刪除此集"
                 >
                   ×

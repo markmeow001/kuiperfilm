@@ -126,7 +126,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                 </div>
               )}
             </div>
-            <div className="absolute left-4 top-4 font-mono text-[10px] tracking-[0.3em] text-amber-300/80">
+            <div className="absolute left-4 top-4 font-mono text-[14px] tracking-[0.3em] text-amber-300/80">
               EP 01 · OPENING SEQUENCE
             </div>
           </div>
@@ -135,7 +135,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
           <div className="mt-5 rounded-sm border border-stone-800/60 bg-stone-900/40 p-4">
             <div className="mb-3 flex items-center justify-between">
               <div className="font-fraunces text-sm italic text-amber-500/80">Timeline</div>
-              <div className="font-mono text-[10px] tracking-wider text-stone-500">
+              <div className="font-mono text-[14px] tracking-wider text-stone-500">
                 {panelsWithVideo.length} / {allPanels.length} 段已生視頻
               </div>
             </div>
@@ -216,7 +216,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                 type="button"
                 disabled={stitchMp4.isPending || !currentEpisodeId || !hasPackageableContent}
                 onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
-                className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {stitchMp4.isPending ? '重新打包中…' : '↻ 重新打包素材包'}
               </button>

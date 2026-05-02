@@ -189,7 +189,7 @@ export function V2GroupsLayout({
               <div className="rounded-sm border border-stone-800/60 bg-stone-900/20 px-4 py-3">
                 <div className="mb-2 flex items-center gap-2">
                   <AppIcon name="sparklesAlt" className="h-3 w-3 text-stone-500" />
-                  <div className="font-mono text-[9px] uppercase tracking-wider text-stone-500">
+                  <div className="font-mono text-[12px] uppercase tracking-wider text-stone-500">
                     未切組 · {groups.ungrouped.length} 鏡
                   </div>
                 </div>

@@ -66,7 +66,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
       <header className="border-b border-stone-800/60 px-12 py-5">
         <Link
           href={`/${locale}/v2`}
-          className="font-mono text-[10px] tracking-[0.2em] text-stone-500 transition-colors hover:text-amber-400"
+          className="font-mono text-[14px] tracking-[0.2em] text-stone-500 transition-colors hover:text-amber-400"
         >
           ← 我的專案
         </Link>
@@ -74,7 +74,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
 
       <main className="mx-auto max-w-2xl px-12 py-16">
         <div className="mb-10">
-          <div className="font-mono text-[10px] tracking-[0.25em] text-amber-500/70">
+          <div className="font-mono text-[14px] tracking-[0.25em] text-amber-500/70">
             STEP 00 — NEW
           </div>
           <h1 className="mt-2 font-serif-cn text-3xl font-light text-stone-100">
@@ -87,7 +87,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="mb-2 block font-mono text-[10px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
               專案名稱 · NAME *
             </label>
             <input
@@ -103,7 +103,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
           </div>
 
           <div>
-            <label className="mb-2 block font-mono text-[10px] tracking-wider text-stone-500">
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
               簡述 · DESCRIPTION（選填）
             </label>
             <textarea
@@ -114,13 +114,13 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               rows={4}
               className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 px-4 py-3 font-serif-cn text-sm leading-relaxed text-stone-200 placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
             />
-            <div className="mt-1 text-right font-mono text-[10px] text-stone-700">
+            <div className="mt-1 text-right font-mono text-[14px] text-stone-700">
               {description.length} / 500
             </div>
           </div>
 
           <div className="rounded-sm border border-stone-800/60 bg-stone-900/20 p-4">
-            <div className="font-mono text-[10px] tracking-wider text-stone-500">
+            <div className="font-mono text-[14px] tracking-wider text-stone-500">
               💡 TIP
             </div>
             <p className="mt-2 font-serif-cn text-xs leading-relaxed text-stone-400">

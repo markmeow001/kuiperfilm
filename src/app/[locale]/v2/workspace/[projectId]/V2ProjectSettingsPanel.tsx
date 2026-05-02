@@ -88,7 +88,7 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
 
       {/* Video ratio */}
       <div className="mb-5">
-        <div className="mb-2 font-mono text-[10px] tracking-wider text-stone-500">
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
           畫面比例 · ASPECT
         </div>
         <div className="flex flex-wrap gap-2">
@@ -107,7 +107,7 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
                 }`}
               >
                 {r.label}
-                <span className="ml-1.5 font-serif-cn text-[10px] opacity-70">{r.caption}</span>
+                <span className="ml-1.5 font-serif-cn text-[14px] opacity-70">{r.caption}</span>
               </button>
             )
           })}
@@ -116,7 +116,7 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
 
       {/* Style preset */}
       <div>
-        <div className="mb-2 font-mono text-[10px] tracking-wider text-stone-500">
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
           畫面風格 · STYLE
           {selectedPresetLabel ? (
             <span className="ml-2 font-serif-cn text-amber-400">({selectedPresetLabel})</span>
@@ -125,7 +125,7 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
         <div className="space-y-3">
           {presetGroups.map((group) => (
             <div key={group.category}>
-              <div className="mb-1.5 font-mono text-[9px] uppercase tracking-wider text-stone-600">
+              <div className="mb-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-600">
                 {group.label}
               </div>
               <div className="flex flex-wrap gap-1.5">

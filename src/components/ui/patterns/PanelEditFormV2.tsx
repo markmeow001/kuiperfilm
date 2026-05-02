@@ -136,7 +136,7 @@ export default function PanelEditFormV2({
               type="button"
               onClick={handleSafeRewrite}
               disabled={isRewriting || (!panelData.description && !panelData.videoPrompt)}
-              className="inline-flex h-6 items-center gap-1 px-1.5 text-[10px] text-[var(--glass-text-tertiary)] hover:text-[var(--glass-tone-info-fg)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex h-6 items-center gap-1 px-1.5 text-[14px] text-[var(--glass-text-tertiary)] hover:text-[var(--glass-tone-info-fg)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               title={t('panel.safeRewrite')}
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />

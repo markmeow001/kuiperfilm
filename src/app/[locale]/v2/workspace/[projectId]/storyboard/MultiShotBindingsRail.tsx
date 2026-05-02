@@ -107,14 +107,14 @@ export function MultiShotBindingsRail({
   return (
     <div className="rounded-sm border border-amber-900/15 bg-stone-900/20 px-3 py-2.5">
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+        <div className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
           <AppIcon name="sparklesAlt" className="h-3 w-3" />
           多鏡頭綁定
           {groupLabel ? (
             <span className="text-stone-500">· {groupLabel}</span>
           ) : null}
         </div>
-        <div className="font-mono text-[9px] tracking-wider">
+        <div className="font-mono text-[12px] tracking-wider">
           {status === 'completed' ? (
             <span className="text-emerald-400/80">已完成</span>
           ) : status === 'failed' ? (
@@ -145,7 +145,7 @@ export function MultiShotBindingsRail({
             {isRateLimit ? (
               <>
                 <strong className="text-rose-200">Tencent VOD 並發上限被打到</strong>
-                <div className="mt-0.5 text-[10px] text-rose-300/80">
+                <div className="mt-0.5 text-[14px] text-rose-300/80">
                   你的 Tencent 帳號同時跑的視頻任務太多。建議:
                   <ul className="mt-0.5 list-inside list-disc space-y-0.5">
                     <li>等 30-60 秒後點上方「重新生成」</li>
@@ -157,7 +157,7 @@ export function MultiShotBindingsRail({
             ) : isOrphaned ? (
               <>
                 <strong className="text-rose-200">任務被中斷(可能是部署期間)</strong>
-                <div className="mt-0.5 text-[10px] text-rose-300/80">
+                <div className="mt-0.5 text-[14px] text-rose-300/80">
                   這個任務原本在跑,但因為 server restart 被中止。系統自動清掉了 zombie task。
                   <ul className="mt-0.5 list-inside list-disc space-y-0.5">
                     <li>點上方「重新生成」就會送新 task</li>
@@ -190,7 +190,7 @@ export function MultiShotBindingsRail({
             className="mx-auto block h-auto max-h-[320px] w-full object-contain"
           />
           <div className="flex items-center justify-between border-t border-amber-900/20 bg-stone-900/40 px-2 py-1">
-            <div className="font-mono text-[9px] tracking-wider text-amber-500/70">
+            <div className="font-mono text-[12px] tracking-wider text-amber-500/70">
               MULTI-SHOT {shotCount ? `· ${shotCount} 鏡` : ''}
             </div>
             <a
@@ -202,7 +202,7 @@ export function MultiShotBindingsRail({
               download=""
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-[9px] tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+              className="font-mono text-[12px] tracking-wider text-stone-400 transition-colors hover:text-amber-400"
             >
               下載
             </a>
@@ -214,7 +214,7 @@ export function MultiShotBindingsRail({
         <div className="space-y-2">
           {showCastBlock ? (
             <div>
-              <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-stone-500">
+              <div className="mb-1 font-mono text-[12px] uppercase tracking-wider text-stone-500">
                 Cast · {characters.length}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -246,12 +246,12 @@ export function MultiShotBindingsRail({
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
                         </div>
-                        <span className="font-serif-cn text-[10px] text-stone-200">{c.name}</span>
-                        <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                        <span className="font-serif-cn text-[14px] text-stone-200">{c.name}</span>
+                        <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
                           {c.appearanceLabel ?? '默認造型'}
                         </span>
                         {hasOverride ? (
-                          <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                          <span className="font-mono text-[12px] tracking-wider text-violet-300">
                             ✏ 已改
                           </span>
                         ) : null}
@@ -264,8 +264,8 @@ export function MultiShotBindingsRail({
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
                       </div>
-                      <span className="font-serif-cn text-[10px] text-stone-200">{c.name}</span>
-                      <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                      <span className="font-serif-cn text-[14px] text-stone-200">{c.name}</span>
+                      <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
                         {c.appearanceLabel ?? '默認造型'}
                       </span>
                     </div>
@@ -277,7 +277,7 @@ export function MultiShotBindingsRail({
 
           {scenes.length > 0 ? (
             <div>
-              <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-stone-500">
+              <div className="mb-1 font-mono text-[12px] uppercase tracking-wider text-stone-500">
                 Scenes · {scenes.length}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -308,12 +308,12 @@ export function MultiShotBindingsRail({
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={s.imageUrl} alt={s.name} className="h-full w-full object-cover" />
                         </div>
-                        <span className="font-serif-cn text-[10px] text-stone-200">{s.name}</span>
-                        <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                        <span className="font-serif-cn text-[14px] text-stone-200">{s.name}</span>
+                        <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
                           {s.viewName ?? '主視角'}
                         </span>
                         {hasOverride ? (
-                          <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                          <span className="font-mono text-[12px] tracking-wider text-violet-300">
                             ✏ 已改
                           </span>
                         ) : null}
@@ -326,8 +326,8 @@ export function MultiShotBindingsRail({
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={s.imageUrl} alt={s.name} className="h-full w-full object-cover" />
                       </div>
-                      <span className="font-serif-cn text-[10px] text-stone-200">{s.name}</span>
-                      <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                      <span className="font-serif-cn text-[14px] text-stone-200">{s.name}</span>
+                      <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
                         {s.viewName ?? '主視角'}
                       </span>
                     </div>

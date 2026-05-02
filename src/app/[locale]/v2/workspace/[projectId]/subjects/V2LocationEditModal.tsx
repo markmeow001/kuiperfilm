@@ -192,7 +192,7 @@ export function V2LocationEditModal({
         <div className="flex items-center justify-between border-b border-stone-800/60 px-6 py-4">
           <div>
             <div className="font-fraunces text-xl italic text-amber-400">編輯場景</div>
-            <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">
+            <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
               EDIT_LOCATION · {location.id.slice(0, 8)}
             </div>
           </div>
@@ -226,7 +226,7 @@ export function V2LocationEditModal({
               {isRegenerating ? (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
                   <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                  <div className="font-mono text-[10px] tracking-wider text-amber-300">生圖中…</div>
+                  <div className="font-mono text-[14px] tracking-wider text-amber-300">生圖中…</div>
                 </div>
               ) : null}
             </div>
@@ -414,7 +414,7 @@ export function V2LocationEditModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-mono text-[10px] tracking-wider text-stone-500">{label}</div>
+      <div className="mb-1.5 font-mono text-[14px] tracking-wider text-stone-500">{label}</div>
       {children}
     </label>
   )

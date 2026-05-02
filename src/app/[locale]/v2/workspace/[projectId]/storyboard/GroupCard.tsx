@@ -493,15 +493,15 @@ export function GroupCard({
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex flex-1 items-center gap-3 overflow-hidden">
-          <div className="flex-shrink-0 font-mono text-[10px] uppercase tracking-wider text-amber-500/80">
+          <div className="flex-shrink-0 font-mono text-[14px] uppercase tracking-wider text-amber-500/80">
             {groupLabel}
           </div>
-          <div className="flex flex-shrink-0 items-center gap-1 rounded-sm border border-stone-800 bg-stone-900/60 px-1.5 py-0.5 font-mono text-[9px] tracking-wider text-stone-400">
+          <div className="flex flex-shrink-0 items-center gap-1 rounded-sm border border-stone-800 bg-stone-900/60 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-400">
             <AppIcon name="play" className="h-2.5 w-2.5" />
             {timeRangeLabel}
           </div>
           <div
-            className={`flex-shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[9px] tracking-wider ${statusToneClass}`}
+            className={`flex-shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[12px] tracking-wider ${statusToneClass}`}
           >
             {statusLabel.tone === 'done' ? '✓ ' : statusLabel.tone === 'error' ? '⚠ ' : statusLabel.tone === 'pending' ? '↻ ' : ''}
             {statusLabel.text}
@@ -522,7 +522,7 @@ export function GroupCard({
                 void handleRegenerate()
               }}
               title="重新送這個 group 跑 Kling 多鏡頭"
-              className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[9px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[12px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 regenState.status === 'submitting'
                   ? 'border-amber-400 bg-amber-500/30 text-amber-100 ring-2 ring-amber-500/40'
                   : regenState.status === 'done'
@@ -546,7 +546,7 @@ export function GroupCard({
                     : '重新生成'}
             </button>
           ) : null}
-          <div className="font-mono text-[10px] tracking-wider text-stone-500">
+          <div className="font-mono text-[14px] tracking-wider text-stone-500">
             {expanded ? '▲' : '▼'}
           </div>
         </div>
@@ -577,7 +577,7 @@ export function GroupCard({
             <button
               type="button"
               onClick={() => void handleRegenerate()}
-              className="rounded-sm border border-rose-500/50 bg-rose-500/15 px-2 py-0.5 font-mono text-[9px] tracking-wider text-rose-200 transition-colors hover:bg-rose-500/25"
+              className="rounded-sm border border-rose-500/50 bg-rose-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-rose-200 transition-colors hover:bg-rose-500/25"
             >
               重試
             </button>
@@ -618,13 +618,13 @@ export function GroupCard({
           />
           {overrideCount > 0 ? (
             <div className="mt-2 flex items-center justify-between rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1.5">
-              <div className="font-mono text-[9px] tracking-wider text-violet-300">
+              <div className="font-mono text-[12px] tracking-wider text-violet-300">
                 ✏ 已修改 {overrideCount} 個綁定 — 「重新生成」會套用
               </div>
               <button
                 type="button"
                 onClick={handleResetOverrides}
-                className="font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-violet-300"
+                className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-violet-300"
               >
                 清空
               </button>
@@ -636,13 +636,13 @@ export function GroupCard({
 
         <div className="col-span-12 space-y-3 lg:col-span-7">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+            <div className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               叙事提示词
               <span className="text-stone-500">· {narrativeDraft.length} 字</span>
             </div>
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-stone-400">
+              <label className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-400">
                 <AppIcon name="play" className="h-3 w-3" />
                 时长
                 <select
@@ -654,7 +654,7 @@ export function GroupCard({
                     // — protected by buildInitialNarrative guard.
                     setNarrativeDirty(false)
                   }}
-                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[10px] text-stone-200 outline-none focus:border-amber-500/40"
+                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
                 >
                   <option value={5}>5s</option>
                   <option value={10}>10s</option>
@@ -668,7 +668,7 @@ export function GroupCard({
                   setNarrativeDirty(false)
                 }}
                 title="從分鏡描述重新生成這段敘事"
-                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[9px] tracking-wider text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-400"
+                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[12px] tracking-wider text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-400"
               >
                 ↻ 重生敘事
               </button>
@@ -686,11 +686,11 @@ export function GroupCard({
             className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-2.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
           />
           {narrativeDirty ? (
-            <div className="font-mono text-[9px] tracking-wider text-violet-300">
+            <div className="font-mono text-[12px] tracking-wider text-violet-300">
               ✏ 敘事已修改 — 「重新生成」會以這段為主 prompt(覆蓋分鏡描述)
             </div>
           ) : (
-            <div className="font-mono text-[9px] tracking-wider text-stone-600">
+            <div className="font-mono text-[12px] tracking-wider text-stone-600">
               預設由 {panels.length} 個分鏡描述自動拼接。直接編輯這段即可,送出時會以你寫的為準。
             </div>
           )}
@@ -699,7 +699,7 @@ export function GroupCard({
             <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-950/30 p-2">
               {groupCast.length > 0 ? (
                 <div>
-                  <div className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
                     <AppIcon name="user" className="h-3 w-3" />
                     出場角色 · {groupCast.length}
                   </div>
@@ -733,14 +733,14 @@ export function GroupCard({
                               <AppIcon name="user" className="h-3 w-3 m-auto text-stone-600" />
                             )}
                           </div>
-                          <span className="font-serif-cn text-[10px] text-stone-200">
+                          <span className="font-serif-cn text-[14px] text-stone-200">
                             {c.character.name}
                           </span>
-                          <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                          <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
                             {c.appearanceLabel ?? '默認造型'}
                           </span>
                           {overridden ? (
-                            <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                            <span className="font-mono text-[12px] tracking-wider text-violet-300">
                               ✏ 已改
                             </span>
                           ) : null}
@@ -753,7 +753,7 @@ export function GroupCard({
 
               {groupScenes.length > 0 ? (
                 <div>
-                  <div className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
                     <AppIcon name="image" className="h-3 w-3" />
                     場景 · {groupScenes.length}
                   </div>
@@ -787,14 +787,14 @@ export function GroupCard({
                               <AppIcon name="image" className="h-3 w-3 m-auto text-stone-600" />
                             )}
                           </div>
-                          <span className="font-serif-cn text-[10px] text-stone-200">
+                          <span className="font-serif-cn text-[14px] text-stone-200">
                             {s.location.name}
                           </span>
-                          <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                          <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
                             {s.viewName ?? '主視角'}
                           </span>
                           {overridden ? (
-                            <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                            <span className="font-mono text-[12px] tracking-wider text-violet-300">
                               ✏ 已改
                             </span>
                           ) : null}
@@ -807,7 +807,7 @@ export function GroupCard({
 
               {boundCharacters.length > 0 ? (
                 <div>
-                  <div className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
                     <AppIcon name="user" className="h-3 w-3" />
                     演員綁定 · {boundCharacters.length}
                   </div>
@@ -845,14 +845,14 @@ export function GroupCard({
                               className="h-full w-full object-cover"
                             />
                           </div>
-                          <span className="font-serif-cn text-[10px] text-stone-200">
+                          <span className="font-serif-cn text-[14px] text-stone-200">
                             {c.name}
                           </span>
-                          <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                          <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
                             {c.appearanceLabel ?? '默認造型'}
                           </span>
                           {hasOverride ? (
-                            <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                            <span className="font-mono text-[12px] tracking-wider text-violet-300">
                               ✏ 已改
                             </span>
                           ) : null}
@@ -884,7 +884,7 @@ export function GroupCard({
             <button
               type="button"
               onClick={() => setShowAdvancedEditor((v) => !v)}
-              className="flex items-center gap-1 font-mono text-[9px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+              className="flex items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
             >
               {showAdvancedEditor ? '▼' : '▶'} 進階分鏡編輯({panels.length} 鏡 · 編輯各分鏡描述 / 對白)
             </button>
@@ -905,11 +905,11 @@ export function GroupCard({
                     >
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[9px] tracking-wider text-amber-500/60">
+                          <span className="font-mono text-[12px] tracking-wider text-amber-500/60">
                             #{String(panelIdx + 1).padStart(2, '0')}
                           </span>
                           {Array.isArray(p.characters) && p.characters.length > 0 ? (
-                            <span className="font-mono text-[9px] tracking-wider text-stone-500">
+                            <span className="font-mono text-[12px] tracking-wider text-stone-500">
                               {p.characters.join(' / ')}
                             </span>
                           ) : null}
@@ -929,7 +929,7 @@ export function GroupCard({
                           type="button"
                           disabled={isSavingThis}
                           onClick={() => handleSaveDescription(p.id)}
-                          className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+                          className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
                         >
                           {isSavingThis ? '儲存中…' : '儲存描述'}
                         </button>
@@ -949,7 +949,7 @@ export function GroupCard({
                             type="button"
                             disabled={isSavingThis}
                             onClick={() => handleSaveDialogue(p.id)}
-                            className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[9px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+                            className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
                           >
                             {isSavingThis ? '儲存中…' : '儲存對白'}
                           </button>

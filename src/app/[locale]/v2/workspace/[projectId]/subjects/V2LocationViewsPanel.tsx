@@ -80,7 +80,7 @@ export function V2LocationViewsPanel({
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="font-fraunces text-xs italic text-amber-500/80">場景多視角</div>
-          <div className="mt-0.5 font-mono text-[10px] tracking-wider text-stone-600">
+          <div className="mt-0.5 font-mono text-[14px] tracking-wider text-stone-600">
             分鏡 panel.location 寫「{locationName}#視角名」即可切換
           </div>
         </div>
@@ -96,7 +96,7 @@ export function V2LocationViewsPanel({
       {showForm ? (
         <form onSubmit={handleSubmit} className="mb-4 space-y-3 rounded-sm border border-stone-800/80 bg-stone-900/40 p-4">
           <label className="block">
-            <div className="mb-1.5 font-mono text-[10px] tracking-wider text-stone-500">視角名稱(短)</div>
+            <div className="mb-1.5 font-mono text-[14px] tracking-wider text-stone-500">視角名稱(短)</div>
             <input
               value={newViewName}
               onChange={(e) => setNewViewName(e.target.value)}
@@ -107,7 +107,7 @@ export function V2LocationViewsPanel({
             />
           </label>
           <label className="block">
-            <div className="mb-1.5 font-mono text-[10px] tracking-wider text-stone-500">視角描述(可選,給 AI 出圖用)</div>
+            <div className="mb-1.5 font-mono text-[14px] tracking-wider text-stone-500">視角描述(可選,給 AI 出圖用)</div>
             <textarea
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
@@ -184,7 +184,7 @@ export function V2LocationViewsPanel({
                       type="button"
                       onClick={() => onRegenerateView(img.imageIndex)}
                       disabled={regen}
-                      className="rounded-sm border border-amber-500/40 px-2 py-1 font-mono text-[10px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/10 disabled:opacity-40"
+                      className="rounded-sm border border-amber-500/40 px-2 py-1 font-mono text-[14px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/10 disabled:opacity-40"
                     >
                       {regen ? '生圖中…' : '重生'}
                     </button>
@@ -192,7 +192,7 @@ export function V2LocationViewsPanel({
                       type="button"
                       onClick={() => handleDelete(img.imageIndex, img.viewName ?? null)}
                       disabled={isDeleting}
-                      className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[10px] tracking-wider text-stone-400 transition-colors hover:bg-stone-800 hover:text-rose-300 disabled:opacity-40"
+                      className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[14px] tracking-wider text-stone-400 transition-colors hover:bg-stone-800 hover:text-rose-300 disabled:opacity-40"
                     >
                       刪除
                     </button>

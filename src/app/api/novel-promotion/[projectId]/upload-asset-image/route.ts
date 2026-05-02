@@ -36,6 +36,10 @@ interface UploadAssetImageDb {
     update(args: Record<string, unknown>): Promise<{ id: string }>
     create(args: Record<string, unknown>): Promise<{ id: string }>
   }
+  novelPromotionProp: {
+    findFirst(args: Record<string, unknown>): Promise<{ id: string } | null>
+    update(args: Record<string, unknown>): Promise<unknown>
+  }
 }
 
 /**
@@ -94,7 +98,9 @@ export const POST = apiHandler(async (
   // 生成唯一key并上传
   const keyPrefix = type === 'character'
     ? `char-${id}-${appearanceId}-upload`
-    : `loc-${id}-upload`
+    : type === 'prop'
+      ? `prop-${id}-upload`
+      : `loc-${id}-upload`
   const key = generateUniqueKey(keyPrefix, 'jpg')
   await uploadToCOS(processed, key)
 
@@ -225,6 +231,29 @@ export const POST = apiHandler(async (
         imageIndex: maxIndex
       })
     }
+  } else if (type === 'prop') {
+    // 道具图片上传 — 跟角色/场景一样把 COS key 写回 imageUrl
+    // (Phase 11.3 Stage C: NovelPromotionProp 单图模型,没有 images[] 数组,
+    // 所以这里不处理 imageIndex,直接覆盖 imageUrl。)
+    const prop = await db.novelPromotionProp.findFirst({
+      where: { id, novelPromotionProject: { projectId } },
+      select: { id: true },
+    })
+
+    if (!prop) {
+      throw new ApiError('NOT_FOUND', { code: 'PROP_NOT_IN_PROJECT' })
+    }
+
+    await db.novelPromotionProp.update({
+      where: { id: prop.id },
+      data: { imageUrl: key },
+    })
+
+    return NextResponse.json({
+      success: true,
+      imageKey: key,
+      imageIndex: 0,
+    })
   }
 
   throw new ApiError('INVALID_PARAMS')
