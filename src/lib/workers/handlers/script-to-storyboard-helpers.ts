@@ -176,8 +176,31 @@ export async function persistSingleClipStoryboard(
   projectId: string,
   episodeId: string,
   clipEntry: ClipPanelsResult,
-): Promise<PersistedStoryboard> {
+): Promise<PersistedStoryboard | null> {
   return await prisma.$transaction(async (tx) => {
+    // 2026-05-01: race-safe atomic replace. Three guarantees:
+    //
+    // 1) Verify the clip still exists. clips_build may have run in
+    //    parallel and replaced the row by the time we get here —
+    //    inserting against a missing FK would `Foreign key constraint
+    //    violated on (clipId)` (user reported as panels disappearing).
+    // 2) Drop the existing storyboard for this clipId so the unique
+    //    constraint on clipId doesn't error on insert. Cascade
+    //    deletes the panels, multiShotGroup links, etc.
+    // 3) Wrap (1)+(2)+create in one transaction so any failure leaves
+    //    the previous storyboard intact instead of half-wiped.
+    const clipExists = await tx.novelPromotionClip.findUnique({
+      where: { id: clipEntry.clipId },
+      select: { id: true },
+    })
+    if (!clipExists) {
+      // Skip silently — orchestrator keeps going on other clips; the
+      // missing clip's storyboard stays as-is rather than vanishing.
+      return null
+    }
+    await tx.novelPromotionStoryboard.deleteMany({
+      where: { clipId: clipEntry.clipId },
+    })
     const storyboard = await tx.novelPromotionStoryboard.create({
       data: {
         clipId: clipEntry.clipId,

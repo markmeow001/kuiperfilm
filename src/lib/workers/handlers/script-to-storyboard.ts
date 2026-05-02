@@ -151,9 +151,15 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
     orchestratorResult: null,
   }
 
-  // Pre-delete old storyboards + panels for idempotency
-  await prisma.novelPromotionStoryboard.deleteMany({ where: { episodeId } })
-
+  // 2026-05-01 fix: removed the upfront
+  //   `prisma.novelPromotionStoryboard.deleteMany({ episodeId })`
+  // that used to live here. It ran outside any transaction, so a
+  // downstream FK violation in persistSingleClipStoryboard (e.g.
+  // clipId no longer exists because a parallel clips_build replaced
+  // clips) left the user with ZERO panels — user reported
+  // 「一直消失」. Atomic per-clip replacement now happens inside each
+  // persistSingleClipStoryboard call so a failure on clip N doesn't
+  // wipe clips 1..N-1.
   const persistedSoFar: PersistedStoryboard[] = []
 
   const pipelineState = await (async () => {
@@ -195,7 +201,11 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
                     runStep,
                     onClipComplete: async (clipResult) => {
                       const persisted = await persistSingleClipStoryboard(projectId, episodeId, clipResult)
-                      persistedSoFar.push(persisted)
+                      // Race-safe persist returns null when the clip
+                      // it was meant to replace was deleted between
+                      // orchestrator init and persist (e.g. clips_build
+                      // replaced clips). Skip but keep going.
+                      if (persisted) persistedSoFar.push(persisted)
                     },
                   })
 
