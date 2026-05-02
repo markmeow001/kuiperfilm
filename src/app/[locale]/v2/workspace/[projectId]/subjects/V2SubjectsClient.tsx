@@ -314,6 +314,22 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
     return set
   }, [activeImageTasks.data])
+  // 2026-05-02 — break the inflight count down per asset class so the
+  // status banner can say `4 張道具圖` instead of the previous
+  // `4 張角色圖` even when the user is on the 道具 tab. User-reported
+  // confusion: the banner mismatched the visible cards (props) with
+  // the wrong noun (characters).
+  const serverInflightCounts = useMemo(() => {
+    let character = 0
+    let location = 0
+    let prop = 0
+    for (const t of activeImageTasks.data ?? []) {
+      if (t.targetType === 'CharacterAppearance') character += 1
+      else if (t.targetType === 'LocationImage') location += 1
+      else if (t.targetType === 'NovelPromotionProp') prop += 1
+    }
+    return { character, location, prop, total: character + location + prop }
+  }, [activeImageTasks.data])
   // Poll active tasks every 2s while EITHER set has entries. The earlier
   // version gated only on serverInflightIds.size, but that's derived
   // FROM activeImageTasks.data — chicken-and-egg: when the user just
@@ -712,7 +728,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             分析{currentEpisode ? `「${currentEpisode.name}」` : '當前集'}的劇本
           </div>
           <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">
-            從劇本自動抽出角色 / 場景 — 完成後可在下方卡片點「重新生成」/「鎖定」/上傳替換
+            從劇本自動抽出角色 / 場景 / 道具 — 完成後可在下方卡片點「重新生成」/「鎖定」/上傳替換
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -751,18 +767,37 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         </div>
       ) : isAnalyzing ? (
         <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
-          ⏳ 分析中… 進度 {taskProgress}% (LLM 跑完約 30-90 秒,完成後角色/場景會自動出現)
+          ⏳ 分析中… 進度 {taskProgress}% (LLM 跑完約 30-90 秒,完成後角色/場景/道具會自動出現)
         </div>
       ) : taskStatus === 'completed' && serverInflightIds.size > 0 ? (
         <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
-          ⚙️ 分析完成 — 後台正在自動重新生成 <strong>{serverInflightIds.size}</strong> 張角色圖,
-          每張約 30-90 秒,完成後卡片會自動更新(別離開頁面也沒關係,任務在 server 端跑)
+          ⚙️ 分析完成 — 後台正在自動生成
+          {(() => {
+            // Build a comma-separated breakdown of what's actually
+            // in flight ("3 張角色圖、1 張場景圖、4 張道具圖") so the
+            // banner reads accurately on every tab. If only one asset
+            // class is running, the breakdown collapses to a single
+            // term — no awkward "0 張角色" noise.
+            const parts: string[] = []
+            if (serverInflightCounts.character > 0) {
+              parts.push(`${serverInflightCounts.character} 張角色圖`)
+            }
+            if (serverInflightCounts.location > 0) {
+              parts.push(`${serverInflightCounts.location} 張場景圖`)
+            }
+            if (serverInflightCounts.prop > 0) {
+              parts.push(`${serverInflightCounts.prop} 張道具圖`)
+            }
+            const text = parts.length > 0 ? parts.join('、') : `${serverInflightIds.size} 張資產圖`
+            return <strong> {text}</strong>
+          })()}
+          ,每張約 30-90 秒,完成後卡片會自動更新(別離開頁面也沒關係,任務在 server 端跑)
         </div>
       ) : taskStatus === 'completed' && hasStoryboardPanels ? (
         <div className="mb-6 flex flex-col gap-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="font-serif-cn text-sm text-emerald-300">
             ✓ 分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} —
-            角色 / 場景 / <strong>分鏡 {storyboardPanelCount} 個</strong> 都好了
+            角色 / 場景 / 道具 / <strong>分鏡 {storyboardPanelCount} 個</strong> 都好了
           </div>
           <Link
             href={`/${locale}/v2/workspace/${projectId}/storyboard`}
@@ -773,7 +808,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         </div>
       ) : taskStatus === 'completed' ? (
         <div className="mb-6 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
-          ✓ 上次分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} — 角色 / 場景已寫入下方卡片(分鏡正在後台繼續處理)
+          ✓ 上次分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} — 角色 / 場景 / 道具已寫入下方卡片(分鏡正在後台繼續處理)
         </div>
       ) : null}
 
