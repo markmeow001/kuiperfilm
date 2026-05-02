@@ -142,19 +142,58 @@ function stripParentheticalStageDirections(content: string): string {
     .trim()
 }
 
+/**
+ * Detect dialogue language from the line content using only highly
+ * distinctive code points / characters. We deliberately avoid common-word
+ * heuristics ("el", "la", "the") because they false-positive across
+ * latin-alphabet languages and against character names.
+ *
+ * Returns the English language name suitable for inlining into a Kling
+ * prompt hint (`TOBY (in Spanish): "..."`), or null when the line is
+ * Chinese / English / unknown — let Kling auto-detect those.
+ *
+ * Why we bother: Kling 3.0-Omni's TTS does support CN/EN/JA/KO/ES
+ * natively (per klingaio.com/blogs/kling-3-release + 2026 reviews),
+ * but it picks the language by analyzing the *entire shot prompt*. Our
+ * per-shot prompt is ~120 chars 中文 visual description + ~80 chars of
+ * Spanish dialogue → the parser sees a mostly-Chinese prompt and
+ * Mandarin-defaults the dub. Adding a tiny English-language hint
+ * `(in Spanish)` to the dialogue line nudges the parser onto the
+ * right voice without touching the visual portion.
+ */
+function detectDialogueLanguage(content: string): string | null {
+  if (/[぀-ゟ゠-ヿ]/.test(content)) return 'Japanese' // hiragana / katakana
+  if (/[가-힯]/.test(content)) return 'Korean' // hangul
+  if (/[一-鿿]/.test(content)) return null // CJK Chinese — let Kling auto-detect (it's good at zh)
+  // Spanish-specific characters that don't appear in English / French / German.
+  if (/[ñ¿¡]/.test(content)) return 'Spanish'
+  // French-specific: cedilla / ligatures.
+  if (/[çœ]/.test(content)) return 'French'
+  // German-specific: eszett / umlauts. Umlauts also appear in Turkish and
+  // some Scandinavian languages, but eszett is a strong German signal.
+  if (/ß/.test(content)) return 'German'
+  if (/[äöü]/.test(content) && /\b(?:der|die|das|und|ist|nicht|ich|ein|sind)\b/i.test(content)) return 'German'
+  // Russian / Cyrillic.
+  if (/[Ѐ-ӿ]/.test(content)) return 'Russian'
+  // No distinctive markers → leave it to Kling's auto-detect (English /
+  // unknown). Adding `(in English)` for purely-English lines isn't
+  // harmful but adds prompt-length noise, so we skip it.
+  return null
+}
+
 function formatDialogueForKling(speaker: string, content: string): string {
+  const lang = detectDialogueLanguage(content)
   // Kling Omni's native dialogue format (klingai.com webUI / direct API)
   // is `Character: "line"` — speaker name, colon, then the quoted line
-  // verbatim. Earlier this function inserted "says" / 「说」 + full-width
-  // 「」 quotes in an attempt to *help* Kling identify dialogue language;
-  // user-reported behaviour was the opposite — Spanish lines came back
-  // as Mandarin TTS. The most likely cause is that the non-native
-  // markers (`says`, `说`, full-width `"…"`) confuse Kling's per-shot
-  // parser into treating the line as visual narration to dub in the
-  // dominant language of the surrounding shot prompt (heavily 中文 in
-  // our pipeline). Falling back to the bare native format for both CJK
-  // and non-CJK lines so Kling's own language detector decides per-line.
-  return `${speaker}: "${content}"`
+  // verbatim. The optional `(in <Language>)` parenthetical is a
+  // documented Kling 3.0-Omni convention for steering the per-line TTS
+  // when the surrounding shot prompt is in a different language than
+  // the dialogue (the 2026-05-02 user-reported case: Chinese visual
+  // descriptions paired with Spanish dialogue → Kling defaulted to
+  // Mandarin TTS without this hint).
+  return lang
+    ? `${speaker} (in ${lang}): "${content}"`
+    : `${speaker}: "${content}"`
 }
 
 /**
