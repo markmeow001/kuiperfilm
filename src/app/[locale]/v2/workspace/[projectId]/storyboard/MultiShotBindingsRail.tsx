@@ -112,11 +112,29 @@ export function MultiShotBindingsRail({
         </div>
       ) : null}
 
-      {status === 'failed' ? (
-        <div className="rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1.5 font-serif-cn text-[11px] text-rose-300">
-          {data?.error?.message || data?.errorMessage || '視頻生成失敗 — 重試後綁定才會更新'}
-        </div>
-      ) : null}
+      {status === 'failed' ? (() => {
+        const rawMsg = data?.error?.message || data?.errorMessage || ''
+        const isRateLimit = /70000|requestlimitexceeded|maximum concurrency/i.test(rawMsg)
+        return (
+          <div className="rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1.5 font-serif-cn text-[11px] text-rose-300">
+            {isRateLimit ? (
+              <>
+                <strong className="text-rose-200">Tencent VOD 並發上限被打到</strong>
+                <div className="mt-0.5 text-[10px] text-rose-300/80">
+                  你的 Tencent 帳號同時跑的視頻任務太多。建議:
+                  <ul className="mt-0.5 list-inside list-disc space-y-0.5">
+                    <li>等 30-60 秒後點上方「重新生成」</li>
+                    <li>不要一次送多個 group(改成一次跑一組)</li>
+                    <li>長期解法:聯絡 Tencent 提高並發配額</li>
+                  </ul>
+                </div>
+              </>
+            ) : (
+              rawMsg || '視頻生成失敗 — 重試後綁定才會更新'
+            )}
+          </div>
+        )
+      })() : null}
 
       {videoUrl ? (
         <div className="mx-auto mb-2.5 w-full max-w-[260px] overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950">
