@@ -137,3 +137,98 @@ export function useUpdateEpisodeCharacterBinding(projectId: string) {
     },
   })
 }
+
+/**
+ * Bulk variant — bind one appearance (or null = clear) to a SET of
+ * episodes for one character in a single transactional call. Used by
+ * the "套用至 ep1-10" range affordance on V2CharacterAppearancesPanel
+ * so users don't have to click N dropdowns when a costume change is
+ * episode-range based.
+ */
+export function useBulkBindEpisodeCharacterAppearance(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      characterId: string
+      appearanceId: string | null
+      episodeIds: string[]
+    }) => {
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/character/bind-appearance-bulk`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        },
+        'Failed to bulk-bind episode-character appearances',
+      )
+    },
+    onSuccess: (_data, vars) => {
+      // Invalidate every affected episode's binding cache. Cheaper than
+      // a project-wide nuke and keeps unrelated episodes' data in cache.
+      for (const episodeId of vars.episodeIds) {
+        void queryClient.invalidateQueries({
+          queryKey: [...queryKeys.tasks.all(projectId), 'episode-bindings', episodeId],
+        })
+      }
+      invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+    },
+  })
+}
+
+/**
+ * Delete a single CharacterAppearance row. The DELETE endpoint refuses
+ * to remove the last appearance (one-per-character minimum), so the
+ * caller doesn't need to gate the call — surface the server's error
+ * message verbatim if it comes back as INVALID_PARAMS.
+ */
+export function useDeleteCharacterAppearance(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: { characterId: string; appearanceId: string }) => {
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/character/appearance?` +
+          new URLSearchParams({
+            characterId: params.characterId,
+            appearanceId: params.appearanceId,
+          }).toString(),
+        { method: 'DELETE' },
+        'Failed to delete character appearance',
+      )
+    },
+    onSuccess: () => {
+      invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+    },
+  })
+}
+
+/**
+ * Update an appearance's name (changeReason) and/or description.
+ * Either field can be omitted to leave it untouched; passing both
+ * empty strings throws server-side. Used by the inline rename flow on
+ * the appearance row.
+ */
+export function useUpdateCharacterAppearanceMeta(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (params: {
+      characterId: string
+      appearanceId: string
+      changeReason?: string
+      description?: string
+    }) => {
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/character/appearance`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        },
+        'Failed to update character appearance',
+      )
+    },
+    onSuccess: () => {
+      invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+    },
+  })
+}

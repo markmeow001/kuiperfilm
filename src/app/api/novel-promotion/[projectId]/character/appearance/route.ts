@@ -74,8 +74,18 @@ export const POST = apiHandler(async (
 })
 
 /**
- * PATCH - 更新角色形象描述
- * Body: { characterId, appearanceId, description, descriptionIndex }
+ * PATCH - 更新角色形象描述与/或造型名稱(changeReason)
+ *
+ * Body: {
+ *   characterId,
+ *   appearanceId,
+ *   description?,        // 任一非空才更新對應欄位
+ *   changeReason?,
+ *   descriptionIndex?
+ * }
+ *
+ * 設計:description 與 changeReason 各自可選,讓前端可以單獨改名或單獨
+ * 改描述,不會被另一條欄位的空字串誤洗。但兩者都缺時是無效呼叫(400)。
  */
 export const PATCH = apiHandler(async (
   request: NextRequest,
@@ -88,10 +98,18 @@ export const PATCH = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json()
-  const { characterId, appearanceId, description, descriptionIndex } = body
+  const { characterId, appearanceId, description, changeReason, descriptionIndex } = body
 
-  if (!characterId || !appearanceId || !description) {
+  if (!characterId || !appearanceId) {
     throw new ApiError('INVALID_PARAMS')
+  }
+  const hasDescription = typeof description === 'string' && description.trim().length > 0
+  const hasChangeReason = typeof changeReason === 'string' && changeReason.trim().length > 0
+  if (!hasDescription && !hasChangeReason) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'NO_FIELDS_TO_UPDATE',
+      message: 'description 或 changeReason 至少要傳一個非空字串',
+    })
   }
 
   // 验证形象存在
@@ -113,34 +131,45 @@ export const PATCH = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
-  // 更新描述
-  const trimmedDesc = description.trim()
+  // Build the update payload conditionally so an empty changeReason
+  // doesn't blow away the existing one.
+  const updateData: {
+    description?: string
+    descriptions?: string
+    changeReason?: string
+  } = {}
 
-  // 更新 descriptions 数组
-  let descriptions: string[] = []
-  try {
-    descriptions = appearance.descriptions ? JSON.parse(appearance.descriptions) : []
-  } catch {
-    descriptions = []
+  if (hasDescription) {
+    const trimmedDesc = description.trim()
+    let descriptions: string[] = []
+    try {
+      descriptions = appearance.descriptions ? JSON.parse(appearance.descriptions) : []
+    } catch {
+      descriptions = []
+    }
+    const idx = typeof descriptionIndex === 'number' ? descriptionIndex : 0
+    if (idx >= 0 && idx < descriptions.length) {
+      descriptions[idx] = trimmedDesc
+    } else {
+      descriptions.push(trimmedDesc)
+    }
+    updateData.description = trimmedDesc
+    updateData.descriptions = JSON.stringify(descriptions)
   }
-
-  // 如果指定了 descriptionIndex，更新对应位置；否则更新/添加第一个
-  const idx = typeof descriptionIndex === 'number' ? descriptionIndex : 0
-  if (idx >= 0 && idx < descriptions.length) {
-    descriptions[idx] = trimmedDesc
-  } else {
-    descriptions.push(trimmedDesc)
+  if (hasChangeReason) {
+    updateData.changeReason = changeReason.trim()
   }
 
   await prisma.characterAppearance.update({
     where: { id: appearanceId },
-    data: {
-      description: trimmedDesc,
-      descriptions: JSON.stringify(descriptions)
-    }
+    data: updateData,
   })
 
-  _ulogInfo(`✓ 更新形象描述: ${appearance.character.name} - ${appearance.changeReason || '形象' + appearance.appearanceIndex}`)
+  _ulogInfo(
+    `✓ 更新形象: ${appearance.character.name} - ${appearance.changeReason || '形象' + appearance.appearanceIndex}` +
+      (hasDescription ? ' [desc]' : '') +
+      (hasChangeReason ? ' [name]' : ''),
+  )
 
   return NextResponse.json({
     success: true
