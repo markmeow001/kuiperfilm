@@ -36,6 +36,12 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
     update: vi.fn(async () => undefined),
   },
+  // Session A added multi-shot B-path support — handler now queries the
+  // Task table to find completed video_multi_shot tasks per group.
+  // Default to empty so the original per-panel-video tests stay focused.
+  task: {
+    findMany: vi.fn(async () => []),
+  },
 }))
 
 vi.mock('@/lib/workers/shared', () => ({ reportTaskProgress: reportTaskProgressMock }))
@@ -178,24 +184,26 @@ describe('handleEpisodePackageZipTask', () => {
     expect(updateCalls[1][0].data.stitchedVideoUrl).toContain('episode-pack-ep-1')
   })
 
-  it('marks episode failed when no panels have videoUrl', async () => {
+  it('marks episode failed when no panel videos AND no multi-shot videos', async () => {
     prismaMock.novelPromotionEpisode.findUnique.mockResolvedValue({
       id: 'ep-empty',
       storyboards: [
         {
+          id: 'sb-empty',
           createdAt: new Date(),
           panels: [
-            { id: 'p1', panelIndex: 1, description: 'x', imageUrl: null, videoUrl: null, cameraMove: null, shotType: null },
+            { id: 'p1', panelIndex: 1, description: 'x', imageUrl: null, videoUrl: null, cameraMove: null, shotType: null, multiShotGroupId: null },
           ],
         },
       ],
       voiceLines: [],
     })
+    prismaMock.task.findMany.mockResolvedValue([]) // no multi-shot tasks either
 
     const { handleEpisodePackageZipTask } = await import('@/lib/workers/handlers/episode-package-zip')
 
     await expect(handleEpisodePackageZipTask(makeJob('ep-empty'))).rejects.toThrow(
-      /no panels have videoUrl/,
+      /no panel videos or multi-shot group videos/,
     )
     expect(cosMock.uploadToCOS).not.toHaveBeenCalled()
   })

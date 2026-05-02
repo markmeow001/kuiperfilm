@@ -88,6 +88,30 @@ export function categorizeTaskType(taskType: string): UsageCategory {
   return 'other'
 }
 
+/**
+ * Inverse of categorizeTaskType — return every task.type value that
+ * belongs to a given category. Lets `WHERE type IN (...)` queries
+ * filter recent tasks per category without re-deriving the set.
+ *
+ * Returns [] for 'other' on purpose — 'other' is the residual bucket
+ * and we don't want to manifest the exact list (it shifts as new task
+ * types get added before they're categorized).
+ */
+export function getTaskTypesForCategory(category: UsageCategory): string[] {
+  switch (category) {
+    case 'video':
+      return Array.from(VIDEO_TYPES)
+    case 'image':
+      return Array.from(IMAGE_TYPES)
+    case 'analyze':
+      return Array.from(ANALYZE_TYPES)
+    case 'voice':
+      return Array.from(VOICE_TYPES)
+    case 'other':
+      return []
+  }
+}
+
 export const ALL_CATEGORIES: readonly UsageCategory[] = [
   'video',
   'image',

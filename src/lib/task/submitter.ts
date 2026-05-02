@@ -17,6 +17,7 @@ import { getTaskFlowMeta } from '@/lib/llm-observe/stage-pipeline'
 import type { Locale } from '@/i18n/routing'
 import { attachTaskToRun, createRun } from '@/lib/run-runtime/service'
 import { isAiTaskType, workflowTypeFromTaskType } from '@/lib/run-runtime/workflow'
+import { enforceRateLimit } from './rate-limit'
 
 export function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -105,6 +106,12 @@ export async function submitTask(params: {
     projectId: params.projectId,
     userId: params.userId,
   })
+
+  // Per-user rate limit on generate-class tasks. Throws RATE_LIMIT
+  // before we touch the DB / billing / queue, so a runaway loop
+  // can't accumulate failed Task rows or burn quota. Categorized
+  // by task type — see src/lib/task/rate-limit.ts for limits.
+  await enforceRateLimit({ userId: params.userId, taskType: params.type })
 
   const normalizedPayloadBase = normalizeTaskPayload(params.type, params.payload || null)
   const normalizedPayloadMeta = toObject(normalizedPayloadBase.meta)
