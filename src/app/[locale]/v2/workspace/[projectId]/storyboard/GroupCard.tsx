@@ -20,6 +20,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
 import { LocationViewPickerModal } from './LocationViewPickerModal'
+import { useMultiShotTask } from '@/lib/query/hooks/useMultiShotTask'
 import type { UseMutationResult } from '@tanstack/react-query'
 
 interface PanelLike {
@@ -431,8 +432,30 @@ export function GroupCard({
     const trimmed = head.replace(/\s+/g, ' ').trim()
     return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed
   })()
+  // Pull live task status so the header badge reflects the actual
+  // server state (failed / processing / completed) instead of just
+  // the local "did I click submit recently" flag. Same React Query
+  // key as the rail so no extra network hop.
+  const taskQuery = useMultiShotTask(taskId)
+  const liveTaskStatus = taskQuery.data?.status ?? null
+  const taskFailed = liveTaskStatus === 'failed' || liveTaskStatus === 'cancelled'
+  const taskProcessing = liveTaskStatus === 'queued' || liveTaskStatus === 'processing'
+  const taskCompleted = liveTaskStatus === 'completed'
+
+  // If the task ultimately failed but local regenState still says
+  // "done" (we marked done on submit success, before Kling actually
+  // ran), drop back to idle so the user can re-click.
+  useEffect(() => {
+    if (taskFailed && regenState.status === 'done') {
+      setRegenState({ status: 'idle' })
+    }
+  }, [taskFailed, regenState.status])
+
   const statusLabel = (() => {
     if (regenState.status === 'submitting') return { text: '送出中…', tone: 'pending' }
+    if (taskFailed) return { text: '失敗 · 點重新生成', tone: 'error' }
+    if (taskProcessing) return { text: '生成中…', tone: 'pending' }
+    if (taskCompleted) return { text: '已完成', tone: 'done' }
     if (taskId) return { text: '已送出', tone: 'done' }
     return { text: '尚未生成', tone: 'idle' }
   })()
@@ -441,7 +464,9 @@ export function GroupCard({
       ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400'
       : statusLabel.tone === 'pending'
         ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-        : 'border-stone-800/60 bg-stone-900/30 text-stone-500'
+        : statusLabel.tone === 'error'
+          ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
+          : 'border-stone-800/60 bg-stone-900/30 text-stone-500'
 
   return (
     <article
@@ -462,7 +487,8 @@ export function GroupCard({
           <div
             className={`flex-shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[9px] tracking-wider ${statusToneClass}`}
           >
-            ✓ {statusLabel.text}
+            {statusLabel.tone === 'done' ? '✓ ' : statusLabel.tone === 'error' ? '⚠ ' : statusLabel.tone === 'pending' ? '↻ ' : ''}
+            {statusLabel.text}
           </div>
           {!expanded && briefDescription ? (
             <div className="truncate font-serif-cn text-[12px] text-stone-300">
