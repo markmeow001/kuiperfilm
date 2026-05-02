@@ -1636,9 +1636,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         bindings/cast/notes third (order-3) — but they remain in the
         DOM in their original order so React keys / refs stay stable.
       */}
-      <div className="grid flex-1 grid-cols-12 gap-6 overflow-y-auto px-12 py-6">
-        {/* Text column — visually 2nd-from-left, was leftmost */}
-        <div className="col-span-3 space-y-5 order-2">
+      <div className="grid flex-1 grid-cols-12 gap-5 overflow-y-auto px-6 py-6">
+        {/* Text column — visually middle, was leftmost.
+            Widened to col-span-5 because the 視角 / 景別 / 運鏡 chip
+            grids and the 描述詞 / 對話 textareas were getting pinched
+            at col-span-3 on a 14" laptop, while the Selected Shot
+            column had ~50% empty whitespace around a 260px image. */}
+        <div className="col-span-5 space-y-5 order-2">
           <div>
             <div className="mb-2 flex items-center justify-between">
               <div className="font-mono text-[10px] tracking-wider text-amber-600">
@@ -1712,8 +1716,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           </div>
         </div>
 
-        {/* Selected Shot — visually leftmost (order-1) */}
-        <div className="col-span-6 order-1">
+        {/* Selected Shot — visually leftmost (order-1).
+            Shrunk to col-span-3 so the 9:16 still doesn't sit inside
+            a wide empty container that read as "16:9 frame around
+            a 9:16 image" — the user-reported visual confusion when
+            the shot was col-span-6. The image's own max-w-[260px]
+            already prevents it from blowing up at this width. */}
+        <div className="col-span-3 order-1">
           <div className="mb-3 flex items-center justify-between">
             <div className="font-fraunces text-sm italic text-amber-500/80">Selected Shot</div>
             <button
@@ -1946,8 +1955,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           ) : null}
         </div>
 
-        {/* Inspector (cast / notes / multi-shot bindings) — rightmost (order-3) */}
-        <div className="col-span-3 space-y-5 order-3">
+        {/* Inspector (cast / notes / multi-shot bindings) — rightmost (order-3).
+            Widened to col-span-4 so the 9:16 multi-shot bindings player
+            (180×320) plus its CAST / SCENES chip rows fit without
+            horizontal scrolling. Plus user-reported clipping at the
+            right edge — this gives the column real estate the rail
+            actually needs. 3 + 5 + 4 = 12. */}
+        <div className="col-span-4 space-y-5 order-3">
           {selectedGroupTaskId ? (
             <MultiShotBindingsRail
               taskId={selectedGroupTaskId}
