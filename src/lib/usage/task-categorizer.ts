@@ -1,0 +1,97 @@
+/**
+ * Task type → high-level usage category mapping.
+ *
+ * Used by /api/usage/* endpoints to bucket the 30+ task.type values
+ * into stat-friendly groups the UI can render as "今天: 5 视频 / 12 图
+ * / 3 分析 / 0 配音". One source of truth — keep aligned with
+ * TASK_TYPE in src/lib/task/types.ts.
+ *
+ * Categories:
+ *   - video   : multi-shot Kling Omni / single-panel video / lip-sync /
+ *               editor render
+ *   - image   : every character / location / prop / panel image gen
+ *               (incl. asset-hub variants and ai-modify-image flows)
+ *   - analyze : LLM-only "文案分析" tasks — script analysis, storyboard
+ *               planning, character profile, screenplay convert, etc.
+ *   - voice   : TTS / voice design (separate from speaking-line audio
+ *               that gets generated as part of video tasks)
+ *   - other   : fallback for anything not yet classified — UI can show
+ *               this as "其他" and we'll keep an eye on it for new
+ *               task types.
+ *
+ * Whenever TASK_TYPE adds a new value, this file should adopt it. A
+ * defensive `other` fallback keeps stats well-formed during the
+ * transition window if rollout ordering misses a sync.
+ */
+export type UsageCategory = 'video' | 'image' | 'analyze' | 'voice' | 'other'
+
+const VIDEO_TYPES = new Set<string>([
+  'video_multi_shot',
+  'video_panel',
+  'video_editor_render',
+  'lip_sync',
+  // Phase 12.7 FFmpeg full-episode mp4 stitch — counts as a "video"
+  // generation event from the user's POV (one click → one mp4 out).
+  'episode_stitch_mp4',
+])
+
+const IMAGE_TYPES = new Set<string>([
+  'image_panel',
+  'image_character',
+  'image_location',
+  'image_prop',
+  'panel_variant',
+  'regenerate_group',
+  'modify_asset_image',
+  'insert_panel',
+  'asset_hub_image',
+  'asset_hub_modify',
+  'asset_hub_ai_design_character',
+  'asset_hub_ai_design_location',
+  'asset_hub_ai_modify_character',
+  'asset_hub_ai_modify_location',
+  'asset_hub_reference_to_character',
+  'ai_modify_appearance',
+  'ai_modify_location',
+  'ai_create_character',
+  'ai_create_location',
+  'reference_to_character',
+])
+
+const ANALYZE_TYPES = new Set<string>([
+  'analyze_novel',
+  'analyze_global',
+  'analyze_shot_variants',
+  'script_to_storyboard_run',
+  'clips_build',
+  'screenplay_convert',
+  'story_to_script_run',
+  'voice_analyze', // dialogue extraction is text analysis, not voice synth
+  'episode_split_llm',
+  'character_profile_confirm',
+  'character_profile_batch_confirm',
+  'ai_modify_shot_prompt',
+  'regenerate_storyboard_text',
+])
+
+const VOICE_TYPES = new Set<string>([
+  'voice_line',
+  'voice_design',
+  'asset_hub_voice_design',
+])
+
+export function categorizeTaskType(taskType: string): UsageCategory {
+  if (VIDEO_TYPES.has(taskType)) return 'video'
+  if (IMAGE_TYPES.has(taskType)) return 'image'
+  if (ANALYZE_TYPES.has(taskType)) return 'analyze'
+  if (VOICE_TYPES.has(taskType)) return 'voice'
+  return 'other'
+}
+
+export const ALL_CATEGORIES: readonly UsageCategory[] = [
+  'video',
+  'image',
+  'analyze',
+  'voice',
+  'other',
+] as const
