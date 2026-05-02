@@ -178,6 +178,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // multi-shot 9:16 player on the right) while preserving zoom-in for
   // detail inspection.
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null)
+  // Batch-generate progress state. Exposed to the user via toolbar
+  // status pills so they know N panels are being processed without
+  // having to scroll the strip and watch each thumbnail's overlay.
+  const [batchImageState, setBatchImageState] = useState<{ submitted: number; total: number } | null>(null)
+  const [batchVideoState, setBatchVideoState] = useState<{ submitted: number; total: number } | null>(null)
 
   // Stage 1 chip-rail bookkeeping. We persist the most-recent
   // multi-shot taskId per groupId so the chip rail survives page
@@ -662,6 +667,91 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     } catch {
       // surfaced via autoGroup.error
     }
+  }
+
+  /**
+   * Batch-generate static images for every panel that doesn't have
+   * one yet. Each panel goes through the same regenPanel mutation
+   * the per-card button uses, so worker dispatch / dedupe / billing
+   * are identical — we just don't make the user click 17 times.
+   *
+   * Submitted serially with a 100ms gap between requests so we don't
+   * smash the API or trip BullMQ's per-second add-job limit. The
+   * panels are filtered to those WITHOUT an existing imageUrl: this
+   * is a "fill in the blanks" action, not a "regenerate everything"
+   * action. Users who want to nuke + redo can click per-card 重新生
+   * 成圖 individually.
+   */
+  async function handleBatchGenerateImages() {
+    const targets = allPanels.filter((p) => !p.imageUrl && !imageInFlight.has(p.id))
+    if (targets.length === 0) return
+    setBatchImageState({ submitted: 0, total: targets.length })
+    let i = 0
+    for (const p of targets) {
+      try {
+        await regenPanel.mutateAsync({ panelId: p.id })
+        setImageInFlight((prev) => {
+          const next = new Set(prev)
+          next.add(p.id)
+          return next
+        })
+      } catch {
+        // Per-panel failure is non-fatal — surface via the per-card
+        // overlay; the loop should keep submitting siblings.
+      }
+      i += 1
+      setBatchImageState({ submitted: i, total: targets.length })
+      // Tiny gap so BullMQ + Tencent VOD ingest doesn't burst-reject.
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    void activePanelImageTasks.refetch()
+    // Auto-clear the toolbar pill 5s after the last submit so it
+    // doesn't sit there forever — the per-card overlays still show
+    // generation state.
+    setTimeout(() => setBatchImageState(null), 5000)
+  }
+
+  /**
+   * Batch-generate video for every panel that has an imageUrl but no
+   * videoUrl yet. Same submit-serial-with-gap pattern as
+   * handleBatchGenerateImages. Non-eligible panels (missing imageUrl
+   * for i2v video models) are silently skipped — the multi-shot
+   * B-path button is the right tool for projects that don't generate
+   * static images.
+   */
+  async function handleBatchGenerateVideos() {
+    const videoModel = project?.novelPromotionData?.videoModel
+    if (!videoModel) {
+      alert('專案還沒選 video model — 請到首頁設定中選擇 Kling 系列模型')
+      return
+    }
+    const targets = allPanels.filter(
+      (p) => Boolean(p.imageUrl) && !p.videoUrl && !videoInFlight.has(p.id),
+    )
+    if (targets.length === 0) return
+    setBatchVideoState({ submitted: 0, total: targets.length })
+    let i = 0
+    for (const p of targets) {
+      try {
+        await generateVideo.mutateAsync({
+          panelId: p.id,
+          storyboardId: p.storyboardId ?? '',
+          panelIndex: p.panelIndex ?? 0,
+          videoModel,
+        })
+        setVideoInFlight((prev) => {
+          const next = new Set(prev)
+          next.add(p.id)
+          return next
+        })
+      } catch {
+        // surfaced per-card; continue the loop
+      }
+      i += 1
+      setBatchVideoState({ submitted: i, total: targets.length })
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    }
+    setTimeout(() => setBatchVideoState(null), 5000)
   }
 
   async function handleSubmitMultiShot() {
@@ -1242,7 +1332,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     }}
                     className="rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
                   >
-                    {regenPanel.isPending ? '提交中…' : '重新生成圖'}
+                    {regenPanel.isPending
+                      ? '提交中…'
+                      : selected?.imageUrl
+                        ? '↻ 重新生成圖'
+                        : '生成圖片'}
                   </button>
                   <button
                     type="button"
@@ -1389,6 +1483,51 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
             </button>
+            {/*
+              Batch generate buttons — surface a one-click path to fill
+              every panel without an image / video. Each button only
+              shows up when there's actually work to do (avoids "0 個"
+              dead-button noise). Disabled while either is in flight so
+              the user can't accidentally submit overlapping batches.
+            */}
+            {(() => {
+              const missingImages = allPanels.filter((p) => !p.imageUrl).length
+              if (missingImages === 0) return null
+              return (
+                <button
+                  type="button"
+                  disabled={batchImageState !== null || regenPanel.isPending}
+                  onClick={handleBatchGenerateImages}
+                  title={`一鍵把還沒有圖的 ${missingImages} 個分鏡都送去生圖(每張 30-60s,後台跑)`}
+                  className="flex items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <AppIcon name="image" className="h-3 w-3" />
+                  {batchImageState
+                    ? `送出中 ${batchImageState.submitted}/${batchImageState.total}`
+                    : `一鍵生圖 (${missingImages} 個)`}
+                </button>
+              )
+            })()}
+            {(() => {
+              const eligibleForVideo = allPanels.filter(
+                (p) => Boolean(p.imageUrl) && !p.videoUrl,
+              ).length
+              if (eligibleForVideo === 0) return null
+              return (
+                <button
+                  type="button"
+                  disabled={batchVideoState !== null || generateVideo.isPending}
+                  onClick={handleBatchGenerateVideos}
+                  title={`一鍵把已有圖、還沒有影片的 ${eligibleForVideo} 個分鏡都送去生 5 秒影片`}
+                  className="flex items-center gap-1.5 rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-mono text-[10px] tracking-wider text-sky-300 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <AppIcon name="play" className="h-3 w-3" />
+                  {batchVideoState
+                    ? `送出中 ${batchVideoState.submitted}/${batchVideoState.total}`
+                    : `一鍵生影片 (${eligibleForVideo} 個)`}
+                </button>
+              )
+            })()}
             {layoutToggleNode}
             <div className="font-mono text-[10px] tracking-wider text-stone-500">
               {allPanels.length} SHOTS · DRAFT 03
@@ -1471,21 +1610,35 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     )
                   })()}
                 </div>
-                <div className="bg-stone-900/40 px-2 py-2">
-                  <div className="truncate font-serif-cn text-xs text-stone-200">
-                    {p.description?.slice(0, 30) ?? `分鏡 ${i + 1}`}
-                  </div>
-                </div>
+                {/*
+                  Description text used to live here as a per-thumb
+                  caption row, which made the strip card silhouette
+                  read as 16:9 even on 9:16 projects (image is 9:16
+                  but the caption + image stack added landscape
+                  proportions). User asked 2026-05-02 for a clean
+                  thumbs-only strip; the full description still lives
+                  in the lower 描述詞 column for the selected shot.
+                */}
               </button>
             )
           })}
         </div>
       </div>
 
-      {/* 3-column body */}
+      {/*
+        3-column body. Originally text-LEFT / image-CENTER / inspector-RIGHT.
+        User asked 2026-05-02 to put Selected Shot on the leftmost so the
+        9:16 image anchors the eye, and to push every text/chip/binding
+        column to the right. We use `order-N` Tailwind classes to swap
+        the visual order without cutting/pasting the JSX blocks (each
+        block is large and tightly tied to surrounding state). Result:
+        Selected Shot first (order-1), text-fields second (order-2),
+        bindings/cast/notes third (order-3) — but they remain in the
+        DOM in their original order so React keys / refs stay stable.
+      */}
       <div className="grid flex-1 grid-cols-12 gap-6 overflow-y-auto px-12 py-6">
-        {/* Left: prompt builder placeholder */}
-        <div className="col-span-3 space-y-5">
+        {/* Text column — visually 2nd-from-left, was leftmost */}
+        <div className="col-span-3 space-y-5 order-2">
           <div>
             <div className="mb-2 flex items-center justify-between">
               <div className="font-mono text-[10px] tracking-wider text-amber-600">
@@ -1559,8 +1712,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           </div>
         </div>
 
-        {/* Center: selected panel preview */}
-        <div className="col-span-6">
+        {/* Selected Shot — visually leftmost (order-1) */}
+        <div className="col-span-6 order-1">
           <div className="mb-3 flex items-center justify-between">
             <div className="font-fraunces text-sm italic text-amber-500/80">Selected Shot</div>
             <button
@@ -1710,7 +1863,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 bg-stone-900/50 py-2.5 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="image" className="h-3.5 w-3.5" />
-              {regenPanel.isPending ? '提交中…' : '重新生成圖'}
+              {regenPanel.isPending
+                ? '提交中…'
+                : selected?.imageUrl
+                  ? '↻ 重新生成圖'
+                  : '生成圖片'}
             </button>
             <button
               type="button"
@@ -1718,7 +1875,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               onClick={handleGenerateVideo}
               title={
                 !selected?.imageUrl
-                  ? '需要先有靜態圖才能生影片 — 請先點「重新生成圖」'
+                  ? '需要先有靜態圖才能生影片 — 請先點「生成圖片」'
                   : isCurrentPanelVideoInFlight
                     ? '視頻生成中,請等 worker 完成(~60s)'
                     : '把這個鏡頭的圖送 video model(專案預設 Kling)生成 5 秒影片'
@@ -1789,8 +1946,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           ) : null}
         </div>
 
-        {/* Right: inspector placeholder */}
-        <div className="col-span-3 space-y-5">
+        {/* Inspector (cast / notes / multi-shot bindings) — rightmost (order-3) */}
+        <div className="col-span-3 space-y-5 order-3">
           {selectedGroupTaskId ? (
             <MultiShotBindingsRail
               taskId={selectedGroupTaskId}
