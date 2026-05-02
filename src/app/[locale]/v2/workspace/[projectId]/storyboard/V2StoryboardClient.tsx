@@ -348,6 +348,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const selected = allPanels.find((p) => p.id === selectedId) ?? null
   const selectedIndex = allPanels.findIndex((p) => p.id === selectedId)
 
+  // 2026-05-02 — clear regen mutation state when the user picks a
+  // different panel. Without this, regenPanel.isSuccess stays true
+  // globally after the last submit and the green "已送出重生任務"
+  // banner sticks around on every panel the user clicks into next,
+  // making them think they accidentally submitted a regen on that
+  // panel too. User-reported confusion.
+  useEffect(() => {
+    regenPanel.reset()
+    generateVideo.reset()
+    // mutation refs are stable — only re-run when selection changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId])
+
   // V2 storyboard editor — local drafts for the panel's description (場景
   // 描述詞) and srtSegment (對話/字幕). Re-seeded whenever the user picks
   // a different panel so editing one doesn't leak into another.
