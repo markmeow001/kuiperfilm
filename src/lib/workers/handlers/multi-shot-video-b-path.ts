@@ -285,11 +285,21 @@ function looksLikeStageDirection(content: string): boolean {
   for (const kw of STAGE_KEYWORDS) {
     if (content.includes(kw)) return true
   }
-  // Pure narration tends to be long and end with `。` or `.` while
-  // not containing any spoken-line punctuation. Loose check: long
-  // (>40 chars) without speech markers (! ? 。? 「」 ""), drop it.
-  const hasSpeechMarker = /[！？!?「」"“”]/.test(content)
-  if (!hasSpeechMarker && content.length > 40) return true
+  // Removed (2026-05-02): the "long-without-speech-marker" rule
+  // ( length>40 && no `!?` ) silently dropped legitimate non-CJK
+  // dialogue. Spanish / French / English declarative dialogue routinely
+  // ends with `.` and runs over 40 chars (e.g. "Gracias por el dinero.
+  // No me esperes para cenar..."), so the rule misclassified essentially
+  // every non-Mandarin line as stage direction. Result: dialogueByPanel
+  // ended up empty for those panels → multi_prompt[].prompt held only
+  // the Chinese visual description → Kling dubbed the description in
+  // Mandarin. SARAH's exclamation-heavy line was the only one that
+  // survived, which is exactly the "only one segment speaks Mandarin"
+  // pattern user reported.
+  //
+  // The STAGE_KEYWORDS check above is enough to catch the original
+  // false-negative case ("慢动作中景:CATHERINE...") because every real
+  // stage direction we see in srtSegment contains one of those keywords.
   return false
 }
 
