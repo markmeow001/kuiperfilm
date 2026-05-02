@@ -20,7 +20,10 @@ import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
 import { LocationViewPickerModal } from './LocationViewPickerModal'
-import { useMultiShotTask } from '@/lib/query/hooks/useMultiShotTask'
+import {
+  useMultiShotTask,
+  type MultiShotCharacterBinding,
+} from '@/lib/query/hooks/useMultiShotTask'
 import type { UseMutationResult } from '@tanstack/react-query'
 
 interface PanelLike {
@@ -448,6 +451,12 @@ export function GroupCard({
   const taskFailed = liveTaskStatus === 'failed' || liveTaskStatus === 'cancelled'
   const taskProcessing = liveTaskStatus === 'queued' || liveTaskStatus === 'processing'
   const taskCompleted = liveTaskStatus === 'completed'
+  // Server-bound cast (what Kling actually anchored against). Lives
+  // in the right column below the scene chips per user request —
+  // the rail kept it directly below the player which made the left
+  // half overcrowded vs the narrative pane on the right.
+  const boundCharacters: MultiShotCharacterBinding[] =
+    taskQuery.data?.result?.bindings?.characters ?? []
 
   // If the task ultimately failed but local regenState still says
   // "done" (we marked done on submit success, before Kling actually
@@ -585,6 +594,7 @@ export function GroupCard({
               const epPart = episodeNumber && episodeNumber > 0 ? `ep${episodeNumber}_` : ''
               return `${epPart}group${String(groupOrdinal).padStart(2, '0')}`
             })()}
+            hideCastSection
             characterOverrideAppearanceById={characterOverrides}
             locationOverrideViewByLocationId={locationOverrides}
             onCharacterChipClick={(binding) => {
@@ -685,7 +695,7 @@ export function GroupCard({
             </div>
           )}
 
-          {(groupCast.length > 0 || groupScenes.length > 0) ? (
+          {(groupCast.length > 0 || groupScenes.length > 0 || boundCharacters.length > 0) ? (
             <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-950/30 p-2">
               {groupCast.length > 0 ? (
                 <div>
@@ -789,6 +799,79 @@ export function GroupCard({
                             </span>
                           ) : null}
                         </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {boundCharacters.length > 0 ? (
+                <div>
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[9px] uppercase tracking-wider text-amber-500/70">
+                    <AppIcon name="user" className="h-3 w-3" />
+                    演員綁定 · {boundCharacters.length}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {boundCharacters.map((c) => {
+                      const overrideAppearanceId = characterOverrides[c.id]
+                      const hasOverride =
+                        overrideAppearanceId !== undefined
+                        && overrideAppearanceId !== c.appearanceId
+                      const stateClass = hasOverride
+                        ? 'border-violet-500/60 bg-violet-500/10'
+                        : 'border-amber-900/30 bg-stone-950/40'
+                      const character = characterById.get(c.id) ?? null
+                      const handleClick = () => {
+                        if (!character) return
+                        const currentAppearanceId =
+                          characterOverrides[c.id] !== undefined
+                            ? characterOverrides[c.id]
+                            : c.appearanceId
+                        setPickerCharacter({ character, currentAppearanceId })
+                      }
+                      const title = hasOverride
+                        ? `${c.name} — 下次重生會改用新造型(尚未送出)`
+                        : `${c.name} · ${c.appearanceLabel ?? '默認造型'}${character ? ' — 點擊換造型' : ''}`
+                      const className = `inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 transition-colors ${
+                        character ? 'cursor-pointer hover:border-amber-500/60 hover:bg-amber-500/10' : ''
+                      } ${stateClass}`
+                      const inner = (
+                        <>
+                          <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={c.imageUrl}
+                              alt={c.name}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <span className="font-serif-cn text-[10px] text-stone-200">
+                            {c.name}
+                          </span>
+                          <span className="font-mono text-[9px] tracking-wider text-amber-500/70">
+                            {c.appearanceLabel ?? '默認造型'}
+                          </span>
+                          {hasOverride ? (
+                            <span className="font-mono text-[9px] tracking-wider text-violet-300">
+                              ✏ 已改
+                            </span>
+                          ) : null}
+                        </>
+                      )
+                      return character ? (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={handleClick}
+                          className={className}
+                          title={title}
+                        >
+                          {inner}
+                        </button>
+                      ) : (
+                        <div key={c.id} className={className} title={title}>
+                          {inner}
+                        </div>
                       )
                     })}
                   </div>

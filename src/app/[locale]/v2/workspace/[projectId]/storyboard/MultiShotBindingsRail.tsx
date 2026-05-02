@@ -44,6 +44,12 @@ interface MultiShotBindingsRailProps {
   // characterId / locationId.
   characterOverrideAppearanceById?: Record<string, string | null>
   locationOverrideViewByLocationId?: Record<string, string | null>
+  // When true the rail skips rendering its own Cast chip section so
+  // the host (e.g. GroupCard) can place the bound-characters list
+  // somewhere else (currently: below the Scene chip strip in the
+  // right column). Scenes stay inside the rail because they pair
+  // visually with the player on the left.
+  hideCastSection?: boolean
 }
 
 /**
@@ -81,6 +87,7 @@ export function MultiShotBindingsRail({
   onSceneChipClick,
   characterOverrideAppearanceById,
   locationOverrideViewByLocationId,
+  hideCastSection,
 }: MultiShotBindingsRailProps) {
   const { data, isLoading } = useMultiShotTask(taskId)
 
@@ -94,7 +101,8 @@ export function MultiShotBindingsRail({
   const shotCount = data?.result?.shotCount ?? null
   const characters = bindings?.characters ?? []
   const scenes = bindings?.scenes ?? []
-  const hasContent = characters.length > 0 || scenes.length > 0
+  const showCastBlock = !hideCastSection && characters.length > 0
+  const hasContent = showCastBlock || scenes.length > 0
 
   return (
     <div className="rounded-sm border border-amber-900/15 bg-stone-900/20 px-3 py-2.5">
@@ -201,7 +209,7 @@ export function MultiShotBindingsRail({
 
       {hasContent ? (
         <div className="space-y-2">
-          {characters.length > 0 ? (
+          {showCastBlock ? (
             <div>
               <div className="mb-1 font-mono text-[9px] uppercase tracking-wider text-stone-500">
                 Cast · {characters.length}
