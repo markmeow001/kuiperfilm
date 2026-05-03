@@ -17,6 +17,7 @@
  */
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'
+import { DesktopOverrideBanner } from './DesktopOverrideBanner'
 
 export const metadata: Metadata = {
   title: 'Kuiper · Mobile Review',
@@ -27,6 +28,7 @@ export const metadata: Metadata = {
 export default function MobileLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grain min-h-[100svh] bg-stone-950 text-stone-200">
+      <DesktopOverrideBanner />
       {children}
     </div>
   )

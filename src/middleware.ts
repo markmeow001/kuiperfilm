@@ -1,6 +1,11 @@
 import createMiddleware from 'next-intl/middleware';
 import { NextRequest, NextResponse } from 'next/server';
 import { locales, defaultLocale } from '@/i18n';
+import {
+    isPhoneUserAgent,
+    v2PathToMobile,
+    DESKTOP_OVERRIDE_COOKIE,
+} from '@/lib/mobile-detection';
 
 const intlMiddleware = createMiddleware({
     // 支持的所有语言
@@ -42,6 +47,23 @@ export default function middleware(request: NextRequest) {
         url.pathname = '/' + LOCALE_ALIAS[first] + (rest ? '/' + rest : '');
         return NextResponse.redirect(url);
     }
+
+    // 2026-05-03 — mobile UA bounces from V2 to /m/* so phone users
+    // land on the mobile-native review surface instead of a cramped
+    // desktop layout. Cookie escape hatch (`kuiper_desktop_override`)
+    // lets power users opt out and use V2 anyway. See
+    // `src/lib/mobile-detection.ts` for the path-mapping rules.
+    const desktopOverride = request.cookies.get(DESKTOP_OVERRIDE_COOKIE)?.value === '1';
+    if (!desktopOverride && isPhoneUserAgent(request.headers.get('user-agent'))) {
+        const target = v2PathToMobile(pathname);
+        if (target && target !== pathname) {
+            const url = request.nextUrl.clone();
+            url.pathname = target;
+            // Preserve query string so deep-linked filters survive.
+            return NextResponse.redirect(url);
+        }
+    }
+
     return intlMiddleware(request);
 }
 
