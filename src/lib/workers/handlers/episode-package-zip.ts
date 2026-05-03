@@ -179,7 +179,13 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
     groupOrder: number  // 1-indexed across the episode in storyboard / first-panel order
     storyboardOrder: number
     firstPanelIndex: number
-    cosKey: string
+    /**
+     * 2026-05-03 — a group can produce multiple clips when its dialogue
+     * exceeds Kling Omni's 15s per-call cap. Each clip is a complete
+     * mp4; the user stitches them in their NLE. Single-clip groups
+     * still ship as length-1 arrays so the loop below stays uniform.
+     */
+    cosKeys: string[]
     cameraNote: string | null
   }
   const groupVideos: GroupVideo[] = []
@@ -235,7 +241,7 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
       }
 
       // Pick the most recent completed task per group.
-      const cosByGroupKey = new Map<string, string>()
+      const cosByGroupKey = new Map<string, string[]>()
       for (const t of completedTasks) {
         const payloadObj = (t.payload && typeof t.payload === 'object' ? t.payload : null) as
           | { panelIds?: unknown }
@@ -247,15 +253,28 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
         const groupKey = panelToGroupKey.get(panelIds[0])
         if (!groupKey || cosByGroupKey.has(groupKey)) continue
         const resultObj = (t.result && typeof t.result === 'object' ? t.result : null) as
-          | { multiShotVideoUrl?: unknown }
+          | { multiShotVideoUrl?: unknown; multiShotClipUrls?: unknown }
           | null
-        const cosKey = typeof resultObj?.multiShotVideoUrl === 'string' ? resultObj.multiShotVideoUrl : null
-        if (cosKey) cosByGroupKey.set(groupKey, cosKey)
+        // Prefer the multi-clip array (new in 2026-05-03 chunked
+        // dispatch). Fall back to the legacy single string.
+        const cosKeys: string[] = (() => {
+          const arr = resultObj?.multiShotClipUrls
+          if (Array.isArray(arr)) {
+            const filtered = arr.filter(
+              (k): k is string => typeof k === 'string' && k.length > 0,
+            )
+            if (filtered.length > 0) return filtered
+          }
+          return typeof resultObj?.multiShotVideoUrl === 'string'
+            ? [resultObj.multiShotVideoUrl]
+            : []
+        })()
+        if (cosKeys.length > 0) cosByGroupKey.set(groupKey, cosKeys)
       }
 
       groupSigs.forEach((sig, i) => {
-        const cosKey = cosByGroupKey.get(`${sig.storyboardId}:${sig.groupId}`)
-        if (!cosKey) return
+        const cosKeys = cosByGroupKey.get(`${sig.storyboardId}:${sig.groupId}`)
+        if (!cosKeys || cosKeys.length === 0) return
         // Brief note describing the group's shot range so the zip filename
         // and script.txt reader can locate it without opening the file.
         const sb = episode.storyboards.find((s) => s.id === sig.storyboardId)
@@ -270,7 +289,7 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
           groupOrder: i + 1,
           storyboardOrder: sig.storyboardOrder,
           firstPanelIndex: sig.firstPanelIndex,
-          cosKey,
+          cosKeys,
           cameraNote,
         })
       })
@@ -330,22 +349,35 @@ export async function handleEpisodePackageZipTask(job: Job<TaskJobData>) {
 
     // Multi-shot group videos go into multi-shot/ alongside videos/ so
     // CapCut import keeps them on a separate track from per-panel cuts.
+    //
+    // Naming:
+    //   - Single-clip group:  multi-shot/group01.mp4 (legacy shape)
+    //   - Multi-clip group:   multi-shot/group01-clip1.mp4,
+    //                         multi-shot/group01-clip2.mp4, …
+    //     User imports them in numbered order; NLE auto-sequences.
     for (let i = 0; i < groupVideos.length; i++) {
       await assertTaskActive(job, 'package_assets')
       const group = groupVideos[i]
       const indexStr = String(group.groupOrder).padStart(2, '0')
-      const url = toSignedUrlIfCos(group.cosKey, 7200) || group.cosKey
-      try {
-        const buf = await fetchToBuffer(url)
-        archive.append(buf, { name: `multi-shot/group${indexStr}.mp4` })
-      } catch (err) {
-        // Multi-shot videos are best-effort — a single broken URL
-        // shouldn't kill the whole zip; the user still wants the
-        // remaining groups + per-panel videos.
-        logWarn('EPISODE_PACKAGE_ZIP: skipping multi-shot group', {
-          groupOrder: group.groupOrder,
-          reason: (err as Error).message,
-        })
+      const isMultiClip = group.cosKeys.length > 1
+      for (let j = 0; j < group.cosKeys.length; j++) {
+        const cosKey = group.cosKeys[j]
+        const url = toSignedUrlIfCos(cosKey, 7200) || cosKey
+        const filename = isMultiClip
+          ? `multi-shot/group${indexStr}-clip${j + 1}.mp4`
+          : `multi-shot/group${indexStr}.mp4`
+        try {
+          const buf = await fetchToBuffer(url)
+          archive.append(buf, { name: filename })
+        } catch (err) {
+          // Best-effort — one broken clip shouldn't kill the whole zip.
+          logWarn('EPISODE_PACKAGE_ZIP: skipping multi-shot clip', {
+            groupOrder: group.groupOrder,
+            clipIndex: j + 1,
+            totalClips: group.cosKeys.length,
+            reason: (err as Error).message,
+          })
+        }
       }
     }
 

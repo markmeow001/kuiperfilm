@@ -18,6 +18,7 @@ import {
   waitExternalResult,
 } from '../utils'
 import { reportTaskProgress } from '../shared'
+import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import {
   KieAIKlingVideoGenerator,
   type KlingElement,
@@ -319,17 +320,18 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   await reportTaskProgress(job, 95, { stage: 'persist' })
 
-  // 7. 存入 storyboard
+  // 7. 存入 storyboard — write both legacy and new array column for
+  // uniform shape (C path doesn't chunk; always 1 clip).
   await prisma.novelPromotionStoryboard.update({
     where: { id: storyboardId },
-    data: {
-      multiShotVideoUrl: cosKey,
-    },
+    data: buildMultiShotClipUpdate([cosKey]),
   })
 
   return {
     storyboardId,
     multiShotVideoUrl: cosKey,
+    multiShotClipUrls: [cosKey],
+    chunkCount: 1,
     shotCount: multiPrompt.length,
   }
 }

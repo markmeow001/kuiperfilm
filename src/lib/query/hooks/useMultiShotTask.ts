@@ -46,6 +46,16 @@ export interface MultiShotTaskRecord {
   result?: {
     bindings?: MultiShotBindings | null
     multiShotVideoUrl?: string | null
+    /**
+     * 2026-05-03 — full set of clip URLs when the worker chunked the
+     * group into multiple Kling calls (>15s dialogue). Always present
+     * for new generations; legacy completed tasks may have only
+     * `multiShotVideoUrl`. Consumers should prefer this array and
+     * fall back to wrapping `multiShotVideoUrl` in a 1-element array.
+     */
+    multiShotClipUrls?: string[] | null
+    /** Number of Kling calls dispatched (1 for single, >1 when chunked). */
+    chunkCount?: number | null
     storyboardId?: string | null
     shotCount?: number | null
     subjectCount?: number | null
@@ -125,6 +135,12 @@ export function useMultiShotTask(taskId: string | null | undefined) {
               bindings: parseBindings(t),
               multiShotVideoUrl:
                 typeof t.result.multiShotVideoUrl === 'string' ? t.result.multiShotVideoUrl : null,
+              multiShotClipUrls: Array.isArray(t.result.multiShotClipUrls)
+                ? (t.result.multiShotClipUrls as unknown[]).filter(
+                    (u): u is string => typeof u === 'string' && u.length > 0,
+                  )
+                : null,
+              chunkCount: typeof t.result.chunkCount === 'number' ? t.result.chunkCount : null,
               storyboardId:
                 typeof t.result.storyboardId === 'string' ? t.result.storyboardId : null,
               shotCount: typeof t.result.shotCount === 'number' ? t.result.shotCount : null,

@@ -96,8 +96,26 @@ export function MultiShotBindingsRail({
   const status = data?.status ?? null
   const isTerminal = status === 'completed' || status === 'failed' || status === 'cancelled'
   const bindings = data?.result?.bindings ?? null
-  const rawVideoKey = data?.result?.multiShotVideoUrl ?? null
-  const videoUrl = resolveVideoSrc(rawVideoKey, projectId, downloadFilenameBase)
+  // 2026-05-03 — long-dialogue groups produce N clips. Prefer the
+  // array; fall back to wrapping the legacy single URL.
+  const rawClipKeys: string[] = (() => {
+    const arr = data?.result?.multiShotClipUrls
+    if (Array.isArray(arr) && arr.length > 0) return arr
+    const legacy = data?.result?.multiShotVideoUrl
+    return legacy ? [legacy] : []
+  })()
+  const clipUrls: string[] = rawClipKeys
+    .map((key, i) =>
+      resolveVideoSrc(
+        key,
+        projectId,
+        rawClipKeys.length > 1 && downloadFilenameBase
+          ? `${downloadFilenameBase}_clip${i + 1}`
+          : downloadFilenameBase,
+      ),
+    )
+    .filter((u): u is string => typeof u === 'string' && u.length > 0)
+  const isChunked = clipUrls.length > 1
   const shotCount = data?.result?.shotCount ?? null
   const characters = bindings?.characters ?? []
   const scenes = bindings?.scenes ?? []
@@ -129,7 +147,7 @@ export function MultiShotBindingsRail({
         </div>
       </div>
 
-      {!isTerminal && !hasContent && !videoUrl ? (
+      {!isTerminal && !hasContent && clipUrls.length === 0 ? (
         <div className="font-serif-cn text-[11px] italic text-stone-500">
           多鏡頭視頻生成中(約 3-5 分鐘) — 完成後會顯示視頻播放器與綁定的角色造型 / 場景視角。
         </div>
@@ -172,41 +190,51 @@ export function MultiShotBindingsRail({
         )
       })() : null}
 
-      {videoUrl ? (
-        <div className="mx-auto mb-2.5 w-full max-w-[180px] overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video
-            key={videoUrl}
-            src={videoUrl}
-            controls
-            playsInline
-            // 9:16 reference player. Sized as a *thumbnail-with-controls*,
-            // not a primary viewing surface — the rail is for confirming
-            // the cut, not for watching it. 180×320 fits faces clearly
-            // on the timeline-view col-span-3 inspector without crowding
-            // out CAST chips and overrides below it. Earlier iterations
-            // shipped 260×420 which the user rightly called "way too
-            // big" on 2026-05-02.
-            className="mx-auto block h-auto max-h-[320px] w-full object-contain"
-          />
-          <div className="flex items-center justify-between border-t border-amber-900/20 bg-stone-900/40 px-2 py-1">
-            <div className="font-mono text-[12px] tracking-wider text-amber-500/70">
-              MULTI-SHOT {shotCount ? `· ${shotCount} 鏡` : ''}
-            </div>
-            <a
-              href={videoUrl}
-              // Don't override the proxy's Content-Disposition with
-              // the `download` attribute — when the response sets
-              // its own filename, the browser respects that. Empty
-              // string still triggers the download flow.
-              download=""
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-mono text-[12px] tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+      {clipUrls.length > 0 ? (
+        <div className="mx-auto mb-2.5 w-full max-w-[180px] space-y-2">
+          {clipUrls.map((url, i) => (
+            <div
+              key={url}
+              className="overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950"
             >
-              下載
-            </a>
-          </div>
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video
+                src={url}
+                controls
+                playsInline
+                // 9:16 reference player. Sized as a thumbnail-with-controls,
+                // not a primary viewing surface — the rail is for confirming
+                // the cut, not for watching it.
+                className="mx-auto block h-auto max-h-[320px] w-full object-contain"
+              />
+              <div className="flex items-center justify-between border-t border-amber-900/20 bg-stone-900/40 px-2 py-1">
+                <div className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                  {isChunked ? (
+                    <>CLIP {i + 1}/{clipUrls.length}</>
+                  ) : (
+                    <>MULTI-SHOT {shotCount ? `· ${shotCount} 鏡` : ''}</>
+                  )}
+                </div>
+                <a
+                  href={url}
+                  // Don't override the proxy's Content-Disposition with
+                  // the `download` attribute — when the response sets
+                  // its own filename, the browser respects that.
+                  download=""
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-[12px] tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+                >
+                  下載
+                </a>
+              </div>
+            </div>
+          ))}
+          {isChunked ? (
+            <div className="mt-1.5 rounded-sm border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 font-mono text-[10px] leading-relaxed tracking-wider text-amber-300/80">
+              對白超過 15s，已拆成 {clipUrls.length} 段。下載後可在剪映 / CapCut 順序拼接。
+            </div>
+          ) : null}
         </div>
       ) : null}
 
