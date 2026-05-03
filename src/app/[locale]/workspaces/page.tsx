@@ -478,6 +478,20 @@ function WorkspaceDetailDrawer({
   const [addUserName, setAddUserName] = useState('')
   const [adding, setAdding] = useState(false)
   const [addErr, setAddErr] = useState<string | null>(null)
+  // Click-to-add picker — list of users not yet in this workspace.
+  // Replaces the type-username flow when canManage. Owner clicks an
+  // entry → POSTs `{userId}` → row drops out, member list refreshes.
+  type AddableUser = {
+    userId: string
+    userName: string | null
+    displayName: string | null
+    email: string | null
+    role: string | null
+  }
+  const [addable, setAddable] = useState<AddableUser[]>([])
+  const [loadingAddable, setLoadingAddable] = useState(false)
+  const [addingUserId, setAddingUserId] = useState<string | null>(null)
+  const [addableFilter, setAddableFilter] = useState('')
 
   async function loadMembers() {
     setLoadingM(true)
@@ -502,10 +516,25 @@ function WorkspaceDetailDrawer({
     } catch {}
     setLoadingP(false)
   }
+  async function loadAddable() {
+    if (!canManage) return
+    setLoadingAddable(true)
+    try {
+      const res = await fetch(`/api/workspaces/${workspace.id}/addable-users`)
+      if (res.ok) {
+        const j = await res.json()
+        setAddable(j.addable || [])
+      }
+    } catch {}
+    setLoadingAddable(false)
+  }
 
   useEffect(() => {
     loadMembers()
-    if (canManage) loadProjects()
+    if (canManage) {
+      loadProjects()
+      loadAddable()
+    }
   }, [workspace.id])
 
   async function addMember() {
@@ -523,12 +552,33 @@ function WorkspaceDetailDrawer({
         throw new Error(j?.error?.details?.message || j?.error?.code || `HTTP ${res.status}`)
       }
       setAddUserName('')
-      await loadMembers()
+      await Promise.all([loadMembers(), loadAddable()])
       onChanged()
     } catch (e) {
       setAddErr(e instanceof Error ? e.message : 'failed')
     }
     setAdding(false)
+  }
+
+  async function addMemberById(userId: string) {
+    setAddingUserId(userId)
+    setAddErr(null)
+    try {
+      const res = await fetch(`/api/workspaces/${workspace.id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error?.details?.message || j?.error?.code || `HTTP ${res.status}`)
+      }
+      await Promise.all([loadMembers(), loadAddable()])
+      onChanged()
+    } catch (e) {
+      setAddErr(e instanceof Error ? e.message : 'failed')
+    }
+    setAddingUserId(null)
   }
 
   async function removeMember(userId: string) {
@@ -593,27 +643,98 @@ function WorkspaceDetailDrawer({
           {tab === 'members' && (
             <>
               {canManage && (
-                <div className="mb-4 rounded-sm border border-stone-800 bg-stone-950 p-3">
-                  <div className="mb-2 font-mono text-[10px] uppercase tracking-wider text-stone-500">加成員（用 username）</div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={addUserName}
-                      onChange={(e) => setAddUserName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && addMember()}
-                      placeholder="例:test02"
-                      className="flex-1 rounded-sm border border-stone-700 bg-stone-900 px-2 py-1.5 font-serif-cn text-sm focus:border-amber-500 focus:outline-none"
-                    />
-                    <button
-                      onClick={addMember}
-                      disabled={!addUserName.trim() || adding}
-                      className="rounded-sm bg-amber-500 px-3 py-1.5 font-serif-cn text-sm text-stone-950 hover:bg-amber-400 disabled:opacity-40"
-                    >
-                      {adding ? '加入中…' : '加入'}
-                    </button>
+                <>
+                  {/*
+                    Click-to-add picker. Lists every active user that
+                    isn't already a member or the owner. User asked for
+                    this UX 2026-05-02 — typing a username for every
+                    add was friction when the team is small (~10-20
+                    invite-only members) and they all sit in the same
+                    list. Filter input collapses the list for larger
+                    rosters. Each row has a `+` button that fires
+                    addMemberById(userId).
+                  */}
+                  <div className="mb-3 rounded-sm border border-stone-800 bg-stone-950 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="font-mono text-[12px] uppercase tracking-wider text-stone-500">
+                        可加入的用戶 ({addable.length})
+                      </div>
+                      <input
+                        type="text"
+                        value={addableFilter}
+                        onChange={(e) => setAddableFilter(e.target.value)}
+                        placeholder="搜尋 username / 顯示名稱…"
+                        className="w-48 rounded-sm border border-stone-700 bg-stone-900 px-2 py-1 font-serif-cn text-xs focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+                    {loadingAddable ? (
+                      <div className="font-mono text-xs text-stone-500">載入用戶清單中…</div>
+                    ) : addable.length === 0 ? (
+                      <div className="font-serif-cn text-sm text-stone-500">
+                        所有已註冊用戶都已是成員(或是這個工作區的 owner)。
+                      </div>
+                    ) : (
+                      <ul className="max-h-72 space-y-1 overflow-y-auto">
+                        {addable
+                          .filter((u) => {
+                            const q = addableFilter.trim().toLowerCase()
+                            if (!q) return true
+                            return (
+                              (u.userName ?? '').toLowerCase().includes(q)
+                              || (u.displayName ?? '').toLowerCase().includes(q)
+                              || (u.email ?? '').toLowerCase().includes(q)
+                            )
+                          })
+                          .map((u) => (
+                            <li
+                              key={u.userId}
+                              className="flex items-center justify-between rounded-sm border border-stone-800 bg-stone-950/60 px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate font-serif-cn text-sm text-stone-100">
+                                  {u.displayName || u.userName || '(未命名)'}
+                                </div>
+                                <div className="mt-0.5 truncate font-mono text-[12px] tracking-wider text-stone-500">
+                                  @{u.userName ?? '—'}
+                                  {u.email ? ` · ${u.email}` : ''}
+                                  {u.role && u.role !== 'member' ? ` · ${u.role}` : ''}
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => addMemberById(u.userId)}
+                                disabled={addingUserId === u.userId}
+                                className="ml-3 flex flex-shrink-0 items-center gap-1 rounded-sm bg-amber-500/15 px-2 py-1 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/25 disabled:opacity-50"
+                              >
+                                {addingUserId === u.userId ? '加入中…' : '+ 加入'}
+                              </button>
+                            </li>
+                          ))}
+                      </ul>
+                    )}
                   </div>
-                  {addErr && <div className="mt-2 font-mono text-[11px] text-rose-300">{addErr}</div>}
-                </div>
+
+                  <div className="mb-4 rounded-sm border border-stone-800 bg-stone-950 p-3">
+                    <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-stone-500">或用 username 直接加入</div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={addUserName}
+                        onChange={(e) => setAddUserName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addMember()}
+                        placeholder="例:test02"
+                        className="flex-1 rounded-sm border border-stone-700 bg-stone-900 px-2 py-1.5 font-serif-cn text-sm focus:border-amber-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={addMember}
+                        disabled={!addUserName.trim() || adding}
+                        className="rounded-sm bg-amber-500 px-3 py-1.5 font-serif-cn text-sm text-stone-950 hover:bg-amber-400 disabled:opacity-40"
+                      >
+                        {adding ? '加入中…' : '加入'}
+                      </button>
+                    </div>
+                    {addErr && <div className="mt-2 font-mono text-[12px] text-rose-300">{addErr}</div>}
+                  </div>
+                </>
               )}
               {loadingM ? (
                 <div className="font-mono text-xs text-stone-500">載入中...</div>
