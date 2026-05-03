@@ -1242,9 +1242,12 @@ export const GET = apiHandler(async () => {
     { type: 'video', modelId: 'veo-3.0-fast-generate-001', name: 'Veo 3.0 Fast' },
     { type: 'video', modelId: 'veo-2.0-generate-001', name: 'Veo 2.0' },
   ]
-  // 騰訊混元 (Tencent Hunyuan) — OpenAI 兼容 endpoint，文本 LLM only。
-  // 加進來是為了讓 admin 在 OpenRouter 餘額燒完時能切到便宜 ~10-20 倍
-  // 的本地 LLM (2026-05-03 incident: OpenRouter 402 quota exhausted)。
+  // 騰訊混元 (Tencent Hunyuan) — Tencent Cloud native API，文本 LLM only。
+  // SecretId/SecretKey 跟 tencent-vod **共用同一組**(都是同一個騰訊雲帳號),
+  // admin 不用申請額外 bearer key。chat-completion.ts 會走 TC3-HMAC-SHA256
+  // 簽章呼叫 hunyuan.tencentcloudapi.com,不走 OpenAI 兼容 endpoint。
+  // 加進來是為了 2026-05-03 OpenRouter 402 quota exhausted incident 的
+  // 後續對策 — 切到 Hunyuan 便宜 ~10-20 倍。
   // hunyuan-turbos / t1 / large 是當前主力選擇。
   const HUNYUAN_PRESETS: { type: UnifiedModelType; modelId: string; name: string }[] = [
     { type: 'llm', modelId: 'hunyuan-turbos-latest', name: 'Hunyuan Turbo S (latest)' },
