@@ -49,6 +49,8 @@ import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigM
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { V2LocationEditModal } from './V2LocationEditModal'
 import { V2ManualAddSubjectModal, type ManualAddSubjectType } from './V2ManualAddSubjectModal'
+import { V2LocationCreationModal } from './V2LocationCreationModal'
+import { CharacterCreationModal } from '@/components/shared/assets'
 import {
   useUpdateProjectLocationBasics,
   useUpdateProjectLocationDescription,
@@ -723,52 +725,10 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // No description = no auto AI gen (見 character/route.ts:202 +
   // location/route.ts:90 跳過邏輯)。
 
-  async function handleManualAddCharacter(params: {
-    name: string
-    description: string
-    file: File | null
-  }) {
-    setManualAddSubmitting(true)
-    try {
-      const res = await fetch(`/api/novel-promotion/${projectId}/character`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: params.name,
-          description: params.description || undefined,
-        }),
-      })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(`HTTP ${res.status} ${text}`)
-      }
-      const data = (await res.json()) as {
-        character?: { id: string; appearances?: Array<{ id: string }> }
-      }
-      const charId = data.character?.id
-      const apId = data.character?.appearances?.[0]?.id
-      if (params.file && charId && apId) {
-        await uploadCharImage.mutateAsync({
-          file: params.file,
-          characterId: charId,
-          appearanceId: apId,
-          imageIndex: 0,
-          labelText: `${params.name} - 初始形象`,
-        })
-      }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.characters(projectId) })
-      setManualAddOpen(null)
-    } catch (err) {
-      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
-    } finally {
-      setManualAddSubmitting(false)
-    }
-  }
-
   async function handleManualAddLocation(params: {
     name: string
     description: string
+    summary?: string | null
     file: File | null
   }) {
     setManualAddSubmitting(true)
@@ -780,6 +740,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         body: JSON.stringify({
           name: params.name,
           description: params.description || undefined,
+          summary: params.summary || undefined,
         }),
       })
       if (!res.ok) {
@@ -1263,19 +1224,43 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         </button>
       ) : null}
 
-      {manualAddOpen ? (
+      {/* 角色 — 用既有 CharacterCreationModal,提示词/参考图/上传四视图 3 模式都已實作 */}
+      {manualAddOpen === 'character' ? (
+        <CharacterCreationModal
+          mode="project"
+          projectId={projectId}
+          onClose={() => setManualAddOpen(null)}
+          onSuccess={() => {
+            setManualAddOpen(null)
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.projectAssets.characters(projectId),
+            })
+          }}
+        />
+      ) : null}
+
+      {/* 場景 — 自定的 V2LocationCreationModal,鏡像 V2LocationEditModal 的 metadata + 上傳/AI 生成入口 */}
+      {manualAddOpen === 'scene' ? (
+        <V2LocationCreationModal
+          isSubmitting={manualAddSubmitting}
+          onClose={() => {
+            if (manualAddSubmitting) return
+            setManualAddOpen(null)
+          }}
+          onSubmit={(params) => handleManualAddLocation(params)}
+        />
+      ) : null}
+
+      {/* 道具 — 暫用簡版 V2ManualAddSubjectModal(name + 描述 + 圖片足以) */}
+      {manualAddOpen === 'prop' ? (
         <V2ManualAddSubjectModal
-          subjectType={manualAddOpen}
+          subjectType="prop"
           onClose={() => {
             if (manualAddSubmitting) return
             setManualAddOpen(null)
           }}
           isSubmitting={manualAddSubmitting}
-          onSubmit={(params) => {
-            if (manualAddOpen === 'character') return handleManualAddCharacter(params)
-            if (manualAddOpen === 'scene') return handleManualAddLocation(params)
-            return handleManualAddProp(params)
-          }}
+          onSubmit={(params) => handleManualAddProp(params)}
         />
       ) : null}
     </div>
