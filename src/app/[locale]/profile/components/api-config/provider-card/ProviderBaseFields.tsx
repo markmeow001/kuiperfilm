@@ -17,6 +17,11 @@ export function ProviderBaseFields({ provider, t, state, onUpdateApiKey }: Provi
   if (state.providerKey === 'tencent-vod' || state.providerKey === 'tencent' || state.providerKey === 'vod') {
     return <ProviderTencentVODFields provider={provider} t={t} onUpdateApiKey={onUpdateApiKey} />
   }
+  // 騰訊混元 LLM 複用同一個 form,但 Hunyuan 不用 SubAppId 所以隱藏該欄位。
+  // SecretId/SecretKey 跟 VOD 是同一組(同帳號),admin 不用申請額外的 bearer key。
+  if (state.providerKey === 'tencent-hunyuan') {
+    return <ProviderTencentVODFields provider={provider} t={t} onUpdateApiKey={onUpdateApiKey} requireSubAppId={false} />
+  }
   const baseUrlPlaceholder = (() => {
     switch (state.providerKey) {
       case 'gemini-compatible':

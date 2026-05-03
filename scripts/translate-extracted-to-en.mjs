@@ -5,13 +5,27 @@
  * `_migration-out/messages-en.json` keyed by simplified Chinese
  * source string.
  *
- * Usage (pick one):
+ * Usage — three modes, pick whichever has access:
  *
+ *   # 1. Use admin's stored OpenRouter key on production (no local key
+ *   #    needed — server reads it from DB). Recommended.
+ *   KUIPER_BASE_URL=https://art.kuiperfilmailab.com \
+ *   KUIPER_SESSION='next-auth.session-token=eyJ...' \
+ *     node scripts/translate-extracted-to-en.mjs
+ *
+ *   # 2. Direct OpenAI
  *   OPENAI_API_KEY=sk-... node scripts/translate-extracted-to-en.mjs
+ *
+ *   # 3. Direct OpenRouter (your own key)
  *   OPENROUTER_API_KEY=sk-or-... node scripts/translate-extracted-to-en.mjs
  *
+ * For mode 1: log into prod as admin, open devtools, copy the
+ * `next-auth.session-token` cookie value, paste into KUIPER_SESSION
+ * (the script handles wrapping in Cookie header).
+ *
  * Optional env:
- *   TRANSLATE_MODEL=gpt-4o-mini  (default — cheapest GPT-4 family)
+ *   TRANSLATE_MODEL=gpt-4o-mini  (modes 2/3 only; mode 1 is fixed
+ *                                 server-side)
  *   TRANSLATE_BASE_URL=...       (override; defaults follow whichever
  *                                 key is set)
  *   BATCH_SIZE=50                (strings per request; default 50)
@@ -39,16 +53,27 @@ const BATCH_SIZE = Number(process.env.BATCH_SIZE) || 50
 const MODEL = process.env.TRANSLATE_MODEL || 'gpt-4o-mini'
 
 function pickEndpoint() {
+  // Mode 1: hit our admin-only proxy that reads the stored OpenRouter
+  // key server-side. Preferred — no local secret handling.
+  if (process.env.KUIPER_BASE_URL && process.env.KUIPER_SESSION) {
+    return {
+      mode: 'kuiper',
+      url: `${process.env.KUIPER_BASE_URL}/api/admin/translate-i18n-batch`,
+      cookie: process.env.KUIPER_SESSION.startsWith('next-auth')
+        ? process.env.KUIPER_SESSION
+        : `next-auth.session-token=${process.env.KUIPER_SESSION}`,
+    }
+  }
   if (process.env.TRANSLATE_BASE_URL && process.env.OPENAI_API_KEY) {
-    return { url: process.env.TRANSLATE_BASE_URL, key: process.env.OPENAI_API_KEY }
+    return { mode: 'openai', url: process.env.TRANSLATE_BASE_URL, key: process.env.OPENAI_API_KEY }
   }
   if (process.env.OPENAI_API_KEY) {
-    return { url: 'https://api.openai.com/v1', key: process.env.OPENAI_API_KEY }
+    return { mode: 'openai', url: 'https://api.openai.com/v1', key: process.env.OPENAI_API_KEY }
   }
   if (process.env.OPENROUTER_API_KEY) {
-    return { url: 'https://openrouter.ai/api/v1', key: process.env.OPENROUTER_API_KEY }
+    return { mode: 'openai', url: 'https://openrouter.ai/api/v1', key: process.env.OPENROUTER_API_KEY }
   }
-  console.error('ERROR: set OPENAI_API_KEY or OPENROUTER_API_KEY to translate.')
+  console.error('ERROR: set KUIPER_BASE_URL+KUIPER_SESSION (preferred), OPENAI_API_KEY, or OPENROUTER_API_KEY.')
   process.exit(1)
 }
 
@@ -73,6 +98,25 @@ Rules:
   and whose values are the English translations. No extra prose.`
 
 async function translateBatch(endpoint, batch) {
+  if (endpoint.mode === 'kuiper') {
+    const res = await fetch(endpoint.url, {
+      method: 'POST',
+      headers: {
+        'Cookie': endpoint.cookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ strings: batch.map((b) => b.s), targetLang: 'en' }),
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`)
+    }
+    const data = await res.json()
+    if (!data.translations) throw new Error('Server returned no translations field')
+    return data.translations
+  }
+
+  // Direct OpenAI-compatible mode (modes 2/3)
   const userPrompt = JSON.stringify(batch.map((b) => b.s))
   const res = await fetch(`${endpoint.url}/chat/completions`, {
     method: 'POST',

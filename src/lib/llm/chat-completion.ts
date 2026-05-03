@@ -177,6 +177,48 @@ export async function chatCompletion(
       }
 
 
+      if (providerKey === 'tencent-hunyuan') {
+        // Tencent Hunyuan native API — TC3-HMAC-SHA256 signed call to
+        // hunyuan.tencentcloudapi.com using the SAME SecretId/SecretKey
+        // the admin already set up for tencent-vod (no extra bearer
+        // key required). hunyuanChatCompletion handles the signing
+        // and returns OpenAI-shaped completion.
+        const { apiKey } = await getProviderConfig(userId, provider)
+        const { hunyuanChatCompletion } = await import('./hunyuan-client')
+        const completion = await hunyuanChatCompletion({
+          apiKey,
+          modelId: resolvedModelId,
+          messages,
+          options: { temperature },
+        })
+        const completionParts = getCompletionParts(completion)
+        logLlmRawOutput({
+          userId,
+          projectId,
+          provider: 'tencent-hunyuan',
+          modelId: resolvedModelId,
+          modelKey: selection.modelKey,
+          stream: false,
+          action: options.action,
+          text: completionParts.text,
+          reasoning: completionParts.reasoning,
+          usage: completionUsageSummary(completion),
+        })
+        recordCompletionUsage(resolvedModelId, completion)
+        llmLogger.info({
+          action: 'llm.call.success',
+          message: 'llm call succeeded',
+          provider: 'tencent-hunyuan',
+          durationMs: Date.now() - attemptStartedAt,
+          details: {
+            model: resolvedModelId,
+            attempt,
+            maxRetries,
+          },
+        })
+        return completion
+      }
+
       if (providerKey === 'ark') {
         const { apiKey } = await getProviderConfig(userId, provider)
         const client = new OpenAI({

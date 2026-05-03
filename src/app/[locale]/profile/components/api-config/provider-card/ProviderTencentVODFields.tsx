@@ -8,6 +8,11 @@ interface ProviderTencentVODFieldsProps {
     provider: ProviderCardProps['provider']
     t: ProviderCardTranslator
     onUpdateApiKey: ProviderCardProps['onUpdateApiKey']
+    /**
+     * VOD AIGC 需要 SubAppId 作為媒體歸屬空間;Hunyuan LLM 不用,設 false 隱藏該欄位。
+     * 預設 true 維持原本 VOD 行為。
+     */
+    requireSubAppId?: boolean
 }
 
 interface TencentVODCreds {
@@ -41,7 +46,7 @@ function parseExistingCreds(apiKey?: string): TencentVODCreds {
     }
 }
 
-export function ProviderTencentVODFields({ provider, t, onUpdateApiKey }: ProviderTencentVODFieldsProps) {
+export function ProviderTencentVODFields({ provider, t, onUpdateApiKey, requireSubAppId = true }: ProviderTencentVODFieldsProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [showSecretKey, setShowSecretKey] = useState(false)
 
@@ -59,7 +64,6 @@ export function ProviderTencentVODFields({ provider, t, onUpdateApiKey }: Provid
     }
 
     const handleSave = () => {
-        const subAppIdNum = Number(form.subAppId)
         if (!form.secretId.trim()) {
             alert('請輸入 SecretId')
             return
@@ -68,14 +72,18 @@ export function ProviderTencentVODFields({ provider, t, onUpdateApiKey }: Provid
             alert('請輸入 SecretKey')
             return
         }
-        if (!Number.isFinite(subAppIdNum) || subAppIdNum <= 0) {
-            alert('SubAppId 必須是正整數（11 位數字，例如 1500044236）')
-            return
+        let subAppIdNum = 0
+        if (requireSubAppId) {
+            subAppIdNum = Number(form.subAppId)
+            if (!Number.isFinite(subAppIdNum) || subAppIdNum <= 0) {
+                alert('SubAppId 必須是正整數（11 位數字，例如 1500044236）')
+                return
+            }
         }
         const payload = JSON.stringify({
             secretId: form.secretId.trim(),
             secretKey: form.secretKey.trim(),
-            subAppId: subAppIdNum,
+            ...(requireSubAppId ? { subAppId: subAppIdNum } : {}),
             region: form.region || 'ap-guangzhou',
         })
         onUpdateApiKey(provider.id, payload)
@@ -109,10 +117,12 @@ export function ProviderTencentVODFields({ provider, t, onUpdateApiKey }: Provid
                                 <AppIcon name="edit" className="h-4 w-4" />
                             </button>
                         </div>
-                        <div>
-                            <span className="font-semibold text-[var(--glass-text-primary)]">SubAppId</span>
-                            <span className="ml-2 font-mono">{summary.subAppId}</span>
-                        </div>
+                        {requireSubAppId ? (
+                            <div>
+                                <span className="font-semibold text-[var(--glass-text-primary)]">SubAppId</span>
+                                <span className="ml-2 font-mono">{summary.subAppId}</span>
+                            </div>
+                        ) : null}
                         <div>
                             <span className="font-semibold text-[var(--glass-text-primary)]">Region</span>
                             <span className="ml-2 font-mono">{summary.region}</span>
@@ -161,15 +171,17 @@ export function ProviderTencentVODFields({ provider, t, onUpdateApiKey }: Provid
                             </button>
                         </Field>
 
-                        <Field label="SubAppId">
-                            <input
-                                type="text"
-                                value={form.subAppId}
-                                onChange={(e) => setForm({ ...form, subAppId: e.target.value })}
-                                placeholder="1500044236（11 位數字）"
-                                className="glass-input-base flex-1 px-3 py-1.5 text-[12px] font-mono"
-                            />
-                        </Field>
+                        {requireSubAppId ? (
+                            <Field label="SubAppId">
+                                <input
+                                    type="text"
+                                    value={form.subAppId}
+                                    onChange={(e) => setForm({ ...form, subAppId: e.target.value })}
+                                    placeholder="1500044236（11 位數字）"
+                                    className="glass-input-base flex-1 px-3 py-1.5 text-[12px] font-mono"
+                                />
+                            </Field>
+                        ) : null}
 
                         <Field label="Region">
                             <select
