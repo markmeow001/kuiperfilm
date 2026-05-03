@@ -46,21 +46,41 @@ interface LocationLike {
   images?: LocationImageLike[]
 }
 
+// Phase 11.3 Stage 2 — props as first-class generation refs.
+// PropLike mirrors the slimmed-down view of NovelPromotionProp the
+// worker actually needs:imageUrl for reference image collection,
+// description (the prompt-friendly visual summary produced by
+// extract_props), and name for matching against panel.props.
+interface PropLike {
+  name: string
+  imageUrl: string | null
+  description?: string | null
+  summary?: string | null
+}
+
 interface NovelProjectData {
   videoRatio?: string | null
   characters?: CharacterLike[]
   locations?: LocationLike[]
+  props?: PropLike[]
 }
 
 interface PanelLike {
   sketchImageUrl?: string | null
   characters?: string | null
   location?: string | null
+  // Phase 11.3 Stage 2 — JSON-encoded string array of prop names
+  // referenced by this panel. parsePanelPropReferences() parses it.
+  props?: string | null
 }
 
 export interface PanelCharacterReference {
   name: string
   appearance?: string
+}
+
+export interface PanelPropReference {
+  name: string
 }
 
 interface NovelDataDb {
@@ -138,6 +158,10 @@ export async function resolveNovelData(projectId: string) {
     include: {
       characters: { include: { appearances: { orderBy: { appearanceIndex: 'asc' } } } },
       locations: { include: { images: { orderBy: { imageIndex: 'asc' } } } },
+      // Phase 11.3 Stage 2 — load props so collectPanelReferenceImages
+      // and buildSceneDescription can match panel.props names against
+      // the project prop catalog.
+      props: true,
     },
   })
 
@@ -146,6 +170,51 @@ export async function resolveNovelData(projectId: string) {
   }
 
   return data
+}
+
+/**
+ * Phase 11.3 Stage 2 — parse panel.props JSON.
+ *
+ * Accepts the same shapes as parsePanelCharacterReferences for consistency:
+ *   - string[]                       → [{name}, {name}, ...]
+ *   - { name: string }[]             → [{name}, ...]
+ *
+ * Future-proofed:`appearance` analogue isn't supported here because props
+ * don't have appearance variants (a knife is a knife). If we ever add prop
+ * variants (knife clean / knife bloody), extend this then.
+ *
+ * Defensive parse:malformed JSON returns []. Non-string names skipped.
+ */
+export function parsePanelPropReferences(value: string | null | undefined): PanelPropReference[] {
+  if (!value) return []
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((item: unknown) => {
+        if (typeof item === 'string') return { name: item }
+        if (!item || typeof item !== 'object') return null
+        const candidate = item as { name?: unknown }
+        if (typeof candidate.name === 'string') return { name: candidate.name }
+        return null
+      })
+      .filter(Boolean) as PanelPropReference[]
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Match a prop reference name to a NovelPromotionProp row by name.
+ * Case-insensitive exact match — props don't have "/" alias splitting
+ * because their names are object nouns, not character aliases. Returns
+ * undefined when nothing matches; caller is expected to skip silently
+ * (a panel can list a prop that's been renamed/deleted in the catalog).
+ */
+export function findPropByName<T extends { name: string }>(props: T[], referenceName: string): T | undefined {
+  const refLower = referenceName.toLowerCase().trim()
+  if (!refLower) return undefined
+  return props.find((p) => p.name.toLowerCase().trim() === refLower)
 }
 
 export function parsePanelCharacterReferences(value: string | null | undefined): PanelCharacterReference[] {
@@ -333,6 +402,22 @@ export async function collectPanelReferenceImages(
       const signed = toSignedUrlIfCos(picked?.imageUrl, 3600)
       if (signed) refs.push(signed)
     }
+  }
+
+  // Phase 11.3 Stage 2 — props as generation references.
+  // Same shape as character refs:look up each panel.props name in the
+  // project prop catalog, sign the prop's imageUrl if it's a COS key,
+  // and append. Missing props are silently skipped (catalog mutation
+  // can outpace panel data — a deleted prop shouldn't kill the gen).
+  // Order:characters → location → props matches the prompt order
+  // buildSceneDescription emits, so the AI sees refs in the same
+  // sequence it reads them about.
+  const panelProps = parsePanelPropReferences(panel.props)
+  for (const item of panelProps) {
+    const prop = findPropByName(projectData.props || [], item.name)
+    if (!prop?.imageUrl) continue
+    const signed = toSignedUrlIfCos(prop.imageUrl, 3600)
+    if (signed) refs.push(signed)
   }
 
   return refs

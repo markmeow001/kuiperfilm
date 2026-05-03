@@ -16,7 +16,9 @@ import {
   collectPanelReferenceImages,
   collectPanelSceneBase,
   findCharacterByName,
+  findPropByName,
   parsePanelCharacterReferences,
+  parsePanelPropReferences,
   pickFirstString,
   resolveNovelData,
 } from './image-task-handler-shared'
@@ -40,6 +42,8 @@ function buildSceneDescription(params: {
     videoPrompt: string | null
     location: string | null
     characters: string | null
+    // Phase 11.3 Stage 2 — JSON-encoded prop names referenced in this panel.
+    props: string | null
     srtSegment: string | null
     photographyRules: string | null
     actingNotes: string | null
@@ -102,6 +106,23 @@ function buildSceneDescription(params: {
         })()
       : rawLoc
     lines.push(`场景：${locDesc}`)
+  }
+
+  // Phase 11.3 Stage 2 — props line.
+  // Surface each panel-referenced prop with its prop description (or
+  // summary fallback) so the model knows what objects belong in shot.
+  // Description comes from extract_props LLM (prompt-friendly visual
+  // summary); summary is the human-facing label. Prefer description.
+  // Missing-from-catalog props get the bare name (catalog drift).
+  const panelProps = parsePanelPropReferences(params.panel.props)
+  if (panelProps.length > 0) {
+    const propDescs = panelProps.map((reference) => {
+      const prop = findPropByName(params.projectData.props || [], reference.name)
+      if (!prop) return reference.name
+      const desc = prop.description || prop.summary || ''
+      return desc ? `${prop.name}（${desc}）` : prop.name
+    })
+    lines.push(`道具：${propDescs.join('、')}`)
   }
 
   // Photography rules as plain text
@@ -179,6 +200,7 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
       normalizedUrls: normalizedRefs.map((u) => u.substring(0, 100)),
       panelCharacters: panel.characters,
       panelLocation: panel.location,
+      panelProps: panel.props,
     },
   })
 
@@ -195,6 +217,7 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
       videoPrompt: panel.videoPrompt,
       location: panel.location,
       characters: panel.characters,
+      props: panel.props,
       srtSegment: panel.srtSegment,
       photographyRules: panel.photographyRules,
       actingNotes: panel.actingNotes,

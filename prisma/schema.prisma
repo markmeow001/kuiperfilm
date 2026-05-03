@@ -250,6 +250,16 @@ model NovelPromotionPanel {
   description          String?                   @db.Text
   location             String?                   @db.Text
   characters           String?                   @db.Text
+  // Phase 11.3 Stage 2 — props referenced in this panel.
+  // JSON-encoded string array of NovelPromotionProp.name values
+  // (mirrors `characters` shape, no junction table needed for the
+  // simple "what objects appear in this shot" lookup the worker does).
+  // Worker reads this in collectPanelReferenceImages() to add prop
+  // imageUrl as a generation reference, and in buildSceneDescription()
+  // to surface the prop's text description in the prompt.
+  // null = no props (legacy panels, current default until LLM extract
+  // path lands in Stage 2b).
+  props                String?                   @db.Text
   srtSegment           String?                   @db.Text
   srtStart             Float?
   srtEnd               Float?

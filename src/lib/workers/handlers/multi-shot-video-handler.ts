@@ -148,6 +148,9 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
           description: true,
           videoPrompt: true,
           characters: true,
+          // Phase 11.3 Stage 2 — panel.props JSON so b-path can match
+          // against projectData.props and add prop ref images.
+          props: true,
           location: true,
           shotType: true,
           cameraMove: true,

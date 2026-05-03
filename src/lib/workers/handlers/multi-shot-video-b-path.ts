@@ -5,7 +5,9 @@ import { createScopedLogger } from '@/lib/logging/core'
 import { generateVideo } from '@/lib/generator-api'
 import {
   parsePanelCharacterReferences,
+  parsePanelPropReferences,
   findCharacterByName,
+  findPropByName,
   parseImageUrls,
 } from './image-task-handler-shared'
 
@@ -38,6 +40,9 @@ interface BPathPanel {
   description: string | null
   videoPrompt: string | null
   characters: string | null
+  // Phase 11.3 Stage 2 — JSON-encoded prop names referenced in this panel.
+  // Same shape as `characters`; null = no props.
+  props?: string | null
   /**
    * Free-form scene name written by the analyze worker — typically
    * `<locationName>` or `<locationName>#<viewHint>` (Approach B-Standard).
@@ -71,9 +76,19 @@ interface LocationForBPath {
   images?: LocationImageForBPath[]
 }
 
+// Phase 11.3 Stage 2 — slim view of NovelPromotionProp the multi-shot
+// path needs:imageUrl as Tencent SubjectInfos source, name to match
+// against panel.props references.
+interface PropForBPath {
+  id: string
+  name: string
+  imageUrl?: string | null
+}
+
 interface BPathProjectData {
   characters?: CharacterForBPath[]
   locations?: LocationForBPath[]
+  props?: PropForBPath[]
 }
 
 interface BPathDialogueLine {
@@ -764,6 +779,14 @@ export async function runMultiShotBPath(params: {
       viewName: string | null
       imageUrl: string
     }>
+    // Phase 11.3 Stage 2 — props that made it past the 3-slot cap and
+    // got included as Kling reference images. Empty array when the cap
+    // pushed all props out (chars + scenes filled all 3 slots).
+    props: Array<{
+      id: string
+      name: string
+      imageUrl: string
+    }>
   }
 }> {
   const {
@@ -1023,6 +1046,48 @@ export async function runMultiShotBPath(params: {
     imageUrls: [s.imageUrl],
   }))
 
+  // Phase 11.3 Stage 2 — props as third-tier reference candidates.
+  // Walk panels in order, collect unique props referenced in this
+  // group's panel.props JSON, and resolve each to its imageUrl from
+  // the project prop catalog. Order:dedup by prop.id, skip props
+  // without imageUrl (catalog row exists but image not yet generated/
+  // uploaded), sign COS keys.
+  //
+  // Slot priority is character → scene → prop. Tencent's 3-slot cap
+  // means props rarely make it into SubjectInfos when there are 2+
+  // speaking characters, but they ALWAYS appear in the bindings
+  // response so the UI chip rail can show what was used and what got
+  // dropped. Single-character single-scene groups will frequently
+  // have 1 free slot for a prop.
+  type PropBinding = {
+    id: string
+    name: string
+    imageUrl: string
+  }
+  const propBindings: PropBinding[] = []
+  const seenPropIds = new Set<string>()
+  for (const panel of validPanels) {
+    const propRefs = parsePanelPropReferences(panel.props)
+    for (const ref of propRefs) {
+      const prop = findPropByName(projectData.props || [], ref.name)
+      if (!prop) continue
+      if (seenPropIds.has(prop.id)) continue
+      if (!prop.imageUrl) continue
+      const publicUrl = toSignedUrlIfCos(prop.imageUrl, 7200)
+      if (!publicUrl) continue
+      seenPropIds.add(prop.id)
+      propBindings.push({
+        id: prop.id,
+        name: prop.name,
+        imageUrl: publicUrl,
+      })
+    }
+  }
+  const propSubjects = propBindings.map((p) => ({
+    name: p.name,
+    imageUrls: [p.imageUrl],
+  }))
+
   // Tencent's 3-slot cap applies to the *combined* list. Trim bindings
   // identically so the response shape mirrors what Kling actually saw.
   //
@@ -1037,7 +1102,7 @@ export async function runMultiShotBPath(params: {
   // silently dropped → refCount=0 → identity completely lost. Switch
   // to referenceImageUrls so the existing tencent-vod.ts path that
   // pushes FileInfos with Usage='Reference' runs.
-  const subjectInfos = [...characterSubjects, ...sceneSubjects].slice(0, 3)
+  const subjectInfos = [...characterSubjects, ...sceneSubjects, ...propSubjects].slice(0, 3)
   const referenceImageUrls = subjectInfos
     .map((s) => (Array.isArray(s.imageUrls) ? s.imageUrls[0] : null))
     .filter((u): u is string => typeof u === 'string' && u.length > 0)
@@ -1046,8 +1111,13 @@ export async function runMultiShotBPath(params: {
     sceneBindings.length,
     Math.max(0, subjectInfos.length - usedCharCount),
   )
+  const usedPropCount = Math.min(
+    propBindings.length,
+    Math.max(0, subjectInfos.length - usedCharCount - usedSceneCount),
+  )
   const activeCharacterBindings = characterBindings.slice(0, usedCharCount)
   const activeSceneBindings = sceneBindings.slice(0, usedSceneCount)
+  const activePropBindings = propBindings.slice(0, usedPropCount)
 
   // 1-indexed name → FileInfos position. Order is character refs
   // first, then scene refs — must mirror the referenceImageUrls
@@ -1352,6 +1422,7 @@ export async function runMultiShotBPath(params: {
       bindings: {
         characters: activeCharacterBindings,
         scenes: activeSceneBindings,
+        props: activePropBindings,
       },
     }
   }
@@ -1593,6 +1664,7 @@ export async function runMultiShotBPath(params: {
     bindings: {
       characters: activeCharacterBindings,
       scenes: activeSceneBindings,
+      props: activePropBindings,
     },
   }
 }
