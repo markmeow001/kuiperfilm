@@ -114,3 +114,68 @@ scripts/quality/
    shrinks read-not-sent from 110 to maybe 30. Worth it before round 2.
 4. **Playwright UI smoke** for value round-trip (separate task) —
    covers what static audit can't see.
+
+---
+
+## v3 update (2026-05-03) — adds mutationFn payload-type extraction
+
+v3 (`scripts/quality/field-wire-audit-v3.py`) adds two regexes v2 missed:
+- `mutationFn: async (p: { X, Y }) => { body: JSON.stringify(p) }` —
+  the inline TS type body becomes the source of truth for what's sent
+- `(body as { X?: T }).X` — type-cast access pattern on the read side
+
+| Metric | v2 | v3 | Δ |
+| --- | ---: | ---: | ---: |
+| frontend keys sent | 54 | **105** | +51 |
+| API keys read | 155 | 156 | +1 |
+| matched | 45 | **83** | +38 |
+| sent_not_read | 9 | 22 | +13 |
+| read_not_sent | 110 | **73** | -37 |
+
+Coverage jumped from 83% to ~79% (matched ÷ sent), but the absolute
+matched count nearly doubled. The "drop" in % is just because v3 now
+sees ~2× as many fields the frontend actually sends.
+
+### v3 sent_not_read drilldown (22 entries)
+
+Spot-checked all 22 against the corresponding API route. Findings:
+
+- **~10 are nested-object sub-keys** the audit doesn't unfold:
+  `customPrompt`, `lastFramePanelIndex`, `lastFrameStoryboardId`,
+  `flModel` all live inside `requestBody.firstLastFrame = {...}` and
+  the server reads `body.firstLastFrame.X` (not flat `body.X`).
+  Same pattern for `audioBase64` / `voiceBase64` (inside `voiceDesign`).
+- **~5 are SDK code** (`audio_url`, `video_url`, `model`, `quality`,
+  `kling.ts`) — outbound to external APIs, not our backend.
+- **~3 are server-internal** (`characterName`, `locale`, `file`) —
+  used by the route's own logic, never were "sent from frontend"
+  in the user sense; my regex caught a server file that happens to
+  send to itself.
+- **~3 are routes that pass `body` straight through to `submitTask`**
+  via `payload: { ...body }` or `body: body` — `userInput` (via
+  `insert-panel` → INSERT_PANEL worker), `generateImage` (via
+  `character-profile/confirm` → maybeSubmitLLMTask body passthrough),
+  `referencedAssets` (via storyboard prompt mod). Worker reads them
+  downstream — false-positive at the route audit layer.
+
+### Real dead field found: 1
+
+**`triggerGlobalAnalysis`** — `useEpisodeMutations.ts` sends it inside
+the payload to `POST /api/novel-promotion/[projectId]/episodes/batch`.
+That route's destructure is explicit:
+```ts
+const { episodes, clearExisting = false, importStatus } = await request.json()
+```
+`triggerGlobalAnalysis` is **silently dropped**. Either the field is
+dead UI (delete the send) or the route was meant to honour it but the
+read line was lost in a refactor. **Worth a 1-line PR to one or the
+other.**
+
+### What this proves
+
+After three audit iterations, the platform's frontend↔backend wire is
+in good shape: out of 105 fields the frontend actually sends, **104
+are wired** (1 silently dropped). No widespread "form submitting data
+the server ignores" pattern. The 73 "read_not_sent" remainder is
+overwhelmingly worker-only fields, query-string params, and
+admin-internal endpoints with no frontend UI yet — not bugs.
