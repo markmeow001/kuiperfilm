@@ -48,6 +48,7 @@ import {
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { V2LocationEditModal } from './V2LocationEditModal'
+import { V2ManualAddSubjectModal, type ManualAddSubjectType } from './V2ManualAddSubjectModal'
 import {
   useUpdateProjectLocationBasics,
   useUpdateProjectLocationDescription,
@@ -219,6 +220,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const [editingDescDraft, setEditingDescDraft] = useState<string>('')
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null)
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null)
+  const [manualAddOpen, setManualAddOpen] = useState<ManualAddSubjectType | null>(null)
+  const [manualAddSubmitting, setManualAddSubmitting] = useState(false)
 
   function markRegenStart(targetId: string) {
     setRegenInFlight((prev) => {
@@ -714,6 +717,132 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     )
   }
 
+  // ===== Manual-add (角色 / 場景 / 道具) =====
+  // Pattern: POST → entity exists → upload image (if any) → invalidate.
+  // 上傳走既有的 useUpload* mutation,複用 invalidation,卡片自動刷新。
+  // No description = no auto AI gen (見 character/route.ts:202 +
+  // location/route.ts:90 跳過邏輯)。
+
+  async function handleManualAddCharacter(params: {
+    name: string
+    description: string
+    file: File | null
+  }) {
+    setManualAddSubmitting(true)
+    try {
+      const res = await fetch(`/api/novel-promotion/${projectId}/character`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: params.name,
+          description: params.description || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status} ${text}`)
+      }
+      const data = (await res.json()) as {
+        character?: { id: string; appearances?: Array<{ id: string }> }
+      }
+      const charId = data.character?.id
+      const apId = data.character?.appearances?.[0]?.id
+      if (params.file && charId && apId) {
+        await uploadCharImage.mutateAsync({
+          file: params.file,
+          characterId: charId,
+          appearanceId: apId,
+          imageIndex: 0,
+          labelText: `${params.name} - 初始形象`,
+        })
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.characters(projectId) })
+      setManualAddOpen(null)
+    } catch (err) {
+      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    } finally {
+      setManualAddSubmitting(false)
+    }
+  }
+
+  async function handleManualAddLocation(params: {
+    name: string
+    description: string
+    file: File | null
+  }) {
+    setManualAddSubmitting(true)
+    try {
+      const res = await fetch(`/api/novel-promotion/${projectId}/location`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: params.name,
+          description: params.description || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status} ${text}`)
+      }
+      const data = (await res.json()) as { location?: { id: string } }
+      const locId = data.location?.id
+      if (params.file && locId) {
+        await uploadLocImage.mutateAsync({
+          file: params.file,
+          locationId: locId,
+          imageIndex: 0,
+          labelText: params.name,
+        })
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.locations(projectId) })
+      setManualAddOpen(null)
+    } catch (err) {
+      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    } finally {
+      setManualAddSubmitting(false)
+    }
+  }
+
+  async function handleManualAddProp(params: {
+    name: string
+    description: string
+    file: File | null
+  }) {
+    setManualAddSubmitting(true)
+    try {
+      const res = await fetch(`/api/novel-promotion/${projectId}/prop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: params.name,
+          summary: params.description || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status} ${text}`)
+      }
+      const data = (await res.json()) as { prop?: { id: string } }
+      const propId = data.prop?.id
+      if (params.file && propId) {
+        await uploadPropImage.mutateAsync({
+          file: params.file,
+          propId,
+          labelText: params.name,
+        })
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.props(projectId) })
+      setManualAddOpen(null)
+    } catch (err) {
+      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    } finally {
+      setManualAddSubmitting(false)
+    }
+  }
+
   const props = (propsQuery.data ?? []) as Array<{
     id: string
     name: string
@@ -847,6 +976,22 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           ))}
         </div>
         <div className="flex items-center gap-2">
+          {/* 手動新增 — 三個 tab 都顯示,用「+」icon 區分。
+              點開 V2ManualAddSubjectModal,filled in 後 POST + 上傳,
+              既不依賴劇本分析,也不阻擋自動分析流程。 */}
+          <button
+            type="button"
+            onClick={() =>
+              setManualAddOpen(
+                tab === 'character' ? 'character' : tab === 'scene' ? 'scene' : 'prop',
+              )
+            }
+            className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-200 transition-all hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-300"
+            title={`手動新增${tab === 'character' ? '角色' : tab === 'scene' ? '場景' : '道具'}`}
+          >
+            <AppIcon name="plus" className="h-4 w-4" />
+            手動新增
+          </button>
           {tab === 'character' && characters.length > 0 ? (
             <button
               type="button"
@@ -1116,6 +1261,22 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             ESC / 點背景關閉
           </span>
         </button>
+      ) : null}
+
+      {manualAddOpen ? (
+        <V2ManualAddSubjectModal
+          subjectType={manualAddOpen}
+          onClose={() => {
+            if (manualAddSubmitting) return
+            setManualAddOpen(null)
+          }}
+          isSubmitting={manualAddSubmitting}
+          onSubmit={(params) => {
+            if (manualAddOpen === 'character') return handleManualAddCharacter(params)
+            if (manualAddOpen === 'scene') return handleManualAddLocation(params)
+            return handleManualAddProp(params)
+          }}
+        />
       ) : null}
     </div>
   )

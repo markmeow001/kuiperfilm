@@ -69,7 +69,7 @@ export const POST = apiHandler(async (
   const acceptLanguage = request.headers.get('accept-language') || ''
   const { name, description } = body
 
-  if (!name || !description) {
+  if (!name) {
     throw new ApiError('INVALID_PARAMS')
   }
 
@@ -77,7 +77,8 @@ export const POST = apiHandler(async (
   // 此处不再写入 artStylePrompt — 风格统一由 PATCH /api/projects/{id}/style-profile 管理。
 
   // 创建场景
-  const cleanDescription = removeLocationPromptSuffix(description.trim())
+  const trimmedDescription = typeof description === 'string' ? description.trim() : ''
+  const cleanDescription = trimmedDescription ? removeLocationPromptSuffix(trimmedDescription) : ''
   const location = await prisma.novelPromotionLocation.create({
     data: {
       novelPromotionProjectId: novelData.id,
@@ -95,28 +96,31 @@ export const POST = apiHandler(async (
     }
   })
 
-  // 触发后台图片生成
-  const { getBaseUrl } = await import('@/lib/env')
-  const baseUrl = getBaseUrl()
-  fetch(`${baseUrl}/api/novel-promotion/${projectId}/generate-image`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Cookie': request.headers.get('cookie') || '',
-      ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
-    },
-    body: JSON.stringify({
-      type: 'location',
-      id: location.id,
-      locale: taskLocale || undefined,
-      meta: {
-        ...bodyMeta,
-        locale: taskLocale || bodyMeta.locale || undefined,
+  // 触发后台图片生成 — 仅当用户提供了 description 时。
+  // 手动上传（无 description）走 upload-asset-image 路径，跳过 AI gen。
+  if (cleanDescription) {
+    const { getBaseUrl } = await import('@/lib/env')
+    const baseUrl = getBaseUrl()
+    fetch(`${baseUrl}/api/novel-promotion/${projectId}/generate-image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cookie': request.headers.get('cookie') || '',
+        ...(acceptLanguage ? { 'Accept-Language': acceptLanguage } : {}),
       },
+      body: JSON.stringify({
+        type: 'location',
+        id: location.id,
+        locale: taskLocale || undefined,
+        meta: {
+          ...bodyMeta,
+          locale: taskLocale || bodyMeta.locale || undefined,
+        },
+      })
+    }).catch(err => {
+      _ulogError('[Location API] 后台图片生成任务触发失败:', err)
     })
-  }).catch(err => {
-    _ulogError('[Location API] 后台图片生成任务触发失败:', err)
-  })
+  }
 
   // 返回包含图片的场景数据
   const locationWithImages = await prisma.novelPromotionLocation.findUnique({
