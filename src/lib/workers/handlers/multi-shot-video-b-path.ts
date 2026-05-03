@@ -29,6 +29,7 @@ import {
   waitExternalResult,
 } from '../utils'
 import { reportTaskProgress } from '../shared'
+import { buildDialogueDrivenDurations } from './speech-duration-estimator'
 
 interface BPathPanel {
   id: string
@@ -772,8 +773,11 @@ export async function runMultiShotBPath(params: {
   }
   // Implicit promotion: caller passing panelDurations means they care
   // about per-shot timing; force customize regardless of the mode flag.
-  const multiShotMode: 'intelligence' | 'customize' =
+  // (A second auto-promotion happens later if voice lines exist —
+  // dialogue-driven durations override the equal-split default.)
+  let multiShotMode: 'intelligence' | 'customize' =
     panelDurations !== undefined ? 'customize' : (params.multiShotMode ?? 'intelligence')
+  let effectivePanelDurations: number[] | undefined = panelDurations
   const { userId } = job.data
   const logger = createScopedLogger({
     module: 'worker.multi-shot-video-b-path',
@@ -1133,6 +1137,39 @@ export async function runMultiShotBPath(params: {
     if (cleaned.length > 0) dialogueByPanel.set(panel.id, cleaned)
   }
 
+  // Dialogue-driven duration allocation (2026-05-02). When voice lines
+  // exist and the caller didn't pin per-shot durations, size each
+  // shot's window to the estimated speech time so Kling's TTS doesn't
+  // truncate long lines. This auto-promotes the call to customize mode
+  // because intelligence mode ignores per-shot durations.
+  //
+  // Caller-supplied panelDurations or rawPrompt always win — both
+  // signal "the upstream knows what they're doing, leave it alone".
+  if (
+    effectivePanelDurations === undefined
+    && rawPrompt === undefined
+    && dialogueByPanel.size > 0
+  ) {
+    const driven = buildDialogueDrivenDurations({
+      panels: validPanels,
+      dialogueByPanelId: dialogueByPanel,
+    })
+    if (driven) {
+      effectivePanelDurations = driven.durations
+      multiShotMode = 'customize'
+      logger.info({
+        message: 'B path auto-promoted to customize via dialogue-driven durations',
+        details: {
+          shotCount: validPanels.length,
+          durations: driven.durations,
+          totalDuration: driven.totalDuration,
+          rawEstimateTotal: Number(driven.rawEstimateTotal.toFixed(2)),
+          clampedPanelIndices: driven.clampedPanels,
+        },
+      })
+    }
+  }
+
   await reportTaskProgress(job, 30, { stage: 'submit_generation_b_path' })
 
   // Branch on mode: customize gets per-shot multi_prompt entries with
@@ -1145,7 +1182,7 @@ export async function runMultiShotBPath(params: {
   let intelligencePromptSource: 'panels' | 'raw' | 'seedance' = 'panels'
 
   if (multiShotMode === 'customize') {
-    const { durations, totalDuration } = distributeShotDurations(validPanels.length, panelDurations)
+    const { durations, totalDuration } = distributeShotDurations(validPanels.length, effectivePanelDurations)
     const multiPrompt = buildBPathCustomizePrompts(validPanels, dialogueByPanel, durations, nameToImageIndex, unboundNames)
     if (multiPrompt.length === 0) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')

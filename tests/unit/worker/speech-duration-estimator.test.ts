@@ -1,0 +1,124 @@
+import { describe, expect, it } from 'vitest'
+import {
+  estimateSpeechSeconds,
+  estimatePanelSpeechSeconds,
+  buildDialogueDrivenDurations,
+} from '@/lib/workers/handlers/speech-duration-estimator'
+
+describe('estimateSpeechSeconds', () => {
+  it('returns 0 for empty string', () => {
+    expect(estimateSpeechSeconds('')).toBe(0)
+    expect(estimateSpeechSeconds('   ')).toBe(0)
+  })
+
+  it('estimates Chinese chars at the configured CJK rate', () => {
+    // 8 chars / 4 chars/sec = 2s
+    expect(estimateSpeechSeconds('你好我是新角色介紹')).toBeCloseTo(9 / 4, 5)
+  })
+
+  it('estimates English words at the configured rate', () => {
+    // 6 words / 2.3 wps ≈ 2.61s
+    expect(estimateSpeechSeconds('hello there how are you today')).toBeCloseTo(6 / 2.3, 4)
+  })
+
+  it('handles mixed CJK + English by summing both', () => {
+    // 3 CJK chars (0.75s) + 3 words (1.30s) ≈ 2.05s
+    const sec = estimateSpeechSeconds('你好嗎 hello there friend')
+    expect(sec).toBeGreaterThan(1.9)
+    expect(sec).toBeLessThan(2.2)
+  })
+})
+
+describe('estimatePanelSpeechSeconds', () => {
+  it('sums all lines and adds per-line buffer', () => {
+    const lines = [
+      { speaker: 'A', content: '你好嗎' }, // 3 chars / 4 = 0.75s
+      { speaker: 'B', content: 'hello world' }, // 2 words / 2.3 ≈ 0.87s
+    ]
+    // 0.75 + 0.87 + 2 × 0.4 buffer = ~2.42s
+    const sec = estimatePanelSpeechSeconds(lines)
+    expect(sec).toBeGreaterThan(2.3)
+    expect(sec).toBeLessThan(2.6)
+  })
+
+  it('returns 0 for empty lines array', () => {
+    expect(estimatePanelSpeechSeconds([])).toBe(0)
+    expect(estimatePanelSpeechSeconds(undefined)).toBe(0)
+  })
+})
+
+describe('buildDialogueDrivenDurations', () => {
+  it('returns null when no panel has dialogue', () => {
+    const panels = [{ id: 'p1' }, { id: 'p2' }]
+    const dialogue = new Map<string, ReadonlyArray<{ speaker: string; content: string }>>()
+    expect(buildDialogueDrivenDurations({ panels, dialogueByPanelId: dialogue })).toBeNull()
+  })
+
+  it('gives silent panels the floor and dialogue panels their estimated time', () => {
+    const panels = [{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }]
+    // 12 chars ≈ 3s + buffer ≈ 3.4s → ceil to 4s
+    const dialogue = new Map([
+      [
+        'p2',
+        [{ speaker: 'A', content: '這是一段中等長度的對白測' }],
+      ],
+    ])
+    const r = buildDialogueDrivenDurations({ panels, dialogueByPanelId: dialogue })
+    expect(r).not.toBeNull()
+    expect(r!.durations).toHaveLength(3)
+    expect(r!.durations[0]).toBe(3) // silent floor
+    expect(r!.durations[1]).toBeGreaterThanOrEqual(4) // dialogue estimate
+    expect(r!.durations[2]).toBe(3) // silent floor
+    expect(r!.totalDuration).toBe(r!.durations.reduce((a, b) => a + b, 0))
+  })
+
+  it('throws DIALOGUE_EXCEEDS_KLING_BUDGET when speech alone exceeds 15s', () => {
+    const panels = [{ id: 'p1' }, { id: 'p2' }]
+    // 80 CJK chars = 20s of speech alone
+    const longLine = '一'.repeat(80)
+    const dialogue = new Map([
+      ['p1', [{ speaker: 'A', content: longLine }]],
+    ])
+    expect(() =>
+      buildDialogueDrivenDurations({ panels, dialogueByPanelId: dialogue }),
+    ).toThrow(/DIALOGUE_EXCEEDS_KLING_BUDGET/)
+  })
+
+  it('shrinks silent-panel padding when integer rounding pushes total > 15s', () => {
+    // 6 panels, two with dialogue summing to ~12s, four silent. Default
+    // floor would push total = 12 + 4×3 = 24 > 15. The shrink pass cuts
+    // silent panels to 1s each so total drops to 12 + 4 = 16 still over,
+    // then 12 + 1+1+1+0 — but min is 1. Realistically this case will
+    // throw DIALOGUE_EXCEEDS because dialogue alone is fine but total
+    // budget is exhausted by silent floors.
+    const panels = [
+      { id: 'p1' },
+      { id: 'p2' },
+      { id: 'p3' },
+      { id: 'p4' },
+      { id: 'p5' },
+      { id: 'p6' },
+    ]
+    // p1 dialogue ≈ 1s, p2 dialogue ≈ 1s, others silent.
+    const dialogue = new Map([
+      ['p1', [{ speaker: 'A', content: '短句一句' }]], // ~1s
+      ['p2', [{ speaker: 'B', content: '另一句也是短的' }]], // ~1.5s
+    ])
+    const r = buildDialogueDrivenDurations({ panels, dialogueByPanelId: dialogue })
+    expect(r).not.toBeNull()
+    expect(r!.totalDuration).toBeLessThanOrEqual(15)
+  })
+
+  it('preserves caller-controlled silentPanelSeconds when provided', () => {
+    const panels = [{ id: 'p1' }, { id: 'p2' }]
+    const dialogue = new Map([
+      ['p1', [{ speaker: 'A', content: '一句話' }]],
+    ])
+    const r = buildDialogueDrivenDurations({
+      panels,
+      dialogueByPanelId: dialogue,
+      silentPanelSeconds: 1,
+    })
+    expect(r!.durations[1]).toBe(1)
+  })
+})
