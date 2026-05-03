@@ -35,10 +35,14 @@
  * split logic (distributeShotDurations).
  */
 
+// Pull constants from the leaf module, NOT from
+// ./multi-shot-video-b-path — pulling them from b-path created a
+// circular import that crashed the worker at startup. See
+// ./kling-omni-constants for the full incident note.
 import {
   KLING_OMNI_DEFAULT_PER_SHOT_DURATION,
   KLING_OMNI_MAX_TOTAL_DURATION,
-} from './multi-shot-video-b-path'
+} from './kling-omni-constants'
 
 const CJK_CHARS_PER_SEC = 4
 const NON_CJK_WORDS_PER_SEC = 2.3

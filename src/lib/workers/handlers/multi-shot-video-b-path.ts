@@ -86,12 +86,20 @@ export interface BPathShotPromptEntry {
   duration: number
 }
 
-/** Maximum total Duration accepted by Kling 3 / 3-Omni (std/pro). */
-export const KLING_OMNI_MAX_TOTAL_DURATION = 15
-/** Default per-shot allocation when caller does not specify durations. */
-export const KLING_OMNI_DEFAULT_PER_SHOT_DURATION = 3
-/** Tencent doc constraint: customize-mode multi_prompt allows at most 6 shots. */
-export const KLING_OMNI_MAX_SHOTS = 6
+// Constants moved to ./kling-omni-constants on 2026-05-03 to break a
+// circular import with speech-duration-estimator that crashed the
+// worker at startup. Re-exported here so `import { ... } from
+// './multi-shot-video-b-path'` keeps working everywhere.
+export {
+  KLING_OMNI_MAX_TOTAL_DURATION,
+  KLING_OMNI_DEFAULT_PER_SHOT_DURATION,
+  KLING_OMNI_MAX_SHOTS,
+} from './kling-omni-constants'
+import {
+  KLING_OMNI_MAX_TOTAL_DURATION,
+  KLING_OMNI_DEFAULT_PER_SHOT_DURATION,
+  KLING_OMNI_MAX_SHOTS,
+} from './kling-omni-constants'
 
 /**
  * Build a per-panel shot fragment (no `镜头N:` prefix) that mixes the
