@@ -33,6 +33,7 @@ import { useProjectData } from '@/lib/query/hooks/useProjectData'
 interface PanelDetail {
   id: string
   panelIndex: number
+  panelNumber: number | null
   storyboardId: string
   imageUrl: string | null
   videoUrl: string | null
@@ -156,9 +157,10 @@ export default function MobilePanelDetailPage() {
 
   async function handleRegenImage() {
     if (!panel) return
+    const isFirstGen = !panel.imageUrl
     try {
       await regenImage.mutateAsync({ panelId: panel.id })
-      flashSaved('已送出重新生成圖片任務')
+      flashSaved(isFirstGen ? '已送出生成圖片任務' : '已送出重新生成圖片任務')
     } catch (err) {
       setError((err as Error).message)
     }
@@ -200,10 +202,17 @@ export default function MobilePanelDetailPage() {
     }
   }
 
-  const indexStr = useMemo(
-    () => (panel ? String(panel.panelIndex).padStart(2, '0') : '—'),
-    [panel],
-  )
+  const indexStr = useMemo(() => {
+    if (!panel) return '—'
+    // Display panelNumber when available (1-indexed, what users
+    // expect), otherwise fall back to panelIndex+1 to avoid the
+    // confusing "PANEL 00" we used to show for first-in-storyboard
+    // panels (panelIndex=0 padded to "00").
+    const display = typeof panel.panelNumber === 'number' && panel.panelNumber > 0
+      ? panel.panelNumber
+      : panel.panelIndex + 1
+    return String(display).padStart(2, '0')
+  }, [panel])
 
   if (status === 'loading' || (status === 'authenticated' && loading)) {
     return (
@@ -276,7 +285,11 @@ export default function MobilePanelDetailPage() {
           disabled={regenImage.isPending}
           className="h-12 rounded-sm border border-amber-900/40 bg-stone-900/60 font-serif-cn text-sm text-amber-300 active:bg-stone-900 disabled:opacity-50"
         >
-          {regenImage.isPending ? '提交中…' : '↻ 重新生成圖片'}
+          {regenImage.isPending
+            ? '提交中…'
+            : panel.imageUrl
+              ? '↻ 重新生成圖片'
+              : '✨ 生成圖片'}
         </button>
         <button
           type="button"
