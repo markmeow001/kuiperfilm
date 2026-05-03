@@ -67,6 +67,58 @@ export const POST = apiHandler(async (
 
   _ulogInfo(`✓ 添加子形象: ${character.name} - ${changeReason} (index: ${newIndex})`)
 
+  // 2026-05-04 — auto-bind 新 appearance 到專案內每一集。
+  //
+  // 起因:iangyc 報「上傳了角色圖但生圖沒用到」。trace 發現 user
+  // 上傳新造型後 EpisodeCharacter.appearanceId 仍是 NULL,worker 走
+  // fallback 用 appearance[0](初始形象),不是 user 上傳的那張。
+  //
+  // 設計選擇:user 明確要求(2026-05-04)「之後每一集上傳角色後都會
+  // 自動綁定在同一個專案內」。從此每次新增 appearance 視為「換臉宣告」,
+  // 套用到該角色在所有 episode 的 binding;最新上傳 wins。
+  //
+  // 取捨:這會破壞「ep1-10 用 appearance A, ep11+ 用 appearance B」
+  // 的 multi-appearance use case。但內部 10-20 人 TikTok 短劇場景下,
+  // user 直覺「上傳=換臉」遠優先。需要跨集區間造型時 user 仍可在主體頁
+  // 的「每集綁定」UI 手動 PATCH 覆寫。
+  //
+  // Best-effort:binding 失敗不應該擋住 appearance 建立(已回 200)。
+  // 失敗只 log,不 throw。下次上傳會再 upsert 一次,自我修復。
+  try {
+    const episodes = await prisma.novelPromotionEpisode.findMany({
+      where: { novelPromotionProjectId: character.novelPromotionProjectId },
+      select: { id: true },
+    })
+    if (episodes.length > 0) {
+      await prisma.$transaction(
+        episodes.map((ep) =>
+          prisma.episodeCharacter.upsert({
+            where: {
+              episodeId_characterId: {
+                episodeId: ep.id,
+                characterId,
+              },
+            },
+            update: { appearanceId: newAppearance.id },
+            create: {
+              episodeId: ep.id,
+              characterId,
+              appearanceId: newAppearance.id,
+              role: 'manual',
+            },
+          }),
+        ),
+      )
+      _ulogInfo(
+        `✓ 自動綁定 appearance ${newAppearance.id} 到 ${episodes.length} 集 (project=${projectId}, character=${character.name})`,
+      )
+    }
+  } catch (bindErr) {
+    _ulogWarn(
+      `[appearance auto-bind] 綁定失敗(不影響 appearance 建立): ${(bindErr as Error)?.message ?? bindErr}`,
+    )
+  }
+
   return NextResponse.json({
     success: true,
     appearance: newAppearance
