@@ -25,6 +25,8 @@ import {
 import {
   useRegenerateProjectPanelImage,
   useUpdateProjectPanel,
+  useCreateProjectPanel,
+  useCreateProjectStoryboardGroup,
 } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import { useTaskSnapshot, useActiveTasks, useTaskList } from '@/lib/query/hooks/useTaskStatus'
@@ -34,6 +36,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { V2GroupsLayout } from './V2GroupsLayout'
+import { V2ManualPanelModal, type ManualPanelDraft } from './V2ManualPanelModal'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -184,6 +187,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const updatePanelText = useUpdatePanelText(projectId, currentEpisodeId)
   const generateVideo = useGenerateVideo(projectId, currentEpisodeId)
   const autoGroup = useAutoGroupMultiShot(projectId)
+  const createPanel = useCreateProjectPanel(projectId)
+  const createStoryboardGroup = useCreateProjectStoryboardGroup(projectId)
+
+  // 手動新增分鏡 (Phase 1 of B 組 free-prompt workflow):
+  // open via the toolbar button, submit creates panel + auto-triggers
+  // image gen. State is intentionally local — only one modal at a time.
+  const [manualPanelOpen, setManualPanelOpen] = useState(false)
+  const [manualPanelSubmitting, setManualPanelSubmitting] = useState(false)
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
   const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
@@ -751,6 +762,77 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   }
 
   /**
+   * Submit the manual panel modal — B 組 free-prompt workflow.
+   *
+   * Steps:
+   *   1. Find a storyboard group for the current episode. If none
+   *      exists yet (which is the common case for B 組 — they skip
+   *      the auto-flow entirely), create one via
+   *      useCreateProjectStoryboardGroup so the panel has somewhere
+   *      to land.
+   *   2. POST the panel with description + characters JSON + location.
+   *      The worker side panel-image-task-handler already knows how
+   *      to read these fields (parsePanelCharacterReferences etc.) —
+   *      no special "manual" branch needed.
+   *   3. Auto-trigger image gen on the new panel so the user sees a
+   *      result immediately, no need to click 重新生成 after create.
+   *   4. Close modal regardless of gen success — the panel exists in
+   *      the grid even if gen errors out, and users can always retry
+   *      via the per-card button.
+   */
+  async function handleManualPanelSubmit(draft: ManualPanelDraft) {
+    if (!currentEpisodeId) {
+      alert('請先選一集再新增分鏡')
+      return
+    }
+    setManualPanelSubmitting(true)
+    try {
+      // Pick or create the destination storyboard group.
+      const existingGroups = storyboardsData?.storyboards ?? []
+      let storyboardId: string | null = existingGroups[existingGroups.length - 1]?.id ?? null
+      if (!storyboardId) {
+        const created = (await createStoryboardGroup.mutateAsync({
+          episodeId: currentEpisodeId,
+          insertIndex: 0,
+        })) as { storyboard?: { id?: string }; id?: string } | null
+        storyboardId =
+          (created && (created.storyboard?.id ?? created.id ?? null)) || null
+        if (!storyboardId) {
+          throw new Error('無法建立分鏡組,請重試')
+        }
+      }
+
+      const created = (await createPanel.mutateAsync({
+        storyboardId,
+        description: draft.description,
+        characters: draft.characterNames.length > 0
+          ? JSON.stringify(draft.characterNames)
+          : null,
+        location: draft.locationName,
+        duration: draft.durationSeconds,
+      })) as { panel?: { id?: string }; id?: string } | null
+      const newPanelId =
+        (created && (created.panel?.id ?? created.id ?? null)) || null
+
+      if (newPanelId) {
+        // Best-effort kick-off; if gen fails (rate limit, sensitive
+        // content) the panel still lives in the grid for retry.
+        regenPanel.mutate({ panelId: newPanelId }, {
+          onError: () => {
+            // surfaced via per-card error overlay; nothing more to do here
+          },
+        })
+      }
+
+      setManualPanelOpen(false)
+    } catch (err) {
+      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    } finally {
+      setManualPanelSubmitting(false)
+    }
+  }
+
+  /**
    * Batch-generate static images for every panel that doesn't have
    * one yet. Each panel goes through the same regenPanel mutation
    * the per-card button uses, so worker dispatch / dedupe / billing
@@ -1086,6 +1168,16 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={!currentEpisodeId || manualPanelSubmitting}
+            onClick={() => setManualPanelOpen(true)}
+            title="自己寫提示詞 + 選角色場景,單一鏡頭手動建立"
+            className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <AppIcon name="plus" className="h-3 w-3" />
+            手動新增分鏡
+          </button>
           <button
             type="button"
             disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
@@ -2289,6 +2381,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             click anywhere or press esc to close
           </div>
         </div>
+      ) : null}
+
+      {manualPanelOpen ? (
+        <V2ManualPanelModal
+          characters={characterRoster.map((c) => ({ id: c.id, name: c.name ?? '未命名角色' }))}
+          locations={locationRoster.map((l) => ({ id: l.id, name: l.name ?? '未命名場景' }))}
+          onSubmit={handleManualPanelSubmit}
+          onClose={() => setManualPanelOpen(false)}
+          isSubmitting={manualPanelSubmitting}
+          contextHint={
+            (storyboardsData?.storyboards?.length ?? 0) === 0
+              ? '本集還沒有分鏡組,送出時會自動建立第一組'
+              : undefined
+          }
+        />
       ) : null}
     </div>
   )
