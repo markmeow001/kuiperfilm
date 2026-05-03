@@ -180,6 +180,7 @@ export default function MobileEpisodeReviewPage() {
             panel={panel}
             index={panel.panelIndex ?? idx + 1}
             dialogues={dialogueByPanelId.get(panel.id) ?? []}
+            detailHref={`/${locale}/m/projects/${projectId}/episodes/${episodeId}/panels/${panel.id}`}
           />
         ))}
       </ol>
@@ -200,17 +201,20 @@ function PanelCard({
   panel,
   index,
   dialogues,
+  detailHref,
 }: {
   panel: PanelLike
   index: number
   dialogues: MatchedVoiceLine[]
+  detailHref: string
 }) {
   const indexStr = String(index).padStart(2, '0')
   const meta = [panel.shotType, panel.cameraMove].filter(Boolean).join(' · ')
 
   return (
     <li className="overflow-hidden rounded-sm border border-amber-900/20 bg-stone-900/50">
-      {/* Media: video preferred, image fallback */}
+      {/* Media: video preferred, image fallback. Tap controls play
+          inside the card; tapping the chrome below navigates to edit. */}
       <div className="relative aspect-video bg-stone-900">
         {panel.videoUrl ? (
           <video
@@ -246,7 +250,10 @@ function PanelCard({
         ) : null}
       </div>
 
-      <div className="space-y-2 px-4 py-3">
+      <Link
+        href={detailHref}
+        className="block space-y-2 px-4 py-3 active:bg-stone-900/80"
+      >
         {meta ? (
           <div className="font-mono text-[10px] uppercase tracking-wider text-amber-500/80">
             {meta}
@@ -267,7 +274,12 @@ function PanelCard({
             ))}
           </div>
         ) : null}
-      </div>
+        <div className="flex items-center justify-end pt-1">
+          <span className="font-mono text-[10px] tracking-wider text-stone-500">
+            點此編輯 →
+          </span>
+        </div>
+      </Link>
     </li>
   )
 }
