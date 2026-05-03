@@ -50,7 +50,7 @@ import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { V2LocationEditModal } from './V2LocationEditModal'
 import { V2ManualAddSubjectModal, type ManualAddSubjectType } from './V2ManualAddSubjectModal'
 import { V2LocationCreationModal } from './V2LocationCreationModal'
-import { CharacterCreationModal } from '@/components/shared/assets'
+import { V2CharacterCreationModal } from './V2CharacterCreationModal'
 import {
   useUpdateProjectLocationBasics,
   useUpdateProjectLocationDescription,
@@ -1224,10 +1224,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         </button>
       ) : null}
 
-      {/* 角色 — 用既有 CharacterCreationModal,提示词/参考图/上传四视图 3 模式都已實作 */}
+      {/* 角色 — V2 stone/amber 風格,3 模式: 提示詞/參考圖/上傳四視圖。
+          後端邏輯複用 useCharacterCreationSubmit hook(跟舊玻璃版同一份),
+          只是 UI 重刻。 */}
       {manualAddOpen === 'character' ? (
-        <CharacterCreationModal
-          mode="project"
+        <V2CharacterCreationModal
           projectId={projectId}
           onClose={() => setManualAddOpen(null)}
           onSuccess={() => {
