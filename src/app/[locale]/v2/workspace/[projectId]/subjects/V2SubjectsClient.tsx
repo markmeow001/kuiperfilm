@@ -207,7 +207,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const storyboardPanelCount = (storyboardData?.storyboards ?? [])
     .reduce((sum, sb) => sum + (sb.panels?.length ?? 0), 0)
   const hasStoryboardPanels = storyboardPanelCount > 0
-  const [batchGenInFlight, setBatchGenInFlight] = useState<'characters' | 'locations' | null>(null)
+  const [batchGenInFlight, setBatchGenInFlight] = useState<'characters' | 'locations' | 'props' | null>(null)
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null)
 
   // Per-target in-flight tracking. The shared mutation `isPending` flag
@@ -670,6 +670,40 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }
 
+  async function handleBatchGenProps() {
+    if (batchGenInFlight) return
+    if (props.length === 0) {
+      alert('沒有道具 — 先到上方點「一鍵分析」')
+      return
+    }
+    setBatchGenInFlight('props')
+    setBatchProgress({ done: 0, total: props.length })
+    try {
+      let done = 0
+      // For props, pick the right mutation per item: brand-new props
+      // (no imageUrl yet) go through generateProp; existing ones go
+      // through regenProp. Same logic the per-card button uses.
+      for (const p of props) {
+        try {
+          markRegenStart(p.id)
+          if (p.imageUrl) {
+            await regenProp.mutateAsync({ propId: p.id })
+          } else {
+            await generateProp.mutateAsync({ propId: p.id })
+          }
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[batch-gen] prop', p.id, err)
+        }
+        done++
+        setBatchProgress({ done, total: props.length })
+      }
+    } finally {
+      setBatchGenInFlight(null)
+      setTimeout(() => setBatchProgress(null), 3000)
+    }
+  }
+
   function handleUploadChar(c: CharacterLike, file: File) {
     const ap = c.appearances?.[0]
     if (!ap?.id) {
@@ -977,6 +1011,19 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               {batchGenInFlight === 'locations' && batchProgress
                 ? `生成中… ${batchProgress.done}/${batchProgress.total}`
                 : '一鍵生圖所有場景'}
+            </button>
+          ) : null}
+          {tab === 'prop' && props.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleBatchGenProps}
+              disabled={!!batchGenInFlight}
+              className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-4 w-4" />
+              {batchGenInFlight === 'props' && batchProgress
+                ? `生成中… ${batchProgress.done}/${batchProgress.total}`
+                : '一鍵生圖所有道具'}
             </button>
           ) : null}
           <Link
@@ -1466,10 +1513,14 @@ function SubjectGrid({
                 disabled={item.isRegenerating}
                 onClick={item.onRegenerate}
                 className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-                title="用 AI 重新生成此圖"
+                title={item.imageUrl ? '用 AI 重新生成此圖' : '用 AI 生成此圖'}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                {item.isRegenerating ? '生成中…' : '重新生成'}
+                {item.isRegenerating
+                  ? '生成中…'
+                  : item.imageUrl
+                    ? '重新生成'
+                    : '生成'}
               </button>
             ) : null}
 
