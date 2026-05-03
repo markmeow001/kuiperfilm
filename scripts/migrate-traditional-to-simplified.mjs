@@ -108,11 +108,17 @@ function* findCJKStrings(src) {
     if (trimmed) yield { type: 'jsx-text', raw: m[0], content: trimmed }
   }
 
-  // 2. String literals with CJK. Both single- and double-quoted. Skip
-  // import paths (we already strip comments; imports won't have CJK).
-  const sLit = /(['"])((?:\\.|[^\\\1])*?[㐀-䶿一-鿿][^\1]*?)\1/gs
-  while ((m = sLit.exec(stripped))) {
-    yield { type: 'string-literal', raw: m[0], content: m[2] }
+  // 2. String literals with CJK. Both single- and double-quoted,
+  // single-line only (no embedded newlines). Backreferences don't
+  // work inside character classes in JS regex, so we run two
+  // separate patterns.
+  const dqLit = /"((?:\\.|[^"\\\n])*?[㐀-䶿一-鿿](?:\\.|[^"\\\n])*?)"/g
+  while ((m = dqLit.exec(stripped))) {
+    yield { type: 'string-literal', raw: m[0], content: m[1] }
+  }
+  const sqLit = /'((?:\\.|[^'\\\n])*?[㐀-䶿一-鿿](?:\\.|[^'\\\n])*?)'/g
+  while ((m = sqLit.exec(stripped))) {
+    yield { type: 'string-literal', raw: m[0], content: m[1] }
   }
 
   // 3. Template literals with CJK. Skip ones where the only CJK lives
@@ -134,6 +140,29 @@ function* findCJKStrings(src) {
 function countCJKChars(s) {
   const m = s.match(CJK_GLOBAL)
   return m ? m.length : 0
+}
+
+/**
+ * Reject strings that look like code rather than user-facing copy.
+ * The JSX-text regex sometimes swallows JSX expressions or attribute
+ * blocks when there are CJK chars on both sides of an inner expression
+ * — symptom is a "string" containing `{`, `}`, `className=`, etc. We
+ * post-filter rather than upgrade to AST parsing for this first pass.
+ *
+ * Returns false if the string looks like UI copy.
+ */
+function looksLikeCodeNoise(s) {
+  // JSX braces or angle brackets — UI copy never has these
+  if (/[{}<>]/.test(s)) return true
+  // Common code tokens
+  if (/\bclassName\b|\bonClick\b|\bonChange\b/.test(s)) return true
+  // Multi-quote indicates the regex bridged across literals
+  if ((s.match(/['"]/g) ?? []).length >= 4) return true
+  // Stray code-like punctuation patterns
+  if (/=>/.test(s)) return true
+  // Unreasonably long — UI copy is rarely > 200 chars
+  if (s.length > 200) return true
+  return false
 }
 
 function main() {
@@ -159,6 +188,7 @@ function main() {
     const found = []
     const seen = new Set() // dedupe within file
     for (const hit of findCJKStrings(src)) {
+      if (looksLikeCodeNoise(hit.content)) continue
       const key = `${hit.type}::${hit.content}`
       if (seen.has(key)) continue
       seen.add(key)
