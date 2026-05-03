@@ -93,15 +93,21 @@ export const PATCH = apiHandler(async (
     }
     const newOwner = await prisma.user.findUnique({
       where: { id: body.ownerEditorId.trim() },
-      select: { role: true },
+      select: { id: true, isActive: true },
     })
     if (!newOwner) throw new ApiError('NOT_FOUND', { code: 'NEW_OWNER_NOT_FOUND' })
-    if (!roleAtLeast(newOwner.role, 'editor')) {
+    if (!newOwner.isActive) {
       throw new ApiError('INVALID_PARAMS', {
-        code: 'NEW_OWNER_INSUFFICIENT_ROLE',
-        details: { required: 'admin | editor', got: newOwner.role },
+        code: 'NEW_OWNER_INACTIVE',
+        details: { reason: 'Cannot transfer to a deactivated user' },
       })
     }
+    // 2026-05-02: dropped the role >= editor check. Phase 1 of the
+    // role simplification makes "workspace owner" independent of
+    // platform `editor` role — a 組長 is defined by ownership, not
+    // by carrying an editor flag. Eventually editor will be removed
+    // entirely (Phase 4) and demoted users still keep workspaces
+    // they own.
     data.ownerEditorId = body.ownerEditorId.trim()
   }
   if (Object.keys(data).length === 0) {

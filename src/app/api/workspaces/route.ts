@@ -54,14 +54,38 @@ export const POST = apiHandler(async (request: NextRequest) => {
     throw new ApiError('FORBIDDEN', { code: 'NOT_ORG_OWNER' })
   }
 
-  // The requester becomes the owning editor of this workspace, even if
-  // they're admin. Admin can later reassign by editing the workspace.
+  // 2026-05-02 — admin can specify `ownerEditorId` to assign the
+  // workspace to a specific 組長 directly at creation time. Without
+  // this admin had to create-then-PATCH-transfer, two API calls and
+  // two cache invalidations. Default behaviour preserved for
+  // non-admin: requester becomes the owner.
+  let ownerEditorId = session.user.id
+  if (typeof body.ownerEditorId === 'string' && body.ownerEditorId.trim()) {
+    if (!roleAtLeast(requester?.role, 'admin')) {
+      throw new ApiError('FORBIDDEN', {
+        code: 'OWNER_ASSIGN_REQUIRES_ADMIN',
+        details: { reason: 'Only admin can assign workspace to another user at creation' },
+      })
+    }
+    const targetOwner = await prisma.user.findUnique({
+      where: { id: body.ownerEditorId.trim() },
+      select: { id: true, isActive: true },
+    })
+    if (!targetOwner || !targetOwner.isActive) {
+      throw new ApiError('NOT_FOUND', { code: 'OWNER_NOT_FOUND' })
+    }
+    // Member is allowed as owner. Phase 1 of the role simplification
+    // makes ownership independent of platform `editor` role — a 組長
+    // is "the owner of a workspace", not "a user with editor role".
+    ownerEditorId = targetOwner.id
+  }
+
   const ws = await prisma.workspace.create({
     data: {
       name,
       description,
       organizationId,
-      ownerEditorId: session.user.id,
+      ownerEditorId,
     },
   })
   return NextResponse.json({ workspace: ws }, { status: 201 })

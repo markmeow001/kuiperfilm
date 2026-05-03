@@ -273,6 +273,7 @@ export default function WorkspacesPage() {
       {showWsModal && (
         <CreateWorkspaceModal
           orgs={orgs}
+          role={role}
           onClose={() => setShowWsModal(false)}
           onCreated={() => { setShowWsModal(false); reload() }}
         />
@@ -366,14 +367,36 @@ function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated
 
 // ─── Create Workspace modal ──────────────────────────────────────────
 
-function CreateWorkspaceModal({ orgs, onClose, onCreated }: {
-  orgs: Org[]; onClose: () => void; onCreated: () => void
+function CreateWorkspaceModal({ orgs, role, onClose, onCreated }: {
+  orgs: Org[]; role: Role; onClose: () => void; onCreated: () => void
 }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [organizationId, setOrganizationId] = useState(orgs[0]?.id || '')
+  // Admin can assign 組長 directly at creation; non-admin defaults
+  // to themselves (server-side fallback).
+  const [ownerEditorId, setOwnerEditorId] = useState<string>('')
+  type PickerUser = { id: string; name: string | null; displayName: string | null; email: string | null; role: string | null }
+  const [users, setUsers] = useState<PickerUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+
+  // Fetch user list for owner picker (admin only — endpoint enforces).
+  useEffect(() => {
+    if (role !== 'admin') return
+    setUsersLoading(true)
+    fetch('/api/admin/users')
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((j) => {
+        const list: PickerUser[] = (j.users ?? []).map((u: PickerUser) => ({
+          id: u.id, name: u.name, displayName: u.displayName, email: u.email, role: u.role,
+        }))
+        setUsers(list.filter((u) => u.role !== 'admin')) // admin doesn't need to "assign to admin"
+      })
+      .catch(() => setUsers([]))
+      .finally(() => setUsersLoading(false))
+  }, [role])
 
   async function submit() {
     if (!name.trim() || !organizationId) return
@@ -387,6 +410,9 @@ function CreateWorkspaceModal({ orgs, onClose, onCreated }: {
           name: name.trim(),
           organizationId,
           description: description.trim() || undefined,
+          // Only admin's `ownerEditorId` is honoured server-side; the
+          // server clears it for non-admin to be safe.
+          ...(role === 'admin' && ownerEditorId ? { ownerEditorId } : {}),
         }),
       })
       if (!res.ok) {
@@ -437,6 +463,34 @@ function CreateWorkspaceModal({ orgs, onClose, onCreated }: {
               maxLength={2000}
             />
           </div>
+          {role === 'admin' && (
+            <div>
+              <label className="block font-mono text-[14px] uppercase tracking-wider text-stone-500">
+                指派組長 (workspace owner)
+              </label>
+              <p className="mb-1 mt-0.5 font-serif-cn text-[11px] text-stone-500">
+                空白 = 你自己當 owner。指派給其他用戶他就是這個工作區的組長,能加成員、看用量、改設定。
+              </p>
+              {usersLoading ? (
+                <div className="font-mono text-[12px] text-stone-500">載入用戶…</div>
+              ) : (
+                <select
+                  value={ownerEditorId}
+                  onChange={(e) => setOwnerEditorId(e.target.value)}
+                  className="mt-1 w-full rounded-sm border border-stone-700 bg-stone-950 px-2 py-1.5 font-serif-cn text-sm text-stone-200 focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="">— 你自己 (admin) —</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.displayName || u.name || u.email || u.id.slice(0, 8)}
+                      {u.name ? ` (@${u.name})` : ''}
+                      {u.role && u.role !== 'member' ? ` · ${u.role}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
           {err && <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 font-mono text-[11px] text-rose-300">{err}</div>}
         </div>
         <div className="mt-6 flex justify-end gap-2">
