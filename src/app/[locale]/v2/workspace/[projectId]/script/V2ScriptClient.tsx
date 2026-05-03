@@ -27,6 +27,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
+import { useEpisodePreservingHref } from '../hooks/useEpisodePreservingHref'
 
 interface V2ScriptClientProps {
   projectId: string
@@ -48,6 +49,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
   const project = projectQuery.data as ProjectDataLike | undefined
   const novelData = project?.novelPromotionData ?? null
   const { currentEpisodeId, currentEpisode, episodes } = useCurrentEpisode(projectId)
+  const buildHref = useEpisodePreservingHref()
 
   const [novelText, setNovelText] = useState('')
   const [savedText, setSavedText] = useState<string | null>(null)
@@ -208,7 +210,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
 
             {!isDirty && hasContent && currentEpisodeId ? (
               <Link
-                href={`/${locale}/v2/workspace/${projectId}/subjects`}
+                href={buildHref(`/${locale}/v2/workspace/${projectId}/subjects`)}
                 className="font-mono text-xs tracking-wider text-stone-500 transition-colors hover:text-amber-300"
               >
                 下一步 → 主體 →

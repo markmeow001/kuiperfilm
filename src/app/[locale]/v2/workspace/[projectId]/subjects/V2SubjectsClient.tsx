@@ -65,6 +65,7 @@ import {
 } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
+import { useEpisodePreservingHref } from '../hooks/useEpisodePreservingHref'
 
 type Tab = 'character' | 'scene' | 'prop'
 
@@ -195,6 +196,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
+  const buildHref = useEpisodePreservingHref()
 
   // After the analyze cascade lands clips + storyboard panels, surface
   // a clear "→ 進入分鏡頁" CTA so the user knows the next step is one
@@ -940,7 +942,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             角色 / 場景 / 道具 / <strong>分鏡 {storyboardPanelCount} 個</strong> 都好了
           </div>
           <Link
-            href={`/${locale}/v2/workspace/${projectId}/storyboard`}
+            href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
             className="flex flex-shrink-0 items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/20 px-4 py-1.5 font-mono text-[14px] tracking-wider text-emerald-200 transition-all hover:bg-emerald-500/30"
           >
             → 進入分鏡頁 <AppIcon name="chevronRight" className="h-3 w-3" />
@@ -1027,7 +1029,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             </button>
           ) : null}
           <Link
-            href={`/${locale}/v2/workspace/${projectId}/storyboard`}
+            href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
             className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/50 hover:text-amber-300"
           >
             下一步 → 分鏡 <AppIcon name="chevronRight" className="h-4 w-4" />

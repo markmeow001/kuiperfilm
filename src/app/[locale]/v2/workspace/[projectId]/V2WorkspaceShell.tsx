@@ -13,6 +13,7 @@ import { Sidebar } from '@/components/v2/Sidebar'
 import { TopBar } from '@/components/v2/TopBar'
 import type { V2StepId } from '@/components/v2/v2-types'
 import { V2EpisodeTabBar } from './V2EpisodeTabBar'
+import { useEpisodePreservingHref } from './hooks/useEpisodePreservingHref'
 
 interface V2WorkspaceShellProps {
   projectId: string
@@ -33,13 +34,18 @@ export function V2WorkspaceShell({
 }: V2WorkspaceShellProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const buildHref = useEpisodePreservingHref()
 
   function handleSelect(stepId: V2StepId) {
     // Map "home" to no suffix so /v2/workspace/[id] is the home page.
     const tail = stepId === 'home' ? '' : `/${stepId}`
-    const next = `/${locale}/v2/workspace/${projectId}${tail}`
-    if (pathname === next) return
-    router.push(next)
+    const basePath = `/${locale}/v2/workspace/${projectId}${tail}`
+    if (pathname === basePath) return
+    // Carry ?episode=<id> across stage tabs so working on episode 4
+    // and switching script→subjects→storyboard stays on episode 4.
+    // Without this the destination falls back to "first episode in
+    // project" via useCurrentEpisode's resolution order.
+    router.push(buildHref(basePath))
   }
 
   return (

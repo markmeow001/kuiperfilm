@@ -21,6 +21,7 @@ import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { useStitchEpisodeMp4 } from '@/lib/query/mutations/episode-stitch-mutations'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
+import { useEpisodePreservingHref } from '../hooks/useEpisodePreservingHref'
 
 interface V2FinalClientProps {
   projectId: string
@@ -61,6 +62,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   // and friends — which the hook intentionally doesn't expose — stay
   // available on this page.
   const { currentEpisodeId } = useCurrentEpisode(projectId)
+  const buildHref = useEpisodePreservingHref()
   const episodes = project?.novelPromotionData?.episodes ?? []
   const currentEpisode = episodes.find((ep) => ep?.id === currentEpisodeId) ?? episodes[0] ?? null
   const storyboardsQuery = useStoryboards(projectId, currentEpisode?.id ?? null)
@@ -259,7 +261,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
           ) : null}
 
           <Link
-            href={`/${locale}/v2/workspace/${projectId}/script`}
+            href={buildHref(`/${locale}/v2/workspace/${projectId}/script`)}
             className="flex items-center justify-center rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400"
           >
             查看劇本
