@@ -28,6 +28,13 @@ import { pickStoryboardDetailPromptId } from '@/lib/novel-promotion/storyboard-p
 import { resolveAnalysisModel } from './resolve-analysis-model'
 import { createRunStep } from './script-to-storyboard-run-step'
 import { runVoiceAnalyzeWithRetry, persistVoiceLines } from './script-to-storyboard-voice'
+import { submitTask } from '@/lib/task/submitter'
+import { TASK_TYPE } from '@/lib/task/types'
+import { withTaskUiPayload } from '@/lib/task/ui-payload'
+import { getProjectModelConfig } from '@/lib/config-service'
+import { resolveModelSelection } from '@/lib/api-config'
+import { buildDefaultTaskBillingInfo } from '@/lib/billing'
+import { logError as _ulogError, logInfo as _ulogInfo } from '@/lib/logging/core'
 
 type AnyObj = Record<string, unknown>
 
@@ -300,10 +307,98 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
     displayMode: 'detail',
   })
 
+  // 2026-05-03 — auto-cascade panel image generation. Without this
+  // every newly-created panel sits with imageUrl=null until the user
+  // manually clicks "一鍵生圖". Mobile review users (post-redirect)
+  // saw "尚未生成" placeholders for ~16/17 panels even on freshly-
+  // analysed episodes, breaking the on-the-go preview UX. Now each
+  // panel gets a single-candidate IMAGE_PANEL task fanned out behind
+  // BullMQ + Tencent's per-account quota — backpressure absorbs the
+  // burst, image gen completes ~30-60s after script-to-storyboard
+  // wraps. Opt out with payload.cascadeImageGen=false (e.g. dev
+  // wanting to inspect panels before paying for image gen).
+  const cascadeImageGen = payload.cascadeImageGen !== false
+  if (cascadeImageGen) {
+    const allPanels: Array<{ id: string; description: string | null }> = persistedStoryboards
+      .flatMap((sb) => sb.panels)
+    // Skip panels with no description — the worker has nothing to feed
+    // the model, and the resulting "default" image isn't useful.
+    const eligiblePanels = allPanels.filter((p) => (p.description ?? '').trim().length > 0)
+
+    if (eligiblePanels.length > 0) {
+      // The image worker requires a configured storyboard model.
+      // Resolve once per cascade — admin fallback already applied
+      // server-side, so non-admin projects inherit admin's setup.
+      const projectModelConfig = await getProjectModelConfig(projectId, job.data.userId)
+      const storyboardModel = projectModelConfig.storyboardModel
+      let modelOk = false
+      if (storyboardModel) {
+        try {
+          await resolveModelSelection(job.data.userId, storyboardModel, 'image')
+          modelOk = true
+        } catch (err) {
+          _ulogError('[script-to-storyboard] cascade skipped — storyboard model unresolvable', {
+            err: (err as Error).message,
+            model: storyboardModel,
+          })
+        }
+      }
+      if (modelOk && storyboardModel) {
+        const capabilityOptions = await resolveProjectModelCapabilityGenerationOptions({
+          projectId,
+          userId: job.data.userId,
+          modelType: 'image',
+          modelKey: storyboardModel,
+        })
+        let submitted = 0
+        for (const panel of eligiblePanels) {
+          try {
+            const billingPayload = {
+              candidateCount: 1,
+              imageModel: storyboardModel,
+              ...(Object.keys(capabilityOptions).length > 0
+                ? { generationOptions: capabilityOptions }
+                : {}),
+            }
+            await submitTask({
+              userId: job.data.userId,
+              locale: job.data.locale,
+              projectId,
+              type: TASK_TYPE.IMAGE_PANEL,
+              targetType: 'NovelPromotionPanel',
+              targetId: panel.id,
+              payload: withTaskUiPayload(billingPayload, {
+                intent: 'generate',
+                hasOutputAtStart: false,
+              }),
+              dedupeKey: `image_panel:${panel.id}:1`,
+              billingInfo: buildDefaultTaskBillingInfo(TASK_TYPE.IMAGE_PANEL, billingPayload),
+            })
+            submitted += 1
+          } catch (err) {
+            // A single image cascade failure shouldn't kill the whole
+            // storyboard task — the panel just stays imageless and the
+            // user can manually retry later.
+            _ulogError('[script-to-storyboard] cascade submit failed', {
+              panelId: panel.id,
+              err: (err as Error).message,
+            })
+          }
+        }
+        _ulogInfo('[script-to-storyboard] cascaded image gen', {
+          episodeId,
+          eligible: eligiblePanels.length,
+          submitted,
+        })
+      }
+    }
+  }
+
   return {
     episodeId,
     storyboardCount: persistedStoryboards.length,
     panelCount: orchestratorResult.summary.totalPanelCount,
     voiceLineCount: createdVoiceLines.length,
+    cascadedImageGen: cascadeImageGen,
   }
 }
