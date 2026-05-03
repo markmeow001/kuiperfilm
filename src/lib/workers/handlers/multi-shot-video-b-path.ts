@@ -1293,6 +1293,16 @@ export async function runMultiShotBPath(params: {
         },
       })
 
+      // Stage label per-chunk so the task-status feed shows
+      // "chunk 1/3" rather than a single opaque progress bar.
+      // UI can read details.chunkIndex / chunkTotal to render
+      // "對白較長,正在生成第 i 段（共 N 段）".
+      await reportTaskProgress(job, Math.floor(progressBase + i * progressRange), {
+        stage: 'multi_kling_chunk_submit',
+        chunkIndex: i + 1,
+        chunkTotal: chunkSplitPlan.chunks.length,
+      })
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const generateResult = await generateVideo(userId, videoModel, '', chunkOptions as any)
       if (!generateResult.success) {
