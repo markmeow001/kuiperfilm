@@ -648,40 +648,148 @@ export async function chatCompletionStream(
 
       emitStreamStage(callbacks, streamStep, 'streaming', providerName)
       const isOpenRouterReasoning = isOpenRouter && (options.reasoning ?? true)
-      const stream = await client.chat.completions.create({
+
+      // 2026-05-03: cap max_tokens for OpenRouter to keep streams short
+      // enough that mid-stream connection drops stop happening. Without
+      // this cap, the OpenAI SDK auto-fills max_tokens to the model's
+      // context-window-derived ceiling (Gemini 3.1 Pro = 65536), and
+      // long reasoning + huge ceiling kept the stream open for minutes
+      // → connection timed out → "Network connection lost." → analyze
+      // task retried 5× with same outcome → reconcile flagged "Queue
+      // job already terminated but DB was not updated" in the UI.
+      // 16384 is comfortably above analyze_novel's typical output
+      // (~6-12k tokens) but bounds the worst case so the stream
+      // finishes within the OpenRouter / network keepalive window.
+      // Override via RATE_LIMIT_OPENROUTER_MAX_TOKENS env if needed.
+      const openRouterMaxTokens = Number(
+        process.env.OPENROUTER_MAX_OUTPUT_TOKENS || '',
+      )
+      const cappedMaxTokens =
+        Number.isFinite(openRouterMaxTokens) && openRouterMaxTokens > 0
+          ? Math.floor(openRouterMaxTokens)
+          : 16384
+      const requestParams = {
         model: resolvedModelId,
         messages,
         // OpenRouter 推理模型不支持 temperature
         ...(isOpenRouterReasoning ? {} : { temperature: options.temperature ?? 0.7 }),
-        stream: true,
+        ...(isOpenRouter ? { max_tokens: cappedMaxTokens } : {}),
+        stream: true as const,
         ...extraParams,
-      } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming)
+      } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming
 
       let text = ''
       let reasoning = ''
       let seq = 1
       let finalCompletion: OpenAI.Chat.Completions.ChatCompletion | null = null
-      for await (const part of withStreamChunkTimeout(stream as AsyncIterable<unknown>)) {
-        const { textDelta, reasoningDelta } = extractStreamDeltaParts(part)
-        if (reasoningDelta) {
-          reasoning += reasoningDelta
-          emitStreamChunk(callbacks, streamStep, {
-            kind: 'reasoning',
-            delta: reasoningDelta,
-            seq,
-            lane: 'reasoning',
-          })
-          seq += 1
+      let streamFailedMidway = false
+      let streamError: unknown = null
+      let stream: Awaited<ReturnType<typeof client.chat.completions.create>> | null = null
+
+      try {
+        stream = await client.chat.completions.create(requestParams) as Awaited<ReturnType<typeof client.chat.completions.create>>
+        for await (const part of withStreamChunkTimeout(stream as AsyncIterable<unknown>)) {
+          const { textDelta, reasoningDelta } = extractStreamDeltaParts(part)
+          if (reasoningDelta) {
+            reasoning += reasoningDelta
+            emitStreamChunk(callbacks, streamStep, {
+              kind: 'reasoning',
+              delta: reasoningDelta,
+              seq,
+              lane: 'reasoning',
+            })
+            seq += 1
+          }
+          if (textDelta) {
+            text += textDelta
+            emitStreamChunk(callbacks, streamStep, {
+              kind: 'text',
+              delta: textDelta,
+              seq,
+              lane: 'main',
+            })
+            seq += 1
+          }
         }
-        if (textDelta) {
-          text += textDelta
-          emitStreamChunk(callbacks, streamStep, {
-            kind: 'text',
-            delta: textDelta,
-            seq,
-            lane: 'main',
+      } catch (err) {
+        streamError = err
+        const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+        // Network-level disconnects mid-stream — fall back to a single
+        // non-streaming request with the same params. Catches: undici's
+        // "Network connection lost", "fetch failed", "socket hang up",
+        // "ECONNRESET", "stream timeout" from withStreamChunkTimeout.
+        // Hard errors (4xx / 402 / auth) are NOT in this list — they'll
+        // re-throw so existing retry/error handling still kicks in.
+        const isStreamLevelDrop =
+          msg.includes('network connection lost')
+          || msg.includes('fetch failed')
+          || msg.includes('socket hang up')
+          || msg.includes('econnreset')
+          || msg.includes('eai_again')
+          || msg.includes('stream_timeout')
+          || msg.includes('terminated')
+          || msg.includes('aborted')
+        if (!isStreamLevelDrop) throw err
+        streamFailedMidway = true
+        llmLogger.warn({
+          audit: false,
+          action: 'llm.stream.fallback_to_nonstream',
+          message: '[LLM] stream dropped mid-flight, falling back to non-stream once',
+          userId,
+          projectId,
+          provider: providerName,
+          details: {
+            model: { id: resolvedModelId, key: selection.modelKey },
+            error: msg.slice(0, 200),
+            partialChars: { text: text.length, reasoning: reasoning.length },
+          },
+        })
+      }
+
+      if (streamFailedMidway) {
+        // Non-stream fallback. Loses chunk-level UX but completes
+        // reliably because there's no mid-stream connection to drop.
+        const nonStreamParams = { ...requestParams, stream: false } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+        try {
+          const nonStreamCompletion = await client.chat.completions.create(nonStreamParams) as OpenAI.Chat.Completions.ChatCompletion
+          const parts = getCompletionParts(nonStreamCompletion)
+          if (parts.reasoning && parts.reasoning !== reasoning) {
+            const delta = parts.reasoning.startsWith(reasoning)
+              ? parts.reasoning.slice(reasoning.length)
+              : parts.reasoning
+            if (delta) {
+              emitStreamChunk(callbacks, streamStep, { kind: 'reasoning', delta, seq, lane: 'reasoning' })
+              seq += 1
+            }
+            reasoning = parts.reasoning
+          }
+          if (parts.text && parts.text !== text) {
+            const delta = parts.text.startsWith(text) ? parts.text.slice(text.length) : parts.text
+            if (delta) {
+              emitStreamChunk(callbacks, streamStep, { kind: 'text', delta, seq, lane: 'main' })
+              seq += 1
+            }
+            text = parts.text
+          }
+          finalCompletion = nonStreamCompletion
+        } catch (fallbackErr) {
+          // Both stream + non-stream failed. Surface the original
+          // stream error (more relevant for ops triage) but include
+          // the fallback err in the log.
+          llmLogger.error({
+            audit: false,
+            action: 'llm.stream.fallback_failed',
+            message: '[LLM] non-stream fallback also failed',
+            userId,
+            projectId,
+            provider: providerName,
+            details: {
+              model: { id: resolvedModelId, key: selection.modelKey },
+              streamError: streamError instanceof Error ? streamError.message : String(streamError),
+              fallbackError: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+            },
           })
-          seq += 1
+          throw streamError
         }
       }
 
