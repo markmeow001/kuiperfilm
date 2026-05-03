@@ -56,12 +56,29 @@ function pickEndpoint() {
   // Mode 1: hit our admin-only proxy that reads the stored OpenRouter
   // key server-side. Preferred — no local secret handling.
   if (process.env.KUIPER_BASE_URL && process.env.KUIPER_SESSION) {
+    // KUIPER_SESSION can be either:
+    //   1. The raw cookie VALUE (eyJ...) — we wrap it ourselves. HTTPS
+    //      hosts use `__Secure-next-auth.session-token`; plain http
+    //      uses `next-auth.session-token`. Detect by base URL.
+    //   2. A pre-formatted Cookie header (`name=value` or
+    //      `name1=v1; name2=v2`) — we pass through as-is.
+    const raw = process.env.KUIPER_SESSION
+    const looksFormatted = raw.includes('=') && (
+      raw.includes('next-auth.session-token=') ||
+      raw.includes('__Secure-next-auth.session-token=')
+    )
+    let cookie
+    if (looksFormatted) {
+      cookie = raw
+    } else {
+      const isHttps = process.env.KUIPER_BASE_URL.startsWith('https://')
+      const cookieName = isHttps ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
+      cookie = `${cookieName}=${raw}`
+    }
     return {
       mode: 'kuiper',
       url: `${process.env.KUIPER_BASE_URL}/api/admin/translate-i18n-batch`,
-      cookie: process.env.KUIPER_SESSION.startsWith('next-auth')
-        ? process.env.KUIPER_SESSION
-        : `next-auth.session-token=${process.env.KUIPER_SESSION}`,
+      cookie,
     }
   }
   if (process.env.TRANSLATE_BASE_URL && process.env.OPENAI_API_KEY) {
