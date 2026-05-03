@@ -392,6 +392,12 @@ model NovelPromotionStoryboard {
   lastError           String?
   photographyPlan     String?               @db.Text
   multiShotVideoUrl   String?               @db.Text
+  // 2026-05-03 — when a panel group's dialogue exceeds Kling Omni's
+  // 15s per-call cap, the worker splits into N chunks and stores
+  // each chunk's mp4 URL in this JSON array. Reader prefers this when
+  // set; falls back to wrapping multiShotVideoUrl in a single-element
+  // array for legacy storyboards.
+  multiShotClipUrls   String?               @db.Text
   panels              NovelPromotionPanel[]
   clip                NovelPromotionClip    @relation(fields: [clipId], references: [id], onDelete: Cascade)
   episode             NovelPromotionEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)

@@ -30,6 +30,8 @@ import {
 } from '../utils'
 import { reportTaskProgress } from '../shared'
 import { buildDialogueDrivenDurations } from './speech-duration-estimator'
+import { buildMultiKlingSplitPlan, MultiKlingChunkerError, type MultiKlingChunk } from './multi-kling-chunker'
+import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 
 interface BPathPanel {
   id: string
@@ -728,6 +730,15 @@ export async function runMultiShotBPath(params: {
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
+  /**
+   * 2026-05-03 — when dialogue exceeded Kling Omni's 15s per-call cap
+   * the chunker split the group across N Kling calls. This array
+   * holds all chunk URLs in playback order. For ≤15s groups the
+   * array has length 1 (and equals [multiShotVideoUrl]).
+   */
+  multiShotClipUrls: string[]
+  /** Number of Kling calls dispatched (1 for single, >1 when chunked). */
+  chunkCount: number
   shotCount: number
   subjectCount: number
   path: 'B'
@@ -1145,40 +1156,196 @@ export async function runMultiShotBPath(params: {
     if (cleaned.length > 0) dialogueByPanel.set(panel.id, cleaned)
   }
 
-  // Dialogue-driven duration allocation (2026-05-02). When voice lines
-  // exist and the caller didn't pin per-shot durations, size each
-  // shot's window to the estimated speech time so Kling's TTS doesn't
-  // truncate long lines. This auto-promotes the call to customize mode
-  // because intelligence mode ignores per-shot durations.
+  // Dialogue-driven duration allocation + chunked dispatch (2026-05-03).
+  //
+  // When voice lines exist and the caller didn't pin per-shot durations:
+  //   1. Try to fit the whole group in one Kling call (≤15s budget).
+  //      Auto-promotes to customize mode + per-panel speech estimates.
+  //   2. If the group's speech alone exceeds 15s, fall through to the
+  //      chunker which splits the group into N sub-chunks (each ≤15s),
+  //      each dispatched as its own Kling call. User downloads N mp4
+  //      clips and stitches them in their NLE — we explicitly do NOT
+  //      stitch server-side because the NLE is the user's editor of
+  //      choice.
   //
   // Caller-supplied panelDurations or rawPrompt always win — both
   // signal "the upstream knows what they're doing, leave it alone".
+  let chunkSplitPlan: { chunks: MultiKlingChunk[]; cutReasons: string[] } | null = null
   if (
     effectivePanelDurations === undefined
     && rawPrompt === undefined
     && dialogueByPanel.size > 0
   ) {
-    const driven = buildDialogueDrivenDurations({
-      panels: validPanels,
-      dialogueByPanelId: dialogueByPanel,
-    })
-    if (driven) {
-      effectivePanelDurations = driven.durations
-      multiShotMode = 'customize'
-      logger.info({
-        message: 'B path auto-promoted to customize via dialogue-driven durations',
-        details: {
-          shotCount: validPanels.length,
-          durations: driven.durations,
-          totalDuration: driven.totalDuration,
-          rawEstimateTotal: Number(driven.rawEstimateTotal.toFixed(2)),
-          clampedPanelIndices: driven.clampedPanels,
-        },
+    try {
+      const driven = buildDialogueDrivenDurations({
+        panels: validPanels,
+        dialogueByPanelId: dialogueByPanel,
       })
+      if (driven) {
+        effectivePanelDurations = driven.durations
+        multiShotMode = 'customize'
+        logger.info({
+          message: 'B path auto-promoted to customize via dialogue-driven durations',
+          details: {
+            shotCount: validPanels.length,
+            durations: driven.durations,
+            totalDuration: driven.totalDuration,
+            rawEstimateTotal: Number(driven.rawEstimateTotal.toFixed(2)),
+            clampedPanelIndices: driven.clampedPanels,
+          },
+        })
+      }
+    } catch (err) {
+      const message = (err as Error)?.message ?? ''
+      if (message.startsWith('DIALOGUE_EXCEEDS_KLING_BUDGET')) {
+        // Speech > 15s — chunk the group across multiple Kling calls.
+        // Errors from the chunker (e.g. EXCEEDS_DISPATCH_LIMIT) bubble
+        // up to the caller with a friendly message; we don't try to
+        // recover further.
+        try {
+          const plan = buildMultiKlingSplitPlan({
+            panels: validPanels,
+            dialogueByPanelId: dialogueByPanel,
+          })
+          if (plan) {
+            chunkSplitPlan = plan
+            multiShotMode = 'customize'
+            logger.info({
+              message: 'B path auto-chunked via multi-kling split plan',
+              details: {
+                chunkCount: plan.chunks.length,
+                chunkSizes: plan.chunks.map((c) => c.panels.length),
+                chunkDurations: plan.chunks.map((c) => c.totalDuration),
+                cutReasons: plan.cutReasons,
+                score: plan.score,
+              },
+            })
+          } else {
+            // Shouldn't be reachable — buildDialogueDrivenDurations
+            // threw, so the chunker should have something to do.
+            throw err
+          }
+        } catch (chunkErr) {
+          if (chunkErr instanceof MultiKlingChunkerError) throw chunkErr
+          throw err
+        }
+      } else {
+        throw err
+      }
     }
   }
 
   await reportTaskProgress(job, 30, { stage: 'submit_generation_b_path' })
+
+  // ──────── Chunked dispatch path (>15s dialogue groups) ────────
+  if (chunkSplitPlan) {
+    const cosKeys: string[] = []
+    const allDurations: number[] = []
+    const storyboardId = validPanels[0].storyboardId
+    const progressBase = 30
+    const progressRange = 60 / chunkSplitPlan.chunks.length
+
+    for (let i = 0; i < chunkSplitPlan.chunks.length; i++) {
+      const chunk = chunkSplitPlan.chunks[i]
+      const chunkPanels = chunk.panels as BPathPanel[]
+      const multiPrompt = buildBPathCustomizePrompts(
+        chunkPanels,
+        dialogueByPanel,
+        chunk.durations,
+        nameToImageIndex,
+        unboundNames,
+      )
+      if (multiPrompt.length === 0) {
+        throw new Error(
+          `MULTI_SHOT_PROMPT_EMPTY: chunk ${i + 1}/${chunkSplitPlan.chunks.length} had no usable shots`,
+        )
+      }
+      const finalTotal = multiPrompt.reduce((s, p) => s + p.duration, 0)
+      allDurations.push(...multiPrompt.map((p) => p.duration))
+      const placeholderPrompt = buildBPathCombinedPrompt(
+        chunkPanels,
+        dialogueByPanel,
+        nameToImageIndex,
+        unboundNames,
+      )
+      const chunkOptions: Record<string, unknown> = {
+        prompt: placeholderPrompt,
+        duration: finalTotal,
+        ...(aspectRatio ? { aspectRatio } : {}),
+        ...(sound !== undefined ? { generateAudio: sound } : {}),
+        ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
+        klingMultiShot: {
+          multi_shot: true,
+          shot_type: 'customize',
+          multi_prompt: multiPrompt,
+        },
+        outputComplianceCheck: 'Enabled',
+      }
+
+      logger.info({
+        message: 'B path multi-chunk submit',
+        details: {
+          chunkIndex: i + 1,
+          chunkTotal: chunkSplitPlan.chunks.length,
+          shotCount: multiPrompt.length,
+          durations: multiPrompt.map((p) => p.duration),
+          totalDuration: finalTotal,
+        },
+      })
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const generateResult = await generateVideo(userId, videoModel, '', chunkOptions as any)
+      if (!generateResult.success) {
+        throw new Error(
+          generateResult.error || `Tencent VOD chunk ${i + 1} submit failed`,
+        )
+      }
+      const externalId =
+        typeof generateResult.externalId === 'string' ? generateResult.externalId.trim() : ''
+      if (!externalId) {
+        throw new Error(`Tencent VOD chunk ${i + 1} returned no externalId`)
+      }
+
+      const chunkProgressStart = progressBase + i * progressRange
+      const chunkProgressEnd = chunkProgressStart + progressRange * 0.95
+      const polled = await waitExternalResult(job, externalId, userId, {
+        progressStart: chunkProgressStart,
+        progressEnd: chunkProgressEnd,
+      })
+
+      await assertTaskActive(job, `persist_multi_shot_video_b_path_chunk_${i + 1}`)
+      const cosKey = await uploadVideoSourceToCos(
+        polled.url,
+        `multi-shot-video-b-chunk-${i + 1}`,
+        storyboardId,
+      )
+      cosKeys.push(cosKey)
+    }
+
+    await reportTaskProgress(job, 95, { stage: 'persist' })
+    const update = buildMultiShotClipUpdate(cosKeys)
+    await prisma.novelPromotionStoryboard.update({
+      where: { id: storyboardId },
+      data: update,
+    })
+
+    return {
+      storyboardId,
+      multiShotVideoUrl: cosKeys[0],
+      multiShotClipUrls: cosKeys,
+      chunkCount: cosKeys.length,
+      shotCount: validPanels.length,
+      subjectCount: subjectInfos.length,
+      path: 'B',
+      multiShotMode: 'customize',
+      durations: allDurations,
+      bindings: {
+        characters: activeCharacterBindings,
+        scenes: activeSceneBindings,
+      },
+    }
+  }
+  // ──────── End chunked dispatch path ────────
 
   // Branch on mode: customize gets per-shot multi_prompt entries with
   // explicit durations; intelligence keeps the legacy combined-prompt
@@ -1395,14 +1562,18 @@ export async function runMultiShotBPath(params: {
   const cosKey = await uploadVideoSourceToCos(polled.url, 'multi-shot-video-b', storyboardId)
   await reportTaskProgress(job, 95, { stage: 'persist' })
 
+  // Single-clip path still populates multiShotClipUrls with a 1-element
+  // array so consumers always see a uniform shape.
   await prisma.novelPromotionStoryboard.update({
     where: { id: storyboardId },
-    data: { multiShotVideoUrl: cosKey },
+    data: buildMultiShotClipUpdate([cosKey]),
   })
 
   return {
     storyboardId,
     multiShotVideoUrl: cosKey,
+    multiShotClipUrls: [cosKey],
+    chunkCount: 1,
     shotCount: validPanels.length,
     subjectCount: subjectInfos.length,
     path: 'B',
