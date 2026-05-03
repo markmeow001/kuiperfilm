@@ -1242,25 +1242,58 @@ export const GET = apiHandler(async () => {
     { type: 'video', modelId: 'veo-3.0-fast-generate-001', name: 'Veo 3.0 Fast' },
     { type: 'video', modelId: 'veo-2.0-generate-001', name: 'Veo 2.0' },
   ]
+  // 騰訊混元 (Tencent Hunyuan) — OpenAI 兼容 endpoint，文本 LLM only。
+  // 加進來是為了讓 admin 在 OpenRouter 餘額燒完時能切到便宜 ~10-20 倍
+  // 的本地 LLM (2026-05-03 incident: OpenRouter 402 quota exhausted)。
+  // hunyuan-turbos / t1 / large 是當前主力選擇。
+  const HUNYUAN_PRESETS: { type: UnifiedModelType; modelId: string; name: string }[] = [
+    { type: 'llm', modelId: 'hunyuan-turbos-latest', name: 'Hunyuan Turbo S (latest)' },
+    { type: 'llm', modelId: 'hunyuan-t1-latest', name: 'Hunyuan T1 (reasoning, latest)' },
+    { type: 'llm', modelId: 'hunyuan-large', name: 'Hunyuan Large (256K)' },
+    { type: 'llm', modelId: 'hunyuan-large-longcontext', name: 'Hunyuan Large LongContext' },
+    { type: 'llm', modelId: 'hunyuan-standard', name: 'Hunyuan Standard' },
+    { type: 'llm', modelId: 'hunyuan-lite', name: 'Hunyuan Lite' },
+  ]
+
   const savedModelKeys = new Set(pricedModels.map((m) => m.modelKey))
   const disabledPresets: (StoredModel & { enabled: false })[] = []
   for (const p of providers) {
-    if (getProviderKey(p.id) !== 'gemini-compatible') continue
-    for (const preset of GEMINI_COMPATIBLE_PRESETS) {
-      const modelKey = composeModelKey(p.id, preset.modelId)
-      if (!modelKey || savedModelKeys.has(modelKey)) continue
-      savedModelKeys.add(modelKey)
-      const base: StoredModel = {
-        modelId: preset.modelId,
-        modelKey,
-        name: preset.name,
-        type: preset.type,
-        provider: p.id,
-        price: 0,
-        // alias 回退自动从 google catalog 获取 capabilities
-        capabilities: findBuiltinCapabilities(preset.type, p.id, preset.modelId),
+    const providerKey = getProviderKey(p.id)
+    if (providerKey === 'gemini-compatible') {
+      for (const preset of GEMINI_COMPATIBLE_PRESETS) {
+        const modelKey = composeModelKey(p.id, preset.modelId)
+        if (!modelKey || savedModelKeys.has(modelKey)) continue
+        savedModelKeys.add(modelKey)
+        const base: StoredModel = {
+          modelId: preset.modelId,
+          modelKey,
+          name: preset.name,
+          type: preset.type,
+          provider: p.id,
+          price: 0,
+          // alias 回退自动从 google catalog 获取 capabilities
+          capabilities: findBuiltinCapabilities(preset.type, p.id, preset.modelId),
+        }
+        disabledPresets.push({ ...withDisplayPricing(base, pricingDisplay), enabled: false })
       }
-      disabledPresets.push({ ...withDisplayPricing(base, pricingDisplay), enabled: false })
+    } else if (providerKey === 'tencent-hunyuan') {
+      for (const preset of HUNYUAN_PRESETS) {
+        const modelKey = composeModelKey(p.id, preset.modelId)
+        if (!modelKey || savedModelKeys.has(modelKey)) continue
+        savedModelKeys.add(modelKey)
+        const base: StoredModel = {
+          modelId: preset.modelId,
+          modelKey,
+          name: preset.name,
+          type: preset.type,
+          provider: p.id,
+          price: 0,
+          // Hunyuan capabilities 沒進 catalog（不需要 capability 選項）—
+          // LLM 只需要 model id + provider, 文字進文字出, 走 OpenAI 兼容
+          capabilities: undefined,
+        }
+        disabledPresets.push({ ...withDisplayPricing(base, pricingDisplay), enabled: false })
+      }
     }
   }
 
