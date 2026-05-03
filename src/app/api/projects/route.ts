@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { toMoneyNumber } from '@/lib/billing/money'
+import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
 
 // GET - 获取用户的项目（支持分页和搜索）
 export const GET = apiHandler(async (request: NextRequest) => {
@@ -219,6 +220,19 @@ export const POST = apiHandler(async (request: NextRequest) => {
   // - 手动创作 → 创建第一个空白剧集
   // - 智能导入 → AI 分析后批量创建剧集
   // 🔥 artStylePrompt 通过实时查询获取，不再存储到数据库
+  //
+  // 2026-05-04 — Default style profile = "realistic" (寫實風格).
+  // Without this, new projects had NULL style anchors → loadStyleProfile()
+  // returned null → image generator used the neutral "与参考图风格一致"
+  // fallback → Tencent VOD GEM-3.1 freestyled into painterly / anime-ish
+  // outputs (reported by iangyc 2026-05-03 — kneeling figures rendered
+  // in stylized Genshin-Impact-like 3D instead of TikTok 短劇 photo-real).
+  // Locking the default to 'realistic' anchors NEW projects to cinematic
+  // photorealism out of the gate. Users can still flip to any other
+  // preset (anime / chinese-ink / cyberpunk / etc.) in V2ProjectSettingsPanel
+  // → Style Profile. Existing NULL projects are intentionally left alone
+  // so the loader's null-fallback behavior stays observable + recoverable.
+  const realisticPreset = STYLE_PROFILE_PRESETS.realistic
   await prisma.novelPromotionProject.create({
     data: {
       projectId: project.id,
@@ -231,6 +245,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
       videoRatio: pick('videoRatio') ?? undefined,
       artStyle: pick('artStyle') || 'american-comic',
       ttsRate: pick('ttsRate') ?? undefined,
+      stylePresetKey: 'realistic',
+      stylePositivePrompt: realisticPreset.positivePrompt,
+      styleNegativePrompt: realisticPreset.negativePrompt,
     }
   })
 
