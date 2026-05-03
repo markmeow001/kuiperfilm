@@ -29,6 +29,7 @@ import {
 import { useAutoGroupMultiShot } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import { useTaskSnapshot, useActiveTasks, useTaskList } from '@/lib/query/hooks/useTaskStatus'
 import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
+import { useEpisodeCharacterBindings } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
@@ -172,6 +173,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const projectAssetsQuery = useProjectAssets(projectId)
   const characterRoster = projectAssetsQuery.data?.characters ?? []
   const locationRoster = projectAssetsQuery.data?.locations ?? []
+  // Phase 11.4 — per-episode character appearance bindings. Lets the
+  // CAST chip in the inspector show which appearance the worker would
+  // actually use when generating panels for THIS episode (instead of
+  // the user having to navigate back to the subjects page to verify).
+  const episodeBindingsQuery = useEpisodeCharacterBindings(projectId, currentEpisodeId)
+  const episodeBindings = episodeBindingsQuery.data ?? []
   const regenPanel = useRegenerateProjectPanelImage(projectId)
   const updatePanel = useUpdateProjectPanel(projectId)
   const updatePanelText = useUpdatePanelText(projectId, currentEpisodeId)
@@ -2144,18 +2151,103 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           ) : null}
 
           <div>
-            <div className="mb-2 font-mono text-[14px] tracking-wider text-amber-600">主體 · CAST</div>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="font-mono text-[14px] tracking-wider text-amber-600">主體 · CAST</div>
+              {currentEpisode?.episodeNumber ? (
+                <div className="font-mono text-[11px] tracking-wider text-stone-500">
+                  ep {currentEpisode.episodeNumber} 綁定
+                </div>
+              ) : null}
+            </div>
+            {/*
+              Each panel character is rendered with the appearance the
+              worker WOULD use right now — looks up
+              EpisodeCharacter(currentEpisodeId, characterId) and falls
+              back to characterRoster[0].appearances[0] when no
+              binding exists. Match exactly the resolution priority in
+              multi-shot-video-b-path.ts:820-855 so the chip reflects
+              the actual generation outcome (no surprises).
+            */}
             {Array.isArray(selected?.characters) && selected.characters.length > 0 ? (
               <div className="space-y-1.5">
-                {selected.characters.map((name, i) => (
-                  <div
-                    key={`${name}-${i}`}
-                    className="flex items-center gap-2.5 rounded-sm border border-stone-800/60 bg-stone-900/40 px-2.5 py-1.5"
-                  >
-                    <div className="h-7 w-7 flex-shrink-0 rounded-sm bg-gradient-to-br from-amber-500 to-rose-700" />
-                    <div className="font-serif-cn text-xs text-stone-200">{name}</div>
-                  </div>
-                ))}
+                {selected.characters.map((name, i) => {
+                  const character = characterRoster.find(
+                    (c) => (c.name ?? '').trim().toLowerCase() === String(name).trim().toLowerCase(),
+                  )
+                  const appearances = character?.appearances ?? []
+                  const binding = episodeBindings.find(
+                    (b) => b.characterId === character?.id,
+                  )
+                  // Resolution priority (mirrors worker):
+                  //   1. EpisodeCharacter binding (this episode)
+                  //   2. appearances[0]
+                  // We don't reproduce ref.appearance here because
+                  // panel.characters in V2 is just a name list — the
+                  // tagged appearance shape is a legacy worker fallback.
+                  let resolved = null as
+                    | { id: string | null; label: string; imageUrl: string | null; isDefault: boolean }
+                    | null
+                  if (binding?.appearanceId) {
+                    const ap = appearances.find((a) => a.id === binding.appearanceId)
+                    if (ap) {
+                      resolved = {
+                        id: ap.id ?? null,
+                        label: ap.changeReason || `造型 ${(ap.appearanceIndex ?? 0) + 1}`,
+                        imageUrl: ap.imageUrl ?? null,
+                        isDefault: false,
+                      }
+                    }
+                  }
+                  if (!resolved && appearances.length > 0) {
+                    const ap = appearances[0]
+                    resolved = {
+                      id: ap.id ?? null,
+                      label: ap.changeReason || '初始形象',
+                      imageUrl: ap.imageUrl ?? null,
+                      isDefault: true,
+                    }
+                  }
+                  return (
+                    <div
+                      key={`${name}-${i}`}
+                      className="flex items-center gap-2.5 rounded-sm border border-stone-800/60 bg-stone-900/40 px-2.5 py-1.5"
+                      title={
+                        resolved?.isDefault
+                          ? `這集沒綁造型 — 用第一個造型(${resolved.label})。要改去主體頁設定。`
+                          : `這集綁定造型: ${resolved?.label ?? '(無)'}`
+                      }
+                    >
+                      <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-sm bg-gradient-to-br from-amber-500 to-rose-700">
+                        {resolved?.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={resolved.imageUrl}
+                            alt={String(name)}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-serif-cn text-xs text-stone-200">{name}</div>
+                        <div className="truncate font-mono text-[11px] tracking-wider text-amber-500/70">
+                          {resolved
+                            ? resolved.isDefault
+                              ? `${resolved.label} (預設)`
+                              : resolved.label
+                            : '尚無造型'}
+                        </div>
+                      </div>
+                      {resolved?.isDefault && appearances.length > 1 ? (
+                        <span
+                          className="flex-shrink-0 rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-amber-300"
+                          title="這個角色有多個造型,但這集還沒綁定"
+                        >
+                          未綁
+                        </span>
+                      ) : null}
+                    </div>
+                  )
+                })}
               </div>
             ) : (
               <p className="font-serif-cn text-xs text-stone-500">(無關聯角色)</p>
