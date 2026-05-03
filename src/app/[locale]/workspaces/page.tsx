@@ -66,7 +66,7 @@ function rolePill(role: string) {
     : role === 'editor' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
     : 'bg-stone-500/15 text-stone-300 border-stone-500/30'
   return (
-    <span className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${color}`}>
+    <span className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 font-mono text-[14px] uppercase tracking-wider ${color}`}>
       {role}
     </span>
   )
@@ -183,11 +183,11 @@ export default function WorkspacesPage() {
                   <div className="font-fraunces text-base italic">{o.name}</div>
                   {o.description && <div className="mt-1 font-serif-cn text-xs text-stone-400">{o.description}</div>}
                   <div className="mt-3 flex items-center justify-between">
-                    <span className="font-mono text-[10px] tracking-wider text-stone-500">
+                    <span className="font-mono text-[14px] tracking-wider text-stone-500">
                       {o._count?.workspaces ?? 0} workspace{(o._count?.workspaces ?? 0) !== 1 ? 's' : ''}
                     </span>
                     {(role === 'admin' || o.ownerUserId === myUserId) && (
-                      <span className="font-mono text-[10px] uppercase tracking-wider text-amber-500/80">owner</span>
+                      <span className="font-mono text-[14px] uppercase tracking-wider text-amber-500/80">owner</span>
                     )}
                   </div>
                 </div>
@@ -237,7 +237,7 @@ export default function WorkspacesPage() {
                       <div>
                         <div className="font-fraunces text-base italic">{w.name}</div>
                         {w.organization && (
-                          <div className="mt-0.5 font-mono text-[10px] tracking-wider text-stone-500">
+                          <div className="mt-0.5 font-mono text-[14px] tracking-wider text-stone-500">
                             org · {w.organization.name}
                           </div>
                         )}
@@ -247,11 +247,11 @@ export default function WorkspacesPage() {
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         {canManage && (
-                          <span className="font-mono text-[10px] uppercase tracking-wider text-amber-500/80">
+                          <span className="font-mono text-[14px] uppercase tracking-wider text-amber-500/80">
                             {isOwner ? 'owner' : 'admin'}
                           </span>
                         )}
-                        <span className="font-mono text-[10px] tracking-wider text-stone-500">
+                        <span className="font-mono text-[14px] tracking-wider text-stone-500">
                           {w._count?.members ?? 0} 成員
                         </span>
                       </div>
@@ -325,7 +325,7 @@ function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated
         <h3 className="mb-4 font-fraunces text-lg italic">新增組織</h3>
         <div className="space-y-3">
           <div>
-            <label className="block font-mono text-[10px] uppercase tracking-wider text-stone-500">名稱 *</label>
+            <label className="block font-mono text-[14px] uppercase tracking-wider text-stone-500">名稱 *</label>
             <input
               type="text"
               value={name}
@@ -337,7 +337,7 @@ function CreateOrgModal({ onClose, onCreated }: { onClose: () => void; onCreated
             />
           </div>
           <div>
-            <label className="block font-mono text-[10px] uppercase tracking-wider text-stone-500">描述（選填）</label>
+            <label className="block font-mono text-[14px] uppercase tracking-wider text-stone-500">描述（選填）</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -406,7 +406,7 @@ function CreateWorkspaceModal({ orgs, onClose, onCreated }: {
         <h3 className="mb-4 font-fraunces text-lg italic">新增工作區</h3>
         <div className="space-y-3">
           <div>
-            <label className="block font-mono text-[10px] uppercase tracking-wider text-stone-500">所屬組織 *</label>
+            <label className="block font-mono text-[14px] uppercase tracking-wider text-stone-500">所屬組織 *</label>
             <select
               value={organizationId}
               onChange={(e) => setOrganizationId(e.target.value)}
@@ -416,7 +416,7 @@ function CreateWorkspaceModal({ orgs, onClose, onCreated }: {
             </select>
           </div>
           <div>
-            <label className="block font-mono text-[10px] uppercase tracking-wider text-stone-500">名稱 *</label>
+            <label className="block font-mono text-[14px] uppercase tracking-wider text-stone-500">名稱 *</label>
             <input
               type="text"
               value={name}
@@ -428,7 +428,7 @@ function CreateWorkspaceModal({ orgs, onClose, onCreated }: {
             />
           </div>
           <div>
-            <label className="block font-mono text-[10px] uppercase tracking-wider text-stone-500">描述（選填）</label>
+            <label className="block font-mono text-[14px] uppercase tracking-wider text-stone-500">描述（選填）</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -604,7 +604,7 @@ function WorkspaceDetailDrawer({
       <div className="flex w-full max-w-2xl flex-col border-l border-stone-800 bg-stone-900">
         <header className="flex items-start justify-between border-b border-stone-800 p-5">
           <div>
-            <div className="font-mono text-[10px] uppercase tracking-wider text-stone-500">
+            <div className="font-mono text-[14px] uppercase tracking-wider text-stone-500">
               workspace · {workspace.organization?.name || workspace.organizationId.slice(0, 8)}
             </div>
             <h3 className="mt-1 font-fraunces text-2xl italic">{workspace.name}</h3>
@@ -613,7 +613,7 @@ function WorkspaceDetailDrawer({
             )}
             <div className="mt-2 flex items-center gap-2">
               {canManage && (
-                <span className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-amber-300">
+                <span className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[14px] uppercase tracking-wider text-amber-300">
                   {isOwner ? 'OWNER' : 'ADMIN ACCESS'}
                 </span>
               )}
@@ -748,13 +748,13 @@ function WorkspaceDetailDrawer({
                         {rolePill(m.role)}
                         <div>
                           <div className="font-serif-cn text-sm">{m.displayName || m.userName}</div>
-                          <div className="font-mono text-[10px] tracking-wider text-stone-500">@{m.userName}</div>
+                          <div className="font-mono text-[14px] tracking-wider text-stone-500">@{m.userName}</div>
                         </div>
                       </div>
                       {canManage && (
                         <button
                           onClick={() => removeMember(m.userId)}
-                          className="rounded-sm border border-rose-500/30 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-rose-300 hover:border-rose-400 hover:text-rose-200"
+                          className="rounded-sm border border-rose-500/30 px-2 py-1 font-mono text-[14px] uppercase tracking-wider text-rose-300 hover:border-rose-400 hover:text-rose-200"
                         >
                           踢出
                         </button>
@@ -784,7 +784,7 @@ function WorkspaceDetailDrawer({
                           >
                             {p.name || '未命名專案'}
                           </Link>
-                          <div className="mt-0.5 font-mono text-[10px] tracking-wider text-stone-500">
+                          <div className="mt-0.5 font-mono text-[14px] tracking-wider text-stone-500">
                             擁有者 @{p.ownerName} · 更新於 {new Date(p.updatedAt).toLocaleString('zh-TW')}
                           </div>
                           {p.description && <div className="mt-1 font-serif-cn text-xs text-stone-400">{p.description}</div>}
