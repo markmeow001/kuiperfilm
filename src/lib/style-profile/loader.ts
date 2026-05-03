@@ -6,12 +6,17 @@
  * - referenceImageUrls：把 styleReferenceImages（JSON array of MediaObject id）
  *   join 出 MediaObject.publicId，组成 `/m/<publicId>` URL
  *
- * 三栏全 null 视为「未配置」-> 回传 null。
+ * 三栏全 null 时，2026-05-04 起 runtime fallback 成 'realistic' preset
+ * (TikTok 短劇用途必走寫實照片風，避免 Tencent VOD GEM-3.1 自由發揮成
+ * painterly / Genshin-Impact-3D)。如果 user 明確要其他風格，直接點
+ * V2ProjectSettingsPanel 的 preset 即可覆蓋。
+ *
  * 解析或 owner 校验失败的 mediaId 会被跳过并记录 warn。
  */
 
 import type { PrismaClient } from '@prisma/client'
 import { logWarn } from '@/lib/logging/core'
+import { STYLE_PROFILE_PRESETS } from './presets'
 
 export interface StyleProfile {
   positivePrompt: string | null
@@ -166,7 +171,20 @@ export async function loadStyleProfile(
   const rawReferenceImages = project.styleReferenceImages
 
   const allNull = positivePrompt === null && negativePrompt === null && rawReferenceImages === null
-  if (allNull) return null
+  // 2026-05-04 — runtime fallback to 'realistic' instead of returning
+  // null. Used to be `return null`, which made the chokepoint a
+  // pass-through and let GEM-3.1 free-style stylized output (reported
+  // by iangyc 2026-05-03). This covers BOTH legacy projects whose
+  // settings row was never populated AND any future codepath that
+  // forgets to seed style fields at creation time.
+  if (allNull) {
+    const fallback = STYLE_PROFILE_PRESETS.realistic
+    return {
+      positivePrompt: fallback.positivePrompt,
+      negativePrompt: fallback.negativePrompt,
+      referenceImageUrls: [],
+    }
+  }
 
   let referenceImageUrls: string[] = []
   if (rawReferenceImages !== null) {

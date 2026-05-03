@@ -39,7 +39,13 @@ describe('style-profile loader behavior', () => {
     vi.clearAllMocks()
   })
 
-  it('三栏全 null -> 回传 null', async () => {
+  it('三栏全 null -> 回传 realistic preset (2026-05-04 fallback)', async () => {
+    // Behavior change: previously returned null when all three style
+    // fields were null, which made the chokepoint a pass-through and
+    // let GEM-3.1 free-style stylized output (iangyc 2026-05-03
+    // incident — TikTok 短劇 needs photoreal). Loader now falls back
+    // to the 'realistic' preset so legacy projects + any future-codepath
+    // miss-seed both get cinematic photorealism instead of nothing.
     prismaMock.novelPromotionProject.findUnique.mockResolvedValueOnce({
       id: 'np-project-1',
       projectId: 'project-1',
@@ -50,7 +56,10 @@ describe('style-profile loader behavior', () => {
     })
 
     const result: StyleProfile | null = await loadStyleProfile(prismaArg, 'np-project-1')
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.positivePrompt).toMatch(/photorealistic/i)
+    expect(result!.negativePrompt).toMatch(/cartoon|anime|illustration/i)
+    expect(result!.referenceImageUrls).toEqual([])
   })
 
   it('只有 positivePrompt -> 回传 { positivePrompt, negativePrompt: null, referenceImageUrls: [] }', async () => {
