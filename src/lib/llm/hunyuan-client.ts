@@ -121,15 +121,17 @@ async function loadCommonClient(): Promise<CommonClientCtor> {
   // don't want to add it to package.json explicitly. Lazy-load so a
   // user without it installed only fails when they actually try to
   // use Hunyuan (other LLM providers keep working).
+  // Top-level export shape verified empirically — the SDK ships
+  // CommonClient at the module root, not under a Common namespace.
   const mod = (await import('tencentcloud-sdk-nodejs-common')) as {
-    Common?: { CommonClient?: CommonClientCtor }
-    default?: { Common?: { CommonClient?: CommonClientCtor } }
+    CommonClient?: CommonClientCtor
+    default?: { CommonClient?: CommonClientCtor }
   }
-  const Common = mod.Common ?? mod.default?.Common
-  if (!Common?.CommonClient) {
+  const ctor = mod.CommonClient ?? mod.default?.CommonClient
+  if (!ctor) {
     throw new Error('TENCENT_HUNYUAN_SDK_MISSING: tencentcloud-sdk-nodejs-common.CommonClient not found')
   }
-  cachedCommonClient = Common.CommonClient
+  cachedCommonClient = ctor
   return cachedCommonClient
 }
 
