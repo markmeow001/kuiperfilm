@@ -128,6 +128,81 @@ function parsePanelCharacters(raw: string | null): string[] {
   }
 }
 
+/**
+ * 2026-05-04 — Root-cause fix for "panel.characters left empty by LLM".
+ *
+ * iangyc reported a panel with description `镜头切回洞府内,王玄紧闭着双眼`
+ * having panel.characters = [] in DB. trace showed the LLM
+ * (agent_storyboard_plan) silently dropped the structured field even
+ * though the prompt asks for it. The image-gen worker then had no
+ * character ref → AI invented a face → user-uploaded character photo
+ * never used.
+ *
+ * Defensive fallback in collectPanelReferenceImages handles runtime
+ * resolution, but every caller path (plus the junction sync loop)
+ * also needs the data to be CORRECT in DB so the UI CAST chip rail,
+ * EpisodeCharacter junction, downstream variant generation, and any
+ * future feature reading panel.characters all see the truth.
+ *
+ * This helper runs synchronously between LLM output and DB write:
+ *
+ *   1. Normalize whatever shape the LLM returned (string[],
+ *      {name}[], or mixed) into a consistent {name, appearance?}[]
+ *   2. Walk the project character roster; for each name not already
+ *      present in the list, scan panel.description for a hit (alias-
+ *      aware via slash-split). When found, append { name } so the
+ *      character makes it into the persisted record.
+ *
+ * Bounded by 8 to avoid blowing up on dense ensemble novels — that
+ * many characters in one shot exceeds Kling's 3-slot cap anyway,
+ * so capping here doesn't lose useful refs and keeps the field
+ * readable in the UI.
+ */
+export function enrichPanelCharacters(
+  rawCharacters: unknown,
+  description: string | null | undefined,
+  characterRoster: ReadonlyArray<{ name: string }>,
+): Array<{ name: string; appearance?: string }> {
+  const normalized: Array<{ name: string; appearance?: string }> = []
+  if (Array.isArray(rawCharacters)) {
+    for (const item of rawCharacters) {
+      if (typeof item === 'string' && item.trim()) {
+        normalized.push({ name: item.trim() })
+      } else if (item && typeof item === 'object') {
+        const candidate = item as { name?: unknown; appearance?: unknown }
+        if (typeof candidate.name === 'string' && candidate.name.trim()) {
+          normalized.push({
+            name: candidate.name.trim(),
+            appearance:
+              typeof candidate.appearance === 'string' && candidate.appearance.trim()
+                ? candidate.appearance.trim()
+                : undefined,
+          })
+        }
+      }
+    }
+  }
+
+  const desc = (description ?? '').trim()
+  if (!desc || characterRoster.length === 0) return normalized
+
+  const seen = new Set(normalized.map((c) => c.name))
+  for (const character of characterRoster) {
+    if (normalized.length >= 8) break
+    if (!character.name) continue
+    if (seen.has(character.name)) continue
+    const aliases = character.name
+      .split('/')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (aliases.some((alias) => desc.includes(alias))) {
+      normalized.push({ name: character.name })
+      seen.add(character.name)
+    }
+  }
+  return normalized
+}
+
 export function parseVoiceLinesJson(responseText: string): JsonRecord[] {
   let jsonText = responseText.trim()
   jsonText = jsonText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '')
@@ -210,6 +285,14 @@ export async function persistSingleClipStoryboard(
       select: { id: true, clipId: true },
     })
 
+    // 2026-05-04 — fetch character roster once per clip so each panel
+    // can have description-based name enrichment applied before the
+    // DB write. See enrichPanelCharacters for rationale.
+    const projectCharacterRoster = await tx.novelPromotionCharacter.findMany({
+      where: { novelPromotionProject: { projectId } },
+      select: { name: true },
+    })
+
     const persistedPanels: PersistedStoryboard['panels'] = []
     // Phase 11.2: collect names across all panels in this clip for one-shot junction sync.
     const allCharacterNames: string[] = []
@@ -217,6 +300,11 @@ export async function persistSingleClipStoryboard(
 
     for (let i = 0; i < clipEntry.finalPanels.length; i += 1) {
       const panel = clipEntry.finalPanels[i]
+      const enrichedCharacters = enrichPanelCharacters(
+        panel.characters,
+        typeof panel.description === 'string' ? panel.description : null,
+        projectCharacterRoster,
+      )
       const created = await tx.novelPromotionPanel.create({
         data: {
           storyboardId: storyboard.id,
@@ -227,7 +315,11 @@ export async function persistSingleClipStoryboard(
           description: panel.description || null,
           videoPrompt: panel.video_prompt || null,
           location: panel.location || null,
-          characters: panel.characters ? JSON.stringify(panel.characters) : null,
+          // Always write structured form { name, appearance? }[] so
+          // every reader (worker + UI + future features) sees the same
+          // shape. Empty array is preserved as null to keep the legacy
+          // "no characters" sentinel unchanged.
+          characters: enrichedCharacters.length > 0 ? JSON.stringify(enrichedCharacters) : null,
           srtSegment: extractDialogueFromSourceText(panel.source_text || null),
           photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
           actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
@@ -243,11 +335,14 @@ export async function persistSingleClipStoryboard(
       })
       persistedPanels.push(created)
 
-      // Collect for junction sync (Phase 11.2). panel.characters is already a string[] here.
-      if (Array.isArray(panel.characters)) {
-        for (const name of panel.characters) {
-          if (typeof name === 'string' && name.trim()) allCharacterNames.push(name.trim())
-        }
+      // Phase 11.2 junction sync — collect names from the enriched
+      // (structured) record so junction creation matches what's
+      // actually persisted. Pre-2026-05-04 this loop only handled
+      // string[] form and silently skipped {name}[] objects, leaving
+      // EpisodeCharacter empty when the LLM returned the structured
+      // shape (the documented prompt format).
+      for (const c of enrichedCharacters) {
+        if (c.name) allCharacterNames.push(c.name)
       }
       if (typeof panel.location === 'string' && panel.location.trim()) {
         allLocationNames.push(panel.location.trim())
@@ -316,6 +411,13 @@ export async function persistStoryboardsAndPanels(params: {
     const allCharacterNames: string[] = []
     const allLocationNames: string[] = []
 
+    // 2026-05-04 — same roster fetch as persistSingleClipStoryboard so
+    // each panel gets description-based name enrichment before write.
+    const projectCharacterRoster = await tx.novelPromotionCharacter.findMany({
+      where: { novelPromotionProject: { projectId } },
+      select: { name: true },
+    })
+
     for (const clipEntry of clipPanels) {
       const storyboard = await tx.novelPromotionStoryboard.create({
         data: {
@@ -329,6 +431,11 @@ export async function persistStoryboardsAndPanels(params: {
       const persistedPanels: PersistedStoryboard['panels'] = []
       for (let i = 0; i < clipEntry.finalPanels.length; i += 1) {
         const panel = clipEntry.finalPanels[i]
+        const enrichedCharacters = enrichPanelCharacters(
+          panel.characters,
+          typeof panel.description === 'string' ? panel.description : null,
+          projectCharacterRoster,
+        )
         const created = await tx.novelPromotionPanel.create({
           data: {
             storyboardId: storyboard.id,
@@ -339,7 +446,7 @@ export async function persistStoryboardsAndPanels(params: {
             description: panel.description || null,
             videoPrompt: panel.video_prompt || null,
             location: panel.location || null,
-            characters: panel.characters ? JSON.stringify(panel.characters) : null,
+            characters: enrichedCharacters.length > 0 ? JSON.stringify(enrichedCharacters) : null,
             srtSegment: extractDialogueFromSourceText(panel.source_text || null),
             photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
             actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
@@ -355,10 +462,12 @@ export async function persistStoryboardsAndPanels(params: {
         })
         persistedPanels.push(created)
 
-        if (Array.isArray(panel.characters)) {
-          for (const name of panel.characters) {
-            if (typeof name === 'string' && name.trim()) allCharacterNames.push(name.trim())
-          }
+        // Same junction-sync fix as persistSingleClipStoryboard:
+        // collect from the enriched structured record, not the
+        // raw LLM output that may be {name}[] which the old
+        // string-only loop silently skipped.
+        for (const c of enrichedCharacters) {
+          if (c.name) allCharacterNames.push(c.name)
         }
         if (typeof panel.location === 'string' && panel.location.trim()) {
           allLocationNames.push(panel.location.trim())
