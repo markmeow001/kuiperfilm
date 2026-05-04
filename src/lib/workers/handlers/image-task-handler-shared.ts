@@ -72,6 +72,13 @@ interface PanelLike {
   // Phase 11.3 Stage 2 — JSON-encoded string array of prop names
   // referenced by this panel. parsePanelPropReferences() parses it.
   props?: string | null
+  // 2026-05-04 — description-mining fallback source. When LLM
+  // extraction left panel.characters empty but description plainly
+  // names a project character, the description body becomes the
+  // implicit character ref source. See collectPanelReferenceImages
+  // fallback block for rationale.
+  description?: string | null
+  videoPrompt?: string | null
 }
 
 export interface PanelCharacterReference {
@@ -365,7 +372,50 @@ export async function collectPanelReferenceImages(
   }
 
   const panelCharacters = parsePanelCharacterReferences(panel.characters)
-  for (const item of panelCharacters) {
+
+  // 2026-05-04 — description-mining fallback for character refs.
+  //
+  // iangyc reported the worker generating a stranger's face for a
+  // panel that clearly named "王玄" in the description. Trace showed:
+  //   panel.characters = []           (analyze pipeline left empty)
+  //   panel.description = "王玄..."   (name plainly mentioned)
+  //
+  // Without this fallback the worker has no character ref → AI
+  // invents a face from the prompt's English body ("35-year-old man
+  // with stubble"). The EpisodeCharacter binding fix from earlier
+  // commits has nothing to do here because there's no character ref
+  // to look up bindings against.
+  //
+  // Strategy:if panel.characters parsed to nothing, walk the project
+  // character roster and append any character whose name appears in
+  // panel.description / videoPrompt as a synthetic reference. This
+  // mirrors the speaker-fallback already in multi-shot-video-b-path
+  // (which mines panel.srtSegment for SubjectInfos).
+  //
+  // Bounded by 3 to avoid blowing the reference budget on novels with
+  // dense ensemble casts; ordered by character index in projectData
+  // (analysis order ≈ first-mentioned-first), which is a reasonable
+  // proxy for narrative importance for a closed-set fallback.
+  let effectiveCharacters: PanelCharacterReference[] = panelCharacters
+  if (panelCharacters.length === 0) {
+    const descSource = `${panel.description ?? ''}\n${panel.videoPrompt ?? ''}`.trim()
+    if (descSource && (projectData.characters?.length ?? 0) > 0) {
+      const mined: PanelCharacterReference[] = []
+      for (const c of projectData.characters!) {
+        if (mined.length >= 3) break
+        if (!c.name) continue
+        // Use the same alias-split rule findCharacterByName does — match
+        // any of the slash-separated alias forms. Plain string includes
+        // is fine here:CJK names rarely overlap with prose words.
+        const aliases = c.name.split('/').map((s) => s.trim()).filter(Boolean)
+        const hit = aliases.some((alias) => descSource.includes(alias))
+        if (hit) mined.push({ name: c.name })
+      }
+      effectiveCharacters = mined
+    }
+  }
+
+  for (const item of effectiveCharacters) {
     const character = findCharacterByName(projectData.characters || [], item.name)
     if (!character) continue
 

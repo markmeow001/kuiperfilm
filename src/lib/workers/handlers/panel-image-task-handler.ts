@@ -63,7 +63,28 @@ function buildSceneDescription(params: {
   if (shotParts.length > 0) lines.push(`镜头：${shotParts.join('，')}`)
 
   // Characters with appearance descriptions
-  const panelCharacters = parsePanelCharacterReferences(params.panel.characters)
+  // 2026-05-04 — when LLM extraction left panel.characters empty
+  // (iangyc 王玄 case), mine character names out of the description /
+  // videoPrompt body so the prompt still surfaces the correct character
+  // identity. Mirrors the description-mining fallback in
+  // collectPanelReferenceImages — same source, same priority order,
+  // same 3-cap. Both must agree so refs and prompt stay in sync.
+  let panelCharacters = parsePanelCharacterReferences(params.panel.characters)
+  if (panelCharacters.length === 0) {
+    const descSource = `${params.panel.description ?? ''}\n${params.panel.videoPrompt ?? ''}`.trim()
+    if (descSource && (params.projectData.characters?.length ?? 0) > 0) {
+      const mined: typeof panelCharacters = []
+      for (const c of params.projectData.characters!) {
+        if (mined.length >= 3) break
+        if (!c.name) continue
+        const aliases = c.name.split('/').map((s) => s.trim()).filter(Boolean)
+        if (aliases.some((alias) => descSource.includes(alias))) {
+          mined.push({ name: c.name })
+        }
+      }
+      panelCharacters = mined
+    }
+  }
   if (panelCharacters.length > 0) {
     const charDescs = panelCharacters.map((reference) => {
       const character = findCharacterByName(params.projectData.characters || [], reference.name)

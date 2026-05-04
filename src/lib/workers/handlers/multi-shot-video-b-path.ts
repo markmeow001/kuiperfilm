@@ -961,6 +961,58 @@ export async function runMultiShotBPath(params: {
       })
     }
   }
+  // ── 2026-05-04 description-mining fallback (third pass).
+  //
+  // The two passes above cover (1) panel.characters explicit refs
+  // and (2) srtSegment speaker mentions. Silent shots that name a
+  // character only inside `panel.description` still slip through
+  // both — iangyc reported this for a "镜头切回洞府内,王玄紧闭着双眼"
+  // shot where panel.characters was empty and there was no dialogue.
+  //
+  // Scan description / videoPrompt for project-character-name hits
+  // and add as character bindings, capped at the same 3-slot Tencent
+  // limit so we don't blow ref budget. Same alias-aware substring
+  // match findCharacterByName uses (slash-split aliases).
+  for (const panel of validPanels) {
+    if (characterBindings.length >= 3) break
+    const descSource = `${panel.description ?? ''}\n${panel.videoPrompt ?? ''}`.trim()
+    if (!descSource) continue
+    for (const character of projectData.characters ?? []) {
+      if (characterBindings.length >= 3) break
+      if (seenCharIds.has(character.id)) continue
+      if (!character.name) continue
+      const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
+      const hit = aliases.some((alias) => descSource.includes(alias))
+      if (!hit) continue
+      const appearances = character.appearances || []
+      let appearance = appearances[0]
+      const overrideAppearanceId = charOverrideById.get(character.id)
+      const boundAppearanceId = episodeBindings.get(character.id)
+      if (overrideAppearanceId) {
+        const ov = appearances.find((a) => a.id === overrideAppearanceId)
+        if (ov) appearance = ov
+      } else if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
+      }
+      if (!appearance) continue
+      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
+      const selectedIndex = appearance.selectedIndex
+      const selectedUrl =
+        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
+      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
+      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
+      if (!publicUrl) continue
+      seenCharIds.add(character.id)
+      characterBindings.push({
+        id: character.id,
+        name: character.name,
+        appearanceId: appearance.id ?? null,
+        appearanceLabel: appearance.changeReason || null,
+        imageUrl: publicUrl,
+      })
+    }
+  }
   // ── Speaker-priority sort BEFORE the 3-slot cap.
   //
   // Kling Omni accepts at most 3 reference images per task (Tencent
