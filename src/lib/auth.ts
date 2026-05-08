@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs"
 import { logAuthAction } from './logging/semantic'
 import { prisma } from './prisma'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export const authOptions: any = {
   adapter: PrismaAdapter(prisma),
   // 🔥 允许从任意 Host 访问（解决局域网访问问题）
@@ -81,7 +81,7 @@ export const authOptions: any = {
     signIn: "/auth/signin",
   },
   callbacks: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     async jwt({ token, user }: any) {
       if (user) {
         token.id = user.id
@@ -89,7 +89,7 @@ export const authOptions: any = {
       }
       return token
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     async session({ session, token }: any) {
       if (token && session.user) {
         session.user.id = token.id as string

@@ -1425,7 +1425,7 @@ export async function runMultiShotBPath(params: {
         chunkTotal: chunkSplitPlan.chunks.length,
       })
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const generateResult = await generateVideo(userId, videoModel, '', chunkOptions as any)
       if (!generateResult.success) {
         throw new Error(
@@ -1672,7 +1672,7 @@ export async function runMultiShotBPath(params: {
     userId,
     videoModel,
     '',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     generateOptions as any,
   )
 

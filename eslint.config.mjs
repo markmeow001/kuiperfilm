@@ -23,6 +23,25 @@ const eslintConfig = [
     ],
   },
   {
+    // Mirror legacy .eslintrc.json intent that the v8→v9 flat-config
+    // migration dropped: `any` is allowed across the codebase (mock
+    // surfaces, config bridges intentionally use it), and underscore-
+    // prefixed parameters/vars/catches are conventional unused markers
+    // that should not warn.
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/components/ui/icons/**"],
     rules: {

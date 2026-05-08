@@ -136,7 +136,7 @@ export async function applyAdminFallbackToNovelPromotionProject<T extends Projec
     if (data[field] === null || data[field] === undefined) {
       const adminVal = admin.prefs[field]
       if (typeof adminVal === 'string' && adminVal.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         ;(data as any)[field] = adminVal
       }
     }
@@ -145,7 +145,7 @@ export async function applyAdminFallbackToNovelPromotionProject<T extends Projec
     if (data[field] === null || data[field] === undefined) {
       const adminVal = admin.prefs[field]
       if (typeof adminVal === 'string' && adminVal.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         ;(data as any)[field] = adminVal
       }
     }

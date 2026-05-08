@@ -6,7 +6,7 @@ const Root: React.FC = () => {
   return (
     <Composition
       id="VideoEditor"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       component={VideoComposition as any}
       durationInFrames={1}
       fps={30}
