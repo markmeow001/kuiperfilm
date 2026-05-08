@@ -830,7 +830,7 @@ export async function runMultiShotBPath(params: {
   // for the storyboard's episode so per-character costume overrides
   // apply to multi-shot generation too. All selected panels live under
   // the same storyboard, which lives under one episode.
-  let episodeBindings = new Map<string, string>()
+  const episodeBindings = new Map<string, string>()
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({

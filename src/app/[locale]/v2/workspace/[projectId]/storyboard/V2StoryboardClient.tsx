@@ -694,14 +694,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         } catch (err) {
           // Visible breadcrumb so cross-browser issues are debuggable
           // from the browser console without a server hit.
-          // eslint-disable-next-line no-console
+           
           console.warn('[multi-shot-recovery] fetch failed for storyboard', sbId, err)
         }
       }
       if (cancelled) return
       const recoveredMap: Record<string, string> = {}
       for (const [g, v] of Object.entries(recovered)) recoveredMap[g] = v.taskId
-      // eslint-disable-next-line no-console
+       
       console.info(
         '[multi-shot-recovery]',
         `storyboards=${storyboardIds.length}`,

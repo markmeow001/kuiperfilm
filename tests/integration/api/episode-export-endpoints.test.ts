@@ -26,7 +26,7 @@ const prismaMock = vi.hoisted(() => ({
 }))
 
 const submitTaskMock = vi.hoisted(() => ({
-  submitTask: vi.fn(async () => ({
+  submitTask: vi.fn(async (_args: Record<string, unknown>) => ({
     task: {
       id: 'task-1',
       type: 'episode_stitch_mp4',
@@ -159,7 +159,7 @@ describe('POST /episodes/:id/stitch-mp4', () => {
 
     expect(res.status).toBe(200)
     expect(submitTaskMock.submitTask).toHaveBeenCalledTimes(1)
-    const call = submitTaskMock.submitTask.mock.calls[0][0] as {
+    const call = submitTaskMock.submitTask.mock.calls[0][0] as unknown as {
       type: string
       episodeId: string
       payload: { episodeId: string }

@@ -16,7 +16,7 @@ const prismaMock = vi.hoisted(() => ({
   novelPromotionProject: { findUnique: vi.fn() },
   novelPromotionEpisode: {
     findMany: vi.fn(),
-    update: vi.fn(async () => ({})),
+    update: vi.fn(async (_args: Record<string, unknown>) => ({})),
   },
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock as unknown)),
 }))
@@ -139,7 +139,7 @@ describe('POST /episodes/reorder', () => {
     expect(prismaMock.novelPromotionEpisode.update).toHaveBeenCalledTimes(6)
 
     const calls = prismaMock.novelPromotionEpisode.update.mock.calls.map(
-      (c) => c[0] as { where: { id: string }; data: { episodeNumber: number } },
+      (c) => c[0] as unknown as { where: { id: string }; data: { episodeNumber: number } },
     )
     // Phase A parks: numbers should jump to 1001/1002/1003
     expect(calls.slice(0, 3).map((c) => c.data.episodeNumber).sort()).toEqual([1001, 1002, 1003])

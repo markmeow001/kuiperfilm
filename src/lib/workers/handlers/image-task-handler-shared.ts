@@ -360,7 +360,7 @@ export async function collectPanelReferenceImages(
 
   // Pre-load EpisodeCharacter bindings for this episode once. Keyed by
   // characterId so the per-character loop below can do a flat lookup.
-  let episodeBindings: Map<string, string> = new Map()
+  const episodeBindings: Map<string, string> = new Map()
   if (episodeId) {
     const rows = await prisma.episodeCharacter.findMany({
       where: { episodeId, appearanceId: { not: null } },

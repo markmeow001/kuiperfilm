@@ -226,7 +226,7 @@ export function GroupCard({
         seen.add(lower)
         const appearances = char.appearances ?? []
         const overrideId = characterOverrides[char.id]
-        let chosen = overrideId
+        const chosen = overrideId
           ? appearances.find((a) => a.id === overrideId) ?? appearances[0]
           : appearances[0]
         if (!chosen) {

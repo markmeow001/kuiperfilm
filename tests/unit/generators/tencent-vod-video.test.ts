@@ -12,7 +12,7 @@ const apiConfigMock = vi.hoisted(() => ({
 }))
 
 const createAigcVideoTaskMock = vi.hoisted(() =>
-  vi.fn(async () => ({ TaskId: 'task-test-001' })),
+  vi.fn(async (_args: Record<string, unknown>) => ({ TaskId: 'task-test-001' })),
 )
 
 const vodClientMock = vi.hoisted(() =>
@@ -89,6 +89,7 @@ describe('TencentVODVideoGenerator', () => {
     const generator = new TencentVODVideoGenerator()
     await generator.generate({
       userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
       prompt: '[@小明] 在森林裡跑',
       options: {
         modelId: 'Vidu-q2',
@@ -147,6 +148,7 @@ describe('TencentVODVideoGenerator', () => {
     const generator = new TencentVODVideoGenerator()
     await generator.generate({
       userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
       prompt: '兩人在咖啡店對話，然後走出店外',
       options: {
         modelId: 'Kling-3.0',
@@ -163,6 +165,7 @@ describe('TencentVODVideoGenerator', () => {
     const generator = new TencentVODVideoGenerator()
     await generator.generate({
       userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
       prompt: 'short drama opening scene',
       options: {
         modelId: 'Kling-3.0-Omni',
@@ -186,6 +189,7 @@ describe('TencentVODVideoGenerator', () => {
     const generator = new TencentVODVideoGenerator()
     await generator.generate({
       userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
       prompt: 'mixed payload',
       options: {
         modelId: 'Kling-3.0',
@@ -286,6 +290,7 @@ describe('TencentVODVideoGenerator', () => {
     const generator = new TencentVODVideoGenerator()
     await generator.generate({
       userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
       prompt: 'partial flags',
       options: {
         modelId: 'Kling-3.0',

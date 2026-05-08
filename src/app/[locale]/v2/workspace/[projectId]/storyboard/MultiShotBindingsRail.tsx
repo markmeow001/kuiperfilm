@@ -197,7 +197,7 @@ export function MultiShotBindingsRail({
               key={url}
               className="overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950"
             >
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              { }
               <video
                 src={url}
                 controls

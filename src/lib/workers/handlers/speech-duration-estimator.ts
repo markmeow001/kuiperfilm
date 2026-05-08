@@ -78,7 +78,7 @@ export function estimateSpeechSeconds(text: string): number {
   const trimmed = text?.trim() ?? ''
   if (!trimmed) return 0
   let cjkChars = 0
-  let nonCjkChars: string[] = []
+  const nonCjkChars: string[] = []
   for (const ch of trimmed) {
     if (isCjkChar(ch)) {
       cjkChars += 1

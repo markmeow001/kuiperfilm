@@ -534,7 +534,7 @@ function CharacterVoiceSection({
         />
       </div>
       {customVoiceUrl ? (
-        // eslint-disable-next-line jsx-a11y/media-has-caption
+         
         <audio src={customVoiceUrl} controls className="w-full max-w-md" />
       ) : (
         <div className="font-body text-[11px] italic text-stone-500">

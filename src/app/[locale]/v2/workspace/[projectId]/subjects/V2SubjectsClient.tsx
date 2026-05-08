@@ -634,7 +634,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         try {
           await regenCharGroup.mutateAsync({ characterId: c.id, appearanceId })
         } catch (err) {
-          // eslint-disable-next-line no-console
+           
           console.warn('[batch-regen] character', c.id, err)
         }
         done++
@@ -660,7 +660,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         try {
           await regenLocGroup.mutateAsync({ locationId: l.id })
         } catch (err) {
-          // eslint-disable-next-line no-console
+           
           console.warn('[batch-regen] location', l.id, err)
         }
         done++
@@ -694,7 +694,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             await generateProp.mutateAsync({ propId: p.id })
           }
         } catch (err) {
-          // eslint-disable-next-line no-console
+           
           console.warn('[batch-gen] prop', p.id, err)
         }
         done++

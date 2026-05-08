@@ -55,7 +55,7 @@ describe('buildMultiKlingSplitPlan', () => {
     // The optimal cut should land at the location change. Find which
     // boundary the chunker picked.
     let cumulative = 0
-    let cutAfter: number[] = []
+    const cutAfter: number[] = []
     for (const c of plan!.chunks) {
       cumulative += c.panels.length
       cutAfter.push(cumulative)

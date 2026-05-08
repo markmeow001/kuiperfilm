@@ -15,7 +15,7 @@ import {
 
 const prismaMock = vi.hoisted(() => ({
   globalProp: {
-    findMany: vi.fn(async () => []),
+    findMany: vi.fn(async (_args?: Record<string, unknown>): Promise<Record<string, unknown>[]> => []),
     findUnique: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -24,7 +24,7 @@ const prismaMock = vi.hoisted(() => ({
   globalAssetFolder: { findUnique: vi.fn() },
   novelPromotionProject: { findUnique: vi.fn() },
   novelPromotionProp: {
-    findMany: vi.fn(async () => []),
+    findMany: vi.fn(async (_args?: Record<string, unknown>): Promise<Record<string, unknown>[]> => []),
     findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -83,7 +83,7 @@ describe('GET /api/asset-hub/props', () => {
       query: { folderId: 'null' },
       context: undefined as never,
     })
-    const call = prismaMock.globalProp.findMany.mock.calls[0][0] as { where: { folderId: null | string } }
+    const call = prismaMock.globalProp.findMany.mock.calls[0][0] as unknown as { where: { folderId: null | string } }
     expect(call.where.folderId).toBeNull()
   })
 })
