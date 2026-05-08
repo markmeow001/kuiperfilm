@@ -36,7 +36,7 @@
  * developers can rename keys to semantic slugs over time.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve, join, relative, dirname, basename } from 'node:path'
 
 const ROOT = resolve(import.meta.dirname, '..')

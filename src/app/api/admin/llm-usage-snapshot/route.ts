@@ -29,7 +29,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { headers as readHeaders } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { isErrorResponse, requireAdminAuth } from '@/lib/api-auth'
-import { apiHandler, ApiError } from '@/lib/api-errors'
+import { apiHandler } from '@/lib/api-errors'
 
 const LLM_WORKFLOW_TYPES = [
   'analyze_novel',

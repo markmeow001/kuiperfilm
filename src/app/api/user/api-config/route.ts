@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { encryptApiKey, decryptApiKey } from '@/lib/crypto-utils'
-import { requireUserAuth, requireAdminAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireAdminAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import {
   composeModelKey,

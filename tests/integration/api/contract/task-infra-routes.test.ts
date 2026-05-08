@@ -6,10 +6,6 @@ type AuthState = {
   authenticated: boolean
 }
 
-type RouteContext = {
-  params: Promise<Record<string, string>>
-}
-
 type TaskRecord = {
   id: string
   userId: string

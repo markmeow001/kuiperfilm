@@ -1,7 +1,6 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { resolveProjectModelCapabilityGenerationOptions } from '@/lib/config-service'
-import { logAIAnalysis } from '@/lib/logging/semantic'
 import { onProjectNameAvailable } from '@/lib/logging/file-writer'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
