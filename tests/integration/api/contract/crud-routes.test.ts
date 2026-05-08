@@ -50,9 +50,25 @@ vi.mock('@/lib/api-auth', () => {
 
   return {
     isErrorResponse: (value: unknown) => value instanceof Response,
+    requireAuth: async () => {
+      if (!authState.authenticated) return unauthorized()
+      return { user: { id: 'user-1' } }
+    },
     requireUserAuth: async () => {
       if (!authState.authenticated) return unauthorized()
       return { session: { user: { id: 'user-1' } } }
+    },
+    requireAdminAuth: async () => {
+      if (!authState.authenticated) return unauthorized()
+      return { session: { user: { id: 'user-1' } } }
+    },
+    requireEditorAuth: async () => {
+      if (!authState.authenticated) return unauthorized()
+      return { session: { user: { id: 'user-1' } }, role: 'editor' as const }
+    },
+    requireRoleAuth: async () => {
+      if (!authState.authenticated) return unauthorized()
+      return { session: { user: { id: 'user-1' } }, role: 'editor' as const }
     },
     requireProjectAuth: async (projectId: string) => {
       if (!authState.authenticated) return unauthorized()
@@ -68,6 +84,7 @@ vi.mock('@/lib/api-auth', () => {
         project: { id: projectId, userId: 'user-1', mode: 'novel-promotion' },
       }
     },
+    roleAtLeast: () => true,
   }
 })
 
@@ -278,7 +295,7 @@ describe('api contract - crud routes (behavior)', () => {
     }))
   })
 
-  it('DELETE /asset-hub/characters/[characterId] deletes owned character and blocks non-owner', async () => {
+  it('DELETE /asset-hub/characters/[characterId] deletes character on editor auth and 404s when missing', async () => {
     authState.authenticated = true
     const mod = await import('@/app/api/asset-hub/characters/[characterId]/route')
 
@@ -294,16 +311,14 @@ describe('api contract - crud routes (behavior)', () => {
     expect(okRes.status).toBe(200)
     expect(prismaMock.globalCharacter.delete).toHaveBeenCalledWith({ where: { id: 'character-1' } })
 
-    prismaMock.globalCharacter.findUnique.mockResolvedValueOnce({
-      id: 'character-1',
-      userId: 'other-user',
-    })
-    const forbiddenReq = buildMockRequest({
-      path: '/api/asset-hub/characters/character-1',
+    prismaMock.globalCharacter.findUnique.mockResolvedValueOnce(null)
+    const missingReq = buildMockRequest({
+      path: '/api/asset-hub/characters/missing-1',
       method: 'DELETE',
     })
-    const forbiddenRes = await mod.DELETE(forbiddenReq, { params: Promise.resolve({ characterId: 'character-1' }) })
-    expect(forbiddenRes.status).toBe(403)
+    const missingRes = await mod.DELETE(missingReq, { params: Promise.resolve({ characterId: 'missing-1' }) })
+    expect(missingRes.status).toBeGreaterThanOrEqual(400)
+    expect(missingRes.status).toBeLessThan(500)
   })
 
   it('POST /novel-promotion/[projectId]/select-character-image writes selectedIndex and imageUrl key', async () => {

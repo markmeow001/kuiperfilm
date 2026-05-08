@@ -76,7 +76,14 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(async () => ({ lipSyncModel: 'fal::lipsync-model' })),
   },
   novelPromotionPanel: {
-    findFirst: vi.fn(async () => ({ id: 'panel-1' })),
+    findFirst: vi.fn(async ({ where }: { where?: { id?: string } } = {}) => {
+      const id = where?.id || 'panel-1'
+      return {
+        id,
+        panelIndex: id === 'panel-ins' ? 2 : 1,
+        storyboardId: 'storyboard-1',
+      }
+    }),
     findMany: vi.fn(async () => []),
     findUnique: vi.fn(async ({ where }: { where?: { id?: string } }) => {
       const id = where?.id || 'panel-1'

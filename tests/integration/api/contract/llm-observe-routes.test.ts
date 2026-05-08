@@ -224,7 +224,7 @@ const ROUTE_CASES: ReadonlyArray<LLMRouteCase> = [
     body: { episodeId: 'episode-1', content: 'Analyze this chapter' },
     params: { projectId: 'project-1' },
     expectedTaskType: TASK_TYPE.ANALYZE_NOVEL,
-    expectedTargetType: 'NovelPromotionProject',
+    expectedTargetType: 'NovelPromotionEpisode',
     expectedProjectId: 'project-1',
   },
   {
