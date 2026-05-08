@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
 
@@ -49,12 +50,12 @@ export function UserMenu() {
   }
   if (!session?.user) {
     return (
-      <a
+      <Link
         href="/zh/auth/signin"
         className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-amber-400 hover:bg-amber-500/20"
       >
         登入
-      </a>
+      </Link>
     )
   }
 
@@ -147,7 +148,7 @@ function MenuItem({
   onClose: () => void
 }) {
   return (
-    <a
+    <Link
       href={href}
       onClick={onClose}
       role="menuitem"
@@ -158,6 +159,6 @@ function MenuItem({
         <div className={`font-serif-cn text-sm ${highlight ? 'text-amber-300' : 'text-stone-200'}`}>{label}</div>
         {hint && <div className="mt-0.5 font-mono text-[10px] tracking-wider text-stone-500">{hint}</div>}
       </div>
-    </a>
+    </Link>
   )
 }

@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment, no-restricted-imports */
 // @ts-nocheck
 // Standalone visual mockup ported from ~/Downloads/kino_mockup.jsx.
 // Rendered at /[locale]/preview to give the user a feel for the
 // proposed Kino-style layout without disturbing the real workspace.
-// Data is hard-coded; no API calls.
+// Data is hard-coded; no API calls. The two file-wide eslint-disables
+// above are intentional: this is a frozen mockup port, not application
+// code, so the icon-system rule and ts-nocheck ban don't apply.
 'use client'
 
 import React, { useState } from "react";

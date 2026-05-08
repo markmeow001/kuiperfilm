@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useTranslations } from 'next-intl'
 import Navbar from '@/components/Navbar'
 
@@ -161,22 +162,22 @@ export default function AdminInvitesPage() {
       <Navbar />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex items-center justify-between gap-4">
-          <a href="../" className="font-mono text-[10px] tracking-wider text-[var(--glass-text-secondary)] hover:text-amber-400">
+          <Link href="../" className="font-mono text-[10px] tracking-wider text-[var(--glass-text-secondary)] hover:text-amber-400">
             ← 後台首頁
-          </a>
+          </Link>
           <div className="flex items-center gap-1 rounded-md border border-[var(--glass-border)] bg-[var(--glass-tone-info-bg)]/30 p-1">
-            <a href="../users" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+            <Link href="../users" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
               使用者
-            </a>
+            </Link>
             <span className="rounded-sm bg-[var(--glass-tone-info-fg)]/15 px-3 py-1.5 font-medium text-xs text-[var(--glass-tone-info-fg)]">
               邀請碼
             </span>
-            <a href="../projects" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+            <Link href="../projects" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
               所有專案
-            </a>
-            <a href="../runs" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+            </Link>
+            <Link href="../runs" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
               失敗任務
-            </a>
+            </Link>
           </div>
         </div>
         <header className="flex items-end justify-between mb-6 gap-4 flex-wrap">
@@ -327,9 +328,9 @@ export default function AdminInvitesPage() {
               <div className="rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 text-xs text-stone-400">
                 ℹ️ 邀請碼建立的新使用者**一律為成員 (member)**。如需升級為管理員,
                 請先讓對方註冊完成,再去
-                <a href="/zh/admin/users" className="ml-1 text-amber-400 hover:underline">
+                <Link href="/zh/admin/users" className="ml-1 text-amber-400 hover:underline">
                   使用者管理
-                </a>
+                </Link>
                 手動升級。
               </div>
 

@@ -141,12 +141,12 @@ function SidebarSignedOutCTA() {
   if (status === 'loading' || session?.user) return null
   return (
     <div className="border-t border-amber-900/15 px-5 py-5">
-      <a
+      <Link
         href="/auth/signin"
         className="block rounded-md border border-amber-500/30 px-3 py-2 text-center font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/10"
       >
         登入帳號
-      </a>
+      </Link>
     </div>
   )
 }
