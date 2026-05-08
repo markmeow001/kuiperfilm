@@ -22,6 +22,12 @@ const prismaMock = vi.hoisted(() => ({
     updateMany: vi.fn(async () => ({ count: 0 })),
     update: vi.fn(async () => ({})),
   },
+  // stitch-mp4 falls back to counting completed VIDEO_MULTI_SHOT tasks
+  // when no panel.videoUrl exists (B-path episodes). Default 0 → the
+  // route correctly returns 400 NO_PANEL_VIDEOS.
+  task: {
+    count: vi.fn(async () => 0),
+  },
   $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prismaMock as unknown)),
 }))
 
