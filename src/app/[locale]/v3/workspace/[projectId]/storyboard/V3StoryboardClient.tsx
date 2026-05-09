@@ -17,7 +17,7 @@
  */
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
@@ -123,10 +123,16 @@ export function V3StoryboardClient({ projectId, locale }: V3StoryboardClientProp
 
   const [descDraft, setDescDraft] = useState('')
   const [dialogueDraft, setDialogueDraft] = useState('')
-  useMemo(() => {
+  // Reset drafts when the user picks a different panel. Intentionally
+  // narrow deps to selected?.id so external updates to description /
+  // srtSegment (e.g., LLM regenerated text landing while the user is
+  // mid-edit) don't clobber the in-progress draft. Reading the latest
+  // value off `selected` inside the effect is correct: the effect only
+  // fires on id change, by which point `selected` has resolved.
+  useEffect(() => {
     setDescDraft(selected?.description ?? '')
     setDialogueDraft(selected?.srtSegment ?? '')
-  }, [selected?.id])
+  }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleRegenImage() {
     if (!selected) return

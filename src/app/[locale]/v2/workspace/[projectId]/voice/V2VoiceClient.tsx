@@ -30,7 +30,10 @@ const EMOTION_FILTERS = ['中性', '歡快', '悲傷', '憤怒', '驚訝', '神�
 
 export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
   const voicesQuery = useGlobalVoices(null)
-  const voices = (voicesQuery.data ?? []) as unknown as VoiceLike[]
+  const voices = useMemo(
+    () => (voicesQuery.data ?? []) as unknown as VoiceLike[],
+    [voicesQuery.data],
+  )
 
   const [genderFilter, setGenderFilter] = useState<string>('全部')
   const [emotionFilter, setEmotionFilter] = useState<string | null>(null)

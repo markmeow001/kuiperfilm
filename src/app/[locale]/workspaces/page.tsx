@@ -13,7 +13,7 @@
  * role server-side) — UI layer only adds visibility/affordance gating.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -547,7 +547,7 @@ function WorkspaceDetailDrawer({
   const [addingUserId, setAddingUserId] = useState<string | null>(null)
   const [addableFilter, setAddableFilter] = useState('')
 
-  async function loadMembers() {
+  const loadMembers = useCallback(async () => {
     setLoadingM(true)
     try {
       const res = await fetch(`/api/workspaces/${workspace.id}/members`)
@@ -557,8 +557,8 @@ function WorkspaceDetailDrawer({
       }
     } catch {}
     setLoadingM(false)
-  }
-  async function loadProjects() {
+  }, [workspace.id])
+  const loadProjects = useCallback(async () => {
     if (!canManage) return
     setLoadingP(true)
     try {
@@ -569,8 +569,8 @@ function WorkspaceDetailDrawer({
       }
     } catch {}
     setLoadingP(false)
-  }
-  async function loadAddable() {
+  }, [workspace.id, canManage])
+  const loadAddable = useCallback(async () => {
     if (!canManage) return
     setLoadingAddable(true)
     try {
@@ -581,7 +581,7 @@ function WorkspaceDetailDrawer({
       }
     } catch {}
     setLoadingAddable(false)
-  }
+  }, [workspace.id, canManage])
 
   useEffect(() => {
     loadMembers()
@@ -589,7 +589,7 @@ function WorkspaceDetailDrawer({
       loadProjects()
       loadAddable()
     }
-  }, [workspace.id])
+  }, [workspace.id, canManage, loadMembers, loadProjects, loadAddable])
 
   async function addMember() {
     if (!addUserName.trim()) return

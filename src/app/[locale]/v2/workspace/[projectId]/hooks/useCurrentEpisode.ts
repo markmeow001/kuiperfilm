@@ -57,7 +57,7 @@ export function useCurrentEpisode(projectId: string) {
   const searchParams = useSearchParams()
 
   const project = projectQuery.data as ProjectShape | undefined
-  const rawEpisodes = project?.novelPromotionData?.episodes ?? []
+  const rawEpisodes = project?.novelPromotionData?.episodes
   const episodes = useMemo(() => sortByEpisodeNumber(rawEpisodes ?? []), [rawEpisodes])
 
   const requestedId = searchParams?.get('episode') ?? null
