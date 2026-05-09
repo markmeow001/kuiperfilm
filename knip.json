@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/app/**/{page,layout,template,loading,error,not-found,route,default,global-error,robots,sitemap,opengraph-image,twitter-image}.{ts,tsx,js,jsx}",
+    "src/middleware.ts",
+    "src/instrumentation.ts",
+    "scripts/**/*.{ts,mjs,js}",
+    "tests/**/*.{test,spec}.{ts,tsx}",
+    "tests/integration/api/contract/*.test.ts",
+    "tests/contracts/*.ts",
+    "src/lib/workers/index.ts",
+    "scripts/watchdog.ts",
+    "scripts/bull-board.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,js,jsx}",
+    "scripts/**/*.{ts,mjs,js}",
+    "tests/**/*.{ts,tsx}"
+  ],
+  "ignore": [
+    "src/generated/prisma/**",
+    "prisma/schema.sqlit.prisma",
+    ".next/**",
+    "deploy/**",
+    "ComfyUI*/**",
+    "openfx_plugin_cache.xml"
+  ],
+  "ignoreDependencies": [
+    "@types/node",
+    "tsx",
+    "concurrently",
+    "cross-env",
+    "rimraf"
+  ]
+}
