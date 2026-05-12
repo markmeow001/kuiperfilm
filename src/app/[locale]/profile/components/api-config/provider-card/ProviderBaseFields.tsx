@@ -1,9 +1,31 @@
 'use client'
 
+import { useState } from 'react'
 import type { ProviderCardProps, ProviderCardTranslator } from './types'
 import type { UseProviderCardStateResult } from './hooks/useProviderCardState'
 import { AppIcon } from '@/components/ui/icons'
 import { ProviderTencentVODFields } from './ProviderTencentVODFields'
+
+type TestConnectionApiProvider = 'openrouter' | 'google' | 'anthropic' | 'openai' | 'custom'
+
+// Map the UI's internal providerKey to the /test-connection endpoint's
+// supported set. Anything not in the explicit list falls back to 'custom'
+// with the user-configured baseUrl.
+function mapToTestProvider(providerKey: string): TestConnectionApiProvider {
+  switch (providerKey) {
+    case 'openrouter': return 'openrouter'
+    case 'google': return 'google'
+    case 'anthropic': return 'anthropic'
+    case 'openai': return 'openai'
+    default: return 'custom'
+  }
+}
+
+type TestStatus =
+  | { kind: 'idle' }
+  | { kind: 'running' }
+  | { kind: 'ok'; latencyMs: number; message: string; model?: string; answer?: string }
+  | { kind: 'fail'; message: string }
 
 interface ProviderBaseFieldsProps {
   provider: ProviderCardProps['provider']
@@ -13,6 +35,42 @@ interface ProviderBaseFieldsProps {
 }
 
 export function ProviderBaseFields({ provider, t, state, onUpdateApiKey }: ProviderBaseFieldsProps) {
+  const [testStatus, setTestStatus] = useState<TestStatus>({ kind: 'idle' })
+
+  async function handleTestConnection() {
+    if (!provider.apiKey || !provider.hasApiKey) return
+    setTestStatus({ kind: 'running' })
+    try {
+      const res = await fetch('/api/user/api-config/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: mapToTestProvider(state.providerKey),
+          apiKey: provider.apiKey,
+          baseUrl: provider.baseUrl || undefined,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = json?.error?.details?.message
+          || json?.error?.message
+          || json?.error?.code
+          || `HTTP ${res.status}`
+        setTestStatus({ kind: 'fail', message: String(msg) })
+        return
+      }
+      setTestStatus({
+        kind: 'ok',
+        latencyMs: Number(json.latencyMs) || 0,
+        message: String(json.message || '连接成功'),
+        model: json.model,
+        answer: json.answer,
+      })
+    } catch (err) {
+      setTestStatus({ kind: 'fail', message: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
   // 騰訊雲 VOD AIGC 需要多欄位憑證（SecretId/SecretKey/SubAppId/Region），改用專用 UI
   if (state.providerKey === 'tencent-vod' || state.providerKey === 'tencent' || state.providerKey === 'vod') {
     return <ProviderTencentVODFields provider={provider} t={t} onUpdateApiKey={onUpdateApiKey} />
@@ -91,6 +149,18 @@ export function ProviderBaseFields({ provider, t, state, onUpdateApiKey }: Provi
                     >
                       <AppIcon name="edit" className="h-4 w-4" />
                     </button>
+                    <button
+                      onClick={handleTestConnection}
+                      disabled={testStatus.kind === 'running'}
+                      className="glass-icon-btn-sm"
+                      title="测试连线"
+                    >
+                      {testStatus.kind === 'running' ? (
+                        <AppIcon name="loader" className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <AppIcon name="bolt" className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                 </>
               ) : (
@@ -105,6 +175,24 @@ export function ProviderBaseFields({ provider, t, state, onUpdateApiKey }: Provi
             </div>
           )}
         </div>
+        {(testStatus.kind === 'ok' || testStatus.kind === 'fail') && (
+          <div
+            className={`mt-1.5 flex items-start gap-1.5 px-1 font-mono text-[11px] ${
+              testStatus.kind === 'ok' ? 'text-emerald-500' : 'text-red-500'
+            }`}
+          >
+            <span className="shrink-0 leading-relaxed">
+              {testStatus.kind === 'ok' ? '✓' : '✗'}
+            </span>
+            <span className="min-w-0 break-words leading-relaxed">
+              {testStatus.kind === 'ok'
+                ? `${testStatus.message} · ${testStatus.latencyMs}ms${
+                    testStatus.model ? ` · ${testStatus.model}` : ''
+                  }${testStatus.answer ? ` · 回复"${testStatus.answer}"` : ''}`
+                : testStatus.message}
+            </span>
+          </div>
+        )}
       </div>
 
       {state.showBaseUrlEdit && (
