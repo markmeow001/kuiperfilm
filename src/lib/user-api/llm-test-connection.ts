@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { ApiError } from '@/lib/api-errors'
+import { hunyuanChatCompletion, parseHunyuanCredentials } from '@/lib/llm/hunyuan-client'
 
 type SupportedProvider =
   | 'openrouter'
@@ -7,6 +8,8 @@ type SupportedProvider =
   | 'anthropic'
   | 'openai'
   | 'custom'
+  | 'tencent-hunyuan'
+  | 'tencent-vod'
 
 type TestConnectionPayload = {
   provider?: string
@@ -36,6 +39,14 @@ function normalizeProvider(payload: TestConnectionPayload): SupportedProvider {
     case 'anthropic':
     case 'openai':
     case 'custom':
+    case 'tencent-hunyuan':
+    case 'tencent-vod':
+    case 'vod':
+    case 'tencent':
+      // VOD / Hunyuan share the same Tencent credential format; normalise
+      // the legacy 'vod' / 'tencent' keys onto 'tencent-vod' so the rest
+      // of the switch only deals with two canonical names.
+      if (provider === 'vod' || provider === 'tencent') return 'tencent-vod'
       return provider
     default:
       throw new ApiError('INVALID_PARAMS', { message: `不支持的渠道: ${provider}` })
@@ -141,5 +152,70 @@ export async function testLlmConnection(payload: TestConnectionPayload): Promise
       })
       return { provider, message: 'custom 连接成功', ...tested }
     }
+    case 'tencent-hunyuan': {
+      const tested = await testTencentHunyuan(apiKey, requestedModel)
+      return { provider, message: 'Tencent Hunyuan 连接成功', ...tested }
+    }
+    case 'tencent-vod': {
+      const tested = await testTencentVOD(apiKey)
+      return { provider, message: 'Tencent VOD 凭证有效', ...tested }
+    }
   }
+}
+
+async function testTencentHunyuan(
+  apiKey: string,
+  requestedModel: string,
+): Promise<Pick<LlmConnectionTestResult, 'model' | 'answer'>> {
+  // Hunyuan apiKey is a JSON-stringified { secretId, secretKey, region }
+  // — parseHunyuanCredentials enforces the shape; throws on bad format.
+  parseHunyuanCredentials(apiKey)
+  const model = requestedModel || 'hunyuan-turbos-latest'
+  const resp = await hunyuanChatCompletion({
+    apiKey,
+    modelId: model,
+    messages: [{ role: 'user', content: '1+1等于几？只回答数字' }],
+    options: { temperature: 0 },
+  })
+  const answer = resp.choices[0]?.message?.content?.trim() || ''
+  return { model: resp.model || model, answer }
+}
+
+async function testTencentVOD(apiKey: string): Promise<Pick<LlmConnectionTestResult, 'model'>> {
+  // VOD shares the Hunyuan credential format (SecretId/SecretKey + region).
+  // To validate without actually creating an AIGC video task, we call
+  // cam.GetUserAppId — a free identity-verification endpoint that any
+  // Tencent SecretId/SecretKey can hit. 401/403 here = bad creds.
+  const creds = parseHunyuanCredentials(apiKey)
+  const mod = (await import('tencentcloud-sdk-nodejs-common')) as {
+    CommonClient?: new (
+      endpoint: string,
+      version: string,
+      options: {
+        credential: { secretId: string; secretKey: string }
+        region?: string
+        profile?: { httpProfile?: { endpoint?: string } }
+      },
+    ) => { request: (action: string, params: Record<string, unknown>) => Promise<unknown> }
+    default?: { CommonClient?: unknown }
+  }
+  const CommonClient = mod.CommonClient
+    ?? (mod.default as { CommonClient?: typeof mod.CommonClient } | undefined)?.CommonClient
+  if (!CommonClient) {
+    throw new Error('TENCENT_SDK_MISSING: tencentcloud-sdk-nodejs-common.CommonClient not found')
+  }
+  const client = new CommonClient('cam.tencentcloudapi.com', '2019-01-16', {
+    credential: { secretId: creds.secretId, secretKey: creds.secretKey },
+    region: creds.region,
+    profile: { httpProfile: { endpoint: 'cam.tencentcloudapi.com' } },
+  })
+  const raw = await client.request('GetUserAppId', {}) as {
+    Response?: { AppId?: number; OwnerUin?: string; Error?: { Code?: string; Message?: string } }
+  }
+  const err = raw?.Response?.Error
+  if (err?.Code) {
+    throw new Error(`TENCENT_API_ERROR: ${err.Code} — ${err.Message ?? ''}`.trim())
+  }
+  const appId = raw?.Response?.AppId
+  return { model: appId ? `AppId ${appId}` : undefined }
 }

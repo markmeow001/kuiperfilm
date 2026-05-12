@@ -15,6 +15,12 @@ interface ProviderTencentVODFieldsProps {
     requireSubAppId?: boolean
 }
 
+type TestStatus =
+    | { kind: 'idle' }
+    | { kind: 'running' }
+    | { kind: 'ok'; latencyMs: number; message: string; model?: string; answer?: string }
+    | { kind: 'fail'; message: string }
+
 interface TencentVODCreds {
     secretId: string
     secretKey: string
@@ -49,9 +55,47 @@ function parseExistingCreds(apiKey?: string): TencentVODCreds {
 export function ProviderTencentVODFields({ provider, t, onUpdateApiKey, requireSubAppId = true }: ProviderTencentVODFieldsProps) {
     const [isEditing, setIsEditing] = useState(false)
     const [showSecretKey, setShowSecretKey] = useState(false)
+    const [testStatus, setTestStatus] = useState<TestStatus>({ kind: 'idle' })
 
     const initial = useMemo(() => parseExistingCreds(provider.apiKey), [provider.apiKey])
     const [form, setForm] = useState<TencentVODCreds>(initial)
+
+    // Hunyuan tests via ChatCompletions (real LLM call); VOD tests via
+    // CAM GetUserAppId (free identity verify) — the same SecretId/Key
+    // works for both since Tencent shares them across services.
+    async function handleTestConnection() {
+        if (!provider.apiKey || !provider.hasApiKey) return
+        const testProvider = requireSubAppId ? 'tencent-vod' : 'tencent-hunyuan'
+        setTestStatus({ kind: 'running' })
+        try {
+            const res = await fetch('/api/user/api-config/test-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    provider: testProvider,
+                    apiKey: provider.apiKey,
+                }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                const msg = json?.error?.details?.message
+                    || json?.error?.message
+                    || json?.error?.code
+                    || `HTTP ${res.status}`
+                setTestStatus({ kind: 'fail', message: String(msg) })
+                return
+            }
+            setTestStatus({
+                kind: 'ok',
+                latencyMs: Number(json.latencyMs) || 0,
+                message: String(json.message || '连接成功'),
+                model: json.model,
+                answer: json.answer,
+            })
+        } catch (err) {
+            setTestStatus({ kind: 'fail', message: err instanceof Error ? err.message : String(err) })
+        }
+    }
 
     const handleStart = () => {
         setForm(parseExistingCreds(provider.apiKey))
@@ -109,13 +153,27 @@ export function ProviderTencentVODFields({ provider, t, onUpdateApiKey, requireS
                                 <span className="font-semibold text-[var(--glass-text-primary)]">SecretId</span>
                                 <span className="ml-2 font-mono">{summary.secretId}</span>
                             </div>
-                            <button
-                                onClick={handleStart}
-                                className="glass-icon-btn-sm"
-                                title={t('configure')}
-                            >
-                                <AppIcon name="edit" className="h-4 w-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={handleStart}
+                                    className="glass-icon-btn-sm"
+                                    title={t('configure')}
+                                >
+                                    <AppIcon name="edit" className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={handleTestConnection}
+                                    disabled={testStatus.kind === 'running'}
+                                    className="glass-icon-btn-sm"
+                                    title="测试连线"
+                                >
+                                    {testStatus.kind === 'running' ? (
+                                        <AppIcon name="loader" className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <AppIcon name="bolt" className="h-4 w-4" />
+                                    )}
+                                </button>
+                            </div>
                         </div>
                         {requireSubAppId ? (
                             <div>
@@ -127,6 +185,24 @@ export function ProviderTencentVODFields({ provider, t, onUpdateApiKey, requireS
                             <span className="font-semibold text-[var(--glass-text-primary)]">Region</span>
                             <span className="ml-2 font-mono">{summary.region}</span>
                         </div>
+                        {(testStatus.kind === 'ok' || testStatus.kind === 'fail') && (
+                            <div
+                                className={`flex items-start gap-1.5 pt-1 font-mono text-[11px] ${
+                                    testStatus.kind === 'ok' ? 'text-emerald-500' : 'text-red-500'
+                                }`}
+                            >
+                                <span className="shrink-0 leading-relaxed">
+                                    {testStatus.kind === 'ok' ? '✓' : '✗'}
+                                </span>
+                                <span className="min-w-0 break-words leading-relaxed">
+                                    {testStatus.kind === 'ok'
+                                        ? `${testStatus.message} · ${testStatus.latencyMs}ms${
+                                            testStatus.model ? ` · ${testStatus.model}` : ''
+                                        }${testStatus.answer ? ` · 回复"${testStatus.answer}"` : ''}`
+                                        : testStatus.message}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 )}
 
