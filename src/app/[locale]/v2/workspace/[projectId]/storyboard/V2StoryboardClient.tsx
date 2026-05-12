@@ -200,6 +200,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
   const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
+  // 2026-05-13 — Selected Shot 圖/視頻顯示切換。
+  // 以前 render 只看 videoUrl 有無 → 一旦 panel 跑過 B 路徑就只能看視頻、
+  // 看不回原圖（user 報「無法切回去圖」）。改成 per-panel override：
+  // - 沒紀錄 → auto（有 video 顯示 video，否則顯示 image，等同舊行為）
+  // - user 點 toggle → 紀錄 'image' / 'video'，下次選回同個 panel 還記得
+  type MediaDisplayMode = 'image' | 'video'
+  const [mediaDisplayOverride, setMediaDisplayOverride] = useState<Record<string, MediaDisplayMode>>({})
   // Lightbox: when set, render a full-screen overlay of this URL. Lets
   // the timeline-view Selected Shot stay tile-sized (matching the
   // multi-shot 9:16 player on the right) while preserving zoom-in for
@@ -367,6 +374,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   const selected = allPanels.find((p) => p.id === selectedId) ?? null
   const selectedIndex = allPanels.findIndex((p) => p.id === selectedId)
+
+  // Compute which media to render in the Selected Shot preview.
+  // Priority: explicit override (if the chosen asset exists) → auto
+  // (video if available else image) → null when nothing is generated.
+  // The toggle UI below only renders when BOTH assets exist, so the
+  // explicit-override branch is only reachable in that case.
+  const selectedMediaDisplayMode: MediaDisplayMode | null = (() => {
+    if (!selected) return null
+    const override = selected.id ? mediaDisplayOverride[selected.id] : undefined
+    if (override === 'image' && selected.imageUrl) return 'image'
+    if (override === 'video' && selected.videoUrl) return 'video'
+    if (selected.videoUrl) return 'video'
+    if (selected.imageUrl) return 'image'
+    return null
+  })()
 
   // 2026-05-02 — clear regen mutation state when the user picks a
   // different panel. Without this, regenPanel.isSuccess stays true
@@ -1990,6 +2012,43 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   })()}
             </button>
           </div>
+          {/* 2026-05-13 — 圖/視頻顯示切換。只有當 panel 同時有 imageUrl
+              + videoUrl 才顯示，讓 user 在「看原圖」與「看 B 路徑視頻」
+              之間隨時切換。沒有兩個資產就沒得切。 */}
+          {selected?.imageUrl && selected?.videoUrl ? (
+            <div className="mb-3 inline-flex rounded-sm border border-stone-800/60 bg-stone-900/40 font-mono text-[12px]">
+              <button
+                type="button"
+                onClick={() =>
+                  setMediaDisplayOverride((prev) => ({ ...prev, [selected.id]: 'image' }))
+                }
+                className={`flex items-center gap-1.5 px-3 py-1.5 transition-all ${
+                  selectedMediaDisplayMode === 'image'
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'text-stone-500 hover:text-stone-300'
+                }`}
+                title="顯示原圖"
+              >
+                <AppIcon name="image" className="h-3 w-3" />
+                圖
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setMediaDisplayOverride((prev) => ({ ...prev, [selected.id]: 'video' }))
+                }
+                className={`flex items-center gap-1.5 border-l border-stone-800/60 px-3 py-1.5 transition-all ${
+                  selectedMediaDisplayMode === 'video'
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'text-stone-500 hover:text-stone-300'
+                }`}
+                title="顯示生成視頻"
+              >
+                <span aria-hidden>▶</span>
+                視頻
+              </button>
+            </div>
+          ) : null}
           {multiShotState.status === 'done' ? (
             <div className="mb-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
               ✓ 已送出 {multiShotState.sent} 個 multi-shot 任務
@@ -2020,11 +2079,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               className="relative bg-gradient-to-br from-stone-800 to-stone-900"
               style={{ aspectRatio: projectVideoRatio.replace(':', '/') }}
             >
-              {selected?.videoUrl ? (
-                // Video player when videoUrl is present. Use the still
-                // imageUrl as poster so first paint is the same frame
-                // the user is used to seeing while idle, then switch to
-                // playing video on user click.
+              {selectedMediaDisplayMode === 'video' && selected?.videoUrl ? (
+                // Video player. Use the still imageUrl as poster so first
+                // paint is the same frame the user is used to seeing while
+                // idle, then switch to playing video on user click. The
+                // image/video toggle above lets the user explicitly switch
+                // back to viewing the still image even after a video exists.
                 <video
                   key={selected.id + ':' + selected.videoUrl}
                   src={selected.videoUrl}
@@ -2033,7 +2093,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   preload="metadata"
                   className="h-full w-full object-cover"
                 />
-              ) : selected?.imageUrl ? (
+              ) : selectedMediaDisplayMode === 'image' && selected?.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={selected.imageUrl}
