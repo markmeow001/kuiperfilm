@@ -82,6 +82,50 @@ function splitModel(model: string): { name: string; version: string } {
     return { name, version: model.slice(idx + 1) }
 }
 
+/**
+ * Per-model reference image cap, sourced from Tencent VOD docs (last
+ * verified 2026-05-13 against https://cloud.tencent.com/document/product/266/126240).
+ *
+ * Previous implementation hard-capped every model at 3 (a leftover from
+ * the GG-2.5 era), silently dropping ref images for models with much
+ * higher headroom — e.g. Kling-2.1 supports 4, GG-3.0/3.1 and SI-* support
+ * 14, Kling-3.0-Omni supports 10. Dropping refs hurts identity / scene /
+ * prop binding precision (the whole reason a caller passes multiple refs).
+ *
+ * Keys are `<modelName>-<modelVersion>` AFTER alias resolution
+ * (e.g. "GG-3.1", "Kling-2.1"). Unknown models fall back to a conservative
+ * cap of 3 so we never accidentally over-send and trigger a Tencent reject.
+ */
+const TENCENT_VOD_REF_CAP_BY_MODEL: Record<string, number> = {
+    // GG (Google nano-banana series; aliased from GEM)
+    'GG-2.5': 3,
+    'GG-3.0': 14,
+    'GG-3.1': 14,
+    // Kling
+    'Kling-2.1': 4,
+    'Kling-3.0': 1,
+    'Kling-3.0-Omni': 10,
+    'Kling-O1': 10,
+    // SI (Seedream)
+    'SI-4.0': 14,
+    'SI-4.5': 14,
+    'SI-5.0-lite': 14,
+    // Hunyuan
+    'Hunyuan-3.0': 3,
+    // Vidu
+    'Vidu-q2': 7,
+    // Qwen
+    'Qwen-0925': 1,
+}
+
+const TENCENT_VOD_REF_CAP_DEFAULT = 3
+
+function maxReferenceImagesForModel(modelName: string, modelVersion: string): number {
+    const key = `${modelName}-${modelVersion}`
+    const cap = TENCENT_VOD_REF_CAP_BY_MODEL[key]
+    return typeof cap === 'number' ? cap : TENCENT_VOD_REF_CAP_DEFAULT
+}
+
 interface TencentVODImageOptions {
     modelId?: string
     aspectRatio?: string
@@ -124,7 +168,7 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
             profile: { httpProfile: { endpoint: 'vod.tencentcloudapi.com' } },
         })
 
-        // FileInfos: 參考圖（最多 3 張：GEM 系列限制）。
+        // FileInfos: 參考圖。每模型上限不同，見 TENCENT_VOD_REF_CAP_BY_MODEL。
         //
         // iangyc 2026-05-12 debug trail:
         // 1. Tried mirroring the video-side shape (Category + Usage +
@@ -139,10 +183,27 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
         //    context only. For strong identity preservation, callers
         //    should switch storyboardModel to Kling-2.1 (or another
         //    image model with identity-aware capabilities).
+        // 3. 2026-05-13: per-model cap unlocked (was hard-coded 3 for
+        //    all models — that was correct only for GG-2.5 / Hunyuan-3.0).
+        //    Kling-2.1 = 4, GG-3.x / SI-* = 14, Kling-3.0-Omni = 10, etc.
+        const refCap = maxReferenceImagesForModel(modelName, modelVersion)
         const fileInfos: Record<string, unknown>[] = []
-        for (const ref of referenceImages.slice(0, 3)) {
+        const droppedAtCap = Math.max(0, referenceImages.length - refCap)
+        for (const ref of referenceImages.slice(0, refCap)) {
             if (!ref || ref.startsWith('data:')) continue // 不支援 base64，需要 URL
             fileInfos.push({ Type: 'Url', Url: ref })
+        }
+        if (droppedAtCap > 0) {
+            logger.warn({
+                message: 'tencent-vod-image: reference images exceeded per-model cap, extras dropped',
+                details: {
+                    modelName,
+                    modelVersion,
+                    cap: refCap,
+                    received: referenceImages.length,
+                    dropped: droppedAtCap,
+                },
+            })
         }
 
         const outputConfig: Record<string, unknown> = {
