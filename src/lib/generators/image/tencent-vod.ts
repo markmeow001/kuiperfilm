@@ -126,24 +126,21 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
 
         // FileInfos: 參考圖（最多 3 張：GEM 系列限制）。
         //
-        // iangyc 2026-05-12 debug:Tencent VOD AIGC image task needs the
-        // explicit `Usage: 'Reference'` tag for the multi-image identity
-        // anchoring to fire. Without it the refs are accepted (refCount
-        // climbs as expected on the submit log) but the model treats
-        // them as silent context and falls back to text-only generation.
-        // The video generator already sets this — image generator was
-        // missing it. Symptom was 王玄 generated as a modern white-suit
-        // man even though the 古裝劍仙 ref image reached Tencent.
-        //
-        // Mirror the video-side shape (Category + ObjectId) so the API
-        // surface stays consistent if Tencent adds more identity slots
-        // later (the placeholder `<<<image_N>>>` pattern Kling uses).
+        // iangyc 2026-05-12 debug:
+        // - Initial fix tried to mirror the video-side shape
+        //   ({Type, Category:'Image', Url, Usage:'Reference', ObjectId}),
+        //   but the AIGC IMAGE endpoint rejected `Category` as an
+        //   unknown parameter. The video and image task params share
+        //   the FileInfos name but NOT the field set.
+        // - Drop `Category` for image. Keep `Usage:'Reference'` —
+        //   that's what flags these as identity anchors (vs. style refs)
+        //   for nano-banana / GG family models. `ObjectId` stays for
+        //   per-slot ordering when prompts use placeholders.
         const fileInfos: Record<string, unknown>[] = []
         referenceImages.slice(0, 3).forEach((ref, idx) => {
             if (!ref || ref.startsWith('data:')) return // 不支援 base64，需要 URL
             fileInfos.push({
                 Type: 'Url',
-                Category: 'Image',
                 Url: ref,
                 Usage: 'Reference',
                 ObjectId: `ref_${idx + 1}`,
