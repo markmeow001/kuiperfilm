@@ -160,7 +160,11 @@ export async function handlePanelVariantTask(job: Job<TaskJobData>) {
     characterAssets: characterAssetsDesc,
     locationAsset: locationName ? `场景：${locationName}` : '无场景参考',
     aspectRatio,
-    style: '与参考图风格一致',
+    // 2026-05-13 style-conflict fix: styleProfile.positivePrompt prepend at the
+    // chokepoint is the single style authority. Old '与参考图风格一致' literal
+    // contradicted that and let identity-aware models (Kling-2.1) drag style
+    // from the ref image. Empty string lets the prepend dominate.
+    style: '',
   })
 
   _ulogInfo('[panel-variant] resolved variant prompt', prompt)

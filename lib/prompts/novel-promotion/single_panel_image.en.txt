@@ -3,10 +3,11 @@
 Aspect ratio: {aspect_ratio}. Generate one complete cinematic shot with characters performing in a real scene. No white backgrounds, character sheets, headshots, or collage. ABSOLUTELY NO text, subtitles, captions, dialogue, letters, words, watermarks, or any written content anywhere in the image. The image must be completely free of any text elements.
 
 Reference image usage (important):
-- The first reference image is the character's locked look — faithfully reproduce the face, hairstyle, hair colour, facial hair, garment style and cut, accessories, and overall stylistic era. These are part of the character's identity and must not drift.
-- Subsequent reference images (if any) are scene references — use them for background and spatial layout.
-- The text description specifies this shot's action, expression, camera angle, and emotional beat. Do NOT use the text to override the look already established by the reference images.
-- Deviation from the reference look is only allowed when the shot's text description explicitly contains a wardrobe change, hairstyle change, or era jump.
+- The first reference image is the character identity anchor — faithfully reproduce the facial features, hairstyle, hair colour, facial hair, garment style and cut, and accessories. These are the character's identity and must not drift.
+- CRITICAL: the reference image's own drawing/rendering style (photorealistic / anime / CG) is used ONLY to identify the character. **The overall rendering style of the output image MUST follow the style description at the very top of this prompt** — never inherit the drawing style from the reference image. Example: if the reference is anime but the top style requires photorealistic, the output must be a photorealistic photo whose face and outfit match the reference.
+- Subsequent reference images (if any) are scene references — use them for background and spatial layout; their drawing style likewise does not affect the final output style.
+- The text description specifies this shot's action, expression, camera angle, and emotional beat. Do NOT use the text to override the character identity established by the reference images.
+- Deviation from the established character look is only allowed when the shot's text description explicitly contains a wardrobe change, hairstyle change, or era jump.
 
 {storyboard_text_json_input}
 

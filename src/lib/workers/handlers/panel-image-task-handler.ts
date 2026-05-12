@@ -257,13 +257,18 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
     },
     projectData,
   })
-  // Q-006: artStyle is deactivated. styleProfile.positivePrompt is prepended at
-  // the chokepoint, so we pass a neutral fallback for the {style} template var
-  // (kept for prompt template compatibility; not a runtime style source).
+  // Q-006 / 2026-05-13 style-conflict fix: styleProfile.positivePrompt is the
+  // single style authority — it gets prepended at the chokepoint. The {style}
+  // template var used to be '与参考图风格一致', which directly contradicted the
+  // styleProfile prepend (preset says "photorealistic" → {style} says "match
+  // reference image style") and let identity-aware models like Kling-2.1 pull
+  // the output toward the reference image's drawing style (anime leak when
+  // refs were anime-flavored). Set to empty string so the only style signal
+  // is the styleProfile prepend at the very top of the final prompt.
   let prompt = buildPanelPrompt({
     locale: job.data.locale,
     aspectRatio,
-    styleText: '与参考图风格一致',
+    styleText: '',
     sourceText: panel.srtSegment || panel.description || '',
     sceneText,
   })
