@@ -1,6 +1,5 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { getProviderConfig } from '@/lib/api-config'
 import { executeAiVisionStep } from '@/lib/ai-runtime'
 import { getUserModelConfig } from '@/lib/config-service'
 import {
@@ -164,27 +163,24 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
 
   const useReferenceImages = !customDescription
 
-  // 尝试获取 FAL API key，如果没有则直接使用参考图
-  let falApiKey: string | undefined
-  try {
-    const falConfig = await getProviderConfig(job.data.userId, 'fal')
-    falApiKey = falConfig.apiKey
-  } catch {
-    // FAL 未配置，跳过三视图生成，直接使用参考图
-  }
-
+  // 2026-05-13 — FAL gate removed. The original gate (try get fal config →
+  // skip multi-view if missing) was a leftover from when this handler
+  // called fal.ai directly. The current implementation routes through
+  // generateLabeledImageToCos → resolveImageSourceFromGeneration →
+  // generateImage with the user's configured `characterModel` (Tencent
+  // VOD GEM/Kling, KieAI, etc.) — fal isn't actually invoked at any
+  // step. The boolean check just blocked legitimate usage from anyone
+  // not on a fal plan, including the user reported 2026-05-13 who has
+  // no fal key but uses Kling 2.1 for character images.
+  //
+  // Net behavior change: clicking "上傳並轉多視角(3 張)" in the V2
+  // character edit modal now actually runs the 3-image-gen pipeline
+  // for everyone with a configured characterModel, instead of silently
+  // falling back to "store the original ref as the only result".
   let successfulCosKeys: string[]
   let description: string | null = null
 
-  if (!falApiKey && allReferenceImages.length > 0) {
-    // 无 FAL key：直接使用上传的参考图作为角色图
-    await reportTaskProgress(job, 35, {
-      stage: 'reference_to_character_generate',
-      stageLabel: '使用上传图片',
-      displayMode: 'detail',
-    })
-    successfulCosKeys = allReferenceImages
-  } else {
+  {
     const keyPrefix = isAssetHub ? 'ref-char' : `proj-ref-char-${job.data.projectId}`
 
     await reportTaskProgress(job, 35, {
@@ -208,6 +204,18 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
     ))
 
     successfulCosKeys = imageResults.filter((item): item is string => Boolean(item))
+
+    // Safety net: if every gen failed (rate limit / model misconfig / etc.),
+    // fall back to the original reference so the appearance row isn't
+    // wiped to empty. Beats showing the user a broken character with no
+    // image, and they can click 重新生成 to retry.
+    if (successfulCosKeys.length === 0 && allReferenceImages.length > 0) {
+      logError('[reference-to-character] all 3 multi-view gens failed, falling back to original ref', null, {
+        keyPrefix,
+        refCount: allReferenceImages.length,
+      })
+      successfulCosKeys = allReferenceImages
+    }
   }
 
   if (analysisModel) {
