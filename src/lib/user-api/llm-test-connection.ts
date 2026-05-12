@@ -210,12 +210,23 @@ async function testTencentVOD(apiKey: string): Promise<Pick<LlmConnectionTestRes
     profile: { httpProfile: { endpoint: 'cam.tencentcloudapi.com' } },
   })
   const raw = await client.request('GetUserAppId', {}) as {
-    Response?: { AppId?: number; OwnerUin?: string; Error?: { Code?: string; Message?: string } }
+    Response?: Record<string, unknown> & { Error?: { Code?: string; Message?: string } }
   }
-  const err = raw?.Response?.Error
+  const resp = raw?.Response
+  const err = resp?.Error
   if (err?.Code) {
     throw new Error(`TENCENT_API_ERROR: ${err.Code} — ${err.Message ?? ''}`.trim())
   }
-  const appId = raw?.Response?.AppId
-  return { model: appId ? `AppId ${appId}` : undefined }
+  // CAM's CommonClient response casing has varied across SDK versions —
+  // sometimes AppId, sometimes appId. Walk both casings; also fall back
+  // to OwnerUin so the user gets something concrete back even if Tencent
+  // ships a different shape next time.
+  const appId = (resp?.AppId ?? resp?.appId ?? resp?.Appid) as number | string | undefined
+  const ownerUin = (resp?.OwnerUin ?? resp?.ownerUin) as string | undefined
+  const label = appId !== undefined
+    ? `AppId ${appId}`
+    : ownerUin !== undefined
+      ? `Uin ${ownerUin}`
+      : undefined
+  return { model: label }
 }

@@ -51,7 +51,10 @@ export interface MultiShotParams {
     }
 }
 
-function resolveKlingModel(modelId?: string): string {
+function resolveKlingModel(_modelId?: string): string {
+    // KieAI's Kling endpoint accepts only 'kling-3.0/video' on this
+    // generator. _modelId is kept in the signature for symmetry with
+    // resolveKlingMode and any future per-model routing.
     return 'kling-3.0/video'
 }
 

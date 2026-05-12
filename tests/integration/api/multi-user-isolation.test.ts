@@ -16,7 +16,7 @@
  * future regression that drops the chain breaks the test.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildMockRequest, callRoute } from '../../helpers/request'
+import { callRoute } from '../../helpers/request'
 import {
   installAuthMocks,
   mockAuthenticated,

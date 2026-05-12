@@ -28,7 +28,6 @@ import {
 } from '@/lib/query/hooks/useStoryboards'
 import { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import { useCurrentEpisode } from '../../../../v2/workspace/[projectId]/hooks/useCurrentEpisode'
-import { queryKeys } from '@/lib/query/keys'
 
 interface PanelLike {
   id: string

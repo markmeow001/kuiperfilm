@@ -252,7 +252,7 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
   const parsedUpdated = Array.isArray(charactersData.updated_characters)
     ? (charactersData.updated_characters as Array<Record<string, unknown>>)
     : []
-  const updateResult = await processUpdatedCharacters({
+  await processUpdatedCharacters({
     job,
     parsedUpdated,
     existingCharacters: novelData.characters || [],

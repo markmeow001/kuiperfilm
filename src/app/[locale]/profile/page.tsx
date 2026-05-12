@@ -169,7 +169,7 @@ export default function ProfilePage() {
   const t = useTranslations('profile')
   const tc = useTranslations('common')
   const tb = useTranslations('billing')
-  const [balance, setBalance] = useState<BalanceInfo | null>(null)
+  const [, setBalance] = useState<BalanceInfo | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [transactionPagination, setTransactionPagination] = useState<TransactionPagination | null>(null)
   const [projects, setProjects] = useState<ProjectCost[]>([])

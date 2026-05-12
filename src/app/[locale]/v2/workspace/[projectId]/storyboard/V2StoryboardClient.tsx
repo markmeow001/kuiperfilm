@@ -65,10 +65,6 @@ interface StoryboardLike {
   panels?: PanelLike[]
 }
 
-interface ProjectLike {
-  novelPromotionData?: { episodes?: Array<{ id: string }> | null } | null
-}
-
 interface ProjectLikeFull {
   novelPromotionData?: {
     videoModel?: string | null

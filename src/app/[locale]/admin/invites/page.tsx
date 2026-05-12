@@ -61,7 +61,10 @@ export default function AdminInvitesPage() {
   const [creating, setCreating] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  const [formRole, setFormRole] = useState<Role>('member')
+  // formRole intentionally never read: invites are hard-coded to send
+  // 'member', but we keep the setter wired so a future role-on-invite
+  // flow doesn't have to re-introduce the state. See line ~327 comment.
+  const [, setFormRole] = useState<Role>('member')
   const [formExpiresHours, setFormExpiresHours] = useState<number | ''>(168)
   const [formNote, setFormNote] = useState('')
 

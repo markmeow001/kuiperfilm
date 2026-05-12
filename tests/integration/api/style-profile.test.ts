@@ -61,7 +61,6 @@ describe('api PATCH /api/projects/[projectId]/style-profile', () => {
   // 合法 UUID v4 fixture（route Zod schema 强制 UUID 格式 8-4-4-4-12）
   const VALID_MEDIA_ID_OWN = '11111111-1111-4111-8111-111111111111'
   const VALID_MEDIA_ID_OTHER = '22222222-2222-4222-8222-222222222222'
-  const VALID_MEDIA_ID_OWN_2 = '33333333-3333-4333-8333-333333333333'
 
   it('valid 三栏 -> 200 + DB 三栏被更新', async () => {
     installAuthMocks()

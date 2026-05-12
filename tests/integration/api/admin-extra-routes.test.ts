@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Decimal } from '@prisma/client/runtime/library'
-import { buildMockRequest, callRoute } from '../../helpers/request'
+import { callRoute } from '../../helpers/request'
 import {
   installAuthMocks,
   mockAuthenticated,

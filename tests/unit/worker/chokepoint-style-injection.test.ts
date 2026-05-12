@@ -33,11 +33,6 @@ const generatorApiMock = vi.hoisted(() => ({
   generateVideo: vi.fn(async () => ({ success: true, videoUrl: 'https://provider.example/v.mp4' })),
 }))
 
-const billingMock = vi.hoisted(() => ({
-  getTaskExistingExternalId: vi.fn(async () => null),
-  withTaskBilling: vi.fn(async (_taskId: string, fn: () => Promise<unknown>) => await fn()),
-}))
-
 const capsMock = vi.hoisted(() => ({
   resolveProjectModelCapabilityGenerationOptions: vi.fn(async () => ({})),
 }))

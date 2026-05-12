@@ -1490,7 +1490,10 @@ export async function runMultiShotBPath(params: {
   let intelligencePromptSource: 'panels' | 'raw' | 'seedance' = 'panels'
 
   if (multiShotMode === 'customize') {
-    const { durations, totalDuration } = distributeShotDurations(validPanels.length, effectivePanelDurations)
+    // totalDuration from distributeShotDurations is recomputed below as
+    // finalTotal after buildBPathCustomizePrompts may drop empty shots —
+    // discard the initial value to avoid a misleading dead binding.
+    const { durations } = distributeShotDurations(validPanels.length, effectivePanelDurations)
     const multiPrompt = buildBPathCustomizePrompts(validPanels, dialogueByPanel, durations, nameToImageIndex, unboundNames)
     if (multiPrompt.length === 0) {
       throw new Error('MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description')
