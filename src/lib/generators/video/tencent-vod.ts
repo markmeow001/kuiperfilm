@@ -291,7 +291,14 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
         }
 
         if (opts.lastFrameUrl) req.LastFrameUrl = opts.lastFrameUrl
-        if (opts.enhancePrompt) req.EnhancePrompt = opts.enhancePrompt
+        // 2026-05-13 — explicitly disable Tencent's prompt auto-optimizer.
+        // Mirror of the image-side fix; same rationale: Tencent's default
+        // EnhancePrompt='Enabled' silently rewrites style anchors away,
+        // causing style drift across Kling video output too. See
+        // document/kling-style-binding-research.md "發現 3" for the full
+        // research trail. Override via opts.enhancePrompt='Enabled' if
+        // any caller ever wants Tencent's optimizer back on.
+        req.EnhancePrompt = opts.enhancePrompt ?? 'Disabled'
         if (opts.sceneType) req.SceneType = opts.sceneType
         if (typeof opts.seed === 'number') req.Seed = opts.seed
         if (opts.inputRegion) req.InputRegion = opts.inputRegion

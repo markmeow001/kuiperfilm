@@ -220,7 +220,17 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
             OutputConfig: outputConfig,
         }
         if (fileInfos.length) req.FileInfos = fileInfos
-        if (opts.enhancePrompt) req.EnhancePrompt = opts.enhancePrompt
+        // 2026-05-13 — explicitly disable Tencent's prompt auto-optimizer.
+        // Per the kling-style-binding research doc (document/kling-style-binding-research.md
+        // section "發現 3"): EnhancePrompt='Enabled' (Tencent's default when
+        // omitted) silently rewrites the prompt toward "generic / more
+        // realistic" output. That rewrite is the single most common cause
+        // of style drift because it erases style anchors (e.g. our
+        // realistic preset's "DSLR / film grain / NOT CG" directives) and
+        // pulls Kling-2.1 back toward its CG/Genshin training bias.
+        // Override possible via opts.enhancePrompt='Enabled' if a caller
+        // ever wants Tencent's optimizer back on for a specific task.
+        req.EnhancePrompt = opts.enhancePrompt ?? 'Disabled'
         if (opts.negativePrompt) req.NegativePrompt = opts.negativePrompt
         if (typeof opts.seed === 'number') req.Seed = opts.seed
 
