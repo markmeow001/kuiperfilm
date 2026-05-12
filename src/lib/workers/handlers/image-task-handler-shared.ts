@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { type TaskJobData } from '@/lib/task/types'
 import { decodeImageUrlsFromDb } from '@/lib/contracts/image-urls-contract'
 import { extractCOSKey, getSignedUrl, toFetchableUrl, uploadToCOS } from '@/lib/cos'
-import { logWarn } from '@/lib/logging/core'
+import { logInfo, logWarn } from '@/lib/logging/core'
 import {
   resolveImageSourceFromGeneration,
   toSignedUrlIfCos,
@@ -374,14 +374,35 @@ const COMPOSITE_ASPECT_THRESHOLD = 1.5
 const IDENTITY_CROP_WIDTH_RATIO = 0.30
 
 async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
-  if (!originalUrl || originalUrl.startsWith('data:')) return originalUrl
+  if (!originalUrl || originalUrl.startsWith('data:')) {
+    logInfo('[identity-crop] skip: data url or empty', { url: originalUrl?.substring(0, 80) ?? '' })
+    return originalUrl
+  }
 
-  // Only worth processing standard COS-backed images. Other URL forms
-  // (external HTTP, /m/ media aliases, /api/files local mode) we leave
-  // alone — they may not be re-uploadable to our bucket via the same
-  // key namespace.
   const sourceKey = extractCOSKey(originalUrl)
-  if (!sourceKey || !sourceKey.startsWith('images/')) return originalUrl
+  if (!sourceKey) {
+    logInfo('[identity-crop] skip: cannot extract COS key', { url: originalUrl.substring(0, 100) })
+    return originalUrl
+  }
+
+  // Skip /m/<publicId> media aliases (style-profile reference images).
+  // These resolve via a separate route system and re-uploading under
+  // a sibling key would bypass that alias chain.
+  if (sourceKey.startsWith('m/')) {
+    logInfo('[identity-crop] skip: /m/ media alias', { sourceKey })
+    return originalUrl
+  }
+
+  // 2026-05-13 — Bug fix: previous version filtered to keys starting
+  // with `images/`, which was wrong. Character upload keys use prefixes
+  // like `char-<characterId>-<appearanceId>-upload-*` (per
+  // upload-asset-image route.ts), location keys use `loc-*-upload-*`,
+  // prop keys use `prop-*-upload-*`. None of these start with `images/`,
+  // so the helper was a no-op for every single character ref. That's
+  // why the production crop was never actually happening despite the
+  // commit landing. Now: process any extractable COS key (excluding
+  // /m/ aliases above), let the aspect-ratio check decide whether to
+  // actually crop.
 
   // Deterministic crop key: same source → same crop key. Repeated panel
   // gens for the same character overwrite the same COS object (cheap
@@ -403,11 +424,22 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
     const meta = await sharp(buffer).metadata()
     const w = meta.width
     const h = meta.height
-    if (!w || !h) return originalUrl
+    if (!w || !h) {
+      logWarn('[identity-crop] no width/height in metadata', { sourceKey })
+      return originalUrl
+    }
 
-    // Single-shot ref (square or portrait) — no crop needed, identity
-    // binding works fine on it as-is.
-    if (w / h < COMPOSITE_ASPECT_THRESHOLD) return originalUrl
+    const aspect = w / h
+    if (aspect < COMPOSITE_ASPECT_THRESHOLD) {
+      logInfo('[identity-crop] skip: not wide enough', {
+        sourceKey,
+        width: w,
+        height: h,
+        aspect,
+        threshold: COMPOSITE_ASPECT_THRESHOLD,
+      })
+      return originalUrl
+    }
 
     const cropW = Math.round(w * IDENTITY_CROP_WIDTH_RATIO)
     const cropBuffer = await sharp(buffer)
@@ -416,7 +448,16 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
       .toBuffer()
 
     await uploadToCOS(cropBuffer, cropKey)
-    return getSignedUrl(cropKey, 3600)
+    const cropUrl = getSignedUrl(cropKey, 3600)
+    logInfo('[identity-crop] cropped composite ref to face region', {
+      sourceKey,
+      cropKey,
+      origWidth: w,
+      origHeight: h,
+      cropWidth: cropW,
+      aspect,
+    })
+    return cropUrl
   } catch (err) {
     logWarn('[identity-crop] preprocessing failed, falling back to original ref', {
       sourceKey,
