@@ -336,6 +336,45 @@ function toNormalizationIssue(
   }
 }
 
+/**
+ * URL-passthrough variant for providers that *only* accept URLs and
+ * silently drop base64 (e.g. Tencent VOD CreateAigcImageTask, whose
+ * `FileInfos[].Type` is hard-coded to `'Url'`).
+ *
+ * Inputs are expected to be already-signed (callers obtain them via
+ * `toSignedUrlIfCos`), so this function just dedupes, trims, and
+ * filters out `data:` URLs and empties. No network I/O.
+ *
+ * iangyc 2026-05-12 case: `normalizeReferenceImagesForGeneration`
+ * base64-ified the character + scene refs, the Tencent VOD generator's
+ * input loop did `if (ref.startsWith('data:')) continue`, refCount
+ * ended up 0, and AI invented a brand-new character ("white suit man")
+ * from the text prompt alone.
+ */
+export function normalizeReferenceImagesAsUrls(inputs: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of inputs) {
+    if (typeof item !== 'string') continue
+    const trimmed = item.trim()
+    if (!trimmed || trimmed.startsWith('data:')) continue
+    if (seen.has(trimmed)) continue
+    seen.add(trimmed)
+    out.push(trimmed)
+  }
+  return out
+}
+
+/**
+ * Models that can't accept base64 references — keep this list in sync
+ * with the generator-side filters that drop data: URLs.
+ */
+export function modelRequiresUrlReferences(modelKey: string | null | undefined): boolean {
+  if (!modelKey) return false
+  // Tencent VOD AIGC image task only supports FileInfos.Type='Url'.
+  return modelKey.startsWith('tencent-vod::')
+}
+
 export async function normalizeReferenceImagesForGeneration(
   inputs: string[],
   options: {

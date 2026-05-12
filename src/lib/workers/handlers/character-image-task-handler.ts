@@ -9,7 +9,11 @@ import {
   getProjectModels,
   toSignedUrlIfCos,
 } from '../utils'
-import { normalizeReferenceImagesForGeneration } from '@/lib/media/outbound-image'
+import {
+  normalizeReferenceImagesForGeneration,
+  normalizeReferenceImagesAsUrls,
+  modelRequiresUrlReferences,
+} from '@/lib/media/outbound-image'
 import {
   AnyObj,
   generateLabeledImageToCos,
@@ -143,7 +147,11 @@ export async function handleCharacterImageTask(job: Job<TaskJobData>) {
       }
     }
   }
-  const primaryReferenceImages = await normalizeReferenceImagesForGeneration(primaryReferenceInputs)
+  // Tencent VOD only accepts URL refs (see panel-image-task-handler for
+  // full context). Other models embed base64 bytes directly.
+  const primaryReferenceImages = modelRequiresUrlReferences(modelId)
+    ? normalizeReferenceImagesAsUrls(primaryReferenceInputs)
+    : await normalizeReferenceImagesForGeneration(primaryReferenceInputs)
 
   const singleIndex = payload.imageIndex ?? payload.descriptionIndex
   const indexes = singleIndex !== undefined

@@ -9,7 +9,11 @@ import {
   resolveImageSourceFromGeneration,
   uploadImageSourceToCos,
 } from '../utils'
-import { normalizeReferenceImagesForGeneration } from '@/lib/media/outbound-image'
+import {
+  normalizeReferenceImagesForGeneration,
+  normalizeReferenceImagesAsUrls,
+  modelRequiresUrlReferences,
+} from '@/lib/media/outbound-image'
 import {
   AnyObj,
   clampCount,
@@ -199,7 +203,15 @@ export async function handlePanelImageTask(job: Job<TaskJobData>) {
   const refs = isFluxKontext
     ? await collectPanelSceneBase(projectData, panel)
     : await collectPanelReferenceImages(projectData, panel, episodeId)
-  const normalizedRefs = await normalizeReferenceImagesForGeneration(refs)
+  // Tencent VOD's CreateAigcImageTask only accepts URL refs (FileInfos
+  // type='Url'); base64 entries are silently dropped, which is why
+  // iangyc's storyboards were rendering invented characters even though
+  // we collected the right reference URLs. Pass URLs through verbatim
+  // for those models; everything else gets base64-normalised so the
+  // generator can embed the bytes directly.
+  const normalizedRefs = modelRequiresUrlReferences(modelKey)
+    ? normalizeReferenceImagesAsUrls(refs)
+    : await normalizeReferenceImagesForGeneration(refs)
 
   const logger = createScopedLogger({
     module: 'worker.panel-image',
