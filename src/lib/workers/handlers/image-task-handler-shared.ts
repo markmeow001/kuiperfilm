@@ -370,7 +370,15 @@ export async function collectPanelSceneBase(projectData: NovelProjectData, panel
 // Failure mode: any error (download fail / sharp fail / upload fail)
 // falls back to the original ref URL, so the worst case is "we did
 // what we did before this preprocessor existed".
-const COMPOSITE_ASPECT_THRESHOLD = 1.5
+//
+// Threshold history:
+//   1.5  initial pick, missed real-world composites at 1264x913 (1.38)
+//   1.25 verified against 沈冰雪 ref (face-left + 3-body-right at 1.38);
+//        catches it while still letting normal landscape portraits
+//        (typically <1.2) pass through. 1.25 corresponds roughly to
+//        "noticeably wider than 4:3" — a useful boundary because
+//        single-character refs rarely exceed that.
+const COMPOSITE_ASPECT_THRESHOLD = 1.25
 const IDENTITY_CROP_WIDTH_RATIO = 0.30
 
 async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {

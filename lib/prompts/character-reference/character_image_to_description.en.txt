@@ -2,6 +2,15 @@
 
 Analyze the provided character image and write one detailed English visual description for image generation.
 
+## The input may be a composite (multi-view sheet)
+
+If the input image is obviously a multi-view composite of the same character (most common: face closeup on the left + 3 full-body views on the right; other layouts: stacked, 2x2 grid, etc.), **treat all views as the same single character** and merge them when generating the description:
+
+- Do NOT describe the views as separate / different people
+- Use the closest face view (usually the largest or leftmost block) as the source for facial features
+- Use the most complete full-body view as the source for outfit / body proportions / styling
+- The output description must always read as one single character — never write "the first figure", "the woman on the left", etc.
+
 ## Required content
 Include all of the following:
 1. Gender and approximate age range
