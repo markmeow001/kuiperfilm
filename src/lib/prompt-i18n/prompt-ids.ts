@@ -1,6 +1,8 @@
 export const PROMPT_IDS = {
   CHARACTER_IMAGE_TO_DESCRIPTION: 'character_image_to_description',
   CHARACTER_REFERENCE_TO_SHEET: 'character_reference_to_sheet',
+  LOCATION_IMAGE_TO_DESCRIPTION: 'location_image_to_description',
+  PROP_IMAGE_TO_DESCRIPTION: 'prop_image_to_description',
   NP_AGENT_ACTING_DIRECTION: 'np_agent_acting_direction',
   NP_AGENT_CHARACTER_PROFILE: 'np_agent_character_profile',
   NP_AGENT_CHARACTER_VISUAL: 'np_agent_character_visual',

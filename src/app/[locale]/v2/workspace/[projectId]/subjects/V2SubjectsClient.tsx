@@ -614,46 +614,89 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     confirmProfile.mutate({ characterId: c.id, generateImage: false })
   }
 
-  // Manually re-describe an appearance from its current image. Used
-  // when the user uploaded the image before the upload-time auto-rewrite
-  // landed (legacy data), or when they want to refresh the description
-  // after switching the selected image. Updates appearance.description
-  // in place; the next storyboard regen will use it.
-  async function handleRedescribe(c: CharacterLike) {
-    const ap = c.appearances?.[0]
-    if (!ap) return
-    const appearanceId = ap.id
-    if (redescribeInFlight.has(appearanceId)) return
+  // Manually re-describe an asset from its current image. Shared by
+  // character / location / prop cards. Same intent everywhere: the
+  // upload-time auto-rewrite is the happy path; this is the escape
+  // hatch for legacy uploads (data that predates auto-rewrite) and
+  // for refreshing description when the selected image changes.
+  async function callRedescribe(
+    endpoint: string,
+    body: Record<string, string>,
+    inFlightKey: string,
+  ): Promise<boolean> {
+    if (redescribeInFlight.has(inFlightKey)) return false
     setRedescribeInFlight((prev) => {
       const next = new Set(prev)
-      next.add(appearanceId)
+      next.add(inFlightKey)
       return next
     })
     try {
-      const res = await fetch(
-        `/api/novel-promotion/${projectId}/character/appearance/redescribe`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ appearanceId }),
-        },
-      )
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data?.success) {
         const code = typeof data?.error === 'string' ? data.error : `HTTP ${res.status}`
         alert(`抽描述失敗:${code}`)
-        return
+        return false
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
+      return true
     } catch (err) {
       alert(`抽描述失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+      return false
     } finally {
       setRedescribeInFlight((prev) => {
         const next = new Set(prev)
-        next.delete(appearanceId)
+        next.delete(inFlightKey)
         return next
       })
     }
+  }
+
+  async function handleRedescribe(c: CharacterLike) {
+    const ap = c.appearances?.[0]
+    if (!ap) return
+    await callRedescribe(
+      `/api/novel-promotion/${projectId}/character/appearance/redescribe`,
+      { appearanceId: ap.id },
+      ap.id,
+    )
+  }
+
+  async function handleRedescribeLoc(l: LocationLike) {
+    // Pick the LocationImage panel gen would actually use:
+    //   1. l.selectedImageId   (explicit user pick)
+    //   2. first image with imageUrl
+    type ImageWithDescription = { id: string; imageUrl?: string | null }
+    const images = (l.images as ImageWithDescription[] | undefined) ?? []
+    const selectedId = (l as { selectedImageId?: string | null }).selectedImageId ?? null
+    const target =
+      (selectedId ? images.find((img) => img.id === selectedId) : null)
+      ?? images.find((img) => Boolean(img.imageUrl))
+    if (!target?.id) {
+      alert('這個場景還沒有圖,先上傳或重新生成一張')
+      return
+    }
+    await callRedescribe(
+      `/api/novel-promotion/${projectId}/location/image/redescribe`,
+      { locationImageId: target.id },
+      target.id,
+    )
+  }
+
+  async function handleRedescribeProp(p: { id: string; imageUrl?: string | null }) {
+    if (!p.imageUrl) {
+      alert('這個道具還沒有圖,先上傳或重新生成一張')
+      return
+    }
+    await callRedescribe(
+      `/api/novel-promotion/${projectId}/prop/redescribe`,
+      { propId: p.id },
+      p.id,
+    )
   }
 
   async function handleBatchRegenCharacters() {
@@ -1139,20 +1182,31 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       ) : tab === 'scene' ? (
         <SubjectGrid
           aspect="wide"
-          items={locations.map((l) => ({
-            id: l.id,
-            targetId: l.id,
-            name: l.name ?? '未命名場景',
-            caption: '場景',
-            description: l.description ?? null,
-            imageUrl: pickLocationImage(l),
-            onRegenerate: () => handleRegenLoc(l),
-            isRegenerating: regenInFlight.has(l.id) || serverInflightIds.has(l.id),
-            onUpload: (file) => handleUploadLoc(l, file),
-            isUploading: uploadInFlight.has(l.id),
-            onZoom: (url) => setZoomImage(url),
-            onOpenEditor: () => setEditingLocationId(l.id),
-          }))}
+          items={locations.map((l) => {
+            const images = (l.images as Array<{ id: string; imageUrl?: string | null }> | undefined) ?? []
+            const selectedId = (l as { selectedImageId?: string | null }).selectedImageId ?? null
+            const targetImage =
+              (selectedId ? images.find((img) => img.id === selectedId) : null)
+              ?? images.find((img) => Boolean(img.imageUrl))
+            return {
+              id: l.id,
+              targetId: l.id,
+              name: l.name ?? '未命名場景',
+              caption: '場景',
+              description: l.description ?? null,
+              imageUrl: pickLocationImage(l),
+              onRegenerate: () => handleRegenLoc(l),
+              isRegenerating: regenInFlight.has(l.id) || serverInflightIds.has(l.id),
+              onUpload: (file) => handleUploadLoc(l, file),
+              isUploading: uploadInFlight.has(l.id),
+              onZoom: (url) => setZoomImage(url),
+              onOpenEditor: () => setEditingLocationId(l.id),
+              onRedescribe: targetImage?.imageUrl
+                ? () => { void handleRedescribeLoc(l) }
+                : undefined,
+              isRedescribing: targetImage ? redescribeInFlight.has(targetImage.id) : false,
+            }
+          })}
           emptyHint="此項目還沒有場景 — 點上方「一鍵分析」抽出此集的場景,或從素材庫導入"
         />
       ) : (
@@ -1174,6 +1228,10 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             onUpload: (file) => handleUploadProp(p, file),
             isUploading: uploadInFlight.has(p.id),
             onZoom: (url) => setZoomImage(url),
+            onRedescribe: p.imageUrl
+              ? () => { void handleRedescribeProp(p) }
+              : undefined,
+            isRedescribing: redescribeInFlight.has(p.id),
           }))}
           emptyHint="此項目還沒有道具 — 點上方「一鍵分析」抽出此集的道具(刀/信封/戒指等劇情關鍵物件)"
         />

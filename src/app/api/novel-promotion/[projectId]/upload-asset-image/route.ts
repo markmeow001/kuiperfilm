@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { uploadToCOS, generateUniqueKey, getSignedUrl } from '@/lib/cos'
+import { uploadToCOS, generateUniqueKey } from '@/lib/cos'
 import sharp from 'sharp'
 import { initializeFonts, createLabelSVG } from '@/lib/fonts'
 import { decodeImageUrlsFromDb, encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { executeAiVisionStep } from '@/lib/ai-runtime'
-import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
-import { getProjectModelConfig } from '@/lib/config-service'
 import { createScopedLogger } from '@/lib/logging/core'
+import { redescribeAssetFromImage } from '@/lib/novel-promotion/asset-image-redescribe'
 
 interface CharacterAppearanceRecord {
   id: string
@@ -21,6 +19,7 @@ interface CharacterAppearanceRecord {
 interface LocationImageRecord {
   id: string
   imageIndex: number
+  description?: string | null
 }
 
 interface LocationRecord {
@@ -156,69 +155,38 @@ export const POST = apiHandler(async (
     })
 
     // Auto-rewrite appearance.description to match the uploaded image.
+    // See lib/novel-promotion/asset-image-redescribe.ts for the full
+    // rationale (iangyc 2026-05-12 case — uploaded 古裝劍仙 ref but
+    // description still said "modern white suit", panel gen trusted
+    // text over image).
     //
-    // iangyc 2026-05-12: user uploaded a 古裝劍仙 ref image for 王玄, but
-    // the original appearance.description (from script-driven analyze)
-    // said "white modern suit". Panel image generation then sent both
-    // to Tencent VOD GEM-3.1, and the prompt instruction "参考图仅用于
-    // 提取面部特征" made the model trust the text — producing a modern
-    // white-suit man wearing 王玄's face.
-    //
-    // Product call: when the user provides a ref image, that image is
-    // the source of truth. Vision-analyse it and overwrite description
-    // so panel gen never sees a conflicting text-vs-image story.
-    //
-    // Failure modes (analysis model not configured, signed URL fetch
-    // fails, vision call timeouts) are swallowed — the upload itself
-    // succeeded, so we return success either way and let the user
-    // edit description manually if needed.
+    // Only rewrite when the uploaded image is the appearance's selected
+    // image — that's the one panel gen actually feeds to the model.
     if (shouldUpdateImageUrl) {
-      const logger = createScopedLogger({
-        module: 'api.upload-asset-image',
-        action: 'character_appearance_describe',
+      const result = await redescribeAssetFromImage({
+        kind: 'character',
+        imageKeyOrUrl: key,
+        projectId,
+        userId: authResult.session.user.id,
+        entityId: appearance.id,
       })
-      try {
-        const signedUrl = await getSignedUrl(key, 3600)
-        const projectModels = await getProjectModelConfig(projectId, authResult.session.user.id)
-        const analysisModel = projectModels.analysisModel
-        if (signedUrl && analysisModel) {
-          const completion = await executeAiVisionStep({
-            userId: authResult.session.user.id,
-            model: analysisModel,
-            prompt: buildPrompt({
-              promptId: PROMPT_IDS.CHARACTER_IMAGE_TO_DESCRIPTION,
-              locale: 'zh',
-            }),
-            imageUrls: [signedUrl],
-            temperature: 0.3,
-            projectId,
-          })
-          const newDescription = completion.text?.trim()
-          if (newDescription) {
-            await db.characterAppearance.update({
-              where: { id: appearance.id },
-              data: {
-                previousDescription: appearance.description ?? null,
-                description: newDescription,
-              },
-            })
-            logger.info({
-              message: 'appearance description rewritten from uploaded image',
-              details: {
-                appearanceId: appearance.id,
-                model: analysisModel,
-                descriptionPreview: newDescription.slice(0, 80),
-              },
-            })
-          }
-        }
-      } catch (err) {
-        logger.warn({
-          message: 'appearance description rewrite failed — upload still succeeded',
-          details: {
-            appearanceId: appearance.id,
-            error: err instanceof Error ? err.message : String(err),
+      if (result.ok) {
+        await db.characterAppearance.update({
+          where: { id: appearance.id },
+          data: {
+            previousDescription: appearance.description ?? null,
+            description: result.description,
           },
+        })
+      } else {
+        // Swallow — upload itself succeeded. User can hit "從圖抽描述"
+        // manually later, or edit description directly.
+        createScopedLogger({
+          module: 'api.upload-asset-image',
+          action: 'character_appearance_describe',
+        }).warn({
+          message: 'character description rewrite skipped',
+          details: { appearanceId: appearance.id, code: result.code, error: result.message },
         })
       }
     }
@@ -241,9 +209,12 @@ export const POST = apiHandler(async (
     }
 
     // 如果指定了imageIndex，更新对应的图片记录
+    let touchedImage: { id: string; previousDescription: string | null } | null = null
+    let returnImageIndex: number
     if (imageIndex !== null) {
       const targetImageIndex = parseInt(imageIndex)
       const existingImage = location.images?.find((img) => img.imageIndex === targetImageIndex)
+      returnImageIndex = targetImageIndex
 
       if (existingImage) {
         const updated = await db.locationImage.update({
@@ -255,6 +226,10 @@ export const POST = apiHandler(async (
             where: { id },
             data: { selectedImageId: updated.id }
           })
+        }
+        touchedImage = {
+          id: existingImage.id,
+          previousDescription: (existingImage as { description?: string | null }).description ?? null,
         }
       } else {
         const created = await db.locationImage.create({
@@ -272,16 +247,12 @@ export const POST = apiHandler(async (
             data: { selectedImageId: created.id }
           })
         }
+        touchedImage = { id: created.id, previousDescription: null }
       }
-
-      return NextResponse.json({
-        success: true,
-        imageKey: key,
-        imageIndex: targetImageIndex
-      })
     } else {
       // 创建新的图片记录
       const maxIndex = location.images?.length || 0
+      returnImageIndex = maxIndex
       const created = await db.locationImage.create({
         data: {
           locationId: id,
@@ -297,13 +268,47 @@ export const POST = apiHandler(async (
           data: { selectedImageId: created.id }
         })
       }
-
-      return NextResponse.json({
-        success: true,
-        imageKey: key,
-        imageIndex: maxIndex
-      })
+      touchedImage = { id: created.id, previousDescription: null }
     }
+
+    // Auto-rewrite LocationImage.description from the uploaded image —
+    // mirrors the character path. Panel gen reads pick.description to
+    // build the 场景 line of the image prompt, so this keeps text and
+    // image in sync. `labelText` from the form is just the view-name
+    // label (e.g. "窗邊"); we overwrite it with the LLM's read of the
+    // actual scene contents.
+    if (touchedImage) {
+      const result = await redescribeAssetFromImage({
+        kind: 'location',
+        imageKeyOrUrl: key,
+        projectId,
+        userId: authResult.session.user.id,
+        entityId: touchedImage.id,
+      })
+      if (result.ok) {
+        await prisma.locationImage.update({
+          where: { id: touchedImage.id },
+          data: {
+            previousDescription: touchedImage.previousDescription,
+            description: result.description,
+          },
+        })
+      } else {
+        createScopedLogger({
+          module: 'api.upload-asset-image',
+          action: 'location_image_describe',
+        }).warn({
+          message: 'location description rewrite skipped',
+          details: { locationImageId: touchedImage.id, code: result.code, error: result.message },
+        })
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      imageKey: key,
+      imageIndex: returnImageIndex
+    })
   } else if (type === 'prop') {
     // 道具图片上传 — 跟角色/场景一样把 COS key 写回 imageUrl
     // (Phase 11.3 Stage C: NovelPromotionProp 单图模型,没有 images[] 数组,
@@ -321,6 +326,32 @@ export const POST = apiHandler(async (
       where: { id: prop.id },
       data: { imageUrl: key },
     })
+
+    // Auto-rewrite prop.description from the uploaded image. Worker
+    // reads `prop.description || prop.summary` for the 道具 line of
+    // the image prompt — keeping description in sync stops user-uploaded
+    // images from drifting away from the text description.
+    const propResult = await redescribeAssetFromImage({
+      kind: 'prop',
+      imageKeyOrUrl: key,
+      projectId,
+      userId: authResult.session.user.id,
+      entityId: prop.id,
+    })
+    if (propResult.ok) {
+      await db.novelPromotionProp.update({
+        where: { id: prop.id },
+        data: { description: propResult.description },
+      })
+    } else {
+      createScopedLogger({
+        module: 'api.upload-asset-image',
+        action: 'prop_describe',
+      }).warn({
+        message: 'prop description rewrite skipped',
+        details: { propId: prop.id, code: propResult.code, error: propResult.message },
+      })
+    }
 
     return NextResponse.json({
       success: true,

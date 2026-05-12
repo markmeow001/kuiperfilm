@@ -10,6 +10,14 @@ export const PROMPT_CATALOG: Record<PromptId, PromptCatalogEntry> = {
     pathStem: 'character-reference/character_reference_to_sheet',
     variableKeys: [],
   },
+  [PROMPT_IDS.LOCATION_IMAGE_TO_DESCRIPTION]: {
+    pathStem: 'location-reference/location_image_to_description',
+    variableKeys: [],
+  },
+  [PROMPT_IDS.PROP_IMAGE_TO_DESCRIPTION]: {
+    pathStem: 'prop-reference/prop_image_to_description',
+    variableKeys: [],
+  },
   [PROMPT_IDS.NP_AGENT_ACTING_DIRECTION]: {
     pathStem: 'novel-promotion/agent_acting_direction',
     variableKeys: ['panels_json', 'panel_count', 'characters_info'],

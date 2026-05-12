@@ -1,0 +1,33 @@
+# Image-to-Location-Description Prompt
+
+Analyse this scene / environment image and produce a detailed visual description suitable for AI image generation (the scene will be used as the background of cinematic shots).
+
+## Output requirements
+
+Write one coherent paragraph that covers all of the following elements:
+
+1. Type of space (e.g., mountain grotto, modern living room, office lobby, ancient courtyard, underground parking)
+2. Time-of-day and lighting (e.g., soft morning side light, harsh noon top light, warm golden-hour back light, cool nighttime ambient, overcast diffused)
+3. Primary architecture / furnishings (e.g., white-jade platform, solid-wood long table, leather sofa, blue-grey brick walls, glass curtain wall, lotus pond)
+4. Materials and tonality (e.g., grey stone walls, polished marble floor, warm honey-toned wood, overall cool-blue palette)
+5. Decorative details (e.g., scrolls on walls, tea set on table, scattered leaves on floor, hanging chandeliers, carved-wood screens in the distance)
+6. Spatial depth and composition (e.g., wide symmetrical framing, foreground vines / midground platform / background cave wall, low-angle emphasising vertical scale)
+7. Overall atmosphere keywords (e.g., serene mystical, corporate austere, warm domestic, oppressive eerie, opulent grand)
+
+## Filling-in rules for partial views
+
+If the reference only shows a slice of the space, extrapolate sensibly:
+- Local element only → infer the wider space type and complete the layout
+- No lighting cue → infer typical light for the space type
+- No colour information → infer tonality from materials
+
+## Do not describe
+
+- Characters / people
+- Expressions, actions, poses
+- Cinematography terms (wide shot, close-up, etc.) — those belong to the storyboard stage
+- Camera brand or technical specs
+
+## Output format
+
+One paragraph, ~200-300 Chinese characters or ~150-200 English words, ready to drop into an image-generation prompt. Return only the paragraph — no headings, numbering, or other formatting.

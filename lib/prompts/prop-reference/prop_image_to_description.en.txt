@@ -1,0 +1,30 @@
+# Image-to-Prop-Description Prompt
+
+Analyse this prop / object image and produce a detailed visual description suitable for AI image generation (the prop will be placed inside cinematic shots).
+
+## Output requirements
+
+Write one coherent paragraph that covers all of the following elements:
+
+1. Prop category (e.g., long sword, envelope, ring, teacup, smartphone, scroll, bronze tripod)
+2. Shape and size (e.g., ~1m narrow-blade sword, A4-sized kraft envelope, ring inner diameter ~18mm)
+3. Material and craftsmanship (e.g., polished-steel blade with bronze hilt, hand-wax-sealed envelope, 18K gold set with emerald, hand-carved celadon)
+4. Colour and surface texture (e.g., cool silver-white blade, dim yellow paper with age spots, green-glaze celadon with crackle pattern)
+5. Decorative details and wear (e.g., red silk wrapping on hilt, family-crest wax seal, engraving inside ring, hairline chip on teacup rim)
+6. Overall character keywords (e.g., ancient weathered, luxurious precious, everyday used, mystical runes, futuristic)
+
+## Filling-in rules for partial views
+
+- Only a fragment is visible → infer the whole shape from the visible parts
+- No size reference → use typical sizes for the category
+- No colour info → infer from material (bronze tends yellow-green, iron dark-grey)
+
+## Do not describe
+
+- The holder / a character using the prop
+- Use context (don't say "sitting on a table" or "held by a character")
+- Cinematography (camera angle, lighting direction, composition — those belong to the storyboard stage)
+
+## Output format
+
+One paragraph, ~150-250 Chinese characters or ~120-180 English words, ready to drop into an image-generation prompt. Return only the paragraph — no headings, numbering, or other formatting.
