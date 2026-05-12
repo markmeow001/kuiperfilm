@@ -759,6 +759,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           episodeId: currentEpisodeId,
           displayMode: 'detail',
           async: true,
+          // 2026-05-13 — opt out of the post-analysis IMAGE_PANEL cascade
+          // that script-to-storyboard handler runs by default (added
+          // 2026-05-04 for mobile review UX). On V2 desktop the user wants
+          // explicit control: image gen only fires when they click the
+          // per-panel "生成圖片" or the toolbar batch button. Mobile flow
+          // (which still benefits from auto-cascade for on-the-go review)
+          // is unaffected — it has its own analysis trigger path.
+          cascadeImageGen: false,
         }),
       })
       if (!res.ok) {
