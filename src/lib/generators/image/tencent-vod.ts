@@ -126,26 +126,24 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
 
         // FileInfos: 參考圖（最多 3 張：GEM 系列限制）。
         //
-        // iangyc 2026-05-12 debug:
-        // - Initial fix tried to mirror the video-side shape
-        //   ({Type, Category:'Image', Url, Usage:'Reference', ObjectId}),
-        //   but the AIGC IMAGE endpoint rejected `Category` as an
-        //   unknown parameter. The video and image task params share
-        //   the FileInfos name but NOT the field set.
-        // - Drop `Category` for image. Keep `Usage:'Reference'` —
-        //   that's what flags these as identity anchors (vs. style refs)
-        //   for nano-banana / GG family models. `ObjectId` stays for
-        //   per-slot ordering when prompts use placeholders.
+        // iangyc 2026-05-12 debug trail:
+        // 1. Tried mirroring the video-side shape (Category + Usage +
+        //    ObjectId) — Tencent rejected `Category` first, then
+        //    `Usage` once Category was dropped. The image AIGC endpoint
+        //    only accepts a bare `{Type, Url}` envelope; identity-
+        //    anchor semantics (Usage='Reference') live only on the
+        //    video endpoint.
+        // 2. Net implication: GEM-3.1 / nano-banana on Tencent VOD has
+        //    no way to declare "this ref IS the character identity" —
+        //    refs are passed but the model treats them as soft style
+        //    context only. For strong identity preservation, callers
+        //    should switch storyboardModel to Kling-2.1 (or another
+        //    image model with identity-aware capabilities).
         const fileInfos: Record<string, unknown>[] = []
-        referenceImages.slice(0, 3).forEach((ref, idx) => {
-            if (!ref || ref.startsWith('data:')) return // 不支援 base64，需要 URL
-            fileInfos.push({
-                Type: 'Url',
-                Url: ref,
-                Usage: 'Reference',
-                ObjectId: `ref_${idx + 1}`,
-            })
-        })
+        for (const ref of referenceImages.slice(0, 3)) {
+            if (!ref || ref.startsWith('data:')) continue // 不支援 base64，需要 URL
+            fileInfos.push({ Type: 'Url', Url: ref })
+        }
 
         const outputConfig: Record<string, unknown> = {
             StorageMode: opts.storageMode ?? 'Temporary',
