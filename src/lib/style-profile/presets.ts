@@ -65,8 +65,17 @@ export const STYLE_PROFILE_PRESETS: Record<PresetKey, StylePresetEntry> = {
     zhLabel: '寫實風格',
     zhDescription: '影院級寫實攝影。自然皮膚紋理(毛孔/微細節),物理精準光照,柔影 + 體積霧 + 鏡頭效果(散景、色差)。真實材質。Arri Alexa 調色風格。',
     category: 'realistic',
-    positivePrompt: 'cinematic photorealistic photography, natural skin texture with pores and micro-detail, physically accurate lighting, soft shadows with volumetric fog, lens effects including bokeh and chromatic aberration, real materials (weathered wood, polished metal, fabric), Arri Alexa color grading',
-    negativePrompt: `cartoon, anime, illustration, painted, plastic skin, ${NEG_BASE}`,
+    // 2026-05-13 — Kling-2.1 (Tencent VOD) defaults toward Chinese-game-CG
+    // training bias (Genshin / Honkai aesthetic) whenever the realistic
+    // positive prompt is the only style anchor. User shipped this preset
+    // expecting TikTok-short-drama-style real-photo output and kept getting
+    // semi-realistic CG renders with glossy doll-skin and idealized features.
+    // Beef both prompts: positive locks in concrete photographic equipment
+    // signals (camera, lens, film grain, real-world flaws), negative
+    // explicitly bans every CG/game/Pixar/anime adjacency we've seen leak
+    // through plus the porcelain-skin / idealized-feature failure mode.
+    positivePrompt: 'real-life photograph captured on a DSLR full-frame camera, 35mm lens, cinematic photorealistic photography, natural skin texture with visible pores wrinkles freckles and micro imperfections, asymmetric realistic facial features, physically accurate lighting, soft shadows with volumetric fog, lens effects including bokeh and chromatic aberration, real-world materials (weathered wood, polished metal, woven fabric), subtle film grain, Arri Alexa color grading, documentary realism — NOT a 3D render, NOT CG, NOT game graphics, NOT a digital painting',
+    negativePrompt: `cartoon, anime, illustration, painted, digital painting, 3D render, CGI, CG render, computer graphics, game CG, video game style, Genshin Impact style, MiHoYo style, Honkai aesthetic, Pixar style, Disney animation, semi-realistic, anime realism, stylized character render, doll-like, porcelain skin, glossy plastic skin, perfectly symmetric face, idealized beauty, smoothed skin, airbrushed skin, plastic skin, ${NEG_BASE}`,
   },
   'cyberpunk': {
     label: 'Cyberpunk',
