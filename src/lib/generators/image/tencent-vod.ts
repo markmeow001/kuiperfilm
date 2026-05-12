@@ -124,12 +124,31 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
             profile: { httpProfile: { endpoint: 'vod.tencentcloudapi.com' } },
         })
 
-        // FileInfos: 參考圖（最多 3 張：GEM 系列限制）
+        // FileInfos: 參考圖（最多 3 張：GEM 系列限制）。
+        //
+        // iangyc 2026-05-12 debug:Tencent VOD AIGC image task needs the
+        // explicit `Usage: 'Reference'` tag for the multi-image identity
+        // anchoring to fire. Without it the refs are accepted (refCount
+        // climbs as expected on the submit log) but the model treats
+        // them as silent context and falls back to text-only generation.
+        // The video generator already sets this — image generator was
+        // missing it. Symptom was 王玄 generated as a modern white-suit
+        // man even though the 古裝劍仙 ref image reached Tencent.
+        //
+        // Mirror the video-side shape (Category + ObjectId) so the API
+        // surface stays consistent if Tencent adds more identity slots
+        // later (the placeholder `<<<image_N>>>` pattern Kling uses).
         const fileInfos: Record<string, unknown>[] = []
-        for (const ref of referenceImages.slice(0, 3)) {
-            if (!ref || ref.startsWith('data:')) continue // 不支援 base64，需要 URL
-            fileInfos.push({ Type: 'Url', Url: ref })
-        }
+        referenceImages.slice(0, 3).forEach((ref, idx) => {
+            if (!ref || ref.startsWith('data:')) return // 不支援 base64，需要 URL
+            fileInfos.push({
+                Type: 'Url',
+                Category: 'Image',
+                Url: ref,
+                Usage: 'Reference',
+                ObjectId: `ref_${idx + 1}`,
+            })
+        })
 
         const outputConfig: Record<string, unknown> = {
             StorageMode: opts.storageMode ?? 'Temporary',
