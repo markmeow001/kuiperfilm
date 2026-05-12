@@ -219,6 +219,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // refetch surfaces a new image, or a 120s safety timeout clears it.
   const [regenInFlight, setRegenInFlight] = useState<Set<string>>(new Set())
   const [uploadInFlight, setUploadInFlight] = useState<Set<string>>(new Set())
+  // Keyed by appearanceId — same scope the redescribe button targets.
+  const [redescribeInFlight, setRedescribeInFlight] = useState<Set<string>>(new Set())
   const [zoomImage, setZoomImage] = useState<string | null>(null)
   const [editingDescId, setEditingDescId] = useState<string | null>(null) // appearanceId
   const [editingDescDraft, setEditingDescDraft] = useState<string>('')
@@ -610,6 +612,48 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   function handleConfirmProfile(c: CharacterLike) {
     if (c.profileConfirmed) return // already locked — no-op (un-lock not exposed yet)
     confirmProfile.mutate({ characterId: c.id, generateImage: false })
+  }
+
+  // Manually re-describe an appearance from its current image. Used
+  // when the user uploaded the image before the upload-time auto-rewrite
+  // landed (legacy data), or when they want to refresh the description
+  // after switching the selected image. Updates appearance.description
+  // in place; the next storyboard regen will use it.
+  async function handleRedescribe(c: CharacterLike) {
+    const ap = c.appearances?.[0]
+    if (!ap) return
+    const appearanceId = ap.id
+    if (redescribeInFlight.has(appearanceId)) return
+    setRedescribeInFlight((prev) => {
+      const next = new Set(prev)
+      next.add(appearanceId)
+      return next
+    })
+    try {
+      const res = await fetch(
+        `/api/novel-promotion/${projectId}/character/appearance/redescribe`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appearanceId }),
+        },
+      )
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.success) {
+        const code = typeof data?.error === 'string' ? data.error : `HTTP ${res.status}`
+        alert(`抽描述失敗:${code}`)
+        return
+      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
+    } catch (err) {
+      alert(`抽描述失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    } finally {
+      setRedescribeInFlight((prev) => {
+        const next = new Set(prev)
+        next.delete(appearanceId)
+        return next
+      })
+    }
   }
 
   async function handleBatchRegenCharacters() {
@@ -1081,6 +1125,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               onDescriptionSave: () => handleEditDescSave(c),
               onDescriptionCancel: handleEditDescCancel,
               isSavingDescription: updateAppearanceDesc.isPending,
+              // "從圖抽描述" — only meaningful when the appearance has
+              // an image to look at. Skip otherwise so the button
+              // doesn't render dead.
+              onRedescribe: ap?.imageUrl || ap?.imageUrls
+                ? () => { void handleRedescribe(c) }
+                : undefined,
+              isRedescribing: redescribeInFlight.has(apId),
             }
           })}
           emptyHint="此項目還沒有角色 — 點上方「一鍵分析」抽出此集的角色,或從素材庫導入"
@@ -1347,6 +1398,11 @@ interface SubjectItem {
   onDescriptionSave?: () => void
   onDescriptionCancel?: () => void
   isSavingDescription?: boolean
+  // Vision-rewrite description from current uploaded image (character only).
+  // For legacy appearances whose description was written before the
+  // upload-time auto-rewrite path landed.
+  onRedescribe?: () => void
+  isRedescribing?: boolean
 }
 
 function SubjectGrid({
@@ -1451,6 +1507,17 @@ function SubjectGrid({
                     title="只快速改外觀提示詞"
                   >
                     改外觀
+                  </button>
+                ) : null}
+                {item.onRedescribe && !item.isEditingDescription ? (
+                  <button
+                    type="button"
+                    onClick={item.onRedescribe}
+                    disabled={item.isRedescribing}
+                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    title="用 AI 從目前圖片重新抽出外觀提示詞 — 用於上傳新圖後同步描述"
+                  >
+                    {item.isRedescribing ? '抽描述中…' : '從圖抽描述'}
                   </button>
                 ) : null}
               </div>
