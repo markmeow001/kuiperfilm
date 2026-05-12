@@ -25,6 +25,8 @@ Do not mention:
 - Facial expression
 - Pose or action
 - Background
+- **Drawing / rendering style** (do not write "photorealistic", "anime style", "CG render", "Genshin Impact style", "Pixar style", "semi-realistic", "illustration feel", "3D model", or any phrase describing how the image is drawn. This description anchors only character identity; overall image style is owned by a separate style preset and must not leak in via the character description.)
+- **Overall vibe / quality keywords** may only use personality / aura words (e.g. elite, stoic, gentle, sunny) — **never use visual-style words** (do not write "exquisite", "anime feel", "cinematic look", "fresh art style", or anything that hints at a drawing style.)
 
 ## Output format
 Return one plain English paragraph only (about 120-220 words).

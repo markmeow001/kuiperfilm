@@ -24,6 +24,8 @@ Write one coherent paragraph that covers all of the following elements:
 - The holder / a character using the prop
 - Use context (don't say "sitting on a table" or "held by a character")
 - Cinematography (camera angle, lighting direction, composition — those belong to the storyboard stage)
+- **Drawing / rendering style** (do not write "photorealistic", "anime feel", "CG render", "3D model", "illustration feel", "Pixar-like" or any phrase describing how the prop is drawn. Prop descriptions anchor only object form, material, texture, and wear; image-wide style is owned by a separate style preset.)
+- **Overall character keywords** may only use object-intrinsic property words (ancient, luxurious, futuristic, mystical) — **never use visual-style words** (do not write "exquisite", "cinematic", "lavish artistry", or anything that hints at a drawing style.)
 
 ## Output format
 

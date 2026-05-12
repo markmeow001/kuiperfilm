@@ -27,6 +27,8 @@ If the reference only shows a slice of the space, extrapolate sensibly:
 - Expressions, actions, poses
 - Cinematography terms (wide shot, close-up, etc.) — those belong to the storyboard stage
 - Camera brand or technical specs
+- **Drawing / rendering style** (do not write "photorealistic", "anime scene", "CG render", "Genshin Impact backdrop", "3D model", "illustration feel", "Pixar-like" or any phrase describing how the scene is drawn. Location descriptions anchor only spatial structure and materials; image-wide style is owned by a separate style preset.)
+- **Atmosphere keywords** may only use environmental mood words (serene, oppressive, warm, opulent, corporate) — **never use visual-style words** (do not write "cinematic", "exquisite", "anime feel", "dreamy CG vibe", or anything that hints at a drawing style.)
 
 ## Output format
 
