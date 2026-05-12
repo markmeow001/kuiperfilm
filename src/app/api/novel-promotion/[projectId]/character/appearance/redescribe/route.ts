@@ -71,7 +71,14 @@ export const POST = apiHandler(async (
         where: { id: appearance.id },
         data: {
             previousDescription: appearance.description ?? null,
+            previousDescriptions: appearance.descriptions ?? null,
             description: result.description,
+            // pickAppearanceDescription reads `descriptions` first, so a
+            // singular-only rewrite was being silently shadowed by the
+            // stale LLM-script text (王玄's "modern white suit" stayed
+            // alive in `descriptions[0]` even after vision rewrote
+            // `description` to 古裝劍仙). Reset the array to match.
+            descriptions: JSON.stringify([result.description]),
         },
     })
 

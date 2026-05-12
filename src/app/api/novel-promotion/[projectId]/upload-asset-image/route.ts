@@ -14,6 +14,7 @@ interface CharacterAppearanceRecord {
   imageUrls: string | null
   selectedIndex: number | null
   description: string | null
+  descriptions: string | null
 }
 
 interface LocationImageRecord {
@@ -175,7 +176,17 @@ export const POST = apiHandler(async (
           where: { id: appearance.id },
           data: {
             previousDescription: appearance.description ?? null,
+            previousDescriptions: appearance.descriptions ?? null,
             description: result.description,
+            // Worker's pickAppearanceDescription prefers `descriptions`
+            // (plural, JSON array of LLM-generated variants) over
+            // `description` (singular). If we only rewrote the singular
+            // form, the worker would keep reading the stale LLM-script
+            // text and the new image-derived description would never
+            // make it into the prompt. Reset the array to a single
+            // entry matching the new singular value so both readers
+            // see the same story.
+            descriptions: JSON.stringify([result.description]),
           },
         })
       } else {
