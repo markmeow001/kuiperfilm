@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { uploadToCOS, generateUniqueKey } from '@/lib/cos'
+import { uploadToCOS, generateUniqueKey, getSignedUrl } from '@/lib/cos'
 import sharp from 'sharp'
 import { initializeFonts, createLabelSVG } from '@/lib/fonts'
 import { decodeImageUrlsFromDb, encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { executeAiVisionStep } from '@/lib/ai-runtime'
+import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
+import { getProjectModelConfig } from '@/lib/config-service'
+import { createScopedLogger } from '@/lib/logging/core'
 
 interface CharacterAppearanceRecord {
   id: string
   imageUrls: string | null
   selectedIndex: number | null
+  description: string | null
 }
 
 interface LocationImageRecord {
@@ -149,6 +154,74 @@ export const POST = apiHandler(async (
       where: { id: appearance.id },
       data: updateData
     })
+
+    // Auto-rewrite appearance.description to match the uploaded image.
+    //
+    // iangyc 2026-05-12: user uploaded a 古裝劍仙 ref image for 王玄, but
+    // the original appearance.description (from script-driven analyze)
+    // said "white modern suit". Panel image generation then sent both
+    // to Tencent VOD GEM-3.1, and the prompt instruction "参考图仅用于
+    // 提取面部特征" made the model trust the text — producing a modern
+    // white-suit man wearing 王玄's face.
+    //
+    // Product call: when the user provides a ref image, that image is
+    // the source of truth. Vision-analyse it and overwrite description
+    // so panel gen never sees a conflicting text-vs-image story.
+    //
+    // Failure modes (analysis model not configured, signed URL fetch
+    // fails, vision call timeouts) are swallowed — the upload itself
+    // succeeded, so we return success either way and let the user
+    // edit description manually if needed.
+    if (shouldUpdateImageUrl) {
+      const logger = createScopedLogger({
+        module: 'api.upload-asset-image',
+        action: 'character_appearance_describe',
+      })
+      try {
+        const signedUrl = await getSignedUrl(key, 3600)
+        const projectModels = await getProjectModelConfig(projectId, authResult.session.user.id)
+        const analysisModel = projectModels.analysisModel
+        if (signedUrl && analysisModel) {
+          const completion = await executeAiVisionStep({
+            userId: authResult.session.user.id,
+            model: analysisModel,
+            prompt: buildPrompt({
+              promptId: PROMPT_IDS.CHARACTER_IMAGE_TO_DESCRIPTION,
+              locale: 'zh',
+            }),
+            imageUrls: [signedUrl],
+            temperature: 0.3,
+            projectId,
+          })
+          const newDescription = completion.text?.trim()
+          if (newDescription) {
+            await db.characterAppearance.update({
+              where: { id: appearance.id },
+              data: {
+                previousDescription: appearance.description ?? null,
+                description: newDescription,
+              },
+            })
+            logger.info({
+              message: 'appearance description rewritten from uploaded image',
+              details: {
+                appearanceId: appearance.id,
+                model: analysisModel,
+                descriptionPreview: newDescription.slice(0, 80),
+              },
+            })
+          }
+        }
+      } catch (err) {
+        logger.warn({
+          message: 'appearance description rewrite failed — upload still succeeded',
+          details: {
+            appearanceId: appearance.id,
+            error: err instanceof Error ? err.message : String(err),
+          },
+        })
+      }
+    }
 
     return NextResponse.json({
       success: true,
