@@ -27,6 +27,8 @@ const sharedMock = vi.hoisted(() => ({
 
 const outboundMock = vi.hoisted(() => ({
   normalizeReferenceImagesForGeneration: vi.fn(async () => ['normalized-ref-1']),
+  normalizeReferenceImagesAsUrls: vi.fn((refs: string[]) => refs),
+  modelRequiresUrlReferences: vi.fn(() => false),
 }))
 
 const styleProfileLoaderMock = vi.hoisted(() => ({
