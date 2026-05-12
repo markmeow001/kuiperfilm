@@ -42,6 +42,11 @@ interface V2StoryboardClientProps {
   projectId: string
 }
 
+interface PanelCharacterRef {
+  name: string
+  appearance?: string
+}
+
 interface PanelLike {
   id: string
   storyboardId?: string | null
@@ -55,7 +60,8 @@ interface PanelLike {
   shotType?: string | null
   cameraMove?: string | null
   location?: string | null
-  characters?: string[] | null
+  // Decoded server-side; see storyboards API route.
+  characters?: PanelCharacterRef[] | null
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
 }
@@ -2258,20 +2264,29 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             */}
             {Array.isArray(selected?.characters) && selected.characters.length > 0 ? (
               <div className="space-y-1.5">
-                {selected.characters.map((name, i) => {
+                {selected.characters.map((ref, i) => {
+                  // Post-2026-05-04 panels store characters as
+                  // {name, appearance?}[]. The storyboards API decodes
+                  // legacy bare-string entries into the same shape.
+                  const name = typeof ref === 'string'
+                    ? ref
+                    : (ref as PanelCharacterRef)?.name ?? ''
+                  const appearanceHint = typeof ref === 'string'
+                    ? null
+                    : (ref as PanelCharacterRef)?.appearance ?? null
                   const character = characterRoster.find(
-                    (c) => (c.name ?? '').trim().toLowerCase() === String(name).trim().toLowerCase(),
+                    (c) => (c.name ?? '').trim().toLowerCase() === name.trim().toLowerCase(),
                   )
                   const appearances = character?.appearances ?? []
                   const binding = episodeBindings.find(
                     (b) => b.characterId === character?.id,
                   )
-                  // Resolution priority (mirrors worker):
+                  // Resolution priority (mirrors worker
+                  // collectPanelReferenceImages):
                   //   1. EpisodeCharacter binding (this episode)
-                  //   2. appearances[0]
-                  // We don't reproduce ref.appearance here because
-                  // panel.characters in V2 is just a name list — the
-                  // tagged appearance shape is a legacy worker fallback.
+                  //   2. panel.characters[i].appearance hint matched
+                  //      against changeReason
+                  //   3. appearances[0]
                   let resolved = null as
                     | { id: string | null; label: string; imageUrl: string | null; isDefault: boolean }
                     | null
@@ -2281,6 +2296,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       resolved = {
                         id: ap.id ?? null,
                         label: ap.changeReason || `造型 ${(ap.appearanceIndex ?? 0) + 1}`,
+                        imageUrl: ap.imageUrl ?? null,
+                        isDefault: false,
+                      }
+                    }
+                  }
+                  if (!resolved && appearanceHint) {
+                    const ap = appearances.find(
+                      (a) => (a.changeReason ?? '').toLowerCase() === appearanceHint.toLowerCase(),
+                    )
+                    if (ap) {
+                      resolved = {
+                        id: ap.id ?? null,
+                        label: ap.changeReason || appearanceHint,
                         imageUrl: ap.imageUrl ?? null,
                         isDefault: false,
                       }
@@ -2310,7 +2338,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={resolved.imageUrl}
-                            alt={String(name)}
+                            alt={name}
                             className="h-full w-full object-cover"
                           />
                         ) : null}

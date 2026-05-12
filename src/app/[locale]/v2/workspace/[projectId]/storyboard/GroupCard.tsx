@@ -26,12 +26,19 @@ import {
 } from '@/lib/query/hooks/useMultiShotTask'
 import type { UseMutationResult } from '@tanstack/react-query'
 
+interface PanelCharacterRef {
+  name: string
+  appearance?: string
+}
+
 interface PanelLike {
   id: string
   description?: string | null
   prompt?: string | null
   srtSegment?: string | null
-  characters?: string[] | null
+  // Decoded server-side; see storyboards API route.
+  characters?: PanelCharacterRef[] | null
+  location?: string | null
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
 }

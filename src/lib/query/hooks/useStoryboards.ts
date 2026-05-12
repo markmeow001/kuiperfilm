@@ -16,6 +16,11 @@ export interface PanelCandidate {
     taskRunning: boolean
 }
 
+export interface PanelCharacterRef {
+    name: string
+    appearance?: string
+}
+
 export interface StoryboardPanel {
     id: string
     shotId: string
@@ -36,6 +41,10 @@ export interface StoryboardPanel {
     errorMessage: string | null
     candidates: PanelCandidate[]
     pendingCandidateCount: number
+    // Decoded server-side from the raw JSON column. See
+    // /api/novel-promotion/[projectId]/storyboards/route.ts.
+    characters?: PanelCharacterRef[]
+    location?: string | null
 }
 
 export interface StoryboardGroup {

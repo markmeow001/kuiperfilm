@@ -32,13 +32,20 @@ import { AppIcon } from '@/components/ui/icons'
 import { GroupCard, type GroupRegenOverrides } from './GroupCard'
 import type { UseMutationResult } from '@tanstack/react-query'
 
+interface PanelCharacterRef {
+  name: string
+  appearance?: string
+}
+
 interface PanelLike {
   id: string
   panelIndex?: number | null
   description?: string | null
   prompt?: string | null
   srtSegment?: string | null
-  characters?: string[] | null
+  // Decoded server-side; see storyboards API route.
+  characters?: PanelCharacterRef[] | null
+  location?: string | null
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
 }
