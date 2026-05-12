@@ -2012,9 +2012,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   })()}
             </button>
           </div>
-          {/* 2026-05-13 — 圖/視頻顯示切換。只有當 panel 同時有 imageUrl
-              + videoUrl 才顯示，讓 user 在「看原圖」與「看 B 路徑視頻」
-              之間隨時切換。沒有兩個資產就沒得切。 */}
+          {/* 2026-05-13 — 圖/視頻顯示切換 + B 路徑「生成原圖」CTA。
+              三種狀態：
+              (a) image + video 都有 → 顯示 toggle，user 切著看
+              (b) 只有 video（B 路徑 t2v 直接出視頻，跳過生圖）→ 顯示
+                  「🖼 生成原圖」按鈕，補上 imageUrl 之後 toggle 自動出現
+              (c) 只有 image 或都沒有 → 不顯示，下方既有的「生成圖片 /
+                  ↻ 重新生成圖」按鈕負責 */}
           {selected?.imageUrl && selected?.videoUrl ? (
             <div className="mb-3 inline-flex rounded-sm border border-stone-800/60 bg-stone-900/40 font-mono text-[12px]">
               <button
@@ -2048,6 +2052,37 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 視頻
               </button>
             </div>
+          ) : selected?.videoUrl && !selected?.imageUrl ? (
+            <button
+              type="button"
+              disabled={!selected || regenPanel.isPending || isCurrentPanelImageInFlight}
+              onClick={() => {
+                if (!selected) return
+                const panelIdAtSubmit = selected.id
+                regenPanel.mutate(
+                  { panelId: panelIdAtSubmit },
+                  {
+                    onSuccess: () => {
+                      setImageInFlight((prev) => {
+                        const next = new Set(prev)
+                        next.add(panelIdAtSubmit)
+                        return next
+                      })
+                      void activePanelImageTasks.refetch()
+                    },
+                  },
+                )
+              }}
+              className="mb-3 inline-flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              title="B 路徑只生了視頻沒生圖。點這裡補生一張原圖，之後就能在圖/視頻之間切換。"
+            >
+              <AppIcon name="image" className="h-3 w-3" />
+              {isCurrentPanelImageInFlight
+                ? '生成原圖中…'
+                : regenPanel.isPending
+                  ? '提交中…'
+                  : '🖼 生成原圖（B 路徑補圖）'}
+            </button>
           ) : null}
           {multiShotState.status === 'done' ? (
             <div className="mb-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
