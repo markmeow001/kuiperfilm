@@ -1,7 +1,10 @@
 import { type Job } from 'bullmq'
+import sharp from 'sharp'
 import { prisma } from '@/lib/prisma'
 import { type TaskJobData } from '@/lib/task/types'
 import { decodeImageUrlsFromDb } from '@/lib/contracts/image-urls-contract'
+import { extractCOSKey, getSignedUrl, toFetchableUrl, uploadToCOS } from '@/lib/cos'
+import { logWarn } from '@/lib/logging/core'
 import {
   resolveImageSourceFromGeneration,
   toSignedUrlIfCos,
@@ -343,6 +346,87 @@ export async function collectPanelSceneBase(projectData: NovelProjectData, panel
   return refs
 }
 
+// 2026-05-13 — identity-crop preprocessor for character ref images.
+//
+// Problem: clients hand us composite ref images (one wide canvas with a
+// face closeup + multiple body views packed side-by-side). Kling-2.1's
+// identity binding sees a single image with N figures and can't infer
+// "all of these are the same person" — it averages features and the
+// generated panel character ends up not resembling the ref at all
+// (verified 2026-05-12, 沈冰雪 case).
+//
+// Fix: at panel-gen time, detect wide-aspect refs and crop the leftmost
+// region — composites in the wild almost always put the face closeup
+// on the left. Pass the face crop to Kling instead of the full
+// composite. For non-composite single-shot refs (square / portrait),
+// pass through unchanged. Works retroactively for existing characters
+// without any user re-upload.
+//
+// Trade-off: extra ~200-500ms per character ref per panel gen
+// (download + sharp + upload). Idempotent — repeated calls write to
+// the same deterministic crop key. Future optimization: in-memory
+// cache or DB-backed cache so we only crop each ref once.
+//
+// Failure mode: any error (download fail / sharp fail / upload fail)
+// falls back to the original ref URL, so the worst case is "we did
+// what we did before this preprocessor existed".
+const COMPOSITE_ASPECT_THRESHOLD = 1.5
+const IDENTITY_CROP_WIDTH_RATIO = 0.30
+
+async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
+  if (!originalUrl || originalUrl.startsWith('data:')) return originalUrl
+
+  // Only worth processing standard COS-backed images. Other URL forms
+  // (external HTTP, /m/ media aliases, /api/files local mode) we leave
+  // alone — they may not be re-uploadable to our bucket via the same
+  // key namespace.
+  const sourceKey = extractCOSKey(originalUrl)
+  if (!sourceKey || !sourceKey.startsWith('images/')) return originalUrl
+
+  // Deterministic crop key: same source → same crop key. Repeated panel
+  // gens for the same character overwrite the same COS object (cheap
+  // and idempotent under Tencent COS / R2 PutObject semantics).
+  const cropKey = sourceKey.replace(/\.[^.]+$/, '') + '.identity-crop.jpg'
+
+  try {
+    const fetchUrl = toFetchableUrl(originalUrl)
+    const response = await fetch(fetchUrl)
+    if (!response.ok) {
+      logWarn('[identity-crop] download failed, falling back to original ref', {
+        sourceKey,
+        status: response.status,
+      })
+      return originalUrl
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const meta = await sharp(buffer).metadata()
+    const w = meta.width
+    const h = meta.height
+    if (!w || !h) return originalUrl
+
+    // Single-shot ref (square or portrait) — no crop needed, identity
+    // binding works fine on it as-is.
+    if (w / h < COMPOSITE_ASPECT_THRESHOLD) return originalUrl
+
+    const cropW = Math.round(w * IDENTITY_CROP_WIDTH_RATIO)
+    const cropBuffer = await sharp(buffer)
+      .extract({ left: 0, top: 0, width: cropW, height: h })
+      .jpeg({ quality: 90, mozjpeg: true })
+      .toBuffer()
+
+    await uploadToCOS(cropBuffer, cropKey)
+    return getSignedUrl(cropKey, 3600)
+  } catch (err) {
+    logWarn('[identity-crop] preprocessing failed, falling back to original ref', {
+      sourceKey,
+      cropKey,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return originalUrl
+  }
+}
+
 export async function collectPanelReferenceImages(
   projectData: NovelProjectData,
   panel: PanelLike,
@@ -440,7 +524,14 @@ export async function collectPanelReferenceImages(
     const selectedUrl = selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
     const key = selectedUrl || imageUrls[0] || appearance.imageUrl
     const signed = toSignedUrlIfCos(key, 3600)
-    if (signed) refs.push(signed)
+    if (signed) {
+      // 2026-05-13 — wide-aspect composite refs (e.g. face-closeup-left
+      // + 3-body-views-right) confuse Kling's identity binding. Crop
+      // the leftmost identity region before passing to the model. Pass-
+      // through for square / portrait single-shot refs.
+      const refUrl = await maybeExtractIdentityCrop(signed)
+      refs.push(refUrl)
+    }
   }
 
   if (panel.location) {
