@@ -10,9 +10,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
+
+const STICKY_STEP_VALUES = ['script', 'subjects', 'storyboard', 'voice', 'final'] as const
+type CarryStep = (typeof STICKY_STEP_VALUES)[number]
+function isCarryStep(v: string | null | undefined): v is CarryStep {
+  return !!v && (STICKY_STEP_VALUES as readonly string[]).includes(v)
+}
 
 interface ProjectStats {
   episodes: number
@@ -46,6 +52,12 @@ interface V2HomeClientProps {
 
 export function V2HomeClient({ locale }: V2HomeClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const carryStepRaw = searchParams?.get('carryStep')
+  // Used by "切專案" button to keep the user on the same step in the
+  // newly chosen project. Only carry valid step ids; "home" never needs
+  // a ?startAt= (home is the natural redirect target).
+  const carryStep = isCarryStep(carryStepRaw) ? carryStepRaw : null
   const { data: session, status } = useSession()
   // Role gate — admin sees 設定中心 + 管理後台, members see only the
   // logout button. Mirrors the Navbar contract.
@@ -267,7 +279,11 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
             : formatted.map((project) => (
                 <Link
                   key={project.id}
-                  href={`/${locale}/v2/workspace/${project.id}`}
+                  href={
+                    carryStep
+                      ? `/${locale}/v2/workspace/${project.id}?startAt=${carryStep}`
+                      : `/${locale}/v2/workspace/${project.id}`
+                  }
                   className="group relative flex h-44 flex-col rounded-sm border border-stone-700 bg-stone-900/70 p-5 transition-all hover:border-amber-500 hover:bg-stone-900/90"
                 >
                   <button

@@ -14,6 +14,7 @@ import { TopBar } from '@/components/v2/TopBar'
 import type { V2StepId } from '@/components/v2/v2-types'
 import { V2EpisodeTabBar } from './V2EpisodeTabBar'
 import { useEpisodePreservingHref } from './hooks/useEpisodePreservingHref'
+import { useStickyStep } from './hooks/useStickyStep'
 
 interface V2WorkspaceShellProps {
   projectId: string
@@ -35,6 +36,10 @@ export function V2WorkspaceShell({
   const router = useRouter()
   const pathname = usePathname()
   const buildHref = useEpisodePreservingHref()
+
+  // Record this step as the user's last position on the project so
+  // returning to /v2/workspace/[id] (F5, sidebar logo, etc.) lands here.
+  useStickyStep(projectId, currentStep)
 
   function handleSelect(stepId: V2StepId) {
     // Map "home" to no suffix so /v2/workspace/[id] is the home page.

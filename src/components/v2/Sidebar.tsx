@@ -26,7 +26,14 @@ interface SidebarProps {
 
 export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) {
   const currentIdx = v2StepIndex(currentStep)
-  const projectsHref = `/${locale}/v2`
+  // Carry the current step on the "switch project" link so the project
+  // list page can append `?startAt=<step>` to each project's href and
+  // the new project lands on the same step (writer→writer, etc.) instead
+  // of bouncing to the home step.
+  const projectsHref =
+    currentStep && currentStep !== 'home'
+      ? `/${locale}/v2?carryStep=${currentStep}`
+      : `/${locale}/v2`
 
   return (
     <aside className="flex w-52 flex-col border-r border-amber-900/20 bg-stone-950 text-stone-200">

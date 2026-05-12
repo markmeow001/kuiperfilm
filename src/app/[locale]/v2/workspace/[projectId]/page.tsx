@@ -1,12 +1,48 @@
+import { redirect } from 'next/navigation'
+import { getAuthSession } from '@/lib/api-auth'
+import { prisma } from '@/lib/prisma'
 import { V2WorkspaceShell } from './V2WorkspaceShell'
 import { V2HomeClient } from './V2HomeClient'
 
-interface PageProps {
-  params: Promise<{ locale: string; projectId: string }>
+const STEP_VALUES = ['home', 'script', 'subjects', 'storyboard', 'voice', 'final'] as const
+type StepValue = (typeof STEP_VALUES)[number]
+
+function isStep(value: unknown): value is StepValue {
+  return typeof value === 'string' && (STEP_VALUES as readonly string[]).includes(value)
 }
 
-export default async function V2WorkspaceHomePage({ params }: PageProps) {
+interface PageProps {
+  params: Promise<{ locale: string; projectId: string }>
+  searchParams?: Promise<{ startAt?: string }>
+}
+
+export default async function V2WorkspaceHomePage({ params, searchParams }: PageProps) {
   const { locale, projectId } = await params
+  const { startAt } = (await searchParams) ?? {}
+
+  // Deep-link override: `?startAt=<step>` wins and is persisted by the
+  // step page itself via useStickyStep, no upsert needed here.
+  if (isStep(startAt) && startAt !== 'home') {
+    redirect(`/${locale}/v2/workspace/${projectId}/${startAt}`)
+  }
+
+  // Sticky-step lookup — per-user, per-project cursor.
+  const session = await getAuthSession()
+  if (session?.user?.id) {
+    const state = await prisma.userProjectState.findUnique({
+      where: {
+        userId_projectId: {
+          userId: session.user.id,
+          projectId,
+        },
+      },
+      select: { lastStep: true },
+    })
+
+    if (state && isStep(state.lastStep) && state.lastStep !== 'home') {
+      redirect(`/${locale}/v2/workspace/${projectId}/${state.lastStep}`)
+    }
+  }
 
   return (
     <V2WorkspaceShell projectId={projectId} locale={locale} currentStep="home">
