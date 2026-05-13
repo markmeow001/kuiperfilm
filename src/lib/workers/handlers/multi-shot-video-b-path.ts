@@ -1561,7 +1561,20 @@ export async function runMultiShotBPath(params: {
       // parser into picking the dominant prompt language (中文) for
       // TTS instead of the actual line language (e.g. Spanish dialogue
       // arriving as Mandarin voice, user-reported 2026-05-02).
-      primaryPrompt = rawPrompt.trim()
+      //
+      // 2026-05-13 — but DO run substituteImageRefs so [character] /
+      // bare character names in the narrative get translated to the
+      // <<<image_N>>> tokens Kling actually parses for SubjectInfos
+      // binding. Without this, the narrative looks readable in the UI
+      // but Kling sees literal text and invents identities from prompt.
+      // panel-numbered / seedance modes already do this; raw used to
+      // skip it because we feared regex over-matching, but the regex
+      // is case-insensitive whole-substring on a small known-name set
+      // (subjectInfos.name list, max 3 entries) — collision risk is
+      // negligible vs the binding payoff.
+      primaryPrompt = nameToImageIndex.size > 0
+        ? substituteImageRefs(rawPrompt.trim(), nameToImageIndex)
+        : rawPrompt.trim()
     } else if (promptStyle === 'auto-seedance') {
       promptSource = 'seedance'
       primaryPrompt = buildSeedancePrompt(validPanels, dialogueByPanel, undefined, nameToImageIndex)
