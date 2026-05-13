@@ -60,7 +60,10 @@ describe('buildSeedancePrompt', () => {
     ]
     const dialogues = new Map([['p1', [{ speaker: '劉浩', content: '操！' }]]])
     const out = buildSeedancePrompt(panels, dialogues)
-    expect(out).toContain('[劉浩]: "操！"')
+    // 2026-05-13 — seedance now also routes through formatDialogueForKling so
+    // mixed-language dramas get the per-line `(in <Lang>)` TTS hint here too.
+    // Bracket-wrapped speaker tag dropped in favour of Kling's native format.
+    expect(out).toContain('劉浩 (in Mandarin Chinese): "操！"')
   })
 
   it('strips #viewHint from location tag', () => {

@@ -47,6 +47,29 @@ export type PresetKey =
   | 'anime'
   | 'thick-paint'
 
+/**
+ * Era hint for a style reference image. Used by the worker to pick the
+ * closest style anchor for each multi-shot group:
+ *   - 'period':  古裝 / 古代 / 武俠 / 仙俠 — looks like a period film still
+ *   - 'modern':  現代都市 / 時裝 — looks like a contemporary film still
+ *   - 'neutral': content-agnostic photographic sample (skin/fabric
+ *     close-up, lens grain reference, etc.) — safe default for either era
+ *
+ * Worker resolves panel era from scene name / panel description keywords
+ * (古/朝/府/宮/廟 vs 公司/街/車/手機). On ambiguous scenes we drop to
+ * 'neutral' so the model still gets a real-photo anchor without a costume
+ * bias.
+ */
+export type StyleRefEraHint = 'period' | 'modern' | 'neutral'
+
+export interface StyleReferenceImage {
+  /** Public URL (COS-signed or HTTPS) — must be permanently accessible by Tencent VOD. */
+  url: string
+  eraHint: StyleRefEraHint
+  /** Short descriptor used as the CustomElement name + visible in logs. */
+  label: string
+}
+
 export interface StylePresetEntry {
   label: string
   zhLabel: string
@@ -54,6 +77,19 @@ export interface StylePresetEntry {
   category: PresetCategory
   positivePrompt: string
   negativePrompt: string
+  /**
+   * Optional photographic style anchor images. When set, the multi-shot
+   * worker injects one as a dedicated SubjectInfos slot so Kling Omni
+   * extracts lighting / grain / skin texture from the real photo instead
+   * of relying on text-only photorealistic anchors (which the model's
+   * xianxia / game-CG training prior can override).
+   *
+   * Picker rules (worker):
+   *   - filter by panel era (period/modern detected from scene + desc)
+   *   - prefer exact era match, fall back to 'neutral'
+   *   - if no entries available, skip the slot
+   */
+  styleReferences?: StyleReferenceImage[]
 }
 
 const NEG_BASE = 'low resolution, blurry, watermark, text overlay, deformed face, extra fingers, extra limbs'
@@ -76,6 +112,56 @@ export const STYLE_PROFILE_PRESETS: Record<PresetKey, StylePresetEntry> = {
     // through plus the porcelain-skin / idealized-feature failure mode.
     positivePrompt: 'real-life photograph captured on a DSLR full-frame camera, 35mm lens, cinematic photorealistic photography, natural skin texture with visible pores wrinkles freckles and micro imperfections, asymmetric realistic facial features, physically accurate lighting, soft shadows with volumetric fog, lens effects including bokeh and chromatic aberration, real-world materials (weathered wood, polished metal, woven fabric), subtle film grain, Arri Alexa color grading, documentary realism — NOT a 3D render, NOT CG, NOT game graphics, NOT a digital painting',
     negativePrompt: `cartoon, anime, illustration, painted, digital painting, 3D render, CGI, CG render, computer graphics, game CG, video game style, Genshin Impact style, MiHoYo style, Honkai aesthetic, Pixar style, Disney animation, semi-realistic, anime realism, stylized character render, doll-like, porcelain skin, glossy plastic skin, perfectly symmetric face, idealized beauty, smoothed skin, airbrushed skin, plastic skin, ${NEG_BASE}`,
+    // 2026-05-13 — TikTok short-drama photorealism bug:
+    // Kling 3.0-Omni's xianxia/wuxia training prior overrides the
+    // text-based photorealistic anchors above whenever a crowd/period
+    // scene appears in the prompt. Text weight loses to model prior
+    // every time. Fix: feed an actual photo via SubjectInfos so the
+    // image-attention path dominates (same mechanism that pins
+    // character identity). Three samples cover the common eras; worker
+    // picks per-shot based on scene/desc keywords.
+    //
+    // URLs are platform-managed assets in COS (Info@rafilm.ca account).
+    // To swap: re-upload to the same path or update this constant.
+    // CC0 / license-clean stills selected to be content-light and
+    // style-strong — face/skin close-ups, fabric texture, natural light.
+    // 2026-05-13 — Initial ship uses Pexels CDN URLs (CC0 license, free
+    // commercial use, no attribution required). These are publicly
+    // fetchable by Tencent VOD's CreateAigcCustomElement.
+    //
+    // Selected photos (v2, after user rejected v1 30570367/1249542 as
+    // "fashion shoot vibe" and "sleeping/dreamy" — too stylized in v1):
+    //   period   19728893 — Woman face by candlelight, warm intimate
+    //     amber tones. Real photograph, period-drama film-still feel
+    //     (warm directional light, deep shadows, natural skin texture).
+    //   modern   33999354 — Contemporary woman outdoor portrait, natural
+    //     summer daylight, clean documentary aesthetic — minimal
+    //     post-processing so Kling extracts photographic look without
+    //     over-stylized lighting bias.
+    //   neutral  6642970  — Human skin texture macro (kaboompics).
+    //     Pure photographic style sample — pores, micro-imperfections,
+    //     natural light — no person/scene context, safe fallback.
+    //
+    // Production hardening (future): mirror these to our own COS bucket
+    // at `system/style-anchors/realistic-{era}.jpg` so Pexels CDN changes
+    // can't break the pipeline.
+    styleReferences: [
+      {
+        url: 'https://images.pexels.com/photos/19728893/pexels-photo-19728893.jpeg',
+        eraHint: 'period',
+        label: 'realistic-period',
+      },
+      {
+        url: 'https://images.pexels.com/photos/33999354/pexels-photo-33999354.png',
+        eraHint: 'modern',
+        label: 'realistic-modern',
+      },
+      {
+        url: 'https://images.pexels.com/photos/6642970/pexels-photo-6642970.jpeg',
+        eraHint: 'neutral',
+        label: 'realistic-neutral',
+      },
+    ],
   },
   'cyberpunk': {
     label: 'Cyberpunk',

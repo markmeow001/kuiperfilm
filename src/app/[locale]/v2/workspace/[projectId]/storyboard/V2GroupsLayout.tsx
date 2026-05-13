@@ -59,6 +59,8 @@ type UpdatePanelTextMutation = UseMutationResult<
     srtSegment?: string
     /** See useUpdatePanelText — used by the chip × remove flow. */
     characters?: Array<{ name: string; appearance?: string }> | string | null
+    /** Used by the 場景 chip × remove flow. */
+    location?: string | null
   }
 >
 

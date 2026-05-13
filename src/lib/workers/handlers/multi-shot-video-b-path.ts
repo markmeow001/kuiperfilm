@@ -49,7 +49,17 @@ import { reportTaskProgress } from '../shared'
 import { buildDialogueDrivenDurations } from './speech-duration-estimator'
 import { buildMultiKlingSplitPlan, MultiKlingChunkerError, type MultiKlingChunk } from './multi-kling-chunker'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
-import { getOrCreateTencentVodElement } from '@/lib/tencent-vod/element-register'
+import {
+  getOrCreateTencentVodElement,
+  getOrRegisterStyleReferenceElement,
+} from '@/lib/tencent-vod/element-register'
+import { loadStyleProfileByProjectId } from '@/lib/style-profile/loader'
+import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
+import {
+  detectEra,
+  pickStyleReference,
+  resolvePresetKeyByPositivePrompt,
+} from '@/lib/style-profile/style-reference-picker'
 
 interface BPathPanel {
   id: string
@@ -210,36 +220,57 @@ function stripParentheticalStageDirections(content: string): string {
  * `(in Spanish)` to the dialogue line nudges the parser onto the
  * right voice without touching the visual portion.
  */
+/**
+ * Detect spoken language of a dialogue line by dominant character set.
+ *
+ * 2026-05-13 — Flipped from "return null for zh/en (trust auto-detect)"
+ * to "always return a language label" because Kling's auto-detect picks
+ * the SURROUNDING prompt's dominant language, not the dialogue line's.
+ * Symptom: Chinese description + English dialogue → Kling speaks the
+ * line in Mandarin. Forcing an explicit `(in English)` per line overrides
+ * the surrounding-prompt bias and locks each line to its actual language.
+ *
+ * This makes the contract source-of-truth: dialogue language = the
+ * language of the dialogue line itself, regardless of description/
+ * narrative language. User requirement (2026-05-13):
+ *   "對白中文就講中文,英文就講英文,西班牙文就講西班牙文"
+ *
+ * Detection priority — checked in order, first match wins:
+ *   1. Hiragana / katakana → Japanese (most distinctive)
+ *   2. Hangul → Korean
+ *   3. Spanish marks (ñ¿¡) → Spanish
+ *   4. French marks (çœ) → French
+ *   5. German eszett ß → German
+ *   6. German umlauts + common-word check → German
+ *   7. Cyrillic → Russian
+ *   8. CJK Han → Mandarin Chinese
+ *   9. Latin alphabet → English (catch-all)
+ *  10. Punctuation/digits only → null (no override needed)
+ */
 function detectDialogueLanguage(content: string): string | null {
-  if (/[぀-ゟ゠-ヿ]/.test(content)) return 'Japanese' // hiragana / katakana
-  if (/[가-힯]/.test(content)) return 'Korean' // hangul
-  if (/[一-鿿]/.test(content)) return null // CJK Chinese — let Kling auto-detect (it's good at zh)
-  // Spanish-specific characters that don't appear in English / French / German.
+  const stripped = content.trim()
+  if (!stripped) return null
+  if (/[぀-ゟ゠-ヿ]/.test(content)) return 'Japanese'
+  if (/[가-힯]/.test(content)) return 'Korean'
   if (/[ñ¿¡]/.test(content)) return 'Spanish'
-  // French-specific: cedilla / ligatures.
   if (/[çœ]/.test(content)) return 'French'
-  // German-specific: eszett / umlauts. Umlauts also appear in Turkish and
-  // some Scandinavian languages, but eszett is a strong German signal.
   if (/ß/.test(content)) return 'German'
   if (/[äöü]/.test(content) && /\b(?:der|die|das|und|ist|nicht|ich|ein|sind)\b/i.test(content)) return 'German'
-  // Russian / Cyrillic.
   if (/[Ѐ-ӿ]/.test(content)) return 'Russian'
-  // No distinctive markers → leave it to Kling's auto-detect (English /
-  // unknown). Adding `(in English)` for purely-English lines isn't
-  // harmful but adds prompt-length noise, so we skip it.
+  if (/[一-鿿]/.test(content)) return 'Mandarin Chinese'
+  if (/[A-Za-zÀ-ÿ]/.test(content)) return 'English'
   return null
 }
 
 function formatDialogueForKling(speaker: string, content: string): string {
   const lang = detectDialogueLanguage(content)
-  // Kling Omni's native dialogue format (klingai.com webUI / direct API)
-  // is `Character: "line"` — speaker name, colon, then the quoted line
-  // verbatim. The optional `(in <Language>)` parenthetical is a
-  // documented Kling 3.0-Omni convention for steering the per-line TTS
-  // when the surrounding shot prompt is in a different language than
-  // the dialogue (the 2026-05-02 user-reported case: Chinese visual
-  // descriptions paired with Spanish dialogue → Kling defaulted to
-  // Mandarin TTS without this hint).
+  // Kling Omni's native dialogue format is `Character: "line"`. The
+  // `(in <Language>)` parenthetical is the documented Kling 3.0-Omni
+  // convention for per-line TTS language override. As of 2026-05-13 we
+  // emit it for EVERY line so the dialogue language is the source of
+  // truth regardless of surrounding description language — handles the
+  // mixed-language drama case (CN narration + EN/ES dialogue) without
+  // user intervention.
   return lang
     ? `${speaker} (in ${lang}): "${content}"`
     : `${speaker}: "${content}"`
@@ -631,8 +662,12 @@ export function buildSeedancePrompt(
       : rawVisual
     const camMove = (panel.cameraMove || '').trim()
 
+    // 2026-05-13 — Route through formatDialogueForKling so the `(in
+    // <Language>)` per-line TTS hint applies in seedance mode too.
+    // Previously seedance bypassed the formatter, leaving mixed-language
+    // dialogue at the mercy of surrounding-prompt language detection.
     const dialogues = (dialogueByPanelId.get(panel.id) ?? [])
-      .map((d) => `[${d.speaker}]: "${d.content}"`)
+      .map((d) => formatDialogueForKling(d.speaker, d.content))
       .join(' ')
 
     const parts: string[] = [`${start}-${end} seconds:`]
@@ -934,11 +969,81 @@ export async function runMultiShotBPath(params: {
   let multiShotMode: 'intelligence' | 'customize' =
     panelDurations !== undefined ? 'customize' : (params.multiShotMode ?? 'intelligence')
   let effectivePanelDurations: number[] | undefined = panelDurations
-  const { userId } = job.data
+  const { userId, projectId } = job.data
   const logger = createScopedLogger({
     module: 'worker.multi-shot-video-b-path',
     action: 'multi_shot_video_b_path_generate',
   })
+
+  // ── 2026-05-13 — Photoreal style anchor for Kling 3.0-Omni ──
+  //
+  // Kling Omni's text-based "photorealistic" anchors lose to its
+  // xianxia/wuxia training prior on crowd / period scenes. Fix is to
+  // feed an actual photo via the same SubjectInfos pipeline that pins
+  // character identity. Reference-image attention beats prompt-text
+  // attention by a wide margin in our 2026-05-13 e2e diffs.
+  //
+  // Resolution path:
+  //   1. Load project styleProfile (or fallback to 'realistic' preset)
+  //   2. Reverse-resolve preset key by matching stylePositivePrompt
+  //   3. If matched preset has styleReferences[], pick one by era hint
+  //   4. Register it as a Tencent CustomElement (cached pod-locally)
+  //
+  // Failure is non-fatal: a null styleRefBinding just means the task
+  // runs without an image-based style anchor (legacy behaviour).
+  type StyleReferenceBinding = {
+    url: string
+    label: string
+    tencentVodElementId: string | null
+    /** 1-indexed FileInfos / element_list slot, filled in once allocated. */
+    slot: number
+  }
+  let styleRefBinding: StyleReferenceBinding | null = null
+  try {
+    const styleProfile = await loadStyleProfileByProjectId(prisma, projectId)
+    const presetKey = resolvePresetKeyByPositivePrompt(styleProfile?.positivePrompt ?? null)
+    const preset = presetKey ? STYLE_PROFILE_PRESETS[presetKey] : null
+    if (preset?.styleReferences?.length) {
+      // Era detection: combine all panel descriptions + location names
+      // so the picker has enough signal even when individual panels are
+      // sparse. Cheap O(n) join — validPanels is at most ~6 entries.
+      const eraTextBlob = validPanels
+        .map((p) => `${p.description ?? ''} ${p.videoPrompt ?? ''} ${p.location ?? ''}`)
+        .join(' ')
+      const era = detectEra(eraTextBlob)
+      const picked = pickStyleReference(preset.styleReferences, era)
+      if (picked) {
+        const elementId = await getOrRegisterStyleReferenceElement({
+          userId,
+          url: picked.url,
+          label: picked.label,
+        })
+        styleRefBinding = {
+          url: picked.url,
+          label: picked.label,
+          tencentVodElementId: elementId,
+          slot: 0, // filled in after slot allocation
+        }
+        logger.info({
+          message: 'style reference resolved',
+          details: {
+            presetKey,
+            detectedEra: era,
+            pickedEra: picked.eraHint,
+            label: picked.label,
+            elementRegistered: elementId !== null,
+          },
+        })
+      }
+    }
+  } catch (err) {
+    // Style anchor is an optimisation, not a correctness gate. Log
+    // and fall through to text-only style anchoring.
+    logger.warn({
+      message: 'style reference resolution failed; running without image-based style anchor',
+      details: { error: err instanceof Error ? err.message : String(err) },
+    })
+  }
 
   // Phase 11.4 / multi-appearance: pre-load EpisodeCharacter bindings
   // for the storyboard's episode so per-character costume overrides
@@ -1301,22 +1406,47 @@ export async function runMultiShotBPath(params: {
   // silently dropped → refCount=0 → identity completely lost. Switch
   // to referenceImageUrls so the existing tencent-vod.ts path that
   // pushes FileInfos with Usage='Reference' runs.
-  const subjectInfos = [...characterSubjects, ...sceneSubjects, ...propSubjects].slice(0, 3)
+  //
+  // 2026-05-13 — slot allocation now also reserves 1 slot for the
+  // photoreal style anchor when active. Priority: chars → style →
+  // scenes → props. Style displaces props/scenes before it displaces
+  // a character ref (identity is more visible than backdrop or prop).
+  const STYLE_SLOT_RESERVED = styleRefBinding !== null ? 1 : 0
+  const HARD_CAP = 3
+  const slotAvail = HARD_CAP - STYLE_SLOT_RESERVED
+  const trimmedCharacterSubjects = characterSubjects.slice(0, slotAvail)
+  const remainingAfterChar = slotAvail - trimmedCharacterSubjects.length
+  const trimmedSceneSubjects = sceneSubjects.slice(0, remainingAfterChar)
+  const remainingAfterScene = remainingAfterChar - trimmedSceneSubjects.length
+  const trimmedPropSubjects = propSubjects.slice(0, remainingAfterScene)
+  // Style ref occupies the slot AFTER characters, before scenes/props,
+  // so its slot index in the prompt is `chars.length + 1` (1-indexed).
+  // This keeps identity refs at slot 1..N (where N = active chars).
+  const styleSubjectEntries = styleRefBinding
+    ? [{ name: '__STYLE_ANCHOR__', imageUrls: [styleRefBinding.url] }]
+    : []
+  const subjectInfos = [
+    ...trimmedCharacterSubjects,
+    ...styleSubjectEntries,
+    ...trimmedSceneSubjects,
+    ...trimmedPropSubjects,
+  ].slice(0, HARD_CAP)
   const referenceImageUrls = subjectInfos
     .map((s) => (Array.isArray(s.imageUrls) ? s.imageUrls[0] : null))
     .filter((u): u is string => typeof u === 'string' && u.length > 0)
-  const usedCharCount = Math.min(characterBindings.length, subjectInfos.length)
-  const usedSceneCount = Math.min(
-    sceneBindings.length,
-    Math.max(0, subjectInfos.length - usedCharCount),
-  )
-  const usedPropCount = Math.min(
-    propBindings.length,
-    Math.max(0, subjectInfos.length - usedCharCount - usedSceneCount),
-  )
+  const usedCharCount = trimmedCharacterSubjects.length
+  const usedStyleCount = styleSubjectEntries.length
+  const usedSceneCount = trimmedSceneSubjects.length
+  const usedPropCount = trimmedPropSubjects.length
   const activeCharacterBindings = characterBindings.slice(0, usedCharCount)
   const activeSceneBindings = sceneBindings.slice(0, usedSceneCount)
   const activePropBindings = propBindings.slice(0, usedPropCount)
+  // Style ref's prompt slot is 1-indexed against subjectInfos order.
+  if (styleRefBinding && usedStyleCount > 0) {
+    styleRefBinding.slot = trimmedCharacterSubjects.length + 1
+  } else {
+    styleRefBinding = null
+  }
 
   // P1 (2026-05-13) — Pre-registered "固定主体" (CustomElement) binding.
   //
@@ -1395,7 +1525,7 @@ export async function runMultiShotBPath(params: {
   }
   // Order MUST mirror referenceImageUrls / nameToImageIndex so slot N is
   // the same entity regardless of which path (element_list vs FileInfos)
-  // we end up using.
+  // we end up using. Slot order: chars → style → scenes → props.
   const elementList: Array<{ element_id: string }> = []
   const elementListNames: string[] = []
   for (const c of activeCharacterBindings) {
@@ -1404,6 +1534,17 @@ export async function runMultiShotBPath(params: {
       elementList.push({ element_id: eid })
       elementListNames.push(c.name)
     }
+  }
+  // Style anchor element — only push when both the binding survived slot
+  // allocation AND Tencent registered the CustomElement. Without an
+  // elementId we can't go down the element_list path for the style ref
+  // (would create a slot/name mismatch with referenceImageUrls), so we
+  // mark it as ineligible for element_list mode by clearing it.
+  let styleRefForElementList: { element_id: string } | null = null
+  if (styleRefBinding && styleRefBinding.tencentVodElementId) {
+    styleRefForElementList = { element_id: styleRefBinding.tencentVodElementId }
+    elementList.push(styleRefForElementList)
+    elementListNames.push('__STYLE_ANCHOR__')
   }
   for (const s of activeSceneBindings) {
     const eid = elementIdByKey.get(`scene:${s.id}`)
@@ -1422,10 +1563,21 @@ export async function runMultiShotBPath(params: {
   // Use element_list path only when EVERY active binding registered
   // successfully — otherwise mixing would leave some entities on the
   // <<<image_N>>> path and others on <<<element_N>>>, which Kling
-  // can't fan-out coherently.
+  // can't fan-out coherently. Style ref counts toward the gate so a
+  // failed style registration falls everyone back to FileInfos (which
+  // is what passes the style ref via referenceImageUrls anyway).
+  const styleRefIsRegistered = styleRefBinding !== null && styleRefBinding.tencentVodElementId !== null
   const totalActive =
-    activeCharacterBindings.length + activeSceneBindings.length + activePropBindings.length
-  const useElementListPath = elementList.length === totalActive && totalActive > 0
+    activeCharacterBindings.length
+    + activeSceneBindings.length
+    + activePropBindings.length
+    + (styleRefBinding !== null ? 1 : 0)
+  const expectedElementListSize =
+    activeCharacterBindings.length
+    + activeSceneBindings.length
+    + activePropBindings.length
+    + (styleRefIsRegistered ? 1 : 0)
+  const useElementListPath = elementList.length === expectedElementListSize && elementList.length === totalActive && totalActive > 0
   logger.info({
     message: 'tencent vod element registration summary',
     details: {
@@ -1448,9 +1600,16 @@ export async function runMultiShotBPath(params: {
   // order so prompt's <<<image_N>>> stays in sync. We also map the
   // location name (sceneBindings[i].name) so visual descriptions
   // mentioning the place get a `<<<image_N>>>` substitution too.
+  //
+  // 2026-05-13 — style anchor slot is INTENTIONALLY excluded from
+  // nameToImageIndex. The substituteImageRefs path is for translating
+  // user-visible names (character / scene / prop) in the narrative
+  // into <<<image_N>>> tokens. The style anchor has no human-readable
+  // name in the prompt — the worker emits its <<<image_N>>> reference
+  // directly via the style header section (see buildStyleAnchorHeader).
   const nameToImageIndex = new Map<string, number>()
   subjectInfos.forEach((s, i) => {
-    if (s.name) nameToImageIndex.set(s.name, i + 1)
+    if (s.name && s.name !== '__STYLE_ANCHOR__') nameToImageIndex.set(s.name, i + 1)
   })
 
   // Names of project characters that were detected in this group's
@@ -1797,9 +1956,24 @@ export async function runMultiShotBPath(params: {
     // actual generation.
     const placeholderPromptRaw = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex, unboundNames)
     const placeholderPrompt = useElementListPath ? rewriteImageRefsToElementRefs(placeholderPromptRaw) : placeholderPromptRaw
+    // Customize mode: Tencent ignores top-level Prompt and reads only
+    // multi_prompt[].prompt. Append style suffix to EVERY per-shot
+    // entry so the photoreal anchor applies uniformly across the cut.
+    const styleSuffix = (() => {
+      if (!styleRefBinding || styleRefBinding.slot <= 0) return ''
+      const refToken = useElementListPath
+        ? `<<<element_${styleRefBinding.slot}>>>`
+        : `<<<image_${styleRefBinding.slot}>>>`
+      return ` (visual style matches ${refToken}: live-action photography, NOT animation, NOT CG, NOT 3D render)`
+    })()
     const multiPromptResolved = useElementListPath
-      ? multiPrompt.map((mp) => ({ ...mp, prompt: rewriteImageRefsToElementRefs(mp.prompt) }))
-      : multiPrompt
+      ? multiPrompt.map((mp) => ({
+          ...mp,
+          prompt: `${rewriteImageRefsToElementRefs(mp.prompt)}${styleSuffix}`,
+        }))
+      : (styleSuffix
+        ? multiPrompt.map((mp) => ({ ...mp, prompt: `${mp.prompt}${styleSuffix}` }))
+        : multiPrompt)
     generateOptions = {
       prompt: placeholderPrompt,
       duration: finalTotal,
@@ -1913,6 +2087,26 @@ export async function runMultiShotBPath(params: {
           return boundEntityNames.has(refName)
         })
         .join('\n')
+      // 2026-05-13 — Photoreal style anchor injection.
+      //
+      // Kling Omni's xianxia/CG training prior overrides text-based
+      // photorealistic anchors. We solve this by feeding an actual real
+      // photo via SubjectInfos (slot `styleRefBinding.slot`) and
+      // prepending a TOP-anchored English header that explicitly tells
+      // Kling to copy the style from that slot. English-only to avoid
+      // CN→xianxia trigger. TOP placement maximises Kling's attention
+      // weight (model attention decays toward end of long prompts).
+      if (styleRefBinding && styleRefBinding.slot > 0) {
+        const refToken = useElementListPath
+          ? `<<<element_${styleRefBinding.slot}>>>`
+          : `<<<image_${styleRefBinding.slot}>>>`
+        const styleHeader = [
+          `STYLE: live-action film photography. Match the visual style of ${refToken} exactly — lighting, film grain, skin texture with visible pores, fabric weave, natural shadows, lens characteristics. ${refToken} is a STYLE REFERENCE ONLY, NOT a character or location.`,
+          'STRICT: NOT animation, NOT CG, NOT 3D render, NOT illustration, NOT digital painting, NOT xianxia stylized art, NOT Genshin Impact aesthetic. Output must look like a real photograph captured on Arri Alexa or RED camera, 35mm lens, with documentary realism.',
+          '',
+        ].join('\n')
+        workingPrompt = `${styleHeader}\n${workingPrompt}`
+      }
       primaryPrompt = workingPrompt
     } else if (promptStyle === 'auto-seedance') {
       promptSource = 'seedance'
@@ -1936,7 +2130,21 @@ export async function runMultiShotBPath(params: {
     // <<<element_N>>>. Slot order is preserved (elementList was built in
     // the same character → scene → prop order as referenceImageUrls), so
     // N stays the same — only the namespace prefix changes.
-    const primaryPromptResolved = useElementListPath ? rewriteImageRefsToElementRefs(primaryPrompt) : primaryPrompt
+    let primaryPromptResolved = useElementListPath ? rewriteImageRefsToElementRefs(primaryPrompt) : primaryPrompt
+    // Inject style anchor header for the non-raw intelligence paths
+    // (panel-numbered / auto-seedance). The raw path already inlined the
+    // header above so it doesn't get double-prepended.
+    if (promptSource !== 'raw' && styleRefBinding && styleRefBinding.slot > 0) {
+      const refToken = useElementListPath
+        ? `<<<element_${styleRefBinding.slot}>>>`
+        : `<<<image_${styleRefBinding.slot}>>>`
+      const styleHeader = [
+        `STYLE: live-action film photography. Match the visual style of ${refToken} exactly — lighting, film grain, skin texture with visible pores, fabric weave, natural shadows, lens characteristics. ${refToken} is a STYLE REFERENCE ONLY, NOT a character or location.`,
+        'STRICT: NOT animation, NOT CG, NOT 3D render, NOT illustration, NOT digital painting, NOT xianxia stylized art, NOT Genshin Impact aesthetic. Output must look like a real photograph captured on Arri Alexa or RED camera, 35mm lens, with documentary realism.',
+        '',
+      ].join('\n')
+      primaryPromptResolved = `${styleHeader}\n${primaryPromptResolved}`
+    }
 
     logger.info({
       message: 'B path multi-shot submit (intelligence)',

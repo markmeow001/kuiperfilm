@@ -71,9 +71,12 @@ describe('buildBPathCustomizePrompts', () => {
       ['p2', [{ speaker: '陳雅婷', content: '志明，你還好嗎？' }]],
     ])
     const out = buildBPathCustomizePrompts(panels, dialogues, [3, 4])
+    // 2026-05-13 — formatDialogueForKling now always emits `(in <Lang>)`
+    // hint so per-line TTS language is the source of truth (handles
+    // mixed-language drama scripts without surrounding-prompt bias).
     expect(out).toEqual([
       { index: 1, prompt: '中景：男子起床', duration: 3 },
-      { index: 2, prompt: '全景：女友端早餐进门\n陳雅婷: "志明，你還好嗎？"', duration: 4 },
+      { index: 2, prompt: '全景：女友端早餐进门\n陳雅婷 (in Mandarin Chinese): "志明，你還好嗎？"', duration: 4 },
     ])
   })
 

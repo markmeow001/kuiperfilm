@@ -239,6 +239,7 @@ export const PATCH = apiHandler(async (
     srtSegment,  // V2 storyboard editor — dialogue/subtitle text
     characters,  // V2 storyboard editor — JSON string of panel.characters
                  // (used by 出場角色 chip × remove flow, 2026-05-13)
+    location,    // V2 storyboard editor — scene name (used by 場景 chip × remove)
   } = body
 
   // 🔥 方式1：通过 panelId 直接更新（优先）
@@ -262,6 +263,7 @@ export const PATCH = apiHandler(async (
       description?: string | null
       srtSegment?: string | null
       characters?: string | null
+      location?: string | null
     } = {}
     if (videoPrompt !== undefined) updateData.videoPrompt = videoPrompt
     if (firstLastFramePrompt !== undefined) updateData.firstLastFramePrompt = firstLastFramePrompt
@@ -284,6 +286,17 @@ export const PATCH = apiHandler(async (
         updateData.characters = JSON.stringify(characters)
       } else {
         throw new ApiError('INVALID_PARAMS', { message: 'characters must be null, string, or array' })
+      }
+    }
+    if (location !== undefined) {
+      // Accept string (set) or null (clear). Worker treats null as 'no scene
+      // ref' and frees up that SubjectInfos slot for character/prop refs.
+      if (location === null) {
+        updateData.location = null
+      } else if (typeof location === 'string') {
+        updateData.location = location.trim() || null
+      } else {
+        throw new ApiError('INVALID_PARAMS', { message: 'location must be null or string' })
       }
     }
 

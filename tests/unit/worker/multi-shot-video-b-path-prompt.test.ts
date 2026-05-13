@@ -39,13 +39,13 @@ describe('buildBPathCombinedPrompt', () => {
     const result = buildBPathCombinedPrompt(panels, dialogues)
     expect(result).toContain('镜头1: 中景：男子躺在床上')
     expect(result).toContain('镜头2: 全景：女友端早餐进门')
-    // Native Kling format `Speaker: "line"` (no `says` / `说`) — see
-    // formatDialogueForKling. Earlier we used `陳雅婷说："…"` thinking it
-    // helped Kling pick CN TTS for CJK lines, but that markup confused
-    // the per-shot parser into mandarin-defaulting Spanish lines too.
-    expect(result).toContain('陳雅婷: "志明，你還好嗎？"')
+    // Native Kling format `Speaker (in <Lang>): "line"` — formatDialogueForKling
+    // emits the per-line language hint for every line as of 2026-05-13 so
+    // mixed-language dramas (CN narration + EN/ES dialogue) keep TTS
+    // locked to the dialogue's own language regardless of surrounding bias.
+    expect(result).toContain('陳雅婷 (in Mandarin Chinese): "志明，你還好嗎？"')
     // Dialogue must be on the same shot as its panel, not standalone
-    expect(result.match(/镜头2:[\s\S]*?陳雅婷:/)).toBeTruthy()
+    expect(result.match(/镜头2:[\s\S]*?陳雅婷/)).toBeTruthy()
   })
 
   it('joins multiple dialogue lines on the same panel with a space', () => {
@@ -58,7 +58,7 @@ describe('buildBPathCombinedPrompt', () => {
     ])
     const result = buildBPathCombinedPrompt(panels, dialogues)
     expect(result).toBe(
-      '镜头1: 中景：办公室对话\n老王: "你被裁了。" 林志明: "为什么是我？"',
+      '镜头1: 中景：办公室对话\n老王 (in Mandarin Chinese): "你被裁了。" 林志明 (in Mandarin Chinese): "为什么是我？"',
     )
   })
 
@@ -95,8 +95,11 @@ describe('buildBPathCombinedPrompt', () => {
     const dialoguesWithFallback = new Map([
       ['p1', [{ speaker: '旁白', content: '在远处的钟声里...' }]],
     ])
+    // 2026-05-13 — formatDialogueForKling now always appends `(in <Lang>)`
+    // so per-line TTS language is locked to the dialogue's own language
+    // regardless of surrounding-prompt bias.
     expect(buildBPathCombinedPrompt(panels, dialoguesWithFallback)).toContain(
-      '旁白: "在远处的钟声里...',
+      '旁白 (in Mandarin Chinese): "在远处的钟声里...',
     )
     // also confirm the bare-empty case is handled by speaker treatment in caller
     const _unused = dialogues // referenced to keep linter calm

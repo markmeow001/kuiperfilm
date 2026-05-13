@@ -274,3 +274,110 @@ export async function getOrCreateTencentVodElement(
 
   return elementId
 }
+
+/**
+ * Pod-local cache for style reference elements. Style refs are global
+ * platform assets (not per-entity rows), so adding a Prisma table just
+ * to cache 3-6 element ids per Tencent subAppId is overkill — the URLs
+ * never change at runtime and a cold cache costs one CreateAigcCustomElement
+ * call per pod boot per (userId, url) pair.
+ *
+ * Keyed by `${userId}:${url}` because CustomElements are bound to the
+ * caller's Tencent SubAppId, which we derive from per-user provider
+ * config. Two users won't see each other's elementIds.
+ */
+const styleRefCache = new Map<string, string>()
+
+interface RegisterStyleReferenceOptions {
+  userId: string
+  /** URL of the style anchor image (must be permanently accessible). */
+  url: string
+  /** Short label — Tencent's ElementName limit is 20 chars. */
+  label: string
+}
+
+/**
+ * Get-or-register a style reference image as a Tencent CustomElement.
+ *
+ * Unlike `getOrCreateTencentVodElement` (which caches against per-entity
+ * Prisma rows), style references are cached in process memory because:
+ *   - They're tiny (3-6 elements per preset across the platform)
+ *   - URLs are hardcoded in `presets.ts` and don't churn
+ *   - Worst-case re-registration on pod reboot is cheap (~1-2s)
+ *
+ * Returns null on any failure (network, validation, missing creds). The
+ * caller MUST treat null as "this task can't use style anchoring" — fall
+ * through to text-only photorealistic anchors.
+ *
+ * The element's ElementDescription explicitly tags it as STYLE-ONLY so
+ * Kling Omni doesn't try to match the photo's subject identity (the
+ * model treats SubjectInfos.Description as a strong hint about what the
+ * reference is FOR).
+ */
+export async function getOrRegisterStyleReferenceElement(
+  opts: RegisterStyleReferenceOptions,
+): Promise<string | null> {
+  if (!opts.url || !opts.url.trim()) return null
+  const cacheKey = `${opts.userId}:${opts.url}`
+  const cached = styleRefCache.get(cacheKey)
+  if (cached) return cached
+
+  let elementId: string | null = null
+  try {
+    const config = await getProviderConfig(opts.userId, 'tencent-vod')
+    const creds = parseCredentials(config.apiKey)
+    const client = new VodClient({
+      credential: { secretId: creds.secretId, secretKey: creds.secretKey },
+      region: creds.region,
+      profile: { httpProfile: { endpoint: 'vod.tencentcloudapi.com' } },
+    })
+
+    const elementName = sanitizeElementName(opts.label || 'style-ref')
+    // 100-char cap per Tencent spec. The description is what Kling reads
+    // to decide "what kind of reference is this?" — we explicitly mark it
+    // as style-only so the model treats lighting/grain as the signal and
+    // ignores subject identity from the photo.
+    const elementDescription =
+      'STYLE REFERENCE ONLY — photographic style anchor. Copy lighting, film grain, skin texture, color grading. NOT a character, NOT a scene.'
+
+    const resp = await client.CreateAigcCustomElement({
+      SubAppId: creds.subAppId,
+      ElementName: elementName,
+      ElementDescription: elementDescription,
+      ElementFrontalImage: opts.url,
+      ElementReferList: [],
+    } as unknown as Parameters<typeof client.CreateAigcCustomElement>[0])
+
+    if (resp.ElementId) {
+      elementId = String(resp.ElementId)
+      styleRefCache.set(cacheKey, elementId)
+      logger.info({
+        message: 'tencent vod style reference element created',
+        details: {
+          label: opts.label,
+          elementId,
+          requestId: resp.RequestId ?? null,
+        },
+      })
+    } else {
+      logger.warn({
+        message: 'tencent vod style reference response missing ElementId',
+        details: {
+          label: opts.label,
+          requestId: resp.RequestId ?? null,
+        },
+      })
+    }
+  } catch (err) {
+    logger.warn({
+      message: 'tencent vod style reference register failed',
+      details: {
+        label: opts.label,
+        urlHead: opts.url.slice(0, 120),
+        error: err instanceof Error ? err.message : String(err),
+      },
+    })
+  }
+
+  return elementId
+}

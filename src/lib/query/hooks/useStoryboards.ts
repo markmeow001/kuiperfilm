@@ -356,6 +356,11 @@ export function useUpdatePanelText(projectId: string | null, episodeId: string |
              * mis-extracted by the analyze LLM).
              */
             characters?: Array<{ name: string; appearance?: string }> | string | null
+            /**
+             * Updated panel.location (scene reference). String to set, null
+             * to clear. Used by the 場景 chip × remove flow (2026-05-13).
+             */
+            location?: string | null
         }) => {
             if (!projectId) throw new Error('Project ID is required')
             const res = await fetch(`/api/novel-promotion/${projectId}/panel`, {

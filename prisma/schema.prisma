@@ -1297,3 +1297,73 @@ model InviteCode {
   @@index([usedBy])
   @@map("invite_codes")
 }
+
+// ============================================================
+// Style Library (2026-05-13) — design doc: docs/style-library-design-v3.md
+//
+// 29 visual styles × 8 lighting presets, replacing the legacy 22-entry
+// in-memory STYLE_PROFILE_PRESETS catalog with a DB-backed source of
+// truth that the admin UI can edit without code deploy.
+//
+// Two recommendation/element tables from the original SQL schema are
+// intentionally NOT included here — they're for future genre-based
+// recommendation surfacing and Kling SubjectInfos pre-registration that
+// the platform doesn't ship yet. Add them when those features ship.
+//
+// MySQL note: PostgreSQL JSONB → MySQL `Json` (Prisma uses MySQL's
+// native JSON column under the hood, same query semantics).
+// ============================================================
+model VisualStyle {
+  id                      String   @id @db.VarChar(64)
+  nameZh                  String   @db.VarChar(64)
+  nameEn                  String   @db.VarChar(64)
+  /// A/B/C/D/E/F/G — see docs/style-library-design-v3.md category map.
+  category                String   @db.VarChar(32)
+  categoryNameZh          String   @db.VarChar(32)
+  /// Reference / thumbnail URL for UI cards. Generated via the Step 4 runbook.
+  thumbnailUrl            String?  @db.Text
+  /// English style anchor — prepended to Kling prompt (highest attention weight).
+  styleAnchor             String   @db.Text
+  /// Visual modifiers — appended to prompt body (Style Bible reinforcement).
+  visualModifiers         String   @db.Text
+  /// Full negative prompt (overrides preset defaults).
+  negativePrompt          String   @db.Text
+  /// JSON string[] — reference artists/works for UI + future SubjectInfos hints.
+  referenceArtists        Json?
+  /// JSON string[] — genres this style fits best (UI recommendation).
+  bestForGenres           Json?
+  /// '3.0' | '3.0-Omni' — picks the VOD ModelVersion / VCLM model name.
+  recommendedKlingVersion String   @default("3.0-Omni") @db.VarChar(16)
+  /// JSON string[] — searchable tags.
+  tags                    Json?
+  displayOrder            Int      @default(0)
+  isActive                Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @default(now()) @updatedAt
+
+  @@index([category, displayOrder])
+  @@index([isActive])
+  @@map("visual_styles")
+}
+
+model LightingPreset {
+  id                 String   @id @db.VarChar(64)
+  nameZh             String   @db.VarChar(64)
+  nameEn             String   @db.VarChar(64)
+  thumbnailUrl       String?  @db.Text
+  /// Lighting clause inserted between userContent and visualModifiers.
+  lightingOverride   String   @db.Text
+  /// Lighting-specific negatives, appended to style.negativePrompt at prompt-build time.
+  additionalNegative String?  @db.Text
+  /// JSON string[] — mood tags for UI recommendation.
+  bestForMoods       Json?
+  /// JSON string[].
+  tags               Json?
+  displayOrder       Int      @default(0)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  @@index([displayOrder])
+  @@index([isActive])
+  @@map("lighting_presets")
+}

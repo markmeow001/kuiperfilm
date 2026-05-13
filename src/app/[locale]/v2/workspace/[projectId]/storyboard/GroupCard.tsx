@@ -20,6 +20,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
 import { LocationViewPickerModal } from './LocationViewPickerModal'
+import { NarrativeHighlighter } from './NarrativeHighlighter'
 import {
   useMultiShotTask,
   type MultiShotCharacterBinding,
@@ -86,6 +87,8 @@ type UpdatePanelTextMutation = UseMutationResult<
     /** Updated panel.characters (array or pre-serialized JSON string).
      * Used by the 出場角色 chip × remove flow. */
     characters?: Array<{ name: string; appearance?: string }> | string | null
+    /** Updated panel.location (scene name). Used by the 場景 chip × remove. */
+    location?: string | null
   }
 >
 
@@ -413,19 +416,53 @@ export function GroupCard({
     搖升: 'tilt up',
     中度推進: 'medium push in',
   }
-  // Photorealistic preset — matches lib/style-profile/presets.ts
-  // 'realistic' positivePrompt. If the project ever uses a different
-  // preset (anime / 3D / etc.) the user can edit this block out.
-  const STYLE_FOOTER_REALISTIC = [
-    '整体视觉风格：',
-    'photorealistic, hyperrealistic, cinematic lighting, volumetric lighting,',
-    'realistic subsurface scattering, film grain, 8K detail, real skin texture,',
-    'real fabric physics, dramatic yet natural lighting, shot on Arri Alexa 65,',
-    'IMAX quality, no cartoonish glow, no plastic look, no 3D render feel,',
-    'no text, no subtitles, no letters, no words, no on-screen text of any kind,',
-    'clean visual only',
-  ].join('\n')
-  const ANTI_TEXT_LINE = '严格无任何字幕、文字、logo或屏幕信息。'
+  // 2026-05-13 — Style anchor rebuilt for Kling 3.0-Omni photoreal output.
+  //
+  // Three problems with the old footer-only design:
+  //   1. Footer placement = lowest attention weight. Kling parses
+  //      photorealistic anchors AFTER 500+ tokens of shot descriptions
+  //      so they barely register.
+  //   2. CN heading "整体视觉风格" triggers Kling's CN-content path
+  //      which is heavily xianxia/wuxia trained → CG output.
+  //   3. No explicit anti-stylization. "no cartoonish glow" is weak;
+  //      model needs "NOT animation, NOT CG, NOT 3D".
+  //
+  // New format:
+  //   - TOP-anchored (highest attention weight)
+  //   - English-only (avoids CN→xianxia trigger)
+  //   - Explicit anti-stylization
+  //   - Per-shot suffix `(live-action photography)` reinforces at every
+  //     time slice so the anchor stays close to the shot description
+  // 2026-05-13 (afternoon update) — vocabulary upgrade based on
+  // cross-referenced prompt guides (Alibaba official text-to-video,
+  // Kling 3.0 templates, awesome-seedance-2-prompts, autoweeb anime
+  // formula). All four converge on:
+  //   (1) specific light source > abstract "natural lighting" — Kling
+  //       attention picks up the concrete keyword, abstract phrases get
+  //       averaged into the model's style prior.
+  //   (2) physically-believable motion suppressors — defeats Kling Omni's
+  //       theatrical-xianxia motion default (huge sword swings, dramatic
+  //       head turns, melodramatic gasps) which is the second-biggest
+  //       CG-ness trigger after costume styling.
+  const STYLE_HEADER_REALISTIC = [
+    'STYLE: live-action film photography, shot on Arri Alexa 65 with 35mm lens.',
+    // Concrete photographic detail vocabulary — visible texture cues
+    // beat abstract "accurate lighting" by a wide margin per all 4 guides.
+    'Visible film grain, natural skin texture with pores and micro-imperfections, real fabric weave, real-world material rendering.',
+    // Specific light-source palette. Kling biases toward whichever named
+    // source first matches the scene; without these tokens it falls back
+    // to its xianxia training prior (uniform soft glow + lens flare).
+    'LIGHTING: specify exact light source per shot — golden hour backlight, blue hour mist, candle warm flicker, fluorescent overhead, neon reflections, or moonlight rim — paired with one atmospheric detail (haze, steam, dust motes, water ripples).',
+    // Motion suppressor — per awesome-seedance-2 "candid, unscripted"
+    // and Alibaba's 运动幅度/速度. Photoreal output needs subtle motion.
+    'MOTION: candid, unscripted, physically believable movement. Subtle micro-expressions, natural breathing rhythm. NOT theatrical, NOT exaggerated, NOT melodramatic, NOT dramatic head-turns.',
+    'STRICT: NOT animation, NOT CG, NOT 3D render, NOT illustration, NOT digital painting, NOT xianxia stylized art, NOT Genshin Impact aesthetic.',
+    'No on-screen text, no subtitles, no logos.',
+  ].join(' ')
+  const PER_SHOT_STYLE_TAG = '(live-action photography, real grain, real skin texture, candid motion, NO CG, NO animation)'
+  // 2026-05-13 — EN'd. CN heading was triggering Kling's CN content path
+  // (xianxia bias). Functional payload unchanged.
+  const ANTI_TEXT_LINE = 'STRICT: no on-screen text, no subtitles, no logos, no screen UI of any kind.'
 
   const buildInitialNarrative = (): string => {
     const count = panels.length
@@ -480,15 +517,19 @@ export function GroupCard({
       sceneNameToRefSlot.set(scene.location.name.trim().toLowerCase(), refSlot)
       refSlot++
     }
+    // 2026-05-13 — Labels EN'd, entity names stay CN. CN entity names are
+    // load-bearing (SubjectInfos binding key, scene reference lookup);
+    // labels are just structural noise that triggered Kling's CN bias.
+    // Result: `Reference characters: 王玄、离 (highly consistent)`.
     const headerLineFragments: string[] = []
     if (charNames.length > 0) {
-      headerLineFragments.push(`参考角色：${charNames.join('、')}（人物高度一致）`)
+      headerLineFragments.push(`Reference characters: ${charNames.join('、')} (highly consistent)`)
     }
     if (sceneLabels.length > 0) {
-      headerLineFragments.push(`参考场景：${sceneLabels.join('、')}（场景高度一致）`)
+      headerLineFragments.push(`Reference scenes: ${sceneLabels.join('、')} (highly consistent)`)
     }
     if (headerLineFragments.length > 0) {
-      header.push(headerLineFragments.join('；'))
+      header.push(headerLineFragments.join('; '))
     }
 
     // Helper: extract character names from panel.characters (handles
@@ -552,34 +593,71 @@ export function GroupCard({
         seenInShot.add(lower)
         if (charNameToRefSlot.has(lower)) shotCharNames.push(charName)
       }
+      // EN'd labels, CN entity names preserved (same rationale as header).
       const shotBindingFragments: string[] = []
       if (shotCharNames.length > 0) {
-        shotBindingFragments.push(`出场：${shotCharNames.join('、')}`)
+        shotBindingFragments.push(`Cast: ${shotCharNames.join('、')}`)
       }
       const panelLocRaw = (p as { location?: string | null }).location ?? ''
       const panelLocName = panelLocRaw.includes('#')
         ? panelLocRaw.slice(0, panelLocRaw.indexOf('#')).trim()
         : panelLocRaw.trim()
       if (panelLocName) {
-        shotBindingFragments.push(`场景：${panelLocName}`)
+        shotBindingFragments.push(`Scene: ${panelLocName}`)
       }
 
       const blockLines: string[] = []
-      blockLines.push(`镜头${i + 1}（${start}-${end} seconds）·${framing}`)
+      blockLines.push(`镜头${i + 1}（${start}-${end} seconds）·${framing} ${PER_SHOT_STYLE_TAG}`)
       if (shotBindingFragments.length > 0) {
         blockLines.push(`[${shotBindingFragments.join('] [')}]`)
       }
       if (desc) blockLines.push(desc)
       if (dialog) blockLines.push(dialog)
-      if (cameraMoveEn) blockLines.push(`镜头：${cameraMoveEn}`)
+      // EN label for consistency with Cast/Scene above; move term was already EN.
+      if (cameraMoveEn) blockLines.push(`Camera: ${cameraMoveEn}`)
       blockLines.push(ANTI_TEXT_LINE)
       shotBlocks.push(blockLines.join('\n'))
     }
 
+    // 2026-05-13 — Overall Description prefix.
+    //
+    // Alibaba's official multi-shot text-to-video formula is
+    //   `Overall Description + Shot N + Timestamp + Shot Content`
+    // Our previous prompt jumped straight to `镜头1`, skipping the
+    // overall sentence that orients the model on the segment's
+    // narrative arc. Adding it cheap-buys: (a) more coherent shot
+    // transitions (model knows where the cut is heading), (b) less
+    // style drift across shots (the synopsis primes the visual style
+    // for the whole arc, not just shot 1).
+    //
+    // Source: longest non-empty description in the group — usually
+    // the climactic shot, which captures arc intent best. Falls back
+    // to first non-empty if nothing distinctive emerges.
+    const overallSummary = (() => {
+      const descs = panels
+        .map((p) => (p.description ?? p.prompt ?? '').trim())
+        .filter((s) => s.length > 0)
+      if (descs.length === 0) return ''
+      const longest = descs.slice().sort((a, b) => b.length - a.length)[0]
+      // Trim to ~140 chars so the OVERALL line stays a sentence, not
+      // a duplicate of the per-shot descriptions below.
+      const trimmed = longest.replace(/\s+/g, ' ').trim()
+      return trimmed.length > 140 ? `${trimmed.slice(0, 140)}…` : trimmed
+    })()
+    const overallLine = overallSummary
+      ? `OVERALL: ${overallSummary}`
+      : ''
+
+    // Section order (highest to lowest model attention):
+    //   1. STYLE header — locks photoreal output regardless of content
+    //   2. OVERALL — primes the narrative arc, helps multi-shot coherence
+    //   3. Reference characters / scenes — entity anchors
+    //   4. Per-shot blocks with embedded style/anti-text reinforcement
     const sections: string[] = []
+    sections.push(STYLE_HEADER_REALISTIC)
+    if (overallLine) sections.push(overallLine)
     if (header.length > 0) sections.push(header.join('\n'))
     sections.push(shotBlocks.join('\n\n'))
-    sections.push(STYLE_FOOTER_REALISTIC)
     return sections.join('\n\n')
   }
   const [narrativeDraft, setNarrativeDraft] = useState<string>('')
@@ -645,9 +723,12 @@ export function GroupCard({
     | { status: 'error'; message: string }
   >({ status: 'idle' })
 
-  // 2026-05-13 — per-character × remove on the 出場角色 chip.
+  // 2026-05-13 — per-character × remove on the 出場角色 / 演員綁定 chips.
   // Tracks the in-flight removal so the chip can show a spinner.
   const [removingCharId, setRemovingCharId] = useState<string | null>(null)
+  // Scene-side equivalent. Keyed by location id to handle multiple
+  // scenes in the same group.
+  const [removingSceneId, setRemovingSceneId] = useState<string | null>(null)
 
   /**
    * Remove a character from EVERY panel in this group. Writes panel.characters
@@ -662,6 +743,38 @@ export function GroupCard({
    * and PATCH-es the panel. Storyboard query is invalidated by the
    * mutation hook so the chip rail re-derives without the removed cast.
    */
+  /**
+   * Remove a SCENE from every panel in this group. Sets panel.location to
+   * null for any panel whose location.name matches. Worker treats null as
+   * 'no scene ref' so that SubjectInfos slot is freed for character/prop
+   * reference images instead.
+   */
+  async function handleRemoveSceneFromGroup(locationId: string, locationName: string) {
+    if (removingSceneId) return
+    if (!confirm(`從此 group 的所有分鏡移除場景「${locationName}」?\n\n影響 DB,下次重新生成時這個場景不再被當作 reference 上傳到 Kling。\n（不會刪除場景本身,只是這幾個分鏡不再引用他）`)) {
+      return
+    }
+    setRemovingSceneId(locationId)
+    const targetLower = locationName.trim().toLowerCase()
+    try {
+      for (const p of panels) {
+        const raw = (p as { location?: string | null }).location ?? null
+        if (!raw) continue
+        const hashIdx = raw.indexOf('#')
+        const locName = (hashIdx === -1 ? raw : raw.slice(0, hashIdx)).trim()
+        if (locName.toLowerCase() !== targetLower) continue
+        await updatePanelText.mutateAsync({
+          panelId: p.id,
+          location: null,
+        })
+      }
+    } catch (err) {
+      alert(`移除場景失敗:${(err as Error)?.message ?? '未知'}`)
+    } finally {
+      setRemovingSceneId(null)
+    }
+  }
+
   async function handleRemoveCharacterFromGroup(characterId: string, characterName: string) {
     if (removingCharId) return
     if (!confirm(`從此 group 的所有分鏡移除「${characterName}」?\n\n影響 DB,下次重新生成圖/影片時這個角色就不會被綁入。\n（不會刪除角色本身,只是這幾個分鏡不再引用他）`)) {
@@ -1044,18 +1157,26 @@ export function GroupCard({
             </div>
           </div>
 
-          <textarea
-            ref={narrativeTextareaRef}
+          {/* 2026-05-13 — synced colored overlay so user can see which
+              characters / scenes are referenced in the narrative.
+              Technique: a <pre> with the same content + entity-coloring
+              spans sits behind a transparent-text textarea so the user
+              edits text on top and sees colors through. Both layers
+              MUST share font, size, line-height, padding, and wrap
+              behaviour or the overlay drifts. Tailwind classes are
+              identical between layers below. */}
+          <NarrativeHighlighter
+            textareaRef={narrativeTextareaRef}
             value={narrativeDraft}
-            onChange={(e) => {
-              setNarrativeDraft(e.target.value)
+            onChange={(v) => {
+              setNarrativeDraft(v)
               setNarrativeDirty(true)
             }}
             rows={panels.length >= 4 ? 14 : 9}
             placeholder="0-5 seconds: 角色 + 場景 + 動作 + 鏡頭 + 氛圍&#10;5-10 seconds: ...&#10;10-15 seconds: ..."
-            className={`w-full resize-none rounded-sm border bg-stone-900/40 p-2.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40 transition-colors ${
-              narrativeRegenFlash ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-stone-800'
-            }`}
+            characterNames={groupCast.map((c) => c.character.name)}
+            sceneNames={groupScenes.map((s) => s.location.name)}
+            flashing={narrativeRegenFlash}
           />
           {narrativeDirty ? (
             <div className="font-mono text-[12px] tracking-wider text-violet-300">
@@ -1148,7 +1269,7 @@ export function GroupCard({
 
               {groupScenes.length > 0 ? (
                 <div>
-                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-emerald-500/70">
                     <AppIcon name="image" className="h-3 w-3" />
                     場景 · {groupScenes.length}
                   </div>
@@ -1158,42 +1279,62 @@ export function GroupCard({
                         && locationOverrides[s.location.id] !== s.viewName
                       const stateClass = overridden
                         ? 'border-violet-500/60 bg-violet-500/10'
-                        : 'border-amber-900/30 bg-stone-950/40'
+                        : 'border-emerald-900/30 bg-stone-950/40'
+                      // 2026-05-13 — same refactor as 出場角色: split into
+                      // main button + × remove button. Removes scene
+                      // from every panel.location in this group.
                       return (
-                        <button
+                        <div
                           key={s.location.id}
-                          type="button"
-                          onClick={() => {
-                            setPickerLocation({
-                              location: s.location,
-                              currentViewName: locationOverrides[s.location.id] !== undefined
-                                ? locationOverrides[s.location.id]
-                                : s.viewName,
-                            })
-                          }}
-                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
-                          title={`${s.location.name} · ${s.viewName ?? '主視角'} — 點擊換視角`}
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-1 transition-colors hover:border-emerald-500/60 hover:bg-emerald-500/10 ${stateClass}`}
                         >
-                          <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
-                            {s.avatarUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={s.avatarUrl} alt={s.location.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <AppIcon name="image" className="h-3 w-3 m-auto text-stone-600" />
-                            )}
-                          </div>
-                          <span className="font-serif-cn text-[14px] text-stone-200">
-                            {s.location.name}
-                          </span>
-                          <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
-                            {s.viewName ?? '主視角'}
-                          </span>
-                          {overridden ? (
-                            <span className="font-mono text-[12px] tracking-wider text-violet-300">
-                              ✏ 已改
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPickerLocation({
+                                location: s.location,
+                                currentViewName: locationOverrides[s.location.id] !== undefined
+                                  ? locationOverrides[s.location.id]
+                                  : s.viewName,
+                              })
+                            }}
+                            className="inline-flex items-center gap-1.5 pr-1"
+                            title={`${s.location.name} · ${s.viewName ?? '主視角'} — 點擊換視角`}
+                          >
+                            <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
+                              {s.avatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={s.avatarUrl} alt={s.location.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <AppIcon name="image" className="h-3 w-3 m-auto text-stone-600" />
+                              )}
+                            </div>
+                            <span className="font-serif-cn text-[14px] text-stone-200">
+                              {s.location.name}
                             </span>
-                          ) : null}
-                        </button>
+                            <span className="font-mono text-[12px] tracking-wider text-emerald-500/70">
+                              {s.viewName ?? '主視角'}
+                            </span>
+                            {overridden ? (
+                              <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                                ✏ 已改
+                              </span>
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveSceneFromGroup(s.location.id, s.location.name)}
+                            disabled={removingSceneId === s.location.id}
+                            title={`從此 group 所有分鏡移除場景 ${s.location.name}（影響 DB,下次重生會生效）`}
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
+                          >
+                            {removingSceneId === s.location.id ? (
+                              <span className="font-mono text-[12px]">…</span>
+                            ) : (
+                              <span className="font-mono text-[14px] leading-none">×</span>
+                            )}
+                          </button>
+                        </div>
                       )
                     })}
                   </div>
@@ -1227,45 +1368,54 @@ export function GroupCard({
                       const title = hasOverride
                         ? `${c.name} — 下次重生會改用新造型(尚未送出)`
                         : `${c.name} · ${c.appearanceLabel ?? '默認造型'}${character ? ' — 點擊換造型' : ''}`
-                      const className = `inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 transition-colors ${
-                        character ? 'cursor-pointer hover:border-amber-500/60 hover:bg-amber-500/10' : ''
-                      } ${stateClass}`
-                      const inner = (
-                        <>
-                          <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={c.imageUrl}
-                              alt={c.name}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                          <span className="font-serif-cn text-[14px] text-stone-200">
-                            {c.name}
-                          </span>
-                          <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
-                            {c.appearanceLabel ?? '默認造型'}
-                          </span>
-                          {hasOverride ? (
-                            <span className="font-mono text-[12px] tracking-wider text-violet-300">
-                              ✏ 已改
-                            </span>
-                          ) : null}
-                        </>
-                      )
-                      return character ? (
-                        <button
+                      // 2026-05-13 — 演員綁定 chip now also has × remove.
+                      // Calls the same handleRemoveCharacterFromGroup as
+                      // 出場角色 chip (single source of truth for removal).
+                      return (
+                        <div
                           key={c.id}
-                          type="button"
-                          onClick={handleClick}
-                          className={className}
-                          title={title}
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-1 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
                         >
-                          {inner}
-                        </button>
-                      ) : (
-                        <div key={c.id} className={className} title={title}>
-                          {inner}
+                          <button
+                            type="button"
+                            onClick={handleClick}
+                            disabled={!character}
+                            className={`inline-flex items-center gap-1.5 pr-1 ${character ? 'cursor-pointer' : 'cursor-default'}`}
+                            title={title}
+                          >
+                            <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={c.imageUrl}
+                                alt={c.name}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                            <span className="font-serif-cn text-[14px] text-stone-200">
+                              {c.name}
+                            </span>
+                            <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                              {c.appearanceLabel ?? '默認造型'}
+                            </span>
+                            {hasOverride ? (
+                              <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                                ✏ 已改
+                              </span>
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveCharacterFromGroup(c.id, c.name)}
+                            disabled={removingCharId === c.id}
+                            title={`從此 group 所有分鏡移除 ${c.name}（影響 DB,下次重生會生效）`}
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
+                          >
+                            {removingCharId === c.id ? (
+                              <span className="font-mono text-[12px]">…</span>
+                            ) : (
+                              <span className="font-mono text-[14px] leading-none">×</span>
+                            )}
+                          </button>
                         </div>
                       )
                     })}
