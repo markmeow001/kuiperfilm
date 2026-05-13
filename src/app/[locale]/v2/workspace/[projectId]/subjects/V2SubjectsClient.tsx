@@ -489,7 +489,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       // cascade. Without this, the storyboard worker would later fail with
       // "No clips found" because Session B made the cascade opt-in for
       // legacy /workspace flows.
-      { episodeId: currentEpisodeId, cascadeToStoryboard: true },
+      //
+      // 2026-05-13 — opt OUT of the script_to_storyboard → IMAGE_PANEL
+      // mass cascade. Reanalyzing a script that already has 22 panels
+      // would otherwise re-submit 22 image gen tasks behind the user's
+      // back. V2 desktop wants explicit control via per-panel "生成圖片"
+      // or the toolbar 「一鍵生圖」 button.
+      { episodeId: currentEpisodeId, cascadeToStoryboard: true, cascadeImageGen: false },
       {
         onSuccess: () => {
           // Pull the new task into the snapshot immediately so the banner

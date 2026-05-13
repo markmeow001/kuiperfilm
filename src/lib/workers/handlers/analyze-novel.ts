@@ -409,6 +409,14 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
         payload: {
           episodeId: targetEpisode.id,
           cascadeToStoryboard: true,
+          // 2026-05-13 — propagate caller's cascadeImageGen choice down
+          // the chain. Default (undefined) lets script-to-storyboard
+          // keep its own default-true behaviour for legacy callers;
+          // V2 SubjectsClient explicitly sends false to suppress mass
+          // IMAGE_PANEL fan-out on reanalyze.
+          ...(typeof payload.cascadeImageGen === 'boolean'
+            ? { cascadeImageGen: payload.cascadeImageGen }
+            : {}),
         },
         dedupeKey: `clips_build:${targetEpisode.id}`,
         priority: 2,

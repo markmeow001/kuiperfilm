@@ -118,12 +118,21 @@ export function useAnalyzeProjectAssets(projectId: string) {
         // /workspace flows + character-debug paths get analyze-only behaviour).
         // V2 SubjectsPage's 一鍵分析 can pass true to chain analyze → CLIPS_BUILD
         // → SCRIPT_TO_STORYBOARD_RUN in one click.
+        //
+        // 2026-05-13 — added explicit cascadeImageGen control. The
+        // analyze→clips→storyboard chain ends at script-to-storyboard which
+        // (default true) auto-fans-out IMAGE_PANEL for every panel. V2 desktop
+        // wants explicit per-panel control: passing cascadeImageGen=false
+        // propagates through the chain so reanalyze updates panel TEXT only,
+        // and the user controls when image gen fires.
         mutationFn: async ({
             episodeId,
             cascadeToStoryboard,
+            cascadeImageGen,
         }: {
             episodeId: string
             cascadeToStoryboard?: boolean
+            cascadeImageGen?: boolean
         }) => {
             const response = await requestTaskResponseWithError(
                 `/api/novel-promotion/${projectId}/analyze`,
@@ -134,6 +143,7 @@ export function useAnalyzeProjectAssets(projectId: string) {
                         episodeId,
                         async: true,
                         ...(cascadeToStoryboard === true ? { cascadeToStoryboard: true } : {}),
+                        ...(typeof cascadeImageGen === 'boolean' ? { cascadeImageGen } : {}),
                     }),
                 },
                 'Failed to analyze assets',

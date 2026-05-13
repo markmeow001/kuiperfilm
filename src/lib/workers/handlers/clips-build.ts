@@ -279,6 +279,15 @@ export async function handleClipsBuildTask(job: Job<TaskJobData>) {
           payload: {
             episodeId,
             displayMode: 'detail',
+            // 2026-05-13 — second-hop propagation of cascadeImageGen
+            // (set by V2 SubjectsClient via analyze-novel). Without
+            // this, the chain hits script-to-storyboard with the field
+            // missing and its default-true cascade fans out IMAGE_PANEL
+            // for every panel — exactly what V2 reanalyze wants to
+            // suppress.
+            ...(typeof payload.cascadeImageGen === 'boolean'
+              ? { cascadeImageGen: payload.cascadeImageGen }
+              : {}),
           },
           dedupeKey: `script_to_storyboard_run:${episodeId}`,
           priority: 2,

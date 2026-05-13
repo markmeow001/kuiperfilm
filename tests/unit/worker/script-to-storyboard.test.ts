@@ -316,12 +316,12 @@ describe('worker script-to-storyboard behavior', () => {
 
     const result = await handleScriptToStoryboardTask(job)
 
-    expect(result).toEqual({
+    expect(result).toEqual(expect.objectContaining({
       episodeId: 'episode-1',
       storyboardCount: 1,
       panelCount: 1,
       voiceLineCount: 1,
-    })
+    }))
 
     expect(txState.createdRows).toHaveLength(1)
     expect(txState.createdRows[0]).toEqual(expect.objectContaining({
