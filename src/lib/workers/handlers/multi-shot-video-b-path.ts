@@ -1652,7 +1652,17 @@ export async function runMultiShotBPath(params: {
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
       ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
-      klingMultiShot: { multi_shot: 'intelligence' },
+      // 2026-05-13 — Tencent doc §3.9.5 spec:
+      //   multi_shot: bool (true/false)
+      //   shot_type: 'customize' | 'intelligence'  (required when multi_shot=true)
+      // Earlier code passed `multi_shot: 'intelligence'` as a single
+      // string field, which Tencent silently dropped (multi_shot must
+      // be bool). Combined with the missing AdditionalParameters
+      // wrapper bug, this meant intelligence-mode multi-shot was
+      // never actually firing — Kling rendered the entire prompt as
+      // a single 15s clip with whatever shot composition the parser
+      // could divine from the embedded text.
+      klingMultiShot: { multi_shot: true, shot_type: 'intelligence' },
       outputComplianceCheck: 'Enabled',
     }
     // Stash for the function's return shape.

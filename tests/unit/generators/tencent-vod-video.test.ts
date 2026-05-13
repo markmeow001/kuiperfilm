@@ -158,7 +158,12 @@ describe('TencentVODVideoGenerator', () => {
 
     const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
     expect(typeof req?.ExtInfo).toBe('string')
-    expect(JSON.parse(req?.ExtInfo as string)).toEqual({ multi_shot: 'intelligence' })
+    // 2026-05-13 — Tencent VOD spec wraps Kling params inside
+    // AdditionalParameters as a JSON-string-in-JSON-string. Earlier
+    // assertion expected a flat object, which silently passed but
+    // Tencent ignored the entire ExtInfo on prod. Fixed.
+    const outer = JSON.parse(req?.ExtInfo as string) as { AdditionalParameters: string }
+    expect(JSON.parse(outer.AdditionalParameters)).toEqual({ multi_shot: 'intelligence' })
   })
 
   it('forwards short_type and multi_prompt alongside multi_shot', async () => {
@@ -178,7 +183,8 @@ describe('TencentVODVideoGenerator', () => {
     })
 
     const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
-    expect(JSON.parse(req?.ExtInfo as string)).toEqual({
+    const outer = JSON.parse(req?.ExtInfo as string) as { AdditionalParameters: string }
+    expect(JSON.parse(outer.AdditionalParameters)).toEqual({
       multi_shot: 'intelligence',
       short_type: 'drama',
       multi_prompt: 'scene 1: meet | scene 2: argue',
@@ -199,7 +205,8 @@ describe('TencentVODVideoGenerator', () => {
     })
 
     const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
-    expect(JSON.parse(req?.ExtInfo as string)).toEqual({
+    const outer = JSON.parse(req?.ExtInfo as string) as { AdditionalParameters: string }
+    expect(JSON.parse(outer.AdditionalParameters)).toEqual({
       multi_shot: 'intelligence',
       short_type: 'comedy', // overridden
       custom_flag: true,

@@ -169,20 +169,55 @@ interface TencentVODVideoOptions {
     outputComplianceCheck?: ToggleFlag
 }
 
-/** 從 typed options 組出最終 ExtInfo payload；無欄位則回 null。 */
+/**
+ * Build the final ExtInfo payload that Tencent VOD CreateAigcVideoTask
+ * expects.
+ *
+ * 2026-05-13 critical fix: Tencent VOD's official spec (per
+ * /tmp/vod-doc.txt §3.9.5 multi_shot, §3.9.4.2 element_list) wraps
+ * ALL Kling-specific params inside `AdditionalParameters` as a
+ * JSON-string-in-JSON-string:
+ *
+ *   ExtInfo = JSON.stringify({
+ *     AdditionalParameters: JSON.stringify({
+ *       multi_shot: true,
+ *       shot_type: 'customize',
+ *       multi_prompt: [...],
+ *       element_list: [...],
+ *     })
+ *   })
+ *
+ * Earlier code emitted ExtInfo = JSON.stringify({multi_shot: ..., ...})
+ * — flat object, no AdditionalParameters wrapper. Tencent silently
+ * ignored the entire ExtInfo payload, which means **multi_shot has
+ * never actually been honored on prod**. Kling treated every request
+ * as single-shot, ignored multi_prompt, and free-styled the whole
+ * window. Identity binding via FileInfos still worked (FileInfos
+ * lives at the top of the request), but per-shot timing / element
+ * binding via element_list was completely lost.
+ *
+ * Returns the OUTER object (NOT yet stringified). Caller serializes
+ * with JSON.stringify before assigning to req.ExtInfo.
+ */
 function buildExtInfoPayload(opts: TencentVODVideoOptions): Record<string, unknown> | null {
-    const merged: Record<string, unknown> = {}
+    const klingParams: Record<string, unknown> = {}
     if (opts.klingMultiShot) {
         for (const [k, v] of Object.entries(opts.klingMultiShot)) {
-            if (v !== undefined && v !== '') merged[k] = v
+            if (v !== undefined && v !== '') klingParams[k] = v
         }
     }
     if (opts.extInfo) {
         for (const [k, v] of Object.entries(opts.extInfo)) {
-            if (v !== undefined) merged[k] = v
+            if (v !== undefined) klingParams[k] = v
         }
     }
-    return Object.keys(merged).length > 0 ? merged : null
+    if (Object.keys(klingParams).length === 0) return null
+    // Inner JSON string — Tencent's parser unwraps this from
+    // AdditionalParameters and re-parses it as JSON to extract the
+    // Kling-specific fields (multi_shot, shot_type, multi_prompt,
+    // element_list, etc.).
+    const innerJsonString = JSON.stringify(klingParams)
+    return { AdditionalParameters: innerJsonString }
 }
 
 /** 將內部 camelCase subject 物件轉為 Tencent API 的 PascalCase；空物件返回 null。 */
