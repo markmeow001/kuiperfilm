@@ -383,11 +383,21 @@ const IDENTITY_CROP_WIDTH_RATIO = 0.30
 
 // Returns ordered ref URLs for a single character image.
 //   - non-composite (square / portrait single shot): [originalUrl]
-//   - composite (wide-aspect multi-view sheet): [cropUrl, originalUrl]
-//     → cropped face first for tight identity anchor, original second so
-//       Omni / multi-ref models also see full body / outfit / silhouette
-//       context. Caller dedup is unnecessary because the URLs differ.
+//   - composite (wide-aspect multi-view sheet): [cropUrl] only
+//     → previous version also appended originalUrl as a "body context"
+//       anchor, but the composite IS a multi-figure layout (face left
+//       + 3 body views right) — Kling's image endpoint has no semantic
+//       binding so it sees "many people in similar outfits" and adds
+//       extras to the scene. iangyc 2026-05-13 multi-character banquet
+//       panel: 3 characters → 6 char refs sent (3 crop + 3 composite)
+//       → Kling generated 5-6 figures instead of 3. Drop the composite
+//       to keep the signal clean.
 //   - failure / skip: [originalUrl]
+//
+// Multi-view-expand uploads (which produce SEPARATE single-figure
+// images stored in appearance.imageUrls[]) still get all their views
+// fed in via the caller's `extras` loop — that path is unaffected and
+// remains the recommended way to give Omni multiple identity anchors.
 async function maybeExtractIdentityCrop(originalUrl: string): Promise<string[]> {
   if (!originalUrl || originalUrl.startsWith('data:')) {
     logInfo('[identity-crop] skip: data url or empty', { url: originalUrl?.substring(0, 80) ?? '' })
@@ -464,7 +474,7 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string[]> 
 
     await uploadToCOS(cropBuffer, cropKey)
     const cropUrl = getSignedUrl(cropKey, 3600)
-    logInfo('[identity-crop] cropped composite ref to face region (sending crop + original)', {
+    logInfo('[identity-crop] cropped composite ref to face region', {
       sourceKey,
       cropKey,
       origWidth: w,
@@ -472,9 +482,12 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string[]> 
       cropWidth: cropW,
       aspect,
     })
-    // Return BOTH: face crop first (tight identity anchor), original second
-    // (full body / outfit / silhouette context for multi-ref models).
-    return [cropUrl, originalUrl]
+    // Return ONLY the crop. The original composite is a multi-figure
+    // layout that confuses Kling's identity binding (sees N figures
+    // and assumes scene has N people). Multi-view-expand uploads with
+    // separate per-view files still get fed via the caller's extras
+    // loop — that path provides body context safely.
+    return [cropUrl]
   } catch (err) {
     logWarn('[identity-crop] preprocessing failed, falling back to original ref', {
       sourceKey,
