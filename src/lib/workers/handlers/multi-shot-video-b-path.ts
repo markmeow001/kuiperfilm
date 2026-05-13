@@ -339,7 +339,7 @@ function formatDialogueForKling(rawSpeaker: string, content: string): string {
  * found — caller should treat the panel as silent rather than
  * dubbing the stage direction.
  */
-function extractSpokenLineFromSrtSegment(
+export function extractSpokenLineFromSrtSegment(
   raw: string,
   fallbackSpeaker: string,
 ): { speaker: string; content: string } | null {
@@ -396,7 +396,7 @@ function extractSpokenLineFromSrtSegment(
  * rather than letting stage directions reach Kling's TTS (which
  * dubs them as if they were speech — broken UX).
  */
-function looksLikeStageDirection(content: string): boolean {
+export function looksLikeStageDirection(content: string): boolean {
   if (!content.trim()) return true
   const STAGE_KEYWORDS = [
     '镜头', '特写', '近景', '中景', '全景', '远景', '俯拍', '仰拍', '俯视', '仰视',
@@ -424,6 +424,50 @@ function looksLikeStageDirection(content: string): boolean {
   // false-negative case ("慢动作中景:CATHERINE...") because every real
   // stage direction we see in srtSegment contains one of those keywords.
   return false
+}
+
+/**
+ * Normalize a panel's voice lines into the dialogue array consumed by
+ * buildDialogueDrivenDurations + buildBPathCustomizePrompts.
+ *
+ * Handles two shapes of voice line content:
+ *   1. Pre-cleaned spoken text from the modern 4-prompt LLM extraction
+ *      pipeline ("当年我误入结界百年...") — pass through.
+ *   2. Legacy mixed narration+dialogue dumps from older analyze runs
+ *      ("SARAH嘴巴张大, SARAH说：'...'") — run through
+ *      extractSpokenLineFromSrtSegment to strip stage directions.
+ *
+ * 2026-05-14 — bug fix: previously every voice line went through the
+ * extractor, which returned null for shape #1 (no quote/colon markers
+ * to anchor on). Result: clean voice lines were silently dropped →
+ * dialogueByPanel stayed empty → dialogue-driven duration allocator
+ * never engaged → worker fell through to Kling intelligence mode → 15s
+ * narrative rendered as 10s video with mismatched dub (user report
+ * 2026-05-13).
+ */
+export function normalizeVoiceLinesToDialogue(
+  voiceLines: ReadonlyArray<{ speaker: string; content: string }>,
+  fallbackSpeaker: string,
+): Array<{ speaker: string; content: string }> {
+  const out: Array<{ speaker: string; content: string }> = []
+  for (const line of voiceLines) {
+    const extracted = extractSpokenLineFromSrtSegment(
+      line.content,
+      line.speaker || fallbackSpeaker,
+    )
+    if (extracted) {
+      out.push(extracted)
+      continue
+    }
+    const rawContent = (line.content ?? '').trim()
+    if (rawContent && !looksLikeStageDirection(rawContent)) {
+      out.push({
+        speaker: line.speaker?.trim() || fallbackSpeaker,
+        content: rawContent,
+      })
+    }
+  }
+  return out
 }
 
 /**
@@ -1741,14 +1785,7 @@ export async function runMultiShotBPath(params: {
     }
     const fallback = voiceLinesByPanel.get(panel.id)
     if (!fallback?.length) continue
-    // Voice-line content can also have mixed narration+dialogue (the
-    // analyze worker sometimes dumps both). Run each through the
-    // same extractor before sending to Kling.
-    const cleaned: Array<{ speaker: string; content: string }> = []
-    for (const line of fallback) {
-      const extracted = extractSpokenLineFromSrtSegment(line.content, line.speaker || fallbackSpeaker)
-      if (extracted) cleaned.push(extracted)
-    }
+    const cleaned = normalizeVoiceLinesToDialogue(fallback, fallbackSpeaker)
     if (cleaned.length > 0) dialogueByPanel.set(panel.id, cleaned)
   }
 
