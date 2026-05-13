@@ -14,7 +14,7 @@
  * touching panel character references.
  */
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import {
   useBulkBindEpisodeCharacterAppearance,
@@ -31,6 +31,13 @@ interface AppearanceOption {
   id: string
   appearanceIndex?: number | null
   changeReason?: string | null
+  /** Frontal reference image — surfaced as a thumbnail in the management row.
+   * Falls back to selected index of imageUrls when null. */
+  imageUrl?: string | null
+  /** LLM-derived visual prompt (35y 西裝商務 etc.) — shown as caption below
+   * the appearance name so the user can read the look without zooming the
+   * thumbnail. */
+  description?: string | null
 }
 
 interface V2CharacterAppearancesPanelProps {
@@ -61,6 +68,10 @@ export function V2CharacterAppearancesPanel({
     return (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0)
   })
 
+  // Lightbox state — shared across all thumbnail rows so we don't render
+  // N overlays. Single zoomable url controls visibility.
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null)
+
   return (
     <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
       <div className="flex items-center justify-between">
@@ -74,9 +85,9 @@ export function V2CharacterAppearancesPanel({
         />
       </div>
 
-      {/* Per-appearance management — rename / delete */}
+      {/* Per-appearance management — thumbnail + rename / delete */}
       {appearances.length > 0 ? (
-        <div className="space-y-1 border-t border-stone-800/40 pt-2">
+        <div className="space-y-1.5 border-t border-stone-800/40 pt-2">
           {appearances.map((ap) => (
             <AppearanceManageRow
               key={ap.id}
@@ -84,9 +95,16 @@ export function V2CharacterAppearancesPanel({
               characterId={characterId}
               appearance={ap}
               canDelete={appearances.length > 1}
+              onZoom={(url) => setZoomImageUrl(url)}
             />
           ))}
         </div>
+      ) : null}
+
+      {/* Lightbox overlay — single shared instance per panel so all
+          thumbnail clicks route through the same z-index / ESC handler. */}
+      {zoomImageUrl ? (
+        <AppearanceLightbox url={zoomImageUrl} onClose={() => setZoomImageUrl(null)} />
       ) : null}
 
       {appearances.length <= 1 ? (
@@ -140,11 +158,15 @@ function AppearanceManageRow({
   characterId,
   appearance,
   canDelete,
+  onZoom,
 }: {
   projectId: string
   characterId: string
   appearance: AppearanceOption
   canDelete: boolean
+  /** Click handler for the thumbnail — opens the shared lightbox in
+   * the parent panel. Called with the url to render full-screen. */
+  onZoom: (url: string) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(appearance.changeReason ?? '')
@@ -153,6 +175,8 @@ function AppearanceManageRow({
 
   const display = appearance.changeReason || `造型 ${(appearance.appearanceIndex ?? 0) + 1}`
   const idxLabel = `#${(appearance.appearanceIndex ?? 0) + 1}`
+  const thumbUrl = appearance.imageUrl ?? null
+  const caption = appearance.description?.trim() ?? ''
 
   function commitRename() {
     const trimmed = draft.trim()
@@ -190,47 +214,130 @@ function AppearanceManageRow({
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-sm bg-stone-950/40 px-2 py-1">
-      <span className="w-8 flex-shrink-0 font-mono text-[12px] tracking-wider text-stone-600">{idxLabel}</span>
-      {editing ? (
-        <input
-          autoFocus
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commitRename}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') commitRename()
-            if (e.key === 'Escape') {
-              setDraft(appearance.changeReason ?? '')
-              setEditing(false)
-            }
-          }}
-          disabled={update.isPending}
-          className="flex-1 rounded-sm border border-amber-500/50 bg-stone-950 px-1.5 py-0.5 font-body text-xs text-stone-100 outline-none disabled:opacity-50"
-          placeholder="造型名稱"
-        />
-      ) : (
+    <div className="flex items-center gap-2.5 rounded-sm bg-stone-950/40 p-2">
+      {/* 64×64 thumbnail. Click → lightbox. Hover overlay shows the zoom
+          icon so it reads as clickable. Falls back to a gradient + 👤 icon
+          placeholder when the appearance has no imageUrl yet (genuinely
+          common for newly-added rows before re-generation runs). */}
+      {thumbUrl ? (
         <button
           type="button"
-          onClick={() => setEditing(true)}
-          className="flex-1 truncate text-left font-body text-xs text-stone-200 transition-colors hover:text-amber-300"
-          title="點擊改名"
+          onClick={() => onZoom(thumbUrl)}
+          className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border border-stone-800 bg-stone-900 transition-all hover:border-amber-500/60"
+          title="點擊看大圖"
         >
-          {display}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={thumbUrl}
+            alt={display}
+            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+          />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
+            <span className="font-mono text-[12px] tracking-wider text-amber-300">🔍</span>
+          </div>
         </button>
+      ) : (
+        <div
+          className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-sm border border-stone-800 bg-gradient-to-br from-stone-800 to-stone-900"
+          title="尚未生成圖片"
+        >
+          <AppIcon name="user" className="h-5 w-5 text-stone-600" />
+        </div>
       )}
-      {update.isPending ? (
-        <span className="font-mono text-[12px] text-stone-500">儲存中…</span>
-      ) : null}
+
+      {/* Right column — name (editable) + caption + actions. Caption
+          truncates to one line so multi-paragraph LLM prompts don't push
+          the layout. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <span className="flex-shrink-0 font-mono text-[12px] tracking-wider text-stone-600">{idxLabel}</span>
+          {editing ? (
+            <input
+              autoFocus
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') {
+                  setDraft(appearance.changeReason ?? '')
+                  setEditing(false)
+                }
+              }}
+              disabled={update.isPending}
+              className="flex-1 rounded-sm border border-amber-500/50 bg-stone-950 px-1.5 py-0.5 font-body text-xs text-stone-100 outline-none disabled:opacity-50"
+              placeholder="造型名稱"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="flex-1 truncate text-left font-body text-[13px] text-stone-200 transition-colors hover:text-amber-300"
+              title="點擊改名"
+            >
+              {display}
+            </button>
+          )}
+          {update.isPending ? (
+            <span className="font-mono text-[12px] text-stone-500">儲存中…</span>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={!canDelete || del.isPending}
+            title={canDelete ? '刪除這個造型' : '至少要保留一個造型'}
+            className="flex-shrink-0 rounded-sm border border-stone-800 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-all hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            {del.isPending ? '…' : '刪除'}
+          </button>
+        </div>
+        {caption ? (
+          <div className="line-clamp-1 font-body text-[12px] text-stone-500" title={caption}>
+            {caption}
+          </div>
+        ) : (
+          <div className="font-body text-[12px] italic text-stone-700">無描述</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Full-screen lightbox overlay for appearance thumbnails. Lives at panel
+ * root so all thumbnail clicks route through one z-index layer. Clicking
+ * the backdrop or pressing ESC closes.
+ */
+function AppearanceLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  // ESC to close. Effect runs only while overlay is mounted.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-8 backdrop-blur-sm"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt="造型參考圖"
+        className="max-h-full max-w-full rounded-sm object-contain shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
       <button
         type="button"
-        onClick={handleDelete}
-        disabled={!canDelete || del.isPending}
-        title={canDelete ? '刪除這個造型' : '至少要保留一個造型'}
-        className="rounded-sm border border-stone-800 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-all hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+        onClick={onClose}
+        className="absolute right-4 top-4 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1 font-mono text-[14px] tracking-wider text-stone-300 transition-colors hover:border-amber-500/60 hover:text-amber-300"
+        title="關閉 (ESC)"
       >
-        {del.isPending ? '…' : '刪除'}
+        ✕ 關閉
       </button>
     </div>
   )

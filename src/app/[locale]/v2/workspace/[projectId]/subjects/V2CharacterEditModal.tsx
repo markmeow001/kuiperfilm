@@ -406,15 +406,41 @@ export function V2CharacterEditModal({
               customVoiceUrl={character.customVoiceUrl ?? null}
             />
 
-            {/* Phase 11.4 — multi-appearance per-episode binding */}
+            {/* Phase 11.4 — multi-appearance per-episode binding.
+                imageUrl + description threaded through so the management
+                row can show a thumbnail + caption — user-asked 2026-05-13
+                '造型管理我需要不同造型也要有可以看到造型的圖片'. */}
             <V2CharacterAppearancesPanel
               projectId={projectId}
               characterId={character.id}
-              appearances={(character.appearances ?? []).map((a) => ({
-                id: a.id,
-                appearanceIndex: a.appearanceIndex ?? null,
-                changeReason: a.changeReason ?? null,
-              }))}
+              appearances={(character.appearances ?? []).map((a) => {
+                // imageUrl priority: explicit a.imageUrl > first entry of
+                // a.imageUrls (when it's an array or stringified array) >
+                // null. Matches the worker's pick.
+                let primaryUrl: string | null = a.imageUrl ?? null
+                if (!primaryUrl && a.imageUrls) {
+                  if (Array.isArray(a.imageUrls)) {
+                    primaryUrl = a.imageUrls[0] ?? null
+                  } else if (typeof a.imageUrls === 'string') {
+                    try {
+                      const parsed = JSON.parse(a.imageUrls) as unknown
+                      if (Array.isArray(parsed) && typeof parsed[0] === 'string') {
+                        primaryUrl = parsed[0]
+                      }
+                    } catch {
+                      // Plain string url
+                      primaryUrl = a.imageUrls
+                    }
+                  }
+                }
+                return {
+                  id: a.id,
+                  appearanceIndex: a.appearanceIndex ?? null,
+                  changeReason: a.changeReason ?? null,
+                  imageUrl: primaryUrl,
+                  description: a.description ?? null,
+                }
+              })}
             />
           </div>
         </div>
