@@ -37,6 +37,7 @@ import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { V2GroupsLayout } from './V2GroupsLayout'
 import { V2ManualPanelModal, type ManualPanelDraft } from './V2ManualPanelModal'
+import { StaleStoryboardCleanupModal } from './StaleStoryboardCleanupModal'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -197,6 +198,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // image gen. State is intentionally local — only one modal at a time.
   const [manualPanelOpen, setManualPanelOpen] = useState(false)
   const [manualPanelSubmitting, setManualPanelSubmitting] = useState(false)
+  // 2026-05-13 — stale storyboard cleanup modal. Lets the user nuke a
+  // single storyboard (and all its panels) when a partial re-analyze
+  // left old panels in the DB. See StaleStoryboardCleanupModal.
+  const [staleCleanupOpen, setStaleCleanupOpen] = useState(false)
 
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
   const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
@@ -1229,6 +1234,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
+              disabled={!currentEpisodeId}
+              onClick={() => setStaleCleanupOpen(true)}
+              title="再分析失敗時舊分鏡會殘留 — 從這裡挑出多餘的分鏡來源刪掉"
+              className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              整理分鏡來源
+            </button>
+            <button
+              type="button"
               disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2}
               onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
               title="把分鏡按角色 / 場景連續性切成 multi-shot 群"
@@ -1377,6 +1391,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   : isAnalyzing
                     ? `分析中… ${analyzeProgress}%`
                     : '↻ 重新分析'}
+              </button>
+              <button
+                type="button"
+                disabled={!currentEpisodeId}
+                onClick={() => setStaleCleanupOpen(true)}
+                title="再分析失敗時舊分鏡會殘留 — 從這裡挑出多餘的分鏡來源刪掉"
+                className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                整理分鏡來源
               </button>
               <button
                 type="button"
@@ -1693,6 +1716,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 : isAnalyzing
                   ? `分析中… ${analyzeProgress}%`
                   : '↻ 重新分析'}
+            </button>
+            <button
+              type="button"
+              disabled={!currentEpisodeId}
+              onClick={() => setStaleCleanupOpen(true)}
+              title="再分析失敗時舊分鏡會殘留 — 從這裡挑出多餘的分鏡來源刪掉"
+              className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              整理分鏡來源
             </button>
             <button
               type="button"
@@ -2539,6 +2571,22 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               ? '本集還沒有分鏡組,送出時會自動建立第一組'
               : undefined
           }
+        />
+      ) : null}
+
+      {currentEpisodeId ? (
+        <StaleStoryboardCleanupModal
+          projectId={projectId}
+          episodeId={currentEpisodeId}
+          open={staleCleanupOpen}
+          onClose={() => setStaleCleanupOpen(false)}
+          onAfterDelete={() => {
+            // Force refetch of storyboards data so the timeline / multi-shot
+            // view drops the deleted panels immediately.
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.storyboards.all(currentEpisodeId),
+            })
+          }}
         />
       ) : null}
     </div>
