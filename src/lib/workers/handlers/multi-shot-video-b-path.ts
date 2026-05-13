@@ -1572,9 +1572,49 @@ export async function runMultiShotBPath(params: {
       // is case-insensitive whole-substring on a small known-name set
       // (subjectInfos.name list, max 3 entries) — collision risk is
       // negligible vs the binding payoff.
-      primaryPrompt = nameToImageIndex.size > 0
+      // Step 1: bound names → <<<image_N>>> tokens (Kling binding syntax).
+      let workingPrompt = nameToImageIndex.size > 0
         ? substituteImageRefs(rawPrompt.trim(), nameToImageIndex)
         : rawPrompt.trim()
+      // Step 2 (2026-05-13): unbound character names → "另一人". When a
+      // group has > 3 unique characters/scenes, Tencent VOD's hard
+      // SubjectInfos cap (3 slots) drops the overflow — but their bare
+      // names still litter the cinematic narrative ("...坎、离迅速转头
+      // ...") and Kling tries to invent identities for them, producing
+      // wrong faces. panel-numbered / seedance modes already do this
+      // via buildShotBody → rewriteForUnboundCharacters; raw mode was
+      // the outlier. Now mirrored.
+      if (unboundNames.size > 0) {
+        const { rewritten } = rewriteForUnboundCharacters(workingPrompt, unboundNames)
+        workingPrompt = rewritten
+      }
+      // Step 3 (2026-05-13): drop "参考图片N的[X]（高度一致）" anchor lines
+      // that reference an entity NOT actually in referenceImageUrls. The
+      // frontend cinematic narrative emits one anchor per character/scene
+      // it sees in the group, but the worker may cap at 3. Leaving stale
+      // anchors makes Kling believe ref slots 4-6 exist when they don't,
+      // and it hallucinates content to fill them. Filter by checking
+      // each anchor line's referenced name against bound entities.
+      const boundEntityNames = new Set<string>([
+        ...activeCharacterBindings.map((c) => c.name),
+        ...activeSceneBindings.map((s) => s.name),
+        ...activePropBindings.map((p) => p.name),
+      ])
+      const ANCHOR_LINE_RE = /^参考图片\d+的\[?([^\]）]+?)\]?(?:人物形象)?（高度一致）$/
+      workingPrompt = workingPrompt
+        .split('\n')
+        .filter((line) => {
+          const trimmed = line.trim()
+          const match = ANCHOR_LINE_RE.exec(trimmed)
+          if (!match) return true
+          const refName = match[1].trim()
+          // <<<image_N>>> tokens are always bound — keep.
+          if (/^<<<image_\d+>>>$/.test(refName)) return true
+          // Otherwise check the bound entity set.
+          return boundEntityNames.has(refName)
+        })
+        .join('\n')
+      primaryPrompt = workingPrompt
     } else if (promptStyle === 'auto-seedance') {
       promptSource = 'seedance'
       primaryPrompt = buildSeedancePrompt(validPanels, dialogueByPanel, undefined, nameToImageIndex)

@@ -380,13 +380,26 @@ export function GroupCard({
     // Header: character + scene anchor lines. Index from 1 because the
     // 五要素 convention says "参考图片1的xxx" — slot 1 is the leftmost
     // ref image which the worker also pins as the primary identity anchor.
+    //
+    // 2026-05-13 — cap at TENCENT_SUBJECT_INFOS_CAP=3. The worker drops
+    // entities beyond slot 3 (Tencent VOD SubjectInfos hard limit) but
+    // if we wrote anchors for 6 entities while only 3 actually upload,
+    // Kling thinks ref slots 4-6 exist and hallucinates content for
+    // them. Mirror the worker's slot priority: characters first, then
+    // scenes, then drop the rest. Worker's defensive filter (Step 3 in
+    // multi-shot-video-b-path raw branch) catches stragglers but
+    // emitting clean upfront is cheaper.
+    const TENCENT_SUBJECT_INFOS_CAP = 3
     const header: string[] = []
     let refSlot = 1
-    for (const cast of groupCast) {
+    const charsToAnchor = groupCast.slice(0, TENCENT_SUBJECT_INFOS_CAP)
+    const remainingForScenes = TENCENT_SUBJECT_INFOS_CAP - charsToAnchor.length
+    const scenesToAnchor = groupScenes.slice(0, remainingForScenes)
+    for (const cast of charsToAnchor) {
       header.push(`参考图片${refSlot}的[${cast.character.name}]人物形象（高度一致）`)
       refSlot++
     }
-    for (const scene of groupScenes) {
+    for (const scene of scenesToAnchor) {
       const sceneLabel = scene.viewName ? `${scene.location.name}·${scene.viewName}` : scene.location.name
       header.push(`参考图片${refSlot}的${sceneLabel}（高度一致）`)
       refSlot++
