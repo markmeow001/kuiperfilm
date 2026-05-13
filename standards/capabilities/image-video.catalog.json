@@ -2072,7 +2072,7 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
+        "supportNegativePrompt": true,
         "supportReferenceImage": true
       }
     }
@@ -2088,7 +2088,7 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
+        "supportNegativePrompt": true,
         "supportReferenceImage": true
       }
     }
@@ -2105,7 +2105,7 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
+        "supportNegativePrompt": true,
         "supportReferenceImage": true
       }
     }
@@ -2121,7 +2121,7 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
+        "supportNegativePrompt": true,
         "supportReferenceImage": true
       }
     }
@@ -2137,7 +2137,7 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
+        "supportNegativePrompt": true,
         "supportReferenceImage": true
       }
     }
@@ -2153,7 +2153,7 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
+        "supportNegativePrompt": true,
         "supportReferenceImage": true
       }
     }
@@ -2164,8 +2164,8 @@
     "modelId": "Qwen-0925",
     "capabilities": {
       "image": {
-        "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
       }
     }
   },
@@ -2179,8 +2179,8 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
       }
     }
   },
@@ -2194,8 +2194,8 @@
           "2K",
           "3K"
         ],
-        "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
       }
     }
   },
@@ -2209,8 +2209,38 @@
           "1k",
           "2k"
         ],
-        "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "Kling-3.0-Omni",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k"
+        ],
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
+    "modelId": "Kling-O1",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k"
+        ],
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
       }
     }
   },
@@ -2225,8 +2255,8 @@
           "2K",
           "4K"
         ],
-        "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
       }
     }
   },
@@ -2236,8 +2266,8 @@
     "modelId": "Jimeng-4.0",
     "capabilities": {
       "image": {
-        "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
       }
     }
   },
@@ -2247,8 +2277,8 @@
     "modelId": "Hunyuan-3.0",
     "capabilities": {
       "image": {
-        "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
       }
     }
   }

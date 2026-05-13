@@ -192,6 +192,8 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'SI-4.5', name: 'SI-4.5', type: 'image', provider: 'tencent-vod' },
     { modelId: 'SI-5.0-lite', name: 'SI-5.0-lite', type: 'image', provider: 'tencent-vod' },
     { modelId: 'Kling-2.1', name: 'Kling-2.1 (Image)', type: 'image', provider: 'tencent-vod' },
+    { modelId: 'Kling-3.0-Omni', name: 'Kling-3.0-Omni (Image, 10 refs)', type: 'image', provider: 'tencent-vod' },
+    { modelId: 'Kling-O1', name: 'Kling-O1 (Image, 10 refs)', type: 'image', provider: 'tencent-vod' },
     { modelId: 'Vidu-q2', name: 'Vidu-q2 (Image)', type: 'image', provider: 'tencent-vod' },
     { modelId: 'Jimeng-4.0', name: 'Jimeng-4.0', type: 'image', provider: 'tencent-vod' },
     { modelId: 'Hunyuan-3.0', name: 'Hunyuan-3.0', type: 'image', provider: 'tencent-vod' },
