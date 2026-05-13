@@ -25,7 +25,21 @@ import {
   useMultiShotTask,
   type MultiShotCharacterBinding,
 } from '@/lib/query/hooks/useMultiShotTask'
+import {
+  buildColdOpenShotBlock,
+  detectColdOpenGenre,
+  type ColdOpenPanel,
+  type ColdOpenVariant,
+} from '@/lib/cold-open'
 import type { UseMutationResult } from '@tanstack/react-query'
+
+/**
+ * Cold-open UI state. `off` = no hook formatting. `auto` = pick the
+ * variant from group text via detectColdOpenGenre. `modern` / `period`
+ * / `action` = user-pinned variants. Episode 1 / Group 1 defaults to
+ * `auto`; all other groups default to `off`.
+ */
+type ColdOpenMode = 'off' | 'auto' | ColdOpenVariant
 
 interface PanelCharacterRef {
   name: string
@@ -390,6 +404,22 @@ export function GroupCard({
   // AUTO so the time tags shown in the textarea aren't 0-0/0-0/0-0.
   const [totalDurationDraft, setTotalDurationDraft] = useState<number>(0)
 
+  // 2026-05-13 — ReelShort 8-second cold-open hook (Phase 1).
+  //
+  // Defaults to `auto` for Episode 1 / Group 1 (the hook position where
+  // the formula is proven valuable per ReelShort's 5B+ view series).
+  // Every other group defaults to `off` to preserve the user's existing
+  // flexible narrative — Phase 1 is opt-in everywhere else.
+  //
+  // See docs/design/reelshort-cold-open-evaluation.md for the full
+  // alignment analysis. The `auto` mode runs detectColdOpenGenre over
+  // the group's panel text to pick modern / period / action variant
+  // without forcing the user to label it manually.
+  const isHookEligible = (episodeNumber ?? 1) === 1 && groupOrdinal === 1
+  const [coldOpenMode, setColdOpenMode] = useState<ColdOpenMode>(
+    isHookEligible ? 'auto' : 'off',
+  )
+
   // 2026-05-13 — upgraded narrative builder using the "五要素導演法"
   // structure (角色錨點 / 場景錨點 / 動作鏈 / 運鏡 / 整體視覺風格).
   // Earlier version emitted bare `0-8 seconds: <desc>` lines which gave
@@ -702,16 +732,58 @@ export function GroupCard({
       ? `OVERALL: ${overallSummary}`
       : ''
 
+    // 2026-05-13 — ReelShort cold-open branch.
+    //
+    // When `coldOpenMode !== 'off'`, replace the per-panel shotBlocks
+    // with the fixed 4-shot × 2-second hook structure. The STYLE header,
+    // OVERALL summary, and reference-character/scene anchors are STILL
+    // prepended — the hook formula only owns the per-shot blocks.
+    //
+    // `auto` mode picks the variant from group text (panel descriptions
+    // + character/scene names); manual modes pin a specific variant.
+    let resolvedColdOpenVariant: ColdOpenVariant | null = null
+    if (coldOpenMode === 'auto') {
+      const textBlob = [
+        ...panels.map((p) => (p.description ?? p.prompt ?? '').trim()),
+        ...charNames,
+        ...sceneLabels,
+      ]
+        .filter(Boolean)
+        .join(' ')
+      resolvedColdOpenVariant = detectColdOpenGenre(textBlob)
+    } else if (coldOpenMode !== 'off') {
+      resolvedColdOpenVariant = coldOpenMode
+    }
+    const coldOpenBlock = resolvedColdOpenVariant
+      ? buildColdOpenShotBlock({
+          panels: panels.map<ColdOpenPanel>((p) => ({
+            id: p.id,
+            description: p.description ?? p.prompt ?? '',
+            characters: p.characters ?? null,
+            location: (p as { location?: string | null }).location ?? null,
+            voiceLines: p.voiceLines,
+            srtSegment: p.srtSegment ?? null,
+          })),
+          variant: resolvedColdOpenVariant,
+          perShotTag: PER_SHOT_STYLE_TAG,
+          antiTextLine: ANTI_TEXT_LINE,
+        })
+      : null
+
     // Section order (highest to lowest model attention):
     //   1. STYLE header — locks photoreal output regardless of content
     //   2. OVERALL — primes the narrative arc, helps multi-shot coherence
     //   3. Reference characters / scenes — entity anchors
-    //   4. Per-shot blocks with embedded style/anti-text reinforcement
+    //   4. Per-shot blocks (cold-open hook OR free-form depending on mode)
     const sections: string[] = []
     sections.push(STYLE_HEADER_REALISTIC)
     if (overallLine) sections.push(overallLine)
     if (header.length > 0) sections.push(header.join('\n'))
-    sections.push(shotBlocks.join('\n\n'))
+    if (coldOpenBlock) {
+      sections.push(coldOpenBlock)
+    } else {
+      sections.push(shotBlocks.join('\n\n'))
+    }
     return sections.join('\n\n')
   }
   const [narrativeDraft, setNarrativeDraft] = useState<string>('')
@@ -725,7 +797,7 @@ export function GroupCard({
     if (narrativeDirty) return
     setNarrativeDraft(buildInitialNarrative())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panels, totalDurationDraft, groupCast, groupScenes])
+  }, [panels, totalDurationDraft, groupCast, groupScenes, coldOpenMode])
 
   // Local drafts keyed by panel id. Re-seeded whenever the panel's
   // server-side description / dialogue changes (e.g. analyze
@@ -947,7 +1019,13 @@ export function GroupCard({
     // per-shot styleSuffix into each multi_prompt entry. Only the
     // OVERALL preamble (a single sentence) is dropped — Kling derives
     // arc context from the per-shot prompts themselves.
-    const sendRaw = narrativeDirty && trimmedNarrative.length > 0
+    // 2026-05-13 — cold-open hook overrides the dirty gate. The
+    // 4-shot × 2s formula only takes effect when the worker reads
+    // rawPrompt (sendRaw=true), so an active coldOpenMode forces the
+    // auto-seeded cold-open narrative through even when the user has
+    // not manually edited the textarea.
+    const sendRaw =
+      (narrativeDirty || coldOpenMode !== 'off') && trimmedNarrative.length > 0
     const overrides: GroupRegenOverrides = {
       // Three states:
       //   sendRaw=true              → rawPrompt only (intelligence mode, user override)
@@ -1202,6 +1280,35 @@ export function GroupCard({
               <span className="text-stone-500">· {narrativeDraft.length} 字</span>
             </div>
             <div className="flex items-center gap-2">
+              {/* 2026-05-13 — ReelShort 8-second cold-open hook toggle.
+                  Default ON (auto) for Episode 1 / Group 1. See
+                  docs/design/reelshort-cold-open-evaluation.md. */}
+              <label
+                className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-400"
+                title="冷開場鉤子模式 - 套用 ReelShort 4 鏡 × 2s 結構 (Wide → Medium → OTS → Slow push-in)。auto 模式由群組文字自動判斷風格。"
+              >
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                鉤子
+                <select
+                  value={coldOpenMode}
+                  onChange={(e) => {
+                    const next = e.target.value as ColdOpenMode
+                    setColdOpenMode(next)
+                    // Re-seed narrative so the new structure renders.
+                    // Cold-open toggle overrides any pending dirty edits
+                    // — switching modes is an explicit "give me the new
+                    // template" gesture.
+                    setNarrativeDirty(false)
+                  }}
+                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
+                >
+                  <option value="off">Off (自由結構)</option>
+                  <option value="auto">Auto (自動偵測)</option>
+                  <option value="modern">Modern (現代劇)</option>
+                  <option value="period">Period (古裝/仙俠)</option>
+                  <option value="action">Action (動作/災劫)</option>
+                </select>
+              </label>
               <label className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-400">
                 <AppIcon name="play" className="h-3 w-3" />
                 时长
