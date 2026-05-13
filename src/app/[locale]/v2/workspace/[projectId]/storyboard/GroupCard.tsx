@@ -107,6 +107,19 @@ interface GroupCardProps {
   characterRoster?: CharacterRef[]
   locationRoster?: LocationRef[]
   /**
+   * Per-episode character → appearance binding (EpisodeCharacter rows).
+   * Worker resolution priority (see image-task-handler-shared and
+   * multi-shot-video-b-path):
+   *   1. UI per-call override (characterOverrides)
+   *   2. EpisodeCharacter binding ← what this prop carries
+   *   3. panel.characters[i].appearance hint (matched by changeReason)
+   *   4. appearances[0] default
+   * Chip rail MUST mirror this priority — otherwise 出場角色 displays
+   * one appearance while the worker renders another (user-reported
+   * 2026-05-13: chip said "初始形象" but Kling rendered "王玄Y").
+   */
+  episodeBindings?: Array<{ characterId: string; appearanceId: string | null }>
+  /**
    * Approximate per-group runtime in seconds. Used to compute a
    * cumulative time range badge in the collapsed header so the
    * editor reads like the Seedance 2.0 video plan UI the user
@@ -145,10 +158,20 @@ export function GroupCard({
   updatePanelText,
   characterRoster,
   locationRoster,
+  episodeBindings,
   segmentDurationSeconds = 15,
   episodeNumber,
   onRegenerate,
 }: GroupCardProps) {
+  // Build episode binding lookup ONCE. Empty map when no bindings prop
+  // (legacy callers) — falls through to panel-hint / default-[0] priority.
+  const episodeBindingByCharId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const b of episodeBindings ?? []) {
+      if (b.characterId && b.appearanceId) map.set(b.characterId, b.appearanceId)
+    }
+    return map
+  }, [episodeBindings])
   // Collapsed by default — the user referenced the Seedance 2.0
   // 视频方案编辑器 layout where each segment is a list row that
   // expands on click. Helps a multi-group episode (8+ groups) stay
@@ -212,12 +235,14 @@ export function GroupCard({
       const charsRaw: unknown[] = Array.isArray(panel.characters) ? panel.characters : []
       for (const item of charsRaw) {
         let name: string | null = null
+        let appearanceHint: string | null = null
         if (typeof item === 'string') {
           const trimmed = item.trim()
           if (trimmed.startsWith('{')) {
             try {
-              const parsed = JSON.parse(trimmed) as { name?: unknown }
+              const parsed = JSON.parse(trimmed) as { name?: unknown; appearance?: unknown }
               if (typeof parsed.name === 'string') name = parsed.name
+              if (typeof parsed.appearance === 'string') appearanceHint = parsed.appearance
             } catch {
               name = trimmed
             }
@@ -225,8 +250,9 @@ export function GroupCard({
             name = trimmed
           }
         } else if (item && typeof item === 'object') {
-          const r = item as { name?: unknown }
+          const r = item as { name?: unknown; appearance?: unknown }
           if (typeof r.name === 'string') name = r.name
+          if (typeof r.appearance === 'string') appearanceHint = r.appearance
         }
         if (!name) continue
         const lower = name.trim().toLowerCase()
@@ -237,10 +263,30 @@ export function GroupCard({
         if (!char) continue
         seen.add(lower)
         const appearances = char.appearances ?? []
+        // Resolution priority — MUST mirror worker (image-task-handler-shared
+        // + multi-shot-video-b-path). User-reported 2026-05-13: 出場角色 chip
+        // said "初始形象" while 演員綁定 said "王玄Y" — that gap caused months
+        // of "the rendered character is wrong" confusion. Resolve here so
+        // both rows display the same appearance.
+        //   1. UI per-call override (characterOverrides[char.id])
+        //   2. EpisodeCharacter binding (episodeBindingByCharId)
+        //   3. panel.characters[i].appearance hint matched by changeReason
+        //   4. appearances[0]
         const overrideId = characterOverrides[char.id]
-        const chosen = overrideId
-          ? appearances.find((a) => a.id === overrideId) ?? appearances[0]
-          : appearances[0]
+        const episodeBoundId = episodeBindingByCharId.get(char.id)
+        let chosen = appearances[0]
+        if (overrideId) {
+          const o = appearances.find((a) => a.id === overrideId)
+          if (o) chosen = o
+        } else if (episodeBoundId) {
+          const b = appearances.find((a) => a.id === episodeBoundId)
+          if (b) chosen = b
+        } else if (appearanceHint) {
+          const h = appearances.find(
+            (a) => (a.changeReason || '').toLowerCase() === appearanceHint!.toLowerCase(),
+          )
+          if (h) chosen = h
+        }
         if (!chosen) {
           out.push({
             character: char,
@@ -259,7 +305,7 @@ export function GroupCard({
       }
     }
     return out
-  }, [panels, characterRoster, characterOverrides])
+  }, [panels, characterRoster, characterOverrides, episodeBindingByCharId])
   const groupScenes = useMemo<SceneChip[]>(() => {
     const seen = new Set<string>()
     const out: SceneChip[] = []

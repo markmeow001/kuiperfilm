@@ -1262,6 +1262,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         updatePanelText={updatePanelText}
         characterRoster={characterRoster}
         locationRoster={locationRoster}
+        episodeBindings={episodeBindings}
         episodeNumber={(currentEpisode as { episodeNumber?: number } | null)?.episodeNumber ?? null}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {

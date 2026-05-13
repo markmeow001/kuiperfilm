@@ -90,6 +90,13 @@ interface V2GroupsLayoutProps {
   updatePanelText: UpdatePanelTextMutation
   characterRoster?: CharacterRosterEntry[]
   locationRoster?: LocationRosterEntry[]
+  /**
+   * Per-episode character → appearance binding. The worker uses this to
+   * override panel.characters[i].appearance, so the chip rail must mirror
+   * the same resolution priority or 出場角色 and 演員綁定 visibly diverge
+   * (user-reported 2026-05-13).
+   */
+  episodeBindings?: Array<{ characterId: string; appearanceId: string | null }>
   /** Used for download filename naming (`ep{N}_group{NN}.mp4`). */
   episodeNumber?: number | null
   onRegenerateGroup: (
@@ -122,6 +129,7 @@ export function V2GroupsLayout({
   updatePanelText,
   characterRoster,
   locationRoster,
+  episodeBindings,
   episodeNumber,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
@@ -184,6 +192,7 @@ export function V2GroupsLayout({
                   updatePanelText={updatePanelText}
                   characterRoster={characterRoster}
                   locationRoster={locationRoster}
+                  episodeBindings={episodeBindings}
                   episodeNumber={episodeNumber}
                   onRegenerate={(panelIds, overrides) =>
                     onRegenerateGroup(g.groupId, panelIds, overrides)
