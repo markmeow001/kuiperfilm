@@ -246,7 +246,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
             </li>
           </ol>
           <div className="border-t border-stone-800/60 pt-3 font-fraunces text-[11px] italic text-stone-600">
-            畫面比例 / 風格在<Link href={`/${locale}/v2/workspace/${projectId}`} className="ml-1 text-amber-500/80 hover:text-amber-300">專案首頁</Link>設定,跨集共用。
+            畫面比例 / 風格在<Link href={`/${locale}/v2/workspace/${projectId}?stay=1`} className="ml-1 text-amber-500/80 hover:text-amber-300">專案首頁</Link>設定,跨集共用。
           </div>
         </aside>
       </div>

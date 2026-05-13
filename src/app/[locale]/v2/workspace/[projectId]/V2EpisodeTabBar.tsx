@@ -169,9 +169,11 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >
-      {/* Project name link → home overview */}
+      {/* Project name link → home overview.
+          `?stay=1` opt-out keeps sticky-step from bouncing this back
+          to last-step (page.tsx 2026-05-13 fix). */}
       <Link
-        href={`/${locale}/v2/workspace/${projectId}`}
+        href={`/${locale}/v2/workspace/${projectId}?stay=1`}
         title={projectName ?? '專案首頁'}
         className="flex shrink-0 items-center gap-2 rounded-sm border border-stone-800/50 bg-stone-900/30 px-3 py-1.5 font-serif-cn text-sm text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-300"
       >

@@ -13,12 +13,12 @@ function isStep(value: unknown): value is StepValue {
 
 interface PageProps {
   params: Promise<{ locale: string; projectId: string }>
-  searchParams?: Promise<{ startAt?: string }>
+  searchParams?: Promise<{ startAt?: string; stay?: string }>
 }
 
 export default async function V2WorkspaceHomePage({ params, searchParams }: PageProps) {
   const { locale, projectId } = await params
-  const { startAt } = (await searchParams) ?? {}
+  const { startAt, stay } = (await searchParams) ?? {}
 
   // Deep-link override: `?startAt=<step>` wins and is persisted by the
   // step page itself via useStickyStep, no upsert needed here.
@@ -26,21 +26,31 @@ export default async function V2WorkspaceHomePage({ params, searchParams }: Page
     redirect(`/${locale}/v2/workspace/${projectId}/${startAt}`)
   }
 
-  // Sticky-step lookup — per-user, per-project cursor.
-  const session = await getAuthSession()
-  if (session?.user?.id) {
-    const state = await prisma.userProjectState.findUnique({
-      where: {
-        userId_projectId: {
-          userId: session.user.id,
-          projectId,
-        },
-      },
-      select: { lastStep: true },
-    })
+  // 2026-05-13 escape hatch — `?stay=1` means "I really want the home
+  // page, do NOT bounce me to last-step". Lets the project-name link
+  // in V2EpisodeTabBar (and any other "回首頁" entry point) actually
+  // reach home, which is where users set artStyle / videoRatio. Without
+  // this, sticky-step would silently redirect home → last-step on
+  // every visit and the user could never reach project settings.
+  const stayOnHome = stay === '1' || stay === 'true'
 
-    if (state && isStep(state.lastStep) && state.lastStep !== 'home') {
-      redirect(`/${locale}/v2/workspace/${projectId}/${state.lastStep}`)
+  // Sticky-step lookup — per-user, per-project cursor.
+  if (!stayOnHome) {
+    const session = await getAuthSession()
+    if (session?.user?.id) {
+      const state = await prisma.userProjectState.findUnique({
+        where: {
+          userId_projectId: {
+            userId: session.user.id,
+            projectId,
+          },
+        },
+        select: { lastStep: true },
+      })
+
+      if (state && isStep(state.lastStep) && state.lastStep !== 'home') {
+        redirect(`/${locale}/v2/workspace/${projectId}/${state.lastStep}`)
+      }
     }
   }
 
