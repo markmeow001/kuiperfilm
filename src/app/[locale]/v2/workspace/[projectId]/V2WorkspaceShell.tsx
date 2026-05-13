@@ -50,7 +50,18 @@ export function V2WorkspaceShell({
     // and switching script→subjects→storyboard stays on episode 4.
     // Without this the destination falls back to "first episode in
     // project" via useCurrentEpisode's resolution order.
-    router.push(buildHref(basePath))
+    //
+    // 2026-05-13 — sidebar "首頁" click needs ?stay=1 to defeat the
+    // server-side sticky-step redirect on page.tsx. Without this, the
+    // sidebar 首頁 button is a dead button: route → page.tsx sees no
+    // stay flag → reads UserProjectState.lastStep (which is the step
+    // the user is leaving from) → redirects right back. Step pages
+    // don't need the flag because their server pages don't redirect.
+    const href = buildHref(basePath)
+    const finalHref = stepId === 'home'
+      ? (href.includes('?') ? `${href}&stay=1` : `${href}?stay=1`)
+      : href
+    router.push(finalHref)
   }
 
   return (
