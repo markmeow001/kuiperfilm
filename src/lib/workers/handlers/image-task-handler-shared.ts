@@ -380,6 +380,15 @@ export async function collectPanelSceneBase(projectData: NovelProjectData, panel
 //        single-character refs rarely exceed that.
 const COMPOSITE_ASPECT_THRESHOLD = 1.25
 const IDENTITY_CROP_WIDTH_RATIO = 0.30
+// 2026-05-13 — face-dominant crop. Previously cropped left 30% × full
+// height, producing a 826×1536-style narrow vertical strip in which the
+// face only occupied ~30-40% of the crop area (rest was hair + robe +
+// shoulders). Kling Omni's identity attention got diluted across the
+// non-face portions and could ignore key facial features. Now also cap
+// the height so the crop becomes near-square (3:4 portrait at most),
+// keeping just face + upper bust. Face occupies 70-80% of the crop
+// → much stronger identity signal.
+const IDENTITY_CROP_MIN_ASPECT = 0.70 // crop_height ≤ crop_width / 0.70 → max ~3:4 portrait
 
 // Returns ordered ref URLs for a single character image.
 //   - non-composite (square / portrait single shot): [originalUrl]
@@ -467,8 +476,13 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string[]> 
     }
 
     const cropW = Math.round(w * IDENTITY_CROP_WIDTH_RATIO)
+    // Cap height so the crop is at most 3:4 portrait. For typical
+    // multi-view sheets the face closeup occupies the top of the left
+    // column, so we anchor `top: 0` and slice down; everything below
+    // the face (extra hair, shoulders, robe) gets dropped.
+    const cropH = Math.min(h, Math.round(cropW / IDENTITY_CROP_MIN_ASPECT))
     const cropBuffer = await sharp(buffer)
-      .extract({ left: 0, top: 0, width: cropW, height: h })
+      .extract({ left: 0, top: 0, width: cropW, height: cropH })
       .jpeg({ quality: 90, mozjpeg: true })
       .toBuffer()
 
@@ -480,7 +494,9 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string[]> 
       origWidth: w,
       origHeight: h,
       cropWidth: cropW,
+      cropHeight: cropH,
       aspect,
+      cropAspect: cropW / cropH,
     })
     // Return ONLY the crop. The original composite is a multi-figure
     // layout that confuses Kling's identity binding (sees N figures
