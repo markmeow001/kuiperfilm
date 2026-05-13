@@ -1265,6 +1265,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             }}
             isSavingIntroduction={updateCharIntro.isPending}
             isSavingVisualPrompt={updateAppearanceDesc.isPending}
+            onRedescribe={apId ? () => handleRedescribe(c) : undefined}
+            isRedescribing={apId ? redescribeInFlight.has(apId) : false}
             onToggleLock={() => handleConfirmProfile(c)}
             isLocking={confirmProfile.isPending}
             onDelete={() => handleDeleteCharacterFromModal(c.id)}

@@ -78,6 +78,12 @@ export interface V2CharacterEditModalProps {
   isSavingIntroduction: boolean
   isSavingVisualPrompt: boolean
 
+  // Re-describe from current image (escape hatch for legacy uploads
+  // / out-of-sync `descriptions` field). Same backend as the list-view
+  // "↻ 從圖抽描述" button. Optional — parent may omit if no appearance.
+  onRedescribe?: () => void
+  isRedescribing?: boolean
+
   // Profile lock + destructive
   onToggleLock: () => void
   isLocking: boolean
@@ -100,6 +106,8 @@ export function V2CharacterEditModal({
   onSaveVisualPrompt,
   isSavingIntroduction,
   isSavingVisualPrompt,
+  onRedescribe,
+  isRedescribing,
   onToggleLock,
   isLocking,
   onDelete,
@@ -359,6 +367,17 @@ export function V2CharacterEditModal({
                   儲存後下次「重新生成」會用此 prompt
                 </div>
                 <div className="flex items-center gap-2">
+                  {onRedescribe ? (
+                    <button
+                      type="button"
+                      onClick={onRedescribe}
+                      disabled={isRedescribing || isSavingVisualPrompt || isRegenerating || isUploading || !imageUrl}
+                      title="用 AI 從目前角色圖重新抽外觀提示詞 — 適合上傳新圖後 / 描述跟圖對不上時"
+                      className="rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/50 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isRedescribing ? '抽描述中…' : '↻ 從圖抽描述'}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => setVisualPromptDraft(initialVisualPrompt)}
