@@ -79,7 +79,14 @@ interface LocationRef {
 type UpdatePanelTextMutation = UseMutationResult<
   unknown,
   Error,
-  { panelId: string; description?: string; srtSegment?: string }
+  {
+    panelId: string
+    description?: string
+    srtSegment?: string
+    /** Updated panel.characters (array or pre-serialized JSON string).
+     * Used by the 出場角色 chip × remove flow. */
+    characters?: Array<{ name: string; appearance?: string }> | string | null
+  }
 >
 
 export interface GroupRegenOverrides {
@@ -446,72 +453,42 @@ export function GroupCard({
     const remainingForScenes = TENCENT_SUBJECT_INFOS_CAP - charsToAnchor.length
     const scenesToAnchor = groupScenes.slice(0, remainingForScenes)
 
-    // 2026-05-13 — Tencent VOD AIGC §3.9.4 says Kling parses
-    // `<<<image_N>>>` as the LITERAL binding marker. Earlier attempts
-    // decorated the token with chinese name parens like
-    // `<<<image_1>>>（即王玄）` so the user could read the textarea, but
-    // the worker's substituteImageRefs then replaced 「王玄」 again
-    // producing `<<<image_1>>>（即<<<image_1>>>）` and the anchor filter
-    // dropped the line entirely (capture group no longer matched a
-    // bound entity name).
+    // 2026-05-13 (later) — user pushback: 「不要用 <<<image_1>>>=王玄
+    // 這種寫法,需要的是像 [王玄M] 直接在描述中寫名字」.
     //
-    // Cleanest fix: collapse the mapping into a single header line
-    // ONCE at the top of the prompt, then use bare `<<<image_N>>>` in
-    // shot blocks. Kling sees the contract; user reads the header
-    // mapping for context.
+    // New format — script-style with bare names:
+    //   header: "参考角色：王玄、离 (高度一致)；参考场景：洞府内·白天 (高度一致)"
+    //   per-shot anchor line: dropped (description already has names)
+    //   description: bare names verbatim — let the worker's
+    //     substituteImageRefs translate names → <<<image_N>>> right before
+    //     hitting Kling. Frontend stays clean and readable like a script.
     //
-    //   header line: "参考主体：<<<image_1>>>=王玄；<<<image_2>>>=李四；<<<image_3>>>=场景：王宅·夜"
-    //   shotbind   : "[出场：<<<image_1>>>，<<<image_2>>>] [场景：<<<image_3>>>]"
-    //   desc       : char/scene names ≥2 chars → <<<image_N>>>
-    //   dialog     : verbatim (TTS speaker must be bare name per §3.9.4)
+    // Single-char name guard still applies (worker skips length<2 names
+    // to avoid clobbering Chinese particles like 离地半米).
     const charNameToRefSlot = new Map<string, number>()
-    const mappingFragments: string[] = []
+    const charNames: string[] = []
     for (const cast of charsToAnchor) {
-      mappingFragments.push(`<<<image_${refSlot}>>>=${cast.character.name}`)
+      charNames.push(cast.character.name)
       charNameToRefSlot.set(cast.character.name.trim().toLowerCase(), refSlot)
       refSlot++
     }
     const sceneNameToRefSlot = new Map<string, number>()
+    const sceneLabels: string[] = []
     for (const scene of scenesToAnchor) {
       const sceneLabel = scene.viewName ? `${scene.location.name}·${scene.viewName}` : scene.location.name
-      mappingFragments.push(`<<<image_${refSlot}>>>=场景：${sceneLabel}`)
+      sceneLabels.push(sceneLabel)
       sceneNameToRefSlot.set(scene.location.name.trim().toLowerCase(), refSlot)
       refSlot++
     }
-    if (mappingFragments.length > 0) {
-      header.push(`参考主体：${mappingFragments.join('；')}（均高度一致，写实风格）`)
+    const headerLineFragments: string[] = []
+    if (charNames.length > 0) {
+      headerLineFragments.push(`参考角色：${charNames.join('、')}（人物高度一致）`)
     }
-
-    // Build a sorted name list (longest first) for substring substitution
-    // inside descriptions. Mirrors the worker's substituteImageRefs order
-    // so frontend and worker produce identical output.
-    const nameSlotPairs: Array<{ name: string; slot: number }> = []
-    for (const [name, slot] of charNameToRefSlot.entries()) {
-      nameSlotPairs.push({ name, slot })
+    if (sceneLabels.length > 0) {
+      headerLineFragments.push(`参考场景：${sceneLabels.join('、')}（场景高度一致）`)
     }
-    for (const [name, slot] of sceneNameToRefSlot.entries()) {
-      nameSlotPairs.push({ name, slot })
-    }
-    nameSlotPairs.sort((a, b) => b.name.length - a.name.length)
-
-    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    // CRITICAL — must skip single-char names (length < 2). CJK has no
-    // word boundaries, so substring-matching a 1-char name like 「離」
-    // clobbers common Chinese phrases that happen to contain that char.
-    // Real prod failure case 2026-05-13:
-    //   character name = "离" (slot 2)
-    //   description = "悬浮在离地半米的空中" (离地 = "above the ground")
-    //   after sub  = "悬浮在<<<image_2>>>地半米的空中"  ← nonsense
-    // Single-char names are accepted into the cast but stay as bare names
-    // in prose; bound anchor lines and dialogue still anchor them.
-    const substituteRefsInDesc = (text: string): string => {
-      if (!text || nameSlotPairs.length === 0) return text
-      let out = text
-      for (const { name, slot } of nameSlotPairs) {
-        if (name.length < 2) continue
-        out = out.replace(new RegExp(escapeRegex(name), 'gi'), `<<<image_${slot}>>>`)
-      }
-      return out
+    if (headerLineFragments.length > 0) {
+      header.push(headerLineFragments.join('；'))
     }
 
     // Helper: extract character names from panel.characters (handles
@@ -563,49 +540,36 @@ export function GroupCard({
       const cameraMoveRaw = p.cameraMove?.trim() ?? ''
       const cameraMoveEn = CAMERA_MOVE_TO_EN[cameraMoveRaw] ?? cameraMoveRaw
 
-      // Per-shot binding: bare `<<<image_N>>>` literal tokens only.
-      // The header line above already documents which slot is which
-      // entity, so we don't need to repeat the name here — repeating
-      // it risks the worker's substituteImageRefs touching it twice.
-      // Names NOT in the cap (>3) fall through to the worker's
-      // "另一人" anonymization.
-      const shotCharBindings: string[] = []
+      // Per-shot binding hint — bare names only, comma-separated. Worker
+      // translates these to `<<<image_N>>>` right before Kling. Drop the
+      // shot anchor line entirely when no characters are bound for this
+      // panel (it was decorative).
+      const shotCharNames: string[] = []
       const seenInShot = new Set<string>()
       for (const charName of extractPanelCharNames(p)) {
         const lower = charName.toLowerCase()
         if (seenInShot.has(lower)) continue
         seenInShot.add(lower)
-        const slot = charNameToRefSlot.get(lower)
-        if (slot !== undefined) shotCharBindings.push(`<<<image_${slot}>>>`)
+        if (charNameToRefSlot.has(lower)) shotCharNames.push(charName)
       }
       const shotBindingFragments: string[] = []
-      if (shotCharBindings.length > 0) {
-        shotBindingFragments.push(`出场：${shotCharBindings.join('，')}`)
+      if (shotCharNames.length > 0) {
+        shotBindingFragments.push(`出场：${shotCharNames.join('、')}`)
       }
       const panelLocRaw = (p as { location?: string | null }).location ?? ''
       const panelLocName = panelLocRaw.includes('#')
         ? panelLocRaw.slice(0, panelLocRaw.indexOf('#')).trim()
         : panelLocRaw.trim()
       if (panelLocName) {
-        const slot = sceneNameToRefSlot.get(panelLocName.toLowerCase())
-        if (slot !== undefined) {
-          shotBindingFragments.push(`场景：<<<image_${slot}>>>`)
-        } else {
-          shotBindingFragments.push(`场景：${panelLocName}`)
-        }
+        shotBindingFragments.push(`场景：${panelLocName}`)
       }
-
-      // Pre-substitute character/scene names INSIDE the description
-      // prose so the textarea matches Kling's view. Dialogue line is
-      // left untouched (TTS speaker parser requires bare name).
-      const descSubstituted = desc ? substituteRefsInDesc(desc) : ''
 
       const blockLines: string[] = []
       blockLines.push(`镜头${i + 1}（${start}-${end} seconds）·${framing}`)
       if (shotBindingFragments.length > 0) {
         blockLines.push(`[${shotBindingFragments.join('] [')}]`)
       }
-      if (descSubstituted) blockLines.push(descSubstituted)
+      if (desc) blockLines.push(desc)
       if (dialog) blockLines.push(dialog)
       if (cameraMoveEn) blockLines.push(`镜头：${cameraMoveEn}`)
       blockLines.push(ANTI_TEXT_LINE)
@@ -680,6 +644,77 @@ export function GroupCard({
     | { status: 'done' }
     | { status: 'error'; message: string }
   >({ status: 'idle' })
+
+  // 2026-05-13 — per-character × remove on the 出場角色 chip.
+  // Tracks the in-flight removal so the chip can show a spinner.
+  const [removingCharId, setRemovingCharId] = useState<string | null>(null)
+
+  /**
+   * Remove a character from EVERY panel in this group. Writes panel.characters
+   * back to DB via useUpdatePanelText so subsequent regens (and panel-image
+   * regens) no longer include this character's reference. Used to fix
+   * mis-extracted single-char names like 离 that the analyze LLM injected
+   * because '离地半米' substring-matched the character name.
+   *
+   * Walks each panel sequentially. For each panel that mentions the
+   * character (case-insensitive, handles both bare-string and
+   * {name, appearance?} shapes), splices that entry out, re-serializes,
+   * and PATCH-es the panel. Storyboard query is invalidated by the
+   * mutation hook so the chip rail re-derives without the removed cast.
+   */
+  async function handleRemoveCharacterFromGroup(characterId: string, characterName: string) {
+    if (removingCharId) return
+    if (!confirm(`從此 group 的所有分鏡移除「${characterName}」?\n\n影響 DB,下次重新生成圖/影片時這個角色就不會被綁入。\n（不會刪除角色本身,只是這幾個分鏡不再引用他）`)) {
+      return
+    }
+    setRemovingCharId(characterId)
+    const targetLower = characterName.trim().toLowerCase()
+    try {
+      for (const p of panels) {
+        const raw: unknown[] = Array.isArray(p.characters) ? p.characters : []
+        if (raw.length === 0) continue
+        const filtered: Array<{ name: string; appearance?: string }> = []
+        let touched = false
+        for (const item of raw) {
+          let entryName: string | null = null
+          let entryAppearance: string | undefined
+          if (typeof item === 'string') {
+            const trimmed = item.trim()
+            if (trimmed.startsWith('{')) {
+              try {
+                const parsed = JSON.parse(trimmed) as { name?: unknown; appearance?: unknown }
+                if (typeof parsed.name === 'string') entryName = parsed.name
+                if (typeof parsed.appearance === 'string') entryAppearance = parsed.appearance
+              } catch {
+                entryName = trimmed
+              }
+            } else {
+              entryName = trimmed
+            }
+          } else if (item && typeof item === 'object') {
+            const r = item as { name?: unknown; appearance?: unknown }
+            if (typeof r.name === 'string') entryName = r.name
+            if (typeof r.appearance === 'string') entryAppearance = r.appearance
+          }
+          if (!entryName) continue
+          if (entryName.trim().toLowerCase() === targetLower) {
+            touched = true
+            continue
+          }
+          filtered.push(entryAppearance ? { name: entryName, appearance: entryAppearance } : { name: entryName })
+        }
+        if (!touched) continue
+        await updatePanelText.mutateAsync({
+          panelId: p.id,
+          characters: filtered,
+        })
+      }
+    } catch (err) {
+      alert(`移除失敗:${(err as Error)?.message ?? '未知'}`)
+    } finally {
+      setRemovingCharId(null)
+    }
+  }
   async function handleRegenerate() {
     if (panels.length < 2) {
       setRegenState({ status: 'error', message: '至少需要 2 鏡才能跑多鏡頭' })
@@ -1047,41 +1082,64 @@ export function GroupCard({
                       const stateClass = overridden
                         ? 'border-violet-500/60 bg-violet-500/10'
                         : 'border-amber-900/30 bg-stone-950/40'
+                      // 2026-05-13 — chip refactored from single <button> to
+                      // a <div> with two interactive children: main area
+                      // opens the swap modal; the trailing × removes this
+                      // character from EVERY panel.characters in this group
+                      // (user-asked: 'every shot needs the ability to
+                      // remove the character binding').
                       return (
-                        <button
+                        <div
                           key={c.character.id}
-                          type="button"
-                          onClick={() => {
-                            setPickerCharacter({
-                              character: c.character,
-                              currentAppearanceId: characterOverrides[c.character.id] !== undefined
-                                ? characterOverrides[c.character.id]
-                                : c.appearanceId,
-                            })
-                          }}
-                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
-                          title={`${c.character.name} · ${c.appearanceLabel ?? '默認造型'} — 點擊換造型`}
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-1 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
                         >
-                          <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
-                            {c.avatarUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={c.avatarUrl} alt={c.character.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <AppIcon name="user" className="h-3 w-3 m-auto text-stone-600" />
-                            )}
-                          </div>
-                          <span className="font-serif-cn text-[14px] text-stone-200">
-                            {c.character.name}
-                          </span>
-                          <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
-                            {c.appearanceLabel ?? '默認造型'}
-                          </span>
-                          {overridden ? (
-                            <span className="font-mono text-[12px] tracking-wider text-violet-300">
-                              ✏ 已改
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPickerCharacter({
+                                character: c.character,
+                                currentAppearanceId: characterOverrides[c.character.id] !== undefined
+                                  ? characterOverrides[c.character.id]
+                                  : c.appearanceId,
+                              })
+                            }}
+                            className="inline-flex items-center gap-1.5 pr-1"
+                            title={`${c.character.name} · ${c.appearanceLabel ?? '默認造型'} — 點擊換造型`}
+                          >
+                            <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                              {c.avatarUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={c.avatarUrl} alt={c.character.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <AppIcon name="user" className="h-3 w-3 m-auto text-stone-600" />
+                              )}
+                            </div>
+                            <span className="font-serif-cn text-[14px] text-stone-200">
+                              {c.character.name}
                             </span>
-                          ) : null}
-                        </button>
+                            <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                              {c.appearanceLabel ?? '默認造型'}
+                            </span>
+                            {overridden ? (
+                              <span className="font-mono text-[12px] tracking-wider text-violet-300">
+                                ✏ 已改
+                              </span>
+                            ) : null}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveCharacterFromGroup(c.character.id, c.character.name)}
+                            disabled={removingCharId === c.character.id}
+                            title={`從此 group 所有分鏡移除 ${c.character.name}（影響 DB,下次重生會生效）`}
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
+                          >
+                            {removingCharId === c.character.id ? (
+                              <span className="font-mono text-[12px]">…</span>
+                            ) : (
+                              <span className="font-mono text-[14px] leading-none">×</span>
+                            )}
+                          </button>
+                        </div>
                       )
                     })}
                   </div>

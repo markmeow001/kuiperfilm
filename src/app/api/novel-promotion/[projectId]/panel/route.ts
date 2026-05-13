@@ -237,6 +237,8 @@ export const PATCH = apiHandler(async (
     firstLastFramePrompt,
     description, // V2 storyboard editor — scene/composition prompt
     srtSegment,  // V2 storyboard editor — dialogue/subtitle text
+    characters,  // V2 storyboard editor — JSON string of panel.characters
+                 // (used by 出場角色 chip × remove flow, 2026-05-13)
   } = body
 
   // 🔥 方式1：通过 panelId 直接更新（优先）
@@ -259,6 +261,7 @@ export const PATCH = apiHandler(async (
       firstLastFramePrompt?: string | null
       description?: string | null
       srtSegment?: string | null
+      characters?: string | null
     } = {}
     if (videoPrompt !== undefined) updateData.videoPrompt = videoPrompt
     if (firstLastFramePrompt !== undefined) updateData.firstLastFramePrompt = firstLastFramePrompt
@@ -269,6 +272,19 @@ export const PATCH = apiHandler(async (
     if (srtSegment !== undefined) {
       const trimmed = typeof srtSegment === 'string' ? srtSegment : null
       updateData.srtSegment = trimmed
+    }
+    if (characters !== undefined) {
+      // Accept either a JSON-string (legacy) or an array (preferred). Always
+      // persist as a JSON string so the column shape stays consistent.
+      if (characters === null) {
+        updateData.characters = null
+      } else if (typeof characters === 'string') {
+        updateData.characters = characters
+      } else if (Array.isArray(characters)) {
+        updateData.characters = JSON.stringify(characters)
+      } else {
+        throw new ApiError('INVALID_PARAMS', { message: 'characters must be null, string, or array' })
+      }
     }
 
     await prisma.novelPromotionPanel.update({

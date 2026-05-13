@@ -348,6 +348,14 @@ export function useUpdatePanelText(projectId: string | null, episodeId: string |
             panelId: string
             description?: string
             srtSegment?: string
+            /**
+             * Updated panel.characters payload. Pass either an array of
+             * `{name, appearance?}` entries (preferred) or a pre-serialized
+             * JSON string. Used by the 出場角色 chip × remove flow (2026-05-13)
+             * to drop a falsely-added character (e.g. single-char name 离
+             * mis-extracted by the analyze LLM).
+             */
+            characters?: Array<{ name: string; appearance?: string }> | string | null
         }) => {
             if (!projectId) throw new Error('Project ID is required')
             const res = await fetch(`/api/novel-promotion/${projectId}/panel`, {

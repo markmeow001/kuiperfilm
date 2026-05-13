@@ -53,7 +53,13 @@ interface PanelLike {
 type UpdatePanelTextMutation = UseMutationResult<
   unknown,
   Error,
-  { panelId: string; description?: string; srtSegment?: string }
+  {
+    panelId: string
+    description?: string
+    srtSegment?: string
+    /** See useUpdatePanelText — used by the chip × remove flow. */
+    characters?: Array<{ name: string; appearance?: string }> | string | null
+  }
 >
 
 interface CharacterRosterEntry {

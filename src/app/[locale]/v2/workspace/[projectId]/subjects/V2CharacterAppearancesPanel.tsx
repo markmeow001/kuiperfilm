@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import {
   useBulkBindEpisodeCharacterAppearance,
@@ -170,6 +171,17 @@ function AppearanceManageRow({
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(appearance.changeReason ?? '')
+  // Description-editor expansion. User-asked 2026-05-13: '目前只能更改最原本
+  // 的造型描述,如果要修改其他造型,就沒辦法'. Each appearance row now has
+  // its own ✎ button that expands an inline description textarea so the
+  // user can edit any appearance's description without leaving the modal.
+  const [descExpanded, setDescExpanded] = useState(false)
+  const [descDraft, setDescDraft] = useState(appearance.description ?? '')
+  // Re-seed when the parent re-fetches (e.g. after a sibling row save).
+  useEffect(() => {
+    setDescDraft(appearance.description ?? '')
+  }, [appearance.description])
+
   const update = useUpdateCharacterAppearanceMeta(projectId)
   const del = useDeleteCharacterAppearance(projectId)
 
@@ -177,6 +189,7 @@ function AppearanceManageRow({
   const idxLabel = `#${(appearance.appearanceIndex ?? 0) + 1}`
   const thumbUrl = appearance.imageUrl ?? null
   const caption = appearance.description?.trim() ?? ''
+  const descDirty = descDraft.trim() !== (appearance.description ?? '').trim()
 
   function commitRename() {
     const trimmed = draft.trim()
@@ -200,6 +213,28 @@ function AppearanceManageRow({
     )
   }
 
+  function handleSaveDescription() {
+    const trimmed = descDraft.trim()
+    if (trimmed === (appearance.description ?? '').trim()) {
+      setDescExpanded(false)
+      return
+    }
+    update.mutate(
+      { characterId, appearanceId: appearance.id, description: trimmed },
+      {
+        onSuccess: () => setDescExpanded(false),
+        onError: (err) => {
+          alert(`描述儲存失敗:${(err as Error)?.message ?? '未知'}`)
+        },
+      },
+    )
+  }
+
+  function handleCancelDescription() {
+    setDescDraft(appearance.description ?? '')
+    setDescExpanded(false)
+  }
+
   function handleDelete() {
     if (!canDelete) return
     if (!confirm(`確定刪除造型「${display}」?關聯的集綁定也會一併移除。`)) return
@@ -214,92 +249,144 @@ function AppearanceManageRow({
   }
 
   return (
-    <div className="flex items-center gap-2.5 rounded-sm bg-stone-950/40 p-2">
-      {/* 64×64 thumbnail. Click → lightbox. Hover overlay shows the zoom
-          icon so it reads as clickable. Falls back to a gradient + 👤 icon
-          placeholder when the appearance has no imageUrl yet (genuinely
-          common for newly-added rows before re-generation runs). */}
-      {thumbUrl ? (
-        <button
-          type="button"
-          onClick={() => onZoom(thumbUrl)}
-          className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border border-stone-800 bg-stone-900 transition-all hover:border-amber-500/60"
-          title="點擊看大圖"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={thumbUrl}
-            alt={display}
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-          />
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
-            <span className="font-mono text-[12px] tracking-wider text-amber-300">🔍</span>
-          </div>
-        </button>
-      ) : (
-        <div
-          className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-sm border border-stone-800 bg-gradient-to-br from-stone-800 to-stone-900"
-          title="尚未生成圖片"
-        >
-          <AppIcon name="user" className="h-5 w-5 text-stone-600" />
-        </div>
-      )}
-
-      {/* Right column — name (editable) + caption + actions. Caption
-          truncates to one line so multi-paragraph LLM prompts don't push
-          the layout. */}
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <span className="flex-shrink-0 font-mono text-[12px] tracking-wider text-stone-600">{idxLabel}</span>
-          {editing ? (
-            <input
-              autoFocus
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename()
-                if (e.key === 'Escape') {
-                  setDraft(appearance.changeReason ?? '')
-                  setEditing(false)
-                }
-              }}
-              disabled={update.isPending}
-              className="flex-1 rounded-sm border border-amber-500/50 bg-stone-950 px-1.5 py-0.5 font-body text-xs text-stone-100 outline-none disabled:opacity-50"
-              placeholder="造型名稱"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="flex-1 truncate text-left font-body text-[13px] text-stone-200 transition-colors hover:text-amber-300"
-              title="點擊改名"
-            >
-              {display}
-            </button>
-          )}
-          {update.isPending ? (
-            <span className="font-mono text-[12px] text-stone-500">儲存中…</span>
-          ) : null}
+    <div className="rounded-sm bg-stone-950/40">
+      <div className="flex items-center gap-2.5 p-2">
+        {/* 64×64 thumbnail. Click → lightbox. Hover overlay shows the zoom
+            icon so it reads as clickable. Falls back to a gradient + 👤 icon
+            placeholder when the appearance has no imageUrl yet. */}
+        {thumbUrl ? (
           <button
             type="button"
-            onClick={handleDelete}
-            disabled={!canDelete || del.isPending}
-            title={canDelete ? '刪除這個造型' : '至少要保留一個造型'}
-            className="flex-shrink-0 rounded-sm border border-stone-800 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-all hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+            onClick={() => onZoom(thumbUrl)}
+            className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border border-stone-800 bg-stone-900 transition-all hover:border-amber-500/60"
+            title="點擊看大圖"
           >
-            {del.isPending ? '…' : '刪除'}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={thumbUrl}
+              alt={display}
+              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
+              <span className="font-mono text-[12px] tracking-wider text-amber-300">🔍</span>
+            </div>
           </button>
-        </div>
-        {caption ? (
-          <div className="line-clamp-1 font-body text-[12px] text-stone-500" title={caption}>
-            {caption}
-          </div>
         ) : (
-          <div className="font-body text-[12px] italic text-stone-700">無描述</div>
+          <div
+            className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-sm border border-stone-800 bg-gradient-to-br from-stone-800 to-stone-900"
+            title="尚未生成圖片"
+          >
+            <AppIcon name="user" className="h-5 w-5 text-stone-600" />
+          </div>
         )}
+
+        {/* Right column — name (editable) + caption + actions. */}
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="flex-shrink-0 font-mono text-[12px] tracking-wider text-stone-600">{idxLabel}</span>
+            {editing ? (
+              <input
+                autoFocus
+                type="text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename()
+                  if (e.key === 'Escape') {
+                    setDraft(appearance.changeReason ?? '')
+                    setEditing(false)
+                  }
+                }}
+                disabled={update.isPending}
+                className="flex-1 rounded-sm border border-amber-500/50 bg-stone-950 px-1.5 py-0.5 font-body text-xs text-stone-100 outline-none disabled:opacity-50"
+                placeholder="造型名稱"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="flex-1 truncate text-left font-body text-[13px] text-stone-200 transition-colors hover:text-amber-300"
+                title="點擊改名"
+              >
+                {display}
+              </button>
+            )}
+            {update.isPending ? (
+              <span className="font-mono text-[12px] text-stone-500">儲存中…</span>
+            ) : null}
+            {/* ✎ edit description — user-asked 2026-05-13: 'every appearance
+                needs its own description editor, not just the first one'. */}
+            <button
+              type="button"
+              onClick={() => setDescExpanded((v) => !v)}
+              title={descExpanded ? '收起描述編輯器' : '編輯造型描述'}
+              className={`flex-shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[12px] tracking-wider transition-all ${
+                descExpanded
+                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                  : 'border-stone-800 text-stone-500 hover:border-amber-500/50 hover:text-amber-300'
+              }`}
+            >
+              {descExpanded ? '▾ 描述' : '✎ 描述'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={!canDelete || del.isPending}
+              title={canDelete ? '刪除這個造型' : '至少要保留一個造型'}
+              className="flex-shrink-0 rounded-sm border border-stone-800 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-all hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              {del.isPending ? '…' : '刪除'}
+            </button>
+          </div>
+          {caption ? (
+            <div className="line-clamp-1 font-body text-[12px] text-stone-500" title={caption}>
+              {caption}
+            </div>
+          ) : (
+            <div className="font-body text-[12px] italic text-stone-700">無描述</div>
+          )}
+        </div>
       </div>
+
+      {/* Expanded description editor — only renders when toggled. Sits
+          below the row so the layout still reads as a list. Save sends
+          PATCH /character/appearance with the new description; cancel
+          reverts to the persisted value. */}
+      {descExpanded ? (
+        <div className="border-t border-stone-800/40 p-2">
+          <textarea
+            value={descDraft}
+            onChange={(e) => setDescDraft(e.target.value)}
+            rows={6}
+            placeholder="造型描述（LLM 生成圖時會用這段作為 prompt）"
+            className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 p-2 font-serif-cn text-[12px] leading-relaxed text-stone-100 outline-none focus:border-amber-500/40"
+          />
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <div className="font-mono text-[11px] tracking-wider text-stone-600">
+              {descDirty ? `✏ 已修改 · ${descDraft.trim().length} 字` : `${descDraft.trim().length} 字`}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleCancelDescription}
+                disabled={update.isPending}
+                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:opacity-40"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveDescription}
+                disabled={!descDirty || update.isPending}
+                className="rounded-sm border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {update.isPending ? '儲存中…' : '儲存描述'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -319,27 +406,42 @@ function AppearanceLightbox({ url, onClose }: { url: string; onClose: () => void
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  return (
+  // 2026-05-13 — portal to <body> so the overlay escapes the parent
+  // modal's stacking context. Without this the lightbox would render
+  // inside V2CharacterEditModal's transformed/scrollable container and
+  // appear at the TOP of that scroll region (user-reported: 'I have to
+  // scroll up to see the preview'). The portal lets `fixed inset-0`
+  // resolve against the actual viewport.
+  if (typeof window === 'undefined') return null
+
+  return createPortal(
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-8 backdrop-blur-sm"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-sm"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
-        alt="造型參考圖"
-        className="max-h-full max-w-full rounded-sm object-contain shadow-2xl"
+      {/* Sized at 60vw × 60vh per user request ('不需要展到最大,60%就夠').
+          The image itself preserves aspect ratio inside this box. */}
+      <div
+        className="relative max-h-[60vh] max-w-[60vw]"
         onClick={(e) => e.stopPropagation()}
-      />
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute right-4 top-4 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1 font-mono text-[14px] tracking-wider text-stone-300 transition-colors hover:border-amber-500/60 hover:text-amber-300"
-        title="關閉 (ESC)"
       >
-        ✕ 關閉
-      </button>
-    </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt="造型參考圖"
+          className="max-h-[60vh] max-w-[60vw] rounded-sm object-contain shadow-2xl"
+        />
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-stone-700 bg-stone-900 font-mono text-[14px] text-stone-300 shadow-md transition-colors hover:border-amber-500/60 hover:text-amber-300"
+          title="關閉 (ESC)"
+        >
+          ✕
+        </button>
+      </div>
+    </div>,
+    document.body,
   )
 }
 
