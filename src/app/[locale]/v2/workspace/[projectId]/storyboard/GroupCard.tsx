@@ -513,11 +513,26 @@ export function GroupCard({
       return out
     })()
     const trimmedNarrative = narrativeDraft.trim()
+    // 2026-05-13 — two coordinated changes from the original gate:
+    //
+    // 1. Drop narrativeDirty check. The auto-seeded cinematic
+    //    narrative (五要素導演法) IS the desired baseline submit —
+    //    silently discarding it when user hasn't typed defeats the
+    //    whole point of having a strong default. Always send rawPrompt
+    //    when there's content.
+    //
+    // 2. When sending rawPrompt, OMIT panelDurations. Worker line 820
+    //    promotes to customize mode whenever panelDurations is set,
+    //    and customize mode reads per-shot prompts from panel.description
+    //    (NOT from rawPrompt) — Tencent treats the top-level Prompt
+    //    as semantically ignored in customize mode. So sending both
+    //    would silently ignore rawPrompt and use the bare panel desc.
+    //    Letting worker run intelligence mode means it actually feeds
+    //    our cinematic narrative to Kling Omni's parser, which respects
+    //    embedded time markers like "镜头1（0-8 seconds）".
+    const sendRaw = trimmedNarrative.length > 0
     const overrides: GroupRegenOverrides = {
-      ...(narrativeDirty && trimmedNarrative.length > 0
-        ? { rawPrompt: trimmedNarrative }
-        : {}),
-      panelDurations,
+      ...(sendRaw ? { rawPrompt: trimmedNarrative } : { panelDurations }),
       characterOverrides: Object.entries(characterOverrides)
         .filter(([, app]) => app !== undefined)
         .map(([characterId, appearanceId]) =>
