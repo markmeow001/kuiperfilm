@@ -362,7 +362,16 @@ export function GroupCard({
   // segment. Anything the user types here goes through the
   // `rawPrompt` field on regen so the worker bypasses per-panel
   // prompt assembly.
-  const [totalDurationDraft, setTotalDurationDraft] = useState<number>(15)
+  // 2026-05-13 — Duration draft has 4 modes:
+  //   0  = AUTO (let worker engage dialogue-driven duration allocator;
+  //              worker picks per-shot durations from voice line speech length)
+  //   5, 10, 15 = explicit total seconds (worker splits evenly across panels)
+  //
+  // Default to AUTO because the typical short-drama use case is dialogue-
+  // driven — user-requested 2026-05-13: 「保留原本對話為主, 去搭配不同的
+  // 秒數做切組」. Falls back to 15s in the narrative preview math when
+  // AUTO so the time tags shown in the textarea aren't 0-0/0-0/0-0.
+  const [totalDurationDraft, setTotalDurationDraft] = useState<number>(0)
 
   // 2026-05-13 — upgraded narrative builder using the "五要素導演法"
   // structure (角色錨點 / 場景錨點 / 動作鏈 / 運鏡 / 整體視覺風格).
@@ -467,7 +476,13 @@ export function GroupCard({
   const buildInitialNarrative = (): string => {
     const count = panels.length
     if (count === 0) return ''
-    const total = totalDurationDraft
+    // 2026-05-13 — AUTO mode (totalDurationDraft=0) means "let worker
+    // decide per-shot durations from dialogue". For the textarea preview
+    // we still need SOME number to print `镜头N（X-Y seconds）` time tags,
+    // so fall back to 15s as the cosmetic display total. The actual
+    // total sent to Kling comes from worker's dialogue-driven path,
+    // NOT from this number.
+    const total = totalDurationDraft > 0 ? totalDurationDraft : 15
     const base = Math.max(1, Math.floor(total / count))
     const remainder = Math.max(0, total - base * count)
 
@@ -839,11 +854,16 @@ export function GroupCard({
       setRegenState({ status: 'submitting' })
     }
     const ids = panels.slice(0, 6).map((p) => p.id)
-    // Phase 2: distribute the segment's total duration evenly across
-    // its panel slices. Worker enters customize mode when
-    // panelDurations is present so each multi_prompt[] entry gets the
+    // 2026-05-13 — AUTO mode (totalDurationDraft=0) means: don't compute
+    // panelDurations at all. Worker engages buildDialogueDrivenDurations
+    // and picks per-shot timing from voice line speech length.
+    //
+    // Explicit-duration mode (5/10/15): user pinned a total, distribute
+    // evenly across panels. Worker enters customize mode when
+    // panelDurations is present, so each multi_prompt[] entry gets the
     // right per-shot anchor in Kling Omni.
-    const panelDurations: number[] = (() => {
+    const isAutoDuration = totalDurationDraft === 0
+    const panelDurations: number[] | undefined = isAutoDuration ? undefined : (() => {
       const count = ids.length
       const total = Math.max(count, Math.min(15, totalDurationDraft))
       const base = Math.max(1, Math.floor(total / count))
@@ -855,26 +875,50 @@ export function GroupCard({
       return out
     })()
     const trimmedNarrative = narrativeDraft.trim()
-    // 2026-05-13 — two coordinated changes from the original gate:
+    // 2026-05-13 (rev 2) — sendRaw flip: gate on narrativeDirty.
     //
-    // 1. Drop narrativeDirty check. The auto-seeded cinematic
-    //    narrative (五要素導演法) IS the desired baseline submit —
-    //    silently discarding it when user hasn't typed defeats the
-    //    whole point of having a strong default. Always send rawPrompt
-    //    when there's content.
+    // History of this gate:
+    //   - rev 1 (earlier today): `sendRaw = trimmedNarrative.length > 0`
+    //     — i.e. always send rawPrompt when the textarea has content.
+    //     Problem: the textarea ALWAYS has content (auto-seeded by
+    //     buildInitialNarrative on mount + on cast/scene/duration change).
+    //     So rawPrompt was always sent → worker always ran intelligence
+    //     mode → the dialogue-driven duration allocator at
+    //     multi-shot-video-b-path.ts:1727 NEVER fired (its gate is
+    //     `effectivePanelDurations === undefined && rawPrompt === undefined`).
+    //     Result: every group rendered fixed-15s totalDurationDraft split
+    //     instead of allocating per-shot durations from voice line length.
     //
-    // 2. When sending rawPrompt, OMIT panelDurations. Worker line 820
-    //    promotes to customize mode whenever panelDurations is set,
-    //    and customize mode reads per-shot prompts from panel.description
-    //    (NOT from rawPrompt) — Tencent treats the top-level Prompt
-    //    as semantically ignored in customize mode. So sending both
-    //    would silently ignore rawPrompt and use the bare panel desc.
-    //    Letting worker run intelligence mode means it actually feeds
-    //    our cinematic narrative to Kling Omni's parser, which respects
-    //    embedded time markers like "镜头1（0-8 seconds）".
-    const sendRaw = trimmedNarrative.length > 0
+    //   - rev 2 (this change): `sendRaw = narrativeDirty`. The textarea
+    //     is now treated as a power-user override — only sent when the
+    //     user explicitly typed (narrativeDirty=true via onChange). When
+    //     the narrative is its auto-seeded default the frontend stays
+    //     out of the worker's way, letting buildDialogueDrivenDurations
+    //     decide per-shot timing from the actual voice lines (user-
+    //     requested 2026-05-13: 「保留原本對話為主, 去搭配不同的秒數做切組」).
+    //
+    // When sendRaw=true, OMIT panelDurations (Tencent customize mode
+    // ignores top-level Prompt; sending both means rawPrompt is silently
+    // dropped). When sendRaw=false, also OMIT panelDurations so the
+    // worker can engage its dialogue-driven path — only fall back to
+    // explicit panelDurations when there's truly no signal upstream.
+    //
+    // The auto-seeded cinematic STYLE / OVERALL / MOTION header is NOT
+    // lost in customize mode: the worker still injects styleHeader +
+    // per-shot styleSuffix into each multi_prompt entry. Only the
+    // OVERALL preamble (a single sentence) is dropped — Kling derives
+    // arc context from the per-shot prompts themselves.
+    const sendRaw = narrativeDirty && trimmedNarrative.length > 0
     const overrides: GroupRegenOverrides = {
-      ...(sendRaw ? { rawPrompt: trimmedNarrative } : { panelDurations }),
+      // Three states:
+      //   sendRaw=true              → rawPrompt only (intelligence mode, user override)
+      //   sendRaw=false, AUTO       → neither (worker engages dialogue-driven)
+      //   sendRaw=false, fixed dur  → panelDurations (customize mode, even split)
+      ...(sendRaw
+        ? { rawPrompt: trimmedNarrative }
+        : panelDurations
+          ? { panelDurations }
+          : {}),
       characterOverrides: Object.entries(characterOverrides)
         .filter(([, app]) => app !== undefined)
         .map(([characterId, appearanceId]) =>
@@ -1007,13 +1051,20 @@ export function GroupCard({
               ) : (
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
               )}
+              {/* 2026-05-13 — label differentiates "no video yet" from
+                  "have a video, regenerate it". `taskId` is the server-
+                  side multi-shot task; null means this group has never
+                  been submitted. The done/error states keep the literal
+                  resubmit prompt because user just clicked once. */}
               {regenState.status === 'submitting'
                 ? '送出中…'
                 : regenState.status === 'done'
                   ? '✓ 已送出'
                   : regenState.status === 'error'
                     ? '⚠ 失敗,點重試'
-                    : '重新生成'}
+                    : taskId
+                      ? '重新生成'
+                      : '生成影片'}
             </button>
           ) : null}
           <div className="font-mono text-[14px] tracking-wider text-stone-500">
@@ -1118,21 +1169,33 @@ export function GroupCard({
                 <select
                   value={totalDurationDraft}
                   onChange={(e) => {
-                    setTotalDurationDraft(Number.parseInt(e.target.value, 10) || 15)
+                    // 0 = AUTO (worker dialogue-driven);
+                    // 5/10/15 = explicit total seconds.
+                    const next = Number.parseInt(e.target.value, 10)
+                    setTotalDurationDraft(Number.isFinite(next) ? next : 0)
                     // Re-seed narrative so the time slices match the
                     // new total. Skipped when the user has dirty edits
                     // — protected by buildInitialNarrative guard.
                     setNarrativeDirty(false)
                   }}
+                  title="AUTO 模式 worker 會用對白長度自動分配每鏡時長;選 5/10/15 則平均切到該秒數"
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
                 >
+                  <option value={0}>Auto (對白驅動)</option>
                   <option value={5}>5s</option>
                   <option value={10}>10s</option>
                   <option value={15}>15s</option>
                 </select>
               </label>
+              {/* 2026-05-13 — only enable 重生敘事 when narrative is dirty.
+                  When narrativeDirty=false the textarea already mirrors
+                  the auto-seeded buildInitialNarrative() output, so the
+                  button is a no-op (just produces a green flash with
+                  identical text — confusing UX). Keep it visible but
+                  disabled so the affordance stays discoverable. */}
               <button
                 type="button"
+                disabled={!narrativeDirty}
                 onClick={() => {
                   // Force a visible refresh even when the regenerated string
                   // is byte-identical: clear first, then set on next tick so
@@ -1149,8 +1212,10 @@ export function GroupCard({
                   })
                   window.setTimeout(() => setNarrativeRegenFlash(false), 1500)
                 }}
-                title="從分鏡描述+綁定角色/場景重新生成這段敘事"
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200"
+                title={narrativeDirty
+                  ? '丟棄手動編輯,從分鏡描述+綁定角色/場景重新生成敘事'
+                  : '敘事目前已是預設值 — 沒有手動編輯,不需要重生'}
+                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
               >
                 ↻ 重生敘事
               </button>
@@ -1180,11 +1245,13 @@ export function GroupCard({
           />
           {narrativeDirty ? (
             <div className="font-mono text-[12px] tracking-wider text-violet-300">
-              ✏ 敘事已修改 — 「重新生成」會以這段為主 prompt(覆蓋分鏡描述)
+              ✏ 敘事已修改 — 「{taskId ? '重新生成' : '生成影片'}」會以這段為主 prompt(覆蓋分鏡描述,並關閉對白驅動時長)
             </div>
           ) : (
             <div className="font-mono text-[12px] tracking-wider text-stone-600">
-              預設由 {panels.length} 個分鏡描述自動拼接。直接編輯這段即可,送出時會以你寫的為準。
+              {totalDurationDraft === 0
+                ? `預覽由 ${panels.length} 個分鏡拼接 · 送出時 worker 會用對白長度自動分配每鏡時長(${panels.length} 鏡)。直接編輯這段可改 prompt(會關閉對白驅動)。`
+                : `預設由 ${panels.length} 個分鏡描述自動拼接,${totalDurationDraft}s 平均切。直接編輯這段即可,送出時會以你寫的為準。`}
             </div>
           )}
 
