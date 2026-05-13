@@ -2401,26 +2401,16 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     (b) => b.characterId === character?.id,
                   )
                   // Resolution priority (mirrors worker
-                  // collectPanelReferenceImages):
-                  //   1. EpisodeCharacter binding (this episode)
-                  //   2. panel.characters[i].appearance hint matched
-                  //      against changeReason
+                  // collectPanelReferenceImages) — 2026-05-13 reordered:
+                  //   1. panel.characters[i].appearance hint matched against
+                  //      changeReason (per-shot LLM intent wins)
+                  //   2. EpisodeCharacter binding (this episode, fallback
+                  //      when LLM did not pick)
                   //   3. appearances[0]
                   let resolved = null as
                     | { id: string | null; label: string; imageUrl: string | null; isDefault: boolean }
                     | null
-                  if (binding?.appearanceId) {
-                    const ap = appearances.find((a) => a.id === binding.appearanceId)
-                    if (ap) {
-                      resolved = {
-                        id: ap.id ?? null,
-                        label: ap.changeReason || `造型 ${(ap.appearanceIndex ?? 0) + 1}`,
-                        imageUrl: ap.imageUrl ?? null,
-                        isDefault: false,
-                      }
-                    }
-                  }
-                  if (!resolved && appearanceHint) {
+                  if (appearanceHint) {
                     const ap = appearances.find(
                       (a) => (a.changeReason ?? '').toLowerCase() === appearanceHint.toLowerCase(),
                     )
@@ -2428,6 +2418,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       resolved = {
                         id: ap.id ?? null,
                         label: ap.changeReason || appearanceHint,
+                        imageUrl: ap.imageUrl ?? null,
+                        isDefault: false,
+                      }
+                    }
+                  }
+                  if (!resolved && binding?.appearanceId) {
+                    const ap = appearances.find((a) => a.id === binding.appearanceId)
+                    if (ap) {
+                      resolved = {
+                        id: ap.id ?? null,
+                        label: ap.changeReason || `造型 ${(ap.appearanceIndex ?? 0) + 1}`,
                         imageUrl: ap.imageUrl ?? null,
                         isDefault: false,
                       }

@@ -592,16 +592,31 @@ export async function collectPanelReferenceImages(
 
     const appearances = character.appearances || []
     let appearance = appearances[0]
-    // Episode-level override wins over both panel-level appearance ref
-    // and the default first appearance — UI lets the user fix per-episode
-    // costume without rewriting every panel's character reference.
+    // 2026-05-13 — resolution priority (post user clarification):
+    //   1. panel.characters[i].appearance — LLM read the script and picked
+    //      a specific look for THIS shot (flashback / current-day / costume
+    //      change). Per-shot intent wins.
+    //   2. EpisodeCharacter.appearanceId — episode-level fallback for shots
+    //      where LLM didn't write an explicit hint. Treated as a default,
+    //      NOT a forced override.
+    //   3. appearances[0] — global default when neither LLM nor episode
+    //      binding has picked anything.
+    //
+    // Earlier ordering (episode > panel hint) was wrong: the user reported
+    // 2026-05-13 "script says 王玄 but episode binding to 王玄Y wins, every
+    // shot renders as 王玄Y even when the LLM correctly tagged 初始形象
+    // for present-day shots".
     const boundAppearanceId = episodeBindings.get(character.id)
-    if (boundAppearanceId) {
-      const bound = appearances.find((a) => a.id === boundAppearanceId)
-      if (bound) appearance = bound
-    } else if (item.appearance) {
+    if (item.appearance) {
       const matched = appearances.find((a) => (a.changeReason || '').toLowerCase() === item.appearance!.toLowerCase())
       if (matched) appearance = matched
+      else if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
+      }
+    } else if (boundAppearanceId) {
+      const bound = appearances.find((a) => a.id === boundAppearanceId)
+      if (bound) appearance = bound
     }
 
     if (!appearance) continue

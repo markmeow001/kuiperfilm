@@ -263,29 +263,33 @@ export function GroupCard({
         if (!char) continue
         seen.add(lower)
         const appearances = char.appearances ?? []
-        // Resolution priority — MUST mirror worker (image-task-handler-shared
-        // + multi-shot-video-b-path). User-reported 2026-05-13: 出場角色 chip
-        // said "初始形象" while 演員綁定 said "王玄Y" — that gap caused months
-        // of "the rendered character is wrong" confusion. Resolve here so
-        // both rows display the same appearance.
+        // Resolution priority — MUST mirror worker. 2026-05-13 user
+        // clarification: per-shot LLM intent (panel.characters[i].appearance)
+        // wins over EpisodeCharacter binding so the same character can
+        // render different appearances across the same episode based on
+        // script context (flashback / present-day / costume change).
         //   1. UI per-call override (characterOverrides[char.id])
-        //   2. EpisodeCharacter binding (episodeBindingByCharId)
-        //   3. panel.characters[i].appearance hint matched by changeReason
-        //   4. appearances[0]
+        //   2. panel.characters[i].appearance — LLM read script per-shot
+        //   3. EpisodeCharacter binding — episode-level fallback
+        //   4. appearances[0] — global default
         const overrideId = characterOverrides[char.id]
         const episodeBoundId = episodeBindingByCharId.get(char.id)
         let chosen = appearances[0]
         if (overrideId) {
           const o = appearances.find((a) => a.id === overrideId)
           if (o) chosen = o
-        } else if (episodeBoundId) {
-          const b = appearances.find((a) => a.id === episodeBoundId)
-          if (b) chosen = b
         } else if (appearanceHint) {
           const h = appearances.find(
             (a) => (a.changeReason || '').toLowerCase() === appearanceHint!.toLowerCase(),
           )
           if (h) chosen = h
+          else if (episodeBoundId) {
+            const b = appearances.find((a) => a.id === episodeBoundId)
+            if (b) chosen = b
+          }
+        } else if (episodeBoundId) {
+          const b = appearances.find((a) => a.id === episodeBoundId)
+          if (b) chosen = b
         }
         if (!chosen) {
           out.push({

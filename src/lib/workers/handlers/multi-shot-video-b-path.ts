@@ -988,20 +988,37 @@ export async function runMultiShotBPath(params: {
       if (seenCharIds.has(character.id)) continue
       const appearances = character.appearances || []
 
+      // 2026-05-13 — resolution priority (user clarification):
+      //   1. UI per-call override (charOverrideById)
+      //   2. panel.characters[i].appearance — LLM picked per-shot
+      //      (flashback vs current, costume change, etc.)
+      //   3. EpisodeCharacter binding — episode-level fallback for
+      //      shots where LLM didn't explicitly choose
+      //   4. appearances[0] — global default
+      //
+      // The earlier order (episode > panel hint) treated EpisodeCharacter
+      // as a forced override. User reported that broke per-shot
+      // appearance variability — script said "王玄 (present-day)" but
+      // the whole episode rendered as "王玄Y" because the binding was
+      // sticky.
       let appearance = appearances[0]
       const overrideAppearanceId = charOverrideById.get(character.id)
       const boundAppearanceId = episodeBindings.get(character.id)
       if (overrideAppearanceId) {
         const ov = appearances.find((a) => a.id === overrideAppearanceId)
         if (ov) appearance = ov
-      } else if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
       } else if (ref.appearance) {
         const matched = appearances.find(
           (a) => (a.changeReason || '').toLowerCase() === ref.appearance!.toLowerCase(),
         )
         if (matched) appearance = matched
+        else if (boundAppearanceId) {
+          const bound = appearances.find((a) => a.id === boundAppearanceId)
+          if (bound) appearance = bound
+        }
+      } else if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
       }
       if (!appearance) continue
       const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
