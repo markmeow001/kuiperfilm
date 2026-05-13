@@ -381,16 +381,23 @@ export async function collectPanelSceneBase(projectData: NovelProjectData, panel
 const COMPOSITE_ASPECT_THRESHOLD = 1.25
 const IDENTITY_CROP_WIDTH_RATIO = 0.30
 
-async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
+// Returns ordered ref URLs for a single character image.
+//   - non-composite (square / portrait single shot): [originalUrl]
+//   - composite (wide-aspect multi-view sheet): [cropUrl, originalUrl]
+//     → cropped face first for tight identity anchor, original second so
+//       Omni / multi-ref models also see full body / outfit / silhouette
+//       context. Caller dedup is unnecessary because the URLs differ.
+//   - failure / skip: [originalUrl]
+async function maybeExtractIdentityCrop(originalUrl: string): Promise<string[]> {
   if (!originalUrl || originalUrl.startsWith('data:')) {
     logInfo('[identity-crop] skip: data url or empty', { url: originalUrl?.substring(0, 80) ?? '' })
-    return originalUrl
+    return [originalUrl]
   }
 
   const sourceKey = extractCOSKey(originalUrl)
   if (!sourceKey) {
     logInfo('[identity-crop] skip: cannot extract COS key', { url: originalUrl.substring(0, 100) })
-    return originalUrl
+    return [originalUrl]
   }
 
   // Skip /m/<publicId> media aliases (style-profile reference images).
@@ -398,7 +405,7 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
   // a sibling key would bypass that alias chain.
   if (sourceKey.startsWith('m/')) {
     logInfo('[identity-crop] skip: /m/ media alias', { sourceKey })
-    return originalUrl
+    return [originalUrl]
   }
 
   // 2026-05-13 — Bug fix: previous version filtered to keys starting
@@ -425,7 +432,7 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
         sourceKey,
         status: response.status,
       })
-      return originalUrl
+      return [originalUrl]
     }
 
     const buffer = Buffer.from(await response.arrayBuffer())
@@ -434,7 +441,7 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
     const h = meta.height
     if (!w || !h) {
       logWarn('[identity-crop] no width/height in metadata', { sourceKey })
-      return originalUrl
+      return [originalUrl]
     }
 
     const aspect = w / h
@@ -446,7 +453,7 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
         aspect,
         threshold: COMPOSITE_ASPECT_THRESHOLD,
       })
-      return originalUrl
+      return [originalUrl]
     }
 
     const cropW = Math.round(w * IDENTITY_CROP_WIDTH_RATIO)
@@ -457,7 +464,7 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
 
     await uploadToCOS(cropBuffer, cropKey)
     const cropUrl = getSignedUrl(cropKey, 3600)
-    logInfo('[identity-crop] cropped composite ref to face region', {
+    logInfo('[identity-crop] cropped composite ref to face region (sending crop + original)', {
       sourceKey,
       cropKey,
       origWidth: w,
@@ -465,14 +472,16 @@ async function maybeExtractIdentityCrop(originalUrl: string): Promise<string> {
       cropWidth: cropW,
       aspect,
     })
-    return cropUrl
+    // Return BOTH: face crop first (tight identity anchor), original second
+    // (full body / outfit / silhouette context for multi-ref models).
+    return [cropUrl, originalUrl]
   } catch (err) {
     logWarn('[identity-crop] preprocessing failed, falling back to original ref', {
       sourceKey,
       cropKey,
       error: err instanceof Error ? err.message : String(err),
     })
-    return originalUrl
+    return [originalUrl]
   }
 }
 
@@ -568,18 +577,58 @@ export async function collectPanelReferenceImages(
 
     if (!appearance) continue
 
+    // 2026-05-13 — Stage 2: feed multiple identity anchors per character.
+    //
+    // Why: Kling-3.0-Omni / Kling-O1 image models accept up to 10 ref
+    // slots and the more identity views they see, the tighter the
+    // binding. Earlier versions only sent 1 ref per character (the
+    // selectedIndex picture, then identity-cropped). For users who
+    // either (a) uploaded a composite multi-view sheet or (b) used
+    // "上傳並轉多視角" to generate 3-4 separate views, we were
+    // discarding 70-90% of the available identity signal.
+    //
+    // New strategy:
+    //   1. Pick the "primary" image (selectedIndex || first) → run
+    //      identity-crop. If composite → returns [face_crop, original].
+    //      If single shot → returns [original] only.
+    //   2. Append the OTHER imageUrls entries (capped at MAX_EXTRA = 3)
+    //      so a multi-view-expand appearance contributes all its views.
+    //   3. Generator-side cap (Kling-2.1: 4, Omni: 10, O1: 10) trims
+    //      anything over budget — face_crop is always first so it
+    //      survives even on tight Kling-2.1 budgets.
+    //
+    // De-dupe by URL so the primary's original isn't double-counted
+    // when it's also at imageUrls[0].
+    const MAX_EXTRA_VIEWS = 3
     const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
     const selectedIndex = appearance.selectedIndex
-    const selectedUrl = selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
-    const key = selectedUrl || imageUrls[0] || appearance.imageUrl
-    const signed = toSignedUrlIfCos(key, 3600)
-    if (signed) {
-      // 2026-05-13 — wide-aspect composite refs (e.g. face-closeup-left
-      // + 3-body-views-right) confuse Kling's identity binding. Crop
-      // the leftmost identity region before passing to the model. Pass-
-      // through for square / portrait single-shot refs.
-      const refUrl = await maybeExtractIdentityCrop(signed)
-      refs.push(refUrl)
+    const primaryKey =
+      (selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null)
+      ?? imageUrls[0]
+      ?? appearance.imageUrl
+    const primarySigned = toSignedUrlIfCos(primaryKey, 3600)
+    const seen = new Set<string>()
+    if (primarySigned) {
+      const primaryRefs = await maybeExtractIdentityCrop(primarySigned)
+      for (const u of primaryRefs) {
+        if (!seen.has(u)) {
+          seen.add(u)
+          refs.push(u)
+        }
+      }
+    }
+    // Append remaining views from imageUrls (multi-view-expand result),
+    // capped to keep budget for scene + prop refs.
+    let extras = 0
+    for (const u of imageUrls) {
+      if (extras >= MAX_EXTRA_VIEWS) break
+      if (u === primaryKey) continue
+      const signed = toSignedUrlIfCos(u, 3600)
+      if (signed && !seen.has(signed)) {
+        seen.add(signed)
+        refs.push(signed)
+        extras++
+      }
     }
   }
 
