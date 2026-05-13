@@ -442,13 +442,15 @@ export function GroupCard({
   }
   const [narrativeDraft, setNarrativeDraft] = useState<string>('')
   const [narrativeDirty, setNarrativeDirty] = useState<boolean>(false)
-  // Re-seed the narrative when panels or duration change AND the user
-  // hasn't edited it locally — avoids clobbering an in-progress edit.
+  const [narrativeRegenFlash, setNarrativeRegenFlash] = useState<boolean>(false)
+  // Re-seed the narrative when panels, duration, cast, or scenes change AND
+  // the user hasn't edited it locally — avoids clobbering an in-progress edit.
+  // groupCast/groupScenes are included so chip overrides re-trigger seed.
   useEffect(() => {
     if (narrativeDirty) return
     setNarrativeDraft(buildInitialNarrative())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panels, totalDurationDraft])
+  }, [panels, totalDurationDraft, groupCast, groupScenes])
 
   // Local drafts keyed by panel id. Re-seeded whenever the panel's
   // server-side description / dialogue changes (e.g. analyze
@@ -807,11 +809,17 @@ export function GroupCard({
                 onClick={() => {
                   setNarrativeDraft(buildInitialNarrative())
                   setNarrativeDirty(false)
+                  setNarrativeRegenFlash(true)
+                  window.setTimeout(() => setNarrativeRegenFlash(false), 1200)
                 }}
-                title="從分鏡描述重新生成這段敘事"
-                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[12px] tracking-wider text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-400"
+                title="從分鏡描述+綁定角色/場景重新生成這段敘事"
+                className={`rounded-sm border px-2 py-0.5 font-mono text-[12px] tracking-wider transition-colors ${
+                  narrativeRegenFlash
+                    ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
+                    : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200'
+                }`}
               >
-                ↻ 重生敘事
+                {narrativeRegenFlash ? '✓ 已重生' : '↻ 重生敘事'}
               </button>
             </div>
           </div>
