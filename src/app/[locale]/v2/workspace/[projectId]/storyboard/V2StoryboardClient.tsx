@@ -1344,22 +1344,25 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     const selectedIdxForGallery = allPanels.findIndex((p) => p.id === selected?.id)
     return (
       <div className="flex h-full flex-col">
-        {/* Top toolbar — analyze + autogroup + layout toggle */}
+        {/* Top toolbar — analyze + autogroup + layout toggle
+            (2026-05-12: split into two rows — view toggle on top,
+            title + action cluster below — same as Groups layout) */}
         <div className="border-b border-amber-900/15 px-8 pb-3 pt-5">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="font-fraunces text-sm italic text-amber-500/80">分鏡</div>
-              {hasGroups ? (
-                <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-                  {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
-                </span>
-              ) : null}
-              <div className="font-mono text-[14px] tracking-wider text-stone-500">
-                {allPanels.length} SHOTS · 比例 {projectVideoRatio}
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-end">{layoutToggleNode}</div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="font-fraunces text-sm italic text-amber-500/80">分鏡</div>
+                {hasGroups ? (
+                  <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
+                    {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+                  </span>
+                ) : null}
+                <div className="font-mono text-[14px] tracking-wider text-stone-500">
+                  {allPanels.length} SHOTS · 比例 {projectVideoRatio}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {layoutToggleNode}
+              <div className="flex items-center gap-2">
               <button
                 type="button"
                 disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
@@ -1396,6 +1399,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
                   : '智能多鏡頭'}
               </button>
+              </div>
             </div>
           </div>
           {isAnalyzing ? (
@@ -1659,18 +1663,22 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // ─── Timeline layout (existing) ──────────────────────────────────
   return (
     <div className="flex h-full flex-col">
-      {/* Top: panel strip */}
+      {/* Top: panel strip
+          (2026-05-12: split toolbar into two rows — view toggle on top,
+          title + action cluster below — same as Gallery / Groups) */}
       <div className="border-b border-amber-900/15 px-12 pb-4 pt-6">
-        <div className="mb-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="font-fraunces text-sm italic text-amber-500/80">Storyboard Strip</div>
-            {hasGroups ? (
-              <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-                {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
-              </span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="mb-3 flex flex-col gap-2">
+          <div className="flex justify-end">{layoutToggleNode}</div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="font-fraunces text-sm italic text-amber-500/80">Storyboard Strip</div>
+              {hasGroups ? (
+                <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
+                  {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+                </span>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-3">
             <button
               type="button"
               disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
@@ -1740,9 +1748,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 </button>
               )
             })()}
-            {layoutToggleNode}
             <div className="font-mono text-[14px] tracking-wider text-stone-500">
               {allPanels.length} SHOTS · DRAFT 03
+            </div>
             </div>
           </div>
         </div>
