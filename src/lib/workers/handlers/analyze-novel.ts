@@ -322,9 +322,53 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
       const existing = (novelData.locations || []).find((l) => l.name === name)
       if (existing) matchedExistingLocationIds.push(existing.id)
     }
+
+    // 2026-05-13 (bug fix) — Dedup fallback for the "ep2 has zero scenes"
+    // case. select_location.{zh,en}.txt rule `若场景在库中已存在则跳过`
+    // tells the LLM to skip already-existing scenes. So when episode 2's
+    // script reuses every scene already extracted in episode 1, the LLM
+    // returns `locations: []` and matchedExistingLocationIds stays empty.
+    // EpisodeLocation never gets linked → V2 SubjectsPage 場景 grid stays
+    // empty for ep2 even though the script is full of scene references.
+    //
+    // Fix: when LLM came back empty AND the project has an existing
+    // locations library, do a deterministic keyword scan against the
+    // script text. Any library scene whose name appears in the source
+    // gets linked to the current episode. Conservative substring match —
+    // doesn't try to fuzzy-match aliases (single-char CJK names like
+    // 离 would collide with 离开 / 离地 etc.), but that's fine because
+    // location names are typically multi-char (洞府 / 长安城 / 御书房).
+    const fallbackLocationIds: string[] = []
+    if (
+      parsedLocations.length === 0
+      && (novelData.locations?.length ?? 0) > 0
+    ) {
+      const seen = new Set<string>()
+      for (const loc of novelData.locations || []) {
+        if (!loc.name) continue
+        // Match by exact substring. Aliases (e.g. `客厅` vs `张家客厅`)
+        // are deliberately NOT chased here because aliases are a separate
+        // pipeline (analyze-novel-create-locations handles alias merge).
+        if (contentToAnalyze.includes(loc.name)) {
+          if (!seen.has(loc.id)) {
+            seen.add(loc.id)
+            fallbackLocationIds.push(loc.id)
+          }
+        }
+      }
+      if (fallbackLocationIds.length > 0) {
+        _ulogInfo('[analyze-novel] LLM returned 0 locations; falling back to keyword scan', {
+          episodeId: targetEpisode.id,
+          existingLibSize: novelData.locations?.length ?? 0,
+          matched: fallbackLocationIds.length,
+        })
+      }
+    }
+
     const allLocationIds = [
       ...createdLocations.map((l) => l.id),
       ...matchedExistingLocationIds,
+      ...fallbackLocationIds,
     ]
     if (allLocationIds.length > 0) {
       try {
