@@ -195,7 +195,27 @@ export function enrichPanelCharacters(
       .split('/')
       .map((s) => s.trim())
       .filter(Boolean)
-    if (aliases.some((alias) => desc.includes(alias))) {
+    // 2026-05-13 — guard against single-char CJK name substring false-positives.
+    //
+    // Real failure case: character named "离" (slot 2 in 王玄 + 离 + 洞府内
+    // group). Description "悬浮在离地半米的空中" ("hovering half a meter above
+    // the ground") contains the literal char 离 but 离地 is a Chinese
+    // preposition phrase, NOT a character mention. Old substring match
+    // wrongly added 离 to panel.characters → panel image generator pulled
+    // her reference → final image had two characters where the scene
+    // actually has one.
+    //
+    // Single-char names: trust the LLM completely. If `agent_storyboard_plan`
+    // didn't include the name, don't add it via substring. The enrichment
+    // is a safety net for genuinely-dropped multi-char names, not a
+    // statistical estimator for ambiguous Chinese chars.
+    //
+    // Multi-char names (≥ 2 chars): keep the substring fallback. Two-char
+    // Chinese names rarely collide with common phrases (e.g. "王玄" doesn't
+    // appear in any common idiom), so the false-positive rate stays low.
+    const multiCharAliases = aliases.filter((alias) => alias.length >= 2)
+    if (multiCharAliases.length === 0) continue
+    if (multiCharAliases.some((alias) => desc.includes(alias))) {
       normalized.push({ name: character.name })
       seen.add(character.name)
     }

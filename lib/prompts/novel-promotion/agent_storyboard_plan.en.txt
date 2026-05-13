@@ -50,3 +50,27 @@ Planning rules:
 4. Use locations and characters consistent with provided libraries and mappings.
 5. Prefer concrete, visible actions over abstract wording.
 6. Return strict JSON only.
+
+⚠️ Single-character CJK name ambiguity rule (CRITICAL):
+
+When the asset library contains a single-character CJK character name (e.g.
+"离", "坎", "兑", "乾" — common in xianxia / bagua-themed novels), the
+name will collide with ordinary Chinese words that contain that character.
+Examples of WRONG additions:
+  - "悬浮在离地半米的空中" (hovering half a meter above the ground) — 离
+    here is a preposition, NOT the character named 离. Do NOT add 离 to
+    characters.
+  - "离开洞府" (leaving the cave) — 离开 is a verb compound. Do NOT add 离.
+  - "迈过坎" (cross the hurdle) — 坎 is a common noun. Do NOT add 坎.
+
+Self-check rules for single-char names:
+  1. Does the char form the subject of a verb in the description?
+     - YES → real character → ADD
+     - NO (it's part of a preposition / compound word / idiom) → DO NOT ADD
+  2. Does the char appear as a speaker in source_text (e.g. "离: ..." or
+     "离 said")?
+     - YES → ADD
+     - NO and the only occurrence is inside a compound word → DO NOT ADD
+
+Better to miss a real character than to falsely add one — a falsely-added
+single-char character poisons downstream image/video reference binding.
