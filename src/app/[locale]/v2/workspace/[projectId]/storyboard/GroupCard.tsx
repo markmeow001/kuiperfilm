@@ -395,14 +395,53 @@ export function GroupCard({
     const charsToAnchor = groupCast.slice(0, TENCENT_SUBJECT_INFOS_CAP)
     const remainingForScenes = TENCENT_SUBJECT_INFOS_CAP - charsToAnchor.length
     const scenesToAnchor = groupScenes.slice(0, remainingForScenes)
+
+    // Build name → ref-slot map so per-shot blocks can carry explicit
+    // pointers like "[出场：王玄→参考图片1]". Without these, Kling Omni
+    // sees "一个男人走进房间" + a header anchor and has to GUESS which
+    // ref the man is. The header anchors alone are necessary but not
+    // sufficient — Kling needs the binding repeated INSIDE each shot.
+    const charNameToRefSlot = new Map<string, number>()
     for (const cast of charsToAnchor) {
       header.push(`参考图片${refSlot}的[${cast.character.name}]人物形象（高度一致）`)
+      charNameToRefSlot.set(cast.character.name.trim().toLowerCase(), refSlot)
       refSlot++
     }
+    const sceneNameToRefSlot = new Map<string, number>()
     for (const scene of scenesToAnchor) {
       const sceneLabel = scene.viewName ? `${scene.location.name}·${scene.viewName}` : scene.location.name
       header.push(`参考图片${refSlot}的${sceneLabel}（高度一致）`)
+      sceneNameToRefSlot.set(scene.location.name.trim().toLowerCase(), refSlot)
       refSlot++
+    }
+
+    // Helper: extract character names from panel.characters (handles
+    // both bare-string and {name, appearance} JSON shapes — same logic
+    // as groupCast useMemo above).
+    const extractPanelCharNames = (panel: PanelLike): string[] => {
+      const out: string[] = []
+      const raw: unknown[] = Array.isArray(panel.characters) ? panel.characters : []
+      for (const item of raw) {
+        let name: string | null = null
+        if (typeof item === 'string') {
+          const trimmed = item.trim()
+          if (trimmed.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(trimmed) as { name?: unknown }
+              if (typeof parsed.name === 'string') name = parsed.name
+            } catch {
+              name = trimmed
+            }
+          } else {
+            name = trimmed
+          }
+        } else if (item && typeof item === 'object') {
+          const r = item as { name?: unknown }
+          if (typeof r.name === 'string') name = r.name
+        }
+        if (name) out.push(name.trim())
+      }
+      return out
     }
 
     // Per-shot blocks
@@ -425,8 +464,42 @@ export function GroupCard({
       const cameraMoveRaw = p.cameraMove?.trim() ?? ''
       const cameraMoveEn = CAMERA_MOVE_TO_EN[cameraMoveRaw] ?? cameraMoveRaw
 
+      // Per-shot binding line: explicit "name → ref slot" pointers for
+      // characters and scene present in this panel. Only emit names that
+      // actually got a ref slot (i.e. within TENCENT_SUBJECT_INFOS_CAP);
+      // unbound characters fall through to "另一人" handling on the
+      // worker side.
+      const shotCharBindings: string[] = []
+      const seenInShot = new Set<string>()
+      for (const charName of extractPanelCharNames(p)) {
+        const lower = charName.toLowerCase()
+        if (seenInShot.has(lower)) continue
+        seenInShot.add(lower)
+        const slot = charNameToRefSlot.get(lower)
+        if (slot !== undefined) shotCharBindings.push(`${charName}→参考图片${slot}`)
+      }
+      const shotBindingFragments: string[] = []
+      if (shotCharBindings.length > 0) {
+        shotBindingFragments.push(`出场：${shotCharBindings.join('，')}`)
+      }
+      const panelLocRaw = (p as { location?: string | null }).location ?? ''
+      const panelLocName = panelLocRaw.includes('#')
+        ? panelLocRaw.slice(0, panelLocRaw.indexOf('#')).trim()
+        : panelLocRaw.trim()
+      if (panelLocName) {
+        const slot = sceneNameToRefSlot.get(panelLocName.toLowerCase())
+        if (slot !== undefined) {
+          shotBindingFragments.push(`场景：${panelLocName}→参考图片${slot}`)
+        } else {
+          shotBindingFragments.push(`场景：${panelLocName}`)
+        }
+      }
+
       const blockLines: string[] = []
       blockLines.push(`镜头${i + 1}（${start}-${end} seconds）·${framing}`)
+      if (shotBindingFragments.length > 0) {
+        blockLines.push(`[${shotBindingFragments.join('] [')}]`)
+      }
       if (desc) blockLines.push(desc)
       if (dialog) blockLines.push(dialog)
       if (cameraMoveEn) blockLines.push(`镜头：${cameraMoveEn}`)
