@@ -4,6 +4,12 @@ import { TaskTerminatedError } from '@/lib/task/errors'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { withInternalLLMStreamCallbacks } from '@/lib/llm-observe/internal-stream-context'
 import type { ScriptToStoryboardStepMeta, ScriptToStoryboardStepOutput } from '@/lib/novel-promotion/script-to-storyboard/orchestrator'
+import {
+  dialogueDedupKey,
+  extractScriptDialogues,
+  inferEmotionFromContent,
+  isDialogueDuplicate,
+} from '@/lib/novel-promotion/script-dialogue-extractor'
 import { asJsonRecord, parseVoiceLinesJson, toPositiveInt, type JsonRecord, type PersistedStoryboard } from './script-to-storyboard-helpers'
 import type { TaskJobData } from '@/lib/task/types'
 
@@ -75,12 +81,70 @@ export async function runVoiceAnalyzeWithRetry(params: {
   return voiceLineRows
 }
 
+/**
+ * Deterministic write-side enrichment that pairs with the LLM result.
+ *
+ * The voice_analysis prompt only recognises quoted dialogue, so when
+ * an input script uses screenplay colon format (王玄OS：xxx /
+ * 桃桃（哽咽VO）：xxx) every dialogue line is silently dropped and the
+ * episode ends up with an empty voice_lines table — see
+ * `project_kuiperfilm_dialogue_extraction_bug` memory. This function
+ * scans the raw episode script with a deterministic regex and appends
+ * any dialogue the LLM missed.
+ *
+ * LLM rows always win when both find the same dialogue (LLM carries
+ * matchedPanel + curated emotionStrength). Regex-only rows are appended
+ * with matchedPanel: null and a heuristic emotionStrength.
+ */
+export function enrichVoiceLinesFromScript(
+  voiceLineRows: JsonRecord[],
+  rawScript: string | null | undefined,
+): JsonRecord[] {
+  if (!rawScript || !rawScript.trim()) return voiceLineRows
+  const regexExtracted = extractScriptDialogues(rawScript)
+  if (regexExtracted.length === 0) return voiceLineRows
+
+  const llmKeys = new Set<string>()
+  let highestLineIndex = 0
+  for (const row of voiceLineRows) {
+    const speaker = typeof row.speaker === 'string' ? row.speaker.trim() : ''
+    const content = typeof row.content === 'string' ? row.content : ''
+    if (speaker && content) {
+      llmKeys.add(dialogueDedupKey(speaker, content))
+    }
+    const idx = toPositiveInt(row.lineIndex)
+    if (idx !== null && idx > highestLineIndex) highestLineIndex = idx
+  }
+
+  const enrichment: JsonRecord[] = []
+  let nextLineIndex = Math.max(highestLineIndex, voiceLineRows.length) + 1
+  for (const dialogue of regexExtracted) {
+    const key = dialogueDedupKey(dialogue.speaker, dialogue.content)
+    if (isDialogueDuplicate(key, llmKeys)) continue
+    enrichment.push({
+      lineIndex: nextLineIndex++,
+      speaker: dialogue.speaker,
+      content: dialogue.content,
+      emotionStrength: inferEmotionFromContent(dialogue.content, dialogue.modifier),
+      matchedPanel: null,
+    })
+  }
+
+  if (enrichment.length === 0) return voiceLineRows
+  return [...voiceLineRows, ...enrichment]
+}
+
 export async function persistVoiceLines(params: {
   episodeId: string
   voiceLineRows: JsonRecord[]
   persistedStoryboards: PersistedStoryboard[]
+  // Raw episode script — when supplied, regex-extracted dialogue the
+  // LLM missed is appended via enrichVoiceLinesFromScript. Optional so
+  // legacy callers that don't have the script handy still compile.
+  rawScript?: string | null
 }): Promise<Array<{ id: string }>> {
-  const { episodeId, voiceLineRows, persistedStoryboards } = params
+  const { episodeId, persistedStoryboards, rawScript } = params
+  const voiceLineRows = enrichVoiceLinesFromScript(params.voiceLineRows, rawScript)
 
   const panelIdByStoryboardPanel = new Map<string, string>()
   for (const storyboard of persistedStoryboards) {

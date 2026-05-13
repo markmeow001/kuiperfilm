@@ -299,6 +299,11 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
     episodeId,
     voiceLineRows,
     persistedStoryboards,
+    // Pass raw script so screenplay-format dialogue ("王玄OS：xxx" /
+    // "桃桃（哽咽VO）：xxx") the voice_analysis prompt can't parse is
+    // backfilled by deterministic regex extraction. See
+    // `project_kuiperfilm_dialogue_extraction_bug` memory.
+    rawScript: episode.novelText,
   })
 
   await reportTaskProgress(job, 96, {

@@ -245,6 +245,12 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
     parsedCharacters,
     existingCharacters: novelData.characters || [],
     novelPromotionProjectId: novelData.id,
+    // Raw script lets processNewCharacters mine dialogue-only speakers
+    // the LLM excluded (the agent_character_profile prompt drops
+    // characters who never appear on-screen, which loses VO-only
+    // speakers like iangyc's 桃桃). See
+    // `project_kuiperfilm_dialogue_extraction_bug` memory.
+    rawScript: contentToAnalyze,
   })
 
   // Update + backfill existing characters (legacy rescue path).

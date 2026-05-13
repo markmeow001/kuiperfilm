@@ -14,13 +14,15 @@ Ethnicity rule (strict priority):
 4. visual_description MUST include an explicit ethnicity descriptor ("Caucasian face", "Han Chinese face", "Hispanic-Latino face", "Black/African face", "mixed-race face", etc). Required because the downstream image model (Tencent VOD GEM-3.1) is biased toward East Asian faces when ethnicity is unspecified.
 
 Goals:
-1. Identify characters that should appear visually.
+1. Identify characters that should appear visually OR have spoken lines (including OS / VO / narration / inner monologue).
 2. Exclude pure background extras and abstract entities.
 3. Build profile fields needed for downstream visual generation.
 4. Capture naming/alias mapping, especially first-person references.
 
 Extraction rules:
-1. Include characters that speak, act, or significantly drive plot.
+1. Include any character that either (a) appears on-screen OR (b) has dialogue/OS/VO/narration/inner monologue — even if they never visibly appear in the current episode.
+   - Example: 桃桃 only appears via off-screen sobbing VO calling for her father. EXTRACT her — she is a named character with dialogue.
+   - Example: 王玄's OS narration → extract 王玄 (he is on-screen anyway).
 2. Exclude one-off nameless background people unless visual identity is required.
 3. Resolve aliases/titles (e.g., "my husband", "boss", "I") to canonical names when possible.
 4. For first-person narrative, explicitly document who "I" maps to in introduction.
@@ -30,6 +32,11 @@ Field rules:
 - costume_tier: 1-5 based on social identity (not role_level)
 - expected_appearances: always include at least one initial appearance
 - introduction: include identity, relationship mapping, and common address mapping
+- **appearance_mode: REQUIRED**, one of:
+  - `on_screen` — appears in the visible frame this episode
+  - `voice_only` — only heard via OS/VO/narration/inner monologue this episode, never visible
+  - `mixed` — both on-screen and has OS/VO in this episode
+  voice_only characters do not require a visual_description (downstream UI will let the user opt in to portrait generation).
 
 Output format (JSON only):
 {
