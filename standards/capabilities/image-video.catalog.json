@@ -2217,6 +2217,21 @@
   {
     "modelType": "image",
     "provider": "tencent-vod",
+    "modelId": "Kling-3.0",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k"
+        ],
+        "supportNegativePrompt": true,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "tencent-vod",
     "modelId": "Kling-3.0-Omni",
     "capabilities": {
       "image": {
