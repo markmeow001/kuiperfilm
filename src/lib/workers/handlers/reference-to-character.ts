@@ -240,23 +240,33 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
 
   await assertTaskActive(job, 'reference_to_character_persist')
   if (isBackgroundJob && appearanceId) {
+    // Worker's pickAppearanceDescription reads `descriptions` (plural array)
+    // FIRST, falling back to `description` (singular). If we only wrote the
+    // singular form, the worker would keep reading whatever stale text was
+    // in `descriptions[0]` from the analyze-novel script-derived pass and
+    // the new image-derived description would never reach the prompt.
+    // Reset the array to a single entry matching the new singular value so
+    // both readers see the same story.
+    const writeData = description
+      ? {
+          imageUrl: successfulCosKeys[0],
+          imageUrls: encodeImageUrls(successfulCosKeys),
+          description,
+          descriptions: JSON.stringify([description]),
+        }
+      : {
+          imageUrl: successfulCosKeys[0],
+          imageUrls: encodeImageUrls(successfulCosKeys),
+        }
     if (isAssetHub) {
       await prisma.globalCharacterAppearance.update({
         where: { id: appearanceId },
-        data: {
-          imageUrl: successfulCosKeys[0],
-          imageUrls: encodeImageUrls(successfulCosKeys),
-          description: description || undefined,
-        },
+        data: writeData,
       })
     } else {
       await prisma.characterAppearance.update({
         where: { id: appearanceId },
-        data: {
-          imageUrl: successfulCosKeys[0],
-          imageUrls: encodeImageUrls(successfulCosKeys),
-          description: description || undefined,
-        },
+        data: writeData,
       })
     }
     await reportTaskProgress(job, 96, {
