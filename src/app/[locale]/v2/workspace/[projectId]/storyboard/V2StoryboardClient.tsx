@@ -1186,62 +1186,69 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   // ─── Groups layout (text-driven multi-shot) ──────────────────────
   if (layoutMode === 'groups') {
+    // Toolbar split into two rows (2026-05-12): top row is the layout
+    // toggle (Gallery / Timeline / Groups), bottom row keeps the title
+    // cluster on the left and the four action buttons on the right.
+    // Previous single-row crammed them together and made the 4 actions
+    // visually compete with the view toggle.
     const groupsToolbar = (
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="font-fraunces text-sm italic text-amber-500/80">多鏡頭</div>
-          {hasGroups ? (
-            <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-              {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
-            </span>
-          ) : null}
-          <div className="font-mono text-[14px] tracking-wider text-stone-500">
-            {projectVideoModel || '尚未設定 video model'} · 比例 {projectVideoRatio}
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-end">{layoutToggleNode}</div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="font-fraunces text-sm italic text-amber-500/80">多鏡頭</div>
+            {hasGroups ? (
+              <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
+                {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+              </span>
+            ) : null}
+            <div className="font-mono text-[14px] tracking-wider text-stone-500">
+              {projectVideoModel || '尚未設定 video model'} · 比例 {projectVideoRatio}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            disabled={!currentEpisodeId || manualPanelSubmitting}
-            onClick={() => setManualPanelOpen(true)}
-            title="自己寫提示詞 + 選角色場景,單一鏡頭手動建立"
-            className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <AppIcon name="plus" className="h-3 w-3" />
-            手動新增分鏡
-          </button>
-          <button
-            type="button"
-            disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
-            onClick={handleAnalyzeStoryboard}
-            title="重新從劇本生成分鏡"
-            className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <AppIcon name="sparklesAlt" className="h-3 w-3" />
-            重新分析
-          </button>
-          <button
-            type="button"
-            disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2}
-            onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
-            title="把分鏡按角色 / 場景連續性切成 multi-shot 群"
-            className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {autoGroup.isPending ? '切組中…' : '自動切組'}
-          </button>
-          <button
-            type="button"
-            disabled={multiShotState.status === 'submitting'}
-            onClick={handleSubmitMultiShot}
-            title="把所有 group 一次送 Kling 多鏡頭"
-            className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <AppIcon name="sparklesAlt" className="h-3 w-3" />
-            {multiShotState.status === 'submitting'
-              ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
-              : '智能多鏡頭'}
-          </button>
-          {layoutToggleNode}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={!currentEpisodeId || manualPanelSubmitting}
+              onClick={() => setManualPanelOpen(true)}
+              title="自己寫提示詞 + 選角色場景,單一鏡頭手動建立"
+              className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="plus" className="h-3 w-3" />
+              手動新增分鏡
+            </button>
+            <button
+              type="button"
+              disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
+              onClick={handleAnalyzeStoryboard}
+              title="重新從劇本生成分鏡"
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              重新分析
+            </button>
+            <button
+              type="button"
+              disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2}
+              onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
+              title="把分鏡按角色 / 場景連續性切成 multi-shot 群"
+              className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {autoGroup.isPending ? '切組中…' : '自動切組'}
+            </button>
+            <button
+              type="button"
+              disabled={multiShotState.status === 'submitting'}
+              onClick={handleSubmitMultiShot}
+              title="把所有 group 一次送 Kling 多鏡頭"
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              {multiShotState.status === 'submitting'
+                ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
+                : '智能多鏡頭'}
+            </button>
+          </div>
         </div>
       </div>
     )
