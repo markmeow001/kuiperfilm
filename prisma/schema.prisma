@@ -37,6 +37,12 @@ model CharacterAppearance {
   imageUrl             String?                 @db.Text
   imageUrls            String?                 @db.Text
   selectedIndex        Int?
+  // Tencent VOD AIGC pre-registered Element ID (per CreateAigcCustomElement
+  // doc §3.9.4.2). When present, the multi-shot worker passes this via
+  // ExtInfo.element_list so Kling 3.0-Omni's "固定主体" path activates and
+  // identity is bound by Element ID rather than ad-hoc FileInfos reference.
+  // Registered lazily on first video gen that needs this appearance.
+  tencentVodElementId  String?                 @db.VarChar(64)
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @default(now()) @updatedAt
   previousImageUrl     String?                 @db.Text
@@ -69,6 +75,9 @@ model LocationImage {
   description         String?                  @db.Text
   imageUrl            String?                  @db.Text
   isSelected          Boolean                  @default(false)
+  // Tencent VOD AIGC Element ID — see CharacterAppearance.tencentVodElementId.
+  // Registered lazily per image (each view has its own Element).
+  tencentVodElementId String?                  @db.VarChar(64)
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @default(now()) @updatedAt
   previousImageUrl    String?                  @db.Text
@@ -1140,6 +1149,8 @@ model NovelPromotionProp {
   imageHistory            String?               @db.Text
   // sourceGlobalPropId: when imported from /asset-hub
   sourceGlobalPropId      String?
+  // Tencent VOD AIGC Element ID — see CharacterAppearance.tencentVodElementId.
+  tencentVodElementId     String?               @db.VarChar(64)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @default(now()) @updatedAt
   novelPromotionProject   NovelPromotionProject @relation(fields: [novelPromotionProjectId], references: [id], onDelete: Cascade)

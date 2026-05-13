@@ -49,6 +49,7 @@ import { reportTaskProgress } from '../shared'
 import { buildDialogueDrivenDurations } from './speech-duration-estimator'
 import { buildMultiKlingSplitPlan, MultiKlingChunkerError, type MultiKlingChunk } from './multi-kling-chunker'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
+import { getOrCreateTencentVodElement } from '@/lib/tencent-vod/element-register'
 
 interface BPathPanel {
   id: string
@@ -79,18 +80,21 @@ interface BPathPanel {
 }
 
 interface LocationImageForBPath {
+  /** LocationImage.id — needed by the tencent-vod element register pipeline
+   * to cache the ElementId per view, not per location. */
+  id?: string | null
   imageIndex?: number | null
   imageUrl?: string | null
   isSelected?: boolean | null
   viewName?: string | null
+  /** See CharacterForBPath.tencentVodElementId — per-view caching. */
+  tencentVodElementId?: string | null
 }
 
 interface LocationForBPath {
   id: string
   name: string
   images?: LocationImageForBPath[]
-  /** See CharacterForBPath.tencentVodElementId — same opt-in field for scenes. */
-  tencentVodElementId?: string | null
 }
 
 // Phase 11.3 Stage 2 — slim view of NovelPromotionProp the multi-shot
@@ -415,6 +419,20 @@ function isDialogueLine(line: string): boolean {
 // stay as bare-name mentions in prose; dialogue / explicit anchors
 // still bind them.
 const ALREADY_SUBSTITUTED_RE = /<<<image_\d+>>>/
+
+/**
+ * Rewrite every `<<<image_N>>>` token to `<<<element_N>>>` for the
+ * element_list binding path (§3.9.4.2). N is preserved because the
+ * worker builds `elementList` in the SAME order as `referenceImageUrls`,
+ * so slot 1 is the same entity in either path. Only the prompt-side
+ * namespace prefix changes.
+ *
+ * Idempotent (running twice produces the same string).
+ */
+function rewriteImageRefsToElementRefs(text: string): string {
+  if (!text) return text
+  return text.replace(/<<<image_(\d+)>>>/g, '<<<element_$1>>>')
+}
 
 function substituteImageRefs(text: string, nameToImageIndex: ReadonlyMap<string, number>): string {
   if (!text || nameToImageIndex.size === 0) return text
@@ -1150,10 +1168,13 @@ export async function runMultiShotBPath(params: {
 
   type SceneBinding = {
     id: string
+    /** LocationImage.id — used by the element-register pipeline so the
+     * cached ElementId belongs to this specific view (not the location). */
+    locationImageId: string | null
     name: string
     viewName: string | null
     imageUrl: string
-    /** See CharacterForBPath.tencentVodElementId. */
+    /** See CharacterForBPath.tencentVodElementId. Sourced from LocationImage row. */
     tencentVodElementId: string | null
   }
   const sceneBindings: SceneBinding[] = []
@@ -1190,10 +1211,12 @@ export async function runMultiShotBPath(params: {
       seenLoc.add(key)
       sceneBindings.push({
         id: loc.id,
+        locationImageId: pickedImg?.id ?? null,
         name: loc.name,
         viewName: pickedImg?.viewName || null,
         imageUrl: publicUrl,
-        tencentVodElementId: loc.tencentVodElementId ?? null,
+        // Element cache is per-image (per-view), not per-location.
+        tencentVodElementId: pickedImg?.tencentVodElementId ?? null,
       })
     }
   }
@@ -1278,33 +1301,130 @@ export async function runMultiShotBPath(params: {
   const activeSceneBindings = sceneBindings.slice(0, usedSceneCount)
   const activePropBindings = propBindings.slice(0, usedPropCount)
 
-  // P1 (2026-05-13) — SubjectInfos.N "固定主体" binding.
+  // P1 (2026-05-13) — Pre-registered "固定主体" (CustomElement) binding.
   //
-  // Tencent VOD AIGC §3.9.4 (2026-03-30 update) deprecated the old
-  // ExtInfo element_list pattern in favour of top-level SubjectInfos[].
-  // For Kling, Id is REQUIRED (pre-registered via CreateAigcCustomElement,
-  // §3.9.4.2). Without Id the request is rejected.
+  // Per Tencent VOD AIGC §3.9.4.2, the most reliable identity-binding path
+  // for Kling 3.0-Omni is:
+  //   1. Pre-register each entity's frontal reference image via
+  //      `CreateAigcCustomElement` → returns an `ElementId`.
+  //   2. Pass element_list: [{element_id: ...}, ...] in
+  //      ExtInfo.AdditionalParameters.
+  //   3. Reference each entity in the prompt as `<<<element_N>>>`
+  //      (1-based against element_list order).
   //
-  // We pre-extend the binding types with `tencentVodElementId` so when
-  // the pre-register pipeline lands we just populate the DB column and
-  // this array auto-fills. Until then it stays empty and we rely on
-  // the FileInfos+ObjectId+`<<<image_N>>>` path (§3.9.4.1) shipped
-  // earlier today.
+  // This is what the official Python multi-element sample uses. The
+  // FileInfos+ObjectId+`<<<image_N>>>` path (§3.9.4.1) still works for
+  // single-shot reference but Kling's identity adherence degrades when
+  // the prompt is long and descriptive — observed 2026-05-13 as the
+  // long-haired CG xianxia young man pulling instead of the 35yo with
+  // stubble from the reference image.
   //
-  // Order MUST mirror nameToImageIndex / referenceImageUrls so a
-  // pre-registered character at slot 1 stays at `<<<image_1>>>` in the
-  // prompt. Entries without elementId are skipped (would fail Tencent's
-  // Id-required validation).
-  const subjectInfosForGenerator: Array<{ id: string; name: string }> = []
+  // Lazy registration: we don't pre-register on appearance creation;
+  // instead, the first video gen that needs an entity will call
+  // CreateAigcCustomElement (sync API, ~1-2s) and cache the ElementId
+  // on the DB row. Subsequent gens hit the cache.
+  //
+  // Fallback: any binding that fails to register (network error, image
+  // rejected for size/ratio, etc.) falls back to the §3.9.4.1 path for
+  // this whole task. We don't mix — either ALL active bindings have
+  // ElementIds (switch to element_list mode) or we stay on FileInfos.
+  // Mixing is technically supported but adds prompt-syntax bifurcation
+  // we don't need to fight today.
+  const elementRegisterTasks: Array<Promise<{ key: string; elementId: string | null }>> = []
   for (const c of activeCharacterBindings) {
-    if (c.tencentVodElementId) subjectInfosForGenerator.push({ id: c.tencentVodElementId, name: c.name })
+    if (c.appearanceId) {
+      elementRegisterTasks.push(
+        getOrCreateTencentVodElement({
+          userId,
+          entityType: 'character-appearance',
+          entityId: c.appearanceId,
+          name: c.name,
+          imageUrl: c.imageUrl,
+          description: c.appearanceLabel || c.name,
+        }).then((elementId) => ({ key: `char:${c.id}`, elementId })),
+      )
+    }
   }
   for (const s of activeSceneBindings) {
-    if (s.tencentVodElementId) subjectInfosForGenerator.push({ id: s.tencentVodElementId, name: s.name })
+    if (s.locationImageId) {
+      elementRegisterTasks.push(
+        getOrCreateTencentVodElement({
+          userId,
+          entityType: 'location-image',
+          entityId: s.locationImageId,
+          name: s.viewName ? `${s.name}-${s.viewName}` : s.name,
+          imageUrl: s.imageUrl,
+          description: `场景：${s.name}${s.viewName ? `·${s.viewName}` : ''}`,
+        }).then((elementId) => ({ key: `scene:${s.id}`, elementId })),
+      )
+    }
   }
   for (const p of activePropBindings) {
-    if (p.tencentVodElementId) subjectInfosForGenerator.push({ id: p.tencentVodElementId, name: p.name })
+    elementRegisterTasks.push(
+      getOrCreateTencentVodElement({
+        userId,
+        entityType: 'prop',
+        entityId: p.id,
+        name: p.name,
+        imageUrl: p.imageUrl,
+        description: `道具：${p.name}`,
+      }).then((elementId) => ({ key: `prop:${p.id}`, elementId })),
+    )
   }
+  const registerResults = await Promise.all(elementRegisterTasks)
+  const elementIdByKey = new Map<string, string>()
+  for (const { key, elementId } of registerResults) {
+    if (elementId) elementIdByKey.set(key, elementId)
+  }
+  // Order MUST mirror referenceImageUrls / nameToImageIndex so slot N is
+  // the same entity regardless of which path (element_list vs FileInfos)
+  // we end up using.
+  const elementList: Array<{ element_id: string }> = []
+  const elementListNames: string[] = []
+  for (const c of activeCharacterBindings) {
+    const eid = elementIdByKey.get(`char:${c.id}`)
+    if (eid) {
+      elementList.push({ element_id: eid })
+      elementListNames.push(c.name)
+    }
+  }
+  for (const s of activeSceneBindings) {
+    const eid = elementIdByKey.get(`scene:${s.id}`)
+    if (eid) {
+      elementList.push({ element_id: eid })
+      elementListNames.push(s.name)
+    }
+  }
+  for (const p of activePropBindings) {
+    const eid = elementIdByKey.get(`prop:${p.id}`)
+    if (eid) {
+      elementList.push({ element_id: eid })
+      elementListNames.push(p.name)
+    }
+  }
+  // Use element_list path only when EVERY active binding registered
+  // successfully — otherwise mixing would leave some entities on the
+  // <<<image_N>>> path and others on <<<element_N>>>, which Kling
+  // can't fan-out coherently.
+  const totalActive =
+    activeCharacterBindings.length + activeSceneBindings.length + activePropBindings.length
+  const useElementListPath = elementList.length === totalActive && totalActive > 0
+  logger.info({
+    message: 'tencent vod element registration summary',
+    details: {
+      totalActive,
+      registered: elementList.length,
+      useElementListPath,
+      elementListNames,
+    },
+  })
+
+  // Legacy scaffolding (kept for diagnostic / SubjectInfos.N path).
+  // Even with element_list, we don't currently pass SubjectInfos.N to the
+  // generator (the official sample uses ExtInfo.element_list, which is
+  // a separate parameter slot). Leave this empty so generator.subjectInfos
+  // stays null and Tencent doesn't reject for mixed binding spec.
+  const subjectInfosForGenerator: Array<{ id: string; name: string }> = []
 
   // 1-indexed name → FileInfos position. Order is character refs
   // first, then scene refs — must mirror the referenceImageUrls
@@ -1649,6 +1769,7 @@ export async function runMultiShotBPath(params: {
         durations: resolvedDurations,
         totalDuration: finalTotal,
         dialogueLineCount: voiceLines.length,
+        useElementListPath,
       },
     })
 
@@ -1657,18 +1778,30 @@ export async function runMultiShotBPath(params: {
     // "prompt cannot be empty" otherwise). Use the combined prompt as a
     // safe non-empty payload — the model uses multi_prompt entries for
     // actual generation.
-    const placeholderPrompt = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex, unboundNames)
+    const placeholderPromptRaw = buildBPathCombinedPrompt(validPanels, dialogueByPanel, nameToImageIndex, unboundNames)
+    const placeholderPrompt = useElementListPath ? rewriteImageRefsToElementRefs(placeholderPromptRaw) : placeholderPromptRaw
+    const multiPromptResolved = useElementListPath
+      ? multiPrompt.map((mp) => ({ ...mp, prompt: rewriteImageRefsToElementRefs(mp.prompt) }))
+      : multiPrompt
     generateOptions = {
       prompt: placeholderPrompt,
       duration: finalTotal,
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
-      ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
+      // Element-list mode supplies references via ExtInfo; FileInfos refs
+      // would conflict with the prompt token namespace. Image-mode keeps
+      // referenceImageUrls so the FileInfos path resolves.
+      ...(useElementListPath
+        ? {}
+        : referenceImageUrls.length > 0
+          ? { referenceImageUrls }
+          : {}),
       ...(subjectInfosForGenerator.length > 0 ? { subjectInfos: subjectInfosForGenerator } : {}),
+      ...(useElementListPath ? { extInfo: { element_list: elementList } } : {}),
       klingMultiShot: {
         multi_shot: true,
         shot_type: 'customize',
-        multi_prompt: multiPrompt,
+        multi_prompt: multiPromptResolved,
       },
       outputComplianceCheck: 'Enabled',
     }
@@ -1782,26 +1915,38 @@ export async function runMultiShotBPath(params: {
       ? (validPanels.length >= 3 ? 10 : 5)
       : KLING_OMNI_MAX_TOTAL_DURATION
 
+    // If we're going element-list path, rewrite <<<image_N>>> tokens to
+    // <<<element_N>>>. Slot order is preserved (elementList was built in
+    // the same character → scene → prop order as referenceImageUrls), so
+    // N stays the same — only the namespace prefix changes.
+    const primaryPromptResolved = useElementListPath ? rewriteImageRefsToElementRefs(primaryPrompt) : primaryPrompt
+
     logger.info({
       message: 'B path multi-shot submit (intelligence)',
       details: {
         videoModel,
         shotCount: validPanels.length,
         subjectCount: subjectInfos.length,
-        promptLength: primaryPrompt.length,
+        promptLength: primaryPromptResolved.length,
         promptSource,
         dialogueLineCount: voiceLines.length,
         totalDuration: resolvedTotal,
+        useElementListPath,
       },
     })
 
     generateOptions = {
-      prompt: primaryPrompt,
+      prompt: primaryPromptResolved,
       duration: resolvedTotal,
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
-      ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
+      ...(useElementListPath
+        ? {}
+        : referenceImageUrls.length > 0
+          ? { referenceImageUrls }
+          : {}),
       ...(subjectInfosForGenerator.length > 0 ? { subjectInfos: subjectInfosForGenerator } : {}),
+      ...(useElementListPath ? { extInfo: { element_list: elementList } } : {}),
       // 2026-05-13 — Tencent doc §3.9.5 spec:
       //   multi_shot: bool (true/false)
       //   shot_type: 'customize' | 'intelligence'  (required when multi_shot=true)
