@@ -396,23 +396,55 @@ export function GroupCard({
     const remainingForScenes = TENCENT_SUBJECT_INFOS_CAP - charsToAnchor.length
     const scenesToAnchor = groupScenes.slice(0, remainingForScenes)
 
-    // Build name → ref-slot map so per-shot blocks can carry explicit
-    // pointers like "[出场：王玄→参考图片1]". Without these, Kling Omni
-    // sees "一个男人走进房间" + a header anchor and has to GUESS which
-    // ref the man is. The header anchors alone are necessary but not
-    // sufficient — Kling needs the binding repeated INSIDE each shot.
+    // 2026-05-13 — IMPORTANT: Tencent VOD AIGC 接入指南 §3.9.4 says Kling
+    // 3.0-Omni parses `<<<image_N>>>` as the LITERAL binding marker;
+    // Chinese phrases like 「参考图片1的[王玄]」 are treated as natural
+    // language and do NOT bind. Emit the binding tokens directly so the
+    // textarea is WYSIWYG for Kling, with the human name in parens for
+    // user readability.
+    //
+    //   header  → "<<<image_1>>>（即[王玄]，角色锚点，高度一致）"
+    //   shotbind → "[出场：<<<image_1>>>（即王玄），<<<image_2>>>（即李四）]"
+    //   desc    → 「王玄」 substring is pre-substituted to "<<<image_1>>>"
+    //              (defensive — worker also does this, but emitting it
+    //               here makes the textarea match what Kling actually sees)
+    //   dialog  → NEVER substituted. Tencent doc explicitly says
+    //              "Dialogue speakers 不能替換，Kling TTS parser 不認
+    //               `<<<image_N>>>说："..."`"
     const charNameToRefSlot = new Map<string, number>()
     for (const cast of charsToAnchor) {
-      header.push(`参考图片${refSlot}的[${cast.character.name}]人物形象（高度一致）`)
+      header.push(`<<<image_${refSlot}>>>（即[${cast.character.name}]，角色锚点，高度一致）`)
       charNameToRefSlot.set(cast.character.name.trim().toLowerCase(), refSlot)
       refSlot++
     }
     const sceneNameToRefSlot = new Map<string, number>()
     for (const scene of scenesToAnchor) {
       const sceneLabel = scene.viewName ? `${scene.location.name}·${scene.viewName}` : scene.location.name
-      header.push(`参考图片${refSlot}的${sceneLabel}（高度一致）`)
+      header.push(`<<<image_${refSlot}>>>（即${sceneLabel}，场景锚点，高度一致）`)
       sceneNameToRefSlot.set(scene.location.name.trim().toLowerCase(), refSlot)
       refSlot++
+    }
+
+    // Build a sorted name list (longest first) for substring substitution
+    // inside descriptions. Mirrors the worker's substituteImageRefs order
+    // so frontend and worker produce identical output.
+    const nameSlotPairs: Array<{ name: string; slot: number }> = []
+    for (const [name, slot] of charNameToRefSlot.entries()) {
+      nameSlotPairs.push({ name, slot })
+    }
+    for (const [name, slot] of sceneNameToRefSlot.entries()) {
+      nameSlotPairs.push({ name, slot })
+    }
+    nameSlotPairs.sort((a, b) => b.name.length - a.name.length)
+
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const substituteRefsInDesc = (text: string): string => {
+      if (!text || nameSlotPairs.length === 0) return text
+      let out = text
+      for (const { name, slot } of nameSlotPairs) {
+        out = out.replace(new RegExp(escapeRegex(name), 'gi'), `<<<image_${slot}>>>`)
+      }
+      return out
     }
 
     // Helper: extract character names from panel.characters (handles
@@ -464,11 +496,11 @@ export function GroupCard({
       const cameraMoveRaw = p.cameraMove?.trim() ?? ''
       const cameraMoveEn = CAMERA_MOVE_TO_EN[cameraMoveRaw] ?? cameraMoveRaw
 
-      // Per-shot binding line: explicit "name → ref slot" pointers for
-      // characters and scene present in this panel. Only emit names that
-      // actually got a ref slot (i.e. within TENCENT_SUBJECT_INFOS_CAP);
-      // unbound characters fall through to "另一人" handling on the
-      // worker side.
+      // Per-shot binding line: explicit `<<<image_N>>>` literal tokens
+      // for characters/scenes present in this panel. Kling 3.0-Omni
+      // parses these as binding markers; the chinese-name parens are
+      // for the user reading the textarea. Names NOT in the cap (>3)
+      // fall through to the worker's "另一人" anonymization.
       const shotCharBindings: string[] = []
       const seenInShot = new Set<string>()
       for (const charName of extractPanelCharNames(p)) {
@@ -476,7 +508,7 @@ export function GroupCard({
         if (seenInShot.has(lower)) continue
         seenInShot.add(lower)
         const slot = charNameToRefSlot.get(lower)
-        if (slot !== undefined) shotCharBindings.push(`${charName}→参考图片${slot}`)
+        if (slot !== undefined) shotCharBindings.push(`<<<image_${slot}>>>（即${charName}）`)
       }
       const shotBindingFragments: string[] = []
       if (shotCharBindings.length > 0) {
@@ -489,18 +521,23 @@ export function GroupCard({
       if (panelLocName) {
         const slot = sceneNameToRefSlot.get(panelLocName.toLowerCase())
         if (slot !== undefined) {
-          shotBindingFragments.push(`场景：${panelLocName}→参考图片${slot}`)
+          shotBindingFragments.push(`场景：<<<image_${slot}>>>（即${panelLocName}）`)
         } else {
           shotBindingFragments.push(`场景：${panelLocName}`)
         }
       }
+
+      // Pre-substitute character/scene names INSIDE the description
+      // prose so the textarea matches Kling's view. Dialogue line is
+      // left untouched (TTS speaker parser requires bare name).
+      const descSubstituted = desc ? substituteRefsInDesc(desc) : ''
 
       const blockLines: string[] = []
       blockLines.push(`镜头${i + 1}（${start}-${end} seconds）·${framing}`)
       if (shotBindingFragments.length > 0) {
         blockLines.push(`[${shotBindingFragments.join('] [')}]`)
       }
-      if (desc) blockLines.push(desc)
+      if (descSubstituted) blockLines.push(descSubstituted)
       if (dialog) blockLines.push(dialog)
       if (cameraMoveEn) blockLines.push(`镜头：${cameraMoveEn}`)
       blockLines.push(ANTI_TEXT_LINE)

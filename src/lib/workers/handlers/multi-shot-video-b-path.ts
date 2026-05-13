@@ -23,6 +23,21 @@ interface CharacterForBPath {
   id: string
   name: string
   appearances?: CharacterAppearanceForBPath[]
+  /**
+   * Tencent VOD AIGC Element ID for this character (per CreateAigcCustomElement,
+   * §3.9.4.2). When present, the worker passes it via SubjectInfos.N to
+   * Kling for the new "固定主体" binding mode (2026-03-30 doc). When null,
+   * we fall back to FileInfos+ObjectId+`<<<image_N>>>` mode (§3.9.4.1).
+   *
+   * Populated by a separate pre-register pipeline (not yet wired):
+   *   1. On character appearance image upload/generation
+   *   2. Call CreateAigcCustomElement with the frontal image URL
+   *   3. Cache the returned ElementId on NovelPromotionCharacter
+   *
+   * Until that pipeline lands this field is always null and we stay on
+   * the image-index path that's working today.
+   */
+  tencentVodElementId?: string | null
 }
 import {
   assertTaskActive,
@@ -74,6 +89,8 @@ interface LocationForBPath {
   id: string
   name: string
   images?: LocationImageForBPath[]
+  /** See CharacterForBPath.tencentVodElementId — same opt-in field for scenes. */
+  tencentVodElementId?: string | null
 }
 
 // Phase 11.3 Stage 2 — slim view of NovelPromotionProp the multi-shot
@@ -83,6 +100,8 @@ interface PropForBPath {
   id: string
   name: string
   imageUrl?: string | null
+  /** See CharacterForBPath.tencentVodElementId — same opt-in field for props. */
+  tencentVodElementId?: string | null
 }
 
 interface BPathProjectData {
@@ -330,6 +349,41 @@ function looksLikeStageDirection(content: string): boolean {
 }
 
 /**
+ * Heuristic: does this line look like a dialogue line whose speaker
+ * name MUST be preserved verbatim?
+ *
+ * Tencent VOD doc §3.9.4 / 3.9.5 — Kling Omni's TTS pipeline parses
+ *   `${speaker}说："${content}"` or `${speaker}: "${content}"`
+ * to identify the voice owner. If we replace the speaker with
+ * `<<<image_N>>>`, the TTS parser fails and either no voice is dubbed
+ * or the dialogue is read by the wrong speaker.
+ *
+ * Patterns we MUST NOT touch (case-insensitive across CJK + ASCII):
+ *   - `王玄说："..."` / `王玄说道："..."` / `王玄道："..."`
+ *   - `王玄：「...」` / `王玄: "..."`
+ *   - `[王玄]：「...」` / `(王玄): "..."`
+ *
+ * Any line matching is returned untouched. Everything else is fair
+ * game for substitution.
+ */
+const DIALOGUE_LINE_PATTERNS: ReadonlyArray<RegExp> = [
+  // `[Name]:` or `(Name):` or （Name）：— optional bracket wrapper, colon, optional quote
+  /^\s*[\[\(（【「][^\]\)）】」]+[\]\)）】」]\s*[:：]\s*[「『"'“]?/,
+  // `Name说/言/道/喊/叫：` followed by optional quote (no leading bracket needed)
+  /^\s*[一-龥A-Za-z][一-龥A-Za-z\s]{0,20}[说言道喊叫嚷吼][道：:：]\s*[「『"'“]?/,
+  // `Name: "..."` — bare ASCII/CJK name followed by colon and quote
+  /^\s*[一-龥A-Za-z][一-龥A-Za-z\s]{0,20}[:：]\s*[「『"'“]/,
+]
+
+function isDialogueLine(line: string): boolean {
+  if (!line) return false
+  for (const re of DIALOGUE_LINE_PATTERNS) {
+    if (re.test(line)) return true
+  }
+  return false
+}
+
+/**
  * Replace character / scene names in a visual prompt with Kling
  * 3.0-Omni's `<<<image_N>>>` reference syntax. Per VOD AIGC 接入指南
  * §3.9.2 example 2 (multi-image 参考生视频):
@@ -344,13 +398,33 @@ function looksLikeStageDirection(content: string): boolean {
  * "CATH" matches accidentally. Match is case-insensitive because
  * panel descriptions sometimes lowercase the entity name.
  *
- * Dialogue speakers are NOT substituted — Kling Omni's audio dub
- * pipeline parses `${speaker}说："${content}"` to identify the
- * voice owner, and `<<<image_N>>>说："..."` is not recognised.
+ * 2026-05-13 line-aware mode: when the input contains multiple lines,
+ * dialogue lines (matched via isDialogueLine) are preserved verbatim.
+ * Tencent doc explicitly says Kling Omni's TTS parser requires the
+ * bare speaker name; `<<<image_N>>>说："..."` is not recognised.
+ * Single-line callers (buildShotBody) get the legacy global behaviour.
  */
 function substituteImageRefs(text: string, nameToImageIndex: ReadonlyMap<string, number>): string {
   if (!text || nameToImageIndex.size === 0) return text
   const sortedNames = Array.from(nameToImageIndex.keys()).sort((a, b) => b.length - a.length)
+
+  // Multi-line — be dialogue-aware. Single-line — global replace.
+  if (text.includes('\n')) {
+    return text
+      .split('\n')
+      .map((line) => {
+        if (isDialogueLine(line)) return line
+        let out = line
+        for (const name of sortedNames) {
+          const idx = nameToImageIndex.get(name)
+          if (!idx) continue
+          out = out.replace(new RegExp(escapeRegex(name), 'gi'), `<<<image_${idx}>>>`)
+        }
+        return out
+      })
+      .join('\n')
+  }
+
   let out = text
   for (const name of sortedNames) {
     const idx = nameToImageIndex.get(name)
@@ -861,6 +935,8 @@ export async function runMultiShotBPath(params: {
     appearanceId: string | null
     appearanceLabel: string | null
     imageUrl: string
+    /** See CharacterForBPath.tencentVodElementId. Null until pre-register pipeline lands. */
+    tencentVodElementId: string | null
   }
   const characterBindings: CharacterBinding[] = []
   const seenCharIds = new Set<string>()
@@ -903,6 +979,7 @@ export async function runMultiShotBPath(params: {
         appearanceId: appearance.id ?? null,
         appearanceLabel: appearance.changeReason || null,
         imageUrl: publicUrl,
+        tencentVodElementId: character.tencentVodElementId ?? null,
       })
     }
   }
@@ -958,6 +1035,7 @@ export async function runMultiShotBPath(params: {
         appearanceId: appearance.id ?? null,
         appearanceLabel: appearance.changeReason || null,
         imageUrl: publicUrl,
+        tencentVodElementId: character.tencentVodElementId ?? null,
       })
     }
   }
@@ -1010,6 +1088,7 @@ export async function runMultiShotBPath(params: {
         appearanceId: appearance.id ?? null,
         appearanceLabel: appearance.changeReason || null,
         imageUrl: publicUrl,
+        tencentVodElementId: character.tencentVodElementId ?? null,
       })
     }
   }
@@ -1052,6 +1131,8 @@ export async function runMultiShotBPath(params: {
     name: string
     viewName: string | null
     imageUrl: string
+    /** See CharacterForBPath.tencentVodElementId. */
+    tencentVodElementId: string | null
   }
   const sceneBindings: SceneBinding[] = []
   const remainingSlots = Math.max(0, 3 - characterSubjects.length)
@@ -1090,6 +1171,7 @@ export async function runMultiShotBPath(params: {
         name: loc.name,
         viewName: pickedImg?.viewName || null,
         imageUrl: publicUrl,
+        tencentVodElementId: loc.tencentVodElementId ?? null,
       })
     }
   }
@@ -1115,6 +1197,8 @@ export async function runMultiShotBPath(params: {
     id: string
     name: string
     imageUrl: string
+    /** See CharacterForBPath.tencentVodElementId. */
+    tencentVodElementId: string | null
   }
   const propBindings: PropBinding[] = []
   const seenPropIds = new Set<string>()
@@ -1132,6 +1216,7 @@ export async function runMultiShotBPath(params: {
         id: prop.id,
         name: prop.name,
         imageUrl: publicUrl,
+        tencentVodElementId: prop.tencentVodElementId ?? null,
       })
     }
   }
@@ -1170,6 +1255,34 @@ export async function runMultiShotBPath(params: {
   const activeCharacterBindings = characterBindings.slice(0, usedCharCount)
   const activeSceneBindings = sceneBindings.slice(0, usedSceneCount)
   const activePropBindings = propBindings.slice(0, usedPropCount)
+
+  // P1 (2026-05-13) — SubjectInfos.N "固定主体" binding.
+  //
+  // Tencent VOD AIGC §3.9.4 (2026-03-30 update) deprecated the old
+  // ExtInfo element_list pattern in favour of top-level SubjectInfos[].
+  // For Kling, Id is REQUIRED (pre-registered via CreateAigcCustomElement,
+  // §3.9.4.2). Without Id the request is rejected.
+  //
+  // We pre-extend the binding types with `tencentVodElementId` so when
+  // the pre-register pipeline lands we just populate the DB column and
+  // this array auto-fills. Until then it stays empty and we rely on
+  // the FileInfos+ObjectId+`<<<image_N>>>` path (§3.9.4.1) shipped
+  // earlier today.
+  //
+  // Order MUST mirror nameToImageIndex / referenceImageUrls so a
+  // pre-registered character at slot 1 stays at `<<<image_1>>>` in the
+  // prompt. Entries without elementId are skipped (would fail Tencent's
+  // Id-required validation).
+  const subjectInfosForGenerator: Array<{ id: string; name: string }> = []
+  for (const c of activeCharacterBindings) {
+    if (c.tencentVodElementId) subjectInfosForGenerator.push({ id: c.tencentVodElementId, name: c.name })
+  }
+  for (const s of activeSceneBindings) {
+    if (s.tencentVodElementId) subjectInfosForGenerator.push({ id: s.tencentVodElementId, name: s.name })
+  }
+  for (const p of activePropBindings) {
+    if (p.tencentVodElementId) subjectInfosForGenerator.push({ id: p.tencentVodElementId, name: p.name })
+  }
 
   // 1-indexed name → FileInfos position. Order is character refs
   // first, then scene refs — must mirror the referenceImageUrls
@@ -1529,6 +1642,7 @@ export async function runMultiShotBPath(params: {
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
       ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
+      ...(subjectInfosForGenerator.length > 0 ? { subjectInfos: subjectInfosForGenerator } : {}),
       klingMultiShot: {
         multi_shot: true,
         shot_type: 'customize',
@@ -1600,12 +1714,25 @@ export async function runMultiShotBPath(params: {
         ...activeSceneBindings.map((s) => s.name),
         ...activePropBindings.map((p) => p.name),
       ])
-      const ANCHOR_LINE_RE = /^参考图片\d+的\[?([^\]）]+?)\]?(?:人物形象)?（高度一致）$/
+      // Two anchor formats to filter:
+      //   legacy: "参考图片1的[王玄]人物形象（高度一致）"
+      //   2026-05-13: "<<<image_1>>>（即[王玄]，角色锚点，高度一致）"
+      //                "<<<image_3>>>（即街道·夜，场景锚点，高度一致）"
+      // Both encode (slot, entityName). If the entity isn't in the
+      // bound set (because we've already substituted via the new
+      // <<<image_N>>> path, this becomes a no-op for new lines).
+      const ANCHOR_LINE_RE_LEGACY = /^参考图片\d+的\[?([^\]）]+?)\]?(?:人物形象)?（高度一致）$/
+      const ANCHOR_LINE_RE_V2 = /^<<<image_\d+>>>（即\[?([^\]，）]+?)\]?(?:，[^）]*)?）$/
       workingPrompt = workingPrompt
         .split('\n')
         .filter((line) => {
           const trimmed = line.trim()
-          const match = ANCHOR_LINE_RE.exec(trimmed)
+          const matchV2 = ANCHOR_LINE_RE_V2.exec(trimmed)
+          if (matchV2) {
+            const refName = matchV2[1].trim()
+            return boundEntityNames.has(refName)
+          }
+          const match = ANCHOR_LINE_RE_LEGACY.exec(trimmed)
           if (!match) return true
           const refName = match[1].trim()
           // <<<image_N>>> tokens are always bound — keep.
@@ -1652,6 +1779,7 @@ export async function runMultiShotBPath(params: {
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(sound !== undefined ? { generateAudio: sound } : {}),
       ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
+      ...(subjectInfosForGenerator.length > 0 ? { subjectInfos: subjectInfosForGenerator } : {}),
       // 2026-05-13 — Tencent doc §3.9.5 spec:
       //   multi_shot: bool (true/false)
       //   shot_type: 'customize' | 'intelligence'  (required when multi_shot=true)
