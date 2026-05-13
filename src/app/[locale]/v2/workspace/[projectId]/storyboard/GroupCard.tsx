@@ -15,7 +15,7 @@
  * subject identity.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
@@ -443,6 +443,7 @@ export function GroupCard({
   const [narrativeDraft, setNarrativeDraft] = useState<string>('')
   const [narrativeDirty, setNarrativeDirty] = useState<boolean>(false)
   const [narrativeRegenFlash, setNarrativeRegenFlash] = useState<boolean>(false)
+  const narrativeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   // Re-seed the narrative when panels, duration, cast, or scenes change AND
   // the user hasn't edited it locally — avoids clobbering an in-progress edit.
   // groupCast/groupScenes are included so chip overrides re-trigger seed.
@@ -807,24 +808,31 @@ export function GroupCard({
               <button
                 type="button"
                 onClick={() => {
-                  setNarrativeDraft(buildInitialNarrative())
+                  // Force a visible refresh even when the regenerated string
+                  // is byte-identical: clear first, then set on next tick so
+                  // React doesn't bail out via Object.is equality check.
+                  const fresh = buildInitialNarrative()
+                  setNarrativeDraft('')
                   setNarrativeDirty(false)
                   setNarrativeRegenFlash(true)
-                  window.setTimeout(() => setNarrativeRegenFlash(false), 1200)
+                  window.requestAnimationFrame(() => {
+                    setNarrativeDraft(fresh)
+                    if (narrativeTextareaRef.current) {
+                      narrativeTextareaRef.current.scrollTop = 0
+                    }
+                  })
+                  window.setTimeout(() => setNarrativeRegenFlash(false), 1500)
                 }}
                 title="從分鏡描述+綁定角色/場景重新生成這段敘事"
-                className={`rounded-sm border px-2 py-0.5 font-mono text-[12px] tracking-wider transition-colors ${
-                  narrativeRegenFlash
-                    ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200'
-                    : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200'
-                }`}
+                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200"
               >
-                {narrativeRegenFlash ? '✓ 已重生' : '↻ 重生敘事'}
+                ↻ 重生敘事
               </button>
             </div>
           </div>
 
           <textarea
+            ref={narrativeTextareaRef}
             value={narrativeDraft}
             onChange={(e) => {
               setNarrativeDraft(e.target.value)
@@ -832,7 +840,9 @@ export function GroupCard({
             }}
             rows={panels.length >= 4 ? 14 : 9}
             placeholder="0-5 seconds: 角色 + 場景 + 動作 + 鏡頭 + 氛圍&#10;5-10 seconds: ...&#10;10-15 seconds: ..."
-            className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-2.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
+            className={`w-full resize-none rounded-sm border bg-stone-900/40 p-2.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40 transition-colors ${
+              narrativeRegenFlash ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-stone-800'
+            }`}
           />
           {narrativeDirty ? (
             <div className="font-mono text-[12px] tracking-wider text-violet-300">
