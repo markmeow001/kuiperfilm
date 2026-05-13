@@ -32,6 +32,19 @@ interface PanelCharacterRef {
   appearance?: string
 }
 
+/**
+ * Voice line attached to a panel by the storyboards API.
+ * Server joins NovelPromotionVoiceLine via matchedPanelId. The
+ * `isVoiceover` flag is derived server-side from speaker markers
+ * (OS / VO / V.O. / O.S. / 画外音 / 旁白 / 独白) so the UI can render
+ * off-camera lines with a different style (no lip-sync indicator).
+ */
+interface PanelVoiceLine {
+  speaker: string
+  content: string
+  isVoiceover: boolean
+}
+
 interface PanelLike {
   id: string
   description?: string | null
@@ -47,6 +60,10 @@ interface PanelLike {
   // emit 镜头N·<景别> shot titles in the cinematic prompt format.
   shotType?: string | null
   cameraMove?: string | null
+  // 2026-05-13 — Structured voice lines (server joins NovelPromotionVoiceLine).
+  // When present, buildInitialNarrative prefers these over srtSegment so
+  // OS / voice-over lines can be tagged for off-camera rendering.
+  voiceLines?: PanelVoiceLine[]
 }
 
 interface CharacterAppearanceRef {
@@ -465,6 +482,13 @@ export function GroupCard({
     // Motion suppressor — per awesome-seedance-2 "candid, unscripted"
     // and Alibaba's 运动幅度/速度. Photoreal output needs subtle motion.
     'MOTION: candid, unscripted, physically believable movement. Subtle micro-expressions, natural breathing rhythm. NOT theatrical, NOT exaggerated, NOT melodramatic, NOT dramatic head-turns.',
+    // 2026-05-13 — Voice-over (OS/VO) lines come marked with the literal
+    // string "Voiceover (off-camera, lips do not move)". Kling needs an
+    // explicit rule that voice-over speakers must NOT have lip animation
+    // — otherwise Kling defaults to lip-syncing every speaker line and
+    // produces visible mouth movement for narrator/inner-monologue
+    // lines (user-reported 2026-05-13: 「所有OS的對白...角色的嘴唇不能有動作」).
+    'DIALOGUE RULE: Lines tagged `Voiceover (off-camera)` are NARRATOR / inner monologue — the on-screen character\'s lips must NOT move while these lines play. Only animate lips for lines without the off-camera tag.',
     'STRICT: NOT animation, NOT CG, NOT 3D render, NOT illustration, NOT digital painting, NOT xianxia stylized art, NOT Genshin Impact aesthetic.',
     'No on-screen text, no subtitles, no logos.',
   ].join(' ')
@@ -586,7 +610,22 @@ export function GroupCard({
       cursor = end
       const p = panels[i]
       const desc = (p.description ?? p.prompt ?? '').trim()
-      const dialog = (p.srtSegment ?? '').trim()
+      // 2026-05-13 — Prefer structured voiceLines (server-joined from
+      // NovelPromotionVoiceLine) over the legacy srtSegment string. This
+      // exposes the isVoiceover flag so we can format off-camera lines
+      // as `Voiceover (off-camera, no lip-sync): "..."` and keep Kling
+      // from mouthing the line.
+      const structuredVoiceLines = Array.isArray(p.voiceLines) ? p.voiceLines : []
+      const dialog = (() => {
+        if (structuredVoiceLines.length > 0) {
+          return structuredVoiceLines
+            .map((v) => v.isVoiceover
+              ? `Voiceover (off-camera, lips do not move) — ${v.speaker}: "${v.content}"`
+              : `${v.speaker}: "${v.content}"`)
+            .join('\n')
+        }
+        return (p.srtSegment ?? '').trim()
+      })()
 
       // Derive framing from panel.shotType when available, else 'shot N'
       const shotTypeRaw = p.shotType?.trim() ?? ''

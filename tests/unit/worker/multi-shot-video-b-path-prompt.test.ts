@@ -98,8 +98,12 @@ describe('buildBPathCombinedPrompt', () => {
     // 2026-05-13 — formatDialogueForKling now always appends `(in <Lang>)`
     // so per-line TTS language is locked to the dialogue's own language
     // regardless of surrounding-prompt bias.
+    //
+    // Also 2026-05-13 (later): `旁白` is recognised as a voice-over
+    // speaker — output gets the "Voiceover (off-camera, lips do not
+    // move)" wrapper so Kling doesn't lip-sync the narrator line.
     expect(buildBPathCombinedPrompt(panels, dialoguesWithFallback)).toContain(
-      '旁白 (in Mandarin Chinese): "在远处的钟声里...',
+      'Voiceover (off-camera, 旁白\'s lips do not move) (in Mandarin Chinese): "在远处的钟声里...',
     )
     // also confirm the bare-empty case is handled by speaker treatment in caller
     const _unused = dialogues // referenced to keep linter calm

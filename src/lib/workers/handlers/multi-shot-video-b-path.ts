@@ -262,8 +262,44 @@ function detectDialogueLanguage(content: string): string | null {
   return null
 }
 
-function formatDialogueForKling(speaker: string, content: string): string {
+/**
+ * Detect whether a speaker label encodes an off-camera voice-over.
+ * Mirrors the same logic in storyboards/route.ts so worker + UI agree
+ * on which lines should NOT trigger lip-sync animation.
+ *
+ * Recognised markers (case-insensitive):
+ *   - parenthesised: 角色(VO) / 角色(V.O.) / 角色(O.S.) / 角色（画外音） / 角色（旁白） / 角色（独白）
+ *   - bare suffix:   角色VO / 角色OS / 角色 V.O. (whole-word match)
+ *   - keyword in name: 画外音 / 旁白 / 独白
+ *
+ * User requirement 2026-05-13:
+ *   「所有OS的對白...角色的嘴唇不能有動作」
+ */
+function isVoiceoverSpeaker(rawSpeaker: string): boolean {
+  if (!rawSpeaker) return false
+  return /(\(|（)\s*(VO|V\.?O\.?|OS|O\.?S\.?|画外音|畫外音|旁白|独白|獨白)\s*(\)|）)/i.test(rawSpeaker)
+    || /\b(VO|V\.?O\.?|OS|O\.?S\.?)\b/i.test(rawSpeaker)
+    || /(画外音|畫外音|旁白|独白|獨白)/.test(rawSpeaker)
+}
+
+/**
+ * Strip the VO/OS suffix from a speaker name for clean TTS attribution.
+ * Without this, Kling reads `桃桃(VO)` aloud as "Taotao VO" instead of
+ * just "Taotao", and the speaker-name lookup against character library
+ * fails (no row matches `桃桃(VO)`).
+ */
+function stripVoiceoverMarkers(rawSpeaker: string): string {
+  return rawSpeaker
+    .replace(/[(（]\s*(VO|V\.?O\.?|OS|O\.?S\.?|画外音|畫外音|旁白|独白|獨白)\s*[)）]/gi, '')
+    .replace(/\b(VO|V\.?O\.?|OS|O\.?S\.?)\b/gi, '')
+    .replace(/(画外音|畫外音|旁白|独白|獨白)/g, '')
+    .trim() || rawSpeaker.trim()
+}
+
+function formatDialogueForKling(rawSpeaker: string, content: string): string {
   const lang = detectDialogueLanguage(content)
+  const isVO = isVoiceoverSpeaker(rawSpeaker)
+  const speaker = stripVoiceoverMarkers(rawSpeaker)
   // Kling Omni's native dialogue format is `Character: "line"`. The
   // `(in <Language>)` parenthetical is the documented Kling 3.0-Omni
   // convention for per-line TTS language override. As of 2026-05-13 we
@@ -271,9 +307,16 @@ function formatDialogueForKling(speaker: string, content: string): string {
   // truth regardless of surrounding description language — handles the
   // mixed-language drama case (CN narration + EN/ES dialogue) without
   // user intervention.
-  return lang
-    ? `${speaker} (in ${lang}): "${content}"`
-    : `${speaker}: "${content}"`
+  //
+  // Off-camera voice-over (OS / VO / 画外音 / 旁白 / 独白) gets a
+  // distinct prefix that tells Kling NOT to lip-sync the line.
+  // Recognised by the model's prompt parser (clean structural English),
+  // and reinforced by the DIALOGUE RULE clause in STYLE_HEADER_REALISTIC
+  // on the frontend.
+  const langTag = lang ? ` (in ${lang})` : ''
+  return isVO
+    ? `Voiceover (off-camera, ${speaker}'s lips do not move)${langTag}: "${content}"`
+    : `${speaker}${langTag}: "${content}"`
 }
 
 /**
