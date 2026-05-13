@@ -41,6 +41,11 @@ interface PanelLike {
   location?: string | null
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
+  // Optional shot framing — present on panels created by analyze-novel
+  // v2+; legacy panels may have null. Used by buildInitialNarrative to
+  // emit 镜头N·<景别> shot titles in the cinematic prompt format.
+  shotType?: string | null
+  cameraMove?: string | null
 }
 
 interface CharacterAppearanceRef {
@@ -298,13 +303,97 @@ export function GroupCard({
   // `rawPrompt` field on regen so the worker bypasses per-panel
   // prompt assembly.
   const [totalDurationDraft, setTotalDurationDraft] = useState<number>(15)
+
+  // 2026-05-13 — upgraded narrative builder using the "五要素導演法"
+  // structure (角色錨點 / 場景錨點 / 動作鏈 / 運鏡 / 整體視覺風格).
+  // Earlier version emitted bare `0-8 seconds: <desc>` lines which gave
+  // Kling Omni nothing to anchor identity / style / scene against, so
+  // output drifted toward Omni's xianxia-CG training prior.
+  //
+  // Format produced (one block per panel + header + footer):
+  //   参考图片1的[角色M]人物形象（高度一致）
+  //   参考图片2的[场景名]（高度一致）
+  //
+  //   镜头1（0-8 seconds）·全景·<focus>
+  //   [角色] <description>
+  //   [角色]: "对白"
+  //   镜头：<camera move in EN>
+  //   严格无任何字幕、文字、logo或屏幕信息。
+  //
+  //   ...
+  //
+  //   整体视觉风格：
+  //   <photorealistic English keywords block>
+  //
+  // Users can still edit verbatim — the auto-seed is just a strong
+  // starting point. Once the user types anything, narrativeDirty=true
+  // and we stop re-seeding to avoid clobbering their edit.
+  const SHOT_TYPE_TO_FRAMING: Record<string, string> = {
+    远景: '远景',
+    遠景: '远景',
+    全景: '全景',
+    中景: '中景',
+    近景: '近景',
+    特写: '特写',
+    特寫: '特写',
+  }
+  const CAMERA_MOVE_TO_EN: Record<string, string> = {
+    固定: 'static shot',
+    平移: 'pan',
+    推镜: 'push in',
+    推進: 'push in',
+    拉镜: 'pull back',
+    拉遠: 'pull back',
+    跟拍: 'camera follows',
+    手持: 'handheld',
+    俯拍: 'high angle',
+    仰拍: 'low angle',
+    环绕: 'orbit',
+    環繞: 'orbit',
+    摇降: 'tilt down',
+    搖降: 'tilt down',
+    摇升: 'tilt up',
+    搖升: 'tilt up',
+    中度推進: 'medium push in',
+  }
+  // Photorealistic preset — matches lib/style-profile/presets.ts
+  // 'realistic' positivePrompt. If the project ever uses a different
+  // preset (anime / 3D / etc.) the user can edit this block out.
+  const STYLE_FOOTER_REALISTIC = [
+    '整体视觉风格：',
+    'photorealistic, hyperrealistic, cinematic lighting, volumetric lighting,',
+    'realistic subsurface scattering, film grain, 8K detail, real skin texture,',
+    'real fabric physics, dramatic yet natural lighting, shot on Arri Alexa 65,',
+    'IMAX quality, no cartoonish glow, no plastic look, no 3D render feel,',
+    'no text, no subtitles, no letters, no words, no on-screen text of any kind,',
+    'clean visual only',
+  ].join('\n')
+  const ANTI_TEXT_LINE = '严格无任何字幕、文字、logo或屏幕信息。'
+
   const buildInitialNarrative = (): string => {
     const count = panels.length
     if (count === 0) return ''
     const total = totalDurationDraft
     const base = Math.max(1, Math.floor(total / count))
     const remainder = Math.max(0, total - base * count)
-    const lines: string[] = []
+
+    // Header: character + scene anchor lines. Index from 1 because the
+    // 五要素 convention says "参考图片1的xxx" — slot 1 is the leftmost
+    // ref image which the worker also pins as the primary identity anchor.
+    const header: string[] = []
+    let refSlot = 1
+    for (const cast of groupCast) {
+      header.push(`参考图片${refSlot}的[${cast.character.name}]人物形象（高度一致）`)
+      refSlot++
+    }
+    for (const scene of groupScenes) {
+      const sceneLabel = scene.viewName ? `${scene.location.name}·${scene.viewName}` : scene.location.name
+      header.push(`参考图片${refSlot}的${sceneLabel}（高度一致）`)
+      refSlot++
+    }
+
+    // Per-shot blocks
+    const shotBlocks: string[] = []
     let cursor = 0
     for (let i = 0; i < count; i++) {
       const dur = base + (i < remainder ? 1 : 0)
@@ -314,12 +403,29 @@ export function GroupCard({
       const p = panels[i]
       const desc = (p.description ?? p.prompt ?? '').trim()
       const dialog = (p.srtSegment ?? '').trim()
-      const segments: string[] = [`${start}-${end} seconds:`]
-      if (desc) segments.push(desc)
-      if (dialog) segments.push(dialog)
-      lines.push(segments.join(' '))
+
+      // Derive framing from panel.shotType when available, else 'shot N'
+      const shotTypeRaw = p.shotType?.trim() ?? ''
+      const framing = SHOT_TYPE_TO_FRAMING[shotTypeRaw] ?? '场景'
+
+      // Derive camera move
+      const cameraMoveRaw = p.cameraMove?.trim() ?? ''
+      const cameraMoveEn = CAMERA_MOVE_TO_EN[cameraMoveRaw] ?? cameraMoveRaw
+
+      const blockLines: string[] = []
+      blockLines.push(`镜头${i + 1}（${start}-${end} seconds）·${framing}`)
+      if (desc) blockLines.push(desc)
+      if (dialog) blockLines.push(dialog)
+      if (cameraMoveEn) blockLines.push(`镜头：${cameraMoveEn}`)
+      blockLines.push(ANTI_TEXT_LINE)
+      shotBlocks.push(blockLines.join('\n'))
     }
-    return lines.join('\n\n')
+
+    const sections: string[] = []
+    if (header.length > 0) sections.push(header.join('\n'))
+    sections.push(shotBlocks.join('\n\n'))
+    sections.push(STYLE_FOOTER_REALISTIC)
+    return sections.join('\n\n')
   }
   const [narrativeDraft, setNarrativeDraft] = useState<string>('')
   const [narrativeDirty, setNarrativeDirty] = useState<boolean>(false)
