@@ -404,16 +404,36 @@ function isDialogueLine(line: string): boolean {
  * bare speaker name; `<<<image_N>>>说："..."` is not recognised.
  * Single-line callers (buildShotBody) get the legacy global behaviour.
  */
+// 2026-05-13 — CRITICAL: skip single-char names (length < 2).
+// CJK has no word boundaries, so substring-matching a 1-char name
+// like 「離」 clobbers common Chinese collocations that happen to
+// contain that char ("離地半米" / "離開" / "離別" etc.).
+// Prod failure was: character "离" replaced "离地半米的空中" with
+// "<<<image_2>>>地半米的空中" — Kling read this as garbage and
+// fell back to its training prior (long-haired xianxia young man).
+// Single-char names are still accepted into the cast — they just
+// stay as bare-name mentions in prose; dialogue / explicit anchors
+// still bind them.
+const ALREADY_SUBSTITUTED_RE = /<<<image_\d+>>>/
+
 function substituteImageRefs(text: string, nameToImageIndex: ReadonlyMap<string, number>): string {
   if (!text || nameToImageIndex.size === 0) return text
-  const sortedNames = Array.from(nameToImageIndex.keys()).sort((a, b) => b.length - a.length)
+  const sortedNames = Array.from(nameToImageIndex.keys())
+    .filter((name) => name.length >= 2)
+    .sort((a, b) => b.length - a.length)
+  if (sortedNames.length === 0) return text
 
-  // Multi-line — be dialogue-aware. Single-line — global replace.
+  // Multi-line — be both dialogue-aware AND idempotent.
+  //   - skip dialogue lines (TTS speaker must stay bare)
+  //   - skip lines already containing <<<image_N>>> (frontend pre-sub
+  //     or earlier worker pass) — re-running clobbers `<<<image_1>>>=王玄`
+  //     mapping headers into `<<<image_1>>>=<<<image_1>>>` nonsense
   if (text.includes('\n')) {
     return text
       .split('\n')
       .map((line) => {
         if (isDialogueLine(line)) return line
+        if (ALREADY_SUBSTITUTED_RE.test(line)) return line
         let out = line
         for (const name of sortedNames) {
           const idx = nameToImageIndex.get(name)
@@ -425,6 +445,8 @@ function substituteImageRefs(text: string, nameToImageIndex: ReadonlyMap<string,
       .join('\n')
   }
 
+  // Single-line callers (buildShotBody) — keep legacy global replace
+  // (they hand us bare description text that hasn't been pre-substituted).
   let out = text
   for (const name of sortedNames) {
     const idx = nameToImageIndex.get(name)

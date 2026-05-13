@@ -396,33 +396,40 @@ export function GroupCard({
     const remainingForScenes = TENCENT_SUBJECT_INFOS_CAP - charsToAnchor.length
     const scenesToAnchor = groupScenes.slice(0, remainingForScenes)
 
-    // 2026-05-13 — IMPORTANT: Tencent VOD AIGC 接入指南 §3.9.4 says Kling
-    // 3.0-Omni parses `<<<image_N>>>` as the LITERAL binding marker;
-    // Chinese phrases like 「参考图片1的[王玄]」 are treated as natural
-    // language and do NOT bind. Emit the binding tokens directly so the
-    // textarea is WYSIWYG for Kling, with the human name in parens for
-    // user readability.
+    // 2026-05-13 — Tencent VOD AIGC §3.9.4 says Kling parses
+    // `<<<image_N>>>` as the LITERAL binding marker. Earlier attempts
+    // decorated the token with chinese name parens like
+    // `<<<image_1>>>（即王玄）` so the user could read the textarea, but
+    // the worker's substituteImageRefs then replaced 「王玄」 again
+    // producing `<<<image_1>>>（即<<<image_1>>>）` and the anchor filter
+    // dropped the line entirely (capture group no longer matched a
+    // bound entity name).
     //
-    //   header  → "<<<image_1>>>（即[王玄]，角色锚点，高度一致）"
-    //   shotbind → "[出场：<<<image_1>>>（即王玄），<<<image_2>>>（即李四）]"
-    //   desc    → 「王玄」 substring is pre-substituted to "<<<image_1>>>"
-    //              (defensive — worker also does this, but emitting it
-    //               here makes the textarea match what Kling actually sees)
-    //   dialog  → NEVER substituted. Tencent doc explicitly says
-    //              "Dialogue speakers 不能替換，Kling TTS parser 不認
-    //               `<<<image_N>>>说："..."`"
+    // Cleanest fix: collapse the mapping into a single header line
+    // ONCE at the top of the prompt, then use bare `<<<image_N>>>` in
+    // shot blocks. Kling sees the contract; user reads the header
+    // mapping for context.
+    //
+    //   header line: "参考主体：<<<image_1>>>=王玄；<<<image_2>>>=李四；<<<image_3>>>=场景：王宅·夜"
+    //   shotbind   : "[出场：<<<image_1>>>，<<<image_2>>>] [场景：<<<image_3>>>]"
+    //   desc       : char/scene names ≥2 chars → <<<image_N>>>
+    //   dialog     : verbatim (TTS speaker must be bare name per §3.9.4)
     const charNameToRefSlot = new Map<string, number>()
+    const mappingFragments: string[] = []
     for (const cast of charsToAnchor) {
-      header.push(`<<<image_${refSlot}>>>（即[${cast.character.name}]，角色锚点，高度一致）`)
+      mappingFragments.push(`<<<image_${refSlot}>>>=${cast.character.name}`)
       charNameToRefSlot.set(cast.character.name.trim().toLowerCase(), refSlot)
       refSlot++
     }
     const sceneNameToRefSlot = new Map<string, number>()
     for (const scene of scenesToAnchor) {
       const sceneLabel = scene.viewName ? `${scene.location.name}·${scene.viewName}` : scene.location.name
-      header.push(`<<<image_${refSlot}>>>（即${sceneLabel}，场景锚点，高度一致）`)
+      mappingFragments.push(`<<<image_${refSlot}>>>=场景：${sceneLabel}`)
       sceneNameToRefSlot.set(scene.location.name.trim().toLowerCase(), refSlot)
       refSlot++
+    }
+    if (mappingFragments.length > 0) {
+      header.push(`参考主体：${mappingFragments.join('；')}（均高度一致，写实风格）`)
     }
 
     // Build a sorted name list (longest first) for substring substitution
@@ -438,10 +445,20 @@ export function GroupCard({
     nameSlotPairs.sort((a, b) => b.name.length - a.name.length)
 
     const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // CRITICAL — must skip single-char names (length < 2). CJK has no
+    // word boundaries, so substring-matching a 1-char name like 「離」
+    // clobbers common Chinese phrases that happen to contain that char.
+    // Real prod failure case 2026-05-13:
+    //   character name = "离" (slot 2)
+    //   description = "悬浮在离地半米的空中" (离地 = "above the ground")
+    //   after sub  = "悬浮在<<<image_2>>>地半米的空中"  ← nonsense
+    // Single-char names are accepted into the cast but stay as bare names
+    // in prose; bound anchor lines and dialogue still anchor them.
     const substituteRefsInDesc = (text: string): string => {
       if (!text || nameSlotPairs.length === 0) return text
       let out = text
       for (const { name, slot } of nameSlotPairs) {
+        if (name.length < 2) continue
         out = out.replace(new RegExp(escapeRegex(name), 'gi'), `<<<image_${slot}>>>`)
       }
       return out
@@ -496,11 +513,12 @@ export function GroupCard({
       const cameraMoveRaw = p.cameraMove?.trim() ?? ''
       const cameraMoveEn = CAMERA_MOVE_TO_EN[cameraMoveRaw] ?? cameraMoveRaw
 
-      // Per-shot binding line: explicit `<<<image_N>>>` literal tokens
-      // for characters/scenes present in this panel. Kling 3.0-Omni
-      // parses these as binding markers; the chinese-name parens are
-      // for the user reading the textarea. Names NOT in the cap (>3)
-      // fall through to the worker's "另一人" anonymization.
+      // Per-shot binding: bare `<<<image_N>>>` literal tokens only.
+      // The header line above already documents which slot is which
+      // entity, so we don't need to repeat the name here — repeating
+      // it risks the worker's substituteImageRefs touching it twice.
+      // Names NOT in the cap (>3) fall through to the worker's
+      // "另一人" anonymization.
       const shotCharBindings: string[] = []
       const seenInShot = new Set<string>()
       for (const charName of extractPanelCharNames(p)) {
@@ -508,7 +526,7 @@ export function GroupCard({
         if (seenInShot.has(lower)) continue
         seenInShot.add(lower)
         const slot = charNameToRefSlot.get(lower)
-        if (slot !== undefined) shotCharBindings.push(`<<<image_${slot}>>>（即${charName}）`)
+        if (slot !== undefined) shotCharBindings.push(`<<<image_${slot}>>>`)
       }
       const shotBindingFragments: string[] = []
       if (shotCharBindings.length > 0) {
@@ -521,7 +539,7 @@ export function GroupCard({
       if (panelLocName) {
         const slot = sceneNameToRefSlot.get(panelLocName.toLowerCase())
         if (slot !== undefined) {
-          shotBindingFragments.push(`场景：<<<image_${slot}>>>（即${panelLocName}）`)
+          shotBindingFragments.push(`场景：<<<image_${slot}>>>`)
         } else {
           shotBindingFragments.push(`场景：${panelLocName}`)
         }
