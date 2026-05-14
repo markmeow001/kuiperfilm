@@ -18,6 +18,10 @@ export interface StyleProfileFetched {
   styleReferenceImages: string[] | null
   /** Which preset card the user clicked. Null when fully custom / never selected. */
   stylePresetKey: string | null
+  /** Phase B — curated 29-style library selection. Null when never picked. */
+  visualStyleId: string | null
+  /** Phase B — 8-lighting preset selection. Null when never picked. */
+  lightingPresetId: string | null
 }
 
 interface StyleProfileResponse {

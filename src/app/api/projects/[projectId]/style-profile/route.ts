@@ -26,6 +26,15 @@ const styleProfileBodySchema = z
     stylePresetKey: z
       .union([z.string().max(64), z.null()])
       .optional(),
+    // Phase B (2026-05-13) — curated 29-style library + 8-lighting picker.
+    // Layers TEXT-based anchor on top of legacy stylePresetKey image-ref
+    // pipeline. Both can coexist; clearing legacy doesn't clear library.
+    visualStyleId: z
+      .union([z.string().max(64), z.null()])
+      .optional(),
+    lightingPresetId: z
+      .union([z.string().max(64), z.null()])
+      .optional(),
   })
   .strict()
 
@@ -94,6 +103,8 @@ export const GET = apiHandler(async (
       styleNegativePrompt: true,
       styleReferenceImages: true,
       stylePresetKey: true,
+      visualStyleId: true,
+      lightingPresetId: true,
     },
   })
 
@@ -111,6 +122,8 @@ export const GET = apiHandler(async (
       styleNegativePrompt: novelData.styleNegativePrompt,
       styleReferenceImages: parseReferenceImagesField(novelData.styleReferenceImages),
       stylePresetKey: novelData.stylePresetKey,
+      visualStyleId: novelData.visualStyleId,
+      lightingPresetId: novelData.lightingPresetId,
     },
   })
 })
@@ -163,6 +176,8 @@ export const PATCH = apiHandler(async (
     styleNegativePrompt?: string | null
     styleReferenceImages?: string | null
     stylePresetKey?: string | null
+    visualStyleId?: string | null
+    lightingPresetId?: string | null
   } = {}
 
   if (parsed.stylePositivePrompt !== undefined) {
@@ -177,6 +192,12 @@ export const PATCH = apiHandler(async (
   if (parsed.stylePresetKey !== undefined) {
     updateData.stylePresetKey = parsed.stylePresetKey
   }
+  if (parsed.visualStyleId !== undefined) {
+    updateData.visualStyleId = parsed.visualStyleId
+  }
+  if (parsed.lightingPresetId !== undefined) {
+    updateData.lightingPresetId = parsed.lightingPresetId
+  }
 
   const updated = await prisma.novelPromotionProject.update({
     where: { id: novelData.id },
@@ -187,6 +208,8 @@ export const PATCH = apiHandler(async (
       styleNegativePrompt: true,
       styleReferenceImages: true,
       stylePresetKey: true,
+      visualStyleId: true,
+      lightingPresetId: true,
     },
   })
 
@@ -198,6 +221,8 @@ export const PATCH = apiHandler(async (
       styleNegativePrompt: updated.styleNegativePrompt,
       styleReferenceImages: updated.styleReferenceImages,
       stylePresetKey: updated.stylePresetKey,
+      visualStyleId: updated.visualStyleId,
+      lightingPresetId: updated.lightingPresetId,
     },
   })
 })

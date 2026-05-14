@@ -18,6 +18,9 @@ type ProjectRow = {
     stylePositivePrompt: string | null
     styleNegativePrompt: string | null
     styleReferenceImages: string | null
+    stylePresetKey?: string | null
+    visualStyleId?: string | null
+    lightingPresetId?: string | null
   } | null
 }
 
@@ -457,5 +460,141 @@ describe('api GET /api/projects/[projectId]/style-profile', () => {
 
     const res = await route.GET(req, buildContext('project-x'))
     expect(res.status).toBe(404)
+  })
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase B (2026-05-13) — visualStyleId / lightingPresetId picker fields
+  // ─────────────────────────────────────────────────────────────────────
+
+  describe('Phase B visualStyleId / lightingPresetId', () => {
+    beforeEach(() => {
+      vi.resetModules()
+      vi.clearAllMocks()
+      resetAuthMockState()
+    })
+
+    it('PATCH writes visualStyleId + lightingPresetId to DB', async () => {
+      installAuthMocks()
+      mockAuthenticated('user-1')
+      mockProjectAuth('allow')
+
+      prismaMock.novelPromotionProject.findUnique.mockResolvedValueOnce({
+        id: 'np-1',
+        stylePositivePrompt: null,
+        styleNegativePrompt: null,
+        styleReferenceImages: null,
+      })
+      prismaMock.novelPromotionProject.update.mockResolvedValueOnce({
+        id: 'np-1',
+        stylePositivePrompt: null,
+        styleNegativePrompt: null,
+        styleReferenceImages: null,
+        stylePresetKey: null,
+        visualStyleId: 'cinematic_realism',
+        lightingPresetId: 'golden_hour',
+      })
+
+      const route = await loadRoute()
+      const req = buildMockRequest({
+        path: '/api/projects/project-1/style-profile',
+        method: 'PATCH',
+        body: { visualStyleId: 'cinematic_realism', lightingPresetId: 'golden_hour' },
+      })
+
+      const res = await route.PATCH(req, buildContext('project-1'))
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { data: { visualStyleId: string | null; lightingPresetId: string | null } }
+      expect(body.data.visualStyleId).toBe('cinematic_realism')
+      expect(body.data.lightingPresetId).toBe('golden_hour')
+      expect(prismaMock.novelPromotionProject.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            visualStyleId: 'cinematic_realism',
+            lightingPresetId: 'golden_hour',
+          }),
+        }),
+      )
+    })
+
+    it('PATCH visualStyleId: null clears the column', async () => {
+      installAuthMocks()
+      mockAuthenticated('user-1')
+      mockProjectAuth('allow')
+
+      prismaMock.novelPromotionProject.findUnique.mockResolvedValueOnce({
+        id: 'np-1',
+        stylePositivePrompt: null,
+        styleNegativePrompt: null,
+        styleReferenceImages: null,
+      })
+      prismaMock.novelPromotionProject.update.mockResolvedValueOnce({
+        id: 'np-1',
+        stylePositivePrompt: null,
+        styleNegativePrompt: null,
+        styleReferenceImages: null,
+        stylePresetKey: null,
+        visualStyleId: null,
+        lightingPresetId: null,
+      })
+
+      const route = await loadRoute()
+      const req = buildMockRequest({
+        path: '/api/projects/project-1/style-profile',
+        method: 'PATCH',
+        body: { visualStyleId: null },
+      })
+
+      const res = await route.PATCH(req, buildContext('project-1'))
+      expect(res.status).toBe(200)
+      expect(prismaMock.novelPromotionProject.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ visualStyleId: null }),
+        }),
+      )
+    })
+
+    it('PATCH visualStyleId > 64 chars -> 400', async () => {
+      installAuthMocks()
+      mockAuthenticated('user-1')
+      mockProjectAuth('allow')
+
+      const route = await loadRoute()
+      const req = buildMockRequest({
+        path: '/api/projects/project-1/style-profile',
+        method: 'PATCH',
+        body: { visualStyleId: 'x'.repeat(65) },
+      })
+
+      const res = await route.PATCH(req, buildContext('project-1'))
+      expect(res.status).toBe(400)
+    })
+
+    it('GET returns visualStyleId + lightingPresetId in response', async () => {
+      installAuthMocks()
+      mockAuthenticated('user-1')
+      mockProjectAuth('allow')
+
+      prismaMock.novelPromotionProject.findUnique.mockResolvedValueOnce({
+        id: 'np-1',
+        stylePositivePrompt: null,
+        styleNegativePrompt: null,
+        styleReferenceImages: null,
+        stylePresetKey: null,
+        visualStyleId: 'cinematic_realism',
+        lightingPresetId: null,
+      })
+
+      const route = await loadRoute()
+      const req = buildMockRequest({
+        path: '/api/projects/project-1/style-profile',
+        method: 'GET',
+      })
+
+      const res = await route.GET(req, buildContext('project-1'))
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { data: { visualStyleId: string | null; lightingPresetId: string | null } }
+      expect(body.data.visualStyleId).toBe('cinematic_realism')
+      expect(body.data.lightingPresetId).toBeNull()
+    })
   })
 })

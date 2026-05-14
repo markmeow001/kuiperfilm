@@ -23,6 +23,7 @@ import {
   type PresetKey,
   type PresetCategory,
 } from '@/lib/style-profile/presets'
+import { visualStyles, lightingPresets } from '@/lib/style-library'
 
 const RATIO_OPTIONS: Array<{ value: string; label: string; caption: string }> = [
   { value: '9:16', label: '9:16', caption: '豎屏' },
@@ -34,6 +35,18 @@ const RATIO_OPTIONS: Array<{ value: string; label: string; caption: string }> = 
 const CATEGORY_ORDER: PresetCategory[] = [
   'realistic', 'anime', 'chinese', 'korean', 'cg-3d', 'western',
 ]
+
+// Phase B — visual style library category labels (matches DB.category enum).
+const LIBRARY_CATEGORY_LABEL: Record<string, string> = {
+  A: '寫實影視',
+  B: '日韓動畫',
+  C: '中國風',
+  D: '歐美動畫',
+  E: 'CG / 3D',
+  F: '插畫 / 遊戲',
+  G: '紀實 / 風格化',
+}
+const LIBRARY_CATEGORY_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 
 interface ProjectShape {
   novelPromotionData?: {
@@ -58,6 +71,14 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
     ? STYLE_PROFILE_PRESETS[selectedPresetKey].zhLabel
     : null
 
+  const selectedVisualStyleId = styleQuery.data?.visualStyleId ?? null
+  const selectedLightingPresetId = styleQuery.data?.lightingPresetId ?? null
+  const selectedVisualStyleLabel = useMemo(() => {
+    if (!selectedVisualStyleId) return null
+    const hit = visualStyles.find((s) => s.id === selectedVisualStyleId)
+    return hit?.nameZh ?? null
+  }, [selectedVisualStyleId])
+
   const presetGroups = useMemo(() => {
     return CATEGORY_ORDER.map((cat) => ({
       category: cat,
@@ -65,6 +86,24 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
       keys: PRESET_ORDER_BY_CATEGORY[cat],
     }))
   }, [])
+
+  const libraryGroups = useMemo(() => {
+    return LIBRARY_CATEGORY_ORDER.map((cat) => ({
+      category: cat,
+      label: LIBRARY_CATEGORY_LABEL[cat] ?? cat,
+      styles: visualStyles
+        .filter((s) => s.category === cat && s.isActive !== false)
+        .sort((a, b) => a.displayOrder - b.displayOrder),
+    })).filter((group) => group.styles.length > 0)
+  }, [])
+
+  const sortedLightings = useMemo(
+    () =>
+      lightingPresets
+        .filter((l) => l.isActive !== false)
+        .sort((a, b) => a.displayOrder - b.displayOrder),
+    [],
+  )
 
   function handleRatioChange(value: string) {
     updateConfig.mutate({ key: 'videoRatio', value })
@@ -77,6 +116,14 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
       styleNegativePrompt: entry.negativePrompt,
       stylePresetKey: key,
     })
+  }
+
+  function handleApplyVisualStyle(styleId: string | null) {
+    updateStyle.mutate({ visualStyleId: styleId })
+  }
+
+  function handleApplyLighting(lightingId: string | null) {
+    updateStyle.mutate({ lightingPresetId: lightingId })
   }
 
   return (
@@ -151,6 +198,99 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Phase B — visual style library (29 curated styles + 8 lightings) */}
+      <div className="mt-6 border-t border-stone-800/60 pt-5">
+        <div className="mb-2 flex items-center justify-between font-mono text-[14px] tracking-wider text-stone-500">
+          <span>
+            視覺風格庫 · VISUAL STYLE LIBRARY
+            {selectedVisualStyleLabel ? (
+              <span className="ml-2 font-serif-cn text-amber-400">({selectedVisualStyleLabel})</span>
+            ) : null}
+          </span>
+          {selectedVisualStyleId ? (
+            <button
+              type="button"
+              onClick={() => handleApplyVisualStyle(null)}
+              disabled={updateStyle.isPending}
+              className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[11px] text-stone-500 hover:border-stone-700 disabled:opacity-50"
+            >
+              CLEAR
+            </button>
+          ) : null}
+        </div>
+        <p className="mb-3 font-serif-cn text-[12px] leading-relaxed text-stone-600">
+          選一個風格會在 Kling 生成時注入文本級風格錨點，疊加在現有畫面風格之上。未選 = 跟原本一樣。
+        </p>
+        <div className="space-y-3">
+          {libraryGroups.map((group) => (
+            <div key={group.category}>
+              <div className="mb-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-600">
+                {group.category} · {group.label}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {group.styles.map((style) => {
+                  const active = style.id === selectedVisualStyleId
+                  return (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => handleApplyVisualStyle(style.id)}
+                      disabled={updateStyle.isPending}
+                      title={style.styleAnchor}
+                      className={`rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
+                        active
+                          ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                          : 'border-stone-800 text-stone-400 hover:border-stone-700'
+                      }`}
+                    >
+                      {style.nameZh}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lighting preset row */}
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between font-mono text-[12px] uppercase tracking-wider text-stone-600">
+            <span>光影預設 · LIGHTING</span>
+            {selectedLightingPresetId ? (
+              <button
+                type="button"
+                onClick={() => handleApplyLighting(null)}
+                disabled={updateStyle.isPending}
+                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[11px] text-stone-500 hover:border-stone-700 disabled:opacity-50"
+              >
+                CLEAR
+              </button>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {sortedLightings.map((lighting) => {
+              const active = lighting.id === selectedLightingPresetId
+              return (
+                <button
+                  key={lighting.id}
+                  type="button"
+                  onClick={() => handleApplyLighting(lighting.id)}
+                  disabled={updateStyle.isPending}
+                  title={lighting.lightingOverride}
+                  className={`rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
+                    active
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                      : 'border-stone-800 text-stone-400 hover:border-stone-700'
+                  }`}
+                >
+                  {lighting.nameZh}
+                </button>
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>
