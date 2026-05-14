@@ -1268,7 +1268,7 @@ export function GroupCard({
         ) : null}
 
       <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-5">
+        <div className="col-span-12 lg:col-span-4">
           <MultiShotBindingsRail
             taskId={taskId}
             groupLabel={null}
@@ -1317,7 +1317,7 @@ export function GroupCard({
               under the player. See above. */}
         </div>
 
-        <div className="col-span-12 space-y-3 lg:col-span-7">
+        <div className="col-span-12 space-y-3 lg:col-span-8">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
@@ -1379,10 +1379,12 @@ export function GroupCard({
                   disabled={!panels[0]?.imageUrl}
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <option value="off">Off (多鏡頭)</option>
-                  <option value="first_frame">首幀鎖定</option>
+                  <option value="off">Off · 多鏡頭(現在)</option>
+                  <option value="first_frame">鎖首幀 · 用 SHOT 01 圖</option>
                   <option value="first_last_frame" disabled={!panels[panels.length - 1]?.imageUrl}>
-                    首尾鎖定 {!panels[panels.length - 1]?.imageUrl ? '(需 SHOT N 有圖)' : ''}
+                    {panels[panels.length - 1]?.imageUrl
+                      ? `鎖首尾 · 用 SHOT 01 + SHOT ${panels.length}`
+                      : `鎖首尾 · 需 SHOT ${panels.length} 也有圖`}
                   </option>
                 </select>
               </label>
@@ -1477,6 +1479,79 @@ export function GroupCard({
                 : `預設由 ${panels.length} 個分鏡描述自動拼接,${totalDurationDraft}s 平均切。直接編輯這段即可,送出時會以你寫的為準。`}
             </div>
           )}
+
+          {/* 2026-05-13 — 鎖幀模式狀態列 + 縮圖預覽。
+              當 frameLockMode !== 'off' 時顯示這段，告訴 user
+              到底用了哪張圖當首/尾幀，並提示「會犧牲多鏡頭」。
+              SHOT 01 / SHOT N 沒圖時也顯示提示讓 user 知道下一步。 */}
+          {frameLockMode !== 'off' ? (
+            <div className="rounded-sm border border-amber-500/40 bg-amber-500/5 p-2">
+              <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-300">
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                {frameLockMode === 'first_last_frame' ? '首尾鎖定' : '首幀鎖定'}模式
+                <span className="font-serif-cn text-[11px] normal-case tracking-normal text-amber-400/70 italic">
+                  · 此 group 將跑單鏡頭 i2v(5-15s)，多鏡頭暫停
+                </span>
+              </div>
+              <div className="flex items-stretch gap-2">
+                {/* SHOT 01 thumbnail */}
+                <div className="flex flex-col items-center">
+                  <div className="font-mono text-[10px] tracking-wider text-amber-400/80">首幀</div>
+                  {panels[0]?.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={panels[0].imageUrl}
+                      alt="首幀 SHOT 01"
+                      className="mt-0.5 h-16 w-12 rounded-sm border border-amber-500/40 object-cover"
+                    />
+                  ) : (
+                    <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300">
+                      SHOT 01<br />沒圖
+                    </div>
+                  )}
+                  <div className="mt-0.5 font-mono text-[10px] text-stone-500">SHOT 01</div>
+                </div>
+                {frameLockMode === 'first_last_frame' ? (
+                  <div className="flex flex-col items-center">
+                    <div className="font-mono text-[10px] tracking-wider text-amber-400/80">尾幀</div>
+                    {panels[panels.length - 1]?.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={panels[panels.length - 1]!.imageUrl!}
+                        alt={`尾幀 SHOT ${panels.length}`}
+                        className="mt-0.5 h-16 w-12 rounded-sm border border-amber-500/40 object-cover"
+                      />
+                    ) : (
+                      <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300">
+                        SHOT {panels.length}<br />沒圖
+                      </div>
+                    )}
+                    <div className="mt-0.5 font-mono text-[10px] text-stone-500">SHOT {panels.length}</div>
+                  </div>
+                ) : null}
+                <div className="flex-1 font-serif-cn text-[12px] leading-relaxed text-stone-400">
+                  Kling 3.0 i2v 會以
+                  <span className="text-amber-300">「首幀」</span>
+                  {frameLockMode === 'first_last_frame' ? (
+                    <>
+                      和
+                      <span className="text-amber-300">「尾幀」</span>
+                      像素鎖死
+                    </>
+                  ) : (
+                    '像素鎖死起點'
+                  )}
+                  ，中間 5-15 秒由上方敘事 prompt 推動。適合
+                  <span className="text-stone-300">角色登場 / 反應鏡頭 / 轉場</span>
+                  這種要求像素級一致的 group。要回到多鏡頭模式請把上面「鎖幀」改回 Off。
+                </div>
+              </div>
+            </div>
+          ) : !panels[0]?.imageUrl ? (
+            <div className="rounded-sm border border-stone-800/60 bg-stone-950/40 px-2 py-1.5 font-mono text-[11px] italic tracking-wider text-stone-600">
+              💡 想用「鎖幀」(Kling 3.0 i2v 像素鎖)? 先到時間軸/畫廊跑「一鍵生圖」幫 SHOT 01 產張圖,選單就會解鎖
+            </div>
+          ) : null}
 
           {(groupCast.length > 0 || groupScenes.length > 0 || boundCharacters.length > 0) ? (
             <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-950/30 p-2">
