@@ -209,15 +209,16 @@ export async function getOrCreateTencentVodElement(
     // The Tencent doc Python example shows minimal payload (no extra refs)
     // is accepted; passing an empty array satisfies the type and matches
     // the doc's recommended single-frontal-image use case.
-    // SubAppId is not in the typed request but the actual API expects it
-    // for multi-tenant routing — pass via `as any` cast.
+    // 2026-05-13 — DO NOT pass SubAppId. The API rejects it ("The parameter
+    // 'SubAppId' is not recognized.") — multi-tenant routing for this
+    // endpoint is inferred from the credential, not from a request field.
+    // The earlier `as any` cast that forced it through SDK typing was wrong.
     const resp = await client.CreateAigcCustomElement({
-      SubAppId: creds.subAppId,
       ElementName: elementName,
       ElementDescription: elementDescription,
       ElementFrontalImage: opts.imageUrl,
       ElementReferList: [],
-    } as unknown as Parameters<typeof client.CreateAigcCustomElement>[0])
+    })
 
     if (resp.ElementId) {
       elementId = String(resp.ElementId)
@@ -340,13 +341,13 @@ export async function getOrRegisterStyleReferenceElement(
     const elementDescription =
       'STYLE REFERENCE ONLY — photographic style anchor. Copy lighting, film grain, skin texture, color grading. NOT a character, NOT a scene.'
 
+    // See note above: CreateAigcCustomElement rejects SubAppId.
     const resp = await client.CreateAigcCustomElement({
-      SubAppId: creds.subAppId,
       ElementName: elementName,
       ElementDescription: elementDescription,
       ElementFrontalImage: opts.url,
       ElementReferList: [],
-    } as unknown as Parameters<typeof client.CreateAigcCustomElement>[0])
+    })
 
     if (resp.ElementId) {
       elementId = String(resp.ElementId)
