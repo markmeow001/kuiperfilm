@@ -85,7 +85,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
   for (const row of grouped) {
     const b = byType.get(row.type) ?? { runs: 0, succeeded: 0, failed: 0 }
     b.runs += row._count._all
-    if (row.status === 'succeeded') b.succeeded += row._count._all
+    if (row.status === 'completed') b.succeeded += row._count._all
     if (row.status === 'failed') b.failed += row._count._all
     byType.set(row.type, b)
   }
@@ -95,9 +95,9 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const daily = (await prisma.$queryRawUnsafe<DailyRow[]>(`
     SELECT
       DATE(createdAt) AS day,
-      SUM(CASE WHEN type LIKE 'image_%' AND status='succeeded' THEN 1 ELSE 0 END) AS img_ok,
+      SUM(CASE WHEN type LIKE 'image_%' AND status='completed' THEN 1 ELSE 0 END) AS img_ok,
       SUM(CASE WHEN type LIKE 'image_%' AND status='failed' THEN 1 ELSE 0 END) AS img_fail,
-      SUM(CASE WHEN type LIKE 'video_%' AND status='succeeded' THEN 1 ELSE 0 END) AS vid_ok,
+      SUM(CASE WHEN type LIKE 'video_%' AND status='completed' THEN 1 ELSE 0 END) AS vid_ok,
       SUM(CASE WHEN type LIKE 'video_%' AND status='failed' THEN 1 ELSE 0 END) AS vid_fail
     FROM tasks
     WHERE createdAt >= ?
