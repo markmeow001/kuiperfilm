@@ -1208,6 +1208,45 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     </div>
   )
 
+  // 2026-05-13 — Modals (manual panel + stale storyboard cleanup) live
+  // outside the per-layout branches because each layout used to
+  // early-return its layout JSX without including modals → button
+  // onClick fired, state updated, but the modal never rendered.
+  // Surface them here so all three layout branches (gallery / timeline /
+  // groups) can mount the same overlay tree.
+  const globalOverlaysNode = (
+    <>
+      {manualPanelOpen ? (
+        <V2ManualPanelModal
+          characters={characterRoster.map((c) => ({ id: c.id, name: c.name ?? '未命名角色' }))}
+          locations={locationRoster.map((l) => ({ id: l.id, name: l.name ?? '未命名場景' }))}
+          onSubmit={handleManualPanelSubmit}
+          onClose={() => setManualPanelOpen(false)}
+          isSubmitting={manualPanelSubmitting}
+          contextHint={
+            (storyboardsData?.storyboards?.length ?? 0) === 0
+              ? '本集還沒有分鏡組,送出時會自動建立第一組'
+              : undefined
+          }
+        />
+      ) : null}
+
+      {currentEpisodeId ? (
+        <StaleStoryboardCleanupModal
+          projectId={projectId}
+          episodeId={currentEpisodeId}
+          open={staleCleanupOpen}
+          onClose={() => setStaleCleanupOpen(false)}
+          onAfterDelete={() => {
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.storyboards.all(currentEpisodeId),
+            })
+          }}
+        />
+      ) : null}
+    </>
+  )
+
   // ─── Groups layout (text-driven multi-shot) ──────────────────────
   if (layoutMode === 'groups') {
     // Toolbar split into two rows (2026-05-12): top row is the layout
@@ -1286,6 +1325,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       </div>
     )
     return (
+      <>
+      {globalOverlaysNode}
       <V2GroupsLayout
         projectId={projectId}
         panels={allPanels}
@@ -1368,6 +1409,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           }
         }}
       />
+      </>
     )
   }
 
@@ -1377,6 +1419,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   if (layoutMode === 'gallery') {
     const selectedIdxForGallery = allPanels.findIndex((p) => p.id === selected?.id)
     return (
+      <>
+      {globalOverlaysNode}
       <div className="flex h-full flex-col">
         {/* Top toolbar — analyze + autogroup + layout toggle
             (2026-05-12: split into two rows — view toggle on top,
@@ -1700,6 +1744,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           </aside>
         </div>
       </div>
+      </>
     )
   }
 
@@ -2578,36 +2623,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         </div>
       ) : null}
 
-      {manualPanelOpen ? (
-        <V2ManualPanelModal
-          characters={characterRoster.map((c) => ({ id: c.id, name: c.name ?? '未命名角色' }))}
-          locations={locationRoster.map((l) => ({ id: l.id, name: l.name ?? '未命名場景' }))}
-          onSubmit={handleManualPanelSubmit}
-          onClose={() => setManualPanelOpen(false)}
-          isSubmitting={manualPanelSubmitting}
-          contextHint={
-            (storyboardsData?.storyboards?.length ?? 0) === 0
-              ? '本集還沒有分鏡組,送出時會自動建立第一組'
-              : undefined
-          }
-        />
-      ) : null}
-
-      {currentEpisodeId ? (
-        <StaleStoryboardCleanupModal
-          projectId={projectId}
-          episodeId={currentEpisodeId}
-          open={staleCleanupOpen}
-          onClose={() => setStaleCleanupOpen(false)}
-          onAfterDelete={() => {
-            // Force refetch of storyboards data so the timeline / multi-shot
-            // view drops the deleted panels immediately.
-            void queryClient.invalidateQueries({
-              queryKey: queryKeys.storyboards.all(currentEpisodeId),
-            })
-          }}
-        />
-      ) : null}
+      {globalOverlaysNode}
     </div>
   )
 }
