@@ -130,6 +130,18 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
         })
     : undefined
 
+  // 2026-05-13 — Option B 首幀鎖定 fields. Forwarded verbatim to
+  // runMultiShotBPath which switches to Kling 3.0 i2v single-shot
+  // when firstFrameImageUrl is present.
+  const firstFrameImageUrl =
+    typeof payload.firstFrameImageUrl === 'string' && payload.firstFrameImageUrl.trim()
+      ? payload.firstFrameImageUrl.trim()
+      : undefined
+  const lastFrameImageUrl =
+    typeof payload.lastFrameImageUrl === 'string' && payload.lastFrameImageUrl.trim()
+      ? payload.lastFrameImageUrl.trim()
+      : undefined
+
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
   }
@@ -204,6 +216,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(promptStyle ? { promptStyle } : {}),
       ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
       ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
+      ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
+      ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
     })
   }
 

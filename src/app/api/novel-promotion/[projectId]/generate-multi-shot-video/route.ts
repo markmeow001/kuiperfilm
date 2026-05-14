@@ -131,6 +131,56 @@ export const POST = apiHandler(async (
     locationOverrides = arr.length > 0 ? arr : undefined
   }
 
+  // 2026-05-13 — Option B "首幀鎖定" mode. When firstFrameImageUrl is
+  // present the worker switches to Kling 3.0 i2v single-shot path.
+  // Optional lastFrameImageUrl locks the ending pixel too. URLs must
+  // be HTTP(S); we don't try to validate they exist (worker will fail
+  // loudly if Tencent rejects them).
+  let firstFrameImageUrl: string | undefined
+  if (body.firstFrameImageUrl !== undefined) {
+    if (typeof body.firstFrameImageUrl !== 'string' || !body.firstFrameImageUrl.trim()) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'FIRST_FRAME_IMAGE_URL_INVALID',
+        field: 'firstFrameImageUrl',
+        details: { message: 'firstFrameImageUrl must be a non-empty string when provided' },
+      })
+    }
+    if (!/^https?:\/\//i.test(body.firstFrameImageUrl.trim())) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'FIRST_FRAME_IMAGE_URL_INVALID',
+        field: 'firstFrameImageUrl',
+        details: { message: 'firstFrameImageUrl must be an http(s) URL' },
+      })
+    }
+    firstFrameImageUrl = body.firstFrameImageUrl.trim()
+  }
+
+  let lastFrameImageUrl: string | undefined
+  if (body.lastFrameImageUrl !== undefined) {
+    if (typeof body.lastFrameImageUrl !== 'string' || !body.lastFrameImageUrl.trim()) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'LAST_FRAME_IMAGE_URL_INVALID',
+        field: 'lastFrameImageUrl',
+        details: { message: 'lastFrameImageUrl must be a non-empty string when provided' },
+      })
+    }
+    if (!/^https?:\/\//i.test(body.lastFrameImageUrl.trim())) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'LAST_FRAME_IMAGE_URL_INVALID',
+        field: 'lastFrameImageUrl',
+        details: { message: 'lastFrameImageUrl must be an http(s) URL' },
+      })
+    }
+    if (!firstFrameImageUrl) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'LAST_FRAME_REQUIRES_FIRST_FRAME',
+        field: 'lastFrameImageUrl',
+        details: { message: 'lastFrameImageUrl requires firstFrameImageUrl (Tencent VOD constraint)' },
+      })
+    }
+    lastFrameImageUrl = body.lastFrameImageUrl.trim()
+  }
+
   // Optional caller-supplied prompt for intelligence mode (Seedance-style
   // 5-element 15s segment). Worker still appends matched dialogue.
   let rawPrompt: string | undefined
@@ -268,6 +318,8 @@ export const POST = apiHandler(async (
       ...(promptStyle ? { promptStyle } : {}),
       ...(characterOverrides ? { characterOverrides } : {}),
       ...(locationOverrides ? { locationOverrides } : {}),
+      ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
+      ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
     },
     // 2026-05-01: include the panel set in the dedupe key. Without
     // this, every group on the same storyboard shared the same key
@@ -293,6 +345,8 @@ export const POST = apiHandler(async (
         m: multiShotMode ?? null,
         p: promptStyle ?? null,
         r: rawPrompt ?? null,
+        f1: firstFrameImageUrl ?? null,
+        f2: lastFrameImageUrl ?? null,
       })
       const hash = createHash('sha256').update(fingerprint).digest('hex').slice(0, 16)
       return `video_multi_shot:${storyboard.id}:${hash}`

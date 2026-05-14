@@ -46,7 +46,7 @@ import {
   waitExternalResult,
 } from '../utils'
 import { reportTaskProgress } from '../shared'
-import { buildDialogueDrivenDurations } from './speech-duration-estimator'
+import { buildDialogueDrivenDurations, estimatePanelSpeechSeconds } from './speech-duration-estimator'
 import { buildMultiKlingSplitPlan, MultiKlingChunkerError, type MultiKlingChunk } from './multi-kling-chunker'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import {
@@ -978,6 +978,32 @@ export async function runMultiShotBPath(params: {
    * collected scenes, doesn't add ones panels never referenced.
    */
   locationOverrides?: Array<{ locationId: string; viewName?: string }>
+  /**
+   * 2026-05-13 — Option B "首幀鎖定" mode (locked first frame).
+   *
+   * When set, the worker switches to Kling 3.0 / 3.0-Omni image-to-video
+   * SINGLE-shot path:
+   *   - FileInfos[0] = { Url: firstFrameImageUrl, Usage: 'FirstFrame' }
+   *   - LastFrameUrl = lastFrameImageUrl (when also set)
+   *   - multi_shot is dropped entirely (Tencent doc §3.9.3 / 3.9.1: the
+   *     "首尾帧 一镜到底" capability is mutually exclusive with multi_shot
+   *     in the third-party Tencent VOD path; the official Kling web UI
+   *     allows mixing but the API does not)
+   *   - Total duration: dialogue-driven if voice lines exist (clamped
+   *     3-15s), otherwise 5s default
+   *   - Single concatenated prompt built from all panel descriptions +
+   *     dialogue (so the locked frame still gets the narrative arc the
+   *     user wrote, just rendered as one continuous shot)
+   *
+   * UX intent: user picks a panel image (or uploads custom) to lock the
+   * opening frame for character/scene consistency. Optionally locks the
+   * ending frame too. Trades multi-shot capability for pixel-level
+   * identity guarantee — most useful for character intros, transitions,
+   * and reaction shots where Kling's free-form first-frame imagination
+   * tends to drift off-model.
+   */
+  firstFrameImageUrl?: string
+  lastFrameImageUrl?: string
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -993,9 +1019,9 @@ export async function runMultiShotBPath(params: {
   shotCount: number
   subjectCount: number
   path: 'B'
-  multiShotMode: 'intelligence' | 'customize'
+  multiShotMode: 'intelligence' | 'customize' | 'first_frame' | 'first_last_frame'
   durations?: number[]
-  promptSource?: 'panels' | 'raw' | 'seedance'
+  promptSource?: 'panels' | 'raw' | 'seedance' | 'first_frame'
   /**
    * Bindings actually used by Kling for this generation, grouped by
    * entity kind so the UI can render chips ("出场角色 / 场景") and
@@ -1036,7 +1062,11 @@ export async function runMultiShotBPath(params: {
     rawPrompt,
     characterOverrides,
     locationOverrides,
+    firstFrameImageUrl,
+    lastFrameImageUrl,
   } = params
+  const isFirstFrameLockMode =
+    typeof firstFrameImageUrl === 'string' && firstFrameImageUrl.length > 0
   const charOverrideById = new Map<string, string | undefined>()
   for (const o of characterOverrides ?? []) {
     if (typeof o.characterId === 'string' && o.characterId) {
@@ -1788,6 +1818,145 @@ export async function runMultiShotBPath(params: {
     const cleaned = normalizeVoiceLinesToDialogue(fallback, fallbackSpeaker)
     if (cleaned.length > 0) dialogueByPanel.set(panel.id, cleaned)
   }
+
+  // ──────── First-frame lock path (2026-05-13, Option B) ────────
+  //
+  // When caller passes firstFrameImageUrl, switch to Kling 3.0 / Omni
+  // image-to-video SINGLE-shot mode. The locked image becomes the
+  // exact opening pixel of the video; LastFrameUrl optionally locks
+  // the ending pixel too. multi_shot is dropped (Tencent VOD's third-
+  // party API treats 首尾帧 as 一镜到底 — mutually exclusive with
+  // multi_prompt). Chunker, dialogue-driven allocator, and the entire
+  // multi-shot dispatch path below are bypassed.
+  //
+  // Trade-off: user gets pixel-level character/scene consistency at
+  // the cost of multi-shot pacing. Best for character intros,
+  // reaction shots, and transition shots.
+  if (isFirstFrameLockMode) {
+    const storyboardId = validPanels[0].storyboardId
+    const isFirstLastFrame =
+      typeof lastFrameImageUrl === 'string' && lastFrameImageUrl.length > 0
+
+    // Single-shot prompt: reuse the existing combined-prompt builder
+    // (镜头N: …) so the narrative arc the user wrote still drives the
+    // motion through the locked frame. Substitutes character names →
+    // <<<image_N>>> tokens via nameToImageIndex when a SubjectInfos
+    // slot exists for that name.
+    const combinedPrompt = buildBPathCombinedPrompt(
+      validPanels,
+      dialogueByPanel,
+      nameToImageIndex,
+      unboundNames,
+    )
+    if (!combinedPrompt.trim()) {
+      throw new Error(
+        'MULTI_SHOT_PROMPT_EMPTY: every panel had empty videoPrompt + description (first-frame lock mode)',
+      )
+    }
+
+    // Duration: dialogue-driven if voice lines exist, else 5s default.
+    // Clamp 3-15s (Kling Omni hard limits).
+    let totalDuration = 5
+    if (dialogueByPanel.size > 0) {
+      let speechSeconds = 0
+      for (const lines of dialogueByPanel.values()) {
+        speechSeconds += estimatePanelSpeechSeconds(lines)
+      }
+      if (speechSeconds > 0) {
+        totalDuration = Math.max(3, Math.min(KLING_OMNI_MAX_TOTAL_DURATION, Math.ceil(speechSeconds)))
+      }
+    }
+
+    logger.info({
+      message: 'B path first-frame lock submit',
+      details: {
+        videoModel,
+        shotCount: validPanels.length,
+        hasLastFrame: isFirstLastFrame,
+        duration: totalDuration,
+        firstFrameImageUrl,
+        ...(isFirstLastFrame ? { lastFrameImageUrl } : {}),
+        promptLength: combinedPrompt.length,
+        dialogueLineCount: voiceLines.length,
+      },
+    })
+
+    await reportTaskProgress(job, 30, { stage: 'submit_generation_b_path_first_frame' })
+
+    // Tencent doc §3.9.3: in 首帧/首尾帧 mode aspect ratio is derived
+    // from the input frame (specifying it has no effect). Drop it.
+    //
+    // generateVideo signature: (userId, modelKey, imageUrl, options)
+    // — third positional `imageUrl` is the first-frame image URL; the
+    // tencent-vod generator places it as FileInfos[0]. Prompt rides
+    // inside options.prompt. Optional last frame goes through as
+    // options.lastFrameUrl (typed in TencentVODVideoOptions).
+    const firstFrameOptions: Record<string, unknown> = {
+      prompt: combinedPrompt,
+      duration: totalDuration,
+      ...(sound !== undefined ? { generateAudio: sound } : {}),
+      ...(isFirstLastFrame ? { lastFrameUrl: lastFrameImageUrl } : {}),
+      // referenceUsage 'FirstFrame' tells the generator to set
+      // FileInfos[0].Usage='FirstFrame' explicitly (matches Tencent
+      // doc §3.9.3 方式1 recommended pattern).
+      referenceUsage: 'FirstFrame',
+      outputComplianceCheck: 'Enabled',
+    }
+
+
+    const generateResult = await generateVideo(
+      userId,
+      videoModel,
+      firstFrameImageUrl,
+      firstFrameOptions as any,
+    )
+    if (!generateResult.success) {
+      throw new Error(generateResult.error || 'Tencent VOD first-frame submit failed')
+    }
+    const externalId =
+      typeof generateResult.externalId === 'string' ? generateResult.externalId.trim() : ''
+    if (!externalId) {
+      throw new Error('Tencent VOD first-frame returned no externalId')
+    }
+
+    const polled = await waitExternalResult(job, externalId, userId, {
+      progressStart: 35,
+      progressEnd: 90,
+    })
+
+    await assertTaskActive(job, 'persist_multi_shot_video_b_path_first_frame')
+    const cosKey = await uploadVideoSourceToCos(
+      polled.url,
+      isFirstLastFrame ? 'multi-shot-video-b-first-last' : 'multi-shot-video-b-first-frame',
+      storyboardId,
+    )
+
+    await reportTaskProgress(job, 95, { stage: 'persist' })
+    const update = buildMultiShotClipUpdate([cosKey])
+    await prisma.novelPromotionStoryboard.update({
+      where: { id: storyboardId },
+      data: update,
+    })
+
+    return {
+      storyboardId,
+      multiShotVideoUrl: cosKey,
+      multiShotClipUrls: [cosKey],
+      chunkCount: 1,
+      shotCount: validPanels.length,
+      subjectCount: subjectInfos.length,
+      path: 'B',
+      multiShotMode: isFirstLastFrame ? 'first_last_frame' : 'first_frame',
+      durations: [totalDuration],
+      promptSource: 'first_frame',
+      bindings: {
+        characters: activeCharacterBindings,
+        scenes: activeSceneBindings,
+        props: activePropBindings,
+      },
+    }
+  }
+  // ──────── End first-frame lock path ────────
 
   // Dialogue-driven duration allocation + chunked dispatch (2026-05-03).
   //

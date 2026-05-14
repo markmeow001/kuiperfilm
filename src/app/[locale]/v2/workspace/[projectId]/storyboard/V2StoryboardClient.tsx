@@ -1374,6 +1374,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             ) {
               body.panelDurations = overrides.panelDurations
             }
+            // 2026-05-13 — Option B 首幀鎖定. When set, worker switches
+            // to Kling 3.0 i2v single-shot path and drops multi_shot.
+            if (overrides.firstFrameImageUrl) {
+              body.firstFrameImageUrl = overrides.firstFrameImageUrl
+            }
+            if (overrides.lastFrameImageUrl) {
+              body.lastFrameImageUrl = overrides.lastFrameImageUrl
+            }
             const res = await fetch(
               `/api/novel-promotion/${projectId}/generate-multi-shot-video`,
               {

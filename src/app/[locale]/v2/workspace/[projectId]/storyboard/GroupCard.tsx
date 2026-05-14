@@ -78,6 +78,10 @@ interface PanelLike {
   // When present, buildInitialNarrative prefers these over srtSegment so
   // OS / voice-over lines can be tagged for off-camera rendering.
   voiceLines?: PanelVoiceLine[]
+  // 2026-05-13 — Generated panel image (storyboard image gen output).
+  // Used by 首幀鎖定 mode to default the first/last frame to existing
+  // panel images. Null when image gen hasn't run for this panel.
+  imageUrl?: string | null
 }
 
 interface CharacterAppearanceRef {
@@ -134,6 +138,13 @@ export interface GroupRegenOverrides {
   // multi-shot mode in the worker so each panel slice gets its own
   // duration anchor in Kling Omni's multi_prompt array.
   panelDurations?: number[]
+  // 2026-05-13 — Option B: 首幀鎖定 / 首尾鎖定 mode.
+  // When firstFrameImageUrl is set, worker switches to Kling 3.0 i2v
+  // single-shot path: FileInfos[Usage='FirstFrame'] + optional
+  // LastFrameUrl, drops multi_shot. Trades multi-shot for pixel-level
+  // character/scene consistency. lastFrameImageUrl requires firstFrameImageUrl.
+  firstFrameImageUrl?: string
+  lastFrameImageUrl?: string
 }
 
 interface GroupCardProps {
@@ -419,6 +430,23 @@ export function GroupCard({
   const [coldOpenMode, setColdOpenMode] = useState<ColdOpenMode>(
     isHookEligible ? 'auto' : 'off',
   )
+
+  // 2026-05-13 — Option B 首幀鎖定 (Locked First/Last Frame).
+  //
+  // Three modes:
+  //   'off'             — current multi-shot text-driven (default)
+  //   'first_frame'     — Kling 3.0 i2v with FileInfos[Usage='FirstFrame']
+  //                       of the first panel's image; single-shot output
+  //   'first_last_frame' — Above + LastFrameUrl from the last panel's image;
+  //                        single-shot interpolation between two pixel-locked
+  //                        frames
+  //
+  // The two locked-frame modes drop multi-shot capability for that group
+  // in exchange for pixel-level character/scene anchoring. Useful for
+  // character intros, transitions, and reaction shots where Kling's
+  // free-form first-frame imagination tends to drift off-model.
+  type FrameLockMode = 'off' | 'first_frame' | 'first_last_frame'
+  const [frameLockMode, setFrameLockMode] = useState<FrameLockMode>('off')
 
   // 2026-05-13 — upgraded narrative builder using the "五要素導演法"
   // structure (角色錨點 / 場景錨點 / 動作鏈 / 運鏡 / 整體視覺風格).
@@ -1026,6 +1054,21 @@ export function GroupCard({
     // not manually edited the textarea.
     const sendRaw =
       (narrativeDirty || coldOpenMode !== 'off') && trimmedNarrative.length > 0
+    // 2026-05-13 — Option B 首幀鎖定. When user enabled the lock, pull
+    // the first panel's image as FirstFrame and (when first_last_frame
+    // mode) the last panel's image as LastFrame. Worker switches to
+    // Kling 3.0 i2v single-shot when these are present.
+    let firstFrameImageUrl: string | undefined
+    let lastFrameImageUrl: string | undefined
+    if (frameLockMode !== 'off') {
+      const firstPanelImage = panels[0]?.imageUrl?.trim()
+      if (firstPanelImage) firstFrameImageUrl = firstPanelImage
+      if (frameLockMode === 'first_last_frame') {
+        const lastPanelImage = panels[panels.length - 1]?.imageUrl?.trim()
+        if (lastPanelImage) lastFrameImageUrl = lastPanelImage
+      }
+    }
+
     const overrides: GroupRegenOverrides = {
       // Three states:
       //   sendRaw=true              → rawPrompt only (intelligence mode, user override)
@@ -1046,6 +1089,8 @@ export function GroupCard({
         .map(([locationId, viewName]) =>
           viewName === null ? { locationId } : { locationId, viewName },
         ),
+      ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
+      ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
     }
     const result = await onRegenerate(ids, overrides)
     if (result.error) {
@@ -1307,6 +1352,38 @@ export function GroupCard({
                   <option value="modern">Modern (現代劇)</option>
                   <option value="period">Period (古裝/仙俠)</option>
                   <option value="action">Action (動作/災劫)</option>
+                </select>
+              </label>
+              {/* 2026-05-13 — Option B 首幀鎖定 toggle.
+                  When ON, this group renders as Kling 3.0 i2v single-shot
+                  (5-15s) using SHOT 01 image as FirstFrame, optionally
+                  SHOT N image as LastFrame. Drops multi-shot pacing for
+                  pixel-locked character/scene consistency.
+                  Disabled when SHOT 01 has no generated image. */}
+              <label
+                className={`flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider ${
+                  panels[0]?.imageUrl ? 'text-stone-400' : 'text-stone-700'
+                }`}
+                title={panels[0]?.imageUrl
+                  ? '首幀鎖定 - 用 SHOT 01 圖當首幀，選「首尾」會再用最後一鏡圖當尾幀。Kling 3.0 i2v 單鏡頭模式 (5-15s)，犧牲多鏡頭換像素級角色/場景一致。'
+                  : '首幀鎖定需要 SHOT 01 已產生圖片 — 先到時間軸/畫廊一鍵生圖'}
+              >
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                鎖幀
+                <select
+                  value={frameLockMode}
+                  onChange={(e) => {
+                    const next = e.target.value as FrameLockMode
+                    setFrameLockMode(next)
+                  }}
+                  disabled={!panels[0]?.imageUrl}
+                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <option value="off">Off (多鏡頭)</option>
+                  <option value="first_frame">首幀鎖定</option>
+                  <option value="first_last_frame" disabled={!panels[panels.length - 1]?.imageUrl}>
+                    首尾鎖定 {!panels[panels.length - 1]?.imageUrl ? '(需 SHOT N 有圖)' : ''}
+                  </option>
                 </select>
               </label>
               <label className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-400">
