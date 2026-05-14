@@ -124,15 +124,25 @@ export default function AdminUsagePage() {
     <div className="min-h-screen bg-stone-950 text-stone-200">
       <Navbar />
       <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <Link
+            href={`/${locale}/admin`}
+            className="font-mono text-[10px] tracking-wider text-stone-500 hover:text-amber-400"
+          >
+            ← 後台首頁
+          </Link>
+          <div className="flex items-center gap-1 rounded-md border border-stone-800/60 bg-stone-900/40 p-1">
+            <Link href={`/${locale}/admin/users`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-stone-400 hover:text-stone-200">使用者</Link>
+            <Link href={`/${locale}/admin/invites`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-stone-400 hover:text-stone-200">邀請碼</Link>
+            <Link href={`/${locale}/admin/projects`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-stone-400 hover:text-stone-200">所有專案</Link>
+            <Link href={`/${locale}/admin/runs`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-stone-400 hover:text-stone-200">失敗任務</Link>
+            <span className="rounded-sm bg-amber-500/15 px-3 py-1.5 font-medium text-xs text-amber-400">使用量</span>
+          </div>
+        </div>
+
+        <div className="mb-6 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <Link
-              href={`/${locale}/admin`}
-              className="font-mono text-[12px] uppercase tracking-wider text-stone-500 hover:text-stone-300"
-            >
-              ← Admin
-            </Link>
-            <h1 className="mt-2 font-fraunces text-2xl italic text-amber-500/90">
+            <h1 className="font-fraunces text-2xl italic text-amber-500/90">
               Per-User Usage
             </h1>
             <p className="mt-1 font-serif-cn text-sm text-stone-500">

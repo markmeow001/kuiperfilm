@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Navbar from '@/components/Navbar'
 
@@ -54,6 +55,8 @@ function inviteStatus(invite: InviteRow): 'used' | 'revoked' | 'expired' | 'usab
 
 export default function AdminInvitesPage() {
   const t = useTranslations('admin')
+  const routeParams = useParams<{ locale: string }>()
+  const locale = routeParams?.locale ?? 'zh'
   const [invites, setInvites] = useState<InviteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -165,21 +168,24 @@ export default function AdminInvitesPage() {
       <Navbar />
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex items-center justify-between gap-4">
-          <Link href="../" className="font-mono text-[10px] tracking-wider text-[var(--glass-text-secondary)] hover:text-amber-400">
+          <Link href={`/${locale}/admin`} className="font-mono text-[10px] tracking-wider text-[var(--glass-text-secondary)] hover:text-amber-400">
             ← 後台首頁
           </Link>
           <div className="flex items-center gap-1 rounded-md border border-[var(--glass-border)] bg-[var(--glass-tone-info-bg)]/30 p-1">
-            <Link href="../users" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+            <Link href={`/${locale}/admin/users`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
               使用者
             </Link>
             <span className="rounded-sm bg-[var(--glass-tone-info-fg)]/15 px-3 py-1.5 font-medium text-xs text-[var(--glass-tone-info-fg)]">
               邀請碼
             </span>
-            <Link href="../projects" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+            <Link href={`/${locale}/admin/projects`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
               所有專案
             </Link>
-            <Link href="../runs" className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+            <Link href={`/${locale}/admin/runs`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
               失敗任務
+            </Link>
+            <Link href={`/${locale}/admin/usage`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+              使用量
             </Link>
           </div>
         </div>
