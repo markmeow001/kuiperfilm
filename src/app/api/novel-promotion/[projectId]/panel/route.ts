@@ -50,6 +50,14 @@ export const POST = apiHandler(async (
     duration,
     videoPrompt,
     firstLastFramePrompt,
+    // 2026-05-13 — manual panel creation in multi-shot view needs to
+    // immediately appear as a new group (otherwise the new panel has
+    // multiShotGroupId=null and is invisible in the groups layout).
+    // Caller passes a fresh group id (e.g. `manual-<uuid>`) so the
+    // panel becomes its own 1-shot group; user can later use 自動切組
+    // to merge it into a larger group or pick the auto-derived layout.
+    multiShotGroupId,
+    multiShotGroupOrder,
   } = body
 
   if (!storyboardId) {
@@ -96,6 +104,12 @@ export const POST = apiHandler(async (
       duration: duration ?? null,
       videoPrompt: videoPrompt ?? null,
       firstLastFramePrompt: firstLastFramePrompt ?? null,
+      multiShotGroupId: typeof multiShotGroupId === 'string' && multiShotGroupId.length > 0
+        ? multiShotGroupId
+        : null,
+      multiShotGroupOrder: typeof multiShotGroupOrder === 'number'
+        ? multiShotGroupOrder
+        : null,
     }
   })
 

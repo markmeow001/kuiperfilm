@@ -839,6 +839,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         }
       }
 
+      // 2026-05-13 — assign a fresh multiShotGroupId so the new panel
+      // shows up immediately as its own group in the multi-shot view.
+      // Without this the panel lives in the storyboard but is invisible
+      // in the groups layout (which renders by multiShotGroupId only).
+      // User can later use 自動切組 to merge / reshuffle.
+      const manualGroupId = `manual-${
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      }`
+
       const created = (await createPanel.mutateAsync({
         storyboardId,
         description: draft.description,
@@ -847,6 +858,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           : null,
         location: draft.locationName,
         duration: draft.durationSeconds,
+        multiShotGroupId: manualGroupId,
+        multiShotGroupOrder: 0,
       })) as { panel?: { id?: string }; id?: string } | null
       const newPanelId =
         (created && (created.panel?.id ?? created.id ?? null)) || null
@@ -860,6 +873,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           },
         })
       }
+
+      // Force the storyboards query to refetch so the timeline / multi-
+      // shot view picks up the new panel + group immediately.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.storyboards.all(currentEpisodeId),
+      })
 
       setManualPanelOpen(false)
     } catch (err) {
