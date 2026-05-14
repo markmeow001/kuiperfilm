@@ -1268,7 +1268,7 @@ export function GroupCard({
         ) : null}
 
       <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-4">
+        <div className="col-span-12 lg:col-span-3">
           <MultiShotBindingsRail
             taskId={taskId}
             groupLabel={null}
@@ -1317,18 +1317,51 @@ export function GroupCard({
               under the player. See above. */}
         </div>
 
-        <div className="col-span-12 space-y-3 lg:col-span-8">
-          {/* Row 1: title + 重生敘事 button only — keeps the header
-              clean even when the right column is narrow.
-              Row 2 (below): 鉤子 / 鎖幀 / 时长 selects on their own
-              line, flex-wrap so they reflow on tight viewports. */}
+        <div className="col-span-12 space-y-3 lg:col-span-9">
+          {/* 2026-05-13 — Two-row header layout:
+              Row 1: 叙事提示词 title (left) + ↻ 重生敘事 button (right) —
+                     stays balanced even on narrow widths because it's
+                     just two short elements.
+              Row 2: 鉤子 / 鎖幀 / 时长 selects on their own dedicated row,
+                     left-aligned, flex-wrap so they overflow cleanly on
+                     tight viewports.
+              Earlier single-row layout caused the 3 selects to push the
+              重生敘事 button onto a third visual line, leaving 叙事提示词
+              awkwardly alone. */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               叙事提示词
               <span className="text-stone-500">· {narrativeDraft.length} 字</span>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* ↻ 重生敘事 — pinned right of the title row so it stays on
+                the SAME line as 叙事提示词 regardless of how wide the
+                Row 2 selects get. */}
+            <button
+              type="button"
+              disabled={!narrativeDirty}
+              onClick={() => {
+                const fresh = buildInitialNarrative()
+                setNarrativeDraft('')
+                setNarrativeDirty(false)
+                setNarrativeRegenFlash(true)
+                window.requestAnimationFrame(() => {
+                  setNarrativeDraft(fresh)
+                  if (narrativeTextareaRef.current) {
+                    narrativeTextareaRef.current.scrollTop = 0
+                  }
+                })
+                window.setTimeout(() => setNarrativeRegenFlash(false), 1500)
+              }}
+              title={narrativeDirty
+                ? '丟棄手動編輯,從分鏡描述+綁定角色/場景重新生成敘事'
+                : '敘事目前已是預設值 — 沒有手動編輯,不需要重生'}
+              className="whitespace-nowrap rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
+            >
+              ↻ 重生敘事
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
               {/* 2026-05-13 — ReelShort 8-second cold-open hook toggle.
                   Default ON (auto) for Episode 1 / Group 1. See
                   docs/design/reelshort-cold-open-evaluation.md. */}
@@ -1416,40 +1449,10 @@ export function GroupCard({
                   <option value={15}>15s</option>
                 </select>
               </label>
-              {/* 2026-05-13 — only enable 重生敘事 when narrative is dirty.
-                  When narrativeDirty=false the textarea already mirrors
-                  the auto-seeded buildInitialNarrative() output, so the
-                  button is a no-op (just produces a green flash with
-                  identical text — confusing UX). Keep it visible but
-                  disabled so the affordance stays discoverable. */}
-              <button
-                type="button"
-                disabled={!narrativeDirty}
-                onClick={() => {
-                  // Force a visible refresh even when the regenerated string
-                  // is byte-identical: clear first, then set on next tick so
-                  // React doesn't bail out via Object.is equality check.
-                  const fresh = buildInitialNarrative()
-                  setNarrativeDraft('')
-                  setNarrativeDirty(false)
-                  setNarrativeRegenFlash(true)
-                  window.requestAnimationFrame(() => {
-                    setNarrativeDraft(fresh)
-                    if (narrativeTextareaRef.current) {
-                      narrativeTextareaRef.current.scrollTop = 0
-                    }
-                  })
-                  window.setTimeout(() => setNarrativeRegenFlash(false), 1500)
-                }}
-                title={narrativeDirty
-                  ? '丟棄手動編輯,從分鏡描述+綁定角色/場景重新生成敘事'
-                  : '敘事目前已是預設值 — 沒有手動編輯,不需要重生'}
-                className="whitespace-nowrap rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
-              >
-                ↻ 重生敘事
-              </button>
+              {/* 重生敘事 button moved to Row 1 (next to 叙事提示词 title)
+                  to keep it visually anchored as the title's action,
+                  not buried at the end of the selects row. */}
             </div>
-          </div>
 
           {/* 2026-05-13 — synced colored overlay so user can see which
               characters / scenes are referenced in the narrative.
