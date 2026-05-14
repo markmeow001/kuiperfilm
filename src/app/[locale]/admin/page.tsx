@@ -275,6 +275,17 @@ export default function AdminLandingPage() {
               <div className="mt-5 font-mono text-[10px] tracking-wider text-stone-600">載入中…</div>
             )}
           </Link>
+
+          <Link
+            href={`/${locale}/admin/usage`}
+            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+          >
+            <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">05 · USAGE</div>
+            <div className="mt-2 font-serif-cn text-xl text-stone-100">使用量統計</div>
+            <p className="mt-2 font-fraunces text-sm italic text-stone-400">
+              每個使用者每週的圖片 / 視頻生成數,看誰在跑、誰在燒額度
+            </p>
+          </Link>
         </div>
 
         <div className="mt-12 rounded-sm border border-stone-800/60 bg-stone-900/20 p-5">
