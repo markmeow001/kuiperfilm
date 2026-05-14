@@ -1318,18 +1318,22 @@ export function GroupCard({
         </div>
 
         <div className="col-span-12 space-y-3 lg:col-span-8">
+          {/* Row 1: title + 重生敘事 button only — keeps the header
+              clean even when the right column is narrow.
+              Row 2 (below): 鉤子 / 鎖幀 / 时长 selects on their own
+              line, flex-wrap so they reflow on tight viewports. */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
+            <div className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               叙事提示词
               <span className="text-stone-500">· {narrativeDraft.length} 字</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               {/* 2026-05-13 — ReelShort 8-second cold-open hook toggle.
                   Default ON (auto) for Episode 1 / Group 1. See
                   docs/design/reelshort-cold-open-evaluation.md. */}
               <label
-                className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-400"
+                className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
                 title="冷開場鉤子模式 - 套用 ReelShort 4 鏡 × 2s 結構 (Wide → Medium → OTS → Slow push-in)。auto 模式由群組文字自動判斷風格。"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
@@ -1361,7 +1365,7 @@ export function GroupCard({
                   pixel-locked character/scene consistency.
                   Disabled when SHOT 01 has no generated image. */}
               <label
-                className={`flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider ${
+                className={`flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider ${
                   panels[0]?.imageUrl ? 'text-stone-400' : 'text-stone-700'
                 }`}
                 title={panels[0]?.imageUrl
@@ -1388,7 +1392,7 @@ export function GroupCard({
                   </option>
                 </select>
               </label>
-              <label className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-400">
+              <label className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400">
                 <AppIcon name="play" className="h-3 w-3" />
                 时长
                 <select
@@ -1440,7 +1444,7 @@ export function GroupCard({
                 title={narrativeDirty
                   ? '丟棄手動編輯,從分鏡描述+綁定角色/場景重新生成敘事'
                   : '敘事目前已是預設值 — 沒有手動編輯,不需要重生'}
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
+                className="whitespace-nowrap rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
               >
                 ↻ 重生敘事
               </button>
