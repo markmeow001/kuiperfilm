@@ -1,11 +1,17 @@
 /**
  * Admin: per-user weekly image/video task usage.
  *
- * GET /api/admin/per-user-task-usage?weeks=4
+ * GET /api/admin/per-user-task-usage?weeks=4&allUsers=1&format=csv
  *
  * Returns image/video generation counts per user per week (ISO weeks
  * starting Monday). Admin auth ONLY — no token bypass, since this
  * surface exposes cross-user activity counts.
+ *
+ * Query params:
+ *   weeks    1-12 (default 4)
+ *   allUsers '1' to include every non-archived user, even with zero
+ *            activity in the window (useful for bi-weekly reports)
+ *   format   'csv' returns text/csv; default 'json'
  *
  * Response shape:
  *   {
@@ -97,6 +103,8 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const weeks = Number.isFinite(weeksParam) && weeksParam > 0 && weeksParam <= 12
     ? Math.floor(weeksParam)
     : 4
+  const allUsers = url.searchParams.get('allUsers') === '1'
+  const format = (url.searchParams.get('format') ?? 'json').toLowerCase()
 
   const weekStarts = buildWeekStarts(weeks)
   const windowStart = weekStarts[0]
@@ -144,14 +152,31 @@ export const GET = apiHandler(async (request: NextRequest) => {
     userBuckets.set(r.user_id, ud)
   }
 
-  // Pull user metadata for the active users
-  const userMeta: UserRow[] = userIds.size > 0
+  // Pull user metadata. In allUsers mode, fetch every non-archived user
+  // so the report includes zero-activity rows (used by bi-weekly export).
+  // Otherwise restrict to users who had activity in the window.
+  const userMeta: UserRow[] = allUsers
+    ? await prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true, email: true, name: true, displayName: true, role: true },
+        orderBy: [{ role: 'asc' }, { email: 'asc' }],
+      })
+    : userIds.size > 0
     ? await prisma.user.findMany({
         where: { id: { in: Array.from(userIds) } },
         select: { id: true, email: true, name: true, displayName: true, role: true },
       })
     : []
   const metaMap = new Map(userMeta.map((u) => [u.id, u]))
+  // In allUsers mode, ensure every user gets a row (zero-fill the
+  // weekly buckets so the CSV/JSON has a stable shape).
+  if (allUsers) {
+    for (const u of userMeta) {
+      if (!userBuckets.has(u.id)) {
+        userBuckets.set(u.id, { weekly: new Map(), totalRuns: 0 })
+      }
+    }
+  }
 
   const users = Array.from(userBuckets.entries())
     .map(([userId, ud]) => {
@@ -190,13 +215,80 @@ export const GET = apiHandler(async (request: NextRequest) => {
     })
     .sort((a, b) => b.totalRuns - a.totalRuns)
 
+  const weekHeaders = weekStarts.map((ws) => ({
+    weekStart: ws,
+    weekEnd: addDays(ws, 6),
+  }))
+
+  if (format === 'csv') {
+    const csv = buildCsv(weekHeaders, users)
+    const filename = `kuiper-usage_${weekHeaders[0].weekStart}_to_${weekHeaders[weekHeaders.length - 1].weekEnd}.csv`
+    return new NextResponse(csv, {
+      status: 200,
+      headers: {
+        // BOM so Excel reads UTF-8 correctly when the file is opened
+        // directly without "Get Data > From Text" workflow.
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    })
+  }
+
   return NextResponse.json({
     success: true,
     generatedAt: new Date().toISOString(),
-    weeks: weekStarts.map((ws) => ({
-      weekStart: ws,
-      weekEnd: addDays(ws, 6),
-    })),
+    weeks: weekHeaders,
     users,
   })
 })
+
+interface CsvUser {
+  email: string | null
+  name: string | null
+  displayName: string | null
+  role: string
+  totals: { image: { completed: number; failed: number }; video: { completed: number; failed: number } }
+  weekly: Array<{
+    weekStart: string
+    image: { completed: number; failed: number }
+    video: { completed: number; failed: number }
+  }>
+}
+
+function csvField(v: string | number | null | undefined): string {
+  if (v === null || v === undefined) return ''
+  const s = String(v)
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  return s
+}
+
+function buildCsv(weeks: Array<{ weekStart: string; weekEnd: string }>, users: CsvUser[]): string {
+  const header: string[] = ['Email', 'Name', 'DisplayName', 'Role']
+  for (const w of weeks) {
+    const tag = `${w.weekStart}~${w.weekEnd}`
+    header.push(`${tag} 圖片成功`, `${tag} 圖片失敗`, `${tag} 視頻成功`, `${tag} 視頻失敗`)
+  }
+  header.push('合計圖片成功', '合計圖片失敗', '合計視頻成功', '合計視頻失敗')
+
+  const lines: string[] = [header.map(csvField).join(',')]
+  for (const u of users) {
+    const row: Array<string | number | null> = [
+      u.email,
+      u.name,
+      u.displayName,
+      u.role,
+    ]
+    for (const w of u.weekly) {
+      row.push(w.image.completed, w.image.failed, w.video.completed, w.video.failed)
+    }
+    row.push(
+      u.totals.image.completed,
+      u.totals.image.failed,
+      u.totals.video.completed,
+      u.totals.video.failed,
+    )
+    lines.push(row.map(csvField).join(','))
+  }
+  // BOM + CRLF so Excel on Windows / macOS treats it as UTF-8 CSV.
+  return '﻿' + lines.join('\r\n') + '\r\n'
+}

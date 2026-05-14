@@ -61,15 +61,15 @@ function bucketToCell(image: Bucket, video: Bucket): React.ReactNode {
   return (
     <div className="flex flex-col gap-0.5 text-[12px] leading-tight">
       <div>
-        <span className="text-amber-400">🖼 {image.completed}</span>
+        <span className="text-amber-400">圖 {image.completed}</span>
         {image.failed > 0 ? (
-          <span className="ml-1 text-rose-500/80">✗{image.failed}</span>
+          <span className="ml-1 text-rose-500/80">失 {image.failed}</span>
         ) : null}
       </div>
       <div>
-        <span className="text-cyan-400">🎬 {video.completed}</span>
+        <span className="text-cyan-400">視 {video.completed}</span>
         {video.failed > 0 ? (
-          <span className="ml-1 text-rose-500/80">✗{video.failed}</span>
+          <span className="ml-1 text-rose-500/80">失 {video.failed}</span>
         ) : null}
       </div>
     </div>
@@ -172,8 +172,15 @@ export default function AdminUsagePage() {
               disabled={loading}
               className="rounded-sm border border-stone-800 px-3 py-1.5 font-mono text-xs text-stone-400 hover:border-stone-700 disabled:opacity-50"
             >
-              {loading ? '…' : '↻ 刷新'}
+              {loading ? '...' : '刷新'}
             </button>
+            <a
+              href="/api/admin/per-user-task-usage?weeks=2&allUsers=1&format=csv"
+              className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-xs text-amber-400 hover:bg-amber-500/20"
+              download
+            >
+              下載雙週報表 CSV
+            </a>
           </div>
         </div>
 
