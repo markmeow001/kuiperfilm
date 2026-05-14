@@ -344,6 +344,14 @@ model NovelPromotionProject {
   // Lets the picker UI highlight the active preset across reloads
   // without having to fuzzy-match on the prompt text.
   stylePresetKey       String?
+  // Phase C (2026-05-13) — curated VisualStyle library selection.
+  // Layers TEXT-based style anchor on top of existing styleProfile
+  // image-based pipeline. Both can coexist: styleProfile pins visual
+  // identity via Tencent CustomElement; visualStyleId injects the
+  // 29-style curated text anchor + lighting preset.
+  // NULL = legacy behaviour (no text anchor from library).
+  visualStyleId        String?
+  lightingPresetId     String?
   characterModel       String? // 用户配置的角色图片模型
   locationModel        String? // 用户配置的场景图片模型
   storyboardModel      String? // 用户配置的分镜图片模型

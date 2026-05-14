@@ -60,6 +60,12 @@ import {
   pickStyleReference,
   resolvePresetKeyByPositivePrompt,
 } from '@/lib/style-profile/style-reference-picker'
+import {
+  buildVisualStylePrefix,
+  buildVisualStyleSuffix,
+  resolveProjectVisualStyle,
+  type ResolvedProjectStyle,
+} from '@/lib/style-library'
 
 interface BPathPanel {
   id: string
@@ -1162,6 +1168,31 @@ export async function runMultiShotBPath(params: {
     })
   }
 
+  // Phase C (2026-05-13) — text-based style anchor from curated VisualStyle
+  // library. Independent of styleRefBinding above: the binding pins visual
+  // identity via image, this prepends Kling-tested style descriptors to
+  // each per-shot prompt. Both layers stack when present. NULL projects
+  // (no library selection yet) skip silently.
+  let projectVisualStyle: ResolvedProjectStyle | null = null
+  try {
+    projectVisualStyle = await resolveProjectVisualStyle(prisma, projectId)
+    if (projectVisualStyle) {
+      logger.info({
+        message: 'curated visual style resolved',
+        details: {
+          styleId: projectVisualStyle.style.id,
+          styleNameZh: projectVisualStyle.style.nameZh,
+          lightingId: projectVisualStyle.lighting?.id ?? null,
+        },
+      })
+    }
+  } catch (err) {
+    logger.warn({
+      message: 'curated visual style resolution failed; skipping text style anchor',
+      details: { error: err instanceof Error ? err.message : String(err) },
+    })
+  }
+
   // Phase 11.4 / multi-appearance: pre-load EpisodeCharacter bindings
   // for the storyboard's episode so per-character costume overrides
   // apply to multi-shot generation too. All selected panels live under
@@ -2215,13 +2246,19 @@ export async function runMultiShotBPath(params: {
         : `<<<image_${styleRefBinding.slot}>>>`
       return ` (visual style matches ${refToken}: live-action photography, NOT animation, NOT CG, NOT 3D render)`
     })()
+    // Phase C — text-based curated style anchor wraps the user body so
+    // Kling sees: <styleAnchor + lighting>. <body>. <visualModifiers>.
+    // <image-binding suffix>. Ordering follows Kling 3.0 official guidance.
+    const visualStylePrefix = buildVisualStylePrefix(projectVisualStyle)
+    const visualStyleSuffix = buildVisualStyleSuffix(projectVisualStyle)
+    const wrap = (body: string) => `${visualStylePrefix}${body}${visualStyleSuffix}${styleSuffix}`
     const multiPromptResolved = useElementListPath
       ? multiPrompt.map((mp) => ({
           ...mp,
-          prompt: `${rewriteImageRefsToElementRefs(mp.prompt)}${styleSuffix}`,
+          prompt: wrap(rewriteImageRefsToElementRefs(mp.prompt)),
         }))
-      : (styleSuffix
-        ? multiPrompt.map((mp) => ({ ...mp, prompt: `${mp.prompt}${styleSuffix}` }))
+      : (visualStylePrefix || visualStyleSuffix || styleSuffix
+        ? multiPrompt.map((mp) => ({ ...mp, prompt: wrap(mp.prompt) }))
         : multiPrompt)
     generateOptions = {
       prompt: placeholderPrompt,

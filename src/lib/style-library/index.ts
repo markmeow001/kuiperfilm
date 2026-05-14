@@ -44,3 +44,10 @@ export {
   type BuildVodAigcRequestOptions,
   type BuildVclmRequestOptions,
 } from './prompt-builder'
+export {
+  resolveProjectVisualStyle,
+  buildVisualStylePrefix,
+  buildVisualStyleSuffix,
+  buildVisualStyleNegative,
+  type ResolvedProjectStyle,
+} from './loader'
