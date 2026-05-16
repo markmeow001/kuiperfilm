@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { headers as readHeaders } from 'next/headers'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { isErrorResponse, requireAdminAuth } from '@/lib/api-auth'
 import { apiHandler } from '@/lib/api-errors'
 
@@ -91,8 +92,14 @@ export const GET = apiHandler(async (request: NextRequest) => {
   }
 
   // Daily breakdown via raw SQL — Prisma groupBy doesn't do DATE().
-  const userClause = userIdFilter ? `AND userId = '${userIdFilter.replace(/'/g, '')}'` : ''
-  const daily = (await prisma.$queryRawUnsafe<DailyRow[]>(`
+  // Use Prisma.sql tagged template so userIdFilter goes through the driver's
+  // parameter binding (safe). Prior version interpolated `${userIdFilter}`
+  // directly with only a single-quote strip, which is the textbook
+  // anti-pattern for SQL injection — see /cso F2 (2026-05-16).
+  const userClause = userIdFilter
+    ? Prisma.sql`AND userId = ${userIdFilter}`
+    : Prisma.empty
+  const daily = (await prisma.$queryRaw<DailyRow[]>(Prisma.sql`
     SELECT
       DATE(createdAt) AS day,
       SUM(CASE WHEN type LIKE 'image_%' AND status='completed' THEN 1 ELSE 0 END) AS img_ok,
@@ -100,12 +107,12 @@ export const GET = apiHandler(async (request: NextRequest) => {
       SUM(CASE WHEN type LIKE 'video_%' AND status='completed' THEN 1 ELSE 0 END) AS vid_ok,
       SUM(CASE WHEN type LIKE 'video_%' AND status='failed' THEN 1 ELSE 0 END) AS vid_fail
     FROM tasks
-    WHERE createdAt >= ?
+    WHERE createdAt >= ${since}
       AND (type LIKE 'image_%' OR type LIKE 'video_%')
       ${userClause}
     GROUP BY day
     ORDER BY day DESC
-  `, since)).map((r) => ({
+  `)).map((r) => ({
     day: toDayString(r.day),
     img_ok: toNum(r.img_ok),
     img_fail: toNum(r.img_fail),
