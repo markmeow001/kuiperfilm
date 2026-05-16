@@ -16,6 +16,16 @@
 			read_timeout 15m
 			write_timeout 15m
 		}
+		# 2026-05-16: hold connect-refused requests through the
+		# kuiper-app container restart window (typical deploy is
+		# ~15-30s while next.js boots). Without this, every page
+		# polling /api/tasks during a deploy gets 5-15 × 502 in the
+		# browser console. Caddy only retries idempotent methods
+		# (GET/HEAD/OPTIONS) by default, so POST mutations are
+		# unaffected. Cap at 20s so a genuinely dead upstream still
+		# surfaces a 502 in reasonable time.
+		lb_try_duration 20s
+		lb_try_interval 500ms
 		# Pass through real client IP so rate limiting / logging see it.
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-For {remote_host}
