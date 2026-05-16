@@ -23,10 +23,27 @@ describe('EPISODE_STORYBOARD_MUTATION_TYPES (F-QA-2 root cause)', () => {
     expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.CLIPS_BUILD)).toBe(true)
   })
 
-  it('excludes per-panel image/video tasks (they target individual rows, not the graph)', () => {
+  it('includes regenerate_storyboard_text (deletes all panels of a storyboard)', () => {
+    expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)).toBe(true)
+  })
+
+  it('includes insert_panel (reindexes panels of a storyboard)', () => {
+    expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.INSERT_PANEL)).toBe(true)
+  })
+
+  it('excludes per-panel image/video tasks (they update individual fields like imageUrl, not the graph)', () => {
     expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.IMAGE_PANEL)).toBe(false)
     expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.VIDEO_PANEL)).toBe(false)
     expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.VOICE_LINE)).toBe(false)
+    expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.PANEL_VARIANT)).toBe(false)
+  })
+
+  it('excludes analyze_novel (writes characters/locations, never touches the panel graph)', () => {
+    expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.ANALYZE_NOVEL)).toBe(false)
+  })
+
+  it('excludes episode_split_llm (read-only — produces JSON output, persistence elsewhere)', () => {
+    expect(EPISODE_STORYBOARD_MUTATION_TYPES.has(TASK_TYPE.EPISODE_SPLIT_LLM)).toBe(false)
   })
 })
 
@@ -47,20 +64,38 @@ describe('episodeConflictGroupForType', () => {
 })
 
 describe('conflictingTaskTypesForType', () => {
-  it('script_to_storyboard_run conflicts with clips_build (not itself — dedupeKey already handles that)', () => {
+  it('script_to_storyboard_run conflicts with the other 3 group members, not itself', () => {
     const conflicts = conflictingTaskTypesForType(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
     expect(conflicts).toContain(TASK_TYPE.CLIPS_BUILD)
+    expect(conflicts).toContain(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
+    expect(conflicts).toContain(TASK_TYPE.INSERT_PANEL)
     expect(conflicts).not.toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
   })
 
-  it('clips_build conflicts with script_to_storyboard_run (symmetric)', () => {
+  it('clips_build conflicts with the other 3 group members (symmetric)', () => {
     const conflicts = conflictingTaskTypesForType(TASK_TYPE.CLIPS_BUILD)
     expect(conflicts).toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
-    expect(conflicts).not.toContain(TASK_TYPE.CLIPS_BUILD)
+    expect(conflicts).toContain(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
+    expect(conflicts).toContain(TASK_TYPE.INSERT_PANEL)
+  })
+
+  it('regenerate_storyboard_text conflicts with the other 3 group members', () => {
+    const conflicts = conflictingTaskTypesForType(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
+    expect(conflicts).toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
+    expect(conflicts).toContain(TASK_TYPE.CLIPS_BUILD)
+    expect(conflicts).toContain(TASK_TYPE.INSERT_PANEL)
+  })
+
+  it('insert_panel conflicts with the other 3 group members', () => {
+    const conflicts = conflictingTaskTypesForType(TASK_TYPE.INSERT_PANEL)
+    expect(conflicts).toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
+    expect(conflicts).toContain(TASK_TYPE.CLIPS_BUILD)
+    expect(conflicts).toContain(TASK_TYPE.REGENERATE_STORYBOARD_TEXT)
   })
 
   it('returns empty array for tasks outside any group', () => {
     expect(conflictingTaskTypesForType(TASK_TYPE.IMAGE_PANEL)).toEqual([])
+    expect(conflictingTaskTypesForType(TASK_TYPE.PANEL_VARIANT)).toEqual([])
   })
 })
 

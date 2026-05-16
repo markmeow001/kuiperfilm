@@ -52,15 +52,14 @@ describe('assertNoEpisodeConflict', () => {
   it('queries the right where clause for storyboard-graph tasks', async () => {
     findFirstMock.mockResolvedValue(null)
     await assertNoEpisodeConflict({ episodeId: 'ep-1', type: TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN })
-    expect(findFirstMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          episodeId: 'ep-1',
-          type: { in: [TASK_TYPE.CLIPS_BUILD] },
-          status: { in: [TASK_STATUS.QUEUED, TASK_STATUS.PROCESSING] },
-        }),
-      }),
+    expect(findFirstMock).toHaveBeenCalledTimes(1)
+    const call = findFirstMock.mock.calls[0]?.[0] as { where: { type: { in: string[] }; status: { in: string[] }; episodeId: string } }
+    expect(call.where.episodeId).toBe('ep-1')
+    expect(call.where.status).toEqual({ in: [TASK_STATUS.QUEUED, TASK_STATUS.PROCESSING] })
+    expect(call.where.type.in).toEqual(
+      expect.arrayContaining([TASK_TYPE.CLIPS_BUILD, TASK_TYPE.REGENERATE_STORYBOARD_TEXT, TASK_TYPE.INSERT_PANEL]),
     )
+    expect(call.where.type.in).not.toContain(TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN)
   })
 
   it('throws CONFLICT when an active clips_build blocks script_to_storyboard_run', async () => {

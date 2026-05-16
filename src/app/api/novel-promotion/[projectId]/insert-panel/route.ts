@@ -6,6 +6,7 @@ import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildDefaultTaskBillingInfo } from '@/lib/billing'
 import { getProjectModelConfig } from '@/lib/config-service'
+import { prisma } from '@/lib/prisma'
 
 export const POST = apiHandler(async (
   request: NextRequest,
@@ -27,6 +28,19 @@ export const POST = apiHandler(async (
     })
   }
 
+  // Look up the parent episodeId so the episode-level conflict guard
+  // (src/lib/task/episode-conflict-matrix.ts) can refuse this task
+  // when a concurrent script_to_storyboard_run / clips_build /
+  // regenerate_storyboard_text is mutating the same episode's panel
+  // graph.
+  const storyboardRef = await prisma.novelPromotionStoryboard.findUnique({
+    where: { id: storyboardId },
+    select: { episodeId: true },
+  })
+  if (!storyboardRef) {
+    throw new ApiError('NOT_FOUND', { message: 'storyboard not found' })
+  }
+
   const projectModelConfig = await getProjectModelConfig(projectId, session.user.id)
   const billingPayload = { ...body, ...(projectModelConfig.analysisModel ? { analysisModel: projectModelConfig.analysisModel } : {}) }
 
@@ -35,6 +49,7 @@ export const POST = apiHandler(async (
     locale,
     requestId: getRequestId(request),
     projectId,
+    episodeId: storyboardRef.episodeId,
     type: TASK_TYPE.INSERT_PANEL,
     targetType: 'NovelPromotionStoryboard',
     targetId: storyboardId,

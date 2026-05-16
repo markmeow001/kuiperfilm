@@ -35,10 +35,25 @@ import { TASK_TYPE, type TaskType } from './types'
  * Set of task types that mutate an episode's storyboard / panel
  * graph. Any two of these targeting the same episodeId at the same
  * time can corrupt each other's writes.
+ *
+ *   - script_to_storyboard_run: deletes + recreates storyboards +
+ *     panels for the whole episode, then writes voice lines
+ *     referencing those panel IDs.
+ *   - clips_build: deletes + recreates novelPromotionClip rows for
+ *     the episode (storyboards FK on clipId → cascade deletes).
+ *   - regenerate_storyboard_text: deletes ALL panels of one
+ *     storyboard and recreates them with new text.
+ *   - insert_panel: reindexes existing panels (panelIndex shifts)
+ *     and inserts a new panel into one storyboard.
+ *
+ * All four can step on each other for the same episode. The matrix
+ * is symmetric: each member conflicts with every other member.
  */
 export const EPISODE_STORYBOARD_MUTATION_TYPES: ReadonlySet<TaskType> = new Set([
   TASK_TYPE.SCRIPT_TO_STORYBOARD_RUN,
   TASK_TYPE.CLIPS_BUILD,
+  TASK_TYPE.REGENERATE_STORYBOARD_TEXT,
+  TASK_TYPE.INSERT_PANEL,
 ])
 
 export type EpisodeConflictGroup = 'storyboard-graph'
