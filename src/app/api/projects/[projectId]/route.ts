@@ -7,6 +7,15 @@ import { logProjectAction } from '@/lib/logging/semantic'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
+// Public-safe User projection — never leak password/email/lastLoginAt to
+// clients. Default `include: { user: true }` would dump the full row.
+const PUBLIC_USER_SELECT = {
+  id: true,
+  name: true,
+  displayName: true,
+  role: true,
+} as const
+
 // GET - 获取项目详情
 export const GET = apiHandler(async (
   request: NextRequest,
@@ -22,7 +31,7 @@ export const GET = apiHandler(async (
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
-      user: true
+      user: { select: PUBLIC_USER_SELECT }
     }
   })
 
@@ -61,7 +70,7 @@ export const PATCH = apiHandler(async (
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { user: true }
+    include: { user: { select: PUBLIC_USER_SELECT } }
   })
 
   if (!project) {
@@ -194,7 +203,7 @@ export const DELETE = apiHandler(async (
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { user: true }
+    include: { user: { select: PUBLIC_USER_SELECT } }
   })
 
   if (!project) {

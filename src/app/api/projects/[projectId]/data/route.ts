@@ -6,6 +6,14 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { applyAdminFallbackToNovelPromotionProject } from '@/lib/multi-user/preference-inheritance'
 
+// Public-safe User projection — never leak password/email/lastLoginAt.
+const PUBLIC_USER_SELECT = {
+  id: true,
+  name: true,
+  displayName: true,
+  role: true,
+} as const
+
 /**
  * 统一的项目数据加载API
  * 返回项目基础信息、全局配置、全局资产和剧集列表
@@ -24,7 +32,7 @@ export const GET = apiHandler(async (
   // 获取基础项目信息
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { user: true }
+    include: { user: { select: PUBLIC_USER_SELECT } }
   })
 
   if (!project) {
