@@ -253,6 +253,35 @@ export const POST = apiHandler(async (
     panelDurations = arr
   }
 
+  // Phase E (2026-05-15) — per-group curated style override.
+  // Optional, sentinel by absence: when provided, wins over
+  // project.visualStyleId in the worker's resolveProjectVisualStyle.
+  // Cap at 64 chars to mirror the project-level zod schema; empty
+  // strings ignored (treated as not-provided).
+  function readOptionalStyleId(field: 'visualStyleId' | 'lightingPresetId'): string | undefined {
+    const raw = body[field]
+    if (raw === undefined) return undefined
+    if (typeof raw !== 'string') {
+      throw new ApiError('INVALID_PARAMS', {
+        code: `${field.toUpperCase()}_INVALID`,
+        field,
+        details: { message: `${field} must be a string when provided` },
+      })
+    }
+    const trimmed = raw.trim()
+    if (trimmed.length === 0) return undefined
+    if (trimmed.length > 64) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: `${field.toUpperCase()}_TOO_LONG`,
+        field,
+        details: { length: trimmed.length, max: 64 },
+      })
+    }
+    return trimmed
+  }
+  const visualStyleId = readOptionalStyleId('visualStyleId')
+  const lightingPresetId = readOptionalStyleId('lightingPresetId')
+
   // Verify all panels exist and have imageUrl
   const panels = await prisma.novelPromotionPanel.findMany({
     where: { id: { in: panelIds } },
@@ -320,6 +349,8 @@ export const POST = apiHandler(async (
       ...(locationOverrides ? { locationOverrides } : {}),
       ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
       ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
+      ...(visualStyleId ? { visualStyleId } : {}),
+      ...(lightingPresetId ? { lightingPresetId } : {}),
     },
     // 2026-05-01: include the panel set in the dedupe key. Without
     // this, every group on the same storyboard shared the same key
@@ -347,6 +378,8 @@ export const POST = apiHandler(async (
         r: rawPrompt ?? null,
         f1: firstFrameImageUrl ?? null,
         f2: lastFrameImageUrl ?? null,
+        vs: visualStyleId ?? null,
+        lp: lightingPresetId ?? null,
       })
       const hash = createHash('sha256').update(fingerprint).digest('hex').slice(0, 16)
       return `video_multi_shot:${storyboard.id}:${hash}`

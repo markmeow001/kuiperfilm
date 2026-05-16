@@ -63,6 +63,8 @@ import {
 import {
   buildVisualStylePrefix,
   buildVisualStyleSuffix,
+  getLightingSafe,
+  getStyleSafe,
   resolveProjectVisualStyle,
   type ResolvedProjectStyle,
 } from '@/lib/style-library'
@@ -1010,6 +1012,13 @@ export async function runMultiShotBPath(params: {
    */
   firstFrameImageUrl?: string
   lastFrameImageUrl?: string
+  /**
+   * Phase E (2026-05-15) — per-group curated style override.
+   * Wins over project.visualStyleId in resolveProjectVisualStyle.
+   * Empty / missing = inherit project default.
+   */
+  visualStyleId?: string
+  lightingPresetId?: string
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -1070,6 +1079,8 @@ export async function runMultiShotBPath(params: {
     locationOverrides,
     firstFrameImageUrl,
     lastFrameImageUrl,
+    visualStyleId: visualStyleIdOverride,
+    lightingPresetId: lightingPresetIdOverride,
   } = params
   const isFirstFrameLockMode =
     typeof firstFrameImageUrl === 'string' && firstFrameImageUrl.length > 0
@@ -1173,18 +1184,47 @@ export async function runMultiShotBPath(params: {
   // identity via image, this prepends Kling-tested style descriptors to
   // each per-shot prompt. Both layers stack when present. NULL projects
   // (no library selection yet) skip silently.
+  //
+  // Phase E (2026-05-15) — caller can override per-group via
+  // visualStyleIdOverride / lightingPresetIdOverride. Override path
+  // skips the DB lookup entirely; bare lookup runs only when no
+  // override was provided.
   let projectVisualStyle: ResolvedProjectStyle | null = null
   try {
-    projectVisualStyle = await resolveProjectVisualStyle(prisma, projectId)
-    if (projectVisualStyle) {
-      logger.info({
-        message: 'curated visual style resolved',
-        details: {
-          styleId: projectVisualStyle.style.id,
-          styleNameZh: projectVisualStyle.style.nameZh,
-          lightingId: projectVisualStyle.lighting?.id ?? null,
-        },
-      })
+    if (visualStyleIdOverride) {
+      const style = getStyleSafe(visualStyleIdOverride)
+      if (style) {
+        const lighting = lightingPresetIdOverride ? getLightingSafe(lightingPresetIdOverride) : null
+        projectVisualStyle = { style, lighting }
+        logger.info({
+          message: 'curated visual style resolved (per-group override)',
+          details: {
+            styleId: style.id,
+            styleNameZh: style.nameZh,
+            lightingId: lighting?.id ?? null,
+            source: 'override',
+          },
+        })
+      } else {
+        logger.warn({
+          message: 'per-group visualStyleId override not in catalog; falling back to project default',
+          details: { visualStyleIdOverride },
+        })
+      }
+    }
+    if (!projectVisualStyle) {
+      projectVisualStyle = await resolveProjectVisualStyle(prisma, projectId)
+      if (projectVisualStyle) {
+        logger.info({
+          message: 'curated visual style resolved',
+          details: {
+            styleId: projectVisualStyle.style.id,
+            styleNameZh: projectVisualStyle.style.nameZh,
+            lightingId: projectVisualStyle.lighting?.id ?? null,
+            source: 'project',
+          },
+        })
+      }
     }
   } catch (err) {
     logger.warn({

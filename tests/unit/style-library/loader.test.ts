@@ -3,6 +3,8 @@ import {
   buildVisualStyleNegative,
   buildVisualStylePrefix,
   buildVisualStyleSuffix,
+  getLightingSafe,
+  getStyleSafe,
   resolveProjectVisualStyle,
 } from '@/lib/style-library/loader'
 
@@ -88,5 +90,27 @@ describe('build helpers', () => {
     const neg = buildVisualStyleNegative(out)
     expect(neg).toContain('animation')
     expect(neg.split(',').length).toBeGreaterThan(1)
+  })
+})
+
+describe('safe lookups (Phase E override path)', () => {
+  it('getStyleSafe returns the entry for a known id', () => {
+    const out = getStyleSafe('cinematic_realism')
+    expect(out).not.toBeNull()
+    expect(out!.nameZh).toBe('院線寫實')
+  })
+
+  it('getStyleSafe returns null for an unknown id (no throw)', () => {
+    expect(getStyleSafe('not_a_real_style')).toBeNull()
+  })
+
+  it('getLightingSafe returns the entry for a known id', () => {
+    const out = getLightingSafe('golden_hour')
+    expect(out).not.toBeNull()
+    expect(out!.id).toBe('golden_hour')
+  })
+
+  it('getLightingSafe returns null for an unknown id (no throw)', () => {
+    expect(getLightingSafe('not_a_real_lighting')).toBeNull()
   })
 })

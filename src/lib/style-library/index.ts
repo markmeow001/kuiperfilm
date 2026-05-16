@@ -49,5 +49,7 @@ export {
   buildVisualStylePrefix,
   buildVisualStyleSuffix,
   buildVisualStyleNegative,
+  getStyleSafe,
+  getLightingSafe,
   type ResolvedProjectStyle,
 } from './loader'

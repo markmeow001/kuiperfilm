@@ -21,6 +21,7 @@ import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
 import { LocationViewPickerModal } from './LocationViewPickerModal'
 import { NarrativeHighlighter } from './NarrativeHighlighter'
+import { visualStyles } from '@/lib/style-library'
 import {
   useMultiShotTask,
   type MultiShotCharacterBinding,
@@ -145,6 +146,14 @@ export interface GroupRegenOverrides {
   // character/scene consistency. lastFrameImageUrl requires firstFrameImageUrl.
   firstFrameImageUrl?: string
   lastFrameImageUrl?: string
+  // Phase E (2026-05-15) — per-group curated style override. When set,
+  // wins over project.visualStyleId. Empty string / undefined = inherit
+  // project default (no override). Use a real id to force a specific
+  // style on this group only — e.g. switch one group to "韓劇" while the
+  // rest of the project stays "院線寫實". lightingPresetId follows the
+  // same omit-or-id convention.
+  visualStyleId?: string
+  lightingPresetId?: string
 }
 
 interface GroupCardProps {
@@ -447,6 +456,24 @@ export function GroupCard({
   // free-form first-frame imagination tends to drift off-model.
   type FrameLockMode = 'off' | 'first_frame' | 'first_last_frame'
   const [frameLockMode, setFrameLockMode] = useState<FrameLockMode>('off')
+
+  // Phase E (2026-05-15) — per-group curated visual style override.
+  // Sentinel '__inherit__' (default) sends nothing → worker uses
+  // project.visualStyleId (Phase B/C plumbing). A real styleId wins
+  // over the project default for this group's regenerate only.
+  const STYLE_INHERIT = '__inherit__'
+  const [visualStyleOverride, setVisualStyleOverride] = useState<string>(STYLE_INHERIT)
+  const sortedStyleOptions = useMemo(
+    () =>
+      visualStyles
+        .filter((s) => s.isActive !== false)
+        .sort((a, b) =>
+          a.category === b.category
+            ? a.displayOrder - b.displayOrder
+            : a.category.localeCompare(b.category),
+        ),
+    [],
+  )
 
   // 2026-05-13 — upgraded narrative builder using the "五要素導演法"
   // structure (角色錨點 / 場景錨點 / 動作鏈 / 運鏡 / 整體視覺風格).
@@ -1091,6 +1118,9 @@ export function GroupCard({
         ),
       ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
       ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
+      ...(visualStyleOverride !== STYLE_INHERIT
+        ? { visualStyleId: visualStyleOverride }
+        : {}),
     }
     const result = await onRegenerate(ids, overrides)
     if (result.error) {
@@ -1447,6 +1477,25 @@ export function GroupCard({
                   <option value={5}>5s</option>
                   <option value={10}>10s</option>
                   <option value={15}>15s</option>
+                </select>
+              </label>
+              <label
+                className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
+                title="選一個風格會覆蓋此組的專案預設 (visualStyleId)。Worker 在 multi_prompt 每段 prompt 前後注入該風格的 styleAnchor + visualModifiers。"
+              >
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                風格
+                <select
+                  value={visualStyleOverride}
+                  onChange={(e) => setVisualStyleOverride(e.target.value)}
+                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
+                >
+                  <option value={STYLE_INHERIT}>依專案預設</option>
+                  {sortedStyleOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.category} · {s.nameZh}
+                    </option>
+                  ))}
                 </select>
               </label>
               {/* 重生敘事 button moved to Row 1 (next to 叙事提示词 title)

@@ -142,6 +142,18 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ? payload.lastFrameImageUrl.trim()
       : undefined
 
+  // Phase E (2026-05-15) — per-group curated style override. Empty string
+  // / missing = inherit project setting (worker falls back to
+  // resolveProjectVisualStyle). Provided id wins over project default.
+  const visualStyleId =
+    typeof payload.visualStyleId === 'string' && payload.visualStyleId.trim()
+      ? payload.visualStyleId.trim()
+      : undefined
+  const lightingPresetId =
+    typeof payload.lightingPresetId === 'string' && payload.lightingPresetId.trim()
+      ? payload.lightingPresetId.trim()
+      : undefined
+
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
   }
@@ -218,6 +230,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
       ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
       ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
+      ...(visualStyleId ? { visualStyleId } : {}),
+      ...(lightingPresetId ? { lightingPresetId } : {}),
     })
   }
 

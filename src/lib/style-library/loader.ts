@@ -12,6 +12,18 @@
 import type { PrismaClient } from '@prisma/client'
 import type { LightingPreset, VisualStyle } from './types'
 import { getLighting, getStyle } from './prompt-builder'
+import { visualStyles } from './visual-styles'
+import { lightingPresets } from './lighting-presets'
+
+// Phase E — null-returning lookups for callers that already have an
+// id from user input and don't want the throw-on-unknown ergonomics
+// of getStyle / getLighting.
+export function getStyleSafe(styleId: string): VisualStyle | null {
+  return visualStyles.find((s) => s.id === styleId) ?? null
+}
+export function getLightingSafe(lightingId: string): LightingPreset | null {
+  return lightingPresets.find((l) => l.id === lightingId) ?? null
+}
 
 export interface ResolvedProjectStyle {
   style: VisualStyle
