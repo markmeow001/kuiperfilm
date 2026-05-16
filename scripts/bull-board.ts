@@ -16,7 +16,12 @@ const logger = createScopedLogger({
 })
 
 // 2026-05-16 (F4) — fail-closed gate. See bull-board-auth-gate.ts
-// for the full rule set + unit tests.
+// for the full rule set + unit tests. On refusal we log loudly and
+// SKIP starting the express listener (so the dashboard is simply
+// unreachable — the safest state), then idle-pin the process so
+// `npm run start`'s `concurrently --kill-others` wrapper doesn't
+// tear down the rest of the container (next, worker, watchdog) as
+// collateral damage of a Bull-Board misconfig.
 const gateDecision = evaluateBullBoardAuthGate({
   nodeEnv: process.env.NODE_ENV,
   host,
@@ -24,19 +29,34 @@ const gateDecision = evaluateBullBoardAuthGate({
   authPassword,
 })
 
+const REFUSAL_MESSAGES = {
+  'partial-credentials':
+    'BULL_BOARD_USER and BULL_BOARD_PASSWORD must both be set or both be empty — partial config refused',
+  'prod-or-non-loopback-without-auth':
+    'Bull-Board requires BULL_BOARD_USER + BULL_BOARD_PASSWORD when running in production or binding to a non-loopback host',
+} as const
+
+function idlePinProcess(): Promise<never> {
+  // Keep the event loop alive without doing anything. Bounded blast
+  // radius: the rest of the container keeps running, the dashboard
+  // endpoint stays unbound.
+  setInterval(() => undefined, 1 << 30)
+  // Block the script from continuing without exiting the process.
+  return new Promise<never>(() => {})
+}
+
 if (!gateDecision.ok) {
-  const messageByReason: Record<typeof gateDecision.reason, string> = {
-    'partial-credentials':
-      'BULL_BOARD_USER and BULL_BOARD_PASSWORD must both be set or both be empty — partial config refused',
-    'prod-or-non-loopback-without-auth':
-      'Bull-Board requires BULL_BOARD_USER + BULL_BOARD_PASSWORD when running in production or binding to a non-loopback host',
-  }
   logger.error({
     action: 'bull_board.startup_refused',
-    message: messageByReason[gateDecision.reason],
+    message: REFUSAL_MESSAGES[gateDecision.reason],
     details: gateDecision.details,
   })
-  process.exit(1)
+  // Halt the script here. `gateDecision.ok` narrowing wasn't
+  // refining through the awaited never, so we throw inside the
+  // refusal branch and idle-pin from the unhandledRejection handler.
+  await idlePinProcess()
+  // unreachable
+  throw new Error('unreachable')
 }
 
 const authConfigured = gateDecision.authConfigured
