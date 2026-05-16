@@ -114,6 +114,7 @@ export class TaijiaiSeedanceVideoGenerator extends BaseVideoGenerator {
     const { apiKey } = await getProviderConfig(userId, 'taijiai')
 
     const {
+      modelId,
       duration = 5,
       aspectRatio = '16:9',
       generateAudio = false,
@@ -183,8 +184,14 @@ export class TaijiaiSeedanceVideoGenerator extends BaseVideoGenerator {
       throw new Error('TAIJIAI_VIDEO_PROMPT_OR_REFERENCE_REQUIRED')
     }
 
+    // BobAPI new-api router does strict model-id matching against the
+    // catalog. Wiki Section 1 says the catalog entry is `seedance-2.0-720p`;
+    // Section 6's example body writes the family name `seedance-2.0` but
+    // that produced 401 "无效的令牌" in live testing (new-api conflates
+    // "no permission" with "invalid token"). Send the catalog id verbatim.
+    // Caller can override via options.modelId for future 480p / fast / etc.
     const body = {
-      model: 'seedance-2.0',
+      model: modelId || 'seedance-2.0-720p',
       duration: clampDuration(duration),
       generate_audio: generateAudio,
       ratio: normaliseRatio(aspectRatio),

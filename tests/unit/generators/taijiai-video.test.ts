@@ -64,7 +64,7 @@ describe('TaijiaiSeedanceVideoGenerator.generate', () => {
     expect(headers.Authorization).toBe('Bearer sk-taijiai-test')
 
     const body = JSON.parse(init.body as string) as Record<string, unknown>
-    expect(body.model).toBe('seedance-2.0')
+    expect(body.model).toBe('seedance-2.0-720p')
     expect(body.duration).toBe(8)
     expect(body.ratio).toBe('16:9')
     expect(body.generate_audio).toBe(true)
