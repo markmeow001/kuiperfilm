@@ -44,10 +44,12 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
         workspace went 3-col (image / text / inspector). The labels
         in this sidebar are short enough ("首頁" / "劇本" / etc.) that
         the narrower width still doesn't wrap them; padding tightened
-        too so the hit-target stays the same proportion. Logo block
-        keeps `AI · MANHUA · STUDIO` in tracking-[0.2em] which is the
-        only thing that ever risks wrapping at this width — matched to
-        the new column with `whitespace-nowrap`.
+        too so the hit-target stays the same proportion.
+
+        2026-05-15: shrunk `Kuiper` (2xl → xl), `影界` (lg → base),
+        and `AI · MANHUA · STUDIO` (13px/0.18em → 11px/0.14em) — at
+        the prior sizing the subtitle was visibly bleeding into the
+        right-edge divider on retina screens.
       */}
       {/* Logo — clicking returns to /v2 entry (project list) */}
       <Link
@@ -56,12 +58,12 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
         title="回到專案列表"
       >
         <div className="flex items-baseline gap-1.5">
-          <div className="font-display text-2xl font-semibold italic tracking-tight text-amber-400">
+          <div className="font-display text-xl font-semibold italic tracking-tight text-amber-400">
             Kuiper
           </div>
-          <div className="font-serif-cn text-lg font-medium text-stone-100">影界</div>
+          <div className="font-serif-cn text-base font-medium text-stone-100">影界</div>
         </div>
-        <div className="mt-1 whitespace-nowrap font-mono text-[13px] tracking-[0.18em] text-stone-500">
+        <div className="mt-1 whitespace-nowrap font-mono text-[11px] tracking-[0.14em] text-stone-500">
           AI · MANHUA · STUDIO
         </div>
       </Link>
