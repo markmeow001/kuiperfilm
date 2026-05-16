@@ -31,19 +31,10 @@
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
 
-		# 2026-05-16 (F5) — Content Security Policy in Report-Only mode.
-		# Conservative baseline. The app is first-party-only at HTML
-		# render time (next.js inline scripts + Tailwind injected
-		# styles, no external CDNs), but generated media (Tencent COS
-		# signed URLs, R2) and outbound XHR can hit arbitrary HTTPS
-		# hosts so img-src / media-src / connect-src stay broad on
-		# `https:`. 'unsafe-inline' + 'unsafe-eval' required for
-		# Next.js 15 default build (no nonce middleware wired yet);
-		# revisit when we adopt next.config.ts nonce injection.
-		#
-		# Report-Only first so policy violations surface in DevTools
-		# console without breaking anything. Promote to enforced
-		# `Content-Security-Policy` after ~1 week of clean reports.
+		# F5 2026-05-16: CSP in Report-Only mode. Promote to
+		# Content-Security-Policy after one week of clean reports.
+		# Unsafe-inline + unsafe-eval needed for Next.js 15 default
+		# build until nonce middleware is wired. See deploy/HARDENING.md.
 		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
 
 		# Strip Caddy's Server fingerprint.
