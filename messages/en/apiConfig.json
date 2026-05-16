@@ -107,7 +107,9 @@
       "openai_compatible_step1": "Enter any OpenAI-compatible service Base URL and API key",
       "gemini_compatible_step1": "Enter any Gemini-compatible service Base URL and API key",
       "qwen_step1": "Go to Alibaba Cloud Bailian platform and get an API Key",
-      "atlascloud_step1": "Go to AtlasCloud console and get an API Key"
+      "atlascloud_step1": "Go to AtlasCloud console and get an API Key",
+      "taijiai_step1": "Register a BobAPI account at taijiai.online",
+      "taijiai_step2": "In the console, create an API Key under \"My Tokens\". Choose group \"banana Pro 官转\" to access seedance-2.0-720p"
     }
   }
 }

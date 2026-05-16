@@ -108,7 +108,11 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance 1.0 Pro Fast', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-0-lite-i2v-250428', name: 'Seedance 1.0 Lite', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-5-pro-251215', name: 'Seedance 1.5 Pro', type: 'video', provider: 'ark' },
-    { modelId: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0（待上线）', type: 'video', provider: 'ark' },
+    // 2026-05-16 — Seedance 2.0 via BobAPI (taijiai.online) reseller.
+    // 火山 ARK 直連 placeholder 暫留待官方放開個人端 API；目前實際生
+    // 視訊走 BobAPI 中転站，model id 是 'seedance-2.0-720p'。
+    { modelId: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0（火山直連待上线）', type: 'video', provider: 'ark' },
+    { modelId: 'seedance-2.0-720p', name: 'Seedance 2.0 (720p · BobAPI)', type: 'video', provider: 'taijiai' },
     { modelId: 'doubao-seedance-1-0-pro-250528', name: 'Seedance 1.0 Pro', type: 'video', provider: 'ark' },
     // Google Veo
     { modelId: 'veo-3.1-generate-preview', name: 'Veo 3.1', type: 'video', provider: 'google' },
@@ -224,6 +228,9 @@ export const PRESET_PROVIDERS: Omit<Provider, 'apiKey' | 'hasApiKey'>[] = [
     { id: 'fal', name: 'FAL' },
     { id: 'qwen', name: 'Qwen' },
     { id: 'atlascloud', name: 'AtlasCloud' },
+    // BobAPI / taijiai.online — Seedance 2.0 reseller (字节跳动 source,
+    // repackaged as @N content[] multi-modal references).
+    { id: 'taijiai', name: 'BobAPI (Seedance 2.0)', baseUrl: 'https://www.taijiai.online' },
 ]
 
 const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
@@ -232,6 +239,7 @@ const ZH_PROVIDER_NAME_MAP: Record<string, string> = {
     ark: '火山引擎 Ark',
     minimax: '海螺 MiniMax',
     vidu: '生数科技 Vidu',
+    taijiai: 'BobAPI 中转站（Seedance 2.0）',
 }
 
 function isZhLocale(locale?: string): boolean {
@@ -406,6 +414,19 @@ export const PROVIDER_TUTORIALS: ProviderTutorial[] = [
             {
                 text: 'atlascloud_step1',
                 url: 'https://www.atlascloud.ai/zh-TW/console/api-keys'
+            }
+        ]
+    },
+    {
+        providerId: 'taijiai',
+        steps: [
+            {
+                text: 'taijiai_step1',
+                url: 'https://www.taijiai.online/register'
+            },
+            {
+                text: 'taijiai_step2',
+                url: 'https://www.taijiai.online/login'
             }
         ]
     }

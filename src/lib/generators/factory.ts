@@ -28,6 +28,7 @@ import { KieAIVideoGenerator } from './video/kieai'
 import { KieAIKlingVideoGenerator } from './video/kieai-kling'
 import { AtlasCloudSeedanceVideoGenerator } from './video/atlascloud'
 import { TencentVODVideoGenerator } from './video/tencent-vod'
+import { TaijiaiSeedanceVideoGenerator } from './video/taijiai'
 import { getProviderKey } from '@/lib/api-config'
 
 /**
@@ -113,6 +114,8 @@ export function createVideoGenerator(provider: string, modelId?: string): VideoG
             return new AtlasCloudSeedanceVideoGenerator()
         case 'tencent-vod':
             return new TencentVODVideoGenerator(provider)
+        case 'taijiai':
+            return new TaijiaiSeedanceVideoGenerator()
         default:
             throw new Error(`Unknown video generator provider: ${provider}`)
     }

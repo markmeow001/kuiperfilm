@@ -24,6 +24,7 @@ import { queryKieAIVideoTaskStatus } from './generators/video/kieai'
 import { queryKieAIKlingTaskStatus } from './generators/video/kieai-kling'
 import { queryKieAINanoBananaTaskStatus } from './generators/image/kieai-nanobanana'
 import { queryAtlasCloudTaskStatus } from './generators/video/atlascloud'
+import { queryTaijiaiTaskStatus } from './generators/video/taijiai'
 
 export interface PollResult {
     status: 'pending' | 'completed' | 'failed'
@@ -63,7 +64,7 @@ function getErrorMessage(error: unknown): string {
  * 解析 externalId 获取 provider、type 和请求信息
  */
 export function parseExternalId(externalId: string): {
-    provider: 'FAL' | 'ARK' | 'GEMINI' | 'GOOGLE' | 'MINIMAX' | 'VIDU' | 'OPENAI' | 'KIEAI' | 'ATLASCLOUD' | 'TENCENTVOD' | 'UNKNOWN'
+    provider: 'FAL' | 'ARK' | 'GEMINI' | 'GOOGLE' | 'MINIMAX' | 'VIDU' | 'OPENAI' | 'KIEAI' | 'ATLASCLOUD' | 'TENCENTVOD' | 'TAIJIAI' | 'UNKNOWN'
     type: 'VIDEO' | 'IMAGE' | 'BATCH' | 'KLING' | 'NANOBANANA' | 'UNKNOWN'
     endpoint?: string
     requestId: string
@@ -220,6 +221,20 @@ export function parseExternalId(externalId: string): {
         }
     }
 
+    if (externalId.startsWith('TAIJIAI:')) {
+        const parts = externalId.split(':')
+        const type = parts[1]
+        const requestId = parts.slice(2).join(':')
+        if (type !== 'VIDEO' || !requestId) {
+            throw new Error(`无效 TAIJIAI externalId: "${externalId}"，应为 TAIJIAI:VIDEO:videoId`)
+        }
+        return {
+            provider: 'TAIJIAI',
+            type: 'VIDEO',
+            requestId,
+        }
+    }
+
     throw new Error(
         `无法识别的 externalId 格式: "${externalId}". ` +
         `支持的格式: FAL:TYPE:endpoint:requestId, ARK:TYPE:requestId, GEMINI:BATCH:batchName, GOOGLE:VIDEO:operationName, MINIMAX:TYPE:taskId, VIDU:TYPE:taskId, OPENAI:VIDEO:providerToken:videoId, KIEAI:IMAGE|VIDEO|KLING|NANOBANANA:taskId`
@@ -266,6 +281,8 @@ export async function pollAsyncTask(
             return await pollAtlasCloudTask(parsed.requestId, userId)
         case 'TENCENTVOD':
             return await pollTencentVODTask(parsed.requestId, userId, parsed.type as 'IMAGE' | 'VIDEO')
+        case 'TAIJIAI':
+            return await pollTaijiaiTask(parsed.requestId, userId)
         default:
             // 🔥 移除 fallback：未知 provider 直接抛出错误
             throw new Error(`未知的 Provider: ${parsed.provider}`)
@@ -875,6 +892,24 @@ async function pollAtlasCloudTask(
 ): Promise<PollResult> {
     const { apiKey } = await getProviderConfig(userId, 'atlascloud')
     const result = await queryAtlasCloudTaskStatus(requestId, apiKey)
+
+    return {
+        status: result.status,
+        videoUrl: result.videoUrl,
+        resultUrl: result.videoUrl,
+        error: result.error,
+    }
+}
+
+/**
+ * BobAPI (taijiai.online) Seedance 2.0 任务轮询
+ */
+async function pollTaijiaiTask(
+    videoId: string,
+    userId: string,
+): Promise<PollResult> {
+    const { apiKey } = await getProviderConfig(userId, 'taijiai')
+    const result = await queryTaijiaiTaskStatus(videoId, apiKey)
 
     return {
         status: result.status,

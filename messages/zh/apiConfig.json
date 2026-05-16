@@ -107,7 +107,9 @@
       "openai_compatible_step1": "填写任意 OpenAI 协议兼容服务的 Base URL 与 API Key",
       "gemini_compatible_step1": "填写任意 Gemini 协议兼容服务的 Base URL 与 API Key",
       "qwen_step1": "进入阿里云百炼平台，获取 API Key",
-      "atlascloud_step1": "前往 AtlasCloud 控制台，获取 API Key"
+      "atlascloud_step1": "前往 AtlasCloud 控制台，获取 API Key",
+      "taijiai_step1": "註冊 BobAPI 帳號（taijiai.online）",
+      "taijiai_step2": "登入後在控制台「我的令牌」建立 API Key，分組選『banana Pro 官转』即可調 seedance-2.0-720p"
     }
   }
 }

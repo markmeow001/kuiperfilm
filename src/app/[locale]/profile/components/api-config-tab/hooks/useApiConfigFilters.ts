@@ -27,6 +27,7 @@ const MODEL_PROVIDER_KEYS = [
   'fal',
   'gemini-compatible',
   'openai-compatible',
+  'taijiai',
 ]
 const AUDIO_PROVIDER_KEYS = ['qwen']
 

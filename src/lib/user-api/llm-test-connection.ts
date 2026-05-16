@@ -10,6 +10,7 @@ type SupportedProvider =
   | 'custom'
   | 'tencent-hunyuan'
   | 'tencent-vod'
+  | 'taijiai'
 
 type TestConnectionPayload = {
   provider?: string
@@ -43,6 +44,7 @@ function normalizeProvider(payload: TestConnectionPayload): SupportedProvider {
     case 'tencent-vod':
     case 'vod':
     case 'tencent':
+    case 'taijiai':
       // VOD / Hunyuan share the same Tencent credential format; normalise
       // the legacy 'vod' / 'tencent' keys onto 'tencent-vod' so the rest
       // of the switch only deals with two canonical names.
@@ -160,7 +162,27 @@ export async function testLlmConnection(payload: TestConnectionPayload): Promise
       const tested = await testTencentVOD(apiKey)
       return { provider, message: 'Tencent VOD 凭证有效', ...tested }
     }
+    case 'taijiai': {
+      await testTaijiai(apiKey)
+      return { provider, message: 'BobAPI (taijiai) 凭证有效' }
+    }
   }
+}
+
+async function testTaijiai(apiKey: string): Promise<void> {
+  // BobAPI 没有 /models 之类的列表端点；最便宜的探针是查询一个
+  // 几乎确定不存在的 video id —— 凭证有效会回 404/Invalid id，
+  // 凭证失败会回 401 {"detail":"Invalid API key"}。
+  const probeId = 'connection-test-' + Math.random().toString(36).slice(2, 10)
+  const response = await fetch(
+    `https://www.taijiai.online/v1/videos/${encodeURIComponent(probeId)}`,
+    { headers: { Authorization: `Bearer ${apiKey}` } },
+  )
+  if (response.status === 401) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`TAIJIAI_AUTH_FAILED: ${text || 'Invalid API key'}`)
+  }
+  // 404/422/200 都视为凭证已被 BobAPI 接受。
 }
 
 async function testTencentHunyuan(
