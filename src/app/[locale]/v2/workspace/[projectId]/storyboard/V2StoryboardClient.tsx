@@ -38,6 +38,7 @@ import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { V2GroupsLayout } from './V2GroupsLayout'
 import { V2ManualPanelModal, type ManualPanelDraft } from './V2ManualPanelModal'
 import { StaleStoryboardCleanupModal } from './StaleStoryboardCleanupModal'
+import { resolveErrorDisplay } from '@/lib/errors/display'
 
 interface V2StoryboardClientProps {
   projectId: string
@@ -330,6 +331,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const analyzeProgress = analyzeSnapshot.data?.progress ?? 0
   const isAnalyzing = analyzeStatus === 'queued' || analyzeStatus === 'processing'
   const analyzeError = analyzeSnapshot.data?.errorMessage ?? null
+  // Map the raw worker error to a user-facing string via the shared
+  // code → message table. Prevents leaking Prisma stack traces / DB
+  // column names into the UI when the worker fails on an internal
+  // exception (e.g. FK violation).
+  const analyzeErrorDisplay = resolveErrorDisplay({
+    code: analyzeSnapshot.data?.errorCode ?? null,
+    message: analyzeSnapshot.data?.errorMessage ?? null,
+  })
 
   // Poll while EITHER (a) the snapshot reports an active task OR (b) we
   // just submitted one ourselves. Active tasks get a faster 3s tick,
@@ -1148,9 +1157,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 提交失敗:{analyzeState.message}
               </p>
             ) : null}
-            {analyzeStatus === 'failed' && analyzeError ? (
-              <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-                上次分析失敗:{analyzeError}
+            {analyzeStatus === 'failed' && (analyzeErrorDisplay || analyzeError) ? (
+              <p
+                className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
+                title={analyzeError ?? undefined}
+              >
+                上次分析失敗:{analyzeErrorDisplay?.message ?? '請點「重新分析」重試'}
               </p>
             ) : null}
             {!currentEpisodeId ? (

@@ -64,6 +64,7 @@ import {
   useEpisodeLocationBindings,
 } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
+import { resolveErrorDisplay } from '@/lib/errors/display'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { useEpisodePreservingHref } from '../hooks/useEpisodePreservingHref'
 
@@ -288,6 +289,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const taskProgress = taskSnapshot.data?.progress ?? 0
   const isAnalyzing = taskStatus === 'queued' || taskStatus === 'processing'
   const taskError = taskSnapshot.data?.errorMessage ?? null
+  // Map the raw worker error to a user-facing string. Prevents
+  // leaking Prisma stack / DB column names when the worker fails
+  // on an internal exception.
+  const taskErrorDisplay = resolveErrorDisplay({
+    code: taskSnapshot.data?.errorCode ?? null,
+    message: taskSnapshot.data?.errorMessage ?? null,
+  })
   const taskUpdatedAt = taskSnapshot.data?.updatedAt ?? null
 
   // Poll the snapshot every 3s while worker is running, so the
@@ -997,8 +1005,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           提交失敗:{(analyze.error as Error)?.message ?? '未知錯誤'}
         </div>
       ) : taskStatus === 'failed' ? (
-        <div className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
-          分析任務失敗:{taskError ?? '未知錯誤'}
+        <div
+          className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300"
+          title={taskError ?? undefined}
+        >
+          分析任務失敗:{taskErrorDisplay?.message ?? '請點「重新分析」重試'}
         </div>
       ) : isAnalyzing ? (
         <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
