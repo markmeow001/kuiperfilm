@@ -1,7 +1,7 @@
 # Model Selector + Multi-Shot Unification Plan
 
 **Date**: 2026-05-16
-**Status**: Draft — pending product decision on Open Question 1 + 2
+**Status**: Approved 2026-05-16 — 5 open questions resolved (see §10)
 **Owner**: TBD
 **Related memory**: `project_kuiperfilm_taijiai_seedance_blocked`, `project_kuiperfilm_fal_seedance_kling_backup`, `project_kuiperfilm_multi_user_inheritance`, `project_kuiperfilm_b_path_fixes`
 **Related code**: `src/lib/generators/{ark,fal,video/taijiai,video/tencent-vod}.ts`, `src/lib/workers/handlers/multi-shot-video-{handler,b-path}.ts`, `src/lib/model-config-contract.ts`, `prisma/schema.prisma:330` (`NovelPromotionProject.videoModel`)
@@ -404,23 +404,22 @@ async function runMultiShotBPath(ctx) {
 | Project 設 Seedance 後 admin 把 Seedance model 從 catalog 移除 | resolver fallback 到 admin default;UI 提示 model 已不可用 | |
 | 多鏡頭 Seedance 拼接 prompt 超出 model token 上限 | 截斷 + warning,或 reject(待產品決定) | Open Q3 |
 
-## 10. Open Questions(待 user 拍板)
+## 10. Open Questions — RESOLVED 2026-05-16
 
-1. **Seedance 多鏡頭品質是否驗證後再決定 Phase 4 啟動?**
-   - 推薦:Phase 4 開工前先用 Playwright + fal key(等 user 拿到)跑 3-5 個多鏡頭測試。品質爛 → Phase 4 改成「方案 Y:Seedance only 單鏡頭」,大幅省工。
-2. **maxShotsPerCall 超出時行為**
-   - (a) Reject(維持顯式 / 教育 user)
-   - (b) 自動分批(server side stitch 我們不做,所以拆成多 task 還是會多個 video)
-   - 推薦 (a)
-3. **Seedance 拼接 prompt 超出 model 文字上限**
-   - 截斷尾端 / reject / 不檢查讓 model 自己處理
-   - 推薦先不檢查、上線觀察是否真的撞到(BobAPI/fal 都沒明文 prompt 上限)
-4. **Task 級 override 要不要做**
-   - 本 plan 寫的 4-tier cascade 含 task-level,但 UI 不暴露(只支援 project-level)。需要時加一顆「這次生成用其他 model」按鈕即可,但會增加 UX 複雜度。
-   - 推薦先不做,project 級夠用
-5. **真人審核 toggle 預設值**
-   - 預設關 vs 預設開
-   - 推薦預設關(避免無辜任務多等 10 分鐘),tooltip 解釋
+1. **Seedance 多鏡頭品質驗證 gate** → **YES,Phase 4 開工前必跑 spike**
+   - 用 Playwright + fal key 跑 3-5 個多鏡頭測試
+   - 品質爛 → Phase 4 退方案 Y(Seedance only 單鏡頭)
+   - 阻擋條件:user 拿到 fal key
+2. **maxShotsPerCall 超出行為** → **REJECT,不分批**
+   - 顯式錯誤 + UI 提示用戶減少 panel 數或分批建任務
+3. **Seedance 拼接 prompt 超 token 上限** → **不檢查,上線觀察**
+   - BobAPI/fal 都沒明文上限,先不做防禦,撞到再說
+4. **Task 級 override** → **不做**
+   - 4-tier resolver 預留 task-level slot 但 UI 不暴露
+   - 之後真的有需求再加按鈕
+5. **真人審核 toggle 預設值** → **預設關**
+   - 避免無辜任務多等 10 分鐘
+   - tooltip 解釋「勾選後需 10 分鐘審核」
 
 ## 11. Out of Scope
 
