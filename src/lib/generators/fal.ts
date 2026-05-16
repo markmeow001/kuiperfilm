@@ -1,18 +1,20 @@
 import { createScopedLogger, logError as _ulogError } from '@/lib/logging/core'
 /**
  * FAL 生成器（统一图像 + 视频）
- * 
+ *
  * 图像模型：
  * - Banana Pro (2K/4K) - fal-ai/nano-banana-pro       (modelId: 'banana')
  * - Banana 2  (1K/2K/4K) - fal-ai/nano-banana-2       (modelId: 'banana-2')
- * 
+ *
  * 视频模型：
  * - Wan 2.6 (fal-wan25) - wan/v2.6/image-to-video
  * - Veo 3.1 (fal-veo31) - fal-ai/veo3.1/fast/image-to-video
- * - Sora 2 (fal-sora2) - fal-ai/sora-2/image-to-video  
+ * - Sora 2 (fal-sora2) - fal-ai/sora-2/image-to-video
  * - Kling 2.5 Turbo Pro - fal-ai/kling-video/v2.5-turbo/pro/image-to-video
  * - Kling 3 Standard - fal-ai/kling-video/v3/standard/image-to-video
  * - Kling 3 Pro - fal-ai/kling-video/v3/pro/image-to-video
+ * - Seedance 2.0 i2v - bytedance/seedance-2.0/image-to-video (audio + 1080p,2026-05-16 加入作为 BobAPI 备援)
+ * - Seedance 2.0 Fast i2v - bytedance/seedance-2.0/fast/image-to-video
  */
 
 import {
@@ -46,6 +48,10 @@ const FAL_VIDEO_ENDPOINTS: Record<string, string> = {
     'fal-ai/kling-video/v2.5-turbo/pro/image-to-video': 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video',
     'fal-ai/kling-video/v3/standard/image-to-video': 'fal-ai/kling-video/v3/standard/image-to-video',
     'fal-ai/kling-video/v3/pro/image-to-video': 'fal-ai/kling-video/v3/pro/image-to-video',
+    // Seedance 2.0 on fal (2026-04-15 enterprise launch). image_url + optional
+    // end_image_url for first/last frame mode; native generate_audio.
+    'bytedance/seedance-2.0/image-to-video': 'bytedance/seedance-2.0/image-to-video',
+    'bytedance/seedance-2.0/fast/image-to-video': 'bytedance/seedance-2.0/fast/image-to-video',
 }
 
 // ============================================================
@@ -201,7 +207,10 @@ export class FalVideoGenerator extends BaseVideoGenerator {
             duration,
             resolution,
             aspectRatio,
-            modelId = 'fal-wan25'
+            modelId = 'fal-wan25',
+            lastFrameImageUrl,
+            generateAudio,
+            seed,
         } = options as {
             duration?: number
             resolution?: string
@@ -209,6 +218,9 @@ export class FalVideoGenerator extends BaseVideoGenerator {
             modelId?: string
             provider?: string
             modelKey?: string
+            lastFrameImageUrl?: string
+            generateAudio?: boolean
+            seed?: number
         }
 
         const allowedOptionKeys = new Set([
@@ -218,6 +230,9 @@ export class FalVideoGenerator extends BaseVideoGenerator {
             'duration',
             'resolution',
             'aspectRatio',
+            'lastFrameImageUrl',
+            'generateAudio',
+            'seed',
         ])
         for (const [key, value] of Object.entries(options)) {
             if (value === undefined) continue
@@ -283,6 +298,35 @@ export class FalVideoGenerator extends BaseVideoGenerator {
                     generate_audio: false,
                 }
                 break
+            case 'bytedance/seedance-2.0/image-to-video':
+            case 'bytedance/seedance-2.0/fast/image-to-video': {
+                // fal Seedance 2.0 spec (fal docs 2026-04-15):
+                //   required: prompt, image_url
+                //   optional: end_image_url, resolution (480p|720p|1080p, default 720p),
+                //             aspect_ratio (auto|21:9|16:9|4:3|1:1|3:4|9:16, default auto),
+                //             duration ('auto' or integer 4-15, default auto),
+                //             generate_audio (bool, default true),
+                //             seed (int)
+                const allowedRatios = new Set(['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'])
+                const allowedResolutions = new Set(['480p', '720p', '1080p'])
+                const clampedDuration =
+                    typeof duration === 'number' && Number.isFinite(duration)
+                        ? Math.max(4, Math.min(15, Math.round(duration)))
+                        : undefined
+                input = {
+                    image_url: imageUrl,
+                    prompt,
+                    ...(lastFrameImageUrl ? { end_image_url: lastFrameImageUrl } : {}),
+                    ...(resolution && allowedResolutions.has(resolution) ? { resolution } : {}),
+                    ...(aspectRatio && allowedRatios.has(aspectRatio) ? { aspect_ratio: aspectRatio } : {}),
+                    ...(clampedDuration !== undefined ? { duration: clampedDuration } : {}),
+                    // generate_audio defaults to true on fal; respect explicit caller intent
+                    // (worker passes false by default to match silent-storyboard convention).
+                    ...(typeof generateAudio === 'boolean' ? { generate_audio: generateAudio } : { generate_audio: false }),
+                    ...(typeof seed === 'number' ? { seed } : {}),
+                }
+                break
+            }
             default:
                 throw new Error(`FAL_VIDEO_MODEL_UNSUPPORTED: ${modelId}`)
         }

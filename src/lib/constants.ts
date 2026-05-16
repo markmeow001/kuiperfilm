@@ -79,7 +79,9 @@ export const VIDEO_MODELS = [
   { value: 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video', label: 'Kling 2.5 Turbo Pro' },
   { value: 'fal-ai/kling-video/v3/standard/image-to-video', label: 'Kling 3 Standard' },
   { value: 'fal-ai/kling-video/v3/pro/image-to-video', label: 'Kling 3 Pro' },
-  { value: 'seedance-2.0-720p', label: 'Seedance 2.0 (720p · BobAPI)' }
+  { value: 'seedance-2.0-720p', label: 'Seedance 2.0 (720p · BobAPI)' },
+  { value: 'bytedance/seedance-2.0/image-to-video', label: 'Seedance 2.0 (fal · audio)' },
+  { value: 'bytedance/seedance-2.0/fast/image-to-video', label: 'Seedance 2.0 Fast (fal · cheap)' }
 ]
 
 // SeeDream 批量模型列表（使用 GPU 空闲时间，成本降低50%）
@@ -91,7 +93,13 @@ export const SEEDANCE_BATCH_MODELS = [
 ]
 
 // 支持生成音频的模型（Seedance 1.5 Pro + 2.0 都支持 generate_audio 旗标）
-export const AUDIO_SUPPORTED_MODELS = ['doubao-seedance-1-5-pro-251215', 'doubao-seedance-1-5-pro-251215-batch', 'seedance-2.0-720p']
+export const AUDIO_SUPPORTED_MODELS = [
+  'doubao-seedance-1-5-pro-251215',
+  'doubao-seedance-1-5-pro-251215-batch',
+  'seedance-2.0-720p',
+  'bytedance/seedance-2.0/image-to-video',
+  'bytedance/seedance-2.0/fast/image-to-video',
+]
 
 // 首尾帧视频模型（能力权威来源是 standards/capabilities；此常量仅作静态兜底展示）
 export const FIRST_LAST_FRAME_MODELS = [
@@ -103,7 +111,9 @@ export const FIRST_LAST_FRAME_MODELS = [
   { value: 'doubao-seedance-1-0-lite-i2v-250428-batch', label: 'Seedance 1.0 Lite (首尾帧/批量) 省50%' },
   { value: 'veo-3.1-generate-preview', label: 'Veo 3.1 (首尾帧)' },
   { value: 'veo-3.1-fast-generate-preview', label: 'Veo 3.1 Fast (首尾帧)' },
-  { value: 'seedance-2.0-720p', label: 'Seedance 2.0 (首尾帧 · BobAPI)' }
+  { value: 'seedance-2.0-720p', label: 'Seedance 2.0 (首尾帧 · BobAPI)' },
+  { value: 'bytedance/seedance-2.0/image-to-video', label: 'Seedance 2.0 (首尾帧 · fal)' },
+  { value: 'bytedance/seedance-2.0/fast/image-to-video', label: 'Seedance 2.0 Fast (首尾帧 · fal)' }
 ]
 
 export const VIDEO_RESOLUTIONS = [
