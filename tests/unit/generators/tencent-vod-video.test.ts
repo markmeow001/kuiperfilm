@@ -344,4 +344,93 @@ describe('TencentVODVideoGenerator', () => {
       .OutputConfig as Record<string, unknown>
     expect(out.StorageMode).toBe('Permanent')
   })
+
+  // —— NegativePrompt: Kling Omni BGM suppression (2026-05-15) ——
+  // Kling Omni bakes dialogue + SFX + BGM into one audio stream.
+  // No per-stem toggle exists; the only available knob is the
+  // top-level NegativePrompt forwarded to Kling. The default
+  // applies ONLY when ModelName=Kling, ModelVersion contains "Omni",
+  // and AudioGeneration is on.
+
+  it('auto-injects default NegativePrompt for Kling Omni with audio enabled', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'panel with dialogue',
+      options: {
+        modelId: 'Kling-3.0-Omni',
+        generateAudio: true,
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req.NegativePrompt).toBe('音乐, BGM, 背景音乐, 配乐')
+  })
+
+  it('does not inject NegativePrompt for Kling Omni when audio is disabled', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'silent panel',
+      options: {
+        modelId: 'Kling-3.0-Omni',
+        generateAudio: false,
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req.NegativePrompt).toBeUndefined()
+  })
+
+  it('does not inject NegativePrompt for non-Omni Kling models', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'visual only',
+      options: {
+        modelId: 'Kling-3.0',
+        generateAudio: true,
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req.NegativePrompt).toBeUndefined()
+  })
+
+  it('honors explicit negativePrompt override on Kling Omni', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'override test',
+      options: {
+        modelId: 'Kling-3.0-Omni',
+        generateAudio: true,
+        negativePrompt: 'low quality, blur',
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req.NegativePrompt).toBe('low quality, blur')
+  })
+
+  it('treats empty-string negativePrompt as explicit opt-out (no field set)', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'opt out test',
+      options: {
+        modelId: 'Kling-3.0-Omni',
+        generateAudio: true,
+        negativePrompt: '',
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req.NegativePrompt).toBeUndefined()
+  })
 })

@@ -167,6 +167,15 @@ interface TencentVODVideoOptions {
     inputComplianceCheck?: ToggleFlag
     /** 輸出內容合規性檢查（production 上線建議開啟） */
     outputComplianceCheck?: ToggleFlag
+    /**
+     * Tencent VOD top-level NegativePrompt (CreateAigcVideoTaskRequest).
+     * Generic across all video models — Tencent forwards to the backing
+     * model (Kling, Hailuo, etc.) which honors it as an anti-prompt.
+     * For Kling Omni (audio-baked), this is currently the only knob to
+     * discourage BGM in the monolithic audio track. Pass '' explicitly
+     * to opt out of the per-model default.
+     */
+    negativePrompt?: string
 }
 
 /**
@@ -326,6 +335,25 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
         }
 
         if (opts.lastFrameUrl) req.LastFrameUrl = opts.lastFrameUrl
+
+        // 2026-05-15 — NegativePrompt for BGM suppression on Kling Omni.
+        // Kling Omni's AudioGeneration bakes dialogue+SFX+BGM into a
+        // single monolithic audio track. There is no per-stem toggle in
+        // the VOD SDK, but the top-level NegativePrompt
+        // (CreateAigcVideoTaskRequest.NegativePrompt, vod_models.d.ts
+        // line 10222) is forwarded to Kling and can probabilistically
+        // reduce BGM. Apply Kling-Omni-with-audio default only; honor
+        // explicit override including '' to opt out.
+        const isKlingOmni = modelName === 'Kling' && /omni/i.test(modelVersion || '')
+        const audioOnForKling = outputConfig.AudioGeneration === 'Enabled'
+        const negativePrompt =
+            opts.negativePrompt !== undefined
+                ? opts.negativePrompt
+                : isKlingOmni && audioOnForKling
+                    ? '音乐, BGM, 背景音乐, 配乐'
+                    : undefined
+        if (negativePrompt) req.NegativePrompt = negativePrompt
+
         // 2026-05-13 — explicitly disable Tencent's prompt auto-optimizer.
         // Mirror of the image-side fix; same rationale: Tencent's default
         // EnhancePrompt='Enabled' silently rewrites style anchors away,
@@ -354,6 +382,7 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
                 subjectInfoCount: Array.isArray(req.SubjectInfos) ? req.SubjectInfos.length : 0,
                 hasMultiShot: Boolean((req.ExtInfo as string | undefined)?.includes('multi_shot')),
                 outputAspectRatio: (outputConfig as { AspectRatio?: string }).AspectRatio ?? null,
+                negativePrompt: (req.NegativePrompt as string | undefined) ?? null,
             },
         })
 
