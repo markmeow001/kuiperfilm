@@ -4,6 +4,7 @@ import { createBullBoard } from '@bull-board/api'
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter'
 import { ExpressAdapter } from '@bull-board/express'
 import { imageQueue, textQueue, videoQueue, voiceQueue } from '@/lib/task/queues'
+import { evaluateBullBoardAuthGate } from '@/lib/ops/bull-board-auth-gate'
 
 const host = process.env.BULL_BOARD_HOST || '127.0.0.1'
 const port = Number.parseInt(process.env.BULL_BOARD_PORT || '3010', 10) || 3010
@@ -14,13 +15,41 @@ const logger = createScopedLogger({
   module: 'ops.bull_board',
 })
 
+// 2026-05-16 (F4) — fail-closed gate. See bull-board-auth-gate.ts
+// for the full rule set + unit tests.
+const gateDecision = evaluateBullBoardAuthGate({
+  nodeEnv: process.env.NODE_ENV,
+  host,
+  authUser,
+  authPassword,
+})
+
+if (!gateDecision.ok) {
+  const messageByReason: Record<typeof gateDecision.reason, string> = {
+    'partial-credentials':
+      'BULL_BOARD_USER and BULL_BOARD_PASSWORD must both be set or both be empty — partial config refused',
+    'prod-or-non-loopback-without-auth':
+      'Bull-Board requires BULL_BOARD_USER + BULL_BOARD_PASSWORD when running in production or binding to a non-loopback host',
+  }
+  logger.error({
+    action: 'bull_board.startup_refused',
+    message: messageByReason[gateDecision.reason],
+    details: gateDecision.details,
+  })
+  process.exit(1)
+}
+
+const authConfigured = gateDecision.authConfigured
+
 function unauthorized(res: Response) {
   res.setHeader('WWW-Authenticate', 'Basic realm="BullMQ Board"')
   res.status(401).send('Authentication required')
 }
 
 function basicAuthMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (!authUser && !authPassword) {
+  // Path 1 — dev convenience: only reachable here if startup gate
+  // permitted unauth (loopback bind + non-prod). Treat as open.
+  if (!authConfigured) {
     next()
     return
   }
@@ -49,7 +78,7 @@ function basicAuthMiddleware(req: Request, res: Response, next: NextFunction) {
 
   const username = decoded.slice(0, index)
   const password = decoded.slice(index + 1)
-  if (username !== (authUser || '') || password !== (authPassword || '')) {
+  if (username !== authUser || password !== authPassword) {
     unauthorized(res)
     return
   }
@@ -75,7 +104,6 @@ app.disable('x-powered-by')
 app.use(basePath, basicAuthMiddleware, serverAdapter.getRouter())
 
 const server = app.listen(port, host, () => {
-  const secured = authUser || authPassword ? 'enabled' : 'disabled'
   logger.info({
     action: 'bull_board.started',
     message: 'bull board listening',
@@ -83,7 +111,8 @@ const server = app.listen(port, host, () => {
       host,
       port,
       basePath,
-      auth: secured,
+      auth: authConfigured ? 'enabled' : 'disabled-dev-loopback-only',
+      nodeEnv: process.env.NODE_ENV,
     },
   })
 })
