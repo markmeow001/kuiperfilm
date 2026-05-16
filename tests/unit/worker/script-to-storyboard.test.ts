@@ -85,6 +85,11 @@ const persistSingleClipStoryboardMock = vi.hoisted(() => vi.fn())
 
 const txState = vi.hoisted(() => ({
   createdRows: [] as Array<Record<string, unknown>>,
+  // When non-null, the tx.novelPromotionPanel.findMany mock returns
+  // only these panel IDs, simulating a concurrent race that wiped
+  // panels between persistedStoryboards being computed and the voice
+  // line transaction running.
+  livePanelIds: null as string[] | null,
 }))
 
 const prismaMock = vi.hoisted(() => ({
@@ -245,6 +250,7 @@ describe('worker script-to-storyboard behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     txState.createdRows = []
+    txState.livePanelIds = null
 
     prismaMock.project.findUnique.mockResolvedValue({
       id: 'project-1',
@@ -279,6 +285,9 @@ describe('worker script-to-storyboard behavior', () => {
         deleteMany: (args: { where: { episodeId: string } }) => Promise<unknown>
         create: (args: { data: Record<string, unknown>; select: { id: boolean } }) => Promise<{ id: string }>
       }
+      novelPromotionPanel: {
+        findMany: (args: { where: { id: { in: string[] } }; select: { id: boolean } }) => Promise<Array<{ id: string }>>
+      }
     }) => Promise<unknown>) => {
       const tx = {
         novelPromotionVoiceLine: {
@@ -287,6 +296,14 @@ describe('worker script-to-storyboard behavior', () => {
             txState.createdRows.push(args.data)
             return { id: `voice-${txState.createdRows.length}` }
           },
+        },
+        novelPromotionPanel: {
+          // Default: every panel ID asked for is still live (no race).
+          // The race-scenario test overrides this mock to return [].
+          findMany: async (args: { where: { id: { in: string[] } } }) =>
+            txState.livePanelIds === null
+              ? args.where.id.in.map((id) => ({ id }))
+              : txState.livePanelIds.map((id) => ({ id })),
         },
       }
       return await fn(tx)
@@ -373,5 +390,66 @@ describe('worker script-to-storyboard behavior', () => {
         message: '台词分析失败，准备重试 (2/2)',
       }),
     )
+  })
+
+  // F-QA-2 (2026-05-16): regression — concurrent script_to_storyboard_run
+  // for the same episode used to wipe + replace panels between
+  // persistedStoryboards being computed and persistVoiceLines running.
+  // The resolved matchedPanelId pointed at a deleted row, Prisma threw
+  // `Foreign key constraint violated on the fields: (matchedPanelId)`,
+  // and the entire voice analysis output was lost (episode 2 stuck).
+  // Fix: re-fetch live panel IDs inside the same transaction; if a
+  // resolved ID is no longer alive, drop the panel binding (set
+  // matchedPanelId = null) and continue rather than failing the batch.
+  it('F-QA-2: race-deleted panel drops the binding instead of throwing', async () => {
+    // Simulate: persistedStoryboards (in-memory) still references
+    // panel-1, but a concurrent run wiped it from DB.
+    txState.livePanelIds = []
+
+    const job = buildJob({ episodeId: 'episode-1' })
+    const result = await handleScriptToStoryboardTask(job)
+
+    expect(result).toEqual(expect.objectContaining({
+      episodeId: 'episode-1',
+      voiceLineCount: 1,
+    }))
+    // Voice line saved, but without panel binding — graceful degrade.
+    expect(txState.createdRows).toHaveLength(1)
+    expect(txState.createdRows[0]).toEqual(expect.objectContaining({
+      episodeId: 'episode-1',
+      lineIndex: 1,
+      speaker: 'Narrator',
+      content: 'Hello world',
+      matchedPanelId: null,
+      matchedStoryboardId: null,
+      matchedPanelIndex: null,
+    }))
+  })
+
+  // F-QA-2 (2026-05-16): the in-memory map check still catches real
+  // LLM hallucination. Use case: LLM returned a (storyboardId,
+  // panelIndex) pair we never persisted this run — that's a real bug
+  // worth surfacing as a failed analyze (so it can be retried with a
+  // fresh LLM call), NOT silently dropped.
+  it('F-QA-2: hallucinated panel reference still throws', async () => {
+    parseVoiceLinesJsonMock.mockReturnValue([
+      {
+        lineIndex: 1,
+        speaker: 'Narrator',
+        content: 'Hello world',
+        emotionStrength: 0.8,
+        matchedPanel: {
+          storyboardId: 'storyboard-NEVER-PERSISTED',
+          panelIndex: 99,
+        },
+      },
+    ])
+
+    const job = buildJob({ episodeId: 'episode-1' })
+    await expect(handleScriptToStoryboardTask(job)).rejects.toThrow(
+      /references non-existent panel/,
+    )
+    // No voice line should have been written.
+    expect(txState.createdRows).toHaveLength(0)
   })
 })

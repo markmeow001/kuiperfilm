@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { TaskTerminatedError } from '@/lib/task/errors'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { withInternalLLMStreamCallbacks } from '@/lib/llm-observe/internal-stream-context'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import type { ScriptToStoryboardStepMeta, ScriptToStoryboardStepOutput } from '@/lib/novel-promotion/script-to-storyboard/orchestrator'
 import {
   dialogueDedupKey,
@@ -155,6 +156,41 @@ export async function persistVoiceLines(params: {
 
   return await prisma.$transaction(async (tx) => {
     await tx.novelPromotionVoiceLine.deleteMany({ where: { episodeId } })
+
+    // 2026-05-16 (F-QA-2) — verify panel IDs are still live in the
+    // DB INSIDE this transaction before we reference them. Background:
+    // persistedStoryboards is an in-memory snapshot from earlier
+    // persistSingleClipStoryboard calls. If a concurrent
+    // script_to_storyboard_run for the same episode (user double-clicked
+    // 重新分析, or a retry got dispatched mid-run) wiped+rewrote panels
+    // between then and now, the in-memory IDs are stale. Trying to
+    // INSERT a voiceLine with a stale matchedPanelId hits a Prisma
+    // foreign-key violation and the WHOLE batch fails, which is the
+    // user-reported "episode 2 stuck with Foreign key constraint
+    // violated" bug.
+    //
+    // Fetching live panel IDs once at transaction start lets us
+    // distinguish two cases below:
+    //   (a) LLM hallucination — referenced (storyboardId, panelIndex)
+    //       was never persisted by THIS run → throw (real LLM bug,
+    //       worth surfacing as analyze failure).
+    //   (b) Concurrent deletion — referenced IDs WERE persisted by
+    //       this run but no longer exist → log warn + drop the panel
+    //       binding (set matchedPanelId = null) so the voice line
+    //       still saves. Better degraded data than no data.
+    const inMemoryPanelIds = new Set(
+      Array.from(panelIdByStoryboardPanel.values()),
+    )
+    const livePanelRows =
+      inMemoryPanelIds.size > 0
+        ? await tx.novelPromotionPanel.findMany({
+            where: { id: { in: Array.from(inMemoryPanelIds) } },
+            select: { id: true },
+          })
+        : []
+    const livePanelIds = new Set(livePanelRows.map((p) => p.id))
+    let staleBindingsSkipped = 0
+
     const created: Array<{ id: string }> = []
     for (let i = 0; i < voiceLineRows.length; i += 1) {
       const row = voiceLineRows[i] || {}
@@ -165,6 +201,8 @@ export async function persistVoiceLines(params: {
           : null
       const matchedPanelIndex = matchedPanel ? toPositiveInt(matchedPanel.panelIndex) : null
       let matchedPanelId: string | null = null
+      let effectiveMatchedStoryboardId: string | null = null
+      let effectiveMatchedPanelIndex: number | null = null
       if (matchedPanel !== null) {
         if (!matchedStoryboardId || matchedPanelIndex === null) {
           throw new Error(`voice line ${i + 1} has invalid matchedPanel reference`)
@@ -172,9 +210,21 @@ export async function persistVoiceLines(params: {
         const panelKey = `${matchedStoryboardId}:${matchedPanelIndex}`
         const resolvedPanelId = panelIdByStoryboardPanel.get(panelKey)
         if (!resolvedPanelId) {
+          // Case (a): LLM produced a (storyboardId, panelIndex) we
+          // never persisted in this run. Real hallucination — keep
+          // the historical fail-fast behaviour.
           throw new Error(`voice line ${i + 1} references non-existent panel ${panelKey}`)
         }
-        matchedPanelId = resolvedPanelId
+        if (!livePanelIds.has(resolvedPanelId)) {
+          // Case (b): panel WAS persisted by this run but got wiped
+          // by a concurrent transaction. Drop the binding rather
+          // than tank the whole voice analysis output.
+          staleBindingsSkipped += 1
+        } else {
+          matchedPanelId = resolvedPanelId
+          effectiveMatchedStoryboardId = matchedStoryboardId
+          effectiveMatchedPanelIndex = matchedPanelIndex
+        }
       }
 
       if (typeof row.emotionStrength !== 'number' || !Number.isFinite(row.emotionStrength)) {
@@ -204,12 +254,19 @@ export async function persistVoiceLines(params: {
           content: row.content,
           emotionStrength,
           matchedPanelId,
-          matchedStoryboardId: matchedPanelId ? matchedStoryboardId : null,
-          matchedPanelIndex,
+          matchedStoryboardId: effectiveMatchedStoryboardId,
+          matchedPanelIndex: effectiveMatchedPanelIndex,
         },
         select: { id: true },
       })
       created.push(createdRow)
+    }
+    if (staleBindingsSkipped > 0) {
+      _ulogInfo('[persistVoiceLines] dropped stale panel bindings', {
+        episodeId,
+        staleBindingsSkipped,
+        totalVoiceLines: voiceLineRows.length,
+      })
     }
     return created
   }, { timeout: 15000 })
