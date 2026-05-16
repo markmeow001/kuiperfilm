@@ -16,12 +16,15 @@ const logger = createScopedLogger({
 })
 
 // 2026-05-16 (F4) — fail-closed gate. See bull-board-auth-gate.ts
-// for the full rule set + unit tests. On refusal we log loudly and
-// SKIP starting the express listener (so the dashboard is simply
-// unreachable — the safest state), then idle-pin the process so
-// `npm run start`'s `concurrently --kill-others` wrapper doesn't
-// tear down the rest of the container (next, worker, watchdog) as
-// collateral damage of a Bull-Board misconfig.
+// for the full rule set + unit tests.
+//
+// On refusal: log loudly and SKIP starting the express listener
+// (dashboard endpoint stays unbound — the safest state). The process
+// then idle-pins via setInterval so `npm run start`'s
+// `concurrently --kill-others` doesn't tear down the rest of the
+// container (next, worker, watchdog) as collateral damage. We use
+// a sync gate (no top-level await) because tsx --env-file runs this
+// script under CJS where top-level await is a transform error.
 const gateDecision = evaluateBullBoardAuthGate({
   nodeEnv: process.env.NODE_ENV,
   host,
@@ -36,119 +39,107 @@ const REFUSAL_MESSAGES = {
     'Bull-Board requires BULL_BOARD_USER + BULL_BOARD_PASSWORD when running in production or binding to a non-loopback host',
 } as const
 
-function idlePinProcess(): Promise<never> {
-  // Keep the event loop alive without doing anything. Bounded blast
-  // radius: the rest of the container keeps running, the dashboard
-  // endpoint stays unbound.
-  setInterval(() => undefined, 1 << 30)
-  // Block the script from continuing without exiting the process.
-  return new Promise<never>(() => {})
-}
-
 if (!gateDecision.ok) {
   logger.error({
     action: 'bull_board.startup_refused',
     message: REFUSAL_MESSAGES[gateDecision.reason],
     details: gateDecision.details,
   })
-  // Halt the script here. `gateDecision.ok` narrowing wasn't
-  // refining through the awaited never, so we throw inside the
-  // refusal branch and idle-pin from the unhandledRejection handler.
-  await idlePinProcess()
-  // unreachable
-  throw new Error('unreachable')
-}
+  // Idle-pin so concurrently --kill-others doesn't reap the
+  // sibling processes (next / worker / watchdog).
+  setInterval(() => undefined, 1 << 30)
+} else {
+  const authConfigured = gateDecision.authConfigured
 
-const authConfigured = gateDecision.authConfigured
+  function unauthorized(res: Response) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="BullMQ Board"')
+    res.status(401).send('Authentication required')
+  }
 
-function unauthorized(res: Response) {
-  res.setHeader('WWW-Authenticate', 'Basic realm="BullMQ Board"')
-  res.status(401).send('Authentication required')
-}
+  function basicAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+    // Dev convenience: only reachable here when the startup gate
+    // permitted unauth (loopback bind + non-prod). Treat as open.
+    if (!authConfigured) {
+      next()
+      return
+    }
 
-function basicAuthMiddleware(req: Request, res: Response, next: NextFunction) {
-  // Path 1 — dev convenience: only reachable here if startup gate
-  // permitted unauth (loopback bind + non-prod). Treat as open.
-  if (!authConfigured) {
+    const authorization = req.headers.authorization
+    if (!authorization?.startsWith('Basic ')) {
+      unauthorized(res)
+      return
+    }
+
+    const encoded = authorization.slice(6).trim()
+    let decoded = ''
+
+    try {
+      decoded = Buffer.from(encoded, 'base64').toString('utf8')
+    } catch {
+      unauthorized(res)
+      return
+    }
+
+    const index = decoded.indexOf(':')
+    if (index === -1) {
+      unauthorized(res)
+      return
+    }
+
+    const username = decoded.slice(0, index)
+    const password = decoded.slice(index + 1)
+    if (username !== authUser || password !== authPassword) {
+      unauthorized(res)
+      return
+    }
+
     next()
-    return
   }
 
-  const authorization = req.headers.authorization
-  if (!authorization?.startsWith('Basic ')) {
-    unauthorized(res)
-    return
-  }
+  const serverAdapter = new ExpressAdapter()
+  serverAdapter.setBasePath(basePath)
 
-  const encoded = authorization.slice(6).trim()
-  let decoded = ''
-
-  try {
-    decoded = Buffer.from(encoded, 'base64').toString('utf8')
-  } catch {
-    unauthorized(res)
-    return
-  }
-
-  const index = decoded.indexOf(':')
-  if (index === -1) {
-    unauthorized(res)
-    return
-  }
-
-  const username = decoded.slice(0, index)
-  const password = decoded.slice(index + 1)
-  if (username !== authUser || password !== authPassword) {
-    unauthorized(res)
-    return
-  }
-
-  next()
-}
-
-const serverAdapter = new ExpressAdapter()
-serverAdapter.setBasePath(basePath)
-
-createBullBoard({
-  queues: [
-    new BullMQAdapter(imageQueue),
-    new BullMQAdapter(videoQueue),
-    new BullMQAdapter(voiceQueue),
-    new BullMQAdapter(textQueue),
-  ],
-  serverAdapter,
-})
-
-const app = express()
-app.disable('x-powered-by')
-app.use(basePath, basicAuthMiddleware, serverAdapter.getRouter())
-
-const server = app.listen(port, host, () => {
-  logger.info({
-    action: 'bull_board.started',
-    message: 'bull board listening',
-    details: {
-      host,
-      port,
-      basePath,
-      auth: authConfigured ? 'enabled' : 'disabled-dev-loopback-only',
-      nodeEnv: process.env.NODE_ENV,
-    },
+  createBullBoard({
+    queues: [
+      new BullMQAdapter(imageQueue),
+      new BullMQAdapter(videoQueue),
+      new BullMQAdapter(voiceQueue),
+      new BullMQAdapter(textQueue),
+    ],
+    serverAdapter,
   })
-})
 
-async function shutdown(signal: string) {
-  logger.info({
-    action: 'bull_board.shutdown',
-    message: 'bull board shutting down',
-    details: {
-      signal,
-    },
+  const app = express()
+  app.disable('x-powered-by')
+  app.use(basePath, basicAuthMiddleware, serverAdapter.getRouter())
+
+  const server = app.listen(port, host, () => {
+    logger.info({
+      action: 'bull_board.started',
+      message: 'bull board listening',
+      details: {
+        host,
+        port,
+        basePath,
+        auth: authConfigured ? 'enabled' : 'disabled-dev-loopback-only',
+        nodeEnv: process.env.NODE_ENV,
+      },
+    })
   })
-  await Promise.allSettled([imageQueue.close(), videoQueue.close(), voiceQueue.close(), textQueue.close()])
-  await new Promise<void>((resolve) => server.close(() => resolve()))
-  process.exit(0)
-}
 
-process.on('SIGINT', () => void shutdown('SIGINT'))
-process.on('SIGTERM', () => void shutdown('SIGTERM'))
+  async function shutdown(signal: string) {
+    logger.info({
+      action: 'bull_board.shutdown',
+      message: 'bull board shutting down',
+      details: {
+        signal,
+      },
+    })
+    await Promise.allSettled([imageQueue.close(), videoQueue.close(), voiceQueue.close(), textQueue.close()])
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    process.exit(0)
+  }
+
+  process.on('SIGINT', () => void shutdown('SIGINT'))
+  process.on('SIGTERM', () => void shutdown('SIGTERM'))
+}
