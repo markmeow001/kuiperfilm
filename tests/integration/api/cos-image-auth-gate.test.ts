@@ -1,16 +1,21 @@
 /**
- * Regression: /api/cos/image must require authentication.
+ * Regression: /api/cos/image is fail-closed.
  *
- * 2026-05-15 /cso audit (F1) flagged this as HIGH IDOR. The route used to
- * be fully anonymous: anyone with a COS key (leaked via Caddy access logs,
- * shared URLs, screenshots, browser history) could hit
- *   /api/cos/image?key=<key>
- * and get a 24h signed URL for the underlying file, bypassing every
- * per-route auth guard the rest of the app installs.
+ * 2026-05-15 /cso F1 audit found this route was fully anonymous and
+ * signed URLs for any COS key. The first patch (commit efdb4fd) added
+ * requireUserAuth so anonymous requests get 401.
  *
- * This test pins the auth gate. Full ownership validation (user A
- * shouldn't sign user B's keys even when both are logged in) is tracked
- * as a follow-up in memory.
+ * 2026-05-16 F1 residual: even with auth, a logged-in user A could
+ * sign a URL for user B's key if A knew the key string. Rather than
+ * implement a key-prefix → projectId → owner check for an unused
+ * endpoint (codebase has zero callers; the active path is
+ * /api/cos/sign), we fail-closed: 403 to every authenticated request
+ * and log the access attempt so ops can decide whether to delete the
+ * endpoint outright after 30 days.
+ *
+ * This test pins both the auth gate AND the fail-closed behavior.
+ * If anyone re-enables the redirect path here without doing proper
+ * ownership validation, this test fires.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRoute } from '../../helpers/request'
@@ -37,7 +42,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('/api/cos/image auth gate', () => {
+describe('/api/cos/image gating', () => {
   it('returns 401 when no session (no signed URL leak)', async () => {
     mockUnauthenticated()
     const { GET } = await import('@/app/api/cos/image/route')
@@ -53,18 +58,20 @@ describe('/api/cos/image auth gate', () => {
     expect([301, 302, 303, 307, 308]).not.toContain(res.status)
   })
 
-  it('passes auth gate for an authenticated user', async () => {
+  it('returns 403 when authenticated (F1 residual fail-closed)', async () => {
     mockAuthenticated('user-A')
     const { GET } = await import('@/app/api/cos/image/route')
     const res = await callRoute(GET, {
-      path: '/api/cos/image?key=images/test.jpg',
+      path: '/api/cos/image?key=images/panel-candidate-abc-12345.jpg',
       method: 'GET',
       context: { params: Promise.resolve({}) },
     })
 
-    // Should now reach the signing step. Whatever the response code, it
-    // must NOT be 401 (the gate passed).
-    expect(res.status).not.toBe(401)
+    expect(res.status).toBe(403)
+    const body = (await res.json()) as { error?: { code?: string } }
+    expect(body.error?.code).toBe('FORBIDDEN')
+    // Must NOT redirect — that was the cross-tenant IDOR path.
+    expect([301, 302, 303, 307, 308]).not.toContain(res.status)
   })
 
   it('returns 400 when authenticated but key is missing', async () => {
