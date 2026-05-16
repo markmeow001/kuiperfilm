@@ -6,17 +6,24 @@ import type { UseProviderCardStateResult } from './hooks/useProviderCardState'
 import { AppIcon } from '@/components/ui/icons'
 import { ProviderTencentVODFields } from './ProviderTencentVODFields'
 
-type TestConnectionApiProvider = 'openrouter' | 'google' | 'anthropic' | 'openai' | 'custom'
+type TestConnectionApiProvider = 'openrouter' | 'google' | 'anthropic' | 'openai' | 'custom' | 'taijiai'
 
 // Map the UI's internal providerKey to the /test-connection endpoint's
 // supported set. Anything not in the explicit list falls back to 'custom'
 // with the user-configured baseUrl.
+//
+// IMPORTANT: providers with a real endpoint-specific probe (e.g. taijiai
+// pings /v1/videos/<probe>, not /v1/models) must be enumerated here.
+// Falling through to 'custom' calls models.list which can succeed even
+// when the token lacks permissions for the actual feature endpoint —
+// false-positive "connected" indicator.
 function mapToTestProvider(providerKey: string): TestConnectionApiProvider {
   switch (providerKey) {
     case 'openrouter': return 'openrouter'
     case 'google': return 'google'
     case 'anthropic': return 'anthropic'
     case 'openai': return 'openai'
+    case 'taijiai': return 'taijiai'
     default: return 'custom'
   }
 }
