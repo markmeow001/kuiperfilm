@@ -18,6 +18,7 @@ import type { Locale } from '@/i18n/routing'
 import { attachTaskToRun, createRun } from '@/lib/run-runtime/service'
 import { isAiTaskType, workflowTypeFromTaskType } from '@/lib/run-runtime/workflow'
 import { enforceRateLimit } from './rate-limit'
+import { assertNoEpisodeConflict } from './episode-conflict-guard'
 
 export function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -112,6 +113,22 @@ export async function submitTask(params: {
   // can't accumulate failed Task rows or burn quota. Categorized
   // by task type — see src/lib/task/rate-limit.ts for limits.
   await enforceRateLimit({ userId: params.userId, taskType: params.type })
+
+  // 2026-05-16 (B / F-QA-2 root cause) — refuse to enqueue when an
+  // incompatible task is already mutating this episode's storyboard
+  // graph. See src/lib/task/episode-conflict-matrix.ts for the rule
+  // set. Same-type races are still handled by dedupeKey's DB unique
+  // constraint; this layer covers CROSS-type races (e.g. user
+  // triggers script_to_storyboard_run while a clips_build is still
+  // rewriting clips for the same episode), which used to cause FK
+  // violations in persistVoiceLines when panel rows got cascade-
+  // deleted out from under the in-flight transaction.
+  if (params.episodeId) {
+    await assertNoEpisodeConflict({
+      episodeId: params.episodeId,
+      type: params.type,
+    })
+  }
 
   const normalizedPayloadBase = normalizeTaskPayload(params.type, params.payload || null)
   const normalizedPayloadMeta = toObject(normalizedPayloadBase.meta)
