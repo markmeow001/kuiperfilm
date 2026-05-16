@@ -225,6 +225,8 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
                   setEditingId(episode.id)
                   setEditingName(episode.name)
                 }}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={`${episode.name}${isActive ? '（目前選取）' : ''}（雙擊重命名）`}
                 className={`flex items-center gap-1.5 rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all ${
                   isActive
                     ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'

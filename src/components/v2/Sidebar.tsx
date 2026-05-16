@@ -88,6 +88,8 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
               key={step.id}
               type="button"
               onClick={() => onSelect(step.id)}
+              aria-current={active ? 'step' : undefined}
+              aria-label={`${step.num} ${step.label} ${step.subtitle}${active ? '（目前步驟）' : completed ? '（已完成）' : ''}`}
               className={`group flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-all ${
                 active
                   ? 'border-amber-500/30 bg-amber-500/10'
