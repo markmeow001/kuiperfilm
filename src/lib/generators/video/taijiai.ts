@@ -153,10 +153,19 @@ export class TaijiaiSeedanceVideoGenerator extends BaseVideoGenerator {
       }
     }
 
-    // Extra reference images (capped at 7 so first/last + extras ≤ 9 total
-    // per BobAPI's "最多9张图". When first/last mode is active the spec
-    // capn drops to 2, so caller is responsible for not over-supplying.)
-    const extraImageCap = imageUrl && lastFrameImageUrl ? 0 : (imageUrl ? 1 : 9) - (imageUrl ? 1 : 0)
+    // Extra reference images. BobAPI caps total images per request at 9
+    // ("最多9张图"). First-frame consumes 1 of those slots; first+last
+    // together consume 2, AND in that mode the spec restricts to exactly
+    // 2 images so no extras are allowed.
+    //   - first_frame only         → 9 - 1     = 8 extras allowed
+    //   - first_frame + last_frame → 0 extras (first/last mode, hard cap 2)
+    //   - no first_frame           → 9 extras allowed
+    // 2026-05-17 — original formula was `(imageUrl?1:9)-(imageUrl?1:0)`
+    // which evaluates to 0 when first_frame is set, silently throwing away
+    // every reference image in composite calls. Caught via Seedance multi-
+    // shot composite (9-ref @N) e2e: contentCount stayed at 2 even with 3
+    // panels supplied, BobAPI then 30s-failed on long prompt + 1 image.
+    const extraImageCap = imageUrl && lastFrameImageUrl ? 0 : (imageUrl ? 8 : 9)
     for (const url of referenceImages.slice(0, Math.max(0, extraImageCap))) {
       content.push({
         type: 'image_url',
