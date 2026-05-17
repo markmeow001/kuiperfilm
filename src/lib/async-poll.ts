@@ -903,6 +903,14 @@ async function pollAtlasCloudTask(
 
 /**
  * BobAPI (taijiai.online) Seedance 2.0 任务轮询
+ *
+ * BobAPI 返回的 video_url 形如:
+ *   https://bobdong.cn/v1/videos/{taskId}/content
+ *
+ * **必須**帶 Bearer 才能拿到 302 redirect 到真實 OSS URL。
+ * 沒帶 auth → 404。所以這裡要把 downloadHeaders 一起回給
+ * worker,讓後續 fetch (uploadVideoSourceToCos / R2) 能跟過 redirect。
+ * 2026-05-17 live verified: 不帶 auth → 404, 帶 auth → 302 → MP4 1.6MB.
  */
 async function pollTaijiaiTask(
     videoId: string,
@@ -916,5 +924,8 @@ async function pollTaijiaiTask(
         videoUrl: result.videoUrl,
         resultUrl: result.videoUrl,
         error: result.error,
+        ...(result.status === 'completed' && result.videoUrl
+            ? { downloadHeaders: { Authorization: `Bearer ${apiKey}` } }
+            : {}),
     }
 }
