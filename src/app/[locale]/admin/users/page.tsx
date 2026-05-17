@@ -214,6 +214,9 @@ export default function AdminUsersPage() {
             <Link href={`/${locale}/admin/usage`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
               使用量
             </Link>
+            <Link href={`/${locale}/admin/economics`} className="rounded-sm px-3 py-1.5 font-medium text-xs text-[var(--glass-text-secondary)] transition-colors hover:bg-[var(--glass-tone-info-fg)]/10 hover:text-[var(--glass-text-primary)]">
+              經濟
+            </Link>
           </div>
         </div>
         <header className="flex items-end justify-between mb-6 gap-4 flex-wrap">
