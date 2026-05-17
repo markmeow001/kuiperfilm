@@ -614,9 +614,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (changed) setImageInFlight(next)
   }, [allPanels, imageInFlight, serverInflightPanelImageIds])
 
-  function handleGenerateVideo() {
+  // 2026-05-17 — modelOverride lets the per-shot Seedance buttons
+  // (added in the Selected Shot card) submit a one-off video gen using
+  // fal Seedance 2.0 without touching project.videoModel. The default
+  // path (no override → use project setting) is unchanged.
+  function handleGenerateVideo(modelOverride?: string) {
     if (!selected) return
-    const videoModel = project?.novelPromotionData?.videoModel
+    const videoModel = modelOverride ?? project?.novelPromotionData?.videoModel
     if (!videoModel) {
       alert('專案還沒選 video model — 請到首頁設定中選擇 Kling 系列模型')
       return
@@ -1664,7 +1668,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   <button
                     type="button"
                     disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
-                    onClick={handleGenerateVideo}
+                    onClick={() => handleGenerateVideo()}
                     className="rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-serif-cn text-xs text-amber-300 transition-all hover:bg-amber-500/20 disabled:opacity-50"
                   >
                     {generateVideo.isPending
@@ -2390,7 +2394,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <button
               type="button"
               disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
-              onClick={handleGenerateVideo}
+              onClick={() => handleGenerateVideo()}
               title={
                 !selected?.imageUrl
                   ? '需要先有靜態圖才能生影片 — 請先點「生成圖片」'
@@ -2408,6 +2412,44 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   : selected?.videoUrl
                     ? '↻ 重生視頻'
                     : '生成視頻'}
+            </button>
+          </div>
+          {/* 2026-05-17 — Seedance 2.0 (fal) alternate row. Lets the user
+              force-use fal Seedance for this one shot without changing
+              the project's default videoModel. Two variants: standard
+              (1080p + native audio, slower / pricier) and Fast (cheap).
+              Smaller, secondary visual weight so it doesn't compete with
+              the project-default "生成視頻" CTA above. Disabled state
+              tracks the same prerequisites (need image, no inflight). */}
+          <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-stone-500">
+            <span className="shrink-0">或用 fal Seedance →</span>
+            <button
+              type="button"
+              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+              onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
+              title={
+                !selected?.imageUrl
+                  ? '需要先有靜態圖才能生影片'
+                  : 'fal Seedance 2.0 (1080p + native audio, ~$0.3-0.5/支)'
+              }
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="play" className="h-3 w-3" />
+              Seedance (1080p+audio)
+            </button>
+            <button
+              type="button"
+              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+              onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
+              title={
+                !selected?.imageUrl
+                  ? '需要先有靜態圖才能生影片'
+                  : 'fal Seedance 2.0 Fast (cheap variant, ~$0.1-0.2/支,稍弱)'
+              }
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="play" className="h-3 w-3" />
+              Seedance Fast
             </button>
           </div>
           {/* Download row — surface the underlying COS URL as a direct
