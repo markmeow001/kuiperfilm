@@ -1681,6 +1681,32 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   </button>
                 </div>
 
+                {/* 2026-05-17 — fal Seedance per-shot override row (mini).
+                    Mirrors the Selected Shot card's secondary row below
+                    the main 生成視頻 CTA. Compact labels (Seedance / Fast)
+                    because the panel-card mini area is narrow. */}
+                <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-stone-500">
+                  <span className="shrink-0">fal Seedance →</span>
+                  <button
+                    type="button"
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+                    onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
+                    title="fal Seedance 2.0 (1080p + native audio, ~$0.3-0.5/支)"
+                    className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
+                  >
+                    Seedance
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+                    onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
+                    title="fal Seedance 2.0 Fast (cheap variant, ~$0.1-0.2/支,稍弱)"
+                    className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
+                  >
+                    Fast
+                  </button>
+                </div>
+
                 <div className="mt-4 space-y-4">
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
