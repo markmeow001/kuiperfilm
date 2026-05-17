@@ -4,6 +4,7 @@ import { type TaskJobData } from '@/lib/task/types'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { runMultiShotBPath } from './multi-shot-video-b-path'
+import { runMultiShotSeedanceComposite, shouldUseSeedanceComposite } from './multi-shot-video-seedance-path'
 import {
   parsePanelCharacterReferences,
   findCharacterByName,
@@ -159,6 +160,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   }
 
   const useBPath = shouldUseTencentBPath(videoModel)
+  const useSeedanceComposite = shouldUseSeedanceComposite(videoModel)
 
   await reportTaskProgress(job, 5, { stage: 'load_panels' })
 
@@ -190,15 +192,30 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   for (let i = 0; i < panels.length; i++) {
     if (!panels[i]) throw new Error(`Panel not found: ${panelIds[i]}`)
-    // C path requires every panel to have a generated reference image
-    // (used as the first-frame). B path is t2v so panels can be
-    // text-only — skip the imageUrl check entirely.
+    // C path + Seedance composite require imageUrl. B path is t2v so
+    // panels can be text-only — skip the imageUrl check there only.
     if (!useBPath && !panels[i]!.imageUrl) {
       throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
     }
   }
 
   const validPanels = panels as NonNullable<(typeof panels)[number]>[]
+
+  // ─────────────────── SEEDANCE COMPOSITE PATH ───────────────────
+  // Single composite video (4-15s) built from up to 9 panel images as
+  // BobAPI @N references. Runs before B/C path so the rest of the
+  // handler (character collection / KlingElement build) stays Kling-
+  // specific. See multi-shot-video-seedance-path.ts.
+  if (useSeedanceComposite) {
+    await reportTaskProgress(job, 15, { stage: 'seedance_composite_start' })
+    return await runMultiShotSeedanceComposite({
+      job,
+      validPanels,
+      videoModel,
+      sound,
+      aspectRatio,
+    })
+  }
 
   await reportTaskProgress(job, 15, { stage: 'collect_characters' })
 

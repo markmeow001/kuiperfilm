@@ -51,16 +51,22 @@ describe('VIDEO_MODEL_VARIANTS catalog', () => {
     }
   })
 
-  it('Seedance variants do NOT support multi-shot today (chunker not built)', () => {
-    // Important: if anyone flips a Seedance multi-shot bit to true, they
-    // must also wire the chunker in the worker — otherwise the gate
-    // greenlights a dispatch path that does not exist. This test fires
-    // first so they update both at once.
-    const seedance = getVariantsByFamily('seedance')
-    expect(seedance.length).toBeGreaterThan(0)
-    for (const v of seedance) {
-      expect(v.capabilities.multiShot).toBe(false)
-    }
+  it('fal Seedance variants do NOT support multi-shot composite (flat i2v API only)', () => {
+    // BobAPI/taijiai Seedance is the only Seedance with the 9-ref
+    // content[] composite endpoint. fal Seedance has a flat i2v
+    // surface (image_url + optional end_image_url), so it stays out
+    // of the 多鏡頭 gate. If anyone flips a fal Seedance bit to true,
+    // they need to wire fal-side composite first.
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/image-to-video')).toBe(false)
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/image-to-video')).toBe(false)
+  })
+
+  it('BobAPI Seedance supports multi-shot composite (content[] @N path)', () => {
+    // The variant registry MUST keep this bit true — the V2 picker
+    // and the multi-shot dispatcher both read from here. Flipping
+    // back to false silently breaks the 多鏡頭 button without a
+    // worker change to back it up.
+    expect(isMultiShotCapable('taijiai::seedance-2.0-720p')).toBe(true)
   })
 
   it('every Kling variant supports multi-shot (the only family that does today)', () => {
@@ -117,10 +123,13 @@ describe('isMultiShotCapable (gate used by the multi-shot button)', () => {
     expect(isMultiShotCapable('fal::fal-ai/kling-video/v3/pro/image-to-video')).toBe(true)
   })
 
-  it('returns false for Seedance variants (no chunker yet)', () => {
+  it('returns false for fal Seedance variants (flat i2v API only)', () => {
     expect(isMultiShotCapable('fal::bytedance/seedance-2.0/image-to-video')).toBe(false)
     expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/image-to-video')).toBe(false)
-    expect(isMultiShotCapable('taijiai::seedance-2.0-720p')).toBe(false)
+  })
+
+  it('returns true for BobAPI Seedance (content[] @N composite)', () => {
+    expect(isMultiShotCapable('taijiai::seedance-2.0-720p')).toBe(true)
   })
 
   it('fails closed for null / unknown ids (never assume capability)', () => {

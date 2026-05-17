@@ -110,6 +110,10 @@ interface V2GroupsLayoutProps {
   /** Threads the project-level capability gate down to each GroupCard
    *  so the per-group CTAs grey out in sync with the picker. */
   canMultiShot?: boolean
+  /** 2026-05-17 — Family-aware CTA wording. Kling = batch multi-shot
+   *  (N stitched clips), Seedance = composite (1 video, 9-ref @N). The
+   *  GroupCard CTA label must match what the worker produces. */
+  videoFamily?: 'kling' | 'seedance' | null
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
@@ -143,6 +147,7 @@ export function V2GroupsLayout({
   episodeBindings,
   episodeNumber,
   canMultiShot = true,
+  videoFamily = null,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -207,6 +212,7 @@ export function V2GroupsLayout({
                   episodeBindings={episodeBindings}
                   episodeNumber={episodeNumber}
                   canMultiShot={canMultiShot}
+                  videoFamily={videoFamily}
                   onRegenerate={(panelIds, overrides) =>
                     onRegenerateGroup(g.groupId, panelIds, overrides)
                   }

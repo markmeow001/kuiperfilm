@@ -18,7 +18,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { VideoModelPickerInline } from './VideoModelPickerInline'
-import { isMultiShotCapable } from '@/lib/video-models/variants'
+import { getVideoModelVariant, isMultiShotCapable } from '@/lib/video-models/variants'
 import {
   useStoryboards,
   useUpdatePanelText,
@@ -167,6 +167,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // 2026-05-17 — Derived from variant registry. Drives multi-shot button
   // disable + tooltip; null/unknown ids fail closed.
   const canMultiShot = isMultiShotCapable(projectVideoModel)
+  // 2026-05-17 — Family-aware labels: Kling = batch multi-shot (N stitched
+  // clips), Seedance composite = single video with 9-ref content[] @N. The
+  // CTA wording must match what the worker actually produces or the user
+  // sees one composite mp4 after expecting N clips (or vice versa).
+  const videoFamily = getVideoModelVariant(projectVideoModel)?.family ?? null
   // Heuristic for thumb sizing: portrait projects (9:16, 3:4, 2:3) get
   // a taller-narrower thumb; landscape stays compact-wide. Without this
   // 9:16 thumbs at h-24 fixed-height end up only ~54px wide — readable
@@ -996,7 +1001,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!videoModel) {
       setMultiShotState({
         status: 'error',
-        message: '請從分鏡頂部的「視頻模型」picker 選一個 Kling 變體（建議 Kling-3.0-Omni）',
+        message: '請從分鏡頂部的「視頻模型」picker 選一個支援多鏡頭的變體(Kling 系列或 Seedance 2.0 720p BobAPI)',
       })
       return
     }
@@ -1008,7 +1013,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!isMultiShotCapable(videoModel)) {
       setMultiShotState({
         status: 'error',
-        message: `多鏡頭目前只支援 Kling 系列,你選的「${videoModel}」不支援。請從分鏡頂部的視頻模型 picker 切到 Kling。`,
+        message: `「${videoModel}」不支援多鏡頭。請從分鏡頂部的視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)。`,
       })
       return
     }
@@ -1341,16 +1346,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               disabled={multiShotState.status === 'submitting' || !canMultiShot}
               onClick={handleSubmitMultiShot}
               title={
-                canMultiShot
-                  ? '把所有 group 一次送 Kling 多鏡頭'
-                  : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+                !canMultiShot
+                  ? '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                  : videoFamily === 'seedance'
+                    ? '每個 group 合成為一支 4-15s 影片(Seedance BobAPI 9-ref @N 合成)'
+                    : '把所有 group 一次送 Kling 多鏡頭'
               }
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {multiShotState.status === 'submitting'
                 ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
-                : '智能多鏡頭'}
+                : videoFamily === 'seedance'
+                  ? '多鏡頭合成'
+                  : '智能多鏡頭'}
             </button>
           </div>
         </div>
@@ -1371,9 +1380,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         episodeBindings={episodeBindings}
         episodeNumber={(currentEpisode as { episodeNumber?: number } | null)?.episodeNumber ?? null}
         canMultiShot={canMultiShot}
+        videoFamily={videoFamily}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
-            return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 模型' }
+            return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 或 Seedance 2.0 720p (BobAPI) 模型' }
           }
           // 2026-05-17 — use the variant registry's capability bit so this
           // gate stays in sync with the inline picker + handleSubmitMultiShot.
@@ -1381,7 +1391,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           if (!isMultiShotCapable(projectVideoModel)) {
             return {
               taskId: null,
-              error: `多鏡頭目前只支援 Kling 系列,你選的「${projectVideoModel}」不支援。請從分鏡頂部的視頻模型 picker 切到 Kling。`,
+              error: `「${projectVideoModel}」不支援多鏡頭。請從分鏡頂部的視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)。`,
             }
           }
           try {
@@ -1523,16 +1533,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 onClick={() => handleSubmitMultiShot()}
                 disabled={multiShotState.status === 'submitting' || !canMultiShot}
                 title={
-                  canMultiShot
-                    ? '把分鏡送 Kling multi-shot 一次出多鏡頭視頻'
-                    : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+                  !canMultiShot
+                    ? '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                    : videoFamily === 'seedance'
+                      ? '每個 group 合成為一支 4-15s 影片(Seedance BobAPI 9-ref @N 合成)'
+                      : '把分鏡送 Kling multi-shot 一次出多鏡頭視頻'
                 }
                 className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {multiShotState.status === 'submitting'
                   ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
-                  : '智能多鏡頭'}
+                  : videoFamily === 'seedance'
+                    ? '多鏡頭合成'
+                    : '智能多鏡頭'}
               </button>
               </div>
             </div>
@@ -2190,7 +2204,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               title={(() => {
                 const m = project?.novelPromotionData?.videoModel ?? ''
                 if (!canMultiShot) {
-                  return 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+                  return '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                }
+                if (videoFamily === 'seedance') {
+                  return `Seedance 合成(BobAPI):一支 4-15s 影片含最多 9 個 reference,模型自決鏡頭運動與過渡`
                 }
                 if (/^tencent-vod::Kling-(3|O1)/i.test(m)) {
                   return `B 路徑(Tencent VOD ${m.split('::')[1]}):t2v + SubjectInfos.N + multi_shot=intelligence,免生圖直接出多鏡頭視頻`
@@ -2203,6 +2220,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
                 : (() => {
                     const m = project?.novelPromotionData?.videoModel ?? ''
+                    if (videoFamily === 'seedance') {
+                      return '多鏡頭合成 (Seedance)'
+                    }
                     return /^tencent-vod::Kling-(3|O1)/i.test(m)
                       ? '智能多鏡頭 (B 路徑)'
                       : 'Kling 多鏡頭(批次)'

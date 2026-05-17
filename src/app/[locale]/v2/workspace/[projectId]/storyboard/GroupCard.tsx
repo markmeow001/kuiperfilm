@@ -201,6 +201,15 @@ interface GroupCardProps {
    * Defaults to true so legacy callers keep working.
    */
   canMultiShot?: boolean
+  /**
+   * 2026-05-17 — Kling = batch multi-shot (N stitched clips per group);
+   * Seedance = composite (1 video with 9-ref @N per group). The CTA
+   * label / loading message / done message must match what the worker
+   * actually delivers or the user expects N clips and gets one composite
+   * (or vice versa). Null defaults to Kling phrasing (back-compat for
+   * existing callers that don't pass this prop yet).
+   */
+  videoFamily?: 'kling' | 'seedance' | null
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
@@ -231,6 +240,7 @@ export function GroupCard({
   segmentDurationSeconds = 15,
   episodeNumber,
   canMultiShot = true,
+  videoFamily = null,
   onRegenerate,
 }: GroupCardProps) {
   // Build episode binding lookup ONCE. Empty map when no bindings prop
@@ -1023,8 +1033,16 @@ export function GroupCard({
       setRegenState({ status: 'error', message: '至少需要 2 鏡才能跑多鏡頭' })
       return
     }
-    if (panels.length > 6) {
-      setRegenState({ status: 'error', message: '一組最多 6 鏡(會送前 6 個)' })
+    // Kling 多鏡頭 single dispatch caps at 6 clips per group; Seedance
+    // composite caps at 9 references (BobAPI content[] @N hard limit).
+    // Worker enforces both — UI just nudges so the user understands which
+    // panels get dropped if the group is oversized.
+    const maxPanels = videoFamily === 'seedance' ? 9 : 6
+    if (panels.length > maxPanels) {
+      setRegenState({
+        status: 'error',
+        message: `一組最多 ${maxPanels} 鏡(會送前 ${maxPanels} 個)`,
+      })
     } else {
       setRegenState({ status: 'submitting' })
     }
@@ -1237,9 +1255,11 @@ export function GroupCard({
                 void handleRegenerate()
               }}
               title={
-                canMultiShot
-                  ? '重新送這個 group 跑 Kling 多鏡頭'
-                  : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+                !canMultiShot
+                  ? '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                  : videoFamily === 'seedance'
+                    ? '把這個 group 的所有分鏡合成為一支 4-15s 影片(Seedance BobAPI 9-ref @N 合成)'
+                    : '重新送這個 group 跑 Kling 多鏡頭'
               }
               className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[12px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 regenState.status === 'submitting'
@@ -1260,7 +1280,9 @@ export function GroupCard({
                   "have a video, regenerate it". `taskId` is the server-
                   side multi-shot task; null means this group has never
                   been submitted. The done/error states keep the literal
-                  resubmit prompt because user just clicked once. */}
+                  resubmit prompt because user just clicked once.
+                  2026-05-17 — Seedance composite reads as "合成此組",
+                  Kling stays "生成影片" / "重新生成". */}
               {regenState.status === 'submitting'
                 ? '送出中…'
                 : regenState.status === 'done'
@@ -1268,8 +1290,12 @@ export function GroupCard({
                   : regenState.status === 'error'
                     ? '⚠ 失敗,點重試'
                     : taskId
-                      ? '重新生成'
-                      : '生成影片'}
+                      ? videoFamily === 'seedance'
+                        ? '重新合成'
+                        : '重新生成'
+                      : videoFamily === 'seedance'
+                        ? '合成此組'
+                        : '生成影片'}
             </button>
           ) : null}
           <div className="font-mono text-[14px] tracking-wider text-stone-500">
@@ -1284,14 +1310,18 @@ export function GroupCard({
           <div className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2">
             <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-400/40 border-t-amber-200" />
             <div className="font-serif-cn text-[12px] text-amber-200">
-              送 Kling 中…task 已 queue,大約 30 秒進到 worker。Kling Omni 算 3-5 分鐘出影片,完成後左邊會自動刷新。
+              {videoFamily === 'seedance'
+                ? '送 Seedance 中…task 已 queue,大約 30 秒進到 worker。BobAPI 合成大約 2-5 分鐘出影片,完成後左邊會自動刷新。'
+                : '送 Kling 中…task 已 queue,大約 30 秒進到 worker。Kling Omni 算 3-5 分鐘出影片,完成後左邊會自動刷新。'}
             </div>
           </div>
         ) : regenState.status === 'done' ? (
           <div className="flex items-center gap-2 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
             <AppIcon name="check" className="h-3 w-3 text-emerald-300" />
             <div className="font-serif-cn text-[12px] text-emerald-200">
-              ✓ 已送出 — Kling Omni 大約 3-5 分鐘出影片,進度會顯示在左邊綁定區。可以同時去其他 group 編輯。
+              {videoFamily === 'seedance'
+                ? '✓ 已送出 — Seedance 合成大約 2-5 分鐘出影片,進度會顯示在左邊綁定區。可以同時去其他 group 編輯。'
+                : '✓ 已送出 — Kling Omni 大約 3-5 分鐘出影片,進度會顯示在左邊綁定區。可以同時去其他 group 編輯。'}
             </div>
           </div>
         ) : regenState.status === 'error' ? (
@@ -1307,7 +1337,7 @@ export function GroupCard({
               title={
                 canMultiShot
                   ? undefined
-                  : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+                  : '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
               }
               className="rounded-sm border border-rose-500/50 bg-rose-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-rose-200 transition-colors hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >

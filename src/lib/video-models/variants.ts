@@ -67,9 +67,12 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
   {
     id: 'taijiai::seedance-2.0-720p',
     family: 'seedance',
+    // 2026-05-17 — only Seedance variant with multi-ref composite support.
+    // BobAPI/taijiai serves the content[] @N endpoint; fal Seedance is
+    // flat i2v only, so only THIS id lights up the 多鏡頭 button.
     label: 'Seedance 2.0 720p (BobAPI)',
-    hint: '透過 BobAPI / taijiai 中轉,720p · audio',
-    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥¥' },
+    hint: '透過 BobAPI / taijiai 中轉,720p · audio · 支援多鏡頭合成 (9-ref @N)',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
 
   // ─────────── Kling family ───────────
