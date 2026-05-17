@@ -11,6 +11,7 @@ type SupportedProvider =
   | 'tencent-hunyuan'
   | 'tencent-vod'
   | 'taijiai'
+  | 'fal'
 
 type TestConnectionPayload = {
   provider?: string
@@ -45,6 +46,7 @@ function normalizeProvider(payload: TestConnectionPayload): SupportedProvider {
     case 'vod':
     case 'tencent':
     case 'taijiai':
+    case 'fal':
       // VOD / Hunyuan share the same Tencent credential format; normalise
       // the legacy 'vod' / 'tencent' keys onto 'tencent-vod' so the rest
       // of the switch only deals with two canonical names.
@@ -166,7 +168,36 @@ export async function testLlmConnection(payload: TestConnectionPayload): Promise
       await testTaijiai(apiKey)
       return { provider, message: 'BobAPI (taijiai) 凭证有效' }
     }
+    case 'fal': {
+      await testFal(apiKey)
+      return { provider, message: 'fal.ai 凭证有效' }
+    }
   }
+}
+
+async function testFal(apiKey: string): Promise<void> {
+  // fal.ai has no listing endpoint; the cheapest valid probe is a status
+  // query for a UUID that will never exist. Behaviour with a real key:
+  //   - 401 {"detail":"invalid key credentials"}  → well-shaped but rejected key
+  //   - 401 {"detail":"Authentication is required"} → malformed / no key
+  //   - 404                                       → auth OK, request id (correctly) not found
+  // The 404 case is what we want; both 401 variants must throw.
+  // We use fal-ai/fast-sdxl as the probe model because it has been
+  // available since 2023 and is always reachable on the queue host.
+  const probeId = '00000000-0000-0000-0000-000000000000'
+  const response = await fetch(
+    `https://queue.fal.run/fal-ai/fast-sdxl/requests/${probeId}/status`,
+    { headers: { Authorization: `Key ${apiKey}` } },
+  )
+  if (response.status === 401) {
+    const text = await response.text().catch(() => '')
+    // Surface fal's own error text so the user can distinguish "key
+    // wrong" from "key missing/malformed" without re-reading the source.
+    throw new Error(`FAL_AUTH_FAILED: ${text || 'Authentication failed'}`)
+  }
+  // 404 / 200 / 422 = auth accepted by the queue host. We do not need
+  // to assert the body shape; the only signal we care about is "did fal
+  // recognise the key".
 }
 
 async function testTaijiai(apiKey: string): Promise<void> {
