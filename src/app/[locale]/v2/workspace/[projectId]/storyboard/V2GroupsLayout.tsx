@@ -107,6 +107,9 @@ interface V2GroupsLayoutProps {
   episodeBindings?: Array<{ characterId: string; appearanceId: string | null }>
   /** Used for download filename naming (`ep{N}_group{NN}.mp4`). */
   episodeNumber?: number | null
+  /** Threads the project-level capability gate down to each GroupCard
+   *  so the per-group CTAs grey out in sync with the picker. */
+  canMultiShot?: boolean
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
@@ -139,6 +142,7 @@ export function V2GroupsLayout({
   locationRoster,
   episodeBindings,
   episodeNumber,
+  canMultiShot = true,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -202,6 +206,7 @@ export function V2GroupsLayout({
                   locationRoster={locationRoster}
                   episodeBindings={episodeBindings}
                   episodeNumber={episodeNumber}
+                  canMultiShot={canMultiShot}
                   onRegenerate={(panelIds, overrides) =>
                     onRegenerateGroup(g.groupId, panelIds, overrides)
                   }

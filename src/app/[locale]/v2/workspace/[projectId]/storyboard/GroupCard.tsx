@@ -193,6 +193,14 @@ interface GroupCardProps {
    * multi-episode projects.
    */
   episodeNumber?: number | null
+  /**
+   * 2026-05-17 — when false, both the per-group main CTA and the
+   * retry button get disabled with a tooltip pointing at the inline
+   * video-model picker. Mirrors the project-level capability gate at
+   * V2StoryboardClient handleSubmitMultiShot / onRegenerateGroup.
+   * Defaults to true so legacy callers keep working.
+   */
+  canMultiShot?: boolean
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
@@ -222,6 +230,7 @@ export function GroupCard({
   episodeBindings,
   segmentDurationSeconds = 15,
   episodeNumber,
+  canMultiShot = true,
   onRegenerate,
 }: GroupCardProps) {
   // Build episode binding lookup ONCE. Empty map when no bindings prop
@@ -1222,12 +1231,16 @@ export function GroupCard({
           {expanded ? (
             <button
               type="button"
-              disabled={regenState.status === 'submitting' || panels.length < 2}
+              disabled={regenState.status === 'submitting' || panels.length < 2 || !canMultiShot}
               onClick={(e) => {
                 e.stopPropagation()
                 void handleRegenerate()
               }}
-              title="重新送這個 group 跑 Kling 多鏡頭"
+              title={
+                canMultiShot
+                  ? '重新送這個 group 跑 Kling 多鏡頭'
+                  : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+              }
               className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[12px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 regenState.status === 'submitting'
                   ? 'border-amber-400 bg-amber-500/30 text-amber-100 ring-2 ring-amber-500/40'
@@ -1290,7 +1303,13 @@ export function GroupCard({
             <button
               type="button"
               onClick={() => void handleRegenerate()}
-              className="rounded-sm border border-rose-500/50 bg-rose-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-rose-200 transition-colors hover:bg-rose-500/25"
+              disabled={!canMultiShot}
+              title={
+                canMultiShot
+                  ? undefined
+                  : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+              }
+              className="rounded-sm border border-rose-500/50 bg-rose-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-rose-200 transition-colors hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               重試
             </button>

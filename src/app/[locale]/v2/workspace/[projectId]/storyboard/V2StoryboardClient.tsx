@@ -1370,14 +1370,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         locationRoster={locationRoster}
         episodeBindings={episodeBindings}
         episodeNumber={(currentEpisode as { episodeNumber?: number } | null)?.episodeNumber ?? null}
+        canMultiShot={canMultiShot}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 模型' }
           }
-          if (!/kling/i.test(projectVideoModel)) {
+          // 2026-05-17 — use the variant registry's capability bit so this
+          // gate stays in sync with the inline picker + handleSubmitMultiShot.
+          // Fails closed for unknown ids (legacy DB rows).
+          if (!isMultiShotCapable(projectVideoModel)) {
             return {
               taskId: null,
-              error: `多鏡頭只支援 Kling 系列模型,目前是 ${projectVideoModel}`,
+              error: `多鏡頭目前只支援 Kling 系列,你選的「${projectVideoModel}」不支援。請從分鏡頂部的視頻模型 picker 切到 Kling。`,
             }
           }
           try {
