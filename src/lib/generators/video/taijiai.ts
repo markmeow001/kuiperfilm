@@ -306,6 +306,18 @@ export async function queryTaijiaiTaskStatus(
     return { status: 'completed', videoUrl: data.video_url }
   }
   if (data.status === 'failed') {
+    // 2026-05-17 — BobAPI's `error.message` is almost always the generic
+    // "视频生成失败，请稍后重试" with no actionable reason. Dump the full
+    // response so ops can see hidden moderation codes / quota errors etc.
+    // when grep'ing logs. The actual surfaced error stays terse for the
+    // retryable BullMQ path.
+    logger.error({
+      message: 'BobAPI Seedance 2.0 task failed — full response',
+      details: {
+        videoId,
+        rawResponse: data as unknown,
+      },
+    })
     return {
       status: 'failed',
       error: data.error?.message ?? `BobAPI Seedance 2.0 task failed (${videoId})`,
