@@ -17,6 +17,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { VideoModelPickerInline } from './VideoModelPickerInline'
+import { isMultiShotCapable } from '@/lib/video-models/variants'
 import {
   useStoryboards,
   useUpdatePanelText,
@@ -162,6 +164,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const projectVideoRatio = project?.novelPromotionData?.videoRatio ?? '16:9'
   const aspectClass = aspectClassFromRatio(projectVideoRatio)
   const projectVideoModel = project?.novelPromotionData?.videoModel ?? ''
+  // 2026-05-17 — Derived from variant registry. Drives multi-shot button
+  // disable + tooltip; null/unknown ids fail closed.
+  const canMultiShot = isMultiShotCapable(projectVideoModel)
   // Heuristic for thumb sizing: portrait projects (9:16, 3:4, 2:3) get
   // a taller-narrower thumb; landscape stays compact-wide. Without this
   // 9:16 thumbs at h-24 fixed-height end up only ~54px wide — readable
@@ -622,7 +627,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!selected) return
     const videoModel = modelOverride ?? project?.novelPromotionData?.videoModel
     if (!videoModel) {
-      alert('專案還沒選 video model — 請到首頁設定中選擇 Kling 系列模型')
+      alert('專案還沒選視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個（Seedance 或 Kling）')
       return
     }
     const panelIdAtSubmit = selected.id
@@ -954,7 +959,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   async function handleBatchGenerateVideos() {
     const videoModel = project?.novelPromotionData?.videoModel
     if (!videoModel) {
-      alert('專案還沒選 video model — 請到首頁設定中選擇 Kling 系列模型')
+      alert('專案還沒選視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個（Seedance 或 Kling）')
       return
     }
     const targets = allPanels.filter(
@@ -991,14 +996,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!videoModel) {
       setMultiShotState({
         status: 'error',
-        message: '請先在 profile / 預設模型配置 中選擇視頻模型(建議 Kling-3.0-Omni)',
+        message: '請從分鏡頂部的「視頻模型」picker 選一個 Kling 變體（建議 Kling-3.0-Omni）',
       })
       return
     }
-    if (!videoModel.toLowerCase().includes('kling')) {
+    // 2026-05-17 — use the variant registry's capability bit so adding
+    // a new multi-shot-capable model in src/lib/video-models/variants.ts
+    // automatically lights up this button. Unknown ids (legacy DB rows)
+    // fail closed by isMultiShotCapable → user sees the same gentle
+    // error + can switch via the new inline picker.
+    if (!isMultiShotCapable(videoModel)) {
       setMultiShotState({
         status: 'error',
-        message: `多鏡頭只支援 Kling 系列模型,你目前選的是 ${videoModel}`,
+        message: `多鏡頭目前只支援 Kling 系列,你選的「${videoModel}」不支援。請從分鏡頂部的視頻模型 picker 切到 Kling。`,
       })
       return
     }
@@ -1281,9 +1291,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
               </span>
             ) : null}
-            <div className="font-mono text-[14px] tracking-wider text-stone-500">
-              {projectVideoModel || '尚未設定 video model'} · 比例 {projectVideoRatio}
-            </div>
+            <VideoModelPickerInline
+              projectId={projectId}
+              currentVideoModel={projectVideoModel || null}
+              videoRatio={projectVideoRatio || '9:16'}
+            />
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -1326,9 +1338,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled={multiShotState.status === 'submitting'}
+              disabled={multiShotState.status === 'submitting' || !canMultiShot}
               onClick={handleSubmitMultiShot}
-              title="把所有 group 一次送 Kling 多鏡頭"
+              title={
+                canMultiShot
+                  ? '把所有 group 一次送 Kling 多鏡頭'
+                  : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+              }
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
@@ -1356,7 +1372,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         episodeNumber={(currentEpisode as { episodeNumber?: number } | null)?.episodeNumber ?? null}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
-            return { taskId: null, error: '尚未設定 video model — 請先到主控台選一個 Kling 模型' }
+            return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 模型' }
           }
           if (!/kling/i.test(projectVideoModel)) {
             return {
@@ -1501,8 +1517,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <button
                 type="button"
                 onClick={() => handleSubmitMultiShot()}
-                disabled={multiShotState.status === 'submitting'}
-                title="把分鏡送 Kling multi-shot 一次出多鏡頭視頻"
+                disabled={multiShotState.status === 'submitting' || !canMultiShot}
+                title={
+                  canMultiShot
+                    ? '把分鏡送 Kling multi-shot 一次出多鏡頭視頻'
+                    : 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+                }
                 className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
@@ -2161,10 +2181,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <button
               type="button"
               onClick={() => handleSubmitMultiShot()}
-              disabled={multiShotState.status === 'submitting'}
+              disabled={multiShotState.status === 'submitting' || !canMultiShot}
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-500 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               title={(() => {
                 const m = project?.novelPromotionData?.videoModel ?? ''
+                if (!canMultiShot) {
+                  return 'Seedance 不支援多鏡頭批次 — 請從上方視頻模型 picker 切到 Kling'
+                }
                 if (/^tencent-vod::Kling-(3|O1)/i.test(m)) {
                   return `B 路徑(Tencent VOD ${m.split('::')[1]}):t2v + SubjectInfos.N + multi_shot=intelligence,免生圖直接出多鏡頭視頻`
                 }

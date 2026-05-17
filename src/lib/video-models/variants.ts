@@ -1,0 +1,177 @@
+/**
+ * Video model variant registry — single source of truth for the V2
+ * storyboard's inline picker, multi-shot gating, and admin/user default
+ * resolution.
+ *
+ * Why this exists separately from `src/lib/constants.ts` (VIDEO_MODELS):
+ *   VIDEO_MODELS is a flat label list dating from the original picker
+ *   that never made it into V2. The 2026-05-17 plan limits the user-
+ *   facing storyboard picker to TWO families (Seedance + Kling) plus
+ *   their capability metadata so the multi-shot button can self-gate
+ *   without `videoModel.toLowerCase().includes('kling')` substring
+ *   tricks. Keep this file the authority for the picker; legacy paths
+ *   that already work off VIDEO_MODELS can stay unchanged.
+ *
+ * Adding a new variant:
+ *   1. Append below in family order (so dropdown order tracks UI intent).
+ *   2. Capability shape must be filled (no defaults) — forcing the
+ *      author to think about audio/multi-shot/duration before shipping.
+ *   3. The id is the canonical `provider::modelId` string the worker
+ *      already understands; never invent a new id scheme here.
+ */
+
+export type VideoModelFamily = 'seedance' | 'kling'
+
+export interface VideoModelCapabilities {
+  /** Native audio track in the output mp4 (no separate TTS overlay needed). */
+  audio: boolean
+  /** Worker accepts a single-call multi-shot batch (B-path Tencent VOD
+   *  Kling-3 / O1 with multi_shot=intelligence, or any Kling via C-path
+   *  i2v chunked). Seedance variants are false today — provider does
+   *  not chunk natively and we have not built a chunker for them. */
+  multiShot: boolean
+  /** Maximum duration (seconds) the worker will accept for a single shot. */
+  maxDurationSec: number
+  /** Rough cost tier — '¥' cheapest, '¥¥¥' priciest. Used only for the
+   *  picker UI badge, not for billing. Update when prices shift. */
+  costTier: '¥' | '¥¥' | '¥¥¥'
+}
+
+export interface VideoModelVariant {
+  /** Canonical `provider::modelId` — matches DB `project.videoModel`. */
+  id: string
+  family: VideoModelFamily
+  /** Short label shown in the dropdown (zh). */
+  label: string
+  /** Optional one-line context shown in tooltip / sub-line. */
+  hint?: string
+  capabilities: VideoModelCapabilities
+}
+
+export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
+  // ─────────── Seedance family ───────────
+  {
+    id: 'fal::bytedance/seedance-2.0/image-to-video',
+    family: 'seedance',
+    label: 'Seedance 2.0 (fal · audio)',
+    hint: '1080p · native audio · 字節跳動 Seedance 2.0 透過 fal',
+    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥¥' },
+  },
+  {
+    id: 'fal::bytedance/seedance-2.0/fast/image-to-video',
+    family: 'seedance',
+    label: 'Seedance 2.0 Fast (fal · cheap)',
+    hint: '較便宜的 fast variant · audio · 適合大量試片',
+    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥' },
+  },
+  {
+    id: 'taijiai::seedance-2.0-720p',
+    family: 'seedance',
+    label: 'Seedance 2.0 720p (BobAPI)',
+    hint: '透過 BobAPI / taijiai 中轉,720p · audio',
+    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥¥' },
+  },
+
+  // ─────────── Kling family ───────────
+  // Tencent VOD line (Kling-3 / Omni / O1 hit B-path multi_shot=intelligence;
+  // other Kling go through C-path i2v chunker). All Kling variants support
+  // multi-shot batch dispatch — gating is by family, not by sub-variant.
+  {
+    id: 'tencent-vod::Kling-1.6',
+    family: 'kling',
+    label: 'Kling 1.6 (Tencent)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥' },
+  },
+  {
+    id: 'tencent-vod::Kling-2.0',
+    family: 'kling',
+    label: 'Kling 2.0 (Tencent)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥' },
+  },
+  {
+    id: 'tencent-vod::Kling-2.1',
+    family: 'kling',
+    label: 'Kling 2.1 (Tencent)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥¥' },
+  },
+  {
+    id: 'tencent-vod::Kling-2.5',
+    family: 'kling',
+    label: 'Kling 2.5 (Tencent)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥¥' },
+  },
+  {
+    id: 'tencent-vod::Kling-2.6',
+    family: 'kling',
+    label: 'Kling 2.6 (Tencent)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥¥' },
+  },
+  {
+    id: 'tencent-vod::Kling-O1',
+    family: 'kling',
+    label: 'Kling-O1 (Tencent)',
+    hint: 'B-path 多鏡頭 + 對白同步 · 10 圖參考',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 10, costTier: '¥¥¥' },
+  },
+  {
+    id: 'tencent-vod::Kling-3.0',
+    family: 'kling',
+    label: 'Kling 3.0 (Tencent)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥¥¥' },
+  },
+  {
+    id: 'tencent-vod::Kling-3.0-Omni',
+    family: 'kling',
+    label: 'Kling 3.0-Omni (Tencent)',
+    hint: 'B-path 多鏡頭 + 多語 TTS · 10 圖參考 · 推薦預設',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 10, costTier: '¥¥¥' },
+  },
+  // fal Kling line — i2v multi-shot via C-path chunker
+  {
+    id: 'fal::fal-ai/kling-video/v2.5-turbo/pro/image-to-video',
+    family: 'kling',
+    label: 'Kling 2.5 Turbo Pro (fal)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥¥' },
+  },
+  {
+    id: 'fal::fal-ai/kling-video/v3/standard/image-to-video',
+    family: 'kling',
+    label: 'Kling 3 Standard (fal)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥¥' },
+  },
+  {
+    id: 'fal::fal-ai/kling-video/v3/pro/image-to-video',
+    family: 'kling',
+    label: 'Kling 3 Pro (fal)',
+    capabilities: { audio: false, multiShot: true, maxDurationSec: 10, costTier: '¥¥¥' },
+  },
+]
+
+/** Recommended default when no admin / user pref is set yet. */
+export const DEFAULT_VARIANT_ID = 'tencent-vod::Kling-3.0-Omni'
+
+const VARIANT_BY_ID: Record<string, VideoModelVariant> = (() => {
+  const out: Record<string, VideoModelVariant> = {}
+  for (const v of VIDEO_MODEL_VARIANTS) out[v.id] = v
+  return out
+})()
+
+/** Returns null when the id is not in the registry (legacy / removed). */
+export function getVideoModelVariant(id: string | null | undefined): VideoModelVariant | null {
+  if (!id) return null
+  return VARIANT_BY_ID[id] ?? null
+}
+
+/** Variants belonging to a family in registry order. */
+export function getVariantsByFamily(family: VideoModelFamily): VideoModelVariant[] {
+  return VIDEO_MODEL_VARIANTS.filter((v) => v.family === family)
+}
+
+/** Used by the multi-shot button to self-gate. Returns false for any
+ *  variant whose capabilities.multiShot is false OR for an unknown id
+ *  (fail closed — never assume multi-shot works for a variant we don't
+ *  know). */
+export function isMultiShotCapable(id: string | null | undefined): boolean {
+  const v = getVideoModelVariant(id)
+  return v !== null && v.capabilities.multiShot
+}
