@@ -192,10 +192,19 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   for (let i = 0; i < panels.length; i++) {
     if (!panels[i]) throw new Error(`Panel not found: ${panelIds[i]}`)
-    // C path + Seedance composite require imageUrl. B path is t2v so
-    // panels can be text-only — skip the imageUrl check there only.
-    if (!useBPath && !panels[i]!.imageUrl) {
+    // C path (Kling i2v) requires every panel to have imageUrl — first_
+    // frame chained from one panel to the next. B path is t2v so text-only
+    // panels are fine. Seedance composite needs ≥1 imageUrl (the first one
+    // becomes BobAPI's first_frame, the rest go in as content[] refs and
+    // empty ones are filtered out inside runMultiShotSeedanceComposite).
+    if (!useBPath && !useSeedanceComposite && !panels[i]!.imageUrl) {
       throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
+    }
+  }
+  if (useSeedanceComposite) {
+    const anyWithImage = panels.some((p) => p?.imageUrl && p.imageUrl.trim().length > 0)
+    if (!anyWithImage) {
+      throw new Error('SEEDANCE_COMPOSITE_NO_PANEL_IMAGES')
     }
   }
 

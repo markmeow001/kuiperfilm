@@ -300,8 +300,12 @@ export const POST = apiHandler(async (
   // the model is text-to-video and SubjectInfos.N carries the per-character
   // reference, so we accept text-only panels. Detect by videoModel string —
   // mirrors shouldUseTencentBPath in the worker handler.
+  // 2026-05-17 — Seedance composite (taijiai BobAPI 9-ref @N) needs ≥1
+  // panel with imageUrl (the first one becomes first_frame); the rest can
+  // be text-only and the worker filters them out before submission.
   const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
-  if (!isBPath) {
+  const isSeedanceComposite = /^taijiai::seedance-2\.0/i.test(videoModel)
+  if (!isBPath && !isSeedanceComposite) {
     const panelsWithoutImage = panels.filter((p) => !p.imageUrl)
     if (panelsWithoutImage.length > 0) {
       throw new ApiError('INVALID_PARAMS', {
@@ -309,6 +313,17 @@ export const POST = apiHandler(async (
         details: {
           panelIds: panelsWithoutImage.map((p) => p.id),
           message: 'All panels must have a generated image before multi-shot video generation',
+        },
+      })
+    }
+  }
+  if (isSeedanceComposite) {
+    const anyWithImage = panels.some((p) => p.imageUrl && p.imageUrl.trim().length > 0)
+    if (!anyWithImage) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'SEEDANCE_COMPOSITE_NO_PANEL_IMAGES',
+        details: {
+          message: 'Seedance composite needs at least one panel with a generated image to use as first_frame',
         },
       })
     }
