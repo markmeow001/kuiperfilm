@@ -267,6 +267,49 @@ function collectSceneRefs(
 }
 
 /**
+ * Detect dialogue presence in a free-form rawPrompt so we know whether
+ * to append the TTS audio directive or the silent ambient directive.
+ *
+ * Heuristics (any match → has dialogue):
+ *   - "<NAME>说「..." / "<NAME>: ..." / quoted span containing 中文 / 字母
+ *   - "对白：..." / "[Cast: ...]"  prefixes
+ *   - "Voiceover (off-camera)" / "OS:" off-screen narration markers
+ */
+function countDialogueBeatsInRawPrompt(raw: string): number {
+  let count = 0
+  // Speaker: "line" or 「line」 — both Western and CJK quotes.
+  const quoted = raw.match(/[「"“”'']([^「」"“”'']{2,})[」"”“'']/g)
+  if (quoted) count += quoted.length
+  // SPEAKER: line (colon style)
+  const tagged = raw.match(/[一-鿿A-Za-z][一-鿿A-Za-z\d_]{0,20}\s*[:：]\s*["「'']/g)
+  if (tagged) count += Math.max(0, tagged.length - count) // avoid double-count
+  // "Voiceover (off-camera)" / "OS:" markers
+  if (/voiceover|VO[:：]|off-camera|OS[:：]/i.test(raw)) count += 1
+  return count
+}
+
+/**
+ * Wrap a user-supplied rawPrompt with the same audio directive footer
+ * buildSeedancePrompt() emits. The rawPrompt body stays verbatim so the
+ * UI's "what you see is what runs" contract holds.
+ */
+function wrapRawPromptWithAudioDirective(
+  rawPrompt: string,
+): { prompt: string; dialogueBeatCount: number } {
+  const dialogueBeatCount = countDialogueBeatsInRawPrompt(rawPrompt)
+  const footer = dialogueBeatCount > 0
+    ? '音频：原生输出双声道音频，按上述对白逐字配音（语气、停顿、情绪与角色一致），'
+      + '唇形与配音严格同步；背景叠加场景对应的环境音（脚步、风声、室内回响等），'
+      + '避免任何机械合成感或字幕音。'
+    : '音频：输出场景对应的环境音（脚步、风声、室内回响等），'
+      + '本组无角色对白，请勿合成任何说话声。'
+  return {
+    prompt: `${rawPrompt}\n\n${footer}`,
+    dialogueBeatCount,
+  }
+}
+
+/**
  * Build the Seedance prompt with @N markers + structured dialogue.
  *
  * Seedance 2.0 supports native multi-channel audio output including
@@ -466,6 +509,17 @@ export async function runMultiShotSeedanceComposite(params: {
   characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
   /** Per-call location view overrides. */
   locationOverrides?: Array<{ locationId: string; viewName?: string }>
+  /** User-edited / LLM-enriched narrative prompt from the GroupCard
+   *  textbox. When present, it carries dialogue inline as
+   *  `<speaker>: "<line>"` / `镜头N (X-Y seconds)·...` and uses Kling-
+   *  style structured shot breakdowns. We send it verbatim to BobAPI
+   *  (only suffixing the audio directive) so what the user reviews in
+   *  the UI is what ships. */
+  rawPrompt?: string
+  /** Per-panel duration seconds (sum = total video duration). Lets the
+   *  caller override Seedance's panel-count heuristic when the prompt
+   *  was built around specific shot lengths. Clamped to 4-15s total. */
+  panelDurations?: number[]
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -549,17 +603,45 @@ export async function runMultiShotSeedanceComposite(params: {
     throw new Error('SEEDANCE_COMPOSITE_NO_REFERENCES')
   }
 
-  const { prompt, dialogueBeatCount } = buildSeedancePrompt(
-    usedPanels,
-    characterRefs,
-    sceneRefs,
-    Boolean(firstFrameUrl),
-  )
-  const totalRefCount = (firstFrameUrl ? 1 : 0) + referenceUrls.length
-  const duration = Math.max(
-    MIN_DURATION_SEC,
-    Math.min(MAX_DURATION_SEC, 4 + Math.ceil(totalRefCount * 1.5)),
-  )
+  // Prompt source priority:
+  //   1. User-edited rawPrompt from the GroupCard textbox — already
+  //      contains dialogue inline + shot timing markers; ships verbatim
+  //      with the audio directive appended.
+  //   2. buildSeedancePrompt() — assemble from panels + char/scene refs.
+  //
+  // Both append the same global audio directive so TTS activates when
+  // dialogue is present.
+  let prompt: string
+  let dialogueBeatCount: number
+  if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
+    const built = wrapRawPromptWithAudioDirective(params.rawPrompt.trim())
+    prompt = built.prompt
+    dialogueBeatCount = built.dialogueBeatCount
+  } else {
+    const built = buildSeedancePrompt(
+      usedPanels,
+      characterRefs,
+      sceneRefs,
+      Boolean(firstFrameUrl),
+    )
+    prompt = built.prompt
+    dialogueBeatCount = built.dialogueBeatCount
+  }
+
+  // Duration priority:
+  //   1. sum(panelDurations) when caller supplied per-shot timings
+  //      (UI's "對白驅動每鏡時長" mode). Clamped to BobAPI 4-15s range.
+  //   2. Panel-count × 2s baseline (5 panels → 10s), clamped 4-15s.
+  //      Old formula `4 + ceil(refCount * 1.5)` under-counted for groups
+  //      with 1 ref + 5 panels (gave 6s for a 5-shot story).
+  let duration: number
+  if (params.panelDurations && params.panelDurations.length > 0) {
+    const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
+    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
+  } else {
+    const baseline = Math.round(usedPanels.length * 2)
+    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))
+  }
 
   logger.info({
     message: 'Seedance composite submit',

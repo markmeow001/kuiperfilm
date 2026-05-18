@@ -222,6 +222,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       aspectRatio,
       ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
       ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
+      ...(rawPrompt ? { rawPrompt } : {}),
+      ...(panelDurations ? { panelDurations } : {}),
     })
   }
 
