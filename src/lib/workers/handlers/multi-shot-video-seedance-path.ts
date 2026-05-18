@@ -5,10 +5,28 @@
  *   - Kling B path: t2v + multi_shot=intelligence → N consecutive clips
  *     stitched into one ~25s narrative video.
  *   - Kling C path: i2v per panel → N chunks stitched into one video.
- *   - Seedance composite (here): a SINGLE 4-15s creative video that
- *     uses up to 9 of the group's panel images as `content[]`
- *     references (BobAPI @N reference scheme), letting the model
- *     decide camera motion / transitions between references.
+ *   - Seedance composite (here): a SINGLE 4-15s creative video built
+ *     from up to 9 reference images delivered via BobAPI's `content[]`
+ *     scheme (`@N` markers in the prompt let the model know which
+ *     reference corresponds to which beat).
+ *
+ * Reference image priority (9-image BobAPI cap):
+ *   1. Character appearance images — same dedup + appearance resolution
+ *      as the b-path's SubjectInfos pipeline (panel.characters + srt
+ *      speakers + description mining). Cap at 4 so dialogues with 3+
+ *      speakers + a scene still fit.
+ *   2. Location reference images — one image per unique location used
+ *      by the panel group, picked by view name match.
+ *   3. Panel images — when available, the FIRST panel image becomes
+ *      BobAPI's `first_frame` (locks the opening composition); any
+ *      remaining panel images fill leftover slots as references.
+ *
+ * Pure t2v mode (no panel imageUrls, but ≥1 character or scene ref):
+ *   BobAPI Seedance 2.0 supports first_frame-less generation. When the
+ *   group's panels have no images yet (project mid-pipeline) but the
+ *   character + scene catalog is populated, we still ship — the model
+ *   uses the character/scene reference images for identity anchoring
+ *   and synthesises the composition from the script prompt.
  *
  * Provider scope: only `taijiai::seedance-2.0-720p` today. fal Seedance
  * variants have a flat i2v API (image_url + optional end_image_url),
@@ -26,14 +44,31 @@ import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import type { TaskJobData } from '@/lib/task/types'
 import { TaijiaiSeedanceVideoGenerator } from '@/lib/generators/video/taijiai'
-import { assertTaskActive, uploadVideoSourceToCos, waitExternalResult } from '../utils'
+import {
+  assertTaskActive,
+  toSignedUrlIfCos,
+  uploadVideoSourceToCos,
+  waitExternalResult,
+} from '../utils'
 import { reportTaskProgress } from '../shared'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
+import {
+  findCharacterByName,
+  parsePanelCharacterReferences,
+  parseImageUrls,
+  resolveNovelData,
+} from './image-task-handler-shared'
 
 /** BobAPI multi-ref cap: 9 images per the wiki Section 4.2. */
 const MAX_REFERENCE_IMAGES = 9
+/** Soft cap on character refs so dialogue groups (3+ speakers) still
+ * leave room for scene + panel references. */
+const MAX_CHARACTER_REFS = 4
+/** Soft cap on scene refs. Most groups stay in 1 location; 2 covers the
+ * "interior→exterior cut within one group" case. */
+const MAX_SCENE_REFS = 2
 /** Seedance 2.0 duration range per the wiki (also clamped by generator). */
 const MIN_DURATION_SEC = 4
 const MAX_DURATION_SEC = 15
@@ -43,7 +78,23 @@ interface PanelLite {
   imageUrl: string | null
   description: string | null
   videoPrompt: string | null
+  characters: string | null
+  location: string | null
   storyboardId: string
+}
+
+/** Resolved character reference for the Seedance content[] payload. */
+interface CharacterRef {
+  id: string
+  name: string
+  imageUrl: string
+}
+
+/** Resolved scene reference for the Seedance content[] payload. */
+interface SceneRef {
+  id: string
+  name: string
+  imageUrl: string
 }
 
 /**
@@ -60,28 +111,261 @@ export function shouldUseSeedanceComposite(videoModel: string): boolean {
   return parsed.provider === 'taijiai' && /^seedance-2\.0/.test(parsed.modelId)
 }
 
+type NovelData = Awaited<ReturnType<typeof resolveNovelData>>
+
 /**
- * Build a deterministic Seedance prompt from panel descriptions, using
- * @1..@N markers so the model knows which reference image corresponds
- * to which beat. Keeps each panel's contribution short (200 chars) to
- * avoid blowing past the model's text budget when the group is large.
+ * Walk panels and collect unique character references with their
+ * appearance imageUrl. Mirrors the first pass of b-path's SubjectInfos
+ * pipeline. Falls back to appearances[0] when no episode binding / panel
+ * appearance hint is available — same priority as b-path.
  */
-function buildSeedancePrompt(panels: PanelLite[]): string {
+function collectCharacterRefs(
+  panels: PanelLite[],
+  projectData: NovelData,
+  episodeBindings: Map<string, string>,
+): CharacterRef[] {
+  const refs: CharacterRef[] = []
+  const seenIds = new Set<string>()
+  for (const panel of panels) {
+    if (refs.length >= MAX_CHARACTER_REFS) break
+    const charRefs = parsePanelCharacterReferences(panel.characters)
+    for (const ref of charRefs) {
+      if (refs.length >= MAX_CHARACTER_REFS) break
+      const character = findCharacterByName(projectData.characters || [], ref.name)
+      if (!character) continue
+      if (seenIds.has(character.id)) continue
+      const appearances = character.appearances || []
+      let appearance = appearances[0]
+      const boundAppearanceId = episodeBindings.get(character.id)
+      if (ref.appearance) {
+        const matched = appearances.find(
+          (a) => (a.changeReason || '').toLowerCase() === ref.appearance!.toLowerCase(),
+        )
+        if (matched) appearance = matched
+        else if (boundAppearanceId) {
+          const bound = appearances.find((a) => a.id === boundAppearanceId)
+          if (bound) appearance = bound
+        }
+      } else if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
+      }
+      if (!appearance) continue
+      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
+      const selectedIndex = appearance.selectedIndex
+      const selectedUrl =
+        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
+      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
+      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
+      if (!publicUrl) continue
+      seenIds.add(character.id)
+      refs.push({ id: character.id, name: ref.name, imageUrl: publicUrl })
+    }
+  }
+  // Description-mining fallback (b-path Pass 3 equivalent): for groups
+  // where panel.characters is empty but the description names a project
+  // character, pull them in so identity still anchors. Caps at the same
+  // MAX_CHARACTER_REFS budget so dialogue groups don't displace scenes.
+  for (const panel of panels) {
+    if (refs.length >= MAX_CHARACTER_REFS) break
+    const desc = `${panel.description ?? ''}\n${panel.videoPrompt ?? ''}`.trim()
+    if (!desc) continue
+    for (const character of projectData.characters ?? []) {
+      if (refs.length >= MAX_CHARACTER_REFS) break
+      if (seenIds.has(character.id)) continue
+      const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
+      const hit = aliases.some((alias) => alias && desc.includes(alias))
+      if (!hit) continue
+      const appearances = character.appearances || []
+      let appearance = appearances[0]
+      const boundAppearanceId = episodeBindings.get(character.id)
+      if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
+      }
+      if (!appearance) continue
+      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
+      const selectedIndex = appearance.selectedIndex
+      const selectedUrl =
+        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
+      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
+      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
+      if (!publicUrl) continue
+      seenIds.add(character.id)
+      refs.push({ id: character.id, name: character.name, imageUrl: publicUrl })
+    }
+  }
+  return refs
+}
+
+/**
+ * Collect unique location reference images from the panel group's
+ * `panel.location` strings. Mirrors b-path: location string is either
+ * "<name>" or "<name>#<viewHint>"; viewHint picks a specific image
+ * inside the location's images[].
+ *
+ * Widened to LocationRow so we can index `id` + `viewName` — the shared
+ * NovelData.LocationLike type is intentionally narrow (image handlers
+ * don't need those), but the Prisma include carries them at runtime.
+ */
+interface LocationImageRow {
+  id?: string
+  imageIndex?: number
+  isSelected?: boolean
+  imageUrl?: string | null
+  viewName?: string | null
+}
+interface LocationRow {
+  id: string
+  name: string
+  images?: LocationImageRow[]
+}
+
+function collectSceneRefs(
+  panels: PanelLite[],
+  projectData: NovelData,
+  locOverrideById: Map<string, string>,
+): SceneRef[] {
+  const refs: SceneRef[] = []
+  const seenIds = new Set<string>()
+  const locations = (projectData.locations as unknown as LocationRow[] | undefined) ?? []
+  if (locations.length === 0) return refs
+  for (const panel of panels) {
+    if (refs.length >= MAX_SCENE_REFS) break
+    if (!panel.location) continue
+    const hashIdx = panel.location.indexOf('#')
+    const locName = (hashIdx === -1 ? panel.location : panel.location.slice(0, hashIdx)).trim()
+    if (!locName) continue
+    const loc = locations.find((l) => l.name.toLowerCase() === locName.toLowerCase())
+    if (!loc) continue
+    if (seenIds.has(loc.id)) continue
+    const panelViewHint = hashIdx === -1 ? null : panel.location.slice(hashIdx + 1).trim()
+    const overrideViewName = locOverrideById.get(loc.id)
+    const effectiveView = (overrideViewName ?? panelViewHint) || null
+    const images = loc.images ?? []
+    const viewMatch = effectiveView
+      ? images.find((img) => (img.viewName || '').trim().toLowerCase() === effectiveView.toLowerCase())
+      : null
+    const selected = images.find((img) => img.isSelected === true)
+    const primary = images.find((img) => (img.imageIndex ?? 0) === 0) ?? images[0]
+    const pickedImg = viewMatch || selected || primary
+    const pickedRaw = pickedImg?.imageUrl
+    const publicUrl = toSignedUrlIfCos(pickedRaw, 7200)
+    if (!publicUrl) continue
+    seenIds.add(loc.id)
+    refs.push({ id: loc.id, name: loc.name, imageUrl: publicUrl })
+  }
+  return refs
+}
+
+/**
+ * Build the Seedance prompt with @N markers. References are ordered:
+ *   character refs (@1..@K), then scene refs (@K+1..@K+L), then panel
+ *   beats (@K+L+1..). The model uses these markers to anchor identity
+ *   to the matching image in content[].
+ */
+function buildSeedancePrompt(
+  panels: PanelLite[],
+  characterRefs: CharacterRef[],
+  sceneRefs: SceneRef[],
+  panelHasFirstFrame: boolean,
+): string {
+  const sections: string[] = []
+  let refIdx = 0
+  if (characterRefs.length > 0) {
+    const charLines = characterRefs.map((c) => {
+      refIdx += 1
+      return `@${refIdx} = ${c.name}`
+    })
+    sections.push(`角色一致性参考（identity anchors）:\n${charLines.join('；')}`)
+  }
+  if (sceneRefs.length > 0) {
+    const sceneLines = sceneRefs.map((s) => {
+      refIdx += 1
+      return `@${refIdx} = 场景「${s.name}」`
+    })
+    sections.push(`场景一致性参考（scene anchors）:\n${sceneLines.join('；')}`)
+  }
+
+  // Panel beats: cap each panel's narrative contribution to 200 chars
+  // so a 6-panel group doesn't blow past Seedance's text budget.
   const beats = panels.map((p, i) => {
     const raw = (p.videoPrompt || p.description || `分鏡 ${i + 1}`).trim()
     const trimmed = raw.length > 200 ? `${raw.slice(0, 200)}…` : raw
-    return `@${i + 1}: ${trimmed}`
+    return `${i + 1}. ${trimmed}`
   })
-  // Front-load the ordering directive so the model treats it as a
-  // narrative sequence, not a moodboard. Tail directive nudges toward
-  // smooth transitions instead of jump-cut collage.
-  return (
-    `按以下順序展現連續分鏡情境（每段約 1-2 秒銜接過渡）：\n` +
-    beats.join('；\n') +
-    `。\n` +
-    `整體鏡頭運動自然順暢，由 @1 平順過渡到 @${panels.length}，` +
-    `保持人物身份和場景連續性,避免硬切。`
+  sections.push(
+    `按以下順序展現連續分鏡情境（每段約 1-2 秒銜接過渡）：\n${beats.join('；\n')}`,
   )
+
+  // Closing directive — different copy when we have a first_frame vs
+  // pure t2v so the model knows whether to honor the opening composition
+  // or compose freely from the references.
+  if (panelHasFirstFrame) {
+    sections.push(
+      `首帧已锁定为分镜 1 的画面；后续运动从该构图自然延展，` +
+        `保持角色身份和场景一致性，避免硬切。`,
+    )
+  } else {
+    sections.push(
+      `根据上述参考图合成连贯的多鏡頭視頻：` +
+        `角色外观与服饰严格匹配角色参考（@1..@${characterRefs.length}），` +
+        `场景背景与材质参考场景图，` +
+        `镜头运动自然顺畅，避免硬切。`,
+    )
+  }
+  return sections.join('\n\n')
+}
+
+/**
+ * Decide how to allocate the 9-image budget across character / scene /
+ * panel references. Returns the URLs in the exact order they'll appear
+ * in BobAPI's content[] so prompt @N markers stay aligned.
+ */
+function planReferenceBudget(args: {
+  panels: PanelLite[]
+  characterRefs: CharacterRef[]
+  sceneRefs: SceneRef[]
+}): {
+  firstFrameUrl: string | undefined
+  referenceUrls: string[]
+} {
+  const { panels, characterRefs, sceneRefs } = args
+  const panelImageUrls = panels
+    .map((p) => p.imageUrl)
+    .filter((u): u is string => !!u && u.trim().length > 0)
+
+  // First-frame anchor: prefer the first panel's image when available.
+  // The first_frame slot lives outside the `referenceImages` array on
+  // the generator side, so it doesn't consume a slot in our local
+  // accounting below.
+  const firstFrameUrl = panelImageUrls[0]
+  const remainingPanelUrls = firstFrameUrl ? panelImageUrls.slice(1) : []
+
+  // 9-image total cap minus 1 slot for first_frame (if present) leaves
+  // 8 reference slots. Without first_frame all 9 are available for refs.
+  const refSlotsAvailable = firstFrameUrl ? MAX_REFERENCE_IMAGES - 1 : MAX_REFERENCE_IMAGES
+
+  const orderedRefs: string[] = []
+  const seen = new Set<string>()
+  const push = (url: string | undefined) => {
+    if (!url) return false
+    if (seen.has(url)) return false
+    if (orderedRefs.length >= refSlotsAvailable) return false
+    seen.add(url)
+    orderedRefs.push(url)
+    return true
+  }
+  // Mark the first_frame url as seen so we don't re-push the same image
+  // (panels with overlapping URLs would otherwise count twice toward
+  // the 9-image budget but waste a slot).
+  if (firstFrameUrl) seen.add(firstFrameUrl)
+
+  for (const c of characterRefs) push(c.imageUrl)
+  for (const s of sceneRefs) push(s.imageUrl)
+  for (const url of remainingPanelUrls) push(url)
+
+  return { firstFrameUrl, referenceUrls: orderedRefs }
 }
 
 /**
@@ -89,21 +373,22 @@ function buildSeedancePrompt(panels: PanelLite[]): string {
  * video-handler) is responsible for loading + validating panels.
  *
  * Behaviour:
- *   - Slices to the first MAX_REFERENCE_IMAGES panels (BobAPI cap).
- *   - First panel image goes in as `first_frame`; the rest as
- *     `reference_image` with subject_type='generic' (the BobAPI
- *     generator handles the role + subject_type wiring).
- *   - Duration scales with panel count (4s + 1.5s per panel, capped
- *     at 15s) — gives the model enough runtime to actually transition
- *     between refs without blowing budget on a 2-panel group.
+ *   - Resolves project's character + location catalog so identity
+ *     anchors can be passed even when panel images aren't ready yet
+ *     (pure t2v mode).
+ *   - Allocates the 9-image budget: characters → scenes → panel images
+ *     (first panel image as first_frame when present).
+ *   - Duration scales with reference image count (4s + 1.5s per ref,
+ *     capped at 15s).
  *   - Output URL is uploaded to our COS so we don't depend on
  *     BobAPI's video_url longevity (it 302-redirects through their
- *     OSS which we mirror locally).
+ *     OSS which we mirror locally via downloadHeaders).
  *   - Persisted as `multiShotVideoUrl` + single-element
  *     `multiShotClipUrls` on the storyboard row.
  */
 export async function runMultiShotSeedanceComposite(params: {
   job: Job<TaskJobData>
+  projectId: string
   validPanels: PanelLite[]
   videoModel: string
   // sound / aspectRatio mirror the handler's payload shape — both can be
@@ -112,8 +397,12 @@ export async function runMultiShotSeedanceComposite(params: {
   // ratio defaults to the project's natural ratio if known, else 16:9).
   sound: boolean | undefined
   aspectRatio: string | undefined
+  /** Per-call character appearance overrides (UI swap-costume affordance). */
+  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
+  /** Per-call location view overrides. */
+  locationOverrides?: Array<{ locationId: string; viewName?: string }>
 }): Promise<{ videoUrl: string }> {
-  const { job, validPanels } = params
+  const { job, projectId, validPanels } = params
   const sound = params.sound ?? true
   const aspectRatio = params.aspectRatio ?? '16:9'
   const { userId } = job.data
@@ -126,19 +415,72 @@ export async function runMultiShotSeedanceComposite(params: {
     throw new Error('SEEDANCE_COMPOSITE_NO_PANELS')
   }
 
-  const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
-  const imageUrls = usedPanels
-    .map((p) => p.imageUrl)
-    .filter((u): u is string => !!u && u.trim().length > 0)
+  await reportTaskProgress(job, 12, { stage: 'seedance_composite_collect_refs' })
 
-  if (imageUrls.length === 0) {
-    throw new Error('SEEDANCE_COMPOSITE_NO_PANEL_IMAGES')
+  // Per-call override maps — mirrors b-path's shape so the caller can
+  // pass the same raw arrays through both dispatches.
+  const charOverrideById = new Map<string, string>()
+  for (const o of params.characterOverrides ?? []) {
+    if (o.characterId && o.appearanceId) charOverrideById.set(o.characterId, o.appearanceId)
+  }
+  const locOverrideById = new Map<string, string>()
+  for (const o of params.locationOverrides ?? []) {
+    if (o.locationId && o.viewName) locOverrideById.set(o.locationId, o.viewName)
   }
 
-  const prompt = buildSeedancePrompt(usedPanels)
+  // Episode-level appearance bindings (same shape as b-path lines 1240+).
+  // All panels in a group live under one storyboard → one episode.
+  const episodeBindings = new Map<string, string>()
+  const firstStoryboardId = validPanels[0]?.storyboardId
+  if (firstStoryboardId) {
+    const sb = await prisma.novelPromotionStoryboard.findUnique({
+      where: { id: firstStoryboardId },
+      select: { episodeId: true },
+    })
+    if (sb?.episodeId) {
+      const rows = await prisma.episodeCharacter.findMany({
+        where: { episodeId: sb.episodeId, appearanceId: { not: null } },
+        select: { characterId: true, appearanceId: true },
+      })
+      for (const row of rows) {
+        if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
+      }
+    }
+  }
+  // Per-call override beats episode binding — match the b-path priority
+  // so the resolvedAppearance is consistent between dispatches.
+  for (const [charId, appearanceId] of charOverrideById) {
+    episodeBindings.set(charId, appearanceId)
+  }
+
+  const projectData = await resolveNovelData(projectId)
+  const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
+  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
+  const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
+
+  const { firstFrameUrl, referenceUrls } = planReferenceBudget({
+    panels: usedPanels,
+    characterRefs,
+    sceneRefs,
+  })
+
+  // Fail closed when we have absolutely no anchors — pure prompt-only
+  // mode gives the model nothing to anchor identity to and BobAPI tends
+  // to reject it on moderation grounds anyway.
+  if (!firstFrameUrl && referenceUrls.length === 0) {
+    throw new Error('SEEDANCE_COMPOSITE_NO_REFERENCES')
+  }
+
+  const prompt = buildSeedancePrompt(
+    usedPanels,
+    characterRefs,
+    sceneRefs,
+    Boolean(firstFrameUrl),
+  )
+  const totalRefCount = (firstFrameUrl ? 1 : 0) + referenceUrls.length
   const duration = Math.max(
     MIN_DURATION_SEC,
-    Math.min(MAX_DURATION_SEC, 4 + Math.ceil(imageUrls.length * 1.5)),
+    Math.min(MAX_DURATION_SEC, 4 + Math.ceil(totalRefCount * 1.5)),
   )
 
   logger.info({
@@ -147,11 +489,15 @@ export async function runMultiShotSeedanceComposite(params: {
       storyboardId: validPanels[0].storyboardId,
       panelsRequested: validPanels.length,
       panelsUsed: usedPanels.length,
-      imageRefs: imageUrls.length,
+      characterRefs: characterRefs.length,
+      sceneRefs: sceneRefs.length,
+      hasFirstFrame: Boolean(firstFrameUrl),
+      referenceUrlCount: referenceUrls.length,
       duration,
       aspectRatio,
       generateAudio: sound,
       promptLength: prompt.length,
+      mode: firstFrameUrl ? 'i2v+refs' : 't2v+refs',
     },
   })
 
@@ -159,19 +505,21 @@ export async function runMultiShotSeedanceComposite(params: {
   await reportTaskProgress(job, 20, { stage: 'seedance_composite_submit' })
 
   const generator = new TaijiaiSeedanceVideoGenerator()
-  // imageUrl param is the first_frame on the BobAPI side; the rest of
-  // the panel imageUrls go in via referenceImages (capped at 8 because
-  // first_frame already consumes one slot of the 9-image budget).
   const generateResult = await generator.generate({
     userId,
-    imageUrl: imageUrls[0],
+    // BaseVideoGenerator types imageUrl as a required string but the
+    // taijiai generator's `if (imageUrl)` truthy gate treats '' as "no
+    // first_frame" → pure t2v with content[] references. Send '' rather
+    // than coercing the base interface optional, so we don't perturb the
+    // Kling i2v generators that DO require it.
+    imageUrl: firstFrameUrl ?? '',
     prompt,
     options: {
       modelId: 'seedance-2.0-720p',
       duration,
       aspectRatio,
       generateAudio: sound,
-      referenceImages: imageUrls.slice(1),
+      referenceImages: referenceUrls,
     },
   })
 
@@ -224,6 +572,8 @@ export async function runMultiShotSeedanceComposite(params: {
       storyboardId: targetId,
       cosKey,
       panelsUsed: usedPanels.length,
+      characterRefs: characterRefs.length,
+      sceneRefs: sceneRefs.length,
     },
   })
 

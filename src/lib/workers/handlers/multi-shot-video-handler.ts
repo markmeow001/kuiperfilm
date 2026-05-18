@@ -194,35 +194,34 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     if (!panels[i]) throw new Error(`Panel not found: ${panelIds[i]}`)
     // C path (Kling i2v) requires every panel to have imageUrl — first_
     // frame chained from one panel to the next. B path is t2v so text-only
-    // panels are fine. Seedance composite needs ≥1 imageUrl (the first one
-    // becomes BobAPI's first_frame, the rest go in as content[] refs and
-    // empty ones are filtered out inside runMultiShotSeedanceComposite).
+    // panels are fine. Seedance composite (Phase 2 — 2026-05-17) accepts
+    // text-only panels too: it falls back to project character/scene
+    // catalog images as content[] references and runs in BobAPI's pure
+    // t2v mode when no panel has an image yet.
     if (!useBPath && !useSeedanceComposite && !panels[i]!.imageUrl) {
       throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
-    }
-  }
-  if (useSeedanceComposite) {
-    const anyWithImage = panels.some((p) => p?.imageUrl && p.imageUrl.trim().length > 0)
-    if (!anyWithImage) {
-      throw new Error('SEEDANCE_COMPOSITE_NO_PANEL_IMAGES')
     }
   }
 
   const validPanels = panels as NonNullable<(typeof panels)[number]>[]
 
   // ─────────────────── SEEDANCE COMPOSITE PATH ───────────────────
-  // Single composite video (4-15s) built from up to 9 panel images as
-  // BobAPI @N references. Runs before B/C path so the rest of the
-  // handler (character collection / KlingElement build) stays Kling-
-  // specific. See multi-shot-video-seedance-path.ts.
+  // Single composite video (4-15s) built from up to 9 reference images
+  // (characters → scenes → panels) delivered via BobAPI's content[] @N
+  // scheme. Runs before B/C path so the rest of the handler (Kling-
+  // specific KlingElement build) stays untouched. See
+  // multi-shot-video-seedance-path.ts.
   if (useSeedanceComposite) {
     await reportTaskProgress(job, 15, { stage: 'seedance_composite_start' })
     return await runMultiShotSeedanceComposite({
       job,
+      projectId,
       validPanels,
       videoModel,
       sound,
       aspectRatio,
+      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
+      ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
     })
   }
 

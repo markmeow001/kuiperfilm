@@ -298,11 +298,14 @@ export const POST = apiHandler(async (
   // Panel imageUrl is required only on the C path (KieAI / image-to-video).
   // On the B path (Tencent VOD Kling-3 / Omni with multi_shot=intelligence)
   // the model is text-to-video and SubjectInfos.N carries the per-character
-  // reference, so we accept text-only panels. Detect by videoModel string —
-  // mirrors shouldUseTencentBPath in the worker handler.
-  // 2026-05-17 — Seedance composite (taijiai BobAPI 9-ref @N) needs ≥1
-  // panel with imageUrl (the first one becomes first_frame); the rest can
-  // be text-only and the worker filters them out before submission.
+  // reference, so we accept text-only panels.
+  // 2026-05-17 Phase 2 — Seedance composite (taijiai BobAPI content[] @N)
+  // also accepts text-only panels: the worker falls back to project's
+  // character/scene catalog images as content[] references and runs in
+  // pure t2v mode. The worker still fails closed if NO references exist
+  // anywhere (no panel image AND no character/scene catalog) — that case
+  // BobAPI guaranteed-rejects, so we'd rather fail fast in the worker
+  // with a specific code than waste a round-trip.
   const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
   const isSeedanceComposite = /^taijiai::seedance-2\.0/i.test(videoModel)
   if (!isBPath && !isSeedanceComposite) {
@@ -313,17 +316,6 @@ export const POST = apiHandler(async (
         details: {
           panelIds: panelsWithoutImage.map((p) => p.id),
           message: 'All panels must have a generated image before multi-shot video generation',
-        },
-      })
-    }
-  }
-  if (isSeedanceComposite) {
-    const anyWithImage = panels.some((p) => p.imageUrl && p.imageUrl.trim().length > 0)
-    if (!anyWithImage) {
-      throw new ApiError('INVALID_PARAMS', {
-        code: 'SEEDANCE_COMPOSITE_NO_PANEL_IMAGES',
-        details: {
-          message: 'Seedance composite needs at least one panel with a generated image to use as first_frame',
         },
       })
     }
