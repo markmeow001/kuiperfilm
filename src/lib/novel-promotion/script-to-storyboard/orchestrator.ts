@@ -436,108 +436,142 @@ export async function runScriptToStoryboardOrchestrator(
     phase1PanelsByClipId.set(result.clipId, result.planPanels)
   }
 
+  // 2026-05-18 — Parallelize phase 2+3 across clips.
+  //
+  // Previously this was a serial for-loop, so a 5-clip episode paid
+  // (clip0_phase23 + clip1_phase23 + ...) sequentially even though
+  // each clip's three LLM calls (cinematography / acting / detail)
+  // were already Promise.all'd within the clip. Timing data from
+  // 2026-05-18 (147s total run): phase1 = 32.6s (parallel across
+  // clips), phase23 = 114.8s (serial across clips) — 78% of wall time.
+  //
+  // New design:
+  //   1. Run all clips' phase 2+3 LLM work in parallel via Promise.all
+  //      (clip-internal parallelism still applies — 5 clips × 3 calls
+  //      = 15 concurrent LLM calls peak).
+  //   2. AFTER all phase23 work finishes, iterate results in clip order
+  //      and fire onClipComplete sequentially. This preserves persist
+  //      order (clipIndex 1..N) so downstream UI sees storyboards in
+  //      the right sequence — but the slow LLM wait happens in one
+  //      shared window, not N serialized ones.
+  //
+  // Estimated speedup at 5 clips: 114.8s → ~26s (slowest single clip's
+  // phase23) = 88s saved, ~60% reduction in total wall time.
+  //
+  // Tradeoff: peaks at 5 × 3 = 15 concurrent LLM calls instead of 3.
+  // Most providers (OpenRouter, Anthropic, OpenAI) tolerate this on
+  // paid tiers. If we hit rate limits in production, switch to a
+  // bounded pool (e.g. p-limit with concurrency=8). For now, observe.
   const phase23StartedAt = Date.now()
-  const clipPanels: ClipStoryboardPanels[] = []
-  for (let index = 0; index < clips.length; index++) {
-    const clipPhase23StartedAt = Date.now()
-    const clip = clips[index]
-    const clipIndex = index + 1
-    const clipCharacters = parseClipCharacters(clip.characters)
-    const clipLocation = clip.location || null
-    const planPanels = phase1PanelsByClipId.get(clip.id) || []
-    if (planPanels.length === 0) {
-      throw new Error(`Missing phase1 result for clip ${formatClipId(clip)}`)
-    }
+  const phase23Results = await Promise.all(
+    clips.map(async (clip, index) => {
+      const clipPhase23StartedAt = Date.now()
+      const clipIndex = index + 1
+      const clipCharacters = parseClipCharacters(clip.characters)
+      const clipLocation = clip.location || null
+      const planPanels = phase1PanelsByClipId.get(clip.id) || []
+      if (planPanels.length === 0) {
+        throw new Error(`Missing phase1 result for clip ${formatClipId(clip)}`)
+      }
 
-    const filteredFullDescription = getFilteredFullDescription(novelPromotionData.characters || [], clipCharacters)
-    const filteredLocationsDescription = getFilteredLocationsDescription(
-      novelPromotionData.locations || [],
-      clipLocation,
-    )
+      const filteredFullDescription = getFilteredFullDescription(novelPromotionData.characters || [], clipCharacters)
+      const filteredLocationsDescription = getFilteredLocationsDescription(
+        novelPromotionData.locations || [],
+        clipLocation,
+      )
 
-    const phase2Meta = withStepMeta(
-      `clip_${clip.id}_phase2_cinematography`,
-      'progress.streamStep.cinematographyRules',
-      clips.length + index * 3 + 1,
-      totalStepCount,
-    )
-    const phase2ActingMeta = withStepMeta(
-      `clip_${clip.id}_phase2_acting`,
-      'progress.streamStep.actingDirection',
-      clips.length + index * 3 + 2,
-      totalStepCount,
-    )
-    const phase3Meta = withStepMeta(
-      `clip_${clip.id}_phase3_detail`,
-      'progress.streamStep.storyboardDetailRefine',
-      clips.length + index * 3 + 3,
-      totalStepCount,
-    )
+      const phase2Meta = withStepMeta(
+        `clip_${clip.id}_phase2_cinematography`,
+        'progress.streamStep.cinematographyRules',
+        clips.length + index * 3 + 1,
+        totalStepCount,
+      )
+      const phase2ActingMeta = withStepMeta(
+        `clip_${clip.id}_phase2_acting`,
+        'progress.streamStep.actingDirection',
+        clips.length + index * 3 + 2,
+        totalStepCount,
+      )
+      const phase3Meta = withStepMeta(
+        `clip_${clip.id}_phase3_detail`,
+        'progress.streamStep.storyboardDetailRefine',
+        clips.length + index * 3 + 3,
+        totalStepCount,
+      )
 
-    const phase2Prompt = promptTemplates.phase2CinematographyTemplate
-      .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
-      .replace(/\{panel_count\}/g, String(planPanels.length))
-      .replace('{locations_description}', filteredLocationsDescription)
-      .replace('{characters_info}', filteredFullDescription)
+      const phase2Prompt = promptTemplates.phase2CinematographyTemplate
+        .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
+        .replace(/\{panel_count\}/g, String(planPanels.length))
+        .replace('{locations_description}', filteredLocationsDescription)
+        .replace('{characters_info}', filteredFullDescription)
 
-    const phase2ActingPrompt = promptTemplates.phase2ActingTemplate
-      .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
-      .replace(/\{panel_count\}/g, String(planPanels.length))
-      .replace('{characters_info}', filteredFullDescription)
+      const phase2ActingPrompt = promptTemplates.phase2ActingTemplate
+        .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
+        .replace(/\{panel_count\}/g, String(planPanels.length))
+        .replace('{characters_info}', filteredFullDescription)
 
-    const phase3Prompt = promptTemplates.phase3DetailTemplate
-      .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
-      .replace('{characters_age_gender}', filteredFullDescription)
-      .replace('{locations_description}', filteredLocationsDescription)
+      const phase3Prompt = promptTemplates.phase3DetailTemplate
+        .replace('{panels_json}', JSON.stringify(planPanels, null, 2))
+        .replace('{characters_age_gender}', filteredFullDescription)
+        .replace('{locations_description}', filteredLocationsDescription)
 
-    const [
-      { parsed: photographyRules },
-      { parsed: actingDirections },
-      { parsed: filteredPhase3Panels },
-    ] = await Promise.all([
-      runStepWithRetry(
-        runStep, phase2Meta, phase2Prompt, 'storyboard_phase2_cinematography', 2400,
-        (text) => parseJsonArray<PhotographyRule>(text, `phase2:${formatClipId(clip)}`),
-      ),
-      runStepWithRetry(
-        runStep, phase2ActingMeta, phase2ActingPrompt, 'storyboard_phase2_acting', 2400,
-        (text) => parseJsonArray<ActingDirection>(text, `phase2-acting:${formatClipId(clip)}`),
-      ),
-      runStepWithRetry(
-        runStep, phase3Meta, phase3Prompt, 'storyboard_phase3_detail', 2600,
-        (text) => {
-          const panels = parseJsonArray<StoryboardPanel>(text, `phase3:${formatClipId(clip)}`)
-          const filtered = panels.filter(
-            (panel) => panel.description && panel.description !== '无' && panel.location !== '无',
-          )
-          if (filtered.length === 0) {
-            throw new Error(`Phase 3 returned empty valid panels for clip ${formatClipId(clip)}`)
-          }
-          return filtered
-        },
-      ),
-    ])
+      const [
+        { parsed: photographyRules },
+        { parsed: actingDirections },
+        { parsed: filteredPhase3Panels },
+      ] = await Promise.all([
+        runStepWithRetry(
+          runStep, phase2Meta, phase2Prompt, 'storyboard_phase2_cinematography', 2400,
+          (text) => parseJsonArray<PhotographyRule>(text, `phase2:${formatClipId(clip)}`),
+        ),
+        runStepWithRetry(
+          runStep, phase2ActingMeta, phase2ActingPrompt, 'storyboard_phase2_acting', 2400,
+          (text) => parseJsonArray<ActingDirection>(text, `phase2-acting:${formatClipId(clip)}`),
+        ),
+        runStepWithRetry(
+          runStep, phase3Meta, phase3Prompt, 'storyboard_phase3_detail', 2600,
+          (text) => {
+            const panels = parseJsonArray<StoryboardPanel>(text, `phase3:${formatClipId(clip)}`)
+            const filtered = panels.filter(
+              (panel) => panel.description && panel.description !== '无' && panel.location !== '无',
+            )
+            if (filtered.length === 0) {
+              throw new Error(`Phase 3 returned empty valid panels for clip ${formatClipId(clip)}`)
+            }
+            return filtered
+          },
+        ),
+      ])
 
-    const result: ClipStoryboardPanels = {
-      clipId: clip.id,
-      clipIndex,
-      finalPanels: mergePanelsWithRules({
-        finalPanels: filteredPhase3Panels,
-        photographyRules,
-        actingDirections,
-      }),
-    }
-    clipPanels.push(result)
-    orchestratorLogger.info({
-      action: 'orchestrator.clip.phase23.complete',
-      message: `phase2+3 for clip ${formatClipId(clip)} complete`,
-      details: {
+      const result: ClipStoryboardPanels = {
         clipId: clip.id,
         clipIndex,
-        finalPanelCount: result.finalPanels.length,
-        durationMs: Date.now() - clipPhase23StartedAt,
-      },
-    })
+        finalPanels: mergePanelsWithRules({
+          finalPanels: filteredPhase3Panels,
+          photographyRules,
+          actingDirections,
+        }),
+      }
+      orchestratorLogger.info({
+        action: 'orchestrator.clip.phase23.complete',
+        message: `phase2+3 for clip ${formatClipId(clip)} complete`,
+        details: {
+          clipId: clip.id,
+          clipIndex,
+          finalPanelCount: result.finalPanels.length,
+          durationMs: Date.now() - clipPhase23StartedAt,
+        },
+      })
+      return result
+    }),
+  )
+
+  // Sequential persist in clip order. Each persist is a fast DB write;
+  // running them in series keeps storyboard rows ordered by clipIndex
+  // and avoids concurrent transaction overhead on the same episode.
+  const clipPanels: ClipStoryboardPanels[] = []
+  for (const result of phase23Results) {
+    clipPanels.push(result)
     if (onClipComplete) await onClipComplete(result)
   }
 
