@@ -28,6 +28,7 @@ import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { useEpisodePreservingHref } from '../hooks/useEpisodePreservingHref'
+import { BulkEpisodeUploadButton } from './BulkEpisodeUploadButton'
 
 interface V2ScriptClientProps {
   projectId: string
@@ -166,6 +167,10 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
               </div>
             </div>
             <div className="flex items-center gap-3 font-mono text-[14px]">
+              <BulkEpisodeUploadButton
+                projectId={projectId}
+                hasExistingEpisodes={episodes.length > 0}
+              />
               <span className="text-stone-600">{charCount} chars</span>
               {currentEpisodeId ? (
                 saving ? (
