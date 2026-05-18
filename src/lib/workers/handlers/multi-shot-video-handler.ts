@@ -224,6 +224,11 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      // 2026-05-18 — per-group curated visual style override mirrors the
+      // b-path. Worker uses it to source negativePrompt (and, in due
+      // course, style anchor) when overriding the project default.
+      ...(visualStyleId ? { visualStyleId } : {}),
+      ...(lightingPresetId ? { lightingPresetId } : {}),
     })
   }
 

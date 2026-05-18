@@ -21,7 +21,7 @@ import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
 import { LocationViewPickerModal } from './LocationViewPickerModal'
 import { NarrativeHighlighter } from './NarrativeHighlighter'
-import { visualStyles } from '@/lib/style-library'
+import { visualStyles, getStyleSafe } from '@/lib/style-library'
 import {
   useMultiShotTask,
   type MultiShotCharacterBinding,
@@ -210,6 +210,15 @@ interface GroupCardProps {
    * existing callers that don't pass this prop yet).
    */
   videoFamily?: 'kling' | 'seedance' | null
+  /**
+   * 2026-05-18 — project-level visual style id (NovelPromotionProject.visualStyleId).
+   * Builder uses it to inject styleAnchor + visualModifiers into the Seedance
+   * prompt instead of the old hard-coded STYLE_FOOTER_SEEDANCE block. The
+   * per-group `visualStyleOverride` picker still wins over this default.
+   * Null / undefined = no project style set → builder emits no style footer
+   * (worker still applies its own resolveProjectVisualStyle on the server).
+   */
+  projectVisualStyleId?: string | null
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
@@ -241,6 +250,7 @@ export function GroupCard({
   episodeNumber,
   canMultiShot = true,
   videoFamily = null,
+  projectVisualStyleId = null,
   onRegenerate,
 }: GroupCardProps) {
   // Build episode binding lookup ONCE. Empty map when no bindings prop
@@ -913,10 +923,37 @@ export function GroupCard({
     中度推進: '中度推镜',
   }
 
-  const STYLE_FOOTER_SEEDANCE = [
-    '整体视觉风格:',
-    'photorealistic, hyperrealistic, cinematic lighting, volumetric lighting, realistic subsurface scattering, film grain, 8K detail, real skin texture, real fabric physics, dramatic yet natural lighting, shot on Arri Alexa 65, IMAX quality, no cartoonish glow, no plastic look, no 3D render feel, no text, no subtitles, no letters, no words, no on-screen text of any kind, clean visual only',
-  ].join('\n')
+  // 2026-05-18 — footer is now driven by the curated visualStyles catalog
+  // (29 styles in src/lib/style-library/visual-styles.ts). The picker's
+  // visualStyleOverride wins over projectVisualStyleId; either resolves to
+  // a VisualStyle whose styleAnchor + visualModifiers form the footer.
+  //
+  // RED LINE — what we deliberately do NOT inline anymore:
+  //   - Camera/film equipment terms ("Arri Alexa 65", "IMAX quality",
+  //     "8K detail", "film grain"). These live in styleAnchor when the
+  //     chosen style is a realistic one; on stylized choices (anime,
+  //     watercolor, etc.) they were actively wrong.
+  //   - Negative directives ("no text", "no subtitles", "no plastic look").
+  //     Generation models attend to the noun and sometimes generate it.
+  //     The worker now sends a dedicated negative_prompt to BobAPI via
+  //     buildVisualStyleNegative() + a universal text/watermark suppressor.
+  //
+  // Returns empty string when no style is selected — the worker's own
+  // resolveProjectVisualStyle on the server is the safety net.
+  const buildStyleFooterFromCatalog = (): string => {
+    const effectiveStyleId =
+      visualStyleOverride && visualStyleOverride !== STYLE_INHERIT
+        ? visualStyleOverride
+        : projectVisualStyleId
+    if (!effectiveStyleId) return ''
+    const style = getStyleSafe(effectiveStyleId)
+    if (!style) return ''
+    const parts = [style.styleAnchor, style.visualModifiers].filter(
+      (s): s is string => Boolean(s && s.trim()),
+    )
+    if (parts.length === 0) return ''
+    return ['整体视觉风格:', parts.join('. ')].join('\n')
+  }
 
   const buildInitialNarrativeSeedance = (): string => {
     const count = panels.length
@@ -951,10 +988,13 @@ export function GroupCard({
       const cameraMoveRaw = p.cameraMove?.trim() ?? ''
       const cameraMoveCn = CAMERA_MOVE_TO_CN[cameraMoveRaw] ?? cameraMoveRaw
 
-      // Shot header: 鏡頭N: framing·camera (Photorealistic Cinematic)
+      // Shot header: 镜头N: framing·camera
       // Drop the camera fragment when 固定 (visually empty info).
+      // 2026-05-18 — dropped "(Photorealistic Cinematic)" tag. It was a
+      // hardcoded editing-style claim that contradicted non-realistic
+      // visualStyleId choices and added noise to every shot block.
       const cameraFragment = cameraMoveCn && cameraMoveCn !== '固定镜头' ? `·${cameraMoveCn}` : ''
-      const lines: string[] = [`镜头${i + 1}: ${framing}${cameraFragment} (Photorealistic Cinematic)`]
+      const lines: string[] = [`镜头${i + 1}: ${framing}${cameraFragment}`]
 
       if (desc) lines.push(desc)
 
@@ -976,14 +1016,19 @@ export function GroupCard({
         if (srt) lines.push(srt)
       }
 
-      lines.push('严格无任何字幕、文字、logo或屏幕信息。')
+      // 2026-05-18 — removed per-shot negative sentence
+      // ("严格无任何字幕、文字、logo或屏幕信息"). Negative directives now
+      // ride on BobAPI's negative_prompt body field; emitting them in the
+      // positive prompt was probabilistically inducing the very artifacts
+      // (subtitle bars, on-screen logos) it was trying to suppress.
       shotBlocks.push(lines.join('\n'))
     }
 
     const sections: string[] = []
     if (headerLines.length > 0) sections.push(headerLines.join('\n'))
     sections.push(shotBlocks.join('\n\n'))
-    sections.push(STYLE_FOOTER_SEEDANCE)
+    const styleFooter = buildStyleFooterFromCatalog()
+    if (styleFooter) sections.push(styleFooter)
     return sections.join('\n\n')
   }
 

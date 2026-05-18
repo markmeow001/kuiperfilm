@@ -80,6 +80,11 @@ interface ProjectLikeFull {
     videoModel?: string | null
     videoRatio?: string | null
     episodes?: Array<{ id: string }> | null
+    // 2026-05-18 — top-level column on NovelPromotionProject. The Seedance
+    // narrative builder uses it to drive the styleAnchor + visualModifiers
+    // footer (replacing the old hardcoded cinematic terms) and the worker
+    // reads it server-side for negative_prompt resolution.
+    visualStyleId?: string | null
   } | null
 }
 
@@ -1432,6 +1437,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         episodeNumber={(currentEpisode as { episodeNumber?: number } | null)?.episodeNumber ?? null}
         canMultiShot={canMultiShot}
         videoFamily={videoFamily}
+        projectVisualStyleId={project?.novelPromotionData?.visualStyleId ?? null}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 或 Seedance 2.0 720p (BobAPI) 模型' }

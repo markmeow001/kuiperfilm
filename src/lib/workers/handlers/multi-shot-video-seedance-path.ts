@@ -64,6 +64,29 @@ import {
   extractSpokenLineFromSrtSegment,
   looksLikeStageDirection,
 } from './multi-shot-video-b-path'
+import {
+  resolveProjectVisualStyle,
+  buildVisualStyleNegative,
+  getStyleSafe,
+} from '@/lib/style-library'
+
+// 2026-05-18 — Universal negative-prompt suffix added to every Seedance
+// composite request regardless of visualStyleId. Suppresses the
+// on-screen-text / subtitle / logo / watermark artifacts the model
+// occasionally surfaces when reference images carry watermarks or the
+// generative training set leaked subtitled content. Replaces the per-shot
+// "严格无任何字幕、文字、logo或屏幕信息" line previously inlined by
+// GroupCard's buildInitialNarrativeSeedance.
+const UNIVERSAL_SEEDANCE_NEGATIVE = [
+  '字幕',
+  '文字',
+  'logo',
+  '屏幕信息',
+  '水印',
+  'watermark',
+  'subtitles',
+  'on-screen text',
+].join(', ')
 
 /** BobAPI multi-ref cap: 9 images per the wiki Section 4.2. */
 const MAX_REFERENCE_IMAGES = 9
@@ -520,6 +543,13 @@ export async function runMultiShotSeedanceComposite(params: {
    *  caller override Seedance's panel-count heuristic when the prompt
    *  was built around specific shot lengths. Clamped to 4-15s total. */
   panelDurations?: number[]
+  /**
+   * 2026-05-18 — per-group curated style override (Phase E parity with
+   * b-path). When set, wins over project.visualStyleId in
+   * resolveProjectVisualStyle for negativePrompt resolution.
+   */
+  visualStyleId?: string
+  lightingPresetId?: string
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -670,6 +700,29 @@ export async function runMultiShotSeedanceComposite(params: {
   await assertTaskActive(job, 'seedance_composite_submit')
   await reportTaskProgress(job, 20, { stage: 'seedance_composite_submit' })
 
+  // 2026-05-18 — Resolve a visual style → per-style negativePrompt, then
+  // append the universal text/watermark suppressors. Order:
+  //   1. Per-group override (params.visualStyleId) — set by GroupCard's
+  //      "this group only" picker.
+  //   2. Project default — resolveProjectVisualStyle reads
+  //      NovelPromotionProject.visualStyleId.
+  //   3. Universal suffix — always added so reference images that carry
+  //      watermarks don't bleed subtitles / logos into the output.
+  // Empty resolution is fine — we still ship the universal suffix.
+  let styleNegative = ''
+  if (params.visualStyleId) {
+    const overrideStyle = getStyleSafe(params.visualStyleId)
+    if (overrideStyle) {
+      styleNegative = overrideStyle.negativePrompt ?? ''
+    }
+  } else {
+    const projectStyle = await resolveProjectVisualStyle(prisma, projectId)
+    styleNegative = buildVisualStyleNegative(projectStyle)
+  }
+  const composedNegative = [styleNegative, UNIVERSAL_SEEDANCE_NEGATIVE]
+    .filter((s) => s && s.trim())
+    .join(', ')
+
   const generator = new TaijiaiSeedanceVideoGenerator()
   const generateResult = await generator.generate({
     userId,
@@ -686,6 +739,7 @@ export async function runMultiShotSeedanceComposite(params: {
       aspectRatio,
       generateAudio: sound,
       referenceImages: referenceUrls,
+      negativePrompt: composedNegative,
     },
   })
 

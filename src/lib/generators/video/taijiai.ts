@@ -75,6 +75,13 @@ interface TaijiaiOptions {
   referenceAudios?: string[]
   /** When true the FIRST reference image is marked subject_type='person' → 真人审核. */
   isPersonReference?: boolean
+  /**
+   * 2026-05-18 — comma-separated negative prompt (e.g. '字幕, 文字, logo, 模糊').
+   * Replaces the GroupCard "严格无任何字幕" inline-negative + STYLE_FOOTER
+   * "no text / no plastic" tail. Forwarded to BobAPI as `negative_prompt`.
+   * Empty string / undefined = field omitted from request body.
+   */
+  negativePrompt?: string
 }
 
 interface CreateVideoResponse {
@@ -123,6 +130,7 @@ export class TaijiaiSeedanceVideoGenerator extends BaseVideoGenerator {
       referenceVideos = [],
       referenceAudios = [],
       isPersonReference = false,
+      negativePrompt,
     } = options as TaijiaiOptions
 
     const logger = createScopedLogger({
@@ -199,13 +207,23 @@ export class TaijiaiSeedanceVideoGenerator extends BaseVideoGenerator {
     // that produced 401 "无效的令牌" in live testing (new-api conflates
     // "no permission" with "invalid token"). Send the catalog id verbatim.
     // Caller can override via options.modelId for future 480p / fast / etc.
-    const body = {
+    // 2026-05-18 — negative_prompt is omitted when blank so BobAPI's
+    // request validator (which can choke on empty strings on optional
+    // fields) sees the same body shape we shipped before this change.
+    // The field is documented as accepted on BobAPI's new-api router
+    // (parallel to Tencent VOD AIGC's NegativePrompt). If the upstream
+    // ever rejects it the worst case is a 4xx and we strip it.
+    const trimmedNegative = (negativePrompt ?? '').trim()
+    const body: Record<string, unknown> = {
       model: modelId || 'seedance-2.0-720p',
       duration: clampDuration(duration),
       generate_audio: generateAudio,
       ratio: normaliseRatio(aspectRatio),
       prompt: paramPrompt || '',  // BobAPI ignores this but new-api compat keeps it
       content,
+    }
+    if (trimmedNegative) {
+      body.negative_prompt = trimmedNegative
     }
 
     logger.info({
@@ -218,6 +236,7 @@ export class TaijiaiSeedanceVideoGenerator extends BaseVideoGenerator {
         hasFirstFrame: !!imageUrl,
         hasLastFrame: !!lastFrameImageUrl,
         promptLength: paramPrompt.length,
+        negativePromptLength: trimmedNegative.length,
       },
     })
 

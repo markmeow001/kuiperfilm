@@ -114,6 +114,13 @@ interface V2GroupsLayoutProps {
    *  (N stitched clips), Seedance = composite (1 video, 9-ref @N). The
    *  GroupCard CTA label must match what the worker produces. */
   videoFamily?: 'kling' | 'seedance' | null
+  /**
+   * 2026-05-18 — pass-through of NovelPromotionProject.visualStyleId.
+   * GroupCard's Seedance narrative builder uses it to inject styleAnchor +
+   * visualModifiers (and feeds the negativePrompt path on the worker side).
+   * Per-group picker overrides this.
+   */
+  projectVisualStyleId?: string | null
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
@@ -148,6 +155,7 @@ export function V2GroupsLayout({
   episodeNumber,
   canMultiShot = true,
   videoFamily = null,
+  projectVisualStyleId = null,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -213,6 +221,7 @@ export function V2GroupsLayout({
                   episodeNumber={episodeNumber}
                   canMultiShot={canMultiShot}
                   videoFamily={videoFamily}
+                  projectVisualStyleId={projectVisualStyleId}
                   onRegenerate={(panelIds, overrides) =>
                     onRegenerateGroup(g.groupId, panelIds, overrides)
                   }
