@@ -698,10 +698,13 @@ export async function runMultiShotSeedanceComposite(params: {
   await reportTaskProgress(job, 40, { stage: 'seedance_composite_poll' })
 
   const polled = await waitExternalResult(job, generateResult.externalId, userId, {
-    // Seedance 2.0 typical 60-180s; give it 10 min budget so cold
-    // queues don't false-fail. Worker keeps reporting progress in the
-    // 40-90 range automatically via waitExternalResult's interp.
-    timeoutMs: 10 * 60 * 1000,
+    // Seedance 2.0 with heavy prompts (3000+ chars + 4 dialogue beats +
+    // 10s duration) has been observed to run 12+ minutes when BobAPI is
+    // under load. 10 min was too tight; 15 min gives heavy runs headroom
+    // without blocking the queue indefinitely. Worker keeps reporting
+    // progress in the 40-90 range automatically via waitExternalResult's
+    // linear interp.
+    timeoutMs: 15 * 60 * 1000,
     progressStart: 40,
     progressEnd: 90,
   })
