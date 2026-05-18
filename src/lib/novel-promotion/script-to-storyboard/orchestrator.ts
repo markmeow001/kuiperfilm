@@ -241,6 +241,9 @@ async function runStepWithRetry<T>(
   parse: (text: string) => T,
 ): Promise<{ output: ScriptToStoryboardStepOutput; parsed: T }> {
   let lastError: Error | null = null
+  // Cumulative timing across retries so the caller can attribute wall time
+  // to the action even when one attempt failed and another succeeded.
+  const stepStartedAt = Date.now()
   for (let attempt = 1; attempt <= MAX_STEP_ATTEMPTS; attempt++) {
     const meta = attempt === 1
       ? baseMeta
@@ -250,9 +253,26 @@ async function runStepWithRetry<T>(
         stepAttempt: attempt,
         stepTitle: baseMeta.stepTitle,
       }
+    const attemptStartedAt = Date.now()
     try {
       const output = await runStep(meta, prompt, action, maxOutputTokens)
       const parsed = parse(output.text)
+      const attemptDurationMs = Date.now() - attemptStartedAt
+      const totalDurationMs = Date.now() - stepStartedAt
+      orchestratorLogger.info({
+        action: 'orchestrator.step.complete',
+        message: `step ${action} completed`,
+        details: {
+          stepId: baseMeta.stepId,
+          action,
+          attempt,
+          attempts: attempt,
+          attemptDurationMs,
+          totalDurationMs,
+          promptChars: prompt.length,
+          outputChars: typeof output.text === 'string' ? output.text.length : 0,
+        },
+      })
       return { output, parsed }
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error))
@@ -291,10 +311,24 @@ async function runStepWithRetry<T>(
 export async function runScriptToStoryboardOrchestrator(
   input: ScriptToStoryboardOrchestratorInput,
 ): Promise<ScriptToStoryboardOrchestratorResult> {
+  const orchestratorStartedAt = Date.now()
   const { clips, targetDuration = 60, novelPromotionData, promptTemplates, runStep, onClipComplete } = input
   if (!Array.isArray(clips) || clips.length === 0) {
     throw new Error('No clips found')
   }
+
+  orchestratorLogger.info({
+    action: 'orchestrator.run.start',
+    message: 'script-to-storyboard orchestrator started',
+    details: {
+      clipCount: clips.length,
+      targetDurationSec: targetDuration,
+      totalContentChars: clips.reduce(
+        (sum, c) => sum + (typeof c.content === 'string' ? c.content.length : 0),
+        0,
+      ),
+    },
+  })
 
   const totalStepCount = clips.length * 4 + 2
   const charactersLibName = (novelPromotionData.characters || []).map((c) => c.name).join(', ') || '无'
@@ -312,8 +346,10 @@ export async function runScriptToStoryboardOrchestrator(
 
   const phase1PanelsByClipId = new Map<string, StoryboardPanel[]>()
 
+  const phase1StartedAt = Date.now()
   const phase1Results = await Promise.all(
     clips.map(async (clip, i) => {
+      const clipPhase1StartedAt = Date.now()
       const clipIndex = i + 1
       const clipContent = typeof clip.content === 'string' ? clip.content.trim() : ''
       if (!clipContent) {
@@ -367,6 +403,18 @@ export async function runScriptToStoryboardOrchestrator(
         },
       )
 
+      orchestratorLogger.info({
+        action: 'orchestrator.clip.phase1.complete',
+        message: `phase1 for clip ${formatClipId(clip)} complete`,
+        details: {
+          clipId: clip.id,
+          clipIndex,
+          panelCountTarget: clipTargetPanels[i],
+          panelCountActual: planPanels.length,
+          durationMs: Date.now() - clipPhase1StartedAt,
+        },
+      })
+
       return {
         clipId: clip.id,
         planPanels,
@@ -374,12 +422,24 @@ export async function runScriptToStoryboardOrchestrator(
     }),
   )
 
+  orchestratorLogger.info({
+    action: 'orchestrator.phase1.complete',
+    message: 'phase1 (storyboard plan) done for all clips',
+    details: {
+      clipCount: clips.length,
+      totalDurationMs: Date.now() - phase1StartedAt,
+      totalPanels: phase1Results.reduce((sum, r) => sum + r.planPanels.length, 0),
+    },
+  })
+
   for (const result of phase1Results) {
     phase1PanelsByClipId.set(result.clipId, result.planPanels)
   }
 
+  const phase23StartedAt = Date.now()
   const clipPanels: ClipStoryboardPanels[] = []
   for (let index = 0; index < clips.length; index++) {
+    const clipPhase23StartedAt = Date.now()
     const clip = clips[index]
     const clipIndex = index + 1
     const clipCharacters = parseClipCharacters(clip.characters)
@@ -468,10 +528,33 @@ export async function runScriptToStoryboardOrchestrator(
       }),
     }
     clipPanels.push(result)
+    orchestratorLogger.info({
+      action: 'orchestrator.clip.phase23.complete',
+      message: `phase2+3 for clip ${formatClipId(clip)} complete`,
+      details: {
+        clipId: clip.id,
+        clipIndex,
+        finalPanelCount: result.finalPanels.length,
+        durationMs: Date.now() - clipPhase23StartedAt,
+      },
+    })
     if (onClipComplete) await onClipComplete(result)
   }
 
   const totalPanelCount = clipPanels.reduce((sum, item) => sum + item.finalPanels.length, 0)
+  const totalDurationMs = Date.now() - orchestratorStartedAt
+  orchestratorLogger.info({
+    action: 'orchestrator.run.complete',
+    message: 'script-to-storyboard orchestrator finished',
+    details: {
+      clipCount: clips.length,
+      totalPanelCount,
+      totalDurationMs,
+      phase1DurationMs: phase23StartedAt - phase1StartedAt,
+      phase23DurationMs: Date.now() - phase23StartedAt,
+      avgPerClipMs: Math.round(totalDurationMs / Math.max(1, clips.length)),
+    },
+  })
   return {
     clipPanels,
     summary: {
