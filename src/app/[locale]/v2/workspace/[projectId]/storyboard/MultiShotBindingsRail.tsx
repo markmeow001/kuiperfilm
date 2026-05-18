@@ -15,12 +15,113 @@
  * doesn't shout when the user hasn't done anything yet.
  */
 
+import { useEffect, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import {
   useMultiShotTask,
   type MultiShotCharacterBinding,
   type MultiShotSceneBinding,
+  type MultiShotTaskRecord,
 } from '@/lib/query/hooks/useMultiShotTask'
+
+/**
+ * Heuristic stage label derived from progress percentage. Avoids the
+ * cost of a second API call (lifecycle events) — the band ranges match
+ * the worker's reportTaskProgress calls in
+ * multi-shot-video-{seedance,b}-path.ts.
+ */
+function progressStageLabel(progress: number, taskType: string | null): string {
+  // Seedance composite stage bands per
+  // multi-shot-video-seedance-path.ts:
+  //   5 received → 12 collect_refs → 15 start → 20 submit → 40 poll
+  //   → 40-90 polling_external (interpolated) → 92 persist → 98 done
+  if (taskType === 'video_multi_shot' || taskType === 'multi_shot_video') {
+    if (progress < 10) return '排隊中…'
+    if (progress < 18) return '收集角色/場景參考…'
+    if (progress < 35) return '送出 AI 模型…'
+    if (progress < 85) return 'AI 生成中…'
+    if (progress < 95) return '下載並上傳影片…'
+    if (progress < 100) return '即將完成…'
+    return '完成'
+  }
+  // Generic fallback.
+  if (progress < 10) return '排隊中…'
+  if (progress < 35) return '送出中…'
+  if (progress < 85) return '生成中…'
+  if (progress < 100) return '收尾中…'
+  return '完成'
+}
+
+function formatElapsed(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '0:00'
+  const totalSec = Math.floor(ms / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/**
+ * Average runtime baselines per worker — used to compute the ETA hint
+ * shown next to the progress bar. Numbers come from observed prod runs:
+ *   - Seedance composite (taijiai): 5-9 min (BobAPI sometimes queues
+ *     under load; pick the upper bound so the ETA doesn't lie when
+ *     things are slow).
+ *   - Kling B-path: 3-5 min typical, sometimes 8.
+ * We use the upper bound so users aren't surprised when it runs long.
+ */
+const TASK_ETA_MS: Record<string, number> = {
+  video_multi_shot: 9 * 60 * 1000,
+  multi_shot_video: 9 * 60 * 1000,
+}
+
+function MultiShotProgressBar({ task }: { task: MultiShotTaskRecord }) {
+  // Re-render once a second so elapsed / ETA tick without waiting on
+  // the 3s task poll. Only mounts while non-terminal so the timer
+  // unsubscribes as soon as the run completes.
+  const [, force] = useState(0)
+  useEffect(() => {
+    const id = window.setInterval(() => force((n) => n + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const startTs = task.startedAt
+    ? Date.parse(task.startedAt)
+    : task.createdAt
+      ? Date.parse(task.createdAt)
+      : NaN
+  const elapsedMs = Number.isFinite(startTs) ? Date.now() - startTs : 0
+  const progress = typeof task.progress === 'number'
+    ? Math.max(0, Math.min(100, task.progress))
+    : 0
+  const stage = progressStageLabel(progress, task.type ?? null)
+  const baselineEta = task.type ? TASK_ETA_MS[task.type] : undefined
+  // ETA = max(0, baseline - elapsed). Progress is interpolated server-
+  // side so it's a noisy estimator; baseline-minus-elapsed is more
+  // honest because it doesn't bounce when the progress band changes.
+  const etaMs = baselineEta ? Math.max(0, baselineEta - elapsedMs) : null
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between font-mono text-[11px] tracking-wider">
+        <span className="text-amber-400/90">{stage}</span>
+        <span className="text-stone-500">
+          {formatElapsed(elapsedMs)}
+          {etaMs !== null && etaMs > 0 ? ` · 預計 ~${formatElapsed(etaMs)}` : ''}
+        </span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-800/80">
+        <div
+          className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-700 ease-out"
+          style={{ width: `${Math.max(progress, 2)}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between font-mono text-[10px] tracking-wider text-stone-500">
+        <span>進度 {progress}%</span>
+        <span className="italic">不必停在此頁,完成後會自動刷新</span>
+      </div>
+    </div>
+  )
+}
 
 interface MultiShotBindingsRailProps {
   taskId: string | null | undefined
@@ -148,8 +249,11 @@ export function MultiShotBindingsRail({
       </div>
 
       {!isTerminal && !hasContent && clipUrls.length === 0 ? (
-        <div className="font-serif-cn text-[11px] italic text-stone-500">
-          多鏡頭視頻生成中(約 3-5 分鐘) — 完成後會顯示視頻播放器與綁定的角色造型 / 場景視角。
+        <div className="space-y-2">
+          {data ? <MultiShotProgressBar task={data} /> : null}
+          <div className="font-serif-cn text-[11px] italic text-stone-500">
+            完成後會顯示視頻播放器與綁定的角色造型 / 場景視角。
+          </div>
         </div>
       ) : null}
 

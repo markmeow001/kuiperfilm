@@ -43,6 +43,13 @@ export interface MultiShotTaskRecord {
   id: string
   status: 'queued' | 'processing' | 'completed' | 'failed' | string
   progress?: number | null
+  /** ISO-8601 timestamps used to compute elapsed / ETA in the rail. */
+  createdAt?: string | null
+  startedAt?: string | null
+  finishedAt?: string | null
+  /** Task type string — drives ETA expectation per worker
+   *  (Seedance composite averages 5-9 min vs Kling B-path 3-5). */
+  type?: string | null
   result?: {
     bindings?: MultiShotBindings | null
     multiShotVideoUrl?: string | null
@@ -130,6 +137,10 @@ export function useMultiShotTask(taskId: string | null | undefined) {
         id: typeof t.id === 'string' ? t.id : taskId,
         status: typeof t.status === 'string' ? t.status : 'unknown',
         progress: typeof t.progress === 'number' ? t.progress : null,
+        createdAt: typeof t.createdAt === 'string' ? t.createdAt : null,
+        startedAt: typeof t.startedAt === 'string' ? t.startedAt : null,
+        finishedAt: typeof t.finishedAt === 'string' ? t.finishedAt : null,
+        type: typeof t.type === 'string' ? t.type : null,
         result: isRecord(t.result)
           ? {
               bindings: parseBindings(t),
