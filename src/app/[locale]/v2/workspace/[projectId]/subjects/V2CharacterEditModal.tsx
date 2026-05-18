@@ -229,7 +229,7 @@ export function V2CharacterEditModal({
                 className="flex items-center justify-center gap-1 rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                重新生成
+                {isRegenerating ? '生圖中…' : imageUrl ? '重新生成' : '生成'}
               </button>
               <button
                 type="button"

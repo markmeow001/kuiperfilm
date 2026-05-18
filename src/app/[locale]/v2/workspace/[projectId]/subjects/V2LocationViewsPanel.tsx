@@ -186,7 +186,7 @@ export function V2LocationViewsPanel({
                       disabled={regen}
                       className="rounded-sm border border-amber-500/40 px-2 py-1 font-mono text-[14px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/10 disabled:opacity-40"
                     >
-                      {regen ? '生圖中…' : '重生'}
+                      {regen ? '生圖中…' : img.imageUrl ? '重生' : '生成'}
                     </button>
                     <button
                       type="button"

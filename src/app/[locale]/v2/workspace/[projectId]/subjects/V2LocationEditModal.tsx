@@ -249,7 +249,7 @@ export function V2LocationEditModal({
                 disabled={isRegenerating}
                 className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-serif-cn text-xs text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
               >
-                {isRegenerating ? '生圖中…' : '重新生成'}
+                {isRegenerating ? '生圖中…' : imageUrl ? '重新生成' : '生成'}
               </button>
               <button
                 type="button"

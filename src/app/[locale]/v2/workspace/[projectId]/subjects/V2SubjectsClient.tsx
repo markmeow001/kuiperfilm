@@ -971,7 +971,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             分析{currentEpisode ? `「${currentEpisode.name}」` : '當前集'}的劇本
           </div>
           <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
-            從劇本自動抽出角色 / 場景 / 道具 — 完成後可在下方卡片點「重新生成」/「鎖定」/上傳替換
+            從劇本自動抽出角色 / 場景 / 道具 — 完成後在下方卡片可單張「生成」/「重新生成」/上傳替換,或用上方「一鍵生圖所有X」批次跑
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -1506,7 +1506,9 @@ function SubjectGrid({
 
   return (
     <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
-      {items.map((item, i) => (
+      {items.map((item, i) => {
+        const showGenerateCta = !item.imageUrl && !item.isRegenerating && !item.isUploading && Boolean(item.onRegenerate)
+        return (
         <div
           key={item.id}
           className="group overflow-hidden rounded-sm border border-stone-800/50 bg-stone-900/30 transition-all hover:border-amber-500/40"
@@ -1551,6 +1553,20 @@ function SubjectGrid({
                 <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-amber-400" />
                 <div className="font-mono text-[14px] tracking-wider text-amber-300">上傳中…</div>
               </div>
+            ) : showGenerateCta ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  item.onRegenerate?.()
+                }}
+                className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/40 backdrop-blur-[1px] transition-all hover:bg-amber-500/15"
+                title="只生成這一張 — 不會動到其他卡"
+              >
+                <AppIcon name="sparklesAlt" className="h-7 w-7 text-amber-400/80" />
+                <div className="font-serif-cn text-base text-amber-300">點此生成</div>
+                <div className="font-mono text-[11px] tracking-wider text-stone-400">單張 · 不影響其他</div>
+              </button>
             ) : null}
           </div>
           <div className="px-4 py-3">
@@ -1708,7 +1724,8 @@ function SubjectGrid({
             ) : null}
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
