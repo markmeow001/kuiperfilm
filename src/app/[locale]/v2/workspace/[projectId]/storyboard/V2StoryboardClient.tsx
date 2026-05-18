@@ -1280,45 +1280,57 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   // ─── Groups layout (text-driven multi-shot) ──────────────────────
   if (layoutMode === 'groups') {
-    // Toolbar split into two rows (2026-05-12): top row is the layout
-    // toggle (Gallery / Timeline / Groups), bottom row keeps the title
-    // cluster on the left and the four action buttons on the right.
-    // Previous single-row crammed them together and made the 4 actions
-    // visually compete with the view toggle.
+    // 2026-05-18 — toolbar reorganized into 3 rows so 16+ elements aren't
+    // crammed into one line. Old layout was visually exhausting + the
+    // primary CTA (多鏡頭合成) competed for attention with secondary
+    // affordances. New rows:
+    //   1. Layout toggle  (right-aligned, identity only)
+    //   2. State + video model picker (state row, no actions here)
+    //   3. Actions split into two clusters:
+    //        LEFT  — data ops (new / re-analyse / cleanup) — muted stone
+    //        RIGHT — workflow ops (auto-group / composite) — accent
+    //        Primary CTA "多鏡頭合成" sits at the far right with stronger
+    //        visual weight (filled bg, brighter border) so the eye lands
+    //        on the next step.
     const groupsToolbar = (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
+        {/* Row 1: layout toggle */}
         <div className="flex justify-end">{layoutToggleNode}</div>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="font-fraunces text-sm italic text-amber-500/80">多鏡頭</div>
-            {hasGroups ? (
-              <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-                {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
-              </span>
-            ) : null}
-            <VideoModelPickerInline
-              projectId={projectId}
-              currentVideoModel={projectVideoModel || null}
-              videoRatio={projectVideoRatio || '9:16'}
-            />
-          </div>
-          <div className="flex items-center gap-3">
+
+        {/* Row 2: state badge + video model picker (wraps on narrow screens) */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {hasGroups ? (
+            <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
+              ◷ {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+            </span>
+          ) : null}
+          <VideoModelPickerInline
+            projectId={projectId}
+            currentVideoModel={projectVideoModel || null}
+            videoRatio={projectVideoRatio || '9:16'}
+          />
+        </div>
+
+        {/* Row 3: actions, split into data ops (left) + workflow ops (right) */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* LEFT cluster — data ops (muted stone style, secondary) */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={!currentEpisodeId || manualPanelSubmitting}
               onClick={() => setManualPanelOpen(true)}
               title="自己寫提示詞 + 選角色場景,單一鏡頭手動建立"
-              className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="plus" className="h-3 w-3" />
-              手動新增分鏡
+              手動新增
             </button>
             <button
               type="button"
               disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
               onClick={handleAnalyzeStoryboard}
               title="重新從劇本生成分鏡"
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               重新分析
@@ -1328,17 +1340,22 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               disabled={!currentEpisodeId}
               onClick={() => setStaleCleanupOpen(true)}
               title="再分析失敗時舊分鏡會殘留 — 從這裡挑出多餘的分鏡來源刪掉"
-              className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              整理分鏡來源
+              整理來源
             </button>
+          </div>
+
+          {/* RIGHT cluster — workflow ops; 自動切組 violet (prep), 多鏡頭合成 amber filled (primary CTA) */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2}
               onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
               title="把分鏡按角色 / 場景連續性切成 multi-shot 群"
-              className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[13px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
+              <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {autoGroup.isPending ? '切組中…' : '自動切組'}
             </button>
             <button
@@ -1352,9 +1369,9 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     ? '每個 group 合成為一支 4-15s 影片(Seedance BobAPI 9-ref @N 合成)'
                     : '把所有 group 一次送 Kling 多鏡頭'
               }
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-sm border border-amber-500/60 bg-amber-500/25 px-3.5 py-1.5 font-mono text-[14px] font-semibold tracking-wider text-amber-100 shadow-sm shadow-amber-500/10 transition-all hover:border-amber-400 hover:bg-amber-500/35 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <AppIcon name="sparklesAlt" className="h-3 w-3" />
+              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
               {multiShotState.status === 'submitting'
                 ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
                 : videoFamily === 'seedance'
