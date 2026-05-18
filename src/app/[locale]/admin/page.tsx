@@ -297,6 +297,17 @@ export default function AdminLandingPage() {
               生成秒 / 成片率 / token 消耗 / 真實成本 / 毛利率 — unit economics dashboard
             </p>
           </Link>
+
+          <Link
+            href={`/${locale}/admin/bobapi-health`}
+            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+          >
+            <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">07 · PROVIDER HEALTH</div>
+            <div className="mt-2 font-serif-cn text-xl text-stone-100">影片供應商健康</div>
+            <p className="mt-2 font-fraunces text-sm italic text-stone-400">
+              Seedance / BobAPI 故障率 + 各供應商使用次數 + get_channel_failed 等錯誤碼分布
+            </p>
+          </Link>
         </div>
 
         <div className="mt-12 rounded-sm border border-stone-800/60 bg-stone-900/20 p-5">
