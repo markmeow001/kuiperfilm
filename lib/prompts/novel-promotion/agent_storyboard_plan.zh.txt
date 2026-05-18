@@ -112,14 +112,51 @@
 2. content数组：
    - type: "action" → 提取text作为动作描述
    - type: "dialogue" → 提取character、lines、parenthetical生成对话镜头
-   - type: "voiceover" → 画外音，设计画面配合声音
+   - type: "voiceover" → 画外音 / OS / VO / 隔空呼喊 / 内心独白 / 旁白，按下方第 4 条处理
 
 3. 对话拆解：
    - 每个对话 2-3 个镜头：说话者 + 听者反应 + 双人/环境镜头
 
-4. 画外音处理：
-   - 画外音时画面应是相关场景或回忆
-   - 示例：voiceover说"猴子死了" → 画面是闪回战斗
+4. 画外音 / OS / VO / 隔空呼喊 处理（⭐ 强制规则，三条都必须满足）：
+
+   ⚠️ 这是过去反复出现 bug 的地方：voiceover 内容（如桃桃从远方呼喊王玄、角色内心独白、旁白叙述）经常在分镜阶段被吞掉，导致后续配音匹配失败。下面三条强制规则必须严格执行：
+
+   a) **必生成一个反应镜头**：对每一条 type=voiceover 的 content，必须生成至少一个独立分镜，该分镜的 description 描述**听者 / 在场人物的反应**（如「王玄猛然睁眼，眉头紧锁」），不是发声者。
+      - 发声者不在画面中，**不要**把发声者放进 characters 数组
+      - 听者在画面中，必须放进 characters 数组
+      - 例外：voiceover 是纯第三人称旁白（无具体听者）→ 描述当前场景或相关回忆画面
+
+   b) **source_text 必须逐字包含 voiceover 台词**：该反应镜头的 source_text 字段必须**逐字**（verbatim）包含 voiceover.text 的内容。可以前后加上听者反应的 action 原文，但 voiceover 那句话本身一字不能改、一字不能漏。
+      - ✅ 正确：source_text = "桃桃（VO）：爸爸,快来救救妈妈... 王玄猛然睁眼。"
+      - ❌ 错误：source_text = "王玄猛然睁眼。"（漏掉了 VO 原文 → 后续 voice_analysis 无法匹配 → 配音掉线）
+      - ❌ 错误：source_text = "桃桃远远地呼喊着父亲。"（改写了原文 → 后续 fuzzy match 失败）
+
+   c) **口型同步强制规则的例外**：本文件第 6 条「对话镜头强制规则（口型同步需求）」只适用于 type=dialogue。对 type=voiceover，发声者按定义不在画面里，**不需要**也**不能**为发声者生成口型同步镜头。
+
+   d) **画面内容反例**：
+      - ❌ 错误（旧版的失败模式）：voiceover 内容生成「闪回发声者」的画面（如桃桃 VO → 画面是桃桃在远方）→ 因为这违反了上面 (a)，发声者本来就 off-screen
+      - ✅ 正确：voiceover 内容生成**听者的反应特写或中景**（如桃桃 VO → 画面是王玄闭眼皱眉、突然睁眼）
+      - 仅当 voiceover 是纯叙事性旁白（无具体听者，如「故事就这样开始了」）才可使用环境镜头 / 闪回画面
+
+   e) **示例**（剧本格式 voiceover → 分镜）：
+      输入 content：
+        {"type":"action","text":"王玄盘膝打坐。"}
+        {"type":"voiceover","character":"桃桃","text":"爸爸,你在哪，快来救救妈妈..."}
+        {"type":"action","text":"王玄猛然睁眼。"}
+      输出分镜（节选）：
+        {
+          "panel_number": N,
+          "description": "中景：王玄盘膝坐在洞府中央，闭眼凝神",
+          "characters": [{"name":"王玄","appearance":"初始形象"}],
+          "source_text": "王玄盘膝打坐。"
+        },
+        {
+          "panel_number": N+1,
+          "description": "近景：王玄紧闭的双眼微微颤动，眉头骤然紧锁，似有声音穿透神识传来",
+          "characters": [{"name":"王玄","appearance":"初始形象"}],
+          "source_text": "桃桃（VO）：爸爸,你在哪，快来救救妈妈... 王玄猛然睁眼。"
+        }
+      注意：桃桃**不在** characters 里；source_text 逐字含 VO 台词；description 焦点是王玄（听者）的反应。
 
 【原文格式解析规则】
 
@@ -345,3 +382,5 @@ Clip信息：
 10. 禁止长句单镜头：包含逗号分隔多个动作/对话的长句必须拆分
 11. 对话必须拆分：每段对话至少 2 个镜头（说话者 + 听者反应）
 12. ⚠️ 镜头合理性：只描述当前镜头**实际能拍摄到**的角色，特写/反打等拍不到的可省略
+13. ⚠️ 每条 voiceover / OS / VO / 隔空呼喊 / 内心独白 / 旁白 必须有一个对应的反应镜头，且该镜头的 source_text **逐字包含**该 voiceover 的台词内容（详见上方「画外音 / OS / VO / 隔空呼喊 处理」第 4 条）。漏掉 VO 内容是历史 bug，绝不允许。
+14. ⚠️ voiceover 镜头的画面焦点是**听者**（在画面中的反应者），不是发声者。发声者不进 characters 数组。

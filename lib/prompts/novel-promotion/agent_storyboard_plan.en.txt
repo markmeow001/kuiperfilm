@@ -51,6 +51,29 @@ Planning rules:
 5. Prefer concrete, visible actions over abstract wording.
 6. Return strict JSON only.
 
+Voiceover / OS / VO / off-screen-call handling (CRITICAL — recurring bug fix):
+
+For EVERY `type: "voiceover"` entry in the screenplay content (including inner monologue, narration, voice-from-afar, telephone, screenplay-marker `Name OS:` / `Name VO:` lines), you MUST produce at least one storyboard panel that satisfies all three of:
+
+  a. **Reaction-shot framing**: the panel `description` shows the LISTENER reacting (e.g. "Wang Xuan's brow furrows, eyes snap open"). It does NOT show the off-screen speaker. The speaker is by definition not in frame.
+     - The listener goes into `characters`.
+     - The off-screen speaker does NOT go into `characters` (they are not visible).
+     - Exception: if the voiceover is pure third-person narration with no specific listener, the panel may show a relevant environment / flashback frame.
+
+  b. **Verbatim source_text**: the panel's `source_text` field MUST contain the voiceover line **verbatim** (character-for-character). You may prepend or append the listener's action line as additional context, but the VO text itself cannot be paraphrased or shortened. Downstream voice-line matching depends on exact substring presence.
+     - ✅ Correct: `source_text: "桃桃（VO）：爸爸,快来救救妈妈... 王玄猛然睁眼。"`
+     - ❌ Wrong: `source_text: "王玄猛然睁眼。"` (drops the VO line → voice_analysis cannot match → dubbing falls out)
+     - ❌ Wrong: paraphrased VO text (breaks fuzzy match in voice_analysis).
+
+  c. **Lip-sync exemption**: any "speaker must have their own face-on shot" rule applies only to `type: dialogue`. For `type: voiceover`, the speaker is off-screen, so do NOT create a speaker face-shot for them.
+
+WRONG behavior (the historical bug):
+  - Generating a flashback panel of the off-screen speaker (e.g. VO = Tao-Tao calling from afar → panel shows Tao-Tao far away). This violates rule (a) — the speaker is supposed to be off-screen.
+  - Dropping the voiceover line entirely because no speaker face-shot can be made.
+  - Putting only the listener's action in `source_text` and omitting the VO line.
+
+CORRECT behavior: a close/medium reaction shot of the LISTENER, with the VO line verbatim inside `source_text`.
+
 ⚠️ Single-character CJK name ambiguity rule (CRITICAL):
 
 When the asset library contains a single-character CJK character name (e.g.

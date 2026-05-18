@@ -57,3 +57,24 @@ Rules:
 3. Resolve character aliases to canonical names when possible.
 4. Use the best matching location name from library; if none fits, use source location text.
 5. Return strict JSON only.
+
+Voiceover / OS / VO handling (CRITICAL — this has been a recurring bug):
+
+Emit `type: "voiceover"` for ALL of the following. Do not drop these lines just because the speaker is off-screen:
+
+  a. Inner monologue / thoughts.
+  b. Third-person narration.
+  c. Voice heard in a flashback / memory.
+  d. **Voice-from-afar / off-screen calling**: a character calls out to another from outside the listener's frame (e.g. "桃桃的隔空呼喊" / Tao-Tao shouting to her father from a distance). This is diegetic but off-screen — it MUST be captured as voiceover, never dropped.
+  e. **Telephone / radio / intercom / reading a letter aloud**: the speaker is not visible to the listener.
+  f. **Screenplay-format explicit markers** in the source text: `Name OS:`, `Name VO:`, `Name (V.O.):`, `Name (O.S.):`, `画外音：`, `旁白：`, `Narrator:` — convert directly to a voiceover entry. `character` = the speaker name (strip the OS/VO modifier). `text` = the line after the colon.
+
+Examples:
+- Source: `桃桃（哽咽VO）：爸爸,你在哪，快来救救妈妈...`
+  → {"type":"voiceover","character":"桃桃","text":"爸爸,你在哪，快来救救妈妈..."}
+- Source: "From far away, Tao-Tao's voice cried out: 'Father!' Wang Xuan's eyes snapped open."
+  → two content entries:
+    {"type":"voiceover","character":"桃桃","text":"Father!"}
+    {"type":"action","text":"Wang Xuan's eyes snapped open."}
+
+For voiceover entries: the **speaker** (off-screen) does NOT go into `scene.characters`. The **listener** (on-screen, reacting) DOES go into `scene.characters`. Never delete a voiceover line on the grounds that the speaker is not in frame — that is the failure mode this rule exists to prevent.
