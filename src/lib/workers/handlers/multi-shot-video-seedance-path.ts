@@ -60,6 +60,10 @@ import {
   parseImageUrls,
   resolveNovelData,
 } from './image-task-handler-shared'
+import {
+  extractSpokenLineFromSrtSegment,
+  looksLikeStageDirection,
+} from './multi-shot-video-b-path'
 
 /** BobAPI multi-ref cap: 9 images per the wiki Section 4.2. */
 const MAX_REFERENCE_IMAGES = 9
@@ -80,6 +84,10 @@ interface PanelLite {
   videoPrompt: string | null
   characters: string | null
   location: string | null
+  /** SRT-style dialogue blob — same field the b-path uses. Format is
+   *  "<NAME>说「<line>」" / "<NAME>: <line>" / bare quoted span / stage
+   *  direction. Parsed via extractSpokenLineFromSrtSegment. */
+  srtSegment: string | null
   storyboardId: string
 }
 
@@ -259,17 +267,29 @@ function collectSceneRefs(
 }
 
 /**
- * Build the Seedance prompt with @N markers. References are ordered:
- *   character refs (@1..@K), then scene refs (@K+1..@K+L), then panel
- *   beats (@K+L+1..). The model uses these markers to anchor identity
- *   to the matching image in content[].
+ * Build the Seedance prompt with @N markers + structured dialogue.
+ *
+ * Seedance 2.0 supports native multi-channel audio output including
+ * spoken dialogue (TTS) and ambient SFX. To unlock the TTS layer the
+ * prompt MUST inline dialogue in `<speaker>说「<line>」` form with
+ * tone + lip-sync hints — pure visual descriptions produce silent
+ * output (which is what shipped before this fix).
+ *
+ * Structure (混合 ByteDance recommended pattern):
+ *   1. Reference anchor list — @N character / scene markers
+ *   2. Per-beat narrative line — visual description
+ *   3. Per-beat dialogue line  — `<speaker>说「<line>」(语气自然，
+ *      唇形与对白同步)` when panel.srtSegment has spoken content
+ *   4. Closing directive — first_frame anchor OR t2v free-composition
+ *      hint, plus a global audio directive ("native dialogue + ambient
+ *      SFX, 自然唇形同步")
  */
 function buildSeedancePrompt(
   panels: PanelLite[],
   characterRefs: CharacterRef[],
   sceneRefs: SceneRef[],
   panelHasFirstFrame: boolean,
-): string {
+): { prompt: string; dialogueBeatCount: number } {
   const sections: string[] = []
   let refIdx = 0
   if (characterRefs.length > 0) {
@@ -287,15 +307,41 @@ function buildSeedancePrompt(
     sections.push(`场景一致性参考（scene anchors）:\n${sceneLines.join('；')}`)
   }
 
-  // Panel beats: cap each panel's narrative contribution to 200 chars
-  // so a 6-panel group doesn't blow past Seedance's text budget.
+  // Default speaker fallback when srtSegment doesn't tag a name: the
+  // first character ref (typically the panel's primary subject). Empty
+  // when no characters resolved — bareQuoted dialogue ships with
+  // "[配音]说「...」" so Seedance still TTS's it.
+  const fallbackSpeaker = characterRefs[0]?.name ?? '配音'
+
+  // Per-beat: visual description + (optional) dialogue line. Cap each
+  // narrative segment at 200 chars so a 6-panel group doesn't blow past
+  // Seedance's prompt budget. Dialogue lines aren't capped because TTS
+  // accuracy depends on the line being verbatim.
+  let dialogueBeatCount = 0
   const beats = panels.map((p, i) => {
-    const raw = (p.videoPrompt || p.description || `分鏡 ${i + 1}`).trim()
-    const trimmed = raw.length > 200 ? `${raw.slice(0, 200)}…` : raw
-    return `${i + 1}. ${trimmed}`
+    const visualRaw = (p.videoPrompt || p.description || `分鏡 ${i + 1}`).trim()
+    const visual = visualRaw.length > 200 ? `${visualRaw.slice(0, 200)}…` : visualRaw
+    const lines: string[] = [`${i + 1}. ${visual}`]
+
+    const srt = (p.srtSegment ?? '').trim()
+    if (srt && !looksLikeStageDirection(srt)) {
+      const spoken = extractSpokenLineFromSrtSegment(srt, fallbackSpeaker)
+      if (spoken && spoken.content) {
+        // Use the b-path's parsed shape so speaker overrides (panel
+        // hint > fallback) stay consistent across both workers. Always
+        // append the lip-sync directive — Seedance's TTS quality drops
+        // hard when the prompt doesn't explicitly ask for sync.
+        lines.push(
+          `   对白：${spoken.speaker}说「${spoken.content}」` +
+            `（语气自然，音量适中，唇形与对白严格同步，嘴部动作细腻不夸张）`,
+        )
+        dialogueBeatCount += 1
+      }
+    }
+    return lines.join('\n')
   })
   sections.push(
-    `按以下順序展現連續分鏡情境（每段約 1-2 秒銜接過渡）：\n${beats.join('；\n')}`,
+    `按以下顺序展现连续分镜情境（每段约 1-3 秒衔接过渡）：\n${beats.join('；\n')}`,
   )
 
   // Closing directive — different copy when we have a first_frame vs
@@ -314,7 +360,26 @@ function buildSeedancePrompt(
         `镜头运动自然顺畅，避免硬切。`,
     )
   }
-  return sections.join('\n\n')
+
+  // Global audio directive — tells the model to produce real spoken
+  // audio (TTS) + ambient SFX, not the silent visual default. Only
+  // attached when at least one beat carries dialogue, otherwise we
+  // keep the audio track ambient-only to avoid fake mumbling.
+  if (dialogueBeatCount > 0) {
+    sections.push(
+      `音频：原生输出双声道音频，按上述对白逐字配音（` +
+        `语气、停顿、情绪与角色一致），唇形与配音严格同步；` +
+        `背景叠加场景对应的环境音（脚步、风声、室内回响等），` +
+        `避免任何机械合成感或字幕音。`,
+    )
+  } else {
+    sections.push(
+      `音频：输出场景对应的环境音（脚步、风声、室内回响等），` +
+        `本组无角色对白，请勿合成任何说话声。`,
+    )
+  }
+
+  return { prompt: sections.join('\n\n'), dialogueBeatCount }
 }
 
 /**
@@ -484,7 +549,7 @@ export async function runMultiShotSeedanceComposite(params: {
     throw new Error('SEEDANCE_COMPOSITE_NO_REFERENCES')
   }
 
-  const prompt = buildSeedancePrompt(
+  const { prompt, dialogueBeatCount } = buildSeedancePrompt(
     usedPanels,
     characterRefs,
     sceneRefs,
@@ -508,7 +573,13 @@ export async function runMultiShotSeedanceComposite(params: {
       referenceUrlCount: referenceUrls.length,
       duration,
       aspectRatio,
+      // generateAudio MUST stay true when dialogueBeatCount > 0 — the
+      // audio directive in the prompt only works if the request body
+      // also sets generate_audio: true (BobAPI gate). When no dialogue
+      // is present we still pass sound through (defaults true) so SFX
+      // ships either way; the directive switches to "ambient only".
       generateAudio: sound,
+      dialogueBeatCount,
       promptLength: prompt.length,
       mode: firstFrameUrl ? 'i2v+refs' : 't2v+refs',
     },
