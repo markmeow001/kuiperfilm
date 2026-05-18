@@ -860,6 +860,141 @@ export function GroupCard({
     }
     return sections.join('\n\n')
   }
+
+  // 2026-05-18 — Seedance 五要素 narrative builder (separate from the
+  // Kling-tuned buildInitialNarrative above).
+  //
+  // The Kling format above carries a lot of anti-CG / anti-xianxia
+  // tooling (English STYLE header, `[Cast: X] [Scene: Y]` brackets,
+  // "STRICT: NOT animation, NOT CG" repetition) that was tuned against
+  // Kling 3.0-Omni's xianxia training bias.
+  //
+  // Seedance 2.0 (BobAPI) handles CN body prose naturally and uses the
+  // industry-standard 五要素 prompt structure (角色引用 / 場景設定 /
+  // 動作鏈 / 運鏡 / 氛圍-聲音) with the photoreal vocab as a footer.
+  // Reference: iangyc-supplied 五要素導演法 spec + a working sample
+  // from a competing platform 2026-05-18.
+  //
+  // Structure:
+  //   參考 @圖片1的 {character} 人物形象            ← character ref chip
+  //   場景參考 @圖片2的 {scene}                     ← scene ref chip
+  //
+  //   鏡頭1: {framing}·{title} (Photorealistic Cinematic)
+  //   {description prose — action chain, 1-3 visual beats}
+  //   嚴格無任何字幕、文字、logo或屏幕信息。
+  //   {speaker} 聲音(僅音頻,無畫面文字,嘴部不動):
+  //   「{dialogue}」                                 ← when VO present
+  //   {speaker}:「{dialogue}」                       ← when on-camera
+  //
+  //   ...
+  //
+  //   整體視覺風格:
+  //   photorealistic, hyperrealistic, cinematic lighting, ...
+  //
+  // No `[Cast]`/`[Scene]` brackets per shot — character name appears
+  // inline in the prose. No English STYLE prefix — handled by footer.
+  const CAMERA_MOVE_TO_CN: Record<string, string> = {
+    固定: '固定镜头',
+    平移: '平移',
+    推镜: '缓慢推镜',
+    推進: '缓慢推镜',
+    拉镜: '缓慢拉远',
+    拉遠: '缓慢拉远',
+    跟拍: '跟拍',
+    手持: '手持微晃',
+    俯拍: '俯拍',
+    仰拍: '仰拍',
+    环绕: '环绕运镜',
+    環繞: '环绕运镜',
+    摇降: '摇降',
+    搖降: '摇降',
+    摇升: '摇升',
+    搖升: '摇升',
+    中度推進: '中度推镜',
+  }
+
+  const STYLE_FOOTER_SEEDANCE = [
+    '整体视觉风格:',
+    'photorealistic, hyperrealistic, cinematic lighting, volumetric lighting, realistic subsurface scattering, film grain, 8K detail, real skin texture, real fabric physics, dramatic yet natural lighting, shot on Arri Alexa 65, IMAX quality, no cartoonish glow, no plastic look, no 3D render feel, no text, no subtitles, no letters, no words, no on-screen text of any kind, clean visual only',
+  ].join('\n')
+
+  const buildInitialNarrativeSeedance = (): string => {
+    const count = panels.length
+    if (count === 0) return ''
+
+    // Header — 五要素 chips. Up to 3 entities (BobAPI Seedance accepts
+    // up to 9 reference images total; first 3 slots are typically the
+    // identity anchors — characters first, then scenes).
+    const TENCENT_SUBJECT_INFOS_CAP = 3
+    const headerLines: string[] = []
+    let refSlot = 1
+    const charsToAnchor = groupCast.slice(0, TENCENT_SUBJECT_INFOS_CAP)
+    const remainingForScenes = TENCENT_SUBJECT_INFOS_CAP - charsToAnchor.length
+    const scenesToAnchor = groupScenes.slice(0, remainingForScenes)
+    for (const cast of charsToAnchor) {
+      headerLines.push(`参考 @图片${refSlot}的 ${cast.character.name} 人物形象`)
+      refSlot++
+    }
+    for (const scene of scenesToAnchor) {
+      const sceneLabel = scene.viewName ? `${scene.location.name}·${scene.viewName}` : scene.location.name
+      headerLines.push(`场景参考 @图片${refSlot}的 ${sceneLabel}`)
+      refSlot++
+    }
+
+    // Per-shot blocks
+    const shotBlocks: string[] = []
+    for (let i = 0; i < count; i++) {
+      const p = panels[i]
+      const desc = (p.description ?? p.prompt ?? '').trim()
+      const shotTypeRaw = p.shotType?.trim() ?? ''
+      const framing = SHOT_TYPE_TO_FRAMING[shotTypeRaw] ?? '中景'
+      const cameraMoveRaw = p.cameraMove?.trim() ?? ''
+      const cameraMoveCn = CAMERA_MOVE_TO_CN[cameraMoveRaw] ?? cameraMoveRaw
+
+      // Shot header: 鏡頭N: framing·camera (Photorealistic Cinematic)
+      // Drop the camera fragment when 固定 (visually empty info).
+      const cameraFragment = cameraMoveCn && cameraMoveCn !== '固定镜头' ? `·${cameraMoveCn}` : ''
+      const lines: string[] = [`镜头${i + 1}: ${framing}${cameraFragment} (Photorealistic Cinematic)`]
+
+      if (desc) lines.push(desc)
+
+      // Voice lines — Seedance native dialogue. VO/OS lines get the
+      // explicit "仅音频,无画面文字,嘴部不动" rider so BobAPI does NOT
+      // lip-sync them (matching the OS rule the prompt chain enforces).
+      const structuredVoiceLines = Array.isArray(p.voiceLines) ? p.voiceLines : []
+      if (structuredVoiceLines.length > 0) {
+        for (const v of structuredVoiceLines) {
+          if (v.isVoiceover) {
+            lines.push(`${v.speaker} 声音(仅音频，无画面文字，嘴部不动):`)
+            lines.push(`「${v.content}」`)
+          } else {
+            lines.push(`${v.speaker}:「${v.content}」`)
+          }
+        }
+      } else {
+        const srt = (p.srtSegment ?? '').trim()
+        if (srt) lines.push(srt)
+      }
+
+      lines.push('严格无任何字幕、文字、logo或屏幕信息。')
+      shotBlocks.push(lines.join('\n'))
+    }
+
+    const sections: string[] = []
+    if (headerLines.length > 0) sections.push(headerLines.join('\n'))
+    sections.push(shotBlocks.join('\n\n'))
+    sections.push(STYLE_FOOTER_SEEDANCE)
+    return sections.join('\n\n')
+  }
+
+  // Family-aware dispatcher. Kling/default keeps the heavily-tuned
+  // STYLE_HEADER_REALISTIC anti-CG anchoring. Seedance gets the cleaner
+  // 五要素 format with CN body + EN photo-vocabulary footer.
+  const buildInitialNarrativeForFamily = (): string =>
+    videoFamily === 'seedance'
+      ? buildInitialNarrativeSeedance()
+      : buildInitialNarrative()
+
   const [narrativeDraft, setNarrativeDraft] = useState<string>('')
   const [narrativeDirty, setNarrativeDirty] = useState<boolean>(false)
   const [narrativeRegenFlash, setNarrativeRegenFlash] = useState<boolean>(false)
@@ -869,9 +1004,9 @@ export function GroupCard({
   // groupCast/groupScenes are included so chip overrides re-trigger seed.
   useEffect(() => {
     if (narrativeDirty) return
-    setNarrativeDraft(buildInitialNarrative())
+    setNarrativeDraft(buildInitialNarrativeForFamily())
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panels, totalDurationDraft, groupCast, groupScenes, coldOpenMode])
+  }, [panels, totalDurationDraft, groupCast, groupScenes, coldOpenMode, videoFamily])
 
   // Local drafts keyed by panel id. Re-seeded whenever the panel's
   // server-side description / dialogue changes (e.g. analyze
@@ -1420,7 +1555,7 @@ export function GroupCard({
               type="button"
               disabled={!narrativeDirty}
               onClick={() => {
-                const fresh = buildInitialNarrative()
+                const fresh = buildInitialNarrativeForFamily()
                 setNarrativeDraft('')
                 setNarrativeDirty(false)
                 setNarrativeRegenFlash(true)

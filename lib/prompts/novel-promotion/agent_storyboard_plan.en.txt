@@ -39,9 +39,11 @@ Output format (JSON array only):
     "shot_type": "medium shot",
     "camera_move": "static",
     "video_prompt": "short visual motion prompt",
-    "duration": 3
+    "duration": 8
   }
 ]
+
+Per-panel duration guidance: aim for 5-12 seconds per panel. Short as 3s for high-action beats, long as 15s for sustained dialogue. Do NOT merge beats just to fit time budget — short panels are fine, merged panels are not.
 
 Planning rules:
 1. Keep strict chronological order.
@@ -50,6 +52,48 @@ Planning rules:
 4. Use locations and characters consistent with provided libraries and mappings.
 5. Prefer concrete, visible actions over abstract wording.
 6. Return strict JSON only.
+
+Panel-count rule (CRITICAL):
+- The orchestrator passes a `target_panel_count`. Treat it as a FLOOR, not a ceiling.
+- If your draft output is more than 2 panels short of the target, you have over-merged — go back and split.
+- Reference benchmark: industry short-drama platforms produce ~1 panel per dialogue beat and ~1 panel per visual verb in narration. We match that density.
+
+Anti-collapse rules (HIGHEST PRIORITY — violating any of these wastes the entire output):
+
+The following five merge patterns are historical bugs. They are FORBIDDEN:
+
+  a) ❌ Do NOT merge "action + reaction" into one panel
+     Wrong: "A speaks while B frowns in the background" → 1 panel
+     Right: "A speaks" (CU on A) + "B frowns" (CU on B) = 2 panels
+
+  b) ❌ Do NOT merge "establishing shot + main subject" into one panel
+     Wrong: "Wide of the room with protagonist standing" → 1 panel
+     Right: "Wide of empty room" (1 panel) + "Protagonist enters/stands" (1 panel) = 2 panels
+
+  c) ❌ Do NOT merge multiple beats of one action sequence
+     Wrong: "He stands up, walks to the door, pushes it open" → 1 panel
+     Right: "stands up" (MS) + "walks to door" (tracking MS) + "pushes door open" (CU on hand / OTS) = 3 panels
+
+  d) ❌ Do NOT skip reaction shots when dialogue/action happens between non-protagonist characters
+     Wrong: Side character A speaks to side character B → only A's speaking panel
+     Right: A speaks (1 panel) + B reacts (1 panel) = 2 panels — even if the protagonist is in the scene, B's reaction is not optional
+
+  e) ❌ Do NOT treat a descriptive narration paragraph as "just 1 panel"
+     If a source paragraph contains 2+ visual verbs / beats, you MUST split.
+     Wrong: source "She pushed the door open, scanned the room, her gaze fell on the letter on the desk" → 1 panel
+     Right: push door (1) + scan room (1) + gaze locks on letter (POV/CU) = 3 panels
+     Method: before writing panels for a paragraph, list every visual verb in it. Each verb gets at least 1 panel.
+
+Dialogue panel rule (the merge-friendly rule is GONE):
+- Continuous shot/reverse-shot dialogue is NOT merged. Each line of dialogue gets at least 1 speaker panel; each listener gets at least 1 reaction panel.
+- A says one line + B replies = at least 2 panels (A speaking + B speaking), and with reactions becomes 3-4 panels.
+- Small actions with emotional weight (frown, fist clench, turn away, look down) get their own close-up panel. Only neutral motor noise (blinks, breathing) merges into the main shot.
+
+Self-check (run before output):
+  □ target_panel_count is N — did I output at least N-2 panels? If not, re-check rules a)~e) for over-merging.
+  □ Does every dialogue line (including VO/OS) have at least 1 dedicated panel?
+  □ Does every dialogue line have a corresponding listener reaction panel (unless this panel IS the reverse-shot listener)?
+  □ For every descriptive narration paragraph, did every visual verb get its own panel?
 
 Voiceover / OS / VO / off-screen-call handling (CRITICAL — recurring bug fix):
 
