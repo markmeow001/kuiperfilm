@@ -47,3 +47,61 @@ Rules:
 3. video_prompt should be motion-ready and concrete.
 4. Prefer age+gender wording in video_prompt when naming actors in camera directions.
 5. Return JSON array only.
+
+Five-element red lines (CRITICAL — applies to both description AND video_prompt):
+
+Root cause this solves: when description/video_prompt is overstuffed, the
+video model cannot identify the load-bearing visual beats, so character /
+scene / prop fidelity all degrade together.
+
+  1. NO appearance details already in @image-N references (body, skin, hair,
+     clothing). Write only current action / emotion / expression.
+     Wrong: "@WangXuan's chest heaves, neck veins bulge, skin flushes, pores
+            and sweat visible, long hair blown by wind" (entirely appearance)
+     Right: "@WangXuan's aura bursts forth, chest heaves, vortex forms"
+            (action + result)
+  2. Action chain ≤ 5 visual beats per panel, typically 1-3. One sentence =
+     one beat. One period = one switch. Do NOT chain action switches with
+     commas.
+  3. NO negative directives ("no X", "no subtitles", "no on-screen text",
+     "strictly without X") — handled by the worker's dedicated
+     negative_prompt field. Mentioning them in the positive prompt
+     probabilistically triggers the very artifact you're trying to avoid.
+  4. NO camera / equipment terms ("Arri Alexa", "IMAX", "film grain", "8K",
+     "35mm lens", "cinematic lighting") — handled by project visualStyleId
+     / styleAnchor. video_prompt describes what's in frame, not the camera.
+  5. NO vague collective nouns ("crowd", "everyone", "people", "all of
+     them", "the group") — name specific characters or give a count.
+  6. Ambient sound and extreme facial detail (pores, sweat reflection,
+     micro-redness) are optional — omit unless central to the shot.
+  7. Dialogue lines ≤ 30 words each — long lines destabilize TTS.
+
+Self-check before output (every panel):
+  □ No appearance details already in @image-N?
+  □ ≤ 5 visual beats?  □ No negative directives?
+  □ No camera/equipment terms?  □ No vague collective nouns?
+  □ Dialogue lines ≤ 30 words each?
+
+Dramatic camera vocabulary (prefer these terms in video_prompt when context
+matches — do NOT invent abstract phrasing like "mysteriously orbit" or
+"cool pull-back"):
+
+  | Context                      | Term                |
+  |------------------------------|---------------------|
+  | Slow reveal / push-in        | dolly in            |
+  | Combat / ritual              | orbit / 360 spin    |
+  | Inner shock / cognition flip | dolly zoom          |
+  | Long take / immersive        | oner                |
+  | Key moment freeze            | time freeze orbit   |
+  | First-person / fall / impact | POV                 |
+  | Grandeur / wide              | 45° high angle      |
+  | Following motion             | tracking / handheld |
+  | Tension                      | crash zoom          |
+
+When to use:
+- "dolly zoom" for cognition flips, sudden realizations, frozen horror
+- "orbit / 360 spin" for sword practice / duels / rituals / breakthroughs
+- "oner" for long dialogues / single-scene multi-action choreography
+- "time freeze orbit" for sword arcs / bullets / raindrops / key instants
+- "POV" for falls, getting hit, waking up, high-speed travel
+- "45° high angle" for grand vistas / armies / cities

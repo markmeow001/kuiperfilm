@@ -118,6 +118,77 @@ WRONG behavior (the historical bug):
 
 CORRECT behavior: a close/medium reaction shot of the LISTENER, with the VO line verbatim inside `source_text`.
 
+Five-element red lines (CRITICAL — applies to `description` field):
+
+These seven rules are reverse-engineered from production Seedance / Kling
+short-drama prompts. Violating any of them downgrades that panel's output.
+Root cause this section solves: when `description` is overstuffed, the
+video model cannot identify the load-bearing visual beats, so character,
+scene, and prop fidelity all degrade together.
+
+  1. ❌ Do NOT repeat appearance details already covered by @image-N refs.
+     The reference-image binding carries body parts, skin texture, hair,
+     and clothing. `description` should only describe current action /
+     emotion / expression — not appearance.
+     Wrong: "@WangXuan's chest heaves violently, neck veins bulge, skin
+            flushed with visible pores and sweat, long hair blown by air"
+            (entirely appearance — all already in @image-1)
+     Right: "@WangXuan's spiritual energy bursts forth, chest heaving,
+            energy vortex forming" (action + result)
+
+  2. ❌ Action chain ≤ 5 visual beats per panel, typically 1-3.
+     One sentence = one visual beat. One period = one beat boundary. Do
+     NOT chain multiple action switches with commas. If > 5 beats, split
+     into the next panel (see Anti-collapse rules).
+     Wrong (11 beats jammed into one panel): "camera pushes in / seven-
+       colored aura swirls / plasma vortex / glowing particles / red-vs-
+       cyan contrast / chest heaves / neck veins bulge / skin flushes /
+       pores and sweat / hair blown / robe billows / fabric strains"
+     Right (3 beats): "@WangXuan's aura bursts forth + chest heaves +
+       vortex forms"
+
+  3. ❌ NO negative directives in `description`.
+     Do NOT write "no X", "no on-screen text", "no subtitles", "no
+     plastic look", "strictly without any X". Generation models attend
+     to the noun in negation phrases and probabilistically generate it.
+     The worker sends a dedicated negative_prompt to the video provider —
+     duplicating it in `description` is counterproductive.
+
+  4. ❌ NO camera / film-equipment terms.
+     Do NOT write "shot on Arri Alexa", "IMAX quality", "film grain",
+     "8K detail", "35mm lens", "cinematic lighting". These belong in
+     the project's `visualStyleId` (styleAnchor), NOT per-panel
+     `description`. `description` describes what is in frame, not what
+     equipment is filming it.
+
+  5. ❌ NO vague collective nouns.
+     Do NOT write "crowd", "everyone", "people", "all of them", "the
+     group". Be specific: "Li Si + Wang Wu + Zhang San" or "three
+     bodyguards". The model cannot infer how many entities a collective
+     term covers or what each is doing.
+
+  6. ⚠️ Ambient sound / micro-facial detail is optional — omit when not
+     central to the shot.
+     Video generation models largely ignore "ambient audio: low-frequency
+     hum, moss growth rustle". Post-prod sound goes through CapCut, not
+     the prompt. Extreme facial detail (pores, sweat reflection, skin
+     micro-redness) belongs only in emotional climax close-ups, not in
+     medium / wide shots.
+
+  7. ✅ Dialogue: each quoted line in source_text ≤ 30 words.
+     Long sentences destabilize Seedance / Kling Omni TTS. Split a long
+     line into multiple shorter lines, each as its own panel (see
+     Anti-collapse rule e). Example: a 47-character single line should
+     become 3 lines of ≤ 15 chars each, each its own panel.
+
+Self-check before output (every panel):
+  □ No appearance details already in @image-N?
+  □ ≤ 5 visual beats? One sentence = one beat?
+  □ No negative directives ("no X" / "strictly without X")?
+  □ No camera/film-equipment terms (Arri / IMAX / 8K / film grain / 35mm)?
+  □ No vague collective nouns (crowd / everyone / "the group")?
+  □ Each dialogue line ≤ 30 words?
+
 ⚠️ Single-character CJK name ambiguity rule (CRITICAL):
 
 When the asset library contains a single-character CJK character name (e.g.
