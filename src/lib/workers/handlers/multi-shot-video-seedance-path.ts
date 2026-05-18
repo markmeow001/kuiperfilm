@@ -401,7 +401,20 @@ export async function runMultiShotSeedanceComposite(params: {
   characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
   /** Per-call location view overrides. */
   locationOverrides?: Array<{ locationId: string; viewName?: string }>
-}): Promise<{ videoUrl: string }> {
+}): Promise<{
+  storyboardId: string
+  multiShotVideoUrl: string
+  multiShotClipUrls: string[]
+  chunkCount: number
+  shotCount: number
+  subjectCount: number
+  path: 'seedance-composite'
+  mode: 'i2v+refs' | 't2v+refs'
+  bindings: {
+    characters: Array<{ id: string; name: string; imageUrl: string }>
+    scenes: Array<{ id: string; name: string; imageUrl: string }>
+  }
+}> {
   const { job, projectId, validPanels } = params
   const sound = params.sound ?? true
   const aspectRatio = params.aspectRatio ?? '16:9'
@@ -577,5 +590,23 @@ export async function runMultiShotSeedanceComposite(params: {
     },
   })
 
-  return { videoUrl: cosKey }
+  // Fat result mirrors the b-path shape so MultiShotBindingsRail (which
+  // reads from task.result.multiShotClipUrls / multiShotVideoUrl) can
+  // render the video player without a frontend code change. Bindings
+  // section lets the chip rail show which character / scene reference
+  // was actually used in the call.
+  return {
+    storyboardId: targetId,
+    multiShotVideoUrl: cosKey,
+    multiShotClipUrls: [cosKey],
+    chunkCount: 1,
+    shotCount: usedPanels.length,
+    subjectCount: characterRefs.length + sceneRefs.length,
+    path: 'seedance-composite',
+    mode: firstFrameUrl ? 'i2v+refs' : 't2v+refs',
+    bindings: {
+      characters: characterRefs.map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl })),
+      scenes: sceneRefs.map((s) => ({ id: s.id, name: s.name, imageUrl: s.imageUrl })),
+    },
+  }
 }
