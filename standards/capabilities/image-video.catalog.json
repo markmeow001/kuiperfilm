@@ -2,6 +2,21 @@
   {
     "modelType": "image",
     "provider": "fal",
+    "modelId": "banana",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "2K",
+          "4K"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "fal",
     "modelId": "banana-2",
     "capabilities": {
       "image": {
@@ -11,7 +26,7 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },

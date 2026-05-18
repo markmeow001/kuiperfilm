@@ -94,6 +94,7 @@ const LEGACY_MODEL_ID_MAP = new Map<string, string>([
   ['google/gemini-3-pro-preview', 'openrouter::google/gemini-3-pro-preview'],
   ['openai/gpt-5.2', 'openrouter::openai/gpt-5.2'],
   ['banana', 'fal::banana'],
+  ['banana-2', 'fal::banana-2'],
   ['banana-2k', 'fal::banana'],
   ['seedream', 'ark::doubao-seedream-4-0-250828'],
   ['seedream4.5', 'ark::doubao-seedream-4-5-251128'],
