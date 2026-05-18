@@ -340,6 +340,38 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const analyzeStatus = analyzeSnapshot.data?.status ?? null
   const analyzeProgress = analyzeSnapshot.data?.progress ?? 0
   const isAnalyzing = analyzeStatus === 'queued' || analyzeStatus === 'processing'
+  // Unified state for the 重新分析 button / banner. Covers the click → worker-
+  // surfaces gap (analyzeState.status) AND the worker progress phase
+  // (analyzeStatus from the snapshot poll). Without this, the user clicks
+  // 重新分析 and sees no progress for the 2-8s before polling first surfaces
+  // the queued task — they think the click was lost.
+  const analyzePhase: 'idle' | 'submitting' | 'queued' | 'processing' | 'done' =
+    analyzeState.status === 'submitting'
+      ? 'submitting'
+      : analyzeState.status === 'submitted' && !isAnalyzing
+        ? 'queued' // submitted to API, worker hasn't surfaced yet
+        : analyzeStatus === 'queued'
+          ? 'queued'
+          : analyzeStatus === 'processing'
+            ? 'processing'
+            : 'idle'
+  const analyzeBusy = analyzePhase !== 'idle'
+  const analyzeBusyLabel =
+    analyzePhase === 'submitting'
+      ? '提交中…'
+      : analyzePhase === 'queued'
+        ? '排隊中…'
+        : analyzePhase === 'processing'
+          ? `分析中… ${analyzeProgress}%`
+          : '重新分析'
+  const analyzeBannerLabel =
+    analyzePhase === 'submitting'
+      ? '正在提交分析任務…'
+      : analyzePhase === 'queued'
+        ? '任務已排隊,等 worker 開始處理(約 3-10 秒)…'
+        : analyzePhase === 'processing'
+          ? `正在重新分析劇本… ${analyzeProgress}% — 完成後分鏡會自動刷新`
+          : ''
   const analyzeError = analyzeSnapshot.data?.errorMessage ?? null
   // Map the raw worker error to a user-facing string via the shared
   // code → message table. Prevents leaking Prisma stack traces / DB
@@ -1143,14 +1175,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   }
 
   if (allPanels.length === 0) {
-    const submitDisabled = analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId
-    const ctaLabel = analyzeState.status === 'submitting'
-      ? '提交中…'
-      : isAnalyzing
-        ? `分析中… ${analyzeProgress}%`
-        : analyzeStatus === 'failed'
-          ? '重新分析'
-          : '一鍵生成分鏡'
+    const submitDisabled = analyzeBusy || !currentEpisodeId
+    const ctaLabel = analyzeBusy
+      ? analyzeBusyLabel
+      : analyzeStatus === 'failed'
+        ? '重新分析'
+        : '一鍵生成分鏡'
     return (
       <div className="px-12 py-10">
         <div className="rounded-sm border border-amber-500/30 bg-amber-500/5 p-8 text-center">
@@ -1327,13 +1357,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
+              disabled={analyzeBusy || !currentEpisodeId}
               onClick={handleAnalyzeStoryboard}
               title="重新從劇本生成分鏡"
-              className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex items-center gap-1.5 rounded-sm border px-3 py-1.5 font-mono text-[13px] tracking-wider transition-all disabled:cursor-not-allowed ${
+                analyzeBusy
+                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-200'
+                  : 'border-stone-700 bg-stone-900/50 text-stone-300 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:opacity-50'
+              }`}
             >
-              <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              重新分析
+              <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
+              {analyzeBusyLabel}
             </button>
             <button
               type="button"
@@ -1514,17 +1548,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
+                disabled={analyzeBusy || !currentEpisodeId}
                 onClick={handleAnalyzeStoryboard}
                 title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
                 className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                {analyzeState.status === 'submitting'
-                  ? '提交中…'
-                  : isAnalyzing
-                    ? `分析中… ${analyzeProgress}%`
-                    : '↻ 重新分析'}
+                <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
+                {analyzeBusy ? analyzeBusyLabel : '↻ 重新分析'}
               </button>
               <button
                 type="button"
@@ -1568,9 +1598,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               </div>
             </div>
           </div>
-          {isAnalyzing ? (
-            <div className="mt-2 rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
-              正在重新分析劇本… {analyzeProgress}% — 完成後分鏡會自動刷新
+          {analyzeBusy ? (
+            <div className="mt-2 flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
+              <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+              <span>{analyzeBannerLabel}</span>
+              {analyzePhase === 'processing' ? (
+                <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-stone-900/60">
+                  <div
+                    className="h-full bg-amber-400 transition-all duration-500"
+                    style={{ width: `${Math.max(2, Math.min(100, analyzeProgress))}%` }}
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
           {multiShotState.status === 'done' ? (
@@ -1874,17 +1913,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <div className="flex items-center gap-3">
             <button
               type="button"
-              disabled={analyzeState.status === 'submitting' || isAnalyzing || !currentEpisodeId}
+              disabled={analyzeBusy || !currentEpisodeId}
               onClick={handleAnalyzeStoryboard}
               title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              {analyzeState.status === 'submitting'
-                ? '提交中…'
-                : isAnalyzing
-                  ? `分析中… ${analyzeProgress}%`
-                  : '↻ 重新分析'}
+              <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
+              {analyzeBusy ? analyzeBusyLabel : '↻ 重新分析'}
             </button>
             <button
               type="button"
@@ -1956,9 +1991,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </div>
           </div>
         </div>
-        {isAnalyzing ? (
-          <div className="mb-2 rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
-            正在重新分析劇本… {analyzeProgress}% — 完成後分鏡會自動刷新
+        {analyzeBusy ? (
+          <div className="mb-2 flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
+            <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+            <span>{analyzeBannerLabel}</span>
+            {analyzePhase === 'processing' ? (
+              <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-stone-900/60">
+                <div
+                  className="h-full bg-amber-400 transition-all duration-500"
+                  style={{ width: `${Math.max(2, Math.min(100, analyzeProgress))}%` }}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
         {analyzeState.status === 'error' ? (
