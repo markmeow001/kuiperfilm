@@ -93,11 +93,6 @@ function classifyLine(line: string): LineClass {
 
   const c = countScripts(trimmed)
 
-  // Inline-bilingual lines: substantial Han + substantial Latin both
-  // present. These usually carry single-line headings like
-  // "EP32 — TITLE / 我们交还的姓氏" — preserve in every filter.
-  if (c.han >= 5 && c.latin >= 5) return 'mixed'
-
   // Japanese: Kana is the giveaway (Kana ranges don't overlap with Han).
   // A line with kana + Han is still Japanese, not Chinese.
   if (c.kana >= 3) return 'ja'
@@ -107,8 +102,28 @@ function classifyLine(line: string): LineClass {
   // survive a "zh" filter.
   if (c.latin >= 6 && c.latinLower === 0 && c.han === 0) return 'slug'
 
-  // Now pick the dominant script. Need at least 5 chars of evidence so
-  // we don't classify "🎵" or "1." as a language.
+  // Dominant-script wins. Earlier we treated "Han ≥ 5 AND Latin ≥ 5" as
+  // 'mixed' (kept in every filter), but that turned out to be way too
+  // permissive — Chinese paragraphs with one English proper noun
+  // ("KARRUG", "LIANA") were getting kept under both "zh" and "en"
+  // picks. The new rule is strict: a line with a Han-dominant character
+  // count is 'zh', a Latin-dominant count is 'en', etc. The only
+  // genuinely-bilingual lines we still preserve via 'mixed' are short
+  // (<50 char) headings where the minor script is ≥ 60% of the major —
+  // i.e. real "TITLE / 標題" slash-headings, not Chinese paragraphs
+  // with stray loanword names.
+  const minLatinHan = Math.min(c.han, c.latin)
+  const maxLatinHan = Math.max(c.han, c.latin)
+  if (
+    c.total < 50
+    && minLatinHan >= 4
+    && minLatinHan >= maxLatinHan * 0.6
+  ) {
+    return 'mixed'
+  }
+
+  // Need at least 5 chars of evidence so we don't classify "🎵" or "1."
+  // as a language.
   const scores: Array<[ScriptCode, number]> = [
     ['zh', c.han],
     ['en', c.latin],
