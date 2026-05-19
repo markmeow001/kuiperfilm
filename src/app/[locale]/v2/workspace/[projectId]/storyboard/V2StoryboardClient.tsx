@@ -1274,6 +1274,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     </div>
   )
 
+  // 2026-05-19 — Shared video-model picker. Originally only mounted inside
+  // the groups toolbar (so gallery / timeline users couldn't see or change
+  // the current model from their layout — they had to switch to groups
+  // first). Hoisted out so all three toolbars can mount the same widget;
+  // existing tooltip strings ("請從上方視頻模型 picker 切到 …") finally
+  // point at a picker that's actually visible in the current layout.
+  const videoModelPickerNode = (
+    <VideoModelPickerInline
+      projectId={projectId}
+      currentVideoModel={projectVideoModel || null}
+      videoRatio={projectVideoRatio || '9:16'}
+    />
+  )
+
   // 2026-05-13 — Modals (manual panel + stale storyboard cleanup) live
   // outside the per-layout branches because each layout used to
   // early-return its layout JSX without including modals → button
@@ -1339,11 +1353,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               ◷ {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
             </span>
           ) : null}
-          <VideoModelPickerInline
-            projectId={projectId}
-            currentVideoModel={projectVideoModel || null}
-            videoRatio={projectVideoRatio || '9:16'}
-          />
+          {videoModelPickerNode}
         </div>
 
         {/* Row 3: actions, split into data ops (left) + workflow ops (right) */}
@@ -1539,6 +1549,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         <div className="border-b border-amber-900/15 px-8 pb-3 pt-5">
           <div className="flex flex-col gap-2">
             <div className="flex justify-end">{layoutToggleNode}</div>
+            {/* 2026-05-19 — picker mirrored from groups toolbar so gallery
+                users can see/change the current video model without
+                switching layouts. Wrap-aware; sits on its own row to
+                avoid crowding the existing title+actions row below. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {videoModelPickerNode}
+            </div>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="font-fraunces text-sm italic text-amber-500/80">分鏡</div>
@@ -1907,6 +1924,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       <div className="border-b border-amber-900/15 px-12 pb-4 pt-6">
         <div className="mb-3 flex flex-col gap-2">
           <div className="flex justify-end">{layoutToggleNode}</div>
+          {/* 2026-05-19 — picker mirrored from groups toolbar so timeline
+              users can see/change the current video model without
+              switching layouts (matches gallery treatment). */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {videoModelPickerNode}
+          </div>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="font-fraunces text-sm italic text-amber-500/80">Storyboard Strip</div>
