@@ -1461,8 +1461,9 @@ export function GroupCard({
                   side multi-shot task; null means this group has never
                   been submitted. The done/error states keep the literal
                   resubmit prompt because user just clicked once.
-                  2026-05-17 — Seedance composite reads as "合成此組",
-                  Kling stays "生成影片" / "重新生成". */}
+                  2026-05-18 — collapsed the seedance/kling label split:
+                  both families now read "生成視頻" / "重新生成", per user
+                  feedback that "合成此組" was unclear jargon. */}
               {regenState.status === 'submitting'
                 ? '送出中…'
                 : regenState.status === 'done'
@@ -1470,12 +1471,8 @@ export function GroupCard({
                   : regenState.status === 'error'
                     ? '⚠ 失敗,點重試'
                     : taskId
-                      ? videoFamily === 'seedance'
-                        ? '重新合成'
-                        : '重新生成'
-                      : videoFamily === 'seedance'
-                        ? '合成此組'
-                        : '生成影片'}
+                      ? '重新生成'
+                      : '生成視頻'}
             </button>
           ) : null}
           <div className="font-mono text-[14px] tracking-wider text-stone-500">
