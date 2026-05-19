@@ -116,14 +116,19 @@ function extractEpMarkerEpisodes(plainText: string): {
 
   const episodes: ExtractedEpisode[] = []
   for (let i = 0; i < matches.length; i++) {
-    const start = matches[i].lineEnd
+    // Content starts at the EP heading line (not after it) so the
+    // author-written title ("EP01 — 'THE HOLLOW ONE'") survives in
+    // the editor body and downstream LLM analysis even though we
+    // strip it from the tab label.
+    const start = matches[i].start
     const end = i + 1 < matches.length ? matches[i + 1].start : searchText.length
     const content = searchText.slice(start, end).trim()
     if (content.length < 50) continue // skip stub / TOC-only markers
 
-    const padded = `EP${String(matches[i].number).padStart(2, '0')}`
-    const tail = matches[i].titleRest.replace(/^[\s\-—–:：]+/, '').trim()
-    const title = tail ? `${padded} — ${tail}` : padded
+    // Tab label intentionally minimal: "EP01" only, no English title
+    // tail. User feedback on first prod release — long titles in the
+    // tab bar were unreadable.
+    const title = `EP${String(matches[i].number).padStart(2, '0')}`
 
     episodes.push({
       number: matches[i].number,

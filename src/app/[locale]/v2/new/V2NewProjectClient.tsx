@@ -255,7 +255,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                 className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-amber-500/40 bg-amber-500/5 px-4 py-6 font-serif-cn text-sm text-amber-300 transition-all hover:bg-amber-500/10"
               >
                 <AppIcon name="upload" className="h-4 w-4" />
-                上傳 .docx / .txt / .md 自動拆集（30-40 集一次建好）
+                上傳 .docx / .txt / .md 自動拆集
               </button>
             ) : (
               <div className="rounded-sm border border-amber-900/40 bg-stone-900/40 p-4">
