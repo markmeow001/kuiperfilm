@@ -27,9 +27,12 @@ interface ExtractedEpisode {
   title: string
   content: string
   wordCount: number
+  contentByLang?: Record<string, string>
 }
 
 type ExtractMode = 'table' | 'markers' | 'prose'
+
+type ScriptCode = 'zh' | 'en' | 'ja' | 'ko' | 'ru' | 'ar'
 
 interface ExtractResponse {
   mode: ExtractMode
@@ -41,7 +44,20 @@ interface ExtractResponse {
     plainTextChars: number
     tableRowsDetected?: number
     markerType?: string
+    languages?: {
+      detected: ScriptCode[]
+      isMultilingual: boolean
+    }
   }
+}
+
+const SCRIPT_LABELS: Record<ScriptCode, string> = {
+  zh: '中文',
+  en: 'English / 拉丁文',
+  ja: '日本語',
+  ko: '한국어',
+  ru: 'Русский',
+  ar: 'العربية',
 }
 
 interface BulkEpisodeUploadButtonProps {
@@ -57,6 +73,7 @@ export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes }: Bulk
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [clearExisting, setClearExisting] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [chosenLang, setChosenLang] = useState<ScriptCode | null>(null)
 
   function openPicker() {
     setErrorMsg(null)
@@ -88,11 +105,23 @@ export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes }: Bulk
       }
       const json = (await res.json()) as ExtractResponse
       setPreview(json)
+      if (json.meta.languages?.isMultilingual && json.meta.languages.detected.length > 0) {
+        setChosenLang(json.meta.languages.detected[0])
+      } else {
+        setChosenLang(null)
+      }
     } catch (err) {
       setErrorMsg(`抽取失敗:${(err as Error).message}`)
     } finally {
       setExtracting(false)
     }
+  }
+
+  function resolveContent(ep: ExtractedEpisode): string {
+    if (chosenLang && ep.contentByLang?.[chosenLang]) {
+      return ep.contentByLang[chosenLang]
+    }
+    return ep.content
   }
 
   async function confirmCreate() {
@@ -103,7 +132,7 @@ export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes }: Bulk
       const episodesToCreate = preview.episodes.length > 0
         ? preview.episodes.map((ep) => ({
             name: ep.title || `第 ${ep.number} 集`,
-            novelText: ep.content,
+            novelText: resolveContent(ep),
           }))
         // prose fallback: dump full text into one episode
         : [{ name: '第 1 集', novelText: preview.rawText }]
@@ -136,6 +165,7 @@ export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes }: Bulk
     setPreview(null)
     setErrorMsg(null)
     setClearExisting(false)
+    setChosenLang(null)
   }
 
   return (
@@ -171,6 +201,8 @@ export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes }: Bulk
           hasExistingEpisodes={hasExistingEpisodes}
           clearExisting={clearExisting}
           setClearExisting={setClearExisting}
+          chosenLang={chosenLang}
+          setChosenLang={setChosenLang}
           creating={creating}
           errorMsg={errorMsg}
           onConfirm={() => void confirmCreate()}
@@ -186,6 +218,8 @@ interface PreviewModalProps {
   hasExistingEpisodes: boolean
   clearExisting: boolean
   setClearExisting: (v: boolean) => void
+  chosenLang: ScriptCode | null
+  setChosenLang: (v: ScriptCode | null) => void
   creating: boolean
   errorMsg: string | null
   onConfirm: () => void
@@ -197,6 +231,8 @@ function PreviewModal({
   hasExistingEpisodes,
   clearExisting,
   setClearExisting,
+  chosenLang,
+  setChosenLang,
   creating,
   errorMsg,
   onConfirm,
@@ -233,6 +269,39 @@ function PreviewModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
+          {/* Language picker — only when multilingual. */}
+          {preview.meta.languages?.isMultilingual ? (
+            <div className="mb-4 rounded-sm border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+              <p className="mb-2 font-serif-cn text-xs text-amber-200/90">
+                偵測到多語言混排,匯入前選一種保留:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {preview.meta.languages.detected.map((code) => (
+                  <label
+                    key={code}
+                    className={`flex cursor-pointer items-center gap-1.5 rounded-sm border px-2.5 py-1 font-serif-cn text-xs transition-colors ${
+                      chosenLang === code
+                        ? 'border-amber-500/70 bg-amber-500/15 text-amber-200'
+                        : 'border-stone-700 text-stone-400 hover:border-stone-600'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="bulk-script-pick"
+                      className="h-3 w-3 accent-amber-500"
+                      checked={chosenLang === code}
+                      onChange={() => setChosenLang(code)}
+                    />
+                    {SCRIPT_LABELS[code]}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 font-mono text-[11px] text-stone-500">
+                其他語言段落會被自動移除,場景頭(INT./EXT.)和雙語標題會保留。
+              </p>
+            </div>
+          ) : null}
+
           {episodeCount > 0 ? (
             <ul className="space-y-3">
               {preview.episodes.slice(0, 50).map((ep) => (

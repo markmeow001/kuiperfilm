@@ -33,6 +33,7 @@ import * as cheerio from 'cheerio'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { detectEpisodeMarkers, splitByMarkers } from '@/lib/episode-marker-detector'
+import { detectScripts, filterByScript, type ScriptCode } from '@/lib/script-language-detector'
 import { createScopedLogger } from '@/lib/logging/core'
 
 const logger = createScopedLogger({ module: 'api.files.extract_episodes' })
@@ -44,6 +45,16 @@ interface ExtractedEpisode {
   title: string
   content: string
   wordCount: number
+  // Pre-computed per-script filtered content. Only populated when the
+  // doc as a whole is multilingual — otherwise client uses `content`.
+  // Keys are ScriptCode values. Saves the client a 33-episode regex
+  // pass on every picker change.
+  contentByLang?: Record<string, string>
+}
+
+interface LanguageDetectionMeta {
+  detected: ScriptCode[]   // sorted dominant-first, empty if monolingual
+  isMultilingual: boolean
 }
 
 /**
@@ -141,6 +152,32 @@ function extractEpMarkerEpisodes(plainText: string): {
   return episodes.length >= 2 ? { episodes, anchorUsed: anchorOffset > 0 } : null
 }
 
+/**
+ * Run language detection across the whole doc and, when multilingual,
+ * pre-compute per-script filtered content for every episode. Returning
+ * pre-filtered text lets the client switch language picks instantly
+ * without a re-roundtrip, and keeps the regex pass on the server (where
+ * the doc was just parsed anyway).
+ */
+function enrichWithLanguageDetection(
+  plainText: string,
+  episodes: ExtractedEpisode[],
+): { episodes: ExtractedEpisode[]; languages: LanguageDetectionMeta } {
+  const detected = detectScripts(plainText)
+  const isMultilingual = detected.length >= 2
+  if (!isMultilingual) {
+    return { episodes, languages: { detected, isMultilingual: false } }
+  }
+  const enriched = episodes.map<ExtractedEpisode>((ep) => {
+    const byLang: Record<string, string> = {}
+    for (const code of detected) {
+      byLang[code] = filterByScript(ep.content, code)
+    }
+    return { ...ep, contentByLang: byLang }
+  })
+  return { episodes: enriched, languages: { detected, isMultilingual: true } }
+}
+
 export const POST = apiHandler(async (request: NextRequest) => {
   const authResult = await requireUserAuth()
   if (isErrorResponse(authResult)) return authResult
@@ -220,24 +257,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   const epResult = extractEpMarkerEpisodes(plainText)
   if (epResult) {
+    const { episodes, languages } = enrichWithLanguageDetection(plainText, epResult.episodes)
     logger.info({
       action: 'extract_episodes.ep_markers',
       message: 'episodes extracted via EP\\d+ markers',
       details: {
         sourceFormat,
         plainTextChars: plainText.length,
-        episodeCount: epResult.episodes.length,
+        episodeCount: episodes.length,
         anchorUsed: epResult.anchorUsed,
+        languages: languages.detected,
       },
     })
     return NextResponse.json({
       mode: 'markers',
-      episodes: epResult.episodes,
+      episodes,
       rawText: plainText,
       meta: {
         sourceFormat,
         plainTextChars: plainText.length,
         markerType: epResult.anchorUsed ? 'EP\\d+ (after 剧本 anchor)' : 'EP\\d+',
+        languages,
       },
     })
   }
@@ -304,24 +344,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
   }
 
   if (tableEpisodes && tableEpisodes.length >= 2) {
+    const { episodes, languages } = enrichWithLanguageDetection(plainText, tableEpisodes)
     logger.info({
       action: 'extract_episodes.table',
       message: 'episodes extracted from DOCX table',
       details: {
         sourceFormat,
         plainTextChars: plainText.length,
-        episodeCount: tableEpisodes.length,
+        episodeCount: episodes.length,
         tableRowsDetected,
+        languages: languages.detected,
       },
     })
     return NextResponse.json({
       mode: 'table',
-      episodes: tableEpisodes,
+      episodes,
       rawText: plainText,
       meta: {
         sourceFormat,
         plainTextChars: plainText.length,
         tableRowsDetected,
+        languages,
       },
     })
   }
@@ -338,25 +381,28 @@ export const POST = apiHandler(async (request: NextRequest) => {
         wordCount: ep.wordCount,
       }),
     )
+    const { episodes, languages } = enrichWithLanguageDetection(plainText, markerEpisodes)
     logger.info({
       action: 'extract_episodes.markers',
       message: 'episodes extracted via marker detection',
       details: {
         sourceFormat,
         plainTextChars: plainText.length,
-        episodeCount: markerEpisodes.length,
+        episodeCount: episodes.length,
         markerType: markerResult.markerType,
         confidence: markerResult.confidence,
+        languages: languages.detected,
       },
     })
     return NextResponse.json({
       mode: 'markers',
-      episodes: markerEpisodes,
+      episodes,
       rawText: plainText,
       meta: {
         sourceFormat,
         plainTextChars: plainText.length,
         markerType: markerResult.markerType,
+        languages,
       },
     })
   }
@@ -367,12 +413,19 @@ export const POST = apiHandler(async (request: NextRequest) => {
   // the whole thing into a single episode or hand it to the existing
   // EPISODE_SPLIT_LLM worker for AI-driven splitting.
 
+  // Even for prose mode we run language detection so the client can offer
+  // a picker before the "dump everything into one episode" fallback.
+  const proseLanguages: LanguageDetectionMeta = {
+    detected: detectScripts(plainText),
+    isMultilingual: detectScripts(plainText).length >= 2,
+  }
   logger.info({
     action: 'extract_episodes.prose',
     message: 'no structure detected, returning raw text for caller-side split',
     details: {
       sourceFormat,
       plainTextChars: plainText.length,
+      languages: proseLanguages.detected,
     },
   })
   return NextResponse.json({
@@ -382,6 +435,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     meta: {
       sourceFormat,
       plainTextChars: plainText.length,
+      languages: proseLanguages,
     },
   })
 })

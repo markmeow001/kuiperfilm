@@ -35,9 +35,12 @@ interface ExtractedEpisode {
   title: string
   content: string
   wordCount: number
+  contentByLang?: Record<string, string>
 }
 
 type ExtractMode = 'table' | 'markers' | 'prose'
+
+type ScriptCode = 'zh' | 'en' | 'ja' | 'ko' | 'ru' | 'ar'
 
 interface ExtractResponse {
   mode: ExtractMode
@@ -48,7 +51,21 @@ interface ExtractResponse {
     plainTextChars: number
     tableRowsDetected?: number
     markerType?: string
+    languages?: {
+      detected: ScriptCode[]
+      isMultilingual: boolean
+    }
   }
+}
+
+// Keep in sync with SCRIPT_LABELS in src/lib/script-language-detector.ts.
+const SCRIPT_LABELS: Record<ScriptCode, string> = {
+  zh: '中文',
+  en: 'English / 拉丁文',
+  ja: '日本語',
+  ko: '한국어',
+  ru: 'Русский',
+  ar: 'العربية',
 }
 
 export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
@@ -68,6 +85,9 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
   const [extracting, setExtracting] = useState(false)
   const [extracted, setExtracted] = useState<ExtractResponse | null>(null)
   const [extractError, setExtractError] = useState<string | null>(null)
+  // When the doc is multilingual, user picks which script to keep.
+  // Defaults to the dominant detected script (first in meta.languages).
+  const [chosenLang, setChosenLang] = useState<ScriptCode | null>(null)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -91,6 +111,13 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
       }
       const json = (await res.json()) as ExtractResponse
       setExtracted(json)
+      // Auto-pick the dominant script when multilingual; null otherwise
+      // (no picker shown, content stays as-is).
+      if (json.meta.languages?.isMultilingual && json.meta.languages.detected.length > 0) {
+        setChosenLang(json.meta.languages.detected[0])
+      } else {
+        setChosenLang(null)
+      }
     } catch (err) {
       setExtractError(`抽取失敗:${(err as Error).message}`)
     } finally {
@@ -102,6 +129,16 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
     setPickedFile(null)
     setExtracted(null)
     setExtractError(null)
+    setChosenLang(null)
+  }
+
+  // Resolve final content for an episode given the current language pick.
+  // For monolingual docs (no chosenLang), returns original `content`.
+  function resolveEpisodeContent(ep: ExtractedEpisode): string {
+    if (chosenLang && ep.contentByLang?.[chosenLang]) {
+      return ep.contentByLang[chosenLang]
+    }
+    return ep.content
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -140,7 +177,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
         const episodesToCreate = extracted.episodes.length > 0
           ? extracted.episodes.map((ep) => ({
               name: ep.title || `第 ${ep.number} 集`,
-              novelText: ep.content,
+              novelText: resolveEpisodeContent(ep),
             }))
           : [{ name: '第 1 集', novelText: extracted.rawText }]
         const batchRes = await fetch(`/api/novel-promotion/${newId}/episodes/batch`, {
@@ -294,6 +331,42 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                         ✓ 偵測到 {episodeCount > 0 ? `${episodeCount} 集` : '0 集'}
                         <span className="ml-2 text-stone-500">· {modeLabel[extracted.mode]}</span>
                       </p>
+
+                      {/* Language picker — only when multilingual. Filtered
+                          content has been pre-computed server-side per
+                          detected script, so switching is instant. */}
+                      {extracted.meta.languages?.isMultilingual ? (
+                        <div className="mt-3 rounded-sm border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                          <p className="mb-2 font-serif-cn text-[12px] text-amber-200/90">
+                            偵測到多語言混排,匯入前選一種保留:
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {extracted.meta.languages.detected.map((code) => (
+                              <label
+                                key={code}
+                                className={`flex cursor-pointer items-center gap-1.5 rounded-sm border px-2.5 py-1 font-serif-cn text-[12px] transition-colors ${
+                                  chosenLang === code
+                                    ? 'border-amber-500/70 bg-amber-500/15 text-amber-200'
+                                    : 'border-stone-700 text-stone-400 hover:border-stone-600'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="script-pick"
+                                  className="h-3 w-3 accent-amber-500"
+                                  checked={chosenLang === code}
+                                  onChange={() => setChosenLang(code)}
+                                />
+                                {SCRIPT_LABELS[code]}
+                              </label>
+                            ))}
+                          </div>
+                          <p className="mt-2 font-mono text-[11px] text-stone-500">
+                            其他語言段落會被自動移除,場景頭(INT./EXT.)和雙語標題會保留。
+                          </p>
+                        </div>
+                      ) : null}
+
                       {episodeCount > 0 ? (
                         <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto pr-2 font-serif-cn text-[12px] text-stone-400">
                           {extracted.episodes.slice(0, 8).map((ep) => (
