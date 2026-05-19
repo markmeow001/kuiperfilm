@@ -43,6 +43,8 @@
     "deleteEpisode": "Delete Episode",
     "deleteEpisodeConfirm": "Confirm Delete",
     "newEpisode": "New Episode",
+    "scrollLeft": "Scroll left",
+    "scrollRight": "Scroll right",
     "optional": "(Optional)",
     "rename": "Rename",
     "dragToReorder": "Drag to reorder",

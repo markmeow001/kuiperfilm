@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { AppIcon } from '@/components/ui/icons'
@@ -8,13 +8,34 @@ import { AppIcon } from '@/components/ui/icons'
 /**
  * Phase 11.1: 工作區水平 Tab Bar — 每集一個 tab
  *
- * - 點劇名 → 跳 dashboard (projectHref)
- * - 當前集高亮 + accent gradient underline
- * - 鍵盤左/右 navigate
- * - 尾端 sticky「+ 新建集」
- * - rename / delete confirm（複用 EpisodeSelector pattern）
+ * UX design (revised 2026-05-18 after 33-episode upload):
  *
- * 不持有任何狀態以外的 UI logic（dropdown / drag-reorder / 進度顯示交給 dashboard）。
+ *   With 30+ episodes the native horizontal scrollbar overlapped the
+ *   bottom of the tab text (especially on macOS where horizontal
+ *   scrollbars track at fixed thickness). We switched to the
+ *   "filmstrip" pattern used by Netflix / YouTube playlists:
+ *
+ *     - Native scrollbar hidden entirely.
+ *     - "‹" / "›" arrow buttons appear at strip edges ONLY when scroll
+ *       room exists in that direction. Click = smooth scroll by ~80%
+ *       of viewport width.
+ *     - Edge fade gradients hint there's more off-screen.
+ *     - Existing controls preserved: keyboard ← / → cycles, mouse
+ *       drag / shift+wheel native scroll, tab labels (now padded
+ *       slightly taller for thumb-comfort).
+ *
+ *   Rationale for NOT going with alternatives:
+ *     - Pagination chunks (10 per page) — adds an extra click for the
+ *       common "scrub to a known ep" task.
+ *     - Wrap to multi-row — eats vertical space the workspace canvas
+ *       needs; bad on mobile.
+ *     - Dropdown picker — kills the visual continuity of the strip.
+ *
+ * Other behaviour (unchanged):
+ *   - 點劇名 → 跳 dashboard (projectHref)
+ *   - 當前集高亮 + accent gradient underline
+ *   - 尾端 sticky「+ 新建集」
+ *   - rename / delete confirm（複用 EpisodeSelector pattern）
  */
 
 export interface EpisodeTabItem {
@@ -52,6 +73,43 @@ export default function EpisodeTabBar({
 
   const tabsRef = useRef<HTMLDivElement>(null)
   const currentIndex = episodes.findIndex((episode) => episode.id === currentId)
+
+  // Arrow-button visibility — tracks the strip's scroll position so we
+  // only surface "‹" when there's room to scroll left, "›" when there's
+  // room right. Toggled via scroll + ResizeObserver because both panel
+  // resizes (sidebar collapse) and content changes (new episode added)
+  // can flip the arrows on/off.
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+
+  const updateScrollState = useCallback(() => {
+    const el = tabsRef.current
+    if (!el) return
+    // 4px tolerance to avoid jitter at the edges.
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    const el = tabsRef.current
+    if (!el) return
+    updateScrollState()
+    el.addEventListener('scroll', updateScrollState, { passive: true })
+    const ro = new ResizeObserver(updateScrollState)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('scroll', updateScrollState)
+      ro.disconnect()
+    }
+  }, [updateScrollState, episodes.length])
+
+  function scrollByViewport(direction: 1 | -1) {
+    const el = tabsRef.current
+    if (!el) return
+    // Scroll 80% of the viewport — leaves the last visible tab as the
+    // first visible tab after the click, preserving spatial context.
+    el.scrollBy({ left: direction * Math.round(el.clientWidth * 0.8), behavior: 'smooth' })
+  }
 
   // 切到目前集時，若 tab 在可視範圍外，scroll 入視窗
   useEffect(() => {
@@ -115,10 +173,10 @@ export default function EpisodeTabBar({
         <span className="text-sm font-bold text-[var(--glass-text-primary)] truncate">{projectName}</span>
       </Link>
 
-      {/* Tab 列 */}
+      {/* Tab strip wrapper — relative so arrow buttons + edge fades can
+          position over the scrollable inner area. */}
       <div
-        ref={tabsRef}
-        className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-1 min-w-0 px-2 py-1 rounded-2xl"
+        className="relative flex-1 min-w-0 rounded-2xl"
         style={{
           background: 'rgba(255,255,255,0.55)',
           backdropFilter: 'blur(24px) saturate(1.6)',
@@ -127,6 +185,55 @@ export default function EpisodeTabBar({
           boxShadow: '0 8px 32px rgba(0,0,0,0.06), 0 1.5px 6px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.7)',
         }}
       >
+        {/* Left edge fade — purely visual, doesn't block clicks. */}
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute left-0 top-0 bottom-0 w-12 rounded-l-2xl bg-gradient-to-r from-white/85 to-transparent transition-opacity duration-150 ${
+            canScrollLeft ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+        {/* Left arrow button — only interactive when scroll room exists. */}
+        <button
+          type="button"
+          onClick={() => scrollByViewport(-1)}
+          tabIndex={canScrollLeft ? 0 : -1}
+          aria-label={tc('scrollLeft')}
+          className={`absolute left-1 top-1/2 -translate-y-1/2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-[var(--glass-text-secondary)] shadow-md ring-1 ring-black/5 transition-all hover:bg-white hover:text-[var(--glass-tone-info-fg)] ${
+            canScrollLeft ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        >
+          <AppIcon name="chevronLeft" className="h-5 w-5" />
+        </button>
+
+        {/* Right edge fade. */}
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute right-0 top-0 bottom-0 w-12 rounded-r-2xl bg-gradient-to-l from-white/85 to-transparent transition-opacity duration-150 ${
+            canScrollRight ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+        {/* Right arrow button. */}
+        <button
+          type="button"
+          onClick={() => scrollByViewport(1)}
+          tabIndex={canScrollRight ? 0 : -1}
+          aria-label={tc('scrollRight')}
+          className={`absolute right-1 top-1/2 -translate-y-1/2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-[var(--glass-text-secondary)] shadow-md ring-1 ring-black/5 transition-all hover:bg-white hover:text-[var(--glass-tone-info-fg)] ${
+            canScrollRight ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        >
+          <AppIcon name="chevronRight" className="h-5 w-5" />
+        </button>
+
+        {/* Scrollable inner strip. Native scrollbar hidden via Tailwind
+            arbitrary variant (works in Tailwind 4) + inline style for
+            Firefox. py-1.5 + extra horizontal padding leaves room for
+            the arrow buttons without overlapping the first/last tab. */}
+        <div
+          ref={tabsRef}
+          className="flex items-center gap-1 overflow-x-auto px-12 py-1.5 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none' }}
+        >
         {episodes.map((episode) => {
           const isActive = episode.id === currentId
 
@@ -201,7 +308,7 @@ export default function EpisodeTabBar({
             <div
               key={episode.id}
               data-tab-id={episode.id}
-              className={`group relative flex items-center gap-2 px-3 py-2 rounded-xl transition-all shrink-0 cursor-pointer ${
+              className={`group relative flex items-center gap-2 px-3 py-2.5 rounded-xl transition-all shrink-0 cursor-pointer ${
                 isActive
                   ? 'bg-[var(--glass-tone-info-bg)] text-[var(--glass-tone-info-fg)]'
                   : 'text-[var(--glass-text-secondary)] hover:bg-[var(--glass-bg-muted)]'
@@ -258,6 +365,7 @@ export default function EpisodeTabBar({
             </div>
           )
         })}
+        </div>
       </div>
 
       {/* + 新建集 sticky */}
