@@ -3,8 +3,9 @@
 **Date**: 2026-05-16
 **Status**: Approved 2026-05-16 — 5 open questions resolved (see §10)
 **Owner**: TBD
+**Last progress update**: 2026-05-19 — Phase 1/3/4 done, Phase 2/5 partial; Open Q4 effectively reversed (see §16)
 **Related memory**: `project_kuiperfilm_taijiai_seedance_blocked`, `project_kuiperfilm_fal_seedance_kling_backup`, `project_kuiperfilm_multi_user_inheritance`, `project_kuiperfilm_b_path_fixes`
-**Related code**: `src/lib/generators/{ark,fal,video/taijiai,video/tencent-vod}.ts`, `src/lib/workers/handlers/multi-shot-video-{handler,b-path}.ts`, `src/lib/model-config-contract.ts`, `prisma/schema.prisma:330` (`NovelPromotionProject.videoModel`)
+**Related code**: `src/lib/generators/{ark,fal,video/taijiai,video/tencent-vod}.ts`, `src/lib/workers/handlers/multi-shot-video-{handler,b-path,seedance-path}.ts`, `src/lib/model-config-contract.ts`, `src/lib/video-models/variants.ts` (SSoT registry), `prisma/schema.prisma:330` (`NovelPromotionProject.videoModel`)
 
 ---
 
@@ -495,3 +496,42 @@ Plan 視為 done 當以下都滿足:
 ---
 
 **Next step**:user 拍板 Open Questions 1 + 2 → 排序 Phase 啟動 → 開卡。
+
+---
+
+## 16. Progress Snapshot — 2026-05-19
+
+Actual ship state vs §8 phased rollout:
+
+| Phase | 計畫狀態 | 實際 | 證據 |
+|---|---|---|---|
+| 1 — Capability metadata 基建 | ⏳ pending | ✅ **done** | `src/lib/video-models/variants.ts`(SSoT)+ 18 invariants test `tests/unit/video-models/variants.test.ts`(commits `82b4112`、`e8eb024`) |
+| 2 — Backend resolver + API | ⏳ pending | 🟡 **partial** | Picker 直接走既有 `PATCH /api/projects/[id]` 寫 `project.videoModel`;沒抽獨立 `resolve-video-model.ts` 4-tier helper(`available-models` API 也沒做) |
+| 3 — UI Model selector | ⏳ pending | ✅ **done + 鏡像三 layout** | `VideoModelPickerInline.tsx`(commit `82b4112`)+ 2026-05-19 commit `89783a1` 把 picker hoist 成 `videoModelPickerNode` 鏡像到 gallery / timeline / Selected Shot toolbar(原本只在 groups layout) |
+| 4 — 多鏡頭 worker 統一 | ⏳ pending | ✅ **done(BobAPI)** | `multi-shot-video-seedance-path.ts`(commit `e8eb024`)走 BobAPI content[] @N 9-ref composite;後續 `dcf738d` / `233aa5a` 等補 ref 收集 + rawPrompt/panelDurations 串接 + `b467b76` poll timeout 10→15min。fal Seedance 仍是 single-shot only(variant.multiShot=false,故意) |
+| 5 — UI conditional 渲染 | ⏳ pending | 🟡 **partial** | `canMultiShot` / `videoFamily` gate 已串到 3 個多鏡頭按鈕 + GroupCard 重試按鈕(commits `82b4112`、`f28d8ff`、`e8eb024`);`perShotDuration` / `personReviewFlag` toggle 仍未做 |
+| 6 — 真人審核 UX 完整化 | ⏳ pending | ❌ **未做** | `isPersonReference` payload 尚未從 UI 串到 BobAPI generator |
+
+### 額外 ship 的東西(原 plan 沒納入)
+
+- **Seedance composite 路徑專屬調整**:`extraImageCap` 公式修正(`988797a`)、failed dump full BobAPI response(`00dcae3`)、PANELS_MISSING_IMAGE gate 放寬(`973e10a`)、fat result 讓 MultiShotBindingsRail 渲影片(`a693b52`)、prompt 注入對白 + lip-sync directive(`8f77476`)、五要素 anti-collapse(`abd11e5`)
+- **進度條與視覺**:`33d9ba9` MultiShotBindingsRail inline progress(stage + elapsed/ETA)、`769ad79` groups toolbar 3 列重排、`8ddae61` 同模式套到 gallery / timeline
+- **Admin observability**:`b996226` BobAPI / Seedance video-provider health dashboard
+- **Per-shot fal Seedance override**:commit `feb11ab` + `0fa4e45`,在 Selected Shot card 跟 panel-card mini 各加 2 顆「Seedance / Fast」按鈕 → `handleGenerateVideo(modelOverride?: string)`,單格 task-level override 不寫 project.videoModel
+
+### Open Q4 反轉:Task-level override
+
+§10 Open Q4 原本拍板「不做」,理由「4-tier resolver 預留 task-level slot 但 UI 不暴露」。
+
+**2026-05-17 實際反轉**:`feb11ab` + `0fa4e45` 已 ship 4 顆 fal Seedance per-shot override 按鈕(task-level)。
+
+**理由**:供應商給 fal key 後,user 想單格試 fal Seedance(尤其 Selected Shot card)而不影響 project.videoModel,picker 切換成本(切去 → 跑 → 切回)太高;per-shot 按鈕是更輕量的 UX。**不算違反 plan,算 plan 演進**。
+
+未來如果加更多 task-level override(例如 task-level Kling 選項),建議轉成統一的「per-shot model picker」元件,別繼續硬編碼按鈕。
+
+### 下一步建議優先序
+
+1. **Phase 5 完成 perShotDuration 灰掉**(Seedance UI 上自訂模式那條 row 應該禁用 + tooltip,目前沒做)— 0.5 天
+2. **Phase 2 抽 resolver helper**(把散落的 `project?.novelPromotionData?.videoModel ?? admin fallback` 邏輯收斂到單一 helper)— 0.5 天
+3. **Phase 6 真人審核 UX**(等 user 真的需要審核 toggle 才做)— deferred
+4. **Phase 5 capability hint toast**(切 model 後 5 秒提示能力差異)— nice-to-have
