@@ -1226,6 +1226,154 @@
   },
   {
     "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.0-t2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.0-i2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.0-fast-t2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.0-fast-i2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "video",
     "provider": "tencent-vod",
     "modelId": "Kling-1.6",
     "capabilities": {

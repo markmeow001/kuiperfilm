@@ -12,6 +12,7 @@ type SupportedProvider =
   | 'tencent-vod'
   | 'taijiai'
   | 'fal'
+  | 'atlascloud'
 
 type TestConnectionPayload = {
   provider?: string
@@ -47,6 +48,7 @@ function normalizeProvider(payload: TestConnectionPayload): SupportedProvider {
     case 'tencent':
     case 'taijiai':
     case 'fal':
+    case 'atlascloud':
       // VOD / Hunyuan share the same Tencent credential format; normalise
       // the legacy 'vod' / 'tencent' keys onto 'tencent-vod' so the rest
       // of the switch only deals with two canonical names.
@@ -172,7 +174,27 @@ export async function testLlmConnection(payload: TestConnectionPayload): Promise
       await testFal(apiKey)
       return { provider, message: 'fal.ai 凭证有效' }
     }
+    case 'atlascloud': {
+      await testAtlasCloud(apiKey)
+      return { provider, message: 'AtlasCloud 凭证有效' }
+    }
   }
+}
+
+async function testAtlasCloud(apiKey: string): Promise<void> {
+  // AtlasCloud 没有 /models 列表端点；用「查询一个永远不存在的 prediction
+  // id」当探针 —— 凭证有效会回 404 / 200（业务码非 200 但 HTTP 通），
+  // 凭证失败则 401。和 fal / taijiai 一致的 cheapest-valid-probe 模式。
+  const probeId = '00000000-0000-0000-0000-000000000000'
+  const response = await fetch(
+    `https://api.atlascloud.ai/api/v1/model/prediction/${probeId}`,
+    { headers: { Authorization: `Bearer ${apiKey}` } },
+  )
+  if (response.status === 401 || response.status === 403) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`ATLASCLOUD_AUTH_FAILED: ${text || 'Authentication failed'}`)
+  }
+  // 404 / 200 / 400 / 422 都视为 AtlasCloud 接受了 token，只是 prediction 不存在。
 }
 
 async function testFal(apiKey: string): Promise<void> {

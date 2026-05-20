@@ -1,12 +1,20 @@
 /**
- * AtlasCloud Seedance v1.5 Pro 视频生成器
+ * AtlasCloud 视频生成器
  *
  * 模型：
- * - seedance-v1.5-pro  (Seedance v1.5 Pro image-to-video)
+ * - seedance-v1.5-pro        (Seedance v1.5 Pro image-to-video)
+ * - wan-2.6                  (Alibaba Wan 2.6 image-to-video flash)
+ * - seedance-2.0-t2v         (Seedance 2.0 Pro text-to-video, native audio)
+ * - seedance-2.0-i2v         (Seedance 2.0 Pro image-to-video, native audio)
+ * - seedance-2.0-fast-t2v    (Seedance 2.0 Fast text-to-video, native audio)
+ * - seedance-2.0-fast-i2v    (Seedance 2.0 Fast image-to-video, native audio)
+ *
+ * t2v 變體不送 body.image — 純文字驅動。
  *
  * API:
- * - 提交: POST https://api.atlascloud.ai/v1/model/bytedance/seedance-v1.5-pro/image-to-video-fast
- * - 轮询: GET  https://api.atlascloud.ai/v1/model/prediction/{requestId}
+ * - 提交: POST https://api.atlascloud.ai/api/v1/model/generateVideo
+ *         body.model 帶入下方 slug
+ * - 轮询: GET  https://api.atlascloud.ai/api/v1/model/prediction/{requestId}
  *
  * status: created | processing | completed | failed
  */
@@ -31,6 +39,14 @@ interface AtlasCloudOptions {
 const ATLASCLOUD_MODEL_MAP: Record<string, string> = {
     'seedance-v1.5-pro': 'bytedance/seedance-v1.5-pro/image-to-video-fast',
     'wan-2.6': 'alibaba/wan-2.6/image-to-video-flash',
+    'seedance-2.0-t2v': 'bytedance/seedance-2.0/text-to-video',
+    'seedance-2.0-i2v': 'bytedance/seedance-2.0/image-to-video',
+    'seedance-2.0-fast-t2v': 'bytedance/seedance-2.0-fast/text-to-video',
+    'seedance-2.0-fast-i2v': 'bytedance/seedance-2.0-fast/image-to-video',
+}
+
+function isTextToVideoSlug(slug: string): boolean {
+    return slug.endsWith('/text-to-video')
 }
 
 function resolveAtlasCloudModel(modelId?: string): string {
@@ -56,6 +72,7 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
         } = options as AtlasCloudOptions
 
         const atlasModel = resolveAtlasCloudModel(modelId)
+        const t2vMode = isTextToVideoSlug(atlasModel)
 
         const logger = createScopedLogger({
             module: 'worker.atlascloud-video',
@@ -64,7 +81,6 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
 
         const body: Record<string, unknown> = {
             model: atlasModel,
-            image: imageUrl,
             duration,
             aspect_ratio: aspectRatio,
             generate_audio: generateAudio,
@@ -73,24 +89,33 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
             seed,
         }
 
-        if (paramPrompt) {
-            body.prompt = paramPrompt
+        if (!t2vMode) {
+            body.image = imageUrl
+            if (lastFrameImageUrl) {
+                body.last_image = lastFrameImageUrl
+            }
         }
 
-        if (lastFrameImageUrl) {
-            body.last_image = lastFrameImageUrl
+        if (paramPrompt) {
+            body.prompt = paramPrompt
+        } else if (t2vMode) {
+            throw new Error(
+                `AtlasCloud ${atlasModel} 為 text-to-video 模型，但 params.prompt 為空`,
+            )
         }
 
         logger.info({
             message: 'AtlasCloud Seedance video generation request',
             details: {
+                model: atlasModel,
+                mode: t2vMode ? 't2v' : 'i2v',
                 duration,
                 aspectRatio,
                 generateAudio,
                 cameraFixed,
-                hasImage: !!imageUrl,
+                hasImage: !t2vMode && !!imageUrl,
                 hasPrompt: !!paramPrompt,
-                hasLastFrame: !!lastFrameImageUrl,
+                hasLastFrame: !t2vMode && !!lastFrameImageUrl,
             },
         })
 
