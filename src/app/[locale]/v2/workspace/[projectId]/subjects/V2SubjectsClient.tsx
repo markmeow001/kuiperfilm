@@ -60,6 +60,7 @@ import {
 import { useTaskSnapshot, useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import {
+  useCreateCharacterAppearance,
   useEpisodeCharacterBindings,
   useEpisodeLocationBindings,
 } from '@/lib/query/mutations/episode-character-binding-mutations'
@@ -192,6 +193,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const updateLocDescription = useUpdateProjectLocationDescription(projectId)
   const createLocationView = useCreateLocationView(projectId)
   const deleteLocationView = useDeleteLocationView(projectId)
+  const createCharAppearance = useCreateCharacterAppearance(projectId)
   const updateCharIntro = useUpdateProjectCharacterIntroduction(projectId)
   const deleteCharacter = useDeleteProjectCharacter(projectId)
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
@@ -807,20 +809,42 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }
 
-  function handleUploadChar(c: CharacterLike, file: File) {
-    const ap = c.appearances?.[0]
-    if (!ap?.id) {
-      alert('此角色還沒有 appearance,請先點「重新生成」建立首張 appearance')
-      return
+  async function handleUploadChar(c: CharacterLike, file: File) {
+    // Multi-appearance schema stores images on CharacterAppearance rows,
+    // not directly on the character. When the script-extraction pipeline
+    // creates a character it doesn't pre-seed an appearance — that gets
+    // built on first generate / regenerate. So if the user hits "上傳替換"
+    // before ever generating, we need to materialize a default appearance
+    // ourselves before the upload-asset-image call has a row to attach to.
+    let appearanceId = c.appearances?.[0]?.id
+    let appearanceChangeReason = c.appearances?.[0]?.changeReason ?? '形象'
+    if (!appearanceId) {
+      try {
+        const created = (await createCharAppearance.mutateAsync({
+          characterId: c.id,
+          changeReason: '原始造型',
+          description: c.description ?? '',
+        })) as { appearance?: { id?: string } } | undefined
+        const newId = created?.appearance?.id
+        if (!newId) {
+          alert('上傳失敗:無法建立 appearance(後端未回傳 id)')
+          return
+        }
+        appearanceId = newId
+        appearanceChangeReason = '原始造型'
+      } catch (err) {
+        alert(`上傳失敗:無法建立 appearance — ${(err as Error)?.message ?? '未知錯誤'}`)
+        return
+      }
     }
-    setUploadInFlight((prev) => new Set(prev).add(ap.id))
+    setUploadInFlight((prev) => new Set(prev).add(appearanceId!))
     // labelText is required by /upload-asset-image. Use a deterministic
     // human-readable label so it appears the same way generated images do.
-    const labelText = `${c.name ?? '角色'} - ${ap.changeReason ?? '形象'}`
+    const labelText = `${c.name ?? '角色'} - ${appearanceChangeReason}`
     uploadCharImage.mutate(
-      { file, characterId: c.id, appearanceId: ap.id, imageIndex: 0, labelText },
+      { file, characterId: c.id, appearanceId: appearanceId!, imageIndex: 0, labelText },
       {
-        onSettled: () => markUploadDone(ap.id),
+        onSettled: () => markUploadDone(appearanceId!),
         onError: (err) => {
           alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
         },
