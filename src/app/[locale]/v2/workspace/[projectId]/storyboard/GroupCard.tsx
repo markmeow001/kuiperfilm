@@ -32,6 +32,9 @@ import {
   type ColdOpenPanel,
   type ColdOpenVariant,
 } from '@/lib/cold-open'
+import {
+  buildDialogueDrivenDurations,
+} from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
 
 /**
@@ -1044,6 +1047,45 @@ export function GroupCard({
   const [narrativeDirty, setNarrativeDirty] = useState<boolean>(false)
   const [narrativeRegenFlash, setNarrativeRegenFlash] = useState<boolean>(false)
   const narrativeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // Phase O (2026-05-21) — Recommended total duration for this group,
+  // derived from panel.srtSegment via the shared dialogue estimator. Used
+  // to make the time dropdown's "Auto" label informative: instead of just
+  // "Auto (對白驅動)" the user sees "Auto (推薦 12s)" so they know what
+  // the system would pick and only need to override when the number feels
+  // off. Mirrors the worker-side Phase M tiers so the displayed value
+  // matches what the worker will actually use.
+  const recommendedDurationSec = useMemo<number | null>(() => {
+    const dialogueByPanelId = new Map<string, Array<{ speaker: string; content: string }>>()
+    for (const p of panels) {
+      const seg = (p.srtSegment ?? '').trim()
+      if (!seg) continue
+      // Loose split on first ":" / "：" — matches "Karrug: 「...」" /
+      // "旁白：..." etc. When no colon, whole segment is the content,
+      // speaker becomes 旁白 (narration).
+      // [\s\S] in lieu of the /s flag (frontend tsconfig predates ES2018).
+      const m = seg.match(/^([^:：「"'']{1,20})\s*[:：]\s*([\s\S]+)$/)
+      const speaker = m?.[1]?.trim() || '旁白'
+      const content = m?.[2]?.trim() || seg
+      dialogueByPanelId.set(p.id, [{ speaker, content }])
+    }
+    try {
+      const driven = buildDialogueDrivenDurations({
+        panels: panels.map((p) => ({ id: p.id })),
+        dialogueByPanelId,
+      })
+      if (driven && driven.hasDialogue) {
+        return driven.totalDuration
+      }
+    } catch {
+      // DIALOGUE_EXCEEDS_KLING_BUDGET — fall through to baseline.
+    }
+    // No dialogue or too-long fallthrough → Phase M baseline parity:
+    // max(10, panel_count * 2.5) clamped 4-15. Worker uses identical
+    // formula so dropdown hint never disagrees with actual output.
+    const baseline = Math.max(10, Math.round(panels.length * 2.5))
+    return Math.max(4, Math.min(15, baseline))
+  }, [panels])
   // Re-seed the narrative when panels, duration, cast, or scenes change AND
   // the user hasn't edited it locally — avoids clobbering an in-progress edit.
   // groupCast/groupScenes are included so chip overrides re-trigger seed.
@@ -1696,10 +1738,20 @@ export function GroupCard({
                     // — protected by buildInitialNarrative guard.
                     setNarrativeDirty(false)
                   }}
-                  title="AUTO 模式 worker 會用對白長度自動分配每鏡時長;選 5/10/15 則平均切到該秒數"
+                  title={
+                    recommendedDurationSec !== null
+                      ? `Auto = 從本組對白長度估算推薦 ${recommendedDurationSec}s` +
+                        `(中文 ~4 字/秒、英文 ~2.3 詞/秒;無對白時用 max(10, 分鏡數×2.5))。` +
+                        `選 5/10/15 會手動覆蓋。`
+                      : 'AUTO 模式 worker 會用對白長度自動分配每鏡時長;選 5/10/15 則平均切到該秒數'
+                  }
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
                 >
-                  <option value={0}>Auto (對白驅動)</option>
+                  <option value={0}>
+                    {recommendedDurationSec !== null
+                      ? `Auto (推薦 ${recommendedDurationSec}s)`
+                      : 'Auto (對白驅動)'}
+                  </option>
                   <option value={5}>5s</option>
                   <option value={10}>10s</option>
                   <option value={15}>15s</option>

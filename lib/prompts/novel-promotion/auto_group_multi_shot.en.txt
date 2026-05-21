@@ -1,18 +1,51 @@
-You are a professional short-drama editing director. Given a sequence of storyboard panels that have already had images generated (each with index, description, location, characters), group them into multi-shot clusters of 2-6 panels each, optimised for **scene & character continuity** so each group can be submitted to Kling 3.0 multi_shot=intelligence as one 5-15-second continuous shot.
+You are a professional short-drama editing director. Given a sequence of storyboard panels that have already had images generated (each with index, description, location, characters, dialogue, speaker), group them into multi-shot clusters of 2-6 panels each, with **dialogue preservation as the TOP priority**, so each group can be submitted to Seedance 2.0 / Kling 3.0 multi_shot as one 5-15-second continuous shot.
 
 ## Grouping Principles (strongest to weakest)
 
-1. **Same scene + same character**: consecutive panels in the same location with the same protagonist MUST go in one group so Kling produces consistent character appearance.
-2. **Action / emotion continuity**: a continuous action sequence (e.g. walking into a room → sitting down → starting to speak) belongs in one group, signalling Kling these are linked motions, not cuts.
-3. **Beat points**: when there is a scene change, time jump, or major narrative turn, **force a group split** (no group spans scenes).
-4. **Group size**: aim for 4-5 panels per group on average, NEVER leave an orphan group of 1. If only 1 panel remains at the tail, merge it into the previous group (provided that group is ≤ 5).
-5. **Total group count**: roughly panel_count / 4 ~ panel_count / 5, e.g. 30 panels → 6-8 groups.
+### 1. Dialogue integrity ← TOP PRIORITY (added 2026-05-21)
+
+**Never split a single speaker's continuous utterance across groups.** Detection:
+
+- Inspect each panel's `speaker` field + `dialogue` content
+- When several consecutive panels share the same `speaker` AND the dialogue reads as one continuous monologue (no interjection from another character), they MUST belong to the same group
+- A legitimate split point lies **only** between speakers (other character replies) OR between distinct utterances by the same speaker
+- Example:
+  - panel 3 — Karrug says "The gods are wrathful"
+  - panel 4 — Karrug continues "Disaster is upon us"
+  - panel 5 — Karrug raises both hands
+  - → panels 3, 4 MUST be in the same group (continuous speech). Panel 5 has no dialogue, can stay in the same group or start a new one.
+
+**Estimate each group's total dialogue time ≤ 12 seconds** (leaving 3s for transitions / reactions / action):
+- CJK characters: ~4 chars/second
+- Non-CJK words: ~2.3 words/second
+- Sum dialogue chars/words across all panels in a candidate group, divide by the respective rate, that's roughly the seconds
+- If a group estimates > 12s, **first try moving silent panels (no dialogue) to a neighbouring group**; if still > 12s, split at a legitimate boundary (other speaker reply OR utterance gap)
+
+### 2. Same scene + same character
+
+Consecutive panels in the same location with the same protagonist should generally go together so the model produces consistent character appearance.
+
+### 3. Action / emotion continuity
+
+A continuous action sequence (e.g. walking into a room → sitting down → starting to speak) belongs in one group, signalling the model these are linked motions, not cuts.
+
+### 4. Beat points
+
+When there is a scene change, time jump, or major narrative turn, **force a group split** (no group spans scenes) — unless rule #1 (dialogue integrity) requires keeping them together.
+
+### 5. Group size
+
+Aim for 4-5 panels per group on average, NEVER leave an orphan group of 1. If only 1 panel remains at the tail, merge it into the previous group (provided that group is ≤ 5).
+
+### 6. Total group count
+
+Roughly panel_count / 4 ~ panel_count / 5, e.g. 30 panels → 6-8 groups.
 
 ## Input
 
 panel count: {panel_count}
 
-panels (JSON, id order = storyboard temporal order):
+panels (JSON, id order = storyboard temporal order, now includes dialogue + speaker fields):
 {panels_json}
 
 ## Output Format (strict JSON, no markdown, no other text)
@@ -20,7 +53,7 @@ panels (JSON, id order = storyboard temporal order):
 ```json
 {
   "groups": [
-    { "id": "g1", "panelIds": ["panel-uuid-1", "panel-uuid-2", "panel-uuid-3"], "reason": "Living room dialogue beat — heroine enters and sits" },
+    { "id": "g1", "panelIds": ["panel-uuid-1", "panel-uuid-2", "panel-uuid-3"], "reason": "Karrug's prophecy monologue, ~9s of dialogue" },
     { "id": "g2", "panelIds": ["panel-uuid-4", "panel-uuid-5"], "reason": "Scene cut to kitchen, new action sequence" }
   ]
 }
@@ -32,6 +65,7 @@ panels (JSON, id order = storyboard temporal order):
 - All panels must be assigned (no orphans)
 - panelIds within a group must follow the original storyboard temporal order
 - Groups must also be in temporal order (g1 contains an earlier first-panel than g2)
-- `reason` is a single short sentence (< 30 chars in EN) explaining why those panels belong together
+- **Same speaker's continuous utterance CANNOT be split across different groups** (rule #1, hard requirement)
+- `reason` is a single short sentence (< 30 EN words) explaining why those panels belong together; when dialogue-driven, prefer to include the estimated duration (e.g. "8s dialogue block")
 
 Output the JSON directly — no ```json``` fence, no leading or trailing text.

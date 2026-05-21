@@ -30,6 +30,14 @@ interface PanelForLlm {
   description: string
   location: string
   characters: string
+  /** Phase N (2026-05-21) — dialogue blob (panel.srtSegment trimmed
+   *  + truncated). LLM uses this to keep "one person's continuous
+   *  speech" inside the same group; never split mid-utterance. */
+  dialogue: string
+  /** Speaker name extracted from srtSegment if obvious (e.g.
+   *  "Karrug: ..."), so LLM can detect "same speaker continues
+   *  across panel 3 → 4" easily. */
+  speaker: string
 }
 
 interface LlmGroup {
@@ -64,6 +72,26 @@ function parsePanelChars(raw: string | null | undefined): string {
   return String(raw).slice(0, 120)
 }
 
+/**
+ * Phase N (2026-05-21) — pull a likely speaker name out of srtSegment
+ * so the LLM can detect "same speaker continues" boundaries.
+ *
+ * srtSegment formats we see in practice:
+ *   - "Karrug: 「諸神震怒了！」" → speaker = "Karrug"
+ *   - "Karrug说「諸神震怒了！」"  → speaker = "Karrug"
+ *   - 旁白："廢墟之上..."        → speaker = "旁白"
+ *   - bare quoted span           → speaker = "" (let LLM infer from characters)
+ *
+ * Returns '' when no obvious speaker prefix is present.
+ */
+function extractSpeakerHint(srtSegment: string | null | undefined): string {
+  if (!srtSegment) return ''
+  const trimmed = srtSegment.trim()
+  // "<Name>: ..." / "<Name>：..." / "<Name>说..." / "<Name>說..."
+  const match = trimmed.match(/^([^\s:：说說「"'']{1,20})\s*[:：说說]/)
+  return match?.[1]?.trim() ?? ''
+}
+
 export const POST = apiHandler(async (
   request: NextRequest,
   context: { params: Promise<{ projectId: string; episodeId: string }> },
@@ -93,6 +121,7 @@ export const POST = apiHandler(async (
               description: true,
               location: true,
               characters: true,
+              srtSegment: true,
             },
             orderBy: { panelIndex: 'asc' },
           },
@@ -126,6 +155,8 @@ export const POST = apiHandler(async (
     description: (p.description || '').slice(0, 200),
     location: (p.location || '').slice(0, 80),
     characters: parsePanelChars(p.characters),
+    dialogue: (p.srtSegment || '').trim().slice(0, 240),
+    speaker: extractSpeakerHint(p.srtSegment),
   }))
 
   const analysisModel = await resolveAnalysisModel({
