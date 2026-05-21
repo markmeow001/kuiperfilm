@@ -17,14 +17,22 @@ function makePrismaStub(row: { visualStyleId: string | null; lightingPresetId: s
 }
 
 describe('resolveProjectVisualStyle', () => {
-  it('returns null when project has no visualStyleId', async () => {
+  // Phase J (2026-05-21) — NULL visualStyleId now falls back to
+  // DEFAULT_PROJECT_VISUAL_STYLE_ID (cinematic_realism) instead of
+  // returning null. Pre-Phase-J tests that locked "returns null" are
+  // inverted here. The fallback ensures the realism anchor reaches
+  // the model for the entire legacy NULL cohort without needing a
+  // production DB backfill UPDATE.
+  it('falls back to cinematic_realism when project visualStyleId is NULL (Phase J)', async () => {
     const out = await resolveProjectVisualStyle(makePrismaStub({ visualStyleId: null, lightingPresetId: null }), 'p1')
-    expect(out).toBeNull()
+    expect(out).not.toBeNull()
+    expect(out!.style.id).toBe('cinematic_realism')
   })
 
-  it('returns null when project row is missing', async () => {
+  it('falls back to cinematic_realism when project row is missing (Phase J)', async () => {
     const out = await resolveProjectVisualStyle(makePrismaStub(null), 'p1')
-    expect(out).toBeNull()
+    expect(out).not.toBeNull()
+    expect(out!.style.id).toBe('cinematic_realism')
   })
 
   it('resolves a known styleId from the curated catalog', async () => {
@@ -46,12 +54,29 @@ describe('resolveProjectVisualStyle', () => {
     expect(out!.lighting?.id).toBe('golden_hour')
   })
 
-  it('returns null on unknown styleId rather than throwing', async () => {
+  it('respects a non-NULL user choice (does NOT override with default)', async () => {
+    // Phase J fallback ONLY kicks in for NULL/missing. A user who
+    // explicitly picked 港式電影 (hk_cinema) keeps their pick — a
+    // backfill UPDATE would silently override and is explicitly out
+    // of scope. Only the fallback path defaults to realism.
+    const out = await resolveProjectVisualStyle(
+      makePrismaStub({ visualStyleId: 'hk_cinema', lightingPresetId: null }),
+      'p1',
+    )
+    expect(out!.style.id).toBe('hk_cinema')
+  })
+
+  it('falls back to cinematic_realism on unknown styleId (Phase J — was: returns null)', async () => {
+    // Unknown DB value (e.g. user picked a style we later removed)
+    // resolves to default rather than null. AVOID list + prefix/suffix
+    // always ship — silent absence is harder to debug than a
+    // deterministic fallback.
     const out = await resolveProjectVisualStyle(
       makePrismaStub({ visualStyleId: 'definitely_not_a_real_style_id', lightingPresetId: null }),
       'p1',
     )
-    expect(out).toBeNull()
+    expect(out).not.toBeNull()
+    expect(out!.style.id).toBe('cinematic_realism')
   })
 })
 

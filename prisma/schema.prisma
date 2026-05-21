@@ -348,9 +348,14 @@ model NovelPromotionProject {
   // Layers TEXT-based style anchor on top of existing styleProfile
   // image-based pipeline. Both can coexist: styleProfile pins visual
   // identity via Tencent CustomElement; visualStyleId injects the
-  // 29-style curated text anchor + lighting preset.
-  // NULL = legacy behaviour (no text anchor from library).
-  visualStyleId        String?
+  // 30-style curated text anchor + lighting preset.
+  // Phase J (2026-05-21) — default 'cinematic_realism' for new rows.
+  // Mirrors DEFAULT_PROJECT_VISUAL_STYLE_ID in lib/style-library/loader.ts;
+  // both must stay in sync. NULL is still legal on existing rows (and
+  // resolveProjectVisualStyle falls back to the same constant), so
+  // we do NOT need a backfill migration — only newly inserted projects
+  // will land with this default.
+  visualStyleId        String?                   @default("cinematic_realism")
   lightingPresetId     String?
   characterModel       String? // 用户配置的角色图片模型
   locationModel        String? // 用户配置的场景图片模型

@@ -30,6 +30,19 @@ export interface ResolvedProjectStyle {
   lighting: LightingPreset | null
 }
 
+/**
+ * Phase J (2026-05-21) — default style for projects that haven't picked
+ * one explicitly. Per the realism-first feedback (saved as
+ * feedback_style_priority_realism_first memory), `cinematic_realism`
+ * carries the strongest cinematic anchor for the realism-driven
+ * short-drama use case the project is targeting.
+ *
+ * This constant is the SINGLE source of truth for the default. The
+ * Prisma schema's `visualStyleId` default mirrors it (set at the same
+ * commit) so new rows land here without needing this fallback.
+ */
+export const DEFAULT_PROJECT_VISUAL_STYLE_ID = 'cinematic_realism'
+
 export async function resolveProjectVisualStyle(
   prisma: Pick<PrismaClient, 'novelPromotionProject'>,
   projectId: string,
@@ -38,13 +51,34 @@ export async function resolveProjectVisualStyle(
     where: { projectId },
     select: { visualStyleId: true, lightingPresetId: true },
   })
-  if (!row?.visualStyleId) return null
+  // Phase J — when the row exists but visualStyleId is NULL (legacy
+  // projects, projects created before the schema default was added,
+  // or projects where the user explicitly cleared the style), fall
+  // back to DEFAULT_PROJECT_VISUAL_STYLE_ID. This makes the realism
+  // default reach the model immediately for the entire NULL cohort
+  // without needing a backfill UPDATE on the production DB.
+  //
+  // We DO NOT override a non-NULL visualStyleId — user choice wins.
+  // The only path to this fallback is row missing OR row.visualStyleId
+  // is null/empty/unknown-string. Unknown-string (typo or removed
+  // style id) is caught by the getStyle try/catch and ALSO falls
+  // back to the default rather than returning null, so the AVOID
+  // suppressor list and prefix/suffix always ship.
+  const effectiveStyleId = row?.visualStyleId || DEFAULT_PROJECT_VISUAL_STYLE_ID
   try {
-    const style = getStyle(row.visualStyleId)
-    const lighting = row.lightingPresetId ? getLighting(row.lightingPresetId) : null
+    const style = getStyle(effectiveStyleId)
+    const lighting = row?.lightingPresetId ? getLighting(row.lightingPresetId) : null
     return { style, lighting }
   } catch {
-    return null
+    // The DB-stored id is unknown (e.g. user picked a style we later
+    // removed). Try the default — if that ALSO fails, the seed data
+    // is broken and returning null is the only safe response.
+    try {
+      const fallback = getStyle(DEFAULT_PROJECT_VISUAL_STYLE_ID)
+      return { style: fallback, lighting: null }
+    } catch {
+      return null
+    }
   }
 }
 
