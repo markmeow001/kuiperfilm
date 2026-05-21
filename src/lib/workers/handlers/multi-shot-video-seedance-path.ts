@@ -70,6 +70,8 @@ import {
 } from './multi-shot-video-b-path'
 import {
   resolveProjectVisualStyle,
+  buildVisualStylePrefix,
+  buildVisualStyleSuffix,
   buildVisualStyleNegative,
   getStyleSafe,
 } from '@/lib/style-library'
@@ -605,27 +607,37 @@ export async function runMultiShotSeedanceComposite(params: {
   await reportTaskProgress(job, 20, { stage: 'seedance_composite_submit' })
 
   // 2026-05-18 — Resolve a visual style → per-style negativePrompt, then
-  // append the universal text/watermark suppressors. Order:
-  //   1. Per-group override (params.visualStyleId) — set by GroupCard's
-  //      "this group only" picker.
-  //   2. Project default — resolveProjectVisualStyle reads
-  //      NovelPromotionProject.visualStyleId.
-  //   3. Universal suffix — always added so reference images that carry
-  //      watermarks don't bleed subtitles / logos into the output.
-  // Empty resolution is fine — we still ship the universal suffix.
-  let styleNegative = ''
-  if (params.visualStyleId) {
-    const overrideStyle = getStyleSafe(params.visualStyleId)
-    if (overrideStyle) {
-      styleNegative = overrideStyle.negativePrompt ?? ''
-    }
-  } else {
-    const projectStyle = await resolveProjectVisualStyle(prisma, projectId)
-    styleNegative = buildVisualStyleNegative(projectStyle)
-  }
+  // append the universal text/watermark suppressors.
+  // 2026-05-20 (Phase I) — also resolve the POSITIVE styleAnchor +
+  // visualModifiers and wrap the prompt with them, matching the Kling
+  // B-path treatment. Previously the BobAPI seedance composite path only
+  // injected the negative bit, so 院線寫實 etc. styles never reached the
+  // model on the positive side → all BobAPI multi-shots drifted toward
+  // the model's training-set average regardless of project style.
+  // Order priority:
+  //   1. Per-group override (params.visualStyleId)
+  //   2. Project default — resolveProjectVisualStyle
+  //   3. null — universal text/watermark suppressors still ship
+  const resolvedStyle = params.visualStyleId
+    ? (() => {
+        const s = getStyleSafe(params.visualStyleId)
+        return s ? { style: s, lighting: null } : null
+      })()
+    : await resolveProjectVisualStyle(prisma, projectId)
+
+  const stylePrefix = buildVisualStylePrefix(resolvedStyle).trim()
+  const styleSuffix = buildVisualStyleSuffix(resolvedStyle).trim()
+  const styleNegative = buildVisualStyleNegative(resolvedStyle).trim()
   const composedNegative = [styleNegative, UNIVERSAL_SEEDANCE_NEGATIVE]
-    .filter((s) => s && s.trim())
+    .filter((s) => s && s.length > 0)
     .join(', ')
+
+  // Wrap prompt with style: prefix → core → suffix. The negative goes
+  // through the generator's negative_prompt body field (BobAPI supports
+  // it natively, unlike AtlasCloud which has no such field).
+  const stylizedPrompt = [stylePrefix, prompt, styleSuffix]
+    .filter((s) => s.length > 0)
+    .join('\n\n')
 
   const generator = new TaijiaiSeedanceVideoGenerator()
   const generateResult = await generator.generate({
@@ -636,7 +648,7 @@ export async function runMultiShotSeedanceComposite(params: {
     // than coercing the base interface optional, so we don't perturb the
     // Kling i2v generators that DO require it.
     imageUrl: firstFrameUrl ?? '',
-    prompt,
+    prompt: stylizedPrompt,
     options: {
       modelId: 'seedance-2.0-720p',
       duration,

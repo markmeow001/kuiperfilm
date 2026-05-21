@@ -251,6 +251,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       aspectRatio,
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      ...(visualStyleId ? { visualStyleId } : {}),
     })
   }
 

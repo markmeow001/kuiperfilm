@@ -59,6 +59,30 @@ import {
   type SceneRef,
   type PropRef,
 } from './multi-shot-ref-collection'
+import {
+  resolveProjectVisualStyle,
+  buildVisualStylePrefix,
+  buildVisualStyleSuffix,
+  buildVisualStyleNegative,
+  getStyleSafe,
+} from '@/lib/style-library'
+
+// AtlasCloud Seedance 2.0's request schema has NO `negative_prompt`
+// field (verified from static.atlascloud.ai/model/schema/...). Inline
+// the negatives into the prompt with an explicit AVOID marker so the
+// model still suppresses CG / animation artifacts. Matches the
+// fallback the BobAPI generator does when its negative_prompt slot
+// goes empty.
+const UNIVERSAL_ATLASCLOUD_NEGATIVE = [
+  'subtitles',
+  'on-screen text',
+  'watermark',
+  'logo',
+  '字幕',
+  '文字',
+  '屏幕信息',
+  '水印',
+].join(', ')
 
 const MAX_REFERENCE_IMAGES = 9
 const MIN_DURATION_SEC = 4
@@ -261,6 +285,10 @@ export async function runMultiShotAtlasCloudComposite(params: {
   aspectRatio: string | undefined
   rawPrompt?: string
   panelDurations?: number[]
+  /** Per-group curated visual style override (Phase E parity with
+   *  Kling B-path and BobAPI seedance-path). When set, wins over
+   *  project.visualStyleId in resolveProjectVisualStyle. */
+  visualStyleId?: string
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -385,16 +413,36 @@ export async function runMultiShotAtlasCloudComposite(params: {
   }
   // t2v: no media; identity anchored purely via inline prompt descriptions.
 
+  // ── VISUAL STYLE (Phase I — parity with Kling B-path + BobAPI seedance) ──
+  // Priority: per-call params.visualStyleId → project.visualStyleId →
+  // null (falls back to no style enrichment, current pre-Phase-I behavior).
+  // Style anchor + visualModifiers wrap the prompt; the curated negativePrompt
+  // is inlined as "AVOID: ..." because AtlasCloud Seedance 2.0's API schema
+  // has no negative_prompt body field.
+  const resolvedStyle = params.visualStyleId
+    ? (() => {
+        const s = getStyleSafe(params.visualStyleId)
+        return s ? { style: s, lighting: null } : null
+      })()
+    : await resolveProjectVisualStyle(prisma, projectId)
+
+  const stylePrefix = buildVisualStylePrefix(resolvedStyle).trim()
+  const styleSuffix = buildVisualStyleSuffix(resolvedStyle).trim()
+  const styleNegative = buildVisualStyleNegative(resolvedStyle).trim()
+  const composedNegative = [styleNegative, UNIVERSAL_ATLASCLOUD_NEGATIVE]
+    .filter((s) => s && s.length > 0)
+    .join(', ')
+
   // ── PROMPT ASSEMBLY ──
-  let prompt: string
+  let promptCore: string
   let dialogueBeatCount: number
   if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
     // User-edited rawPrompt wins; ships verbatim. The Group Card's
     // textarea is already the source of truth for the user's review
     // ("what I see is what runs"). We trust the user to align it with
     // the selected mode (e.g. don't reference @image-3 on t2v).
-    prompt = params.rawPrompt.trim()
-    dialogueBeatCount = (prompt.match(/對白：|说「|: "/g) || []).length
+    promptCore = params.rawPrompt.trim()
+    dialogueBeatCount = (promptCore.match(/對白：|说「|: "/g) || []).length
   } else {
     const built = buildAtlasCloudPrompt(
       usedPanels,
@@ -405,9 +453,23 @@ export async function runMultiShotAtlasCloudComposite(params: {
       projectData,
       r2vRefOrder,
     )
-    prompt = built.prompt
+    promptCore = built.prompt
     dialogueBeatCount = built.dialogueBeatCount
   }
+
+  // Wrap: styleAnchor + lighting → core → visualModifiers → AVOID list.
+  // Match Kling B-path's official ordering (Scene → Action → Style →
+  // Negative-as-text). Even when style is null, the universal AVOID
+  // list still ships so on-screen-text / watermark artifacts get
+  // suppressed across all 3 modes.
+  const prompt = [
+    stylePrefix,
+    promptCore,
+    styleSuffix,
+    composedNegative ? `AVOID: ${composedNegative}.` : '',
+  ]
+    .filter((s) => s.length > 0)
+    .join('\n\n')
 
   // ── DURATION ──
   let duration: number
@@ -437,6 +499,8 @@ export async function runMultiShotAtlasCloudComposite(params: {
       generateAudio: sound,
       dialogueBeatCount,
       promptLength: prompt.length,
+      visualStyleId: resolvedStyle?.style.id ?? null,
+      negativeLength: composedNegative.length,
     },
   })
 
