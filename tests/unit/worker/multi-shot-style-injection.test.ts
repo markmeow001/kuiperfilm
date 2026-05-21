@@ -84,4 +84,24 @@ describe('multi-shot worker paths use style-library helpers (Phase I)', () => {
     expect(atlascloudPath).toMatch(/watermark/)
     expect(atlascloudPath).toMatch(/on-screen text/i)
   })
+
+  it('AtlasCloud describe...ForPrompt helpers branch on ModeKey (Phase L)', () => {
+    // r2v MUST return empty so ref-map + reference_images carry identity;
+    // a regression that flips r2v to inline full descriptions risks
+    // text/image contradiction (catalog 黑髮 vs ref image 棕髮 etc.)
+    // and crowds out the camera language we're trying to fit in.
+    expect(atlascloudPath).toMatch(/if \(mode === 'r2v'\) return ''/)
+    // i2v gets a short blurb (1 sentence, ≤80 chars)
+    expect(atlascloudPath).toMatch(/mode === 'i2v' \? shortBlurb/)
+    // shortBlurb helper exists
+    expect(atlascloudPath).toMatch(/function shortBlurb/)
+  })
+
+  it('AtlasCloud buildAtlasCloudPrompt skips anchor lines entirely for r2v (Phase L)', () => {
+    // The ref-map is the identity hook for r2v; emitting redundant
+    // anchorLines like "角色「Karrug」：..." would either duplicate
+    // (if description present) or just repeat the name (if absent),
+    // both bloat the prompt without anchoring value.
+    expect(atlascloudPath).toMatch(/if \(mode !== 'r2v'\)/)
+  })
 })

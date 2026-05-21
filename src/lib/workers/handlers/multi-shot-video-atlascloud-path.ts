@@ -121,19 +121,46 @@ function classifyMode(modelId: string): ModeKey {
 }
 
 /**
- * Fetch character description from project catalog for inline-anchor
- * text injection. Used by t2v / i2v modes where we cannot pass the
- * actual reference image — embedding the look-description into the
- * prompt is the only way to anchor identity.
+ * Truncate a full description down to a single short sentence for i2v
+ * mode. r2v doesn't call this (image refs carry identity). t2v gets
+ * the full thing untouched. Heuristics:
+ *   1. Take everything before the first 。/. — usually 1 visual beat
+ *   2. Hard-cap at 80 chars to keep things lean
+ *   3. Drop trailing punctuation
+ */
+function shortBlurb(full: string): string {
+  if (!full) return ''
+  const firstSentence = full.split(/[。．.]/)[0] || full
+  const trimmed = firstSentence.trim()
+  if (trimmed.length <= 80) return trimmed
+  return trimmed.slice(0, 77) + '…'
+}
+
+/**
+ * Mode-aware character anchor density (Phase L, 2026-05-20):
  *
- * Returns the appearance.changeReason (which carries the curated
- * visual description) when present, otherwise falls back to
- * character.description (looser blurb). Empty string if neither.
+ *   r2v: returns '' — the ref-map line ("image N = 角色「X」") already
+ *        gives the model an identity hook, and reference_images[N]
+ *        carries the visual description directly. Adding a verbose
+ *        text description risks contradicting the image (hair color,
+ *        clothing mismatch) and crowds out camera/composition language.
+ *
+ *   i2v: returns a 1-sentence ≤80 char blurb. first_frame anchors the
+ *        opening look but subsequent shots in the 4-15s window drift —
+ *        text anchor reinforces identity without bloating prompt.
+ *
+ *   t2v: returns the full description. With no image input at all,
+ *        text IS the identity — needs the curated appearance.changeReason
+ *        (preferred) or character.description for the model to anchor.
+ *
+ * Empty string when no curated description exists in the project catalog.
  */
 function describeCharacterForPrompt(
   ref: CharacterRef,
   projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  mode: ModeKey,
 ): string {
+  if (mode === 'r2v') return ''
   // CharacterLike on the shared type intentionally narrows away
   // `description` (image handlers don't need it); the prisma include
   // carries it at runtime — cast like b-path does for similar cases.
@@ -146,27 +173,32 @@ function describeCharacterForPrompt(
   const c = (characters ?? []).find((x) => x.id === ref.id)
   if (!c) return ''
   const appearance = c.appearances?.[0]
-  const blurb = (appearance?.changeReason || c.description || '').trim()
-  return blurb
+  const full = (appearance?.changeReason || c.description || '').trim()
+  return mode === 'i2v' ? shortBlurb(full) : full
 }
 
 function describeSceneForPrompt(
   ref: SceneRef,
   projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  mode: ModeKey,
 ): string {
+  if (mode === 'r2v') return ''
   const locations = projectData.locations as unknown as Array<{
     id: string
     name: string
     description?: string | null
   }> | undefined
   const loc = locations?.find((x) => x.id === ref.id)
-  return (loc?.description || '').trim()
+  const full = (loc?.description || '').trim()
+  return mode === 'i2v' ? shortBlurb(full) : full
 }
 
 function describePropForPrompt(
   ref: PropRef,
   projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  mode: ModeKey,
 ): string {
+  if (mode === 'r2v') return ''
   const propsCatalog = projectData.props as unknown as Array<{
     id: string
     name: string
@@ -175,7 +207,8 @@ function describePropForPrompt(
   }> | undefined
   const prop = propsCatalog?.find((x) => x.id === ref.id)
   // Prefer human-facing summary; fall back to AI prompt description.
-  return (prop?.summary || prop?.description || '').trim()
+  const full = (prop?.summary || prop?.description || '').trim()
+  return mode === 'i2v' ? shortBlurb(full) : full
 }
 
 /**
@@ -205,32 +238,41 @@ function buildAtlasCloudPrompt(
 ): { prompt: string; dialogueBeatCount: number } {
   const sections: string[] = []
 
-  // ── INLINE ANCHORS ──
-  // Char / scene / prop descriptions. These are TEXT-LEVEL identity
-  // hooks; they work in all 3 modes. r2v additionally pushes the
-  // images themselves, but text descriptions stay so the model has
-  // both anchors (visual + linguistic).
-  const anchorLines: string[] = []
-  if (characterRefs.length > 0) {
-    for (const c of characterRefs) {
-      const desc = describeCharacterForPrompt(c, projectData)
-      anchorLines.push(desc ? `角色「${c.name}」：${desc}` : `角色「${c.name}」`)
+  // ── INLINE ANCHORS (Phase L — mode-aware density) ──
+  // r2v skips anchor lines entirely: the ref-map below ("image N = 角色「X」")
+  // plus reference_images[N] in the API request together carry visual
+  // identity. Duplicating it as long text risks contradicting the image
+  // (e.g. catalog description says 黑髮 but ref image is 棕髮) and crowds
+  // out camera / composition language in the prompt.
+  //
+  // i2v adds short 1-sentence anchors so the model has a text reinforcement
+  // for shots that drift past the first_frame anchor.
+  //
+  // t2v ships full master-sheet descriptions — text is the ONLY identity
+  // hook when no image is sent.
+  if (mode !== 'r2v') {
+    const anchorLines: string[] = []
+    if (characterRefs.length > 0) {
+      for (const c of characterRefs) {
+        const desc = describeCharacterForPrompt(c, projectData, mode)
+        anchorLines.push(desc ? `角色「${c.name}」：${desc}` : `角色「${c.name}」`)
+      }
     }
-  }
-  if (sceneRefs.length > 0) {
-    for (const s of sceneRefs) {
-      const desc = describeSceneForPrompt(s, projectData)
-      anchorLines.push(desc ? `場景「${s.name}」：${desc}` : `場景「${s.name}」`)
+    if (sceneRefs.length > 0) {
+      for (const s of sceneRefs) {
+        const desc = describeSceneForPrompt(s, projectData, mode)
+        anchorLines.push(desc ? `場景「${s.name}」：${desc}` : `場景「${s.name}」`)
+      }
     }
-  }
-  if (propRefs.length > 0) {
-    for (const p of propRefs) {
-      const desc = describePropForPrompt(p, projectData)
-      anchorLines.push(desc ? `道具「${p.name}」：${desc}` : `道具「${p.name}」`)
+    if (propRefs.length > 0) {
+      for (const p of propRefs) {
+        const desc = describePropForPrompt(p, projectData, mode)
+        anchorLines.push(desc ? `道具「${p.name}」：${desc}` : `道具「${p.name}」`)
+      }
     }
-  }
-  if (anchorLines.length > 0) {
-    sections.push(anchorLines.join('\n'))
+    if (anchorLines.length > 0) {
+      sections.push(anchorLines.join('\n'))
+    }
   }
 
   // ── REF MAP (r2v only) ──
