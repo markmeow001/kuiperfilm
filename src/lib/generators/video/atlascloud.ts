@@ -79,8 +79,13 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
             action: 'atlascloud_video_generate',
         })
 
-        const body: Record<string, unknown> = {
-            model: atlasModel,
+        // AtlasCloud body shape (per /docs/...?tab=api, verified 2026-05-20):
+        //   { "model": "<slug>", "input": { "prompt": "...", ... } }
+        // Everything except `model` lives inside `input`. Earlier code path
+        // sent flat top-level fields — that may have silently worked for the
+        // legacy v1.5-pro/wan-2.6 bindings via gateway leniency, but the new
+        // seedance-2.0 endpoints will not parse them.
+        const input: Record<string, unknown> = {
             duration,
             aspect_ratio: aspectRatio,
             generate_audio: generateAudio,
@@ -90,19 +95,21 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
         }
 
         if (!t2vMode) {
-            body.image = imageUrl
+            input.image = imageUrl
             if (lastFrameImageUrl) {
-                body.last_image = lastFrameImageUrl
+                input.last_image = lastFrameImageUrl
             }
         }
 
         if (paramPrompt) {
-            body.prompt = paramPrompt
+            input.prompt = paramPrompt
         } else if (t2vMode) {
             throw new Error(
                 `AtlasCloud ${atlasModel} 為 text-to-video 模型，但 params.prompt 為空`,
             )
         }
+
+        const body = { model: atlasModel, input }
 
         logger.info({
             message: 'AtlasCloud Seedance video generation request',
@@ -136,24 +143,33 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
             throw new Error(`AtlasCloud Seedance 提交失败 (${response.status}): ${errorText}`)
         }
 
+        // Submit response — old wrapped shape `{code, message, data:{id}}`
+        // OR new flat shape `{id, status, model, created_at}`. Handle both;
+        // the docs example shows flat but legacy v1.5-pro went through the
+        // wrapped path so we cannot rely on either side exclusively.
         const responseBody = await response.json() as {
-            code: number
-            message: string
-            data: {
+            code?: number
+            message?: string
+            data?: {
                 id: string
                 model: string
                 status: string
                 urls?: { get?: string }
             }
+            id?: string
+            model?: string
+            status?: string
         }
 
-        if (responseBody.code !== 200) {
-            throw new Error(`AtlasCloud Seedance 错误 (code ${responseBody.code}): ${responseBody.message}`)
+        if (responseBody.code !== undefined && responseBody.code !== 200) {
+            throw new Error(`AtlasCloud Seedance 错误 (code ${responseBody.code}): ${responseBody.message ?? ''}`)
         }
 
-        const requestId = responseBody.data?.id
+        const requestId = responseBody.data?.id ?? responseBody.id
         if (!requestId) {
-            throw new Error(`AtlasCloud Seedance 未返回 prediction ID`)
+            throw new Error(
+                `AtlasCloud Seedance 未返回 prediction ID (response keys: ${Object.keys(responseBody).join(',')})`,
+            )
         }
 
         logger.info({
