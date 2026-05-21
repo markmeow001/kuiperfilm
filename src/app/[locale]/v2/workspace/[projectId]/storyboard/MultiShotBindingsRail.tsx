@@ -1,15 +1,22 @@
 'use client'
 
 /**
- * Stage 1 chip rail for the multi-shot B-path bindings.
+ * Chip rail for the multi-shot B-path bindings (Stage 1 + Stage 2).
  *
  * Given the most-recent multi-shot taskId for a group, this component
  * polls task.result.bindings via `useMultiShotTask` and renders a
  * Seedance-style chip strip showing which character appearance and
  * which scene view the worker actually anchored against (Tencent
- * SubjectInfos.N). Read-only in Stage 1 — Stage 2 will turn each
- * chip into an editable affordance that pushes overrides into the
- * next regenerate call.
+ * SubjectInfos.N).
+ *
+ * Stage 1 (default, no callbacks): read-only chips — show what's bound.
+ * Stage 2 (caller supplies `onCharacterChipClick` / `onSceneChipClick`):
+ *   chips become buttons that open the appearance / view picker;
+ *   pending overrides render with the violet "✏ 已改" treatment so the
+ *   user sees what will swap on next regenerate. The caller owns the
+ *   override map state (characterOverrides / locationOverrides) and
+ *   forwards it through `characterOverrideAppearanceById` /
+ *   `locationOverrideViewByLocationId`.
  *
  * Empty / pre-completion states are intentionally muted so the rail
  * doesn't shout when the user hasn't done anything yet.
