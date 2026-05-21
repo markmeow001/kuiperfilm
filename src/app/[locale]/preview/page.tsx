@@ -36,7 +36,10 @@ import {
 const STEPS = [
   { id: "home", num: "00", label: "首頁", subtitle: "Mode", icon: Film },
   { id: "script", num: "01", label: "劇本", subtitle: "Script", icon: PenLine },
-  { id: "subjects", num: "02", label: "主體", subtitle: "Subjects", icon: Users },
+  // 2026-05-21 — sync with V2 sidebar (cb3b398: 主體 → 劇本拆解).
+  // "主體" was image-generation jargon; "劇本拆解" matches film-
+  // production vocabulary actual users mental-model with.
+  { id: "subjects", num: "02", label: "劇本拆解", subtitle: "Breakdown", icon: Users },
   { id: "storyboard", num: "03", label: "分鏡", subtitle: "Storyboard", icon: Layers },
   { id: "voice", num: "04", label: "配音", subtitle: "Voice", icon: Mic },
   { id: "final", num: "05", label: "成片", subtitle: "Final Cut", icon: Play },
