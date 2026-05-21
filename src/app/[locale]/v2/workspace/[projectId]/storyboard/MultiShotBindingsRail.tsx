@@ -22,7 +22,7 @@
  * doesn't shout when the user hasn't done anything yet.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import {
   useMultiShotTask,
@@ -186,6 +186,89 @@ function resolveVideoSrc(
   return `/api/novel-promotion/${projectId}/video-proxy?${params.toString()}`
 }
 
+/**
+ * Thumbnail video player with an explicit fullscreen overlay button.
+ *
+ * The native <video controls> shipped the fullscreen control behind the
+ * "⋮" overflow menu, which most users never expanded — they assumed the
+ * clip was preview-only. 2026-05-21: surfaced as a top-right overlay
+ * button that calls requestFullscreen() (with iOS Safari's
+ * webkitEnterFullscreen() fallback that puts the <video> itself into
+ * the native iOS player). Click bubble stops at the button so it
+ * doesn't toggle play/pause on the underlying video.
+ */
+function ClipPlayer({ url }: { url: string }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  function handleFullscreenClick(e: React.MouseEvent) {
+    e.stopPropagation()
+    const el = videoRef.current
+    if (!el) return
+    // iOS Safari: <video>.webkitEnterFullscreen() drops the user into
+    // the native player. Other browsers: requestFullscreen on the
+    // <video> itself so the controls stay native + we don't have to
+    // own the player chrome.
+    type FullscreenVideo = HTMLVideoElement & {
+      webkitEnterFullscreen?: () => void
+      webkitRequestFullscreen?: () => Promise<void>
+    }
+    const fsEl = el as FullscreenVideo
+    if (typeof fsEl.webkitEnterFullscreen === 'function') {
+      fsEl.webkitEnterFullscreen()
+    } else if (typeof el.requestFullscreen === 'function') {
+      void el.requestFullscreen().catch(() => {
+        // Fullscreen rejected (user gesture lost / Permissions-Policy
+        // block). No user-facing surface — they can fall back to the
+        // native ⋮ menu. Silent.
+      })
+    } else if (typeof fsEl.webkitRequestFullscreen === 'function') {
+      void fsEl.webkitRequestFullscreen()
+    }
+  }
+
+  return (
+    <div className="relative">
+      <video
+        ref={videoRef}
+        src={url}
+        controls
+        playsInline
+        // 9:16 reference player. Sized as a thumbnail-with-controls,
+        // not a primary viewing surface — the rail is for confirming
+        // the cut, not for watching it.
+        className="mx-auto block h-auto max-h-[320px] w-full object-contain"
+      />
+      <button
+        type="button"
+        onClick={handleFullscreenClick}
+        title="全螢幕播放"
+        aria-label="全螢幕播放"
+        className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-sm border border-stone-700/60 bg-stone-950/70 text-stone-300 backdrop-blur-sm transition-colors hover:border-amber-500/60 hover:bg-stone-900/90 hover:text-amber-400"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          {/* Maximize corners (lucide-react Maximize2 shape inlined to
+              avoid adding a new icon to the registry for one use site). */}
+          <polyline points="15 3 21 3 21 9" />
+          <polyline points="9 21 3 21 3 15" />
+          <line x1="21" y1="3" x2="14" y2="10" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 export function MultiShotBindingsRail({
   taskId,
   groupLabel,
@@ -308,16 +391,7 @@ export function MultiShotBindingsRail({
               key={url}
               className="overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950"
             >
-              { }
-              <video
-                src={url}
-                controls
-                playsInline
-                // 9:16 reference player. Sized as a thumbnail-with-controls,
-                // not a primary viewing surface — the rail is for confirming
-                // the cut, not for watching it.
-                className="mx-auto block h-auto max-h-[320px] w-full object-contain"
-              />
+              <ClipPlayer url={url} />
               <div className="flex items-center justify-between border-t border-amber-900/20 bg-stone-900/40 px-2 py-1">
                 <div className="font-mono text-[12px] tracking-wider text-amber-500/70">
                   {isChunked ? (
