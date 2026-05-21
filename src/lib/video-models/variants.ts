@@ -74,6 +74,40 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
     hint: '透過 BobAPI / taijiai 中轉,720p · audio · 支援多鏡頭合成 (9-ref @N)',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
+  // 2026-05-20 — AtlasCloud Seedance 2.0 line (4 variants: t2v/i2v × standard/fast).
+  // AtlasCloud has a reference-to-video endpoint but we bound only t2v + i2v this
+  // pass; neither accepts the BobAPI-style content[] @N composite, so multiShot
+  // stays false. Picking these and clicking 多鏡頭合成 trips the same gentle
+  // gate as fal Seedance. To light up the button for AtlasCloud we'd need to
+  // bind their reference-to-video endpoint AND build a worker composite path.
+  {
+    id: 'atlascloud::seedance-2.0-t2v',
+    family: 'seedance',
+    label: 'Seedance 2.0 T2V (AtlasCloud · audio)',
+    hint: '純文字驅動,720p/480p · native audio · 4-15s',
+    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥¥' },
+  },
+  {
+    id: 'atlascloud::seedance-2.0-i2v',
+    family: 'seedance',
+    label: 'Seedance 2.0 I2V (AtlasCloud · audio)',
+    hint: '起始圖驅動,720p/480p · native audio · 4-15s',
+    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥¥' },
+  },
+  {
+    id: 'atlascloud::seedance-2.0-fast-t2v',
+    family: 'seedance',
+    label: 'Seedance 2.0 Fast T2V (AtlasCloud · cheap)',
+    hint: '便宜的 fast 版,純文字驅動 · audio · 4-15s',
+    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥' },
+  },
+  {
+    id: 'atlascloud::seedance-2.0-fast-i2v',
+    family: 'seedance',
+    label: 'Seedance 2.0 Fast I2V (AtlasCloud · cheap)',
+    hint: '便宜的 fast 版,起始圖驅動 · audio · 4-15s',
+    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥' },
+  },
 
   // ─────────── Kling family ───────────
   // Tencent VOD line (Kling-3 / Omni / O1 hit B-path multi_shot=intelligence;

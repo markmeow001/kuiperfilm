@@ -69,6 +69,28 @@ describe('VIDEO_MODEL_VARIANTS catalog', () => {
     expect(isMultiShotCapable('taijiai::seedance-2.0-720p')).toBe(true)
   })
 
+  it('AtlasCloud Seedance 2.0 variants do NOT support multi-shot composite', () => {
+    // AtlasCloud bound only t2v + i2v endpoints (no reference-to-video
+    // composite path), so all 4 stay out of the 多鏡頭 gate. Flipping
+    // any of these to true silently breaks the 多鏡頭 button — to enable
+    // it we'd need to bind reference-to-video AND wire a worker composite
+    // path mirroring multi-shot-video-seedance-path.
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-t2v')).toBe(false)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-i2v')).toBe(false)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-fast-t2v')).toBe(false)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-fast-i2v')).toBe(false)
+  })
+
+  it('AtlasCloud Seedance 2.0 variants are registered and resolvable', () => {
+    // Both pickers (V2 multi-shot 視頻模型 inline + profile PRESET_MODELS)
+    // depend on these ids; a typo or removal silently makes the picker
+    // show "目前模型不在清單中".
+    expect(getVideoModelVariant('atlascloud::seedance-2.0-t2v')?.family).toBe('seedance')
+    expect(getVideoModelVariant('atlascloud::seedance-2.0-i2v')?.family).toBe('seedance')
+    expect(getVideoModelVariant('atlascloud::seedance-2.0-fast-t2v')?.family).toBe('seedance')
+    expect(getVideoModelVariant('atlascloud::seedance-2.0-fast-i2v')?.family).toBe('seedance')
+  })
+
   it('every Kling variant supports multi-shot (the only family that does today)', () => {
     const kling = getVariantsByFamily('kling')
     expect(kling.length).toBeGreaterThan(0)
