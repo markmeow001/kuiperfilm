@@ -677,11 +677,43 @@ export const visualStyles: VisualStyle[] = [
     displayOrder: 29,
     isActive: true,
   },
+  {
+    // 2026-05-20 — Imported from a reference cinematic prompt the user
+    // shared as the quality bar to chase. The reference prompt
+    // (https://art.kuiperfilmailab.com — robot-sweeper / zombie scene)
+    // packed 7 sub-fields into its 【氛围与画质】 section:
+    //   風格核心、攝影機+鏡頭、色彩分級、顆粒+濾鏡、光線品質、參考作品、情緒基調
+    // Our existing styles average 25-word anchors; this one runs 60+ to
+    // give the model enough grip to overcome Seedance 2.0's bias toward
+    // "modern digital clean" / "video game CG" looks. The explicit
+    // anti-CG declaration on the POSITIVE prompt side ("NOT video game
+    // CG, live-action photography only") reinforces the negativePrompt
+    // — Seedance training data leaks a lot of 3D-rendered content and
+    // single-side suppression isn't always enough.
+    id: 'atomic_punk_apocalypse',
+    nameZh: '原子朋克末日',
+    nameEn: 'Atomic-Punk Apocalypse',
+    category: 'G',
+    categoryNameZh: '復古與概念',
+    thumbnailUrl: null,
+    styleAnchor:
+      'Atomic-punk post-apocalypse cinematic style, 1960s retro-futurism, anamorphic widescreen on IMAX film stock with Panavision C-series lenses, ultra-photorealistic live-action capture, dynamic motion blur, NOT video game CG, NOT animation',
+    visualModifiers:
+      'warm-orange + sea-salt blue high-contrast 1960s color grade, vintage film grain, wide-angle retro lens, low-saturation vintage film filter, natural daylight side-light through floor-to-ceiling windows, soft terrazzo floor reflections, balanced highlights with no clipping, full shadow detail, smooth tonal transitions, vintage soft film haze, suffocating lonely last-survivor mood, absurd contrast between leisure resort architecture and post-apocalyptic decay',
+    negativePrompt:
+      'video game CG, anime, cartoon, 3D render, plastic skin, oversaturated, harsh digital sharpening, smooth airbrushed faces, modern digital color grading, sterile clean digital look, fluorescent lighting, distorted, low quality',
+    referenceArtists: ['Fallout (HBO series)', 'Pixar character motion control', 'Kubrick (2001: A Space Odyssey)', 'Blade Runner 2049 (Roger Deakins)'],
+    bestForGenres: ['atomic-punk apocalypse', 'retro post-apocalypse', 'lone survivor / last hero', 'post-war ruins', 'desolate vacation noir', '1960s sci-fi'],
+    recommendedKlingVersion: '3.0-Omni',
+    tags: ['retro', 'apocalypse', 'atomic-punk', 'cinematic', 'photorealistic', 'premium'],
+    displayOrder: 30,
+    isActive: true,
+  },
 ];
 
 // 統計
 export const STATS = {
-  total: visualStyles.length, // 29
+  total: visualStyles.length, // 30 (2026-05-20: +atomic_punk_apocalypse)
   byCategory: {
     A: visualStyles.filter((s) => s.category === 'A').length, // 5
     B: visualStyles.filter((s) => s.category === 'B').length, // 6
@@ -689,6 +721,6 @@ export const STATS = {
     D: visualStyles.filter((s) => s.category === 'D').length, // 3
     E: visualStyles.filter((s) => s.category === 'E').length, // 3
     F: visualStyles.filter((s) => s.category === 'F').length, // 4
-    G: visualStyles.filter((s) => s.category === 'G').length, // 3
+    G: visualStyles.filter((s) => s.category === 'G').length, // 4 (2026-05-20)
   },
 };

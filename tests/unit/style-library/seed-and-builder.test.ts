@@ -2,7 +2,9 @@
  * Style library seed + prompt builder smoke tests.
  *
  * Locks in the contract from docs/style-library-seed/README.md:
- *   - 29 visual styles across 7 categories (A=5 B=6 C=5 D=3 E=3 F=4 G=3)
+ *   - 30 visual styles across 7 categories (A=5 B=6 C=5 D=3 E=3 F=4 G=4)
+ *     (G=4 since 2026-05-20 — added atomic_punk_apocalypse from user
+ *      reference cinematic prompt)
  *   - 8 lighting presets
  *   - prompt builder emits Style Bible per shot (no drift)
  *   - VOD request shape includes EnhancePrompt='Disabled' (Tencent
@@ -22,16 +24,29 @@ import {
 } from '@/lib/style-library'
 
 describe('style library seed', () => {
-  it('contains exactly 29 visual styles', () => {
-    expect(visualStyles).toHaveLength(29)
+  it('contains exactly 30 visual styles', () => {
+    expect(visualStyles).toHaveLength(30)
   })
 
-  it('splits styles into categories A=5 B=6 C=5 D=3 E=3 F=4 G=3', () => {
+  it('splits styles into categories A=5 B=6 C=5 D=3 E=3 F=4 G=4', () => {
     const byCategory = visualStyles.reduce<Record<string, number>>((acc, s) => {
       acc[s.category] = (acc[s.category] ?? 0) + 1
       return acc
     }, {})
-    expect(byCategory).toEqual({ A: 5, B: 6, C: 5, D: 3, E: 3, F: 4, G: 3 })
+    expect(byCategory).toEqual({ A: 5, B: 6, C: 5, D: 3, E: 3, F: 4, G: 4 })
+  })
+
+  it('includes the atomic_punk_apocalypse style imported from user reference prompt (2026-05-20)', () => {
+    const atomic = visualStyles.find((s) => s.id === 'atomic_punk_apocalypse')
+    expect(atomic, 'atomic_punk_apocalypse must exist in seed data').toBeDefined()
+    // Explicit anti-CG declaration on the POSITIVE prompt is the key
+    // technique borrowed from the reference prompt — Seedance 2.0's
+    // training set leaks CG content so negativePrompt suppression alone
+    // isn't always enough.
+    expect(atomic!.styleAnchor).toMatch(/NOT video game CG/i)
+    expect(atomic!.styleAnchor).toMatch(/anamorphic/i)
+    expect(atomic!.styleAnchor).toMatch(/IMAX/)
+    expect(atomic!.category).toBe('G')
   })
 
   it('contains exactly 8 lighting presets', () => {
