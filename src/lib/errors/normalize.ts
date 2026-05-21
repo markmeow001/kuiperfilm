@@ -64,6 +64,11 @@ function inferCodeFromMessage(message: string): UnifiedErrorCode | null {
     return explicitMatch[1]
   }
 
+  // 2026-05-21 — episode missing clips (bare Error thrown by
+  // script-to-storyboard worker when STEP 01 wasn't run yet). Matched
+  // BEFORE the generic 'not found' rule below — otherwise it'd
+  // resolve to NOT_FOUND which is also misleading.
+  if (containsAny(message, ['no clips found', 'no clips, please split'])) return 'EPISODE_NO_CLIPS'
   if (containsAny(message, ['task cancelled', 'canceled by user', 'cancelled by user', '任务已取消'])) return 'CONFLICT'
   if (containsAny(message, ['unauthorized', 'not authenticated', 'need login', '401'])) return 'UNAUTHORIZED'
   if (containsAny(message, ['forbidden', 'permission denied', '403'])) return 'FORBIDDEN'
@@ -135,7 +140,14 @@ export function normalizeAnyError(input: unknown, options: NormalizeOptions = {}
   }
 
   const resolvedCode = resolveUnifiedErrorCode(errorLike.code)
-  if (resolvedCode) {
+  // 2026-05-21 — INTERNAL_ERROR is the catch-all worker code used when
+  // the task layer fails to extract a specific code. Don't accept it
+  // verbatim — try message inference first; the message often carries
+  // enough signal to derive a more useful code (e.g. "No clips found"
+  // → EPISODE_NO_CLIPS). Only fall back to INTERNAL_ERROR if inference
+  // also fails. Other resolved codes (SENSITIVE_CONTENT, NOT_FOUND etc.)
+  // are trustworthy and used directly.
+  if (resolvedCode && resolvedCode !== 'INTERNAL_ERROR') {
     return buildNormalizedError(resolvedCode, message, {
       ...(typeof errorLike.details === 'object' && errorLike.details ? (errorLike.details as Record<string, unknown>) : {}),
       ...(options.details || {}),

@@ -6,6 +6,7 @@ export const USER_ERROR_MESSAGES_ZH: Record<UnifiedErrorCode, string> = {
   NOT_FOUND: '没有找到对应的数据。',
   INVALID_PARAMS: '请求参数不正确，请检查后重试。',
   MISSING_CONFIG: '系统配置不完整，请联系管理员。',
+  EPISODE_NO_CLIPS: '此集還沒有劇本切塊 — 請先到「劇本」步驟上傳或寫入劇本，等劇本分析完成後再回來分鏡。',
   CONFLICT: '当前状态冲突，请刷新后重试。',
   TASK_NOT_READY: '任务还在处理中，请稍后。',
   NO_RESULT: '任务已完成，但没有可用结果。',

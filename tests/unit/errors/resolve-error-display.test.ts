@@ -80,4 +80,31 @@ describe('resolveErrorDisplay — Prisma leak prevention (F-QA-1)', () => {
     expect(display?.code).toBe('SENSITIVE_CONTENT')
     expect(display?.message).toMatch(/敏感/)
   })
+
+  it('maps "No clips found" worker error to EPISODE_NO_CLIPS friendly message (2026-05-21)', () => {
+    // STEP 03 storyboard fails when STEP 01 script wasn't run yet:
+    // worker throws bare `Error('No clips found')`. Task layer wraps
+    // it as code=INTERNAL_ERROR + message='No clips found'. Without
+    // inference, V2 client shows "系统内部错误，请稍后重试" — misleading
+    // because retry never helps. With this inference rule,
+    // resolveErrorDisplay routes through EPISODE_NO_CLIPS code so
+    // user sees a targeted message pointing them to the script step.
+    const display = resolveErrorDisplay({
+      code: 'INTERNAL_ERROR',
+      message: 'No clips found',
+    })
+    expect(display?.code).toBe('EPISODE_NO_CLIPS')
+    expect(display?.message).toMatch(/劇本|剧本/)
+    // The friendly text must NOT be the generic 系统内部错误 string.
+    expect(display?.message).not.toMatch(/^系统内部错误/)
+    expect(display?.message).not.toMatch(/^系統內部錯誤/)
+  })
+
+  it('also catches screenplay-convert worker variant "No clips found, please split clips first"', () => {
+    const display = resolveErrorDisplay({
+      code: 'INTERNAL_ERROR',
+      message: 'No clips found, please split clips first',
+    })
+    expect(display?.code).toBe('EPISODE_NO_CLIPS')
+  })
 })

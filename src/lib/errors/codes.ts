@@ -45,6 +45,20 @@ export const ERROR_CATALOG = {
     userMessageKey: 'errors.MISSING_CONFIG',
     defaultMessage: 'Missing required configuration',
   },
+  // 2026-05-21 — surfaced when the user clicks "分析" on an episode
+  // (STEP 03 storyboard) before STEP 01 script + chunking has run.
+  // Pre-fix: the worker threw a bare Error('No clips found') which got
+  // generic-wrapped by V2's error scrubber into "系统内部错误，请稍后重
+  // 试" — misleading because retry never helps until the user adds a
+  // script. With this code, the V2 client routes to the targeted
+  // friendly message pointing them to the script step.
+  EPISODE_NO_CLIPS: {
+    httpStatus: 422,
+    retryable: false,
+    category: ERROR_CATEGORY.VALIDATION,
+    userMessageKey: 'errors.EPISODE_NO_CLIPS',
+    defaultMessage: 'Episode has no clips yet — add a script first',
+  },
   CONFLICT: {
     httpStatus: 409,
     retryable: false,
