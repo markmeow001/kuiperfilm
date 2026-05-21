@@ -142,6 +142,17 @@ export interface GroupRegenOverrides {
   // multi-shot mode in the worker so each panel slice gets its own
   // duration anchor in Kling Omni's multi_prompt array.
   panelDurations?: number[]
+  // Phase P (2026-05-21) — user's intended TOTAL duration as a single
+  // scalar, forwarded EVEN WHEN sendRaw=true. Pre-Phase-P, picking 15s
+  // + editing the narrative caused frontend to omit panelDurations (so
+  // BobAPI/Tencent customize mode wouldn't silently drop rawPrompt) →
+  // worker fell back to dialogue-driven or panel*2.5 baseline → user
+  // saw 10-13s instead of the 15s they picked. totalDurationSeconds
+  // works AROUND that omission: it's an explicit "user wants N seconds
+  // total" signal that workers can use as a tier-1.5 fallback between
+  // the explicit panelDurations[] and the dialogue-driven heuristic.
+  // 0 means AUTO (let worker decide); omitted is treated the same as 0.
+  totalDurationSeconds?: number
   // 2026-05-13 — Option B: 首幀鎖定 / 首尾鎖定 mode.
   // When firstFrameImageUrl is set, worker switches to Kling 3.0 i2v
   // single-shot path: FileInfos[Usage='FirstFrame'] + optional
@@ -1355,6 +1366,11 @@ export function GroupCard({
         : panelDurations
           ? { panelDurations }
           : {}),
+      // Phase P (2026-05-21) — ALWAYS forward the user's intended total
+      // even when sendRaw=true and panelDurations is omitted. Workers
+      // use this as a tier-1.5 fallback so "選 15s + 編 narrative" no
+      // longer drops to 10-13s baseline. 0 = AUTO (unchanged behavior).
+      ...(totalDurationDraft > 0 ? { totalDurationSeconds: totalDurationDraft } : {}),
       characterOverrides: Object.entries(characterOverrides)
         .filter(([, app]) => app !== undefined)
         .map(([characterId, appearanceId]) =>

@@ -43,13 +43,15 @@ describe('AtlasCloud composite duration priority (Phase M)', () => {
     expect(src).toMatch(/import \{ extractSpokenLineFromSrtSegment \}/)
   })
 
-  it('three-tier duration priority: panelDurations > dialogueDriven > baseline', () => {
-    // The if/else chain must check panelDurations FIRST. If we ever
-    // reorder (e.g. dialogue-driven beats explicit override), user's
-    // 时长 dropdown selection gets silently ignored — that was exactly
-    // the pre-Phase-M bug.
-    expect(src).toMatch(/durationSource: 'panelDurations' \| 'dialogueDriven' \| 'baseline'/)
+  it('four-tier duration priority: panelDurations > totalDurationSeconds > dialogueDriven > baseline', () => {
+    // The if/else chain must check panelDurations FIRST, then Phase P's
+    // totalDurationSeconds atomic override, then dialogue-driven, then
+    // baseline. If we ever reorder, user's 时长 dropdown selection gets
+    // silently ignored — exactly the bug Phase M / Phase P were added
+    // to fix.
+    expect(src).toMatch(/durationSource: 'panelDurations' \| 'totalDurationSeconds' \| 'dialogueDriven' \| 'baseline'/)
     expect(src).toMatch(/durationSource = 'panelDurations'/)
+    expect(src).toMatch(/durationSource = 'totalDurationSeconds'/)
     expect(src).toMatch(/durationSource = 'dialogueDriven'/)
     expect(src).toMatch(/durationSource = 'baseline'/)
   })
@@ -95,5 +97,19 @@ describe('AtlasCloud composite duration priority (Phase M)', () => {
     expect(src).toMatch(/try \{\s*\n\s*driven = buildDialogueDrivenDurations/)
     expect(src).toMatch(/catch \(err\)/)
     expect(src).toMatch(/falling back to baseline/)
+  })
+
+  it('totalDurationSeconds (Phase P) sits between panelDurations and dialogue-driven', () => {
+    // The if/else if chain MUST check (1) panelDurations, then (1.5)
+    // totalDurationSeconds, then (2) dialogue-driven, then (3) baseline.
+    // Reordering — e.g. dialogue-driven before totalDurationSeconds —
+    // silently drops the user's explicit 15s pick under sendRaw=true
+    // (the exact bug Phase P was added to fix).
+    expect(src).toMatch(/durationSource: 'panelDurations' \| 'totalDurationSeconds' \| 'dialogueDriven' \| 'baseline'/)
+    expect(src).toMatch(/durationSource = 'totalDurationSeconds'/)
+    // The totalDurationSeconds branch sits IMMEDIATELY after panelDurations
+    // — re-ordering this with an else-if for dialogue would put the
+    // dialogue tier above explicit user pick, also a regression.
+    expect(src).toMatch(/durationSource = 'panelDurations'[\s\S]*?else if[\s\S]*?totalDurationSeconds[\s\S]*?durationSource = 'totalDurationSeconds'/)
   })
 })

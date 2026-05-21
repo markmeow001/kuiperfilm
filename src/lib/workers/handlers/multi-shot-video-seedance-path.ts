@@ -449,6 +449,10 @@ export async function runMultiShotSeedanceComposite(params: {
    *  caller override Seedance's panel-count heuristic when the prompt
    *  was built around specific shot lengths. Clamped to 4-15s total. */
   panelDurations?: number[]
+  /** Phase P (2026-05-21) — atomic total-duration override. Forwarded
+   *  even when panelDurations is omitted (sendRaw=true narrative-edit
+   *  path). Honours user's explicit 15s pick under that gate. */
+  totalDurationSeconds?: number
   /**
    * 2026-05-18 — per-group curated style override (Phase E parity with
    * b-path). When set, wins over project.visualStyleId in
@@ -567,13 +571,17 @@ export async function runMultiShotSeedanceComposite(params: {
   // Duration priority:
   //   1. sum(panelDurations) when caller supplied per-shot timings
   //      (UI's "對白驅動每鏡時長" mode). Clamped to BobAPI 4-15s range.
+  //   1.5 (Phase P, 2026-05-21) params.totalDurationSeconds — atomic
+  //       override forwarded by frontend even when panelDurations is
+  //       omitted (sendRaw=true narrative-edit path). Honours user's
+  //       explicit 15s pick under that gate.
   //   2. Panel-count × 2s baseline (5 panels → 10s), clamped 4-15s.
-  //      Old formula `4 + ceil(refCount * 1.5)` under-counted for groups
-  //      with 1 ref + 5 panels (gave 6s for a 5-shot story).
   let duration: number
   if (params.panelDurations && params.panelDurations.length > 0) {
     const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
+  } else if (typeof params.totalDurationSeconds === 'number' && params.totalDurationSeconds > 0) {
+    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(params.totalDurationSeconds)))
   } else {
     const baseline = Math.round(usedPanels.length * 2)
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))

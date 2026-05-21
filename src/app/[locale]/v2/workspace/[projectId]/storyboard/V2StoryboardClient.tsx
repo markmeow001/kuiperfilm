@@ -1495,6 +1495,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             ) {
               body.panelDurations = overrides.panelDurations
             }
+            // Phase P (2026-05-21) — totalDurationSeconds atomic field.
+            // Forwarded EVEN WHEN panelDurations is omitted (sendRaw path).
+            // Workers use as tier-1.5 fallback so user's 15s pick survives
+            // the narrative-edit gate.
+            if (
+              typeof overrides.totalDurationSeconds === 'number'
+              && Number.isFinite(overrides.totalDurationSeconds)
+              && overrides.totalDurationSeconds > 0
+            ) {
+              body.totalDurationSeconds = overrides.totalDurationSeconds
+            }
             // 2026-05-13 — Option B 首幀鎖定. When set, worker switches
             // to Kling 3.0 i2v single-shot path and drops multi_shot.
             if (overrides.firstFrameImageUrl) {

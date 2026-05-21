@@ -258,6 +258,9 @@ export async function runMultiShotFalComposite(params: {
   aspectRatio: string | undefined
   rawPrompt?: string
   panelDurations?: number[]
+  /** Phase P (2026-05-21) — atomic total-duration override; see
+   *  atlascloud-path for full rationale. */
+  totalDurationSeconds?: number
   visualStyleId?: string
 }): Promise<{
   storyboardId: string
@@ -414,13 +417,16 @@ export async function runMultiShotFalComposite(params: {
     .filter((s) => s.length > 0)
     .join('\n\n')
 
-  // Duration — same 3-tier priority as AtlasCloud (Phase M).
+  // Duration — same priority chain as AtlasCloud (Phase M + Phase P).
   let duration: number
-  let durationSource: 'panelDurations' | 'dialogueDriven' | 'baseline'
+  let durationSource: 'panelDurations' | 'totalDurationSeconds' | 'dialogueDriven' | 'baseline'
   if (params.panelDurations && params.panelDurations.length > 0) {
     const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
     durationSource = 'panelDurations'
+  } else if (typeof params.totalDurationSeconds === 'number' && params.totalDurationSeconds > 0) {
+    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(params.totalDurationSeconds)))
+    durationSource = 'totalDurationSeconds'
   } else {
     const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
     for (const panel of usedPanels) {

@@ -253,6 +253,31 @@ export const POST = apiHandler(async (
     panelDurations = arr
   }
 
+  // Phase P (2026-05-21) — totalDurationSeconds: user's intended TOTAL
+  // duration as a single scalar. Forwarded by the frontend even when
+  // panelDurations is omitted (sendRaw=true narrative edit path). Workers
+  // use as tier-1.5 fallback between explicit panelDurations.sum and
+  // dialogue-driven heuristic. Range mirrors panelDurations.sum: 5-15.
+  let totalDurationSeconds: number | undefined
+  if (body.totalDurationSeconds !== undefined) {
+    const n = body.totalDurationSeconds
+    if (typeof n !== 'number' || !Number.isFinite(n)) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'TOTAL_DURATION_INVALID',
+        field: 'totalDurationSeconds',
+        details: { message: 'totalDurationSeconds must be a finite number' },
+      })
+    }
+    if (n < 5 || n > 15) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'TOTAL_DURATION_OUT_OF_RANGE',
+        field: 'totalDurationSeconds',
+        details: { value: n, min: 5, max: 15 },
+      })
+    }
+    totalDurationSeconds = Math.round(n)
+  }
+
   // Phase E (2026-05-15) — per-group curated style override.
   // Optional, sentinel by absence: when provided, wins over
   // project.visualStyleId in the worker's resolveProjectVisualStyle.
@@ -357,6 +382,7 @@ export const POST = apiHandler(async (
       aspectRatio: typeof body.aspectRatio === 'string' ? body.aspectRatio : undefined,
       ...(multiShotMode ? { multiShotMode } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(promptStyle ? { promptStyle } : {}),
       ...(characterOverrides ? { characterOverrides } : {}),

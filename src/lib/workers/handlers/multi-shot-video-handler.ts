@@ -98,6 +98,16 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     && (payload.panelDurations as unknown[]).every((d) => typeof d === 'number')
     ? (payload.panelDurations as number[])
     : undefined
+  // Phase P (2026-05-21) — atomic total-duration override. Forwarded by
+  // the frontend even when panelDurations is omitted (sendRaw=true
+  // narrative-edit path). Workers use as tier-1.5 fallback to honour
+  // the user's explicit 15s pick under that gate. Range 5-15 enforced
+  // by the API route; worker re-clamps defensively.
+  const totalDurationSeconds = typeof payload.totalDurationSeconds === 'number'
+    && Number.isFinite(payload.totalDurationSeconds)
+    && payload.totalDurationSeconds > 0
+    ? Math.max(4, Math.min(15, Math.round(payload.totalDurationSeconds as number)))
+    : undefined
   // Optional caller-supplied prompt that bypasses panel concatenation
   // in intelligence mode (Seedance-style 5-element 15s segment).
   const rawPrompt = typeof payload.rawPrompt === 'string' && payload.rawPrompt.trim()
@@ -231,6 +241,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
       // 2026-05-18 — per-group curated visual style override mirrors the
       // b-path. Worker uses it to source negativePrompt (and, in due
       // course, style anchor) when overriding the project default.
@@ -254,6 +265,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       aspectRatio,
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
       ...(visualStyleId ? { visualStyleId } : {}),
     })
   }
@@ -273,6 +285,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       aspectRatio,
       ...(rawPrompt ? { rawPrompt } : {}),
       ...(panelDurations ? { panelDurations } : {}),
+      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
       ...(visualStyleId ? { visualStyleId } : {}),
     })
   }

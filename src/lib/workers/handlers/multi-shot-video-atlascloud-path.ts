@@ -329,6 +329,11 @@ export async function runMultiShotAtlasCloudComposite(params: {
   aspectRatio: string | undefined
   rawPrompt?: string
   panelDurations?: number[]
+  /** Phase P (2026-05-21) — user's intended total duration (5-15s).
+   *  Forwarded even when panelDurations is omitted (sendRaw=true gate).
+   *  Used as tier-1.5 fallback before dialogue-driven heuristic.
+   *  Pre-clamped by the dispatcher; worker re-clamps defensively. */
+  totalDurationSeconds?: number
   /** Per-group curated visual style override (Phase E parity with
    *  Kling B-path and BobAPI seedance-path). When set, wins over
    *  project.visualStyleId in resolveProjectVisualStyle. */
@@ -519,23 +524,26 @@ export async function runMultiShotAtlasCloudComposite(params: {
   // Priority:
   //   1. params.panelDurations — explicit user override (UI 时长 dropdown
   //      sets 5/10/15; sum is what user picked). Frontend OMITS this when
-  //      sendRaw=true (narrativeDirty), so we fall through to dialogue-
-  //      driven below.
+  //      sendRaw=true (narrativeDirty), so we fall through.
+  //   1.5 (Phase P, 2026-05-21) params.totalDurationSeconds — atomic
+  //      override forwarded by frontend EVEN when sendRaw=true. Honours
+  //      "user picked 15s + edited narrative" without bringing back
+  //      panelDurations (which BobAPI/Tencent customize mode would have
+  //      caused to silently drop rawPrompt).
   //   2. buildDialogueDrivenDurations() — mirrors BobAPI / Kling b-path's
   //      heuristic: estimate speech seconds from panel.srtSegment, allocate
   //      per-panel airtime, sum the total. Returns null when NO panel has
   //      dialogue → fall through to baseline.
   //   3. Generous baseline — Math.max(10, panel_count * 2.5). Capped 4-15.
-  //      Pre-Phase-M baseline was panel_count * 2 which produced 6-8s for
-  //      3-4 panel groups and triggered user complaint "選 15s 但出來 6-8s".
-  //      The new floor of 10s aligns with "most short-drama groups want
-  //      10-15s, never want < 8s" for cinematic pacing.
   let duration: number
-  let durationSource: 'panelDurations' | 'dialogueDriven' | 'baseline'
+  let durationSource: 'panelDurations' | 'totalDurationSeconds' | 'dialogueDriven' | 'baseline'
   if (params.panelDurations && params.panelDurations.length > 0) {
     const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
     durationSource = 'panelDurations'
+  } else if (typeof params.totalDurationSeconds === 'number' && params.totalDurationSeconds > 0) {
+    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(params.totalDurationSeconds)))
+    durationSource = 'totalDurationSeconds'
   } else {
     // Build dialogueByPanel from srtSegment (same source b-path uses).
     const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
