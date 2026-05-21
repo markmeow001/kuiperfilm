@@ -1374,6 +1374,80 @@
   },
   {
     "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.0-r2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.0-fast-r2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
     "provider": "tencent-vod",
     "modelId": "Kling-1.6",
     "capabilities": {

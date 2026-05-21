@@ -69,16 +69,20 @@ describe('VIDEO_MODEL_VARIANTS catalog', () => {
     expect(isMultiShotCapable('taijiai::seedance-2.0-720p')).toBe(true)
   })
 
-  it('AtlasCloud Seedance 2.0 variants do NOT support multi-shot composite', () => {
-    // AtlasCloud bound only t2v + i2v endpoints (no reference-to-video
-    // composite path), so all 4 stay out of the 多鏡頭 gate. Flipping
-    // any of these to true silently breaks the 多鏡頭 button — to enable
-    // it we'd need to bind reference-to-video AND wire a worker composite
-    // path mirroring multi-shot-video-seedance-path.
-    expect(isMultiShotCapable('atlascloud::seedance-2.0-t2v')).toBe(false)
-    expect(isMultiShotCapable('atlascloud::seedance-2.0-i2v')).toBe(false)
-    expect(isMultiShotCapable('atlascloud::seedance-2.0-fast-t2v')).toBe(false)
-    expect(isMultiShotCapable('atlascloud::seedance-2.0-fast-i2v')).toBe(false)
+  it('AtlasCloud Seedance 2.0 variants support multi-shot (model capability, prompt-encoded)', () => {
+    // 2026-05-20 — Seedance 2.0 multi-shot is a MODEL capability, not an
+    // endpoint capability. The model parses "第一鏡：… 第二鏡：…" shot
+    // breakdowns in the prompt and produces one composite mp4 with
+    // internal transitions. All 6 variants (t2v/i2v/r2v × std/fast)
+    // share this capability — the endpoints only differ in what gets
+    // anchored (no image / one image / 1-9 ref images).
+    // Worker routes these through multi-shot-video-atlascloud-path.
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-t2v')).toBe(true)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-i2v')).toBe(true)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-r2v')).toBe(true)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-fast-t2v')).toBe(true)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-fast-i2v')).toBe(true)
+    expect(isMultiShotCapable('atlascloud::seedance-2.0-fast-r2v')).toBe(true)
   })
 
   it('AtlasCloud Seedance 2.0 variants are registered and resolvable', () => {
@@ -87,8 +91,10 @@ describe('VIDEO_MODEL_VARIANTS catalog', () => {
     // show "目前模型不在清單中".
     expect(getVideoModelVariant('atlascloud::seedance-2.0-t2v')?.family).toBe('seedance')
     expect(getVideoModelVariant('atlascloud::seedance-2.0-i2v')?.family).toBe('seedance')
+    expect(getVideoModelVariant('atlascloud::seedance-2.0-r2v')?.family).toBe('seedance')
     expect(getVideoModelVariant('atlascloud::seedance-2.0-fast-t2v')?.family).toBe('seedance')
     expect(getVideoModelVariant('atlascloud::seedance-2.0-fast-i2v')?.family).toBe('seedance')
+    expect(getVideoModelVariant('atlascloud::seedance-2.0-fast-r2v')?.family).toBe('seedance')
   })
 
   it('every Kling variant supports multi-shot (the only family that does today)', () => {

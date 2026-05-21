@@ -146,11 +146,14 @@ export const PRESET_MODELS: PresetModel[] = [
     // AtlasCloud 视频模型
     { modelId: 'seedance-v1.5-pro', name: 'Seedance v1.5 Pro', type: 'video', provider: 'atlascloud' },
     { modelId: 'wan-2.6', name: 'Wan 2.6 Flash', type: 'video', provider: 'atlascloud' },
-    // 2026-05-20 — AtlasCloud Seedance 2.0（4 變體：t2v / i2v × standard / fast，原生 audio，480p/720p，4-15s）
+    // 2026-05-20 — AtlasCloud Seedance 2.0（6 變體：t2v / i2v / r2v × standard / fast，
+    // 原生 audio，480p/720p/1080p，4-15s，multi-shot 由 prompt 編碼）
     { modelId: 'seedance-2.0-t2v', name: 'Seedance 2.0 T2V (AtlasCloud · audio)', type: 'video', provider: 'atlascloud' },
     { modelId: 'seedance-2.0-i2v', name: 'Seedance 2.0 I2V (AtlasCloud · audio)', type: 'video', provider: 'atlascloud' },
+    { modelId: 'seedance-2.0-r2v', name: 'Seedance 2.0 R2V (AtlasCloud · 9-ref)', type: 'video', provider: 'atlascloud' },
     { modelId: 'seedance-2.0-fast-t2v', name: 'Seedance 2.0 Fast T2V (AtlasCloud · audio)', type: 'video', provider: 'atlascloud' },
     { modelId: 'seedance-2.0-fast-i2v', name: 'Seedance 2.0 Fast I2V (AtlasCloud · audio)', type: 'video', provider: 'atlascloud' },
+    { modelId: 'seedance-2.0-fast-r2v', name: 'Seedance 2.0 Fast R2V (AtlasCloud · 9-ref cheap)', type: 'video', provider: 'atlascloud' },
 
     // Vidu 视频模型
     { modelId: 'viduq3-pro', name: 'Vidu Q3 Pro', type: 'video', provider: 'vidu' },

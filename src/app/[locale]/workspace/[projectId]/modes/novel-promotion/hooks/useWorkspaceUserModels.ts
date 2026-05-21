@@ -35,8 +35,10 @@ export function useWorkspaceUserModels() {
         m.value === 'atlascloud::wan-2.6' ||
         m.value === 'atlascloud::seedance-2.0-t2v' ||
         m.value === 'atlascloud::seedance-2.0-i2v' ||
+        m.value === 'atlascloud::seedance-2.0-r2v' ||
         m.value === 'atlascloud::seedance-2.0-fast-t2v' ||
-        m.value === 'atlascloud::seedance-2.0-fast-i2v'
+        m.value === 'atlascloud::seedance-2.0-fast-i2v' ||
+        m.value === 'atlascloud::seedance-2.0-fast-r2v'
     )
     return allowed.length > 0 ? allowed : userModelsForSettings.video
   }, [userModelsForSettings])

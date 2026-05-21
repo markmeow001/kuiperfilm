@@ -5,6 +5,7 @@ import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { runMultiShotBPath } from './multi-shot-video-b-path'
 import { runMultiShotSeedanceComposite, shouldUseSeedanceComposite } from './multi-shot-video-seedance-path'
+import { runMultiShotAtlasCloudComposite, shouldUseAtlasCloudComposite } from './multi-shot-video-atlascloud-path'
 import {
   parsePanelCharacterReferences,
   findCharacterByName,
@@ -161,6 +162,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   const useBPath = shouldUseTencentBPath(videoModel)
   const useSeedanceComposite = shouldUseSeedanceComposite(videoModel)
+  const useAtlasCloudComposite = shouldUseAtlasCloudComposite(videoModel)
 
   await reportTaskProgress(job, 5, { stage: 'load_panels' })
 
@@ -198,7 +200,9 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     // text-only panels too: it falls back to project character/scene
     // catalog images as content[] references and runs in BobAPI's pure
     // t2v mode when no panel has an image yet.
-    if (!useBPath && !useSeedanceComposite && !panels[i]!.imageUrl) {
+    // AtlasCloud composite t2v + r2v also tolerate panels without imageUrl
+    // (t2v ignores all images; r2v uses character / scene refs as fallback).
+    if (!useBPath && !useSeedanceComposite && !useAtlasCloudComposite && !panels[i]!.imageUrl) {
       throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
     }
   }
@@ -229,6 +233,24 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       // course, style anchor) when overriding the project default.
       ...(visualStyleId ? { visualStyleId } : {}),
       ...(lightingPresetId ? { lightingPresetId } : {}),
+    })
+  }
+
+  // ─────────────── ATLASCLOUD COMPOSITE PATH ───────────────
+  // AtlasCloud Seedance 2.0 — t2v / i2v / r2v variants. Multi-shot is
+  // a model capability (encoded in prompt: "第一鏡：… 第二鏡：…"),
+  // not an endpoint capability. Mode picked by slug suffix.
+  if (useAtlasCloudComposite) {
+    await reportTaskProgress(job, 15, { stage: 'atlascloud_composite_start' })
+    return await runMultiShotAtlasCloudComposite({
+      job,
+      projectId,
+      validPanels,
+      videoModel,
+      sound,
+      aspectRatio,
+      ...(rawPrompt ? { rawPrompt } : {}),
+      ...(panelDurations ? { panelDurations } : {}),
     })
   }
 
