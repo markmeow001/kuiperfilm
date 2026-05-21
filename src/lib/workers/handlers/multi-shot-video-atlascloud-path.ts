@@ -11,15 +11,24 @@
  *   "第一鏡：…  第二鏡：…  第三鏡：…"
  *
  * Each endpoint takes a different anchor type:
- *   - text-to-video       (t2v): no images, pure prompt-driven
- *   - image-to-video      (i2v): one first_frame image + prompt
- *   - reference-to-video  (r2v): 1-9 reference_images[] + prompt
- *                                (refs cited as "image 1" / "image 2")
+ *   - text-to-video       (t2v): NO image inputs at all. Identity is
+ *                                anchored via INLINE descriptions in
+ *                                the prompt ("Karrug — 戴眼罩的部落
+ *                                祭司，黑髮黑鬚，紋面…").
+ *   - image-to-video      (i2v): one first_frame image + prompt. Other
+ *                                refs still get inlined as text since
+ *                                the API only takes one image slot.
+ *   - reference-to-video  (r2v): 1-9 reference_images[] + prompt. Refs
+ *                                cited as "image 1" / "image 2".
  *
- * Picker exposes all 4 (t2v / i2v × std / fast) plus 2 r2v variants.
- * User picks per scene: t2v for purely text-driven scenes, i2v when
- * a single anchor image is enough, r2v when multiple character /
- * scene anchors are needed.
+ * Refs sourced through the shared collector (char + scene + prop):
+ * see multi-shot-ref-collection.ts. Caps mirror BobAPI seedance-path:
+ *   - characters: 4
+ *   - scenes:     2
+ *   - props:      3   (NEW — BobAPI seedance composite never collected
+ *                      props; that path's refs are characters + scenes
+ *                      only. Atlascloud r2v has slot headroom so we
+ *                      include props.)
  *
  * Output: ONE composite mp4 stored as the storyboard's
  * `multiShotVideoUrl` + single-element `multiShotClipUrls`. Same
@@ -41,16 +50,17 @@ import { reportTaskProgress } from '../shared'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
+import { resolveNovelData } from './image-task-handler-shared'
 import {
-  findCharacterByName,
-  parsePanelCharacterReferences,
-  parseImageUrls,
-  resolveNovelData,
-} from './image-task-handler-shared'
+  collectCharacterRefs,
+  collectSceneRefs,
+  collectPropRefs,
+  type CharacterRef,
+  type SceneRef,
+  type PropRef,
+} from './multi-shot-ref-collection'
 
 const MAX_REFERENCE_IMAGES = 9
-const MAX_CHARACTER_REFS = 4
-const MAX_SCENE_REFS = 2
 const MIN_DURATION_SEC = 4
 const MAX_DURATION_SEC = 15
 
@@ -60,34 +70,21 @@ interface PanelLite {
   description: string | null
   videoPrompt: string | null
   characters: string | null
+  /** panel.props JSON — used by collectPropRefs. */
+  props: string | null
   location: string | null
   srtSegment: string | null
   storyboardId: string
 }
 
-interface CharacterRef {
-  id: string
-  name: string
-  imageUrl: string
-}
-
-interface SceneRef {
-  id: string
-  name: string
-  imageUrl: string
-}
-
 /**
  * True when this videoModel routes to AtlasCloud composite (any of the
- * 6 Seedance 2.0 variants — t2v / i2v / r2v × std / fast). Used by
- * the dispatcher in multi-shot-video-handler.ts.
+ * 6 Seedance 2.0 variants — t2v / i2v / r2v × std / fast).
  */
 export function shouldUseAtlasCloudComposite(videoModel: string): boolean {
   const parsed = parseModelKeyStrict(videoModel)
   if (!parsed) return false
   if (parsed.provider !== 'atlascloud') return false
-  // Only Seedance 2.0 line supports multi-shot. v1.5-pro / wan-2.6
-  // stay single-shot only.
   return /^seedance-2\.0/.test(parsed.modelId)
 }
 
@@ -96,22 +93,139 @@ type ModeKey = 't2v' | 'i2v' | 'r2v'
 function classifyMode(modelId: string): ModeKey {
   if (modelId.endsWith('-r2v')) return 'r2v'
   if (modelId.endsWith('-t2v')) return 't2v'
-  return 'i2v' // default for -i2v slugs and anything else
+  return 'i2v'
 }
 
 /**
- * Assemble multi-shot prompt from panel descriptions in shot order.
- * For r2v we also tell the model "image N" maps to character / scene
- * references in the same order they're sent.
+ * Fetch character description from project catalog for inline-anchor
+ * text injection. Used by t2v / i2v modes where we cannot pass the
+ * actual reference image — embedding the look-description into the
+ * prompt is the only way to anchor identity.
+ *
+ * Returns the appearance.changeReason (which carries the curated
+ * visual description) when present, otherwise falls back to
+ * character.description (looser blurb). Empty string if neither.
+ */
+function describeCharacterForPrompt(
+  ref: CharacterRef,
+  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+): string {
+  // CharacterLike on the shared type intentionally narrows away
+  // `description` (image handlers don't need it); the prisma include
+  // carries it at runtime — cast like b-path does for similar cases.
+  const characters = projectData.characters as unknown as Array<{
+    id: string
+    name: string
+    description?: string | null
+    appearances?: Array<{ changeReason?: string | null }>
+  }> | undefined
+  const c = (characters ?? []).find((x) => x.id === ref.id)
+  if (!c) return ''
+  const appearance = c.appearances?.[0]
+  const blurb = (appearance?.changeReason || c.description || '').trim()
+  return blurb
+}
+
+function describeSceneForPrompt(
+  ref: SceneRef,
+  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+): string {
+  const locations = projectData.locations as unknown as Array<{
+    id: string
+    name: string
+    description?: string | null
+  }> | undefined
+  const loc = locations?.find((x) => x.id === ref.id)
+  return (loc?.description || '').trim()
+}
+
+function describePropForPrompt(
+  ref: PropRef,
+  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+): string {
+  const propsCatalog = projectData.props as unknown as Array<{
+    id: string
+    name: string
+    summary?: string | null
+    description?: string | null
+  }> | undefined
+  const prop = propsCatalog?.find((x) => x.id === ref.id)
+  // Prefer human-facing summary; fall back to AI prompt description.
+  return (prop?.summary || prop?.description || '').trim()
+}
+
+/**
+ * Build a single multi-shot prompt for Seedance 2.0.
+ *
+ * Layout:
+ *   [INLINE ANCHORS]    Character / scene / prop descriptions inlined
+ *                       so t2v / i2v can still anchor identity even
+ *                       without (enough) image slots. r2v also keeps
+ *                       this so the @image-N markers + description
+ *                       work together.
+ *   [REF MAP]           r2v only — explicit "image 1 = 角色 X" mapping
+ *                       so the model knows which slot is which.
+ *   [SHOTS]             "第N鏡：{videoPrompt} [對白：{srt}]" lines.
+ *   [AUDIO DIRECTIVE]   TTS-on if any panel has dialogue, ambient-only
+ *                       otherwise.
  */
 function buildAtlasCloudPrompt(
   panels: PanelLite[],
-  refLabels: string[],
   mode: ModeKey,
+  characterRefs: CharacterRef[],
+  sceneRefs: SceneRef[],
+  propRefs: PropRef[],
+  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
+  /** Ordered refs used as reference_images[] for r2v mode. */
+  r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }>,
 ): { prompt: string; dialogueBeatCount: number } {
+  const sections: string[] = []
+
+  // ── INLINE ANCHORS ──
+  // Char / scene / prop descriptions. These are TEXT-LEVEL identity
+  // hooks; they work in all 3 modes. r2v additionally pushes the
+  // images themselves, but text descriptions stay so the model has
+  // both anchors (visual + linguistic).
+  const anchorLines: string[] = []
+  if (characterRefs.length > 0) {
+    for (const c of characterRefs) {
+      const desc = describeCharacterForPrompt(c, projectData)
+      anchorLines.push(desc ? `角色「${c.name}」：${desc}` : `角色「${c.name}」`)
+    }
+  }
+  if (sceneRefs.length > 0) {
+    for (const s of sceneRefs) {
+      const desc = describeSceneForPrompt(s, projectData)
+      anchorLines.push(desc ? `場景「${s.name}」：${desc}` : `場景「${s.name}」`)
+    }
+  }
+  if (propRefs.length > 0) {
+    for (const p of propRefs) {
+      const desc = describePropForPrompt(p, projectData)
+      anchorLines.push(desc ? `道具「${p.name}」：${desc}` : `道具「${p.name}」`)
+    }
+  }
+  if (anchorLines.length > 0) {
+    sections.push(anchorLines.join('\n'))
+  }
+
+  // ── REF MAP (r2v only) ──
+  if (mode === 'r2v' && r2vRefOrder.length > 0) {
+    const mapLines = r2vRefOrder.map((entry, i) => {
+      const label =
+        entry.kind === 'char'
+          ? `角色「${entry.ref.name}」`
+          : entry.kind === 'scene'
+            ? `場景「${entry.ref.name}」`
+            : `道具「${entry.ref.name}」`
+      return `image ${i + 1} = ${label}`
+    })
+    sections.push(`參考圖對應：\n${mapLines.join('\n')}`)
+  }
+
+  // ── SHOTS ──
   const shotLines: string[] = []
   let dialogueBeatCount = 0
-
   for (let i = 0; i < panels.length; i++) {
     const panel = panels[i]
     const shotNum = i + 1
@@ -121,99 +235,21 @@ function buildAtlasCloudPrompt(
 
     const parts: string[] = []
     parts.push(`第${shotNum}鏡：${desc || '(無描述)'}`)
-    if (dialogue) {
-      parts.push(`對白：${dialogue}`)
-    }
+    if (dialogue) parts.push(`對白：${dialogue}`)
     shotLines.push(parts.join(' '))
   }
+  sections.push(shotLines.join('\n'))
 
-  const header: string[] = []
-  if (mode === 'r2v' && refLabels.length > 0) {
-    // Tell the model how the numbered refs map to subjects.
-    header.push(
-      `參考圖對應：${refLabels.map((l, i) => `image ${i + 1} = ${l}`).join('；')}`,
-    )
-  }
-
+  // ── AUDIO DIRECTIVE ──
   const audioDirective =
     dialogueBeatCount > 0
-      ? '依對白生成同步語音，背景音樂與環境音適配劇情。'
-      : '依劇情生成環境音與適配背景音樂，無對白。'
+      ? '音頻：原生輸出雙聲道，按上述對白逐字配音（語氣、停頓、情緒與角色一致），'
+        + '唇形與配音嚴格同步；背景疊加場景對應的環境音；無字幕、無 logo、無屏幕信息。'
+      : '音頻：輸出場景對應的環境音與適配背景音樂，本組無對白請勿合成說話聲；'
+        + '畫面無字幕、無 logo、無屏幕信息。'
+  sections.push(audioDirective)
 
-  const prompt = [
-    ...header,
-    ...shotLines,
-    audioDirective,
-  ].join('\n')
-
-  return { prompt, dialogueBeatCount }
-}
-
-/** Walk panels and collect unique character refs (mirrors BobAPI path). */
-function collectCharacterRefs(
-  panels: PanelLite[],
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
-  episodeBindings: Map<string, string>,
-): CharacterRef[] {
-  const refs: CharacterRef[] = []
-  const seenIds = new Set<string>()
-  for (const panel of panels) {
-    if (refs.length >= MAX_CHARACTER_REFS) break
-    const charRefs = parsePanelCharacterReferences(panel.characters)
-    for (const ref of charRefs) {
-      if (refs.length >= MAX_CHARACTER_REFS) break
-      const character = findCharacterByName(projectData.characters || [], ref.name)
-      if (!character) continue
-      if (seenIds.has(character.id)) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
-      if (!appearance) continue
-      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
-      const selectedIndex = appearance.selectedIndex
-      const selectedUrl =
-        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
-      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
-      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
-      if (!publicUrl) continue
-      seenIds.add(character.id)
-      refs.push({ id: character.id, name: ref.name, imageUrl: publicUrl })
-    }
-  }
-  return refs
-}
-
-/** Walk panels and collect unique scene refs. */
-function collectSceneRefs(
-  panels: PanelLite[],
-  projectData: Awaited<ReturnType<typeof resolveNovelData>>,
-): SceneRef[] {
-  const refs: SceneRef[] = []
-  const seenIds = new Set<string>()
-  for (const panel of panels) {
-    if (refs.length >= MAX_SCENE_REFS) break
-    if (!panel.location) continue
-    const locName = panel.location.trim()
-    if (!locName) continue
-    for (const loc of projectData.locations ?? []) {
-      if (seenIds.has(loc.id)) continue
-      if (loc.name !== locName) continue
-      const views = loc.views ?? []
-      const view = views[0]
-      if (!view) continue
-      const imageKey = view.imageUrl
-      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
-      if (!publicUrl) continue
-      seenIds.add(loc.id)
-      refs.push({ id: loc.id, name: loc.name, imageUrl: publicUrl })
-      break
-    }
-  }
-  return refs
+  return { prompt: sections.join('\n\n'), dialogueBeatCount }
 }
 
 export async function runMultiShotAtlasCloudComposite(params: {
@@ -237,6 +273,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
   bindings: {
     characters: Array<{ id: string; name: string; imageUrl: string }>
     scenes: Array<{ id: string; name: string; imageUrl: string }>
+    props: Array<{ id: string; name: string; imageUrl: string }>
   }
 }> {
   const { job, projectId, validPanels, videoModel } = params
@@ -260,7 +297,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
 
   await reportTaskProgress(job, 12, { stage: 'atlascloud_composite_collect_refs' })
 
-  // Episode-level appearance bindings (same as BobAPI path).
+  // Episode-level appearance bindings (same shape as BobAPI path).
   const episodeBindings = new Map<string, string>()
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
@@ -282,41 +319,54 @@ export async function runMultiShotAtlasCloudComposite(params: {
   const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
 
-  // Mode-specific media assembly.
+  // ── REFS — collect ALL three types for every mode ──
+  // t2v / i2v use them as INLINE TEXT anchors; r2v also pushes them
+  // as reference_images[]. Either way the bindings response surfaces
+  // what the worker had access to, so the chip rail stays accurate.
+  const locOverrideById = new Map<string, string>() // no per-call override surface yet
+  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
+  const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
+  const propRefs = collectPropRefs(usedPanels, projectData)
+
+  // ── MODE-SPECIFIC MEDIA ASSEMBLY ──
   let firstFrameUrl: string | null = null
   let referenceImages: string[] = []
-  let refLabels: string[] = []
-  let characterRefs: CharacterRef[] = []
-  let sceneRefs: SceneRef[] = []
+  let r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }> = []
 
   if (mode === 'r2v') {
-    // r2v: collect up to 9 reference_images (chars → scenes → panel images).
-    characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
-    sceneRefs = collectSceneRefs(usedPanels, projectData)
+    // Slot priority: char → scene → prop → panel (up to 9 total).
     for (const c of characterRefs) {
       if (referenceImages.length >= MAX_REFERENCE_IMAGES) break
       referenceImages.push(c.imageUrl)
-      refLabels.push(`角色「${c.name}」`)
+      r2vRefOrder.push({ kind: 'char', ref: c })
     }
     for (const s of sceneRefs) {
       if (referenceImages.length >= MAX_REFERENCE_IMAGES) break
       referenceImages.push(s.imageUrl)
-      refLabels.push(`場景「${s.name}」`)
+      r2vRefOrder.push({ kind: 'scene', ref: s })
     }
-    // Fill remaining slots with panel images if any.
+    for (const p of propRefs) {
+      if (referenceImages.length >= MAX_REFERENCE_IMAGES) break
+      referenceImages.push(p.imageUrl)
+      r2vRefOrder.push({ kind: 'prop', ref: p })
+    }
+    // Panel images fill remaining slots (composition anchors).
     for (const p of usedPanels) {
       if (referenceImages.length >= MAX_REFERENCE_IMAGES) break
       if (!p.imageUrl) continue
       const signed = toSignedUrlIfCos(p.imageUrl, 7200)
       if (!signed) continue
       referenceImages.push(signed)
-      refLabels.push(`鏡頭 ${usedPanels.indexOf(p) + 1}`)
+      // Panel images stay unnamed in the ref-map (would just confuse
+      // the model — they're composition anchors, not character refs).
     }
     if (referenceImages.length === 0) {
       throw new Error('ATLASCLOUD_COMPOSITE_R2V_NO_REFERENCES')
     }
   } else if (mode === 'i2v') {
-    // i2v: take first panel image (or first character ref if none) as first_frame.
+    // i2v: first available panel image as first_frame. Fall back to
+    // the first character ref so identity still anchors. Text-level
+    // anchors (description in prompt) carry the rest.
     for (const p of usedPanels) {
       if (p.imageUrl) {
         const signed = toSignedUrlIfCos(p.imageUrl, 7200)
@@ -326,31 +376,40 @@ export async function runMultiShotAtlasCloudComposite(params: {
         }
       }
     }
+    if (!firstFrameUrl && characterRefs[0]) {
+      firstFrameUrl = characterRefs[0].imageUrl
+    }
     if (!firstFrameUrl) {
-      // Fall back to first character ref so the call still has an anchor.
-      characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
-      const fallbackUrl = characterRefs[0]?.imageUrl
-      if (!fallbackUrl) {
-        throw new Error('ATLASCLOUD_COMPOSITE_I2V_NO_FIRST_FRAME')
-      }
-      firstFrameUrl = fallbackUrl
+      throw new Error('ATLASCLOUD_COMPOSITE_I2V_NO_FIRST_FRAME')
     }
   }
-  // t2v: no media; prompt-only.
+  // t2v: no media; identity anchored purely via inline prompt descriptions.
 
-  // Prompt: rawPrompt from UI textbox wins, else assembled from panels.
+  // ── PROMPT ASSEMBLY ──
   let prompt: string
   let dialogueBeatCount: number
   if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
+    // User-edited rawPrompt wins; ships verbatim. The Group Card's
+    // textarea is already the source of truth for the user's review
+    // ("what I see is what runs"). We trust the user to align it with
+    // the selected mode (e.g. don't reference @image-3 on t2v).
     prompt = params.rawPrompt.trim()
-    dialogueBeatCount = (prompt.match(/對白：/g) || []).length
+    dialogueBeatCount = (prompt.match(/對白：|说「|: "/g) || []).length
   } else {
-    const built = buildAtlasCloudPrompt(usedPanels, refLabels, mode)
+    const built = buildAtlasCloudPrompt(
+      usedPanels,
+      mode,
+      characterRefs,
+      sceneRefs,
+      propRefs,
+      projectData,
+      r2vRefOrder,
+    )
     prompt = built.prompt
     dialogueBeatCount = built.dialogueBeatCount
   }
 
-  // Duration: sum(panelDurations) when supplied, else panel-count × 2s.
+  // ── DURATION ──
   let duration: number
   if (params.panelDurations && params.panelDurations.length > 0) {
     const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
@@ -370,6 +429,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
       panelsUsed: usedPanels.length,
       characterRefs: characterRefs.length,
       sceneRefs: sceneRefs.length,
+      propRefs: propRefs.length,
       hasFirstFrame: Boolean(firstFrameUrl),
       referenceImageCount: referenceImages.length,
       duration,
@@ -386,9 +446,6 @@ export async function runMultiShotAtlasCloudComposite(params: {
   const generator = new AtlasCloudSeedanceVideoGenerator()
   const generateResult = await generator.generate({
     userId,
-    // AtlasCloud generator drops body.image for t2v slugs internally;
-    // r2v reads from options.referenceImages and ignores imageUrl.
-    // Pass firstFrameUrl when we have one (for i2v); empty string otherwise.
     imageUrl: firstFrameUrl ?? '',
     prompt,
     options: {
@@ -444,6 +501,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
       panelsUsed: usedPanels.length,
       characterRefs: characterRefs.length,
       sceneRefs: sceneRefs.length,
+      propRefs: propRefs.length,
     },
   })
 
@@ -453,12 +511,13 @@ export async function runMultiShotAtlasCloudComposite(params: {
     multiShotClipUrls: [cosKey],
     chunkCount: 1,
     shotCount: usedPanels.length,
-    subjectCount: characterRefs.length + sceneRefs.length,
+    subjectCount: characterRefs.length + sceneRefs.length + propRefs.length,
     path: 'atlascloud-composite',
     mode,
     bindings: {
       characters: characterRefs.map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl })),
       scenes: sceneRefs.map((s) => ({ id: s.id, name: s.name, imageUrl: s.imageUrl })),
+      props: propRefs.map((p) => ({ id: p.id, name: p.name, imageUrl: p.imageUrl })),
     },
   }
 }

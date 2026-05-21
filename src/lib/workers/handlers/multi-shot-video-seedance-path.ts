@@ -61,6 +61,10 @@ import {
   resolveNovelData,
 } from './image-task-handler-shared'
 import {
+  collectCharacterRefs as collectCharacterRefsShared,
+  collectSceneRefs as collectSceneRefsShared,
+} from './multi-shot-ref-collection'
+import {
   extractSpokenLineFromSrtSegment,
   looksLikeStageDirection,
 } from './multi-shot-video-b-path'
@@ -155,78 +159,7 @@ function collectCharacterRefs(
   projectData: NovelData,
   episodeBindings: Map<string, string>,
 ): CharacterRef[] {
-  const refs: CharacterRef[] = []
-  const seenIds = new Set<string>()
-  for (const panel of panels) {
-    if (refs.length >= MAX_CHARACTER_REFS) break
-    const charRefs = parsePanelCharacterReferences(panel.characters)
-    for (const ref of charRefs) {
-      if (refs.length >= MAX_CHARACTER_REFS) break
-      const character = findCharacterByName(projectData.characters || [], ref.name)
-      if (!character) continue
-      if (seenIds.has(character.id)) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (ref.appearance) {
-        const matched = appearances.find(
-          (a) => (a.changeReason || '').toLowerCase() === ref.appearance!.toLowerCase(),
-        )
-        if (matched) appearance = matched
-        else if (boundAppearanceId) {
-          const bound = appearances.find((a) => a.id === boundAppearanceId)
-          if (bound) appearance = bound
-        }
-      } else if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
-      if (!appearance) continue
-      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
-      const selectedIndex = appearance.selectedIndex
-      const selectedUrl =
-        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
-      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
-      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
-      if (!publicUrl) continue
-      seenIds.add(character.id)
-      refs.push({ id: character.id, name: ref.name, imageUrl: publicUrl })
-    }
-  }
-  // Description-mining fallback (b-path Pass 3 equivalent): for groups
-  // where panel.characters is empty but the description names a project
-  // character, pull them in so identity still anchors. Caps at the same
-  // MAX_CHARACTER_REFS budget so dialogue groups don't displace scenes.
-  for (const panel of panels) {
-    if (refs.length >= MAX_CHARACTER_REFS) break
-    const desc = `${panel.description ?? ''}\n${panel.videoPrompt ?? ''}`.trim()
-    if (!desc) continue
-    for (const character of projectData.characters ?? []) {
-      if (refs.length >= MAX_CHARACTER_REFS) break
-      if (seenIds.has(character.id)) continue
-      const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
-      const hit = aliases.some((alias) => alias && desc.includes(alias))
-      if (!hit) continue
-      const appearances = character.appearances || []
-      let appearance = appearances[0]
-      const boundAppearanceId = episodeBindings.get(character.id)
-      if (boundAppearanceId) {
-        const bound = appearances.find((a) => a.id === boundAppearanceId)
-        if (bound) appearance = bound
-      }
-      if (!appearance) continue
-      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
-      const selectedIndex = appearance.selectedIndex
-      const selectedUrl =
-        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
-      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
-      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
-      if (!publicUrl) continue
-      seenIds.add(character.id)
-      refs.push({ id: character.id, name: character.name, imageUrl: publicUrl })
-    }
-  }
-  return refs
+  return collectCharacterRefsShared(panels, projectData, episodeBindings, MAX_CHARACTER_REFS)
 }
 
 /**
@@ -257,36 +190,7 @@ function collectSceneRefs(
   projectData: NovelData,
   locOverrideById: Map<string, string>,
 ): SceneRef[] {
-  const refs: SceneRef[] = []
-  const seenIds = new Set<string>()
-  const locations = (projectData.locations as unknown as LocationRow[] | undefined) ?? []
-  if (locations.length === 0) return refs
-  for (const panel of panels) {
-    if (refs.length >= MAX_SCENE_REFS) break
-    if (!panel.location) continue
-    const hashIdx = panel.location.indexOf('#')
-    const locName = (hashIdx === -1 ? panel.location : panel.location.slice(0, hashIdx)).trim()
-    if (!locName) continue
-    const loc = locations.find((l) => l.name.toLowerCase() === locName.toLowerCase())
-    if (!loc) continue
-    if (seenIds.has(loc.id)) continue
-    const panelViewHint = hashIdx === -1 ? null : panel.location.slice(hashIdx + 1).trim()
-    const overrideViewName = locOverrideById.get(loc.id)
-    const effectiveView = (overrideViewName ?? panelViewHint) || null
-    const images = loc.images ?? []
-    const viewMatch = effectiveView
-      ? images.find((img) => (img.viewName || '').trim().toLowerCase() === effectiveView.toLowerCase())
-      : null
-    const selected = images.find((img) => img.isSelected === true)
-    const primary = images.find((img) => (img.imageIndex ?? 0) === 0) ?? images[0]
-    const pickedImg = viewMatch || selected || primary
-    const pickedRaw = pickedImg?.imageUrl
-    const publicUrl = toSignedUrlIfCos(pickedRaw, 7200)
-    if (!publicUrl) continue
-    seenIds.add(loc.id)
-    refs.push({ id: loc.id, name: loc.name, imageUrl: publicUrl })
-  }
-  return refs
+  return collectSceneRefsShared(panels, projectData, locOverrideById, MAX_SCENE_REFS)
 }
 
 /**
