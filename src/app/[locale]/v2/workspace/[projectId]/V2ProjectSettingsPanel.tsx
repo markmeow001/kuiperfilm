@@ -230,7 +230,7 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
               <div className="mb-1.5 font-mono text-[12px] uppercase tracking-wider text-stone-600">
                 {group.category} · {group.label}
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {group.styles.map((style) => {
                   const active = style.id === selectedVisualStyleId
                   return (
@@ -240,13 +240,32 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
                       onClick={() => handleApplyVisualStyle(style.id)}
                       disabled={updateStyle.isPending}
                       title={style.styleAnchor}
-                      className={`rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
+                      className={`group flex w-[88px] flex-col overflow-hidden rounded-sm border transition-all disabled:opacity-50 ${
                         active
-                          ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                          : 'border-stone-800 text-stone-400 hover:border-stone-700'
+                          ? 'border-amber-500/60 ring-1 ring-amber-500/30'
+                          : 'border-stone-800 hover:border-stone-700'
                       }`}
                     >
-                      {style.nameZh}
+                      {style.thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={style.thumbnailUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-[70px] w-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-[70px] w-full items-center justify-center bg-gradient-to-br from-stone-900 to-stone-950 font-mono text-[20px] tracking-wider text-stone-700">
+                          {style.category}
+                        </div>
+                      )}
+                      <span
+                        className={`truncate px-1.5 py-1 text-center font-serif-cn text-xs ${
+                          active ? 'bg-amber-500/10 text-amber-400' : 'bg-stone-900/60 text-stone-400'
+                        }`}
+                      >
+                        {style.nameZh}
+                      </span>
                     </button>
                   )
                 })}
@@ -270,7 +289,7 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
               </button>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             {sortedLightings.map((lighting) => {
               const active = lighting.id === selectedLightingPresetId
               return (
@@ -280,13 +299,32 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
                   onClick={() => handleApplyLighting(lighting.id)}
                   disabled={updateStyle.isPending}
                   title={lighting.lightingOverride}
-                  className={`rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
+                  className={`group flex w-[88px] flex-col overflow-hidden rounded-sm border transition-all disabled:opacity-50 ${
                     active
-                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                      : 'border-stone-800 text-stone-400 hover:border-stone-700'
+                      ? 'border-amber-500/60 ring-1 ring-amber-500/30'
+                      : 'border-stone-800 hover:border-stone-700'
                   }`}
                 >
-                  {lighting.nameZh}
+                  {lighting.thumbnailUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={lighting.thumbnailUrl}
+                      alt=""
+                      loading="lazy"
+                      className="h-[70px] w-full object-cover transition-transform group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-[70px] w-full items-center justify-center bg-gradient-to-br from-stone-900 to-stone-950">
+                      <AppIcon name="sparklesAlt" className="h-4 w-4 text-stone-700" />
+                    </div>
+                  )}
+                  <span
+                    className={`truncate px-1.5 py-1 text-center font-serif-cn text-xs ${
+                      active ? 'bg-amber-500/10 text-amber-400' : 'bg-stone-900/60 text-stone-400'
+                    }`}
+                  >
+                    {lighting.nameZh}
+                  </span>
                 </button>
               )
             })}

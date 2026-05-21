@@ -1723,6 +1723,14 @@ export function GroupCard({
                     </option>
                   ))}
                 </select>
+                {/* Phase D-2 (2026-05-20) — inline preview of the currently
+                    selected override. Renders thumbnail when populated; falls
+                    back to the category letter so the rail stays informative
+                    before generate-style-thumbnails runs. Hidden on INHERIT
+                    so the toolbar stays compact when the user hasn't picked. */}
+                {visualStyleOverride !== STYLE_INHERIT ? (
+                  <StyleOverridePreview styleId={visualStyleOverride} />
+                ) : null}
               </label>
               {/* 重生敘事 button moved to Row 1 (next to 叙事提示词 title)
                   to keep it visually anchored as the title's action,
@@ -2182,5 +2190,27 @@ export function GroupCard({
         }}
       />
     </article>
+  )
+}
+
+function StyleOverridePreview({ styleId }: { styleId: string }) {
+  const style = visualStyles.find((s) => s.id === styleId)
+  if (!style) return null
+  return style.thumbnailUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={style.thumbnailUrl}
+      alt={style.nameZh}
+      title={`${style.category} · ${style.nameZh}`}
+      loading="lazy"
+      className="h-10 w-8 rounded-sm border border-stone-800 object-cover"
+    />
+  ) : (
+    <span
+      title={`${style.category} · ${style.nameZh} (縮圖未生成)`}
+      className="flex h-10 w-8 items-center justify-center rounded-sm border border-stone-800 bg-stone-900/60 font-mono text-[14px] tracking-wider text-stone-600"
+    >
+      {style.category}
+    </span>
   )
 }
