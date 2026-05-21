@@ -1057,17 +1057,25 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     // B path = Tencent VOD Kling-3 / Omni / O1 (text-to-video with
     // multi_shot=intelligence). Panels without imageUrl are still
     // eligible because the model goes straight from text to video.
-    // C path needs imageUrl for first-frame i2v.
+    // Seedance composite (BobAPI taijiai::) also tolerates text-only panels
+    // (falls back to project's character/scene refs).
+    // AtlasCloud composite (atlascloud::seedance-2.0-*) also tolerates
+    // text-only panels: t2v uses no images at all; i2v/r2v fall back to
+    // character/scene refs when panels are imageless.
+    // C path (Kling i2v) needs imageUrl for first-frame.
     const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
-    const eligible = isBPath
+    const isSeedanceComposite = /^taijiai::seedance-2\.0/i.test(videoModel)
+    const isAtlasCloudComposite = /^atlascloud::seedance-2\.0/i.test(videoModel)
+    const tolerateTextOnly = isBPath || isSeedanceComposite || isAtlasCloudComposite
+    const eligible = tolerateTextOnly
       ? allPanels
       : allPanels.filter((p) => Boolean(p.imageUrl))
     if (eligible.length < 2) {
       setMultiShotState({
         status: 'error',
-        message: isBPath
-          ? '至少需要 2 個分鏡才能跑 multi-shot(B path)'
-          : '至少需要 2 個有圖的分鏡才能跑 multi-shot(或切到 Kling-3.0-Omni 走 t2v B path,免生圖)',
+        message: tolerateTextOnly
+          ? '至少需要 2 個分鏡才能跑 multi-shot'
+          : '至少需要 2 個有圖的分鏡才能跑 multi-shot(或切到支援 t2v 的模型,免生圖)',
       })
       return
     }

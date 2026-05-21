@@ -308,7 +308,14 @@ export const POST = apiHandler(async (
   // with a specific code than waste a round-trip.
   const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
   const isSeedanceComposite = /^taijiai::seedance-2\.0/i.test(videoModel)
-  if (!isBPath && !isSeedanceComposite) {
+  // 2026-05-20 — AtlasCloud Seedance 2.0 composite (any of t2v/i2v/r2v ×
+  // std/fast) also tolerates text-only panels:
+  //   - t2v: no images sent at all
+  //   - i2v: worker takes first panel image OR first char ref as anchor
+  //   - r2v: 1-9 reference_images[] auto-collected from char/scene/panel refs
+  // Worker has its own per-mode validation; route only screens shape.
+  const isAtlasCloudComposite = /^atlascloud::seedance-2\.0/i.test(videoModel)
+  if (!isBPath && !isSeedanceComposite && !isAtlasCloudComposite) {
     const panelsWithoutImage = panels.filter((p) => !p.imageUrl)
     if (panelsWithoutImage.length > 0) {
       throw new ApiError('INVALID_PARAMS', {
