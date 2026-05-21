@@ -28,7 +28,7 @@ export interface V2Step {
 export const V2_STEPS: readonly V2Step[] = [
   { id: 'home', num: '00', label: '首頁', subtitle: 'Mode', icon: 'film' },
   { id: 'script', num: '01', label: '劇本', subtitle: 'Script', icon: 'edit' },
-  { id: 'subjects', num: '02', label: '主體', subtitle: 'Subjects', icon: 'userCircle' },
+  { id: 'subjects', num: '02', label: '劇本拆解', subtitle: 'Breakdown', icon: 'userCircle' },
   { id: 'storyboard', num: '03', label: '分鏡', subtitle: 'Storyboard', icon: 'image' },
   { id: 'voice', num: '04', label: '配音', subtitle: 'Voice', icon: 'mic' },
   { id: 'final', num: '05', label: '成片', subtitle: 'Final Cut', icon: 'play' },

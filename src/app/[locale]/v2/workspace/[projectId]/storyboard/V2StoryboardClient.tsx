@@ -505,7 +505,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // this, the user clicks 重新生成圖, switches to /subjects to check
   // characters, returns — sees no overlay and assumes the task is gone
   // even though it's still running in the background. User reported:
-  // 「當我在這邊按重新生成圖, 我切換到主體或其他頁面, 就會消失了」.
+  // 「當我在這邊按重新生成圖, 我切換到劇本拆解或其他頁面, 就會消失了」.
   const activePanelImageTasks = useActiveTasks({
     projectId,
     type: ['image_panel', 'video_panel'],
@@ -2694,7 +2694,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[14px] tracking-wider text-amber-600">主體 · CAST</div>
+              <div className="font-mono text-[14px] tracking-wider text-amber-600">卡司 · CAST</div>
               {currentEpisode?.episodeNumber ? (
                 <div className="font-mono text-[11px] tracking-wider text-stone-500">
                   ep {currentEpisode.episodeNumber} 綁定
@@ -2778,7 +2778,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       className="flex items-center gap-2.5 rounded-sm border border-stone-800/60 bg-stone-900/40 px-2.5 py-1.5"
                       title={
                         resolved?.isDefault
-                          ? `這集沒綁造型 — 用第一個造型(${resolved.label})。要改去主體頁設定。`
+                          ? `這集沒綁造型 — 用第一個造型(${resolved.label})。要改去劇本拆解頁設定。`
                           : `這集綁定造型: ${resolved?.label ?? '(無)'}`
                       }
                     >

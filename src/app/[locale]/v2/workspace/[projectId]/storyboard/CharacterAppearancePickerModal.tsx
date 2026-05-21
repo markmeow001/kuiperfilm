@@ -88,7 +88,7 @@ export function CharacterAppearancePickerModal({
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
           {appearances.length === 0 ? (
             <p className="font-serif-cn text-sm italic text-stone-500">
-              這個角色目前只有一個造型 — 沒有其他 appearance 可選。先到「主體」分頁加入新造型。
+              這個角色目前只有一個造型 — 沒有其他 appearance 可選。先到「劇本拆解」分頁加入新造型。
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

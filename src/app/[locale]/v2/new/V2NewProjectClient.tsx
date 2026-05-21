@@ -403,7 +403,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               建立後進入工作區,你可以
               <span className="text-amber-400">逐集貼劇本</span>、
               <span className="text-amber-400">設定畫面比例與風格</span>、
-              然後在「主體」與「分鏡」step 用 AI 自動拆解角色 / 場景 / 鏡頭。
+              然後在「劇本拆解」與「分鏡」step 用 AI 自動抽出角色 / 場景 / 鏡頭。
             </p>
           </div>
 

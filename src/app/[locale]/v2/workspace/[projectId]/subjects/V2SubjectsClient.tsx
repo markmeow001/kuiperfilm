@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Phase 12.4 — v2 SubjectsPage (主體) client implementation.
+ * Phase 12.4 — v2 SubjectsPage (劇本拆解 / Script Breakdown) client implementation.
  *
  * Tabs across 角色 / 場景 / 道具.  For now 道具 is a stub
  * because Phase 11.3 (props as first-class assets) is still ⏸ —

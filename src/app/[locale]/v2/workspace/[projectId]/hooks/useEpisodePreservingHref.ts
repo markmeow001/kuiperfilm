@@ -8,7 +8,7 @@
  * If a Link / router.push to another stage drops the search param,
  * the destination falls back to "first episode in project" (line 67
  * of useCurrentEpisode.ts) — which is what was happening when the
- * user worked on episode 4, hit "下一步 → 主體", and watched the
+ * user worked on episode 4, hit "下一步 → 劇本拆解", and watched the
  * subjects page open on episode 1 instead.
  *
  * Pattern:

@@ -112,7 +112,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
               <div className="min-w-0 flex-1">
                 {/*
                   Whitespace-nowrap on both rows: at w-52 the chinese
-                  step labels ("首頁/劇本/主體/分鏡/配音/成片") plus
+                  step labels ("首頁/劇本/劇本拆解/分鏡/配音/成片") plus
                   the english subtitle would otherwise break onto two
                   lines on a 14" laptop with the OS scrollbar visible.
                   Truncate ellipsis when the user crank-zooms the

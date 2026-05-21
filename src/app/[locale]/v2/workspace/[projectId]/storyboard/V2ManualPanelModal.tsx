@@ -161,7 +161,7 @@ export function V2ManualPanelModal({
           </div>
           {characters.length === 0 ? (
             <div className="rounded-sm border border-stone-800/60 bg-stone-950/40 px-3 py-2 font-fraunces text-xs italic text-stone-500">
-              本專案還沒有角色,先到主體 tab 建幾個。
+              本專案還沒有角色,先到劇本拆解 tab 建幾個。
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -199,7 +199,7 @@ export function V2ManualPanelModal({
           </div>
           {locations.length === 0 ? (
             <div className="rounded-sm border border-stone-800/60 bg-stone-950/40 px-3 py-2 font-fraunces text-xs italic text-stone-500">
-              本專案還沒有場景,先到主體 tab 建一個或打 prompt 直接寫。
+              本專案還沒有場景,先到劇本拆解 tab 建一個或打 prompt 直接寫。
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">

@@ -190,7 +190,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
             onBlur={handleBlur}
             placeholder={
               currentEpisode
-                ? `輸入第 ${currentEpisode.episodeNumber} 集的劇本內容…\n\n格式不限——可以是分場大綱、完整對白劇本、或場景敘述。後續「主體」step 會自動從這份文本抽出角色 / 場景 / 物品,「分鏡」step 會自動切鏡頭。`
+                ? `輸入第 ${currentEpisode.episodeNumber} 集的劇本內容…\n\n格式不限——可以是分場大綱、完整對白劇本、或場景敘述。後續「劇本拆解」step 會自動從這份文本抽出角色 / 場景 / 物品,「分鏡」step 會自動切鏡頭。`
                 : '輸入第 1 集的劇本內容(按「儲存」會自動建立第 1 集)'
             }
             className="h-[420px] w-full resize-none rounded-sm border border-amber-900/30 bg-stone-950 px-5 py-4 font-serif-cn text-base leading-relaxed text-stone-200 placeholder:text-stone-700 focus:border-amber-500/60 focus:outline-none"
@@ -218,7 +218,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
                 href={buildHref(`/${locale}/v2/workspace/${projectId}/subjects`)}
                 className="font-mono text-xs tracking-wider text-stone-500 transition-colors hover:text-amber-300"
               >
-                下一步 → 主體 →
+                下一步 → 劇本拆解 →
               </Link>
             ) : null}
           </div>
@@ -229,7 +229,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
           <div>
             <div className="mb-1 font-fraunces text-sm italic text-amber-500/80">Workflow</div>
             <div className="font-mono text-[12px] uppercase tracking-[0.2em] text-stone-600">
-              貼劇本 → 主體 → 分鏡
+              貼劇本 → 劇本拆解 → 分鏡
             </div>
           </div>
           <ol className="space-y-3 font-serif-cn text-xs leading-relaxed text-stone-400">
@@ -239,7 +239,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
             </li>
             <li>
               <span className="mr-2 font-mono text-amber-500/70">02</span>
-              到「<span className="text-amber-300">主體</span>」step 按一鍵分析,自動抽出角色 / 場景 / 物品。可以上傳自己準備好的素材取代。
+              到「<span className="text-amber-300">劇本拆解</span>」step 按一鍵分析,自動抽出角色 / 場景 / 物品。可以上傳自己準備好的素材取代。
             </li>
             <li>
               <span className="mr-2 font-mono text-amber-500/70">03</span>

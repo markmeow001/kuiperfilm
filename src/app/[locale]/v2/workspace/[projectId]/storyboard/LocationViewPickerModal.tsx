@@ -90,7 +90,7 @@ export function LocationViewPickerModal({
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
           {images.length === 0 ? (
             <p className="font-serif-cn text-sm italic text-stone-500">
-              這個場景目前只有主視角(沒有額外的 view)。先到「主體 → 場景」加入新視角。
+              這個場景目前只有主視角(沒有額外的 view)。先到「劇本拆解 → 場景」加入新視角。
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
