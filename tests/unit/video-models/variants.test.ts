@@ -51,14 +51,17 @@ describe('VIDEO_MODEL_VARIANTS catalog', () => {
     }
   })
 
-  it('fal Seedance variants do NOT support multi-shot composite (flat i2v API only)', () => {
-    // BobAPI/taijiai Seedance is the only Seedance with the 9-ref
-    // content[] composite endpoint. fal Seedance has a flat i2v
-    // surface (image_url + optional end_image_url), so it stays out
-    // of the 多鏡頭 gate. If anyone flips a fal Seedance bit to true,
-    // they need to wire fal-side composite first.
-    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/image-to-video')).toBe(false)
-    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/image-to-video')).toBe(false)
+  it('fal Seedance 2.0 variants support multi-shot via fal composite path (Phase D, 2026-05-21)', () => {
+    // Phase D added 2 reference-to-video variants (std + fast) and
+    // upgraded the 2 existing image-to-video variants to multiShot:true,
+    // backed by a new worker path (multi-shot-video-fal-path.ts) that
+    // calls FalVideoGenerator with image_urls[] up to 9 + @Image1
+    // prompt tags. Vendor parity with BobAPI / AtlasCloud — all 3 fully
+    // support prompt-encoded multi-shot now.
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/image-to-video')).toBe(true)
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/reference-to-video')).toBe(true)
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/image-to-video')).toBe(true)
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/reference-to-video')).toBe(true)
   })
 
   it('BobAPI Seedance supports multi-shot composite (content[] @N path)', () => {
@@ -151,9 +154,12 @@ describe('isMultiShotCapable (gate used by the multi-shot button)', () => {
     expect(isMultiShotCapable('fal::fal-ai/kling-video/v3/pro/image-to-video')).toBe(true)
   })
 
-  it('returns false for fal Seedance variants (flat i2v API only)', () => {
-    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/image-to-video')).toBe(false)
-    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/image-to-video')).toBe(false)
+  it('returns true for fal Seedance 2.0 variants (Phase D, 2026-05-21)', () => {
+    // Same prompt-encoded multi-shot capability as AtlasCloud / BobAPI.
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/image-to-video')).toBe(true)
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/reference-to-video')).toBe(true)
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/image-to-video')).toBe(true)
+    expect(isMultiShotCapable('fal::bytedance/seedance-2.0/fast/reference-to-video')).toBe(true)
   })
 
   it('returns true for BobAPI Seedance (content[] @N composite)', () => {

@@ -50,19 +50,38 @@ export interface VideoModelVariant {
 
 export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
   // ─────────── Seedance family ───────────
+  // 2026-05-21 Phase D — fal Seedance 2.0 multi-shot composite line.
+  // Same prompt-encoded multi-shot capability as AtlasCloud / BobAPI;
+  // 4 variants total (i2v / r2v × std / fast). Worker routes to
+  // multi-shot-video-fal-path. r2v variants accept image_urls[] up to 9
+  // refs + @Image1/@Image2/... prompt tags (fal-specific convention).
   {
     id: 'fal::bytedance/seedance-2.0/image-to-video',
     family: 'seedance',
-    label: 'Seedance 2.0 (fal · audio)',
-    hint: '1080p · native audio · 字節跳動 Seedance 2.0 透過 fal',
-    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥¥' },
+    label: 'Seedance 2.0 I2V (fal · audio)',
+    hint: '起始圖驅動,1080p · native audio · 多鏡頭由 prompt 編碼',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
+  },
+  {
+    id: 'fal::bytedance/seedance-2.0/reference-to-video',
+    family: 'seedance',
+    label: 'Seedance 2.0 R2V (fal · 9-ref)',
+    hint: '參考圖驅動,最多 9 張 @Image1...@Image9 · audio · 多鏡頭由 prompt 編碼',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
   {
     id: 'fal::bytedance/seedance-2.0/fast/image-to-video',
     family: 'seedance',
-    label: 'Seedance 2.0 Fast (fal · cheap)',
-    hint: '較便宜的 fast variant · audio · 適合大量試片',
-    capabilities: { audio: true, multiShot: false, maxDurationSec: 15, costTier: '¥' },
+    label: 'Seedance 2.0 Fast I2V (fal · cheap)',
+    hint: 'fast 版起始圖驅動 · audio · 適合大量試片 · 多鏡頭由 prompt 編碼',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
+  },
+  {
+    id: 'fal::bytedance/seedance-2.0/fast/reference-to-video',
+    family: 'seedance',
+    label: 'Seedance 2.0 Fast R2V (fal · 9-ref cheap)',
+    hint: 'fast 版 9 張參考圖 · audio · 多鏡頭由 prompt 編碼',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
   },
   {
     id: 'taijiai::seedance-2.0-720p',

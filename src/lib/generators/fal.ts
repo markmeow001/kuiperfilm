@@ -52,6 +52,12 @@ const FAL_VIDEO_ENDPOINTS: Record<string, string> = {
     // end_image_url for first/last frame mode; native generate_audio.
     'bytedance/seedance-2.0/image-to-video': 'bytedance/seedance-2.0/image-to-video',
     'bytedance/seedance-2.0/fast/image-to-video': 'bytedance/seedance-2.0/fast/image-to-video',
+    // Seedance 2.0 reference-to-video on fal (2026-05-21 Phase D). Multi-ref
+    // composite: image_urls[] up to 9, video_urls[] up to 3, audio_urls[] up
+    // to 3. Prompt references refs via @Image1 / @Video1 / @Audio1 tags
+    // (different convention from AtlasCloud's "image 1" / "video 1").
+    'bytedance/seedance-2.0/reference-to-video': 'bytedance/seedance-2.0/reference-to-video',
+    'bytedance/seedance-2.0/fast/reference-to-video': 'bytedance/seedance-2.0/fast/reference-to-video',
 }
 
 // ============================================================
@@ -211,6 +217,9 @@ export class FalVideoGenerator extends BaseVideoGenerator {
             lastFrameImageUrl,
             generateAudio,
             seed,
+            referenceImages,
+            referenceVideos,
+            referenceAudios,
         } = options as {
             duration?: number
             resolution?: string
@@ -221,6 +230,9 @@ export class FalVideoGenerator extends BaseVideoGenerator {
             lastFrameImageUrl?: string
             generateAudio?: boolean
             seed?: number
+            referenceImages?: string[]
+            referenceVideos?: string[]
+            referenceAudios?: string[]
         }
 
         const allowedOptionKeys = new Set([
@@ -233,6 +245,10 @@ export class FalVideoGenerator extends BaseVideoGenerator {
             'lastFrameImageUrl',
             'generateAudio',
             'seed',
+            // Phase D (2026-05-21) — Seedance 2.0 reference-to-video.
+            'referenceImages',
+            'referenceVideos',
+            'referenceAudios',
         ])
         for (const [key, value] of Object.entries(options)) {
             if (value === undefined) continue
@@ -298,6 +314,63 @@ export class FalVideoGenerator extends BaseVideoGenerator {
                     generate_audio: false,
                 }
                 break
+            case 'bytedance/seedance-2.0/reference-to-video':
+            case 'bytedance/seedance-2.0/fast/reference-to-video': {
+                // fal Seedance 2.0 reference-to-video spec (fal docs 2026-04-15):
+                //   required: prompt
+                //   optional: image_urls[] (≤9, max 30MB each, cited as @Image1...@Image9),
+                //             video_urls[] (≤3, total ≤15s combined, cited as @Video1...),
+                //             audio_urls[] (≤3, total ≤15s combined, cited as @Audio1...),
+                //             resolution (480p|720p|1080p, default 720p),
+                //             aspect_ratio (auto|21:9|16:9|4:3|1:1|3:4|9:16, default auto),
+                //             duration ('auto' or integer 4-15, default auto),
+                //             generate_audio (bool, default true),
+                //             seed (int)
+                // Worker must inject @Image1/@Image2/... tags into the prompt
+                // for character / scene anchoring — the model maps tag to
+                // the same-indexed image_urls entry. Empty image_urls is
+                // allowed (degenerates to t2v from prompt alone).
+                const allowedRatios = new Set(['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16'])
+                const allowedResolutions = new Set(['480p', '720p', '1080p'])
+                const clampedDuration =
+                    typeof duration === 'number' && Number.isFinite(duration)
+                        ? Math.max(4, Math.min(15, Math.round(duration)))
+                        : undefined
+                if (referenceImages && referenceImages.length > 9) {
+                    throw new Error(
+                        `FAL_SEEDANCE_R2V_IMAGE_URLS_OVER_LIMIT: ${referenceImages.length} > 9`,
+                    )
+                }
+                if (referenceVideos && referenceVideos.length > 3) {
+                    throw new Error(`FAL_SEEDANCE_R2V_VIDEO_URLS_OVER_LIMIT: ${referenceVideos.length} > 3`)
+                }
+                if (referenceAudios && referenceAudios.length > 3) {
+                    throw new Error(`FAL_SEEDANCE_R2V_AUDIO_URLS_OVER_LIMIT: ${referenceAudios.length} > 3`)
+                }
+                input = {
+                    prompt,
+                    ...(referenceImages && referenceImages.length > 0 ? { image_urls: referenceImages } : {}),
+                    ...(referenceVideos && referenceVideos.length > 0 ? { video_urls: referenceVideos } : {}),
+                    ...(referenceAudios && referenceAudios.length > 0 ? { audio_urls: referenceAudios } : {}),
+                    ...(resolution && allowedResolutions.has(resolution) ? { resolution } : {}),
+                    ...(aspectRatio && allowedRatios.has(aspectRatio) ? { aspect_ratio: aspectRatio } : {}),
+                    ...(clampedDuration !== undefined ? { duration: clampedDuration } : {}),
+                    ...(typeof generateAudio === 'boolean' ? { generate_audio: generateAudio } : { generate_audio: true }),
+                    ...(typeof seed === 'number' ? { seed } : {}),
+                }
+                vLogger.info({
+                    message: 'FAL Seedance r2v request shape',
+                    details: {
+                        imageUrlsCount: referenceImages?.length ?? 0,
+                        videoUrlsCount: referenceVideos?.length ?? 0,
+                        audioUrlsCount: referenceAudios?.length ?? 0,
+                        duration: clampedDuration,
+                        resolution,
+                        aspectRatio,
+                    },
+                })
+                break
+            }
             case 'bytedance/seedance-2.0/image-to-video':
             case 'bytedance/seedance-2.0/fast/image-to-video': {
                 // fal Seedance 2.0 spec (fal docs 2026-04-15):

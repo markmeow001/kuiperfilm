@@ -6,6 +6,7 @@ import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { runMultiShotBPath } from './multi-shot-video-b-path'
 import { runMultiShotSeedanceComposite, shouldUseSeedanceComposite } from './multi-shot-video-seedance-path'
 import { runMultiShotAtlasCloudComposite, shouldUseAtlasCloudComposite } from './multi-shot-video-atlascloud-path'
+import { runMultiShotFalComposite, shouldUseFalComposite } from './multi-shot-video-fal-path'
 import {
   parsePanelCharacterReferences,
   findCharacterByName,
@@ -163,6 +164,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   const useBPath = shouldUseTencentBPath(videoModel)
   const useSeedanceComposite = shouldUseSeedanceComposite(videoModel)
   const useAtlasCloudComposite = shouldUseAtlasCloudComposite(videoModel)
+  const useFalComposite = shouldUseFalComposite(videoModel)
 
   await reportTaskProgress(job, 5, { stage: 'load_panels' })
 
@@ -202,7 +204,8 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     // t2v mode when no panel has an image yet.
     // AtlasCloud composite t2v + r2v also tolerate panels without imageUrl
     // (t2v ignores all images; r2v uses character / scene refs as fallback).
-    if (!useBPath && !useSeedanceComposite && !useAtlasCloudComposite && !panels[i]!.imageUrl) {
+    // fal composite r2v also tolerates text-only panels for the same reason.
+    if (!useBPath && !useSeedanceComposite && !useAtlasCloudComposite && !useFalComposite && !panels[i]!.imageUrl) {
       throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
     }
   }
@@ -243,6 +246,25 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   if (useAtlasCloudComposite) {
     await reportTaskProgress(job, 15, { stage: 'atlascloud_composite_start' })
     return await runMultiShotAtlasCloudComposite({
+      job,
+      projectId,
+      validPanels,
+      videoModel,
+      sound,
+      aspectRatio,
+      ...(rawPrompt ? { rawPrompt } : {}),
+      ...(panelDurations ? { panelDurations } : {}),
+      ...(visualStyleId ? { visualStyleId } : {}),
+    })
+  }
+
+  // ─────────────── FAL COMPOSITE PATH ───────────────
+  // fal Seedance 2.0 — i2v / r2v × std / fast. Same model as
+  // AtlasCloud / BobAPI underneath; fal-specific gateway uses
+  // image_urls[] for r2v + @Image1/@Image2/... prompt tags.
+  if (useFalComposite) {
+    await reportTaskProgress(job, 15, { stage: 'fal_composite_start' })
+    return await runMultiShotFalComposite({
       job,
       projectId,
       validPanels,

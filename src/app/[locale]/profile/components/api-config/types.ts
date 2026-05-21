@@ -127,8 +127,11 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'fal-ai/kling-video/v3/standard/image-to-video', name: 'Kling 3 Standard', type: 'video', provider: 'fal' },
     { modelId: 'fal-ai/kling-video/v3/pro/image-to-video', name: 'Kling 3 Pro', type: 'video', provider: 'fal' },
     // 2026-05-16 — Seedance 2.0 on fal (BobAPI 备援)。standard + fast 两版。
-    { modelId: 'bytedance/seedance-2.0/image-to-video', name: 'Seedance 2.0 (fal · audio)', type: 'video', provider: 'fal' },
-    { modelId: 'bytedance/seedance-2.0/fast/image-to-video', name: 'Seedance 2.0 Fast (fal · cheap)', type: 'video', provider: 'fal' },
+    // 2026-05-21 Phase D — added r2v variants for full multi-shot vendor parity.
+    { modelId: 'bytedance/seedance-2.0/image-to-video', name: 'Seedance 2.0 I2V (fal · audio)', type: 'video', provider: 'fal' },
+    { modelId: 'bytedance/seedance-2.0/reference-to-video', name: 'Seedance 2.0 R2V (fal · 9-ref)', type: 'video', provider: 'fal' },
+    { modelId: 'bytedance/seedance-2.0/fast/image-to-video', name: 'Seedance 2.0 Fast I2V (fal · cheap)', type: 'video', provider: 'fal' },
+    { modelId: 'bytedance/seedance-2.0/fast/reference-to-video', name: 'Seedance 2.0 Fast R2V (fal · 9-ref cheap)', type: 'video', provider: 'fal' },
 
     // 音频模型
     { modelId: 'fal-ai/index-tts-2/text-to-speech', name: 'IndexTTS 2', type: 'audio', provider: 'fal' },
