@@ -48,6 +48,68 @@ Rules:
 4. Prefer age+gender wording in video_prompt when naming actors in camera directions.
 5. Return JSON array only.
 
+Composition and frame layering (Cinematic richness — added 2026-05-21):
+
+video_prompt must do more than describe "subject does X" — every shot
+needs explicit GEOMETRY and LAYERS. Equipment terms remain banned (see
+red line #4 below) since those are handled by the project's styleAnchor;
+this section is about what the human eye sees in frame, not what camera
+captured it.
+
+Composition cues (include at least ONE per video_prompt, after the subject):
+  - Centered framing — for ritual, confrontation, key freeze moments
+    "@Character A stands centered, ..."
+  - Rule of thirds (1/3 left or 1/3 right) — natural daily, negative space
+    "@Character A stands in the right-third of the frame, ..."
+  - Symmetrical composition — solemnity, fate, abstract
+    "Symmetrical composition, @Character A centered, stone pillars on
+     each side, ..."
+  - Foreground + midground + background (3 layers) — for medium+ wide shots
+    "Foreground a puddle, midground @Character A running, background a
+     lightning-struck cliff"
+  - Negative space — lyrical, loneliness
+    "@Character A occupies the right third, large sky negative space left"
+  - Low-angle + subject filling frame — intimidation, epic
+    "Low-angle upward, @Character A towers, fills the frame top-to-bottom"
+  - High-angle + subject diminutive — smallness, overview
+    "High-angle 45°, @Character A in the lower quarter like a small dot"
+  - Over-the-shoulder + background blur — dialogue, confrontation
+    "Over-the-shoulder of @Character A, @Character B's back fills the
+     left third foreground"
+  - Frame-within-frame — voyeurism, entrapment
+    "@Character A inside the window frame, the metal sash frames the
+     outer edges of the shot"
+
+Frame-layer cues (any shot wider than medium close-up MUST name 2 layers):
+  Foreground: object, prop, character back, rain, smoke
+  Midground:  subject's action
+  Background: distant architecture, nature, crowd action
+
+Upgraded examples:
+- Medium dialogue: "Over-the-shoulder of @young woman, man's back fills
+  left third foreground, subject right-third centered, bar counter blurred
+  with bokeh in background, she lifts the coffee cup and blows gently,
+  eyes drift toward the window, camera dollies in slowly"
+- Action: "Low-angle upward, @teenage boy towers centered as he leaps
+  swinging a sword, kicked-up dust in foreground, overcast sky in
+  background, silver arc of the blade carves through frame, camera
+  handheld follows the motion"
+- Emotion: "Symmetrical composition, @young woman centered head bowed,
+  her raised finger in foreground, candle on the windowsill blurred in
+  background, a tear traces down her cheek, locked-off camera"
+- Establishing wide: "High-angle 45° down, @teenage boy in the lower-
+  right quarter like a small dot running outward, rotten wooden fence
+  in the lower-left third foreground, wet mud reflections in midground,
+  silhouetted cliffs in background, camera pulls back slowly"
+
+Character-anchor rule for dialogue scenes:
+- Always reference characters by @image-N (not by name).
+- After the reference, write only CURRENT action / emotion / expression.
+  Do not re-describe appearance (covered by red line #1 below).
+- Example: "@Character A turns toward the right of frame, brow knit
+  slightly, lips pressed thin"
+
+
 Five-element red lines (CRITICAL — applies to both description AND video_prompt):
 
 Root cause this solves: when description/video_prompt is overstuffed, the
