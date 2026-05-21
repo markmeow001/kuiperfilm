@@ -66,6 +66,8 @@ import {
   buildVisualStyleNegative,
   getStyleSafe,
 } from '@/lib/style-library'
+import { buildDialogueDrivenDurations } from './speech-duration-estimator'
+import { extractSpokenLineFromSrtSegment } from './multi-shot-video-b-path'
 
 // AtlasCloud Seedance 2.0's request schema has NO `negative_prompt`
 // field (verified from static.atlascloud.ai/model/schema/...). Inline
@@ -513,14 +515,64 @@ export async function runMultiShotAtlasCloudComposite(params: {
     .filter((s) => s.length > 0)
     .join('\n\n')
 
-  // ── DURATION ──
+  // ── DURATION (Phase M — dialogue-driven, 2026-05-21) ──
+  // Priority:
+  //   1. params.panelDurations — explicit user override (UI 时长 dropdown
+  //      sets 5/10/15; sum is what user picked). Frontend OMITS this when
+  //      sendRaw=true (narrativeDirty), so we fall through to dialogue-
+  //      driven below.
+  //   2. buildDialogueDrivenDurations() — mirrors BobAPI / Kling b-path's
+  //      heuristic: estimate speech seconds from panel.srtSegment, allocate
+  //      per-panel airtime, sum the total. Returns null when NO panel has
+  //      dialogue → fall through to baseline.
+  //   3. Generous baseline — Math.max(10, panel_count * 2.5). Capped 4-15.
+  //      Pre-Phase-M baseline was panel_count * 2 which produced 6-8s for
+  //      3-4 panel groups and triggered user complaint "選 15s 但出來 6-8s".
+  //      The new floor of 10s aligns with "most short-drama groups want
+  //      10-15s, never want < 8s" for cinematic pacing.
   let duration: number
+  let durationSource: 'panelDurations' | 'dialogueDriven' | 'baseline'
   if (params.panelDurations && params.panelDurations.length > 0) {
     const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
+    durationSource = 'panelDurations'
   } else {
-    const baseline = Math.round(usedPanels.length * 2)
-    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))
+    // Build dialogueByPanel from srtSegment (same source b-path uses).
+    const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
+    for (const panel of usedPanels) {
+      const seg = (panel.srtSegment ?? '').trim()
+      if (!seg) continue
+      const extracted = extractSpokenLineFromSrtSegment(seg, '旁白')
+      if (extracted) dialogueByPanel.set(panel.id, [extracted])
+    }
+
+    let driven: ReturnType<typeof buildDialogueDrivenDurations> = null
+    try {
+      driven = buildDialogueDrivenDurations({
+        panels: usedPanels,
+        dialogueByPanelId: dialogueByPanel,
+      })
+    } catch (err) {
+      // DIALOGUE_EXCEEDS_KLING_BUDGET — fall through to baseline (cap will
+      // clamp). User can fix by shortening dialogue or splitting the group.
+      const message = (err as Error)?.message ?? ''
+      logger.warn({
+        message: 'buildDialogueDrivenDurations failed, falling back to baseline',
+        details: { error: message },
+      })
+    }
+
+    if (driven && driven.hasDialogue) {
+      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, driven.totalDuration))
+      durationSource = 'dialogueDriven'
+    } else {
+      // Generous baseline — 10s minimum so 3-4 panel groups don't drop to
+      // 6-8s. Multiplier 2.5 (vs 2) makes 4 panels = 10s, 5 panels = 12.5s
+      // (rounded 13), 6 panels = 15s (max).
+      const baseline = Math.max(10, Math.round(usedPanels.length * 2.5))
+      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))
+      durationSource = 'baseline'
+    }
   }
 
   logger.info({
@@ -537,6 +589,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
       hasFirstFrame: Boolean(firstFrameUrl),
       referenceImageCount: referenceImages.length,
       duration,
+      durationSource,
       aspectRatio,
       generateAudio: sound,
       dialogueBeatCount,
