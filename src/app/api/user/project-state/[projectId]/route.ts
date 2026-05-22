@@ -20,7 +20,7 @@ interface RouteContext {
  */
 export const GET = apiHandler(async (_req: NextRequest, ctx: RouteContext) => {
     const { projectId } = await ctx.params
-    const authResult = await requireProjectAuthLight(projectId)
+    const authResult = await requireProjectAuthLight(projectId, { action: 'read' })
     if (isErrorResponse(authResult)) return authResult
     const { session } = authResult
 

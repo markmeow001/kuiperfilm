@@ -5,9 +5,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const prismaMock = vi.hoisted(() => ({
-  workspace: { findFirst: vi.fn() },
+  workspace: { findFirst: vi.fn(), findUnique: vi.fn() },
   user: { findUnique: vi.fn() },
   project: { findUnique: vi.fn() },
+  // Phase 12.5 (2026-05-22) — requireProjectAccess (called internally
+  // by requireProjectAuthLight) consults these tables for cascade
+  // steps 4-5. Existing tests don't exercise those paths, so mocks
+  // just need to resolve to "not found" / "no row".
+  projectCollaborator: { findUnique: vi.fn().mockResolvedValue(null) },
+  workspaceMember: { findUnique: vi.fn().mockResolvedValue(null) },
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))

@@ -20,7 +20,7 @@ export const GET = apiHandler(async (
   const { projectId } = await context.params
 
   // 🔐 统一权限验证
-  const authResult = await requireProjectAuth(projectId)
+  const authResult = await requireProjectAuth(projectId, { action: 'read' })
   if (isErrorResponse(authResult)) return authResult
   const { novelData } = authResult
 

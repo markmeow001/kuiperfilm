@@ -295,7 +295,7 @@ export async function requireAuth(): Promise<AuthSession> {
  */
 export async function requireProjectAuth<T extends ProjectAuthIncludes = ProjectAuthIncludes>(
     projectId: string,
-    options?: { include?: T }
+    options?: { include?: T; action?: 'read' | 'write' }
 ): Promise<ProjectAuthContextWithIncludes<T> | NextResponse> {
     // 1. 验证 Session
     const session = await getAuthSession()
@@ -337,16 +337,37 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
         return notFound('Project')
     }
 
-    // 5. 所有权验证 (multi-tier multi-user override)
-    //    - admin: full cross-user
-    //    - editor: cross-user via workspace membership (org → workspace → member)
+    // 5. 权限验证 — Phase 12.5 (2026-05-22) 8-tier cascade
+    //    The cascade now extends beyond owner/admin/ws-owner-editor to
+    //    support workspace members + per-project collaborators. Default
+    //    action='write' means mutation endpoints automatically reject
+    //    viewer-only callers; read endpoints opt-in with action='read'.
+    //
+    //    Compatibility note: existing 4-tier behavior is preserved
+    //    because the cascade's first 3 (+ 3.5 legacy) steps match the
+    //    old logic exactly. The NEW steps 4-5 only fire when the
+    //    requester is a workspace member / project collaborator —
+    //    neither exists in production today, so this is permission-
+    //    additive (never subtractive) for existing users.
+    const action = options?.action ?? 'write'
+    const access = await requireProjectAccess(
+        { project: { id: project.id, userId: project.userId, workspaceId: project.workspaceId } },
+        session.user.id,
+        action,
+    )
+    if (!access.allowed) {
+        if (access.reason === 'NOT_AUTHENTICATED') return unauthorized()
+        if (access.reason === 'NOT_FOUND') return notFound('Project')
+        return forbidden()
+    }
+    // Log cross-user access for audit (mirrors pre-existing behavior)
     if (project.userId !== session.user.id) {
-        const isAdmin = await sessionUserIsAdmin(session.user.id)
-        if (isAdmin) {
+        if (access.effectiveRole === 'admin') {
             bindAdminCrossUserLog(session, projectId, project.userId)
-        } else {
-            const editorAccess = await editorCanAccessProject(session.user.id, project.userId)
-            if (!editorAccess) return forbidden()
+        } else if (
+            access.effectiveRole === 'ws_owner'
+            || access.effectiveRole === 'ws_owner_legacy'
+        ) {
             bindEditorCrossUserLog(session, projectId, project.userId)
         }
     }
@@ -428,7 +449,8 @@ export async function requireUserAuth(): Promise<{ session: AuthSession } | Next
  * 适用于某些不需要 novelPromotionData 的 API
  */
 export async function requireProjectAuthLight(
-    projectId: string
+    projectId: string,
+    options?: { action?: 'read' | 'write' }
 ): Promise<{ session: AuthSession; project: { id: string; userId: string; name: string; [key: string]: unknown } } | NextResponse> {
     const session = await getAuthSession()
     if (!session?.user?.id) {
@@ -447,13 +469,26 @@ export async function requireProjectAuthLight(
         return notFound('Project')
     }
 
+    // Phase 12.5 (2026-05-22) — 8-tier cascade with default action='write'.
+    // See requireProjectAuth above for the full rationale.
+    const action = options?.action ?? 'write'
+    const access = await requireProjectAccess(
+        { project: { id: project.id, userId: project.userId, workspaceId: project.workspaceId } },
+        session.user.id,
+        action,
+    )
+    if (!access.allowed) {
+        if (access.reason === 'NOT_AUTHENTICATED') return unauthorized()
+        if (access.reason === 'NOT_FOUND') return notFound('Project')
+        return forbidden()
+    }
     if (project.userId !== session.user.id) {
-        const isAdmin = await sessionUserIsAdmin(session.user.id)
-        if (isAdmin) {
+        if (access.effectiveRole === 'admin') {
             bindAdminCrossUserLog(session, projectId, project.userId)
-        } else {
-            const editorAccess = await editorCanAccessProject(session.user.id, project.userId)
-            if (!editorAccess) return forbidden()
+        } else if (
+            access.effectiveRole === 'ws_owner'
+            || access.effectiveRole === 'ws_owner_legacy'
+        ) {
             bindEditorCrossUserLog(session, projectId, project.userId)
         }
     }

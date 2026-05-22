@@ -92,7 +92,7 @@ export const GET = apiHandler(async (
 ) => {
   const { projectId } = await context.params
 
-  const authResult = await requireProjectAuthLight(projectId)
+  const authResult = await requireProjectAuthLight(projectId, { action: 'read' })
   if (isErrorResponse(authResult)) return authResult
 
   const novelData = await prisma.novelPromotionProject.findUnique({

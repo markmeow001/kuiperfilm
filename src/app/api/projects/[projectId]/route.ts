@@ -17,6 +17,9 @@ const PUBLIC_USER_SELECT = {
 } as const
 
 // GET - 获取项目详情
+// Phase 12.5 (2026-05-22) — use 8-tier cascade for read access.
+// Allows workspace members + collaborators to read project metadata
+// (Decision 2A: same-workspace members default read).
 export const GET = apiHandler(async (
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> }
@@ -27,6 +30,15 @@ export const GET = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 
+  // 8-tier cascade for read
+  const access = await requireProjectAccess(projectId, session.user.id, 'read')
+  if (!access.allowed) {
+    if (access.reason === 'NOT_FOUND' || access.reason === 'NOT_AUTHENTICATED') {
+      throw new ApiError('NOT_FOUND')
+    }
+    throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
+  }
+
   // 只获取基础项目信息，不包含模式特定数据
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -35,12 +47,8 @@ export const GET = apiHandler(async (
     }
   })
 
-  if (!project) {
+  if (!project || project.deletedAt) {
     throw new ApiError('NOT_FOUND')
-  }
-
-  if (project.userId !== session.user.id) {
-    throw new ApiError('FORBIDDEN')
   }
 
   // 更新最近访问时间（异步，不阻塞响应）
@@ -57,6 +65,9 @@ export const GET = apiHandler(async (
 })
 
 // PATCH - 更新项目配置
+// Phase 12.5 (2026-05-22) — use 8-tier cascade for write.
+// Owner, admin, ws_owner, ws editor, collaborator (editor) can update
+// project config. Viewer gets 403 with VIEWER_CANNOT_WRITE.
 export const PATCH = apiHandler(async (
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> }
@@ -68,17 +79,22 @@ export const PATCH = apiHandler(async (
   const session = authResult.session
   const body = await request.json()
 
+  const access = await requireProjectAccess(projectId, session.user.id, 'write')
+  if (!access.allowed) {
+    if (access.reason === 'NOT_FOUND') throw new ApiError('NOT_FOUND')
+    if (access.reason === 'VIEWER_CANNOT_WRITE') {
+      throw new ApiError('FORBIDDEN', { code: 'VIEWER_CANNOT_WRITE' })
+    }
+    throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: { user: { select: PUBLIC_USER_SELECT } }
   })
 
-  if (!project) {
+  if (!project || project.deletedAt) {
     throw new ApiError('NOT_FOUND')
-  }
-
-  if (project.userId !== session.user.id) {
-    throw new ApiError('FORBIDDEN')
   }
 
   // 更新项目

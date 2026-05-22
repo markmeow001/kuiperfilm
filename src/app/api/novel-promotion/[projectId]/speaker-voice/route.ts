@@ -24,7 +24,7 @@ export const GET = apiHandler(async (
   const episodeId = searchParams.get('episodeId')
 
   // 🔐 统一权限验证
-  const authResult = await requireProjectAuthLight(projectId)
+  const authResult = await requireProjectAuthLight(projectId, { action: 'read' })
   if (isErrorResponse(authResult)) return authResult
 
   if (!episodeId) {

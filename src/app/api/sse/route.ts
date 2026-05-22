@@ -98,7 +98,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
 
   const authResult = projectId === 'global-asset-hub'
     ? await requireUserAuth()
-    : await requireProjectAuthLight(projectId)
+    : await requireProjectAuthLight(projectId, { action: 'read' })
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 

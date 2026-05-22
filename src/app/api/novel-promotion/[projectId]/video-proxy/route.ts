@@ -25,7 +25,7 @@ export const GET = apiHandler(async (
     }
 
     // 🔐 统一权限验证
-    const authResult = await requireProjectAuthLight(projectId)
+    const authResult = await requireProjectAuthLight(projectId, { action: 'read' })
     if (isErrorResponse(authResult)) return authResult
 
     // 生成签名 URL 并下载
