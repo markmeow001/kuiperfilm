@@ -75,6 +75,9 @@ export const queryKeys = {
         episodes: (projectId: string) => ['project', projectId, 'episodes'] as const,
         data: (projectId: string) => ['project', projectId, 'data'] as const,
         styleProfile: (projectId: string) => ['project', projectId, 'style-profile'] as const,
+        // Phase 12.5 (2026-05-22) — current user's effective role + capabilities
+        // on this project. Powers V2 read-only mode + role badge.
+        access: (projectId: string) => ['project', projectId, 'access'] as const,
     },
 
     // ============ 顶层便捷函数 ============
