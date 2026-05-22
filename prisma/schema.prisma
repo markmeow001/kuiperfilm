@@ -495,13 +495,31 @@ model Project {
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @default(now()) @updatedAt
   lastAccessedAt     DateTime?
+  // Phase 12.5 (2026-05-22) — workspace assignment.
+  // NULL = personal (legacy + standalone). Set to bind project to a
+  // workspace so all workspace members get default access per their
+  // WorkspaceMember.role (editor RW / viewer read-only).
+  workspaceId        String?
+  // Phase 12.5 (2026-05-22) — soft delete with 30-day grace period.
+  // DELETE endpoint sets deletedAt; a daily cron hard-deletes rows
+  // where deletedAt is older than 30 days. Owner can restore via
+  // POST /api/projects/:id/restore within the grace window.
+  deletedAt          DateTime?
+  deletedBy          String?
   novelPromotionData NovelPromotionProject?
   user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace          Workspace?             @relation("WorkspaceProjects", fields: [workspaceId], references: [id], onDelete: SetNull)
+  deleter            User?                  @relation("ProjectDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
   usageCosts         UsageCost[]
   // Sticky-step navigation: per-user last step on this project
   userProjectStates  UserProjectState[]
+  // Phase 12.5 — Figma-style per-project explicit grants (overrides workspace default)
+  collaborators      ProjectCollaborator[]
+  editRequests       EditRequest[]
 
   @@index([userId])
+  @@index([workspaceId])
+  @@index([deletedAt])
   @@map("projects")
 }
 
@@ -590,6 +608,14 @@ model User {
   // Sticky-step navigation: remembers per-user last step on each project
   userProjectStates UserProjectState[]
 
+  // Phase 12.5 (2026-05-22) — Figma-style collaboration
+  projectCollaborations  ProjectCollaborator[] @relation("CollaboratorUser")
+  projectCollaborationsGranted ProjectCollaborator[] @relation("CollaboratorGrantedBy")
+  editRequestsMade       EditRequest[]         @relation("EditRequester")
+  editRequestsResolved   EditRequest[]         @relation("EditRequestResolver")
+  auditLogActions        AuditLog[]            @relation("AuditActor")
+  deletedProjects        Project[]             @relation("ProjectDeletedBy")
+
   @@map("user")
 }
 
@@ -638,6 +664,8 @@ model Workspace {
   organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   owner        User              @relation("WorkspaceOwner", fields: [ownerEditorId], references: [id], onDelete: Restrict)
   members      WorkspaceMember[]
+  // Phase 12.5 — projects bound to this workspace (NULL projects = personal/legacy)
+  projects     Project[]         @relation("WorkspaceProjects")
 
   @@index([organizationId])
   @@index([ownerEditorId])
@@ -648,7 +676,13 @@ model WorkspaceMember {
   workspaceId String
   userId      String
   addedBy     String
-  joinedAt    DateTime @default(now())
+  joinedAt    DateTime      @default(now())
+  // Phase 12.5 (2026-05-22) — workspace-scoped role.
+  // Default 'viewer' for NEW members; existing rows backfill to 'editor'
+  // to preserve current 4-tier cascade behavior (existing members had
+  // implicit RW via editorCanAccessProject + workspace owner ed access).
+  // See docs/plans/workspace-collaboration-spec.md §3.4.
+  role        WorkspaceRole @default(viewer)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation("WorkspaceMembership", fields: [userId], references: [id], onDelete: Cascade)
@@ -658,6 +692,93 @@ model WorkspaceMember {
   @@index([userId])
   @@index([addedBy])
   @@map("workspace_member")
+}
+
+enum WorkspaceRole {
+  editor // Default workspace-wide RW on member projects
+  viewer // Default workspace-wide read-only on member projects
+}
+
+// ──────────── Phase 12.5 Figma-style collaboration (2026-05-22) ────────────
+//
+// Three new tables layered on top of the existing Org → Workspace → Member
+// hierarchy to support per-project access grants and request-to-edit flow:
+//
+//   ProjectCollaborator — per-project explicit role override (Figma "share")
+//   EditRequest         — viewer asks owner for edit access (Figma "request")
+//   AuditLog            — accountability trail for destructive / privileged actions
+//
+// Auth cascade (full 8 steps, see docs/plans/workspace-collaboration-spec.md §4):
+//   1 owner | 2 admin | 3 workspace.ownerEditor (via P.workspaceId)
+//   3.5 LEGACY editorCanAccessProject (kept for projects with workspaceId=NULL)
+//   4 ProjectCollaborator (overrides #5) | 5 WorkspaceMember.role | 6 403
+// ────────────────────────────────────────────────────────────────────────────
+
+model ProjectCollaborator {
+  projectId String
+  userId    String
+  // Per-project role, overrides WorkspaceMember.role for this project only
+  role      ProjectCollabRole
+  grantedBy String
+  grantedAt DateTime          @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation("CollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
+  granter   User    @relation("CollaboratorGrantedBy", fields: [grantedBy], references: [id], onDelete: Restrict)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@index([grantedBy])
+  @@map("project_collaborator")
+}
+
+enum ProjectCollabRole {
+  editor
+  viewer
+}
+
+model EditRequest {
+  id          String        @id @default(uuid())
+  projectId   String
+  requesterId String
+  status      RequestStatus @default(pending)
+  message     String?       @db.Text
+  createdAt   DateTime      @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  requester User    @relation("EditRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  resolver  User?   @relation("EditRequestResolver", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([requesterId])
+  @@index([status, createdAt]) // for cron auto-expire scan
+  @@map("edit_request")
+}
+
+enum RequestStatus {
+  pending
+  approved
+  denied
+  expired // Auto-set after 7 days
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String // Actor
+  projectId  String? // Affected project (nullable for workspace-level actions)
+  action     String // e.g. "panel.update" / "project.delete" / "collaborator.add"
+  entityType String // "Panel" | "Project" | "Character" | "Collaborator" | etc.
+  entityId   String
+  snapshot   Json? // Pre-mutation state (destructive actions only)
+  createdAt  DateTime @default(now())
+
+  user User @relation("AuditActor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([userId])
+  @@map("audit_log")
 }
 
 model UserPreference {

@@ -20,8 +20,13 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const { searchParams } = new URL(request.url)
   const limitParam = Number.parseInt(searchParams.get('limit') || '100', 10)
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 500) : 100
+  // Phase 12.5 (2026-05-22) — admin opt-in to see soft-deleted projects
+  // for restore workflow. Defaults to excluding so the main list stays
+  // clean. Pass ?includeDeleted=true for the admin restore queue view.
+  const includeDeleted = searchParams.get('includeDeleted') === 'true'
 
   const projects = await prisma.project.findMany({
+    where: includeDeleted ? {} : { deletedAt: null },
     orderBy: [{ lastAccessedAt: 'desc' }, { createdAt: 'desc' }],
     take: limit,
     select: {

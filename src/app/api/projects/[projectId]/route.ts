@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { addSignedUrlsToProject, deleteCOSObjects } from '@/lib/cos'
 import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { logProjectAction } from '@/lib/logging/semantic'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
 // Public-safe User projection — never leak password/email/lastLoginAt to
@@ -190,7 +190,17 @@ async function collectProjectCOSKeys(projectId: string): Promise<string[]> {
   return keys
 }
 
-// DELETE - 删除项目（同时清理COS文件）
+// DELETE - 软删除项目 (Phase 12.5 — 2026-05-22)
+//
+// 改前：hard delete + 立即清除 COS 文件
+// 改後：soft delete (set deletedAt) + COS 文件保留 30 天
+//   - 30 天內 owner / admin 可呼叫 POST /api/projects/:id/restore 恢復
+//   - 30 天後 daily cron job 才真實 hard-delete + 清 COS
+//   - 仍 audit log（destructive action）
+//
+// Auth: 走新 8-tier cascade `requireProjectAccess(action='write')`.
+// Owner / admin / workspace owner / project editor 都能 soft-delete。
+// Viewer 觸發 VIEWER_CANNOT_WRITE → 403.
 export const DELETE = apiHandler(async (
   request: NextRequest,
   context: { params: Promise<{ projectId: string }> }
@@ -201,33 +211,39 @@ export const DELETE = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
   const session = authResult.session
 
+  // 8-tier cascade — owner / admin / ws_owner / editor collaborator
+  // 都會通過 write check。viewer collaborator 會被 VIEWER_CANNOT_WRITE
+  // 攔下。已 soft-deleted 的會被 NOT_FOUND 攔下 (idempotent)。
+  const access = await requireProjectAccess(projectId, session.user.id, 'write')
+  if (!access.allowed) {
+    if (access.reason === 'NOT_FOUND') throw new ApiError('NOT_FOUND')
+    if (access.reason === 'VIEWER_CANNOT_WRITE') {
+      throw new ApiError('FORBIDDEN', { code: 'VIEWER_CANNOT_DELETE' })
+    }
+    throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
+  }
+
+  // 取 project name 給 log / response（fetch deletedAt:null 雙重防護，
+  // 雖然 requireProjectAccess 已過濾過 soft-deleted，這裡再保險一次以防
+  // race condition: 另一個 request 在毫秒間隔內 soft-deleted 同一筆）。
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { user: { select: PUBLIC_USER_SELECT } }
+    select: { id: true, name: true, userId: true, deletedAt: true },
   })
-
-  if (!project) {
+  if (!project || project.deletedAt) {
     throw new ApiError('NOT_FOUND')
   }
 
-  if (project.userId !== session.user.id) {
-    throw new ApiError('FORBIDDEN')
-  }
-
-  // 1. 先收集所有 COS 文件 Key
-  _ulogInfo(`[DELETE] 开始删除项目: ${project.name} (${projectId})`)
-  const cosKeys = await collectProjectCOSKeys(projectId)
-
-  // 2. 批量删除 COS 文件
-  let cosResult = { success: 0, failed: 0 }
-  if (cosKeys.length > 0) {
-    _ulogInfo(`[DELETE] 正在删除 ${cosKeys.length} 个 COS 文件...`)
-    cosResult = await deleteCOSObjects(cosKeys)
-  }
-
-  // 3. 删除数据库记录 (级联删除所有关联数据)
-  await prisma.project.delete({
-    where: { id: projectId }
+  // Soft delete：不動 COS 文件、不級聯刪 child rows。
+  // child rows (panels / characters / 等) 看 project.deletedAt 應視為 hidden,
+  // 但 DB 不動所以 restore 後完整恢復。
+  const deletedAt = new Date()
+  await prisma.project.update({
+    where: { id: projectId },
+    data: {
+      deletedAt,
+      deletedBy: session.user.id,
+    },
   })
 
   logProjectAction(
@@ -237,18 +253,22 @@ export const DELETE = apiHandler(async (
     projectId,
     project.name,
     {
-      projectName: project.name,
-      cosFilesDeleted: cosResult.success,
-      cosFilesFailed: cosResult.failed
+      softDelete: true,
+      deletedAt: deletedAt.toISOString(),
+      effectiveRole: access.effectiveRole,
+      // 不再 cosFilesDeleted — 30 天後 cron 才真刪
     }
   )
 
-  _ulogInfo(`[DELETE] 项目删除完成: ${project.name}`)
-  _ulogInfo(`[DELETE] COS 文件: 成功 ${cosResult.success}, 失败 ${cosResult.failed}`)
+  _ulogInfo(`[SOFT-DELETE] 项目已软删除: ${project.name} (${projectId}) by ${session.user.id}`)
+
+  // 30 天恢復窗口 (per spec §3.2 grace period)
+  const restorableUntil = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000)
 
   return NextResponse.json({
     success: true,
-    cosFilesDeleted: cosResult.success,
-    cosFilesFailed: cosResult.failed
+    softDeleted: true,
+    deletedAt: deletedAt.toISOString(),
+    restorableUntil: restorableUntil.toISOString(),
   })
 })

@@ -57,8 +57,11 @@ export const GET = apiHandler(async (
   const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
   const cursor = searchParams.get('cursor') || undefined
 
+  // Phase 12.5 (2026-05-22) — exclude soft-deleted from workspace project view.
+  // Owner of soft-deleted project gets restore notification; admin can see
+  // them via /api/admin/projects?includeDeleted=true.
   const projects = await prisma.project.findMany({
-    where: { userId: { in: memberIds } },
+    where: { userId: { in: memberIds }, deletedAt: null },
     orderBy: { updatedAt: 'desc' },
     take: limit + 1,
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),

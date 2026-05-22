@@ -19,7 +19,12 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const search = searchParams.get('search') || ''
 
   // 构建查询条件
-  const where: Record<string, unknown> = { userId: session.user.id }
+  // Phase 12.5 (2026-05-22) — exclude soft-deleted (deletedAt IS NULL).
+  // Soft-deleted projects show up in admin restore queue, not user lists.
+  const where: Record<string, unknown> = {
+    userId: session.user.id,
+    deletedAt: null,
+  }
 
   // 如果有搜索关键词，搜索名称和描述
   if (search.trim()) {

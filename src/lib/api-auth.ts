@@ -330,7 +330,10 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
     )
 
     // 4. 项目存在检查
-    if (!project) {
+    //    Phase 12.5 (2026-05-22) — soft-deleted projects are treated
+    //    as not-found here. Restore endpoint has a dedicated path that
+    //    explicitly reads the deletedAt row.
+    if (!project || project.deletedAt) {
         return notFound('Project')
     }
 
@@ -439,7 +442,8 @@ export async function requireProjectAuthLight(
         })
     )
 
-    if (!project) {
+    // Phase 12.5 (2026-05-22) — soft-deleted treated as not-found.
+    if (!project || project.deletedAt) {
         return notFound('Project')
     }
 
@@ -455,6 +459,191 @@ export async function requireProjectAuthLight(
     }
 
     return { session, project }
+}
+
+// ============================================================
+// Phase 12.5 (2026-05-22) — 8-tier project access cascade
+// ============================================================
+
+/**
+ * Effective role that grants the requester access to a project.
+ *
+ * - owner            — R == project.userId (cascade step 1)
+ * - admin            — R.role == 'admin' (step 2)
+ * - ws_owner         — R == project.workspace.ownerEditorId (step 3, NEW)
+ * - ws_owner_legacy  — R is editor of any workspace containing project.userId
+ *                      as member (step 3.5 LEGACY, kept for projects with
+ *                      workspaceId=NULL until Phase 2 migration)
+ * - editor           — ProjectCollaborator(R, project, editor) OR
+ *                      WorkspaceMember(project.workspace, R, editor)
+ * - viewer           — same as editor but role=viewer; only allows read
+ */
+export type ProjectAccessRole =
+    | 'owner'
+    | 'admin'
+    | 'ws_owner'
+    | 'ws_owner_legacy'
+    | 'editor'
+    | 'viewer'
+
+export interface ProjectAccessAllowed {
+    allowed: true
+    /** Which cascade step granted access — useful for logging + Phase 2 deprecation tracking. */
+    effectiveRole: ProjectAccessRole
+}
+
+export interface ProjectAccessDenied {
+    allowed: false
+    /** Machine-readable denial reason. */
+    reason:
+        | 'NOT_FOUND'
+        | 'NOT_AUTHENTICATED'
+        | 'NO_ACCESS'
+        | 'VIEWER_CANNOT_WRITE'
+}
+
+export type ProjectAccessResult = ProjectAccessAllowed | ProjectAccessDenied
+
+/**
+ * 8-tier project access cascade. Replaces the 4-tier `requireProjectAuth`
+ * for new code paths; the old helper remains for incremental migration.
+ *
+ * Cascade (full ordering, see docs/plans/workspace-collaboration-spec.md §4):
+ *
+ *   1. R == project.userId                              → owner (read+write)
+ *   2. R.role == 'admin'                                 → admin (read+write)
+ *   3. project.workspaceId set AND
+ *      R == project.workspace.ownerEditorId             → ws_owner (read+write)
+ *   3.5 [LEGACY] R is editor of any workspace
+ *       containing project.userId as member             → ws_owner_legacy (read+write)
+ *       — only fires when steps 3 doesn't match. Will be removed in Phase 2
+ *       once all projects have explicit workspaceId.
+ *   4. ProjectCollaborator(project, R) exists           → role-based
+ *   5. WorkspaceMember(project.workspace, R) exists     → role-based
+ *   6. else                                              → NO_ACCESS
+ *
+ * For action='write': only editor-role passes at steps 4-5
+ * For action='read':  both editor and viewer pass
+ *
+ * Implementation note: this function ONLY runs DB queries on cross-user
+ * paths. Steps 1-2 short-circuit before touching workspace/collaborator
+ * tables, so the hot owner/admin path stays cheap.
+ *
+ * @param projectIdOrParams Either the project id directly, or an object
+ *                          carrying the pre-fetched project (saves a DB
+ *                          query when caller already has the row).
+ * @param requesterId       The session user id.
+ * @param action            'read' or 'write'.
+ */
+export async function requireProjectAccess(
+    projectIdOrParams:
+        | string
+        | { project: { id: string; userId: string; workspaceId?: string | null } },
+    requesterId: string,
+    action: 'read' | 'write',
+): Promise<ProjectAccessResult> {
+    if (!requesterId) {
+        return { allowed: false, reason: 'NOT_AUTHENTICATED' }
+    }
+
+    // Resolve project. Caller may pre-fetch for cheap lookups; otherwise
+    // we hit the DB. Selecting only fields needed for the cascade keeps
+    // the query light.
+    let project: { id: string; userId: string; workspaceId: string | null }
+    if (typeof projectIdOrParams === 'string') {
+        const row = await prisma.project.findUnique({
+            where: { id: projectIdOrParams },
+            select: { id: true, userId: true, workspaceId: true, deletedAt: true },
+        })
+        if (!row || row.deletedAt) {
+            // Soft-deleted projects are NOT_FOUND for non-admin callers.
+            // Admin restore endpoint uses a separate query path that
+            // honors deletedAt explicitly.
+            return { allowed: false, reason: 'NOT_FOUND' }
+        }
+        project = { id: row.id, userId: row.userId, workspaceId: row.workspaceId }
+    } else {
+        project = {
+            id: projectIdOrParams.project.id,
+            userId: projectIdOrParams.project.userId,
+            workspaceId: projectIdOrParams.project.workspaceId ?? null,
+        }
+    }
+
+    // Step 1: owner always wins.
+    if (project.userId === requesterId) {
+        return { allowed: true, effectiveRole: 'owner' }
+    }
+
+    // Step 2: admin bypass.
+    const requester = await prisma.user.findUnique({
+        where: { id: requesterId },
+        select: { role: true },
+    })
+    if (requester?.role === 'admin') {
+        return { allowed: true, effectiveRole: 'admin' }
+    }
+
+    // Step 3: workspace owner editor via explicit P.workspaceId.
+    if (project.workspaceId) {
+        const ws = await prisma.workspace.findUnique({
+            where: { id: project.workspaceId },
+            select: { ownerEditorId: true },
+        })
+        if (ws?.ownerEditorId === requesterId) {
+            return { allowed: true, effectiveRole: 'ws_owner' }
+        }
+    }
+
+    // Step 3.5 [LEGACY]: editorCanAccessProject preserves existing 4-tier
+    // behavior for projects with workspaceId=NULL. Will be removed once
+    // all projects have explicit workspaceId (Phase 2 migration).
+    // Only fires when step 3 didn't match — keep the call out of the hot
+    // path for new (workspaceId set) projects.
+    const legacyAllowed = await editorCanAccessProject(requesterId, project.userId)
+    if (legacyAllowed) {
+        return { allowed: true, effectiveRole: 'ws_owner_legacy' }
+    }
+
+    // Step 4: per-project collaborator (explicit grant, overrides workspace default).
+    const collab = await prisma.projectCollaborator.findUnique({
+        where: { projectId_userId: { projectId: project.id, userId: requesterId } },
+        select: { role: true },
+    })
+    if (collab) {
+        if (action === 'read') {
+            return { allowed: true, effectiveRole: collab.role === 'editor' ? 'editor' : 'viewer' }
+        }
+        if (collab.role === 'editor') {
+            return { allowed: true, effectiveRole: 'editor' }
+        }
+        return { allowed: false, reason: 'VIEWER_CANNOT_WRITE' }
+    }
+
+    // Step 5: workspace member role (default for the workspace).
+    if (project.workspaceId) {
+        const wm = await prisma.workspaceMember.findUnique({
+            where: {
+                workspaceId_userId: {
+                    workspaceId: project.workspaceId,
+                    userId: requesterId,
+                },
+            },
+            select: { role: true },
+        })
+        if (wm) {
+            if (action === 'read') {
+                return { allowed: true, effectiveRole: wm.role === 'editor' ? 'editor' : 'viewer' }
+            }
+            if (wm.role === 'editor') {
+                return { allowed: true, effectiveRole: 'editor' }
+            }
+            return { allowed: false, reason: 'VIEWER_CANNOT_WRITE' }
+        }
+    }
+
+    // Step 6: no access.
+    return { allowed: false, reason: 'NO_ACCESS' }
 }
 
 // ============================================================
