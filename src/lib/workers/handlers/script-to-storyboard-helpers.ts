@@ -63,11 +63,36 @@ const SCENE_KEYWORDS = new Set<string>([
   '编号', '編號',
 ])
 
+// 2026-05-22 — audio-design labels masquerade as speakers because they
+// share the `<word>：<content>` shape. The 迁徙 ep3 bug was
+// `（音效：尖锐的单音蜂鸣）` landing in panel srtSegment as if 音效 spoke
+// it. These are metadata categories, never characters.
+const AUDIO_METADATA_KEYWORDS = new Set<string>([
+  '音效', '音樂', '音乐', '配乐', '配樂', 'BGM', 'SFX',
+  '声音', '聲音', '对白', '對白', '台词', '台詞',
+  '旁白', '旁白', '解说', '解說', '字幕',
+  '光效', '特效',
+])
+
+// 2026-05-22 — compound camera/shot suffixes. The original denylist
+// only caught literal `特写` but missed `极端特写` / `对话镜头` /
+// `跟拍中景`. Suffix match catches every X+suffix compound the LLM
+// invents.
+const SCENE_SUFFIXES = [
+  '镜头', '鏡頭', '特写', '特寫', '近景', '中景', '远景', '遠景',
+  '全景', '空镜', '空鏡', '反打', '过肩', '過肩', '俯视', '俯視',
+  '仰视', '仰視', '蒙太奇',
+]
+
 function isLikelyScenePrefix(speaker: string): boolean {
   const trimmed = speaker.trim()
   if (!trimmed) return true
-  // Scene type literal
   if (SCENE_KEYWORDS.has(trimmed)) return true
+  if (AUDIO_METADATA_KEYWORDS.has(trimmed)) return true
+  // Compound camera terms like `对话镜头`, `极端特写`, `跟拍中景`
+  for (const suffix of SCENE_SUFFIXES) {
+    if (trimmed.length > suffix.length && trimmed.endsWith(suffix)) return true
+  }
   // "编号3" / "鏡頭5" / "Shot 7" / "Panel 12"
   if (/^(编号|編號|镜头|鏡頭|场景|場景|Shot|Panel|Scene)\s*\d+/i.test(trimmed)) return true
   // Pure digits like "1" / "01"
@@ -75,27 +100,60 @@ function isLikelyScenePrefix(speaker: string): boolean {
   return false
 }
 
+// Speaker shape — covers:
+//  - ALL-CAPS Latin lead, mixed body (e.g. CATHERINE, AI, BO-7)
+//  - CJK lead, mixed body (e.g. 长官, 镜, AI 系统广播 when matched via Latin lead)
+//  - Mixed Latin+CJK like `AI 系统广播` — Latin track allows CJK in body
+// Length bounded 1-30 incl. lead.
+const SPEAKER_RE_SRC =
+  '([A-ZÁÉÍÓÚÑÄÖÜ][A-ZÁÉÍÓÚÑÄÖÜa-zá-ÿ一-鿿\\s\']{1,30}|[一-鿿][一-鿿A-ZÁÉÍÓÚÑÄÖÜa-zá-ÿ\\s\']{0,19})'
+// 2026-05-22 — `<speaker>（<modifier>）：<content>` is the screenplay
+// convention used in《迁徙》 ep1+ep3 (5/6 dialogue lines) and was the
+// silent failure mode that left panel.srtSegment NULL → Seedance R2V
+// generated silent lip-sync. Make the parenthetical optional but
+// allowed between the speaker name and the colon.
+const PAREN_RE_SRC = '(?:\\s*[（(][^）)\\n]{0,40}[）)])?'
+const COLON_RE_SRC = '\\s*[:：]\\s*'
+
+/** Match `<speaker>(<modifier>)?:` heads across the whole text. */
+const HEAD_RE = new RegExp(SPEAKER_RE_SRC + PAREN_RE_SRC + COLON_RE_SRC, 'gu')
+
 export function extractDialogueFromSourceText(raw: string | null | undefined): string | null {
   if (!raw) return null
-  const trimmed = raw.trim()
-  if (!trimmed) return null
+  const text = raw.trim()
+  if (!text) return null
 
-  // Match candidate `<NAME>:<content>` segments anywhere in the text.
-  // NAME = ALL-CAPS Latin (>=2 chars, allows accented chars + spaces) OR
-  //        short Chinese block (1-4 chars).
-  // Content captured up to the next NAME: or end of string.
-  // The 'gus' flags let . cross newlines and a global match find every
-  // occurrence so we catch panels with multiple speakers concatenated.
-  const SEGMENT_RE = /([A-ZÁÉÍÓÚÑÄÖÜ][A-ZÁÉÍÓÚÑÄÖÜa-zá-ÿ\s']{1,30}|[一-鿿]{1,4})\s*[:：]\s*([\s\S]+?)(?=(?:[A-ZÁÉÍÓÚÑÄÖÜ][A-ZÁÉÍÓÚÑÄÖÜa-zá-ÿ\s']{1,30}|[一-鿿]{1,4})\s*[:：]|$)/gu
-
-  const dialogues: string[] = []
+  // Pass 1 — find every head position in the text. Two-pass instead of
+  // one regex with lookahead makes the parens-aware boundary correct
+  // even when consecutive heads have different shapes (e.g. one with
+  // modifier, one without).
+  type Head = { start: number; end: number; speaker: string }
+  const heads: Head[] = []
+  HEAD_RE.lastIndex = 0
   let m: RegExpExecArray | null
-  while ((m = SEGMENT_RE.exec(trimmed)) !== null) {
-    const speaker = m[1].trim()
-    const content = m[2].trim()
-    if (isLikelyScenePrefix(speaker)) continue
+  while ((m = HEAD_RE.exec(text)) !== null) {
+    heads.push({
+      start: m.index,
+      end: m.index + m[0].length,
+      speaker: m[1].trim(),
+    })
+    // Guard against pathological zero-width matches.
+    if (m[0].length === 0) HEAD_RE.lastIndex += 1
+  }
+
+  if (heads.length === 0) return null
+
+  // Pass 2 — for each valid head, content is the text up to the next
+  // head's start (or end of text). Rejected heads still segment the
+  // text but their content is discarded.
+  const dialogues: string[] = []
+  for (let i = 0; i < heads.length; i++) {
+    const head = heads[i]
+    if (isLikelyScenePrefix(head.speaker)) continue
+    const contentEnd = i + 1 < heads.length ? heads[i + 1].start : text.length
+    const content = text.slice(head.end, contentEnd).trim()
     if (!content) continue
-    dialogues.push(`${speaker}: ${content}`)
+    dialogues.push(`${head.speaker}: ${content}`)
   }
   if (dialogues.length === 0) return null
   return dialogues.join('\n')
