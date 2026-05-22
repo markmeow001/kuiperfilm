@@ -3,6 +3,7 @@ import {
   estimateSpeechSeconds,
   estimatePanelSpeechSeconds,
   buildDialogueDrivenDurations,
+  computeGroupRecommendedDurationSec,
 } from '@/lib/workers/handlers/speech-duration-estimator'
 
 describe('estimateSpeechSeconds', () => {
@@ -120,5 +121,55 @@ describe('buildDialogueDrivenDurations', () => {
       silentPanelSeconds: 1,
     })
     expect(r!.durations[1]).toBe(1)
+  })
+})
+
+describe('computeGroupRecommendedDurationSec', () => {
+  it('returns null for empty panels (caller decides empty-state UI)', () => {
+    expect(computeGroupRecommendedDurationSec([])).toBeNull()
+  })
+
+  it('uses dialogue-driven total when srtSegment carries speech', () => {
+    // Two short dialogue lines → driven total under 15s ceiling.
+    const result = computeGroupRecommendedDurationSec([
+      { id: 'p1', srtSegment: 'Karrug: 你還好嗎' },
+      { id: 'p2', srtSegment: 'Ayla: 我沒事' },
+    ])
+    expect(result).not.toBeNull()
+    expect(result!).toBeGreaterThan(0)
+    expect(result!).toBeLessThanOrEqual(15)
+  })
+
+  it('handles "：" full-width colon, not just half-width ":"', () => {
+    const result = computeGroupRecommendedDurationSec([
+      { id: 'p1', srtSegment: '旁白：森林深處傳來腳步聲' },
+    ])
+    expect(result).not.toBeNull()
+    expect(result!).toBeGreaterThan(0)
+  })
+
+  it('falls back to Phase M baseline when every panel is silent', () => {
+    // 3 silent panels → baseline = max(10, 3*2.5)=10, clamped 4-15 → 10s.
+    const result = computeGroupRecommendedDurationSec([
+      { id: 'p1' },
+      { id: 'p2', srtSegment: '' },
+      { id: 'p3', srtSegment: null },
+    ])
+    expect(result).toBe(10)
+  })
+
+  it('clamps the baseline to 15s even with many silent panels', () => {
+    // 10 silent panels → baseline = max(10, 10*2.5)=25, clamped → 15s.
+    const panels = Array.from({ length: 10 }, (_, i) => ({ id: `p${i}` }))
+    const result = computeGroupRecommendedDurationSec(panels)
+    expect(result).toBe(15)
+  })
+
+  it('treats no-colon srtSegment as narration (still has dialogue)', () => {
+    const result = computeGroupRecommendedDurationSec([
+      { id: 'p1', srtSegment: '一個沒有冒號的句子也算對白' },
+    ])
+    expect(result).not.toBeNull()
+    expect(result!).toBeGreaterThan(0)
   })
 })

@@ -34,6 +34,7 @@ import {
 } from '@/lib/cold-open'
 import {
   buildDialogueDrivenDurations,
+  computeGroupRecommendedDurationSec,
 } from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
 
@@ -195,12 +196,20 @@ interface GroupCardProps {
    */
   episodeBindings?: Array<{ characterId: string; appearanceId: string | null }>
   /**
-   * Approximate per-group runtime in seconds. Used to compute a
-   * cumulative time range badge in the collapsed header so the
-   * editor reads like the Seedance 2.0 video plan UI the user
-   * referenced. Defaults to 15s when not provided.
+   * Approximate per-group runtime in seconds. Used to compute the
+   * cumulative time range badge in the collapsed header. Defaults
+   * to 15s when not provided.
    */
   segmentDurationSeconds?: number
+  /**
+   * Absolute start offset (in seconds) for this group's time-range
+   * badge. When provided, the header reads `segmentStartSec` →
+   * `segmentStartSec + segmentDurationSeconds`. When omitted, falls
+   * back to the legacy `(groupOrdinal - 1) * segmentDurationSeconds`
+   * approximation — only correct when every group has the same
+   * duration, which is rarely true post-Phase Q.
+   */
+  segmentStartSec?: number
   /**
    * Episode number (1-indexed) — folded into the download filename
    * as `ep{N}_group{NN}.mp4` so user keeps a sane archive across
@@ -261,6 +270,7 @@ export function GroupCard({
   locationRoster,
   episodeBindings,
   segmentDurationSeconds = 15,
+  segmentStartSec,
   episodeNumber,
   canMultiShot = true,
   videoFamily = null,
@@ -1066,37 +1076,13 @@ export function GroupCard({
   // the system would pick and only need to override when the number feels
   // off. Mirrors the worker-side Phase M tiers so the displayed value
   // matches what the worker will actually use.
-  const recommendedDurationSec = useMemo<number | null>(() => {
-    const dialogueByPanelId = new Map<string, Array<{ speaker: string; content: string }>>()
-    for (const p of panels) {
-      const seg = (p.srtSegment ?? '').trim()
-      if (!seg) continue
-      // Loose split on first ":" / "：" — matches "Karrug: 「...」" /
-      // "旁白：..." etc. When no colon, whole segment is the content,
-      // speaker becomes 旁白 (narration).
-      // [\s\S] in lieu of the /s flag (frontend tsconfig predates ES2018).
-      const m = seg.match(/^([^:：「"'']{1,20})\s*[:：]\s*([\s\S]+)$/)
-      const speaker = m?.[1]?.trim() || '旁白'
-      const content = m?.[2]?.trim() || seg
-      dialogueByPanelId.set(p.id, [{ speaker, content }])
-    }
-    try {
-      const driven = buildDialogueDrivenDurations({
-        panels: panels.map((p) => ({ id: p.id })),
-        dialogueByPanelId,
-      })
-      if (driven && driven.hasDialogue) {
-        return driven.totalDuration
-      }
-    } catch {
-      // DIALOGUE_EXCEEDS_KLING_BUDGET — fall through to baseline.
-    }
-    // No dialogue or too-long fallthrough → Phase M baseline parity:
-    // max(10, panel_count * 2.5) clamped 4-15. Worker uses identical
-    // formula so dropdown hint never disagrees with actual output.
-    const baseline = Math.max(10, Math.round(panels.length * 2.5))
-    return Math.max(4, Math.min(15, baseline))
-  }, [panels])
+  // Phase M parity with worker — wraps the shared helper so V2GroupsLayout
+  // can compute the same recommendations across all groups (for the
+  // cumulative time-range badge) without duplicating logic.
+  const recommendedDurationSec = useMemo<number | null>(
+    () => computeGroupRecommendedDurationSec(panels),
+    [panels],
+  )
   // Re-seed the narrative when panels, duration, cast, or scenes change AND
   // the user hasn't edited it locally — avoids clobbering an in-progress edit.
   // groupCast/groupScenes are included so chip overrides re-trigger seed.
@@ -1402,10 +1388,18 @@ export function GroupCard({
     setLocationOverrides({})
   }
 
-  // Cumulative time range for the segment header. groupOrdinal is
-  // 1-indexed and we model each segment as `segmentDurationSeconds`
-  // long until the user customises panelDurations (Phase 2).
-  const segmentStart = (groupOrdinal - 1) * segmentDurationSeconds
+  // Cumulative time range for the segment header. Prefer the
+  // absolute `segmentStartSec` the parent computed by summing
+  // prior groups' actual recommended durations (Phase Q-aware).
+  // Fall back to the legacy `(ordinal-1) * thisGroupDuration`
+  // approximation only when the parent hasn't supplied a start —
+  // that path is incorrect whenever groups have different
+  // recommended lengths (which is the norm now), but keeps the
+  // component renderable in legacy contexts that haven't been
+  // upgraded yet.
+  const segmentStart = typeof segmentStartSec === 'number'
+    ? segmentStartSec
+    : (groupOrdinal - 1) * segmentDurationSeconds
   const segmentEnd = segmentStart + segmentDurationSeconds
   const timeRangeLabel = formatTimeRange(segmentStart, segmentEnd)
   const briefDescription = (() => {

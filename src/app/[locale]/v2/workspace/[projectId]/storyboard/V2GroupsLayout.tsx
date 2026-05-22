@@ -30,6 +30,7 @@
 import { useMemo } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { GroupCard, type GroupRegenOverrides } from './GroupCard'
+import { computeGroupRecommendedDurationSec } from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
 
 interface PanelCharacterRef {
@@ -181,6 +182,34 @@ export function V2GroupsLayout({
     return { ordered, ungrouped }
   }, [panels, orderedGroupIds])
 
+  // Per-group recommended duration + cumulative start offset for the
+  // time-range badge in each GroupCard header. Calling the shared
+  // helper here keeps a single source of truth — GroupCard's own
+  // "Auto (推薦 Ns)" hint uses the same function, so the badge,
+  // the dropdown hint, and the worker's actual output all agree.
+  //
+  // Cumulative start = sum of previous groups' durations. Each group
+  // gets `segmentStartSec` (its own absolute offset) +
+  // `segmentDurationSeconds` (its own recommended length). GroupCard
+  // renders `formatTimeRange(start, start + duration)` from these.
+  //
+  // Phase Q follow-up: when a group has been manually overridden
+  // (totalDurationDraft > 0, currently local state) the badge here
+  // can drift. The header label is read-only and far from the
+  // dropdown so the drift isn't disorienting; lifting that state
+  // up is a separate change.
+  const groupTimings = useMemo(() => {
+    const FALLBACK = 15
+    const result: Array<{ groupId: string; startSec: number; durationSec: number }> = []
+    let cursor = 0
+    for (const g of groups.ordered) {
+      const durationSec = computeGroupRecommendedDurationSec(g.panels) ?? FALLBACK
+      result.push({ groupId: g.groupId, startSec: cursor, durationSec })
+      cursor += durationSec
+    }
+    return result
+  }, [groups.ordered])
+
   const hasNoGroups = groups.ordered.length === 0
 
   return (
@@ -204,6 +233,7 @@ export function V2GroupsLayout({
               const ordinal = idx + 1
               const accent = accentForOrdinal(idx)
               const groupLabel = `GROUP ${String(ordinal).padStart(2, '0')}`
+              const timing = groupTimings[idx]
               return (
                 <GroupCard
                   key={g.groupId}
@@ -218,6 +248,8 @@ export function V2GroupsLayout({
                   characterRoster={characterRoster}
                   locationRoster={locationRoster}
                   episodeBindings={episodeBindings}
+                  segmentStartSec={timing?.startSec}
+                  segmentDurationSeconds={timing?.durationSec}
                   episodeNumber={episodeNumber}
                   canMultiShot={canMultiShot}
                   videoFamily={videoFamily}

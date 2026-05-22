@@ -234,3 +234,55 @@ export function buildDialogueDrivenDurations(
     hasDialogue: true,
   }
 }
+
+/**
+ * Single-group recommended duration helper used by frontend group cards
+ * and the cumulative time-range computation in V2GroupsLayout. Mirrors
+ * the worker's Phase M baseline so the dropdown "Auto (推薦 Ns)" hint,
+ * the group header time-range label, and the actual generated mp4 all
+ * agree on the same N.
+ *
+ * Pipeline:
+ *   1. Pull dialogue out of each panel's srtSegment (loose ":"/"：" split,
+ *      narration when no speaker prefix).
+ *   2. Run buildDialogueDrivenDurations. If it returns hasDialogue,
+ *      use its totalDuration.
+ *   3. Otherwise (no dialogue, or DIALOGUE_EXCEEDS_KLING_BUDGET) fall
+ *      back to max(10, panels*2.5) clamped to [4, 15] — the Phase M
+ *      worker baseline.
+ *
+ * Returns null only when panels is empty (caller can decide what to
+ * render then — typically just hide the segment).
+ */
+export function computeGroupRecommendedDurationSec(
+  panels: Array<{ id: string; srtSegment?: string | null }>,
+): number | null {
+  if (panels.length === 0) return null
+
+  const dialogueByPanelId = new Map<string, Array<{ speaker: string; content: string }>>()
+  for (const p of panels) {
+    const seg = (p.srtSegment ?? '').trim()
+    if (!seg) continue
+    // [\s\S] in lieu of /s flag (frontend tsconfig predates ES2018).
+    const m = seg.match(/^([^:：「"'']{1,20})\s*[:：]\s*([\s\S]+)$/)
+    const speaker = m?.[1]?.trim() || '旁白'
+    const content = m?.[2]?.trim() || seg
+    dialogueByPanelId.set(p.id, [{ speaker, content }])
+  }
+
+  try {
+    const driven = buildDialogueDrivenDurations({
+      panels: panels.map((p) => ({ id: p.id })),
+      dialogueByPanelId,
+    })
+    if (driven && driven.hasDialogue) {
+      return driven.totalDuration
+    }
+  } catch {
+    // DIALOGUE_EXCEEDS_KLING_BUDGET — fall through to baseline.
+  }
+
+  // Phase M baseline parity with worker.
+  const baseline = Math.max(10, Math.round(panels.length * 2.5))
+  return Math.max(4, Math.min(15, baseline))
+}
