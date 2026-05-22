@@ -153,7 +153,12 @@ export const PROMPT_CATALOG: Record<PromptId, PromptCatalogEntry> = {
   },
   [PROMPT_IDS.NP_AUTO_GROUP_MULTI_SHOT]: {
     pathStem: 'novel-promotion/auto_group_multi_shot',
-    variableKeys: ['panels_json', 'panel_count'],
+    // Phase Q (2026-05-21) — added target_duration_seconds +
+    // target_group_count_approx so LLM can size group count + per-group
+    // dialogue budget against the project's targetDuration. Catalog
+    // entry MUST list every placeholder the .txt template references;
+    // missing one throws PromptI18nError at request time.
+    variableKeys: ['panels_json', 'panel_count', 'target_duration_seconds', 'target_group_count_approx'],
   },
   [PROMPT_IDS.NP_EXTRACT_PROPS]: {
     pathStem: 'novel-promotion/extract_props',
