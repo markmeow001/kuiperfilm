@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useProjectAccess, type ProjectAccessRole } from '@/lib/query/hooks/useProjectAccess'
 import { AppIcon } from '@/components/ui/icons'
 import { UserMenu } from './UserMenu'
 import { findV2Step, V2_STEPS, v2StepIndex, type V2StepId } from './v2-types'
@@ -75,6 +76,11 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
             draftLabel={draftLabel}
             totalSteps={totalSteps}
           />
+          {/* Phase 12.5 (2026-05-22) — role badge.
+              Only renders when projectId is supplied (i.e. inside a
+              project, not on /v2 home). Tells the user at a glance
+              whether they own / admin / edit / view this project. */}
+          {projectId ? <RoleBadge projectId={projectId} /> : null}
           <UserMenu />
         </div>
       </div>
@@ -230,4 +236,81 @@ function ProjectSwitcher({
       ) : null}
     </div>
   )
+}
+
+/**
+ * Phase 12.5 (2026-05-22) — role badge.
+ *
+ * Tells the user at a glance what role they hold on the current project.
+ * Drives a few user behaviours:
+ *   - OWNER / ADMIN see all editing buttons enabled (matches their role)
+ *   - EDITOR sees the same as owner — they can edit anything in the
+ *     workspace they share with the owner
+ *   - VIEWER sees disabled buttons + "請求編輯權限" tooltip; the badge
+ *     confirms WHY their buttons are greyed out (otherwise users blame
+ *     the app for being broken)
+ *
+ * Color palette intentionally mirrors role authority:
+ *   - ADMIN: rose (different from anything else — sys admin is special)
+ *   - OWNER: amber filled (you own this)
+ *   - EDITOR: amber outline (workspace-granted RW)
+ *   - VIEWER: stone (read-only, low contrast on purpose)
+ *
+ * Renders nothing while loading or on 403 — better than flashing
+ * the wrong role for a beat.
+ */
+function RoleBadge({ projectId }: { projectId: string }) {
+  const access = useProjectAccess(projectId)
+  if (access.isLoading || !access.allowed || !access.role) return null
+
+  const { label, className, title } = roleBadgeStyle(access.role, access.canEdit)
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center rounded-sm border px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.2em] ${className}`}
+    >
+      {label}
+    </span>
+  )
+}
+
+function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean): {
+  label: string
+  className: string
+  title: string
+} {
+  if (role === 'admin') {
+    return {
+      label: 'admin',
+      className: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
+      title: '系統管理員 — 全 access',
+    }
+  }
+  if (role === 'owner') {
+    return {
+      label: 'owner',
+      className: 'border-amber-500/60 bg-amber-500/15 text-amber-200',
+      title: '你是此專案擁有者',
+    }
+  }
+  if (role === 'ws_owner' || role === 'ws_owner_legacy') {
+    return {
+      label: 'editor',
+      className: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
+      title: '工作區負責人 — 對此專案有完整編輯權',
+    }
+  }
+  if (role === 'editor' || canEdit) {
+    return {
+      label: 'editor',
+      className: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
+      title: '可編輯',
+    }
+  }
+  // viewer
+  return {
+    label: 'viewer',
+    className: 'border-stone-700 bg-stone-900/40 text-stone-400',
+    title: '唯讀模式 — 編輯按鈕需要請求權限',
+  }
 }
