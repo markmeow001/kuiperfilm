@@ -21,7 +21,7 @@ import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
 import { LocationViewPickerModal } from './LocationViewPickerModal'
 import { NarrativeHighlighter } from './NarrativeHighlighter'
-import { visualStyles, getStyleSafe } from '@/lib/style-library'
+import { visualStyles, getStyleSafe, sanitizeStyleString } from '@/lib/style-library'
 import {
   useMultiShotTask,
   type MultiShotCharacterBinding,
@@ -987,9 +987,16 @@ export function GroupCard({
     if (!effectiveStyleId) return ''
     const style = getStyleSafe(effectiveStyleId)
     if (!style) return ''
-    const parts = [style.styleAnchor, style.visualModifiers].filter(
-      (s): s is string => Boolean(s && s.trim()),
-    )
+    // 2026-05-22 — strip equipment / camera-format terms before emit.
+    // Catalog entries embed "35mm anamorphic lens", "Arri Alexa color
+    // grading", etc. which the Phase 1 prompt red line forbids and
+    // which Seedance/Kling react badly to. Sanitizer also runs in the
+    // worker (buildVisualStylePrefix/Suffix) so client narrative
+    // preview matches what the model actually sees.
+    const parts = [
+      sanitizeStyleString(style.styleAnchor),
+      sanitizeStyleString(style.visualModifiers),
+    ].filter((s) => s && s.trim())
     if (parts.length === 0) return ''
     return ['整体视觉风格:', parts.join('. ')].join('\n')
   }

@@ -44,26 +44,34 @@ const PROMPT_DIR = path.join(ROOT, 'lib/prompts/novel-promotion')
 //
 // Wording inside each rule can drift freely without breaking the
 // guard, but removing a rule or its self-check checklist trips it.
+// 2026-05-22 revision — the 五要素红线 section was renamed to
+// "description 撰写指南" and softened from 7 hard rules to 5 hard +
+// 4 soft. Retired tokens removed from this list, retained tokens
+// kept under their new wording. See agent_storyboard_plan.{zh,en}.txt
+// for the new structure; the rationale lives in the commit body for
+// this change. Action chain ≤ 5 and 禁止重复 @图片 (the old per-shot
+// caps) are intentionally retired — overly strict caps were producing
+// flat description lists that lost Seedance's material-fidelity edge.
 const REQUIRED_TOKENS = [
   {
     file: 'agent_storyboard_plan.zh.txt',
-    label: '五要素红线 (planner zh)',
+    label: 'description 撰写指南 (planner zh)',
     tokens: [
-      '【五要素红线',
-      '禁止重复 @图片',
-      '动作链 ≤ 5',
+      'description 撰写指南',
+      '硬性紅線',
       '禁止否定句指令',
-      '禁止剪辑 / 器材术语',
-      '禁止模糊集合词',
+      '禁止剪輯', // softened wording, formerly '禁止剪辑 / 器材术语'
+      '禁止模糊集合詞',
       '≤ 30 字',
       '自检清单',
     ],
   },
   {
     file: 'agent_storyboard_plan.en.txt',
-    label: '五要素红线 (planner en)',
+    label: 'description writing guide (planner en)',
     tokens: [
-      'Action chain ≤ 5',
+      'Description writing guide',
+      'Hard red lines',
       'NO negative directives',
       'NO camera / film-equipment',
       'NO vague collective nouns',

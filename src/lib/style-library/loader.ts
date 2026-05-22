@@ -82,6 +82,52 @@ export async function resolveProjectVisualStyle(
   }
 }
 
+// 2026-05-22 — strip camera / film-equipment terms from style strings
+// before they reach the generation prompt. The catalog entries (29 of
+// them) were authored to read well in style-browser UI but several
+// embed "35mm anamorphic lens", "Arri Alexa color grading", "film
+// grain", etc. The Phase 1 prompt's own red-line section forbids these
+// terms in description, and Seedance / Kling react to them by drifting
+// toward documentary / vintage looks regardless of the requested style.
+//
+// Patterns are conservative — only well-known equipment / camera-format
+// tokens. Color / lighting / mood adjectives stay (they're stylistic,
+// not equipment). Sanitizer is exported so client narrative builders
+// (GroupCard.buildStyleFooterFromCatalog) get the same cleanup as the
+// worker-side prompt wrap.
+const FORBIDDEN_EQUIPMENT_PATTERNS: RegExp[] = [
+  /\bshot on Arri\s+Alexa(?:\s+\d+)?\b/gi,
+  /\bArri\s+Alexa(?:\s+\d+)?(?:\s+color\s+grading)?\b/gi,
+  /\b\d+mm\s+anamorphic\s+(?:lens|镜头|鏡頭)?\b/gi,
+  /\b\d+mm\s+(?:lens|镜头|鏡頭)\b/gi,
+  /\banamorphic\s+(?:widescreen|lens|镜头|鏡頭)\b/gi,
+  /\bIMAX(?:\s+quality|\s+film\s+stock)?\b/gi,
+  /\bPanavision(?:\s+[A-Z]-?series\s+lenses?)?\b/gi,
+  /\b\d+K\s+detail\b/gi,
+  /\b(?:subtle|visible)?\s*film\s+grain\b/gi,
+  /\bprofessional\s+film\s+production\s+quality\b/gi,
+  /\bcinematic\s+lighting\b/gi,
+  /电影级光影/g,
+  /電影級光影/g,
+  /35mm\s*镜头/g,
+  /35mm\s*鏡頭/g,
+]
+
+export function sanitizeStyleString(input: string | null | undefined): string {
+  if (!input) return ''
+  let out = input
+  for (const re of FORBIDDEN_EQUIPMENT_PATTERNS) {
+    out = out.replace(re, '')
+  }
+  // Clean up the comma soup left behind by removed phrases.
+  out = out
+    .replace(/,\s*,+/g, ',')
+    .replace(/^\s*,\s*|\s*,\s*$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return out
+}
+
 // Build the prefix string that gets prepended to every per-shot prompt.
 // Order follows Kling 3.0 official guidance: style anchor → user content
 // → lighting → visual modifiers. We split: this helper produces the
@@ -89,15 +135,16 @@ export async function resolveProjectVisualStyle(
 // (visualModifiers + style ref binding).
 export function buildVisualStylePrefix(resolved: ResolvedProjectStyle | null): string {
   if (!resolved) return ''
-  const parts = [resolved.style.styleAnchor, resolved.lighting?.lightingOverride]
-    .filter(Boolean)
-    .join('. ')
+  const styleAnchor = sanitizeStyleString(resolved.style.styleAnchor)
+  const lighting = sanitizeStyleString(resolved.lighting?.lightingOverride)
+  const parts = [styleAnchor, lighting].filter(Boolean).join('. ')
   return parts ? `${parts}. ` : ''
 }
 
 export function buildVisualStyleSuffix(resolved: ResolvedProjectStyle | null): string {
   if (!resolved) return ''
-  return resolved.style.visualModifiers ? ` ${resolved.style.visualModifiers}.` : ''
+  const modifiers = sanitizeStyleString(resolved.style.visualModifiers)
+  return modifiers ? ` ${modifiers}.` : ''
 }
 
 export function buildVisualStyleNegative(resolved: ResolvedProjectStyle | null): string {

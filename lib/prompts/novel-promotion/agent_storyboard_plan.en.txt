@@ -165,76 +165,100 @@ Self-check (before finalising each panel description):
   □ Does the description contain `X says: "Y"` or `X: 「Y」` style content?
   □ If yes, can Y be found in clip_content? If not, rewrite as pure action.
 
-Five-element red lines (CRITICAL — applies to `description` field):
+Description writing guide (2026-05-22 revision — drama first, rules second):
 
-These seven rules are reverse-engineered from production Seedance / Kling
-short-drama prompts. Violating any of them downgrades that panel's output.
-Root cause this section solves: when `description` is overstuffed, the
-video model cannot identify the load-bearing visual beats, so character,
-scene, and prop fidelity all degrade together.
+Core shift: `description` should read like a director's shotlist note,
+not a bullet-pointed feature checklist. Dramatic pacing and material
+detail are the real drivers of Seedance / Kling output quality. Rules
+below only block known-bad patterns — they do NOT cap detail that helps
+the visual.
 
-  1. ❌ Do NOT repeat appearance details already covered by @image-N refs.
-     The reference-image binding carries body parts, skin texture, hair,
-     and clothing. `description` should only describe current action /
-     emotion / expression — not appearance.
-     Wrong: "@WangXuan's chest heaves violently, neck veins bulge, skin
-            flushed with visible pores and sweat, long hair blown by air"
-            (entirely appearance — all already in @image-1)
-     Right: "@WangXuan's spiritual energy bursts forth, chest heaving,
-            energy vortex forming" (action + result)
+Suggested writing pattern — three-beat dramatic structure (preferred, not required):
 
-  2. ❌ Action chain ≤ 5 visual beats per panel, typically 1-3.
-     One sentence = one visual beat. One period = one beat boundary. Do
-     NOT chain multiple action switches with commas. If > 5 beats, split
-     into the next panel (see Anti-collapse rules).
-     Wrong (11 beats jammed into one panel): "camera pushes in / seven-
-       colored aura swirls / plasma vortex / glowing particles / red-vs-
-       cyan contrast / chest heaves / neck veins bulge / skin flushes /
-       pores and sweat / hair blown / robe billows / fabric strains"
-     Right (3 beats): "@WangXuan's aura bursts forth + chest heaves +
-       vortex forms"
+  Each panel may follow:
+    - Opening beat: camera move + subject entry + environment anchor (1 sentence)
+    - Development beat: material / texture / lighting / character detail (1-2 sentences)
+    - Payoff beat: focal action / emotional peak / visual contrast (1 sentence)
 
-  3. ❌ NO negative directives in `description`.
-     Do NOT write "no X", "no on-screen text", "no subtitles", "no
-     plastic look", "strictly without any X". Generation models attend
-     to the noun in negation phrases and probabilistically generate it.
-     The worker sends a dedicated negative_prompt to the video provider —
-     duplicating it in `description` is counterproductive.
+  Optional trailing tag: `[ambient sound: xxx]` (Seedance parses it as
+  the native audio channel; Kling ignores).
 
-  4. ❌ NO camera / film-equipment terms.
-     Do NOT write "shot on Arri Alexa", "IMAX quality", "film grain",
-     "8K detail", "35mm lens", "cinematic lighting". These belong in
-     the project's `visualStyleId` (styleAnchor), NOT per-panel
-     `description`. `description` describes what is in frame, not what
-     equipment is filming it.
+Example (high-quality):
+  "[Crash zoom · alarm wakes] Absolute darkness; a single holographic
+   red alarm lamp ignites without warning, dead-center. Red light strobes
+   at fixed cadence; each pulse paints a horizontal red flare across the
+   frame edges, briefly outlining the cold metal walls beyond.
+   [ambient sound: low mechanical startup hum]"
 
-  5. ❌ NO vague collective nouns.
-     Do NOT write "crowd", "everyone", "people", "all of them", "the
-     group". Be specific: "Li Si + Wang Wu + Zhang San" or "three
-     bodyguards". The model cannot infer how many entities a collective
-     term covers or what each is doing.
+Example (terse — fine for action-dense shots):
+  "Medium shot: @WangXuan's aura bursts, chest heaves, vortex forms."
 
-  6. ⚠️ Ambient sound / micro-facial detail is optional — omit when not
-     central to the shot.
-     Video generation models largely ignore "ambient audio: low-frequency
-     hum, moss growth rustle". Post-prod sound goes through CapCut, not
-     the prompt. Extreme facial detail (pores, sweat reflection, skin
-     micro-redness) belongs only in emotional climax close-ups, not in
-     medium / wide shots.
+Both are good. Write the detail the scene needs; don't pad, don't strip.
 
-  7. ✅ Dialogue: each quoted line in source_text ≤ 30 words.
+Hard red lines (violating these degrades model output):
+
+The five rules below are reverse-engineered from production failures.
+Not stylistic preferences — empirical model behavior.
+
+  1. ❌ NO negative directives in `description`.
+     Don't write "no X", "no on-screen text", "no subtitles",
+     "strictly without X". Generation models attend to the negated noun
+     and probabilistically generate it. Suppression goes through the
+     worker's negative_prompt, not the positive prompt.
+
+  2. ❌ NO camera / film-equipment terms.
+     Don't write "shot on Arri Alexa", "IMAX quality", "film grain",
+     "8K detail", "35mm lens", "cinematic lighting", "professional film
+     production quality". These belong in the project's `visualStyleId`
+     (styleAnchor), not per-panel `description`. Describe what is IN
+     the frame, not what camera is filming it.
+
+  3. ❌ NO vague collective nouns.
+     Don't write "crowd", "everyone", "people", "all of them", "the
+     group", "they". Be specific: "Li Si + Wang Wu + Zhang San" or
+     "three bodyguards". The model cannot infer how many entities a
+     collective covers — output becomes a blurred mass of human shapes.
+
+  4. ❌ DO NOT repeat fixed appearance traits already in @image-N refs.
+     Body proportions, skin color, hairstyle, base costume are carried
+     by the reference image. Repeating these wastes char budget and adds
+     no signal.
+     BUT: material feel, texture, wear, lighting interaction, and scene
+     detail are NOT in this prohibition — they are encouraged because
+     Seedance responds well to them.
+     Wrong (repeats fixed traits): "@WangXuan in white robe, black long
+       hair, refined features"
+     Right (action + material dynamics): "@WangXuan's robe hem lifts in
+       the vortex, hair strands swept up, chest heaves, vortex shapes"
+       (4 dynamic visual beats — not static appearance restatement)
+
+  5. ✅ Dialogue: each quoted line in source_text ≤ 30 words.
      Long sentences destabilize Seedance / Kling Omni TTS. Split a long
      line into multiple shorter lines, each as its own panel (see
-     Anti-collapse rule e). Example: a 47-character single line should
-     become 3 lines of ≤ 15 chars each, each its own panel.
+     Anti-collapse rule e).
+
+Soft guidance (judgment calls, not enforced):
+
+  - Action chain length: 3-8 visual beats serving the drama. Action-
+    dense shots stay focused (1-3 beats); environment establishment
+    shots can run longer (5-8 beats with atmospheric detail).
+  - Material / environment detail: encouraged (metal sheen, gear wear,
+    drifting dust, red light outlining contours) — Seedance responds
+    well to texture.
+  - Ambient sound tag: prefer writing `[ambient sound: xxx]` (Seedance
+    native dialogue + ambient channels both consume it; Kling no-op).
+  - Extreme facial detail (pores, sweat reflection): only in emotional
+    climax close-ups; omit in medium / wide shots.
 
 Self-check before output (every panel):
-  □ No appearance details already in @image-N?
-  □ ≤ 5 visual beats? One sentence = one beat?
   □ No negative directives ("no X" / "strictly without X")?
-  □ No camera/film-equipment terms (Arri / IMAX / 8K / film grain / 35mm)?
-  □ No vague collective nouns (crowd / everyone / "the group")?
+  □ No camera/film-equipment terms (Arri / IMAX / 8K / film grain / 35mm / professional film)?
+  □ No vague collective nouns (crowd / everyone / "the group" / "they")?
+  □ Didn't restate fixed appearance traits already in @image-N?
+    (But material / environment detail IS encouraged — don't over-trim.)
   □ Each dialogue line ≤ 30 words?
+  □ For drama peaks / emotional beats: is the description rich enough?
+    Bullet-list brevity can flatten an otherwise gripping moment.
 
 ⚠️ Single-character CJK name ambiguity rule (CRITICAL):
 
