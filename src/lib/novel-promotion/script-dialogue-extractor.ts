@@ -58,6 +58,21 @@ const NON_DIALOGUE_HEAD_KEYWORDS = new Set([
   '地點',
 ])
 
+/** Chapter / act / scene markers commonly used as section headers in
+ *  Chinese and English shot-lists. Matches the WHOLE speaker head; any
+ *  match rejects the line outright. Without this guard, "第一幕：致命倒数"
+ *  becomes speaker=第一幕 content=致命倒数, which was the 2026-05-22
+ *  《迁徙》 bug. Keep the patterns greedy on the marker token and anchor
+ *  with ^…$ so genuine names ending in 幕/集 (rare) are not blocked. */
+const CHAPTER_MARKER_RE = /^(?:第[零一二三四五六七八九十百千0-9]+[幕集章节節场場回部]|序幕|序章|终幕|終幕|尾声|尾聲|楔子|引子|(?:Episode|Act|Chapter|Scene|Part|Prologue|Epilogue)\s*\d*)$/i
+
+/** Speakers must contain at least one CJK or Latin LETTER. Pure-digit
+ *  heads like "0" (extracted from a timestamp like "0:03 - 0:12 [...]")
+ *  pass SPEAKER_SHAPE_RE because \w includes digits — reject them here.
+ *  CJK range covers Chinese, Japanese kanji, and Korean hanja; Latin
+ *  covers screenplay imports written with English speaker names. */
+const HAS_LETTER_RE = /[一-鿿A-Za-z]/
+
 /** Action markers that prefix scene direction lines. We skip the whole
  *  line. (△/▲ are screenplay convention; the rest are defensive.) */
 const ACTION_PREFIX_RE = /^[△▲◇◆＊*•·]/
@@ -99,6 +114,8 @@ export function extractScriptDialogues(rawScript: string): ExtractedDialogue[] {
     const parsed = parseSpeakerHead(headRaw)
     if (!parsed) continue
     if (NON_DIALOGUE_HEAD_KEYWORDS.has(parsed.speaker)) continue
+    if (CHAPTER_MARKER_RE.test(parsed.speaker)) continue
+    if (!HAS_LETTER_RE.test(parsed.speaker)) continue
     if (!SPEAKER_SHAPE_RE.test(parsed.speaker)) continue
     if (parsed.speaker.length === 0 || parsed.speaker.length > MAX_SPEAKER_LENGTH) continue
 
@@ -169,6 +186,11 @@ export function dialogueDedupKey(speaker: string, content: string): string {
   const normalisedContent = content
     .replace(/\s+/g, '')
     .replace(/[，,。.！!？?…\-—　]/g, '')
+    // 2026-05-22 — strip every flavour of quote so an LLM emission of
+    // `Warning. Illegal...` dedupes against the regex extraction of
+    // `"Warning. Illegal..."` (script kept the quotes, LLM stripped
+    // them). Without this, the same line lands in voice_lines twice.
+    .replace(/["'`‘’“”「」『』]/g, '')
   return `${speaker.trim()}::${normalisedContent}`
 }
 

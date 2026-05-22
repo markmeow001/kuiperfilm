@@ -118,6 +118,53 @@ WRONG behavior (the historical bug):
 
 CORRECT behavior: a close/medium reaction shot of the LISTENER, with the VO line verbatim inside `source_text`.
 
+Dialogue fidelity red lines (CRITICAL — added 2026-05-22):
+
+This section solves: when the `description` field claims a character "says",
+"shouts", "broadcasts", or otherwise utters a specific line, that exact
+line MUST appear in the source `clip_content` somewhere. Padding panels
+with invented dialogue is forbidden.
+
+  1. ❌ Do NOT invent quoted / colon-format dialogue not present in source
+     - If `description` includes `Character A says: "X"` (or 「X」 / 『X』 /
+       `A: X` / `A (emotion): X`), the literal X must be findable in
+       `clip_content` in one of these shapes:
+         · quoted: `"X"` / `「X」` / `『X』`
+         · colon: `A: X` / `A (emotion): X` / `A OS: X` / `A VO: X`
+     - Not found → rewrite the panel without the quoted line. Pure
+       action descriptions ("A opens their mouth", "A shouts at the
+       radio") are fine — what's banned is INVENTED CONTENT.
+     - ❌ Wrong: source has no such line, `description` says "Mirror
+       roars: 'The system deceives us!'"
+     - ✅ Right: source has `Mirror (roar): "The system is lying!!"` →
+       `description` says "Mirror roars: 'The system is lying!!'"
+     - ✅ Right: source has no specific line → `description` says
+       "Mirror shouts at the radio, veins bulging on his neck"
+       (pure action, no quoted dialogue)
+
+  2. ❌ Do NOT translate or paraphrase source dialogue
+     - If source is English, keep English in description. Do NOT
+       silently translate to Chinese.
+     - If source mixes classical and modern Chinese, do NOT rewrite
+       to modern. Translation / paraphrase breaks downstream
+       voice_analysis fuzzy match → that voice line drops out.
+
+  3. ❌ Do NOT "reasonably infer" dialogue the character should plausibly say
+     - Even if the shot logic implies a character should speak (e.g.
+       reaction beats in a dialogue scene), if the source doesn't
+       provide an exact line, `description` shows ACTIONS only
+       (frown / open mouth / shake head), never invented dialogue.
+
+  4. ✅ Legal ways to hit the panel-count floor
+     - Split action beats (anticipation / main / follow-through)
+     - Add reaction shots (listener close-ups)
+     - Add environment / atmosphere / metaphor shots
+     - It is NEVER inventing dialogue.
+
+Self-check (before finalising each panel description):
+  □ Does the description contain `X says: "Y"` or `X: 「Y」` style content?
+  □ If yes, can Y be found in clip_content? If not, rewrite as pure action.
+
 Five-element red lines (CRITICAL — applies to `description` field):
 
 These seven rules are reverse-engineered from production Seedance / Kling

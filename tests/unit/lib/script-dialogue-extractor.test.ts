@@ -3,6 +3,7 @@ import {
   dialogueDedupKey,
   extractScriptDialogues,
   inferEmotionFromContent,
+  isDialogueDuplicate,
 } from '@/lib/novel-promotion/script-dialogue-extractor'
 
 describe('extractScriptDialogues — iangyc 王玄/桃桃 episode', () => {
@@ -123,6 +124,71 @@ describe('extractScriptDialogues — edge cases', () => {
   })
 })
 
+describe('extractScriptDialogues — 《迁徙》 shot-list regression (2026-05-22)', () => {
+  // Verbatim from ep3 of project 4f067c87 (owner @IkariNERV). Before the
+  // 2026-05-22 fix this script produced 26 garbage voice_lines:
+  //   - 4 chapter headers ("第一幕"/"第二幕"/...)
+  //   - 17 timestamp lines (speaker="0", content="00 - 0:03 [...]")
+  //   - 6 duplicates of real LLM dialogue (regex kept the leading ")
+  // Pure-letter speakers + chapter markers + quote-stripped dedup keep
+  // those out now.
+  const qianxiScript = `第一幕：致命倒数 (0:00 - 0:45)
+[画面 - 视觉]
+
+0:00 - 0:03 【急推镜头】 从绝对黑暗中瞬间急推至一颗闪烁的红色全息警报灯。
+0:03 - 0:12 【密集快剪】 浮城冰冷无情的运作机器。
+0:12 - 0:20 【微距探针 转 手持急拉】 极近距离滑过几根剥开的电线。
+
+[声音 - 听觉]
+
+AI 系统广播（失真、卡顿）： "Warning. Illegal emotional fluctuation detected."
+长官（冷酷）： "Erase that sector, along with the signal."
+
+第二幕：撕裂冰冷 (0:45 - 1:40)
+[画面 - 视觉]
+
+0:45 - 0:55 【FPV 俯冲转贴地倒退跟拍】 镜头从狭窄的地下维修层管线中极速俯冲。
+1:10 - 1:25 【超广角追踪】 星轨列车犹如一头失控的野兽。
+
+[声音 - 听觉]
+
+ZARA（广播声音）： "They say we're defective!"
+镜（怒吼）： "The system is lying!!"`
+
+  it('does not extract chapter/act markers as dialogue', () => {
+    const result = extractScriptDialogues(qianxiScript)
+    for (const d of result) {
+      expect(d.speaker).not.toMatch(/^第[一二三四五六七八九十0-9]+[幕集章节場场節回部]$/)
+    }
+  })
+
+  it('does not extract timestamps as speaker "0" / "1" / "2"', () => {
+    const result = extractScriptDialogues(qianxiScript)
+    for (const d of result) {
+      // Without HAS_LETTER guard, head="0" / "1" / "2" from "0:03 - 0:12 [..."
+      // would slip through with the timestamp tail as content.
+      expect(d.speaker).not.toMatch(/^\d+$/)
+      // Content should never be a camera-direction paragraph either.
+      expect(d.content).not.toMatch(/^\d+\s*-\s*\d+:\d+/)
+    }
+  })
+
+  it('still extracts the 4 real dialogue lines from the shot-list', () => {
+    const result = extractScriptDialogues(qianxiScript)
+    const speakers = result.map((d) => d.speaker)
+    expect(speakers).toContain('AI 系统广播')
+    expect(speakers).toContain('长官')
+    expect(speakers).toContain('ZARA')
+    expect(speakers).toContain('镜')
+  })
+
+  it('extracts exactly the 4 real dialogue lines (no junk)', () => {
+    // Strict count — if anything else slips in, this fails noisily.
+    const result = extractScriptDialogues(qianxiScript)
+    expect(result).toHaveLength(4)
+  })
+})
+
 describe('dialogueDedupKey', () => {
   it('collapses whitespace and trailing punctuation', () => {
     const k1 = dialogueDedupKey('王玄', '洞府一甲子，凡尘弹指间...')
@@ -132,6 +198,24 @@ describe('dialogueDedupKey', () => {
 
   it('treats different speakers as different keys', () => {
     expect(dialogueDedupKey('王玄', '位列仙班')).not.toBe(dialogueDedupKey('桃桃', '位列仙班'))
+  })
+
+  it('treats quoted and unquoted dialogue as the same key (2026-05-22)', () => {
+    // LLM strips outer quotes, regex preserves them. Without the
+    // quote-stripping fix, voice_analysis output and regex backfill
+    // landed as two rows for the same line.
+    const llmKey = dialogueDedupKey('AI 系统广播', 'Warning. Illegal emotional fluctuation detected.')
+    const regexKey = dialogueDedupKey('AI 系统广播', '"Warning. Illegal emotional fluctuation detected."')
+    expect(llmKey).toBe(regexKey)
+    const cjkLlmKey = dialogueDedupKey('AI 系统广播', '警告。检测到非法情绪波动。')
+    const cjkRegexKey = dialogueDedupKey('AI 系统广播', '「警告。检测到非法情绪波动。」')
+    expect(cjkLlmKey).toBe(cjkRegexKey)
+  })
+
+  it('isDialogueDuplicate catches quoted regex output against unquoted LLM key', () => {
+    const llmKey = dialogueDedupKey('ZARA', "They say we're defective!")
+    const regexKey = dialogueDedupKey('ZARA', '"They say we\'re defective!"')
+    expect(isDialogueDuplicate(regexKey, [llmKey])).toBe(true)
   })
 })
 
