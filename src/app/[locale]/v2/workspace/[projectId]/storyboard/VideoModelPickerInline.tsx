@@ -40,12 +40,20 @@ interface VideoModelPickerInlineProps {
   currentVideoModel: string | null | undefined
   /** Aspect ratio shown to the right of the picker; rendered as-is. */
   videoRatio: string
+  /** Phase Q (2026-05-21) — project target total video duration in
+   *  seconds. Drives script_to_storyboard panel count + auto_group_multi_shot
+   *  group count. Pre-Phase-Q this was set on STEP 01 but invisible from
+   *  STEP 03 storyboard; user had no signal that targetDuration influenced
+   *  shot count. Now editable inline so user can iterate without bouncing
+   *  to STEP 01. */
+  targetDuration: number | null | undefined
 }
 
 export function VideoModelPickerInline({
   projectId,
   currentVideoModel,
   videoRatio,
+  targetDuration,
 }: VideoModelPickerInlineProps) {
   const updateConfig = useUpdateProjectConfig(projectId)
   const currentVariant = getVideoModelVariant(currentVideoModel)
@@ -157,6 +165,35 @@ export function VideoModelPickerInline({
           </span>
         </div>
       )}
+
+      {/* Phase Q (2026-05-21) — target duration widget. Editable inline
+          so user can change 60/90/120/180s without leaving STEP 03.
+          Affects script_to_storyboard panel count + auto_group_multi_shot
+          group count on next 重新分析 / 重新切組. Persisted to
+          project.targetDuration via useUpdateProjectConfig. */}
+      <label
+        className="flex items-center gap-1.5 whitespace-nowrap"
+        title="整集目標總時長 — 影響分鏡數量與切組策略。改了之後需要按「重新分析」或「重新切組」才會套用到 LLM。"
+      >
+        <span className="shrink-0">目標</span>
+        <select
+          value={typeof targetDuration === 'number' && targetDuration > 0 ? targetDuration : 60}
+          onChange={(e) => {
+            const next = Number.parseInt(e.target.value, 10)
+            if (Number.isFinite(next) && next > 0) {
+              updateConfig.mutate({ key: 'targetDuration', value: next })
+            }
+          }}
+          disabled={updateConfig.isPending}
+          className="rounded-sm border border-stone-800 bg-stone-900/40 px-1.5 py-0.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+        >
+          <option value={30}>30s</option>
+          <option value={60}>1 分鐘</option>
+          <option value={90}>1 分半</option>
+          <option value={120}>2 分鐘</option>
+          <option value={180}>3 分鐘</option>
+        </select>
+      </label>
 
       <span className="ml-auto shrink-0">比例 {videoRatio}</span>
 

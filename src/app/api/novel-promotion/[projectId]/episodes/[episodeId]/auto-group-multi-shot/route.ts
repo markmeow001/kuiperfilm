@@ -110,7 +110,7 @@ export const POST = apiHandler(async (
     select: {
       id: true,
       novelPromotionProject: {
-        select: { id: true, projectId: true, analysisModel: true },
+        select: { id: true, projectId: true, analysisModel: true, targetDuration: true },
       },
       storyboards: {
         select: {
@@ -164,12 +164,22 @@ export const POST = apiHandler(async (
     projectAnalysisModel: episode.novelPromotionProject.analysisModel,
   })
 
+  // Phase Q (2026-05-21) — pass the project's targetDuration so the LLM
+  // can size group count + per-group dialogue budget to hit the total.
+  // Each Seedance / Kling composite group is 4-15s; for a 60s project
+  // we want ~5 groups, 120s ~10, 180s ~15. LLM does the rough math from
+  // the targetDuration_seconds variable + the per-group ≤12s soft cap.
+  const targetDurationSeconds = episode.novelPromotionProject.targetDuration ?? 60
+  const targetGroupCountApprox = Math.max(2, Math.round(targetDurationSeconds / 12))
+
   const prompt = buildPrompt({
     promptId: PROMPT_IDS.NP_AUTO_GROUP_MULTI_SHOT,
     locale,
     variables: {
       panels_json: JSON.stringify(panelsForLlm, null, 2),
       panel_count: String(panelsForLlm.length),
+      target_duration_seconds: String(targetDurationSeconds),
+      target_group_count_approx: String(targetGroupCountApprox),
     },
   })
 

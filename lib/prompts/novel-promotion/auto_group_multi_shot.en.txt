@@ -45,7 +45,17 @@ Roughly panel_count / 4 ~ panel_count / 5, e.g. 30 panels → 6-8 groups.
 
 panel count: {panel_count}
 
-panels (JSON, id order = storyboard temporal order, now includes dialogue + speaker fields):
+**Episode target total duration**: {target_duration_seconds} seconds
+**Expected group count (approx)**: ~{target_group_count_approx} groups (each ≤12s of dialogue, leaving 3s for transitions)
+
+⚠️ When grouping, sum the estimated dialogue seconds across ALL groups — the total MUST stay close to {target_duration_seconds}s.
+- Under target → add a panel to an existing group (within rule #1) or increase group count.
+- Over target → shrink the per-group dialogue budget, BUT NEVER violate rule #1 (dialogue integrity).
+- Tolerance ±15% (e.g. 60s → 51-69s, 120s → 102-138s).
+- If the panel count or dialogue density makes the target impossible, split legally and stop trying to force it.
+
+## panels (JSON, id order = storyboard temporal order, includes dialogue + speaker fields)
+
 {panels_json}
 
 ## Output Format (strict JSON, no markdown, no other text)

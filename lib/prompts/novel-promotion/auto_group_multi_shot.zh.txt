@@ -45,7 +45,17 @@
 
 panel 數量:{panel_count}
 
-panels(JSON,id 順序就是分鏡時序順序,新增 dialogue + speaker 欄位):
+**整集目標總時長**:{target_duration_seconds} 秒
+**預期 group 數量參考**:約 {target_group_count_approx} 群(每群 ≤12 秒,留 3 秒給轉場)
+
+⚠️ 切組時把所有 group 的對白估算秒數加總,要**儘量接近** {target_duration_seconds} 秒
+- 短了 → 加 panel 進現有 group (在規則 #1 容許範圍內) 或增加 group 數
+- 長了 → 縮小 group 平均對白量,但**絕對不能違反規則 #1 (對白完整性)**
+- 容許誤差 ±15% (例如 60s 可以是 51-69s,120s 可以是 102-138s)
+- 若實在無法接近 (例如 panel 數太少或對白太長/太短),也要切到合法為止,不要硬塞
+
+## panels(JSON,id 順序就是分鏡時序順序,新增 dialogue + speaker 欄位)
+
 {panels_json}
 
 ## 輸出格式(嚴格 JSON,不要 markdown 不要任何其他文字)

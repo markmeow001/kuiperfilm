@@ -85,6 +85,11 @@ interface ProjectLikeFull {
     // footer (replacing the old hardcoded cinematic terms) and the worker
     // reads it server-side for negative_prompt resolution.
     visualStyleId?: string | null
+    // Phase Q (2026-05-21) — episode target total video duration in
+    // seconds. Drives script_to_storyboard panel count + auto_group_multi_shot
+    // group count. Exposed via VideoModelPickerInline so user can edit
+    // inline from STEP 03.
+    targetDuration?: number | null
   } | null
 }
 
@@ -1293,6 +1298,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       projectId={projectId}
       currentVideoModel={projectVideoModel || null}
       videoRatio={projectVideoRatio || '9:16'}
+      targetDuration={project?.novelPromotionData?.targetDuration ?? null}
     />
   )
 
