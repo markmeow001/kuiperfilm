@@ -69,6 +69,17 @@ function inferCodeFromMessage(message: string): UnifiedErrorCode | null {
   // BEFORE the generic 'not found' rule below — otherwise it'd
   // resolve to NOT_FOUND which is also misleading.
   if (containsAny(message, ['no clips found', 'no clips, please split'])) return 'EPISODE_NO_CLIPS'
+  // 2026-05-21 — another task (clips_build / script_to_storyboard_run /
+  // etc.) still processing for the same episode. The route's task-conflict
+  // guard throws CONFLICT with the literal phrases below. Matched BEFORE
+  // the generic 'conflict' / 'already exists' rule so user sees the
+  // specific "wait a few seconds" message rather than "refresh and retry".
+  if (containsAny(message, [
+    'still processing for this episode',
+    'still processing for this',
+    'another task',
+    'wait for it to finish and try',
+  ])) return 'TASK_STILL_PROCESSING'
   if (containsAny(message, ['task cancelled', 'canceled by user', 'cancelled by user', '任务已取消'])) return 'CONFLICT'
   if (containsAny(message, ['unauthorized', 'not authenticated', 'need login', '401'])) return 'UNAUTHORIZED'
   if (containsAny(message, ['forbidden', 'permission denied', '403'])) return 'FORBIDDEN'
@@ -140,14 +151,19 @@ export function normalizeAnyError(input: unknown, options: NormalizeOptions = {}
   }
 
   const resolvedCode = resolveUnifiedErrorCode(errorLike.code)
-  // 2026-05-21 — INTERNAL_ERROR is the catch-all worker code used when
-  // the task layer fails to extract a specific code. Don't accept it
-  // verbatim — try message inference first; the message often carries
-  // enough signal to derive a more useful code (e.g. "No clips found"
-  // → EPISODE_NO_CLIPS). Only fall back to INTERNAL_ERROR if inference
-  // also fails. Other resolved codes (SENSITIVE_CONTENT, NOT_FOUND etc.)
-  // are trustworthy and used directly.
-  if (resolvedCode && resolvedCode !== 'INTERNAL_ERROR') {
+  // 2026-05-21 — Some "resolved" codes are catch-all buckets that
+  // benefit from message inference refining them into more specific
+  // codes:
+  //   - INTERNAL_ERROR: worker fallback when task layer couldn't extract
+  //     a specific code. "No clips found" → EPISODE_NO_CLIPS.
+  //   - CONFLICT: route's task-conflict guard throws CONFLICT but the
+  //     message distinguishes "still processing" (just wait) from
+  //     "duplicate / already exists" (refresh and retry). Inference
+  //     picks TASK_STILL_PROCESSING for the wait case.
+  // Other resolved codes (SENSITIVE_CONTENT, NOT_FOUND etc.) are
+  // trustworthy and used directly.
+  const inferenceCandidateCodes = new Set(['INTERNAL_ERROR', 'CONFLICT'])
+  if (resolvedCode && !inferenceCandidateCodes.has(resolvedCode)) {
     return buildNormalizedError(resolvedCode, message, {
       ...(typeof errorLike.details === 'object' && errorLike.details ? (errorLike.details as Record<string, unknown>) : {}),
       ...(options.details || {}),

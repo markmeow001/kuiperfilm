@@ -59,6 +59,19 @@ export const ERROR_CATALOG = {
     userMessageKey: 'errors.EPISODE_NO_CLIPS',
     defaultMessage: 'Episode has no clips yet — add a script first',
   },
+  // 2026-05-21 — surfaced when the user clicks 重新分析 / submit again
+  // while a previous task (clips_build / script_to_storyboard_run /
+  // similar) is still processing. Pre-fix this fell into generic
+  // CONFLICT ("当前状态冲突，请刷新后重试") which sent users into a
+  // refresh loop that never helped — the right action is just to
+  // wait a few seconds for the running task to finish.
+  TASK_STILL_PROCESSING: {
+    httpStatus: 409,
+    retryable: true,
+    category: ERROR_CATEGORY.VALIDATION,
+    userMessageKey: 'errors.TASK_STILL_PROCESSING',
+    defaultMessage: 'Previous task still processing — please wait a few seconds',
+  },
   CONFLICT: {
     httpStatus: 409,
     retryable: false,

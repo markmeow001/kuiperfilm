@@ -840,8 +840,22 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         }),
       })
       if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        throw new Error(text || `HTTP ${res.status}`)
+        // 2026-05-21 — Pre-fix this dumped the raw JSON response body
+        // straight into analyzeState.message → user saw a wall of
+        // {"success":false,"requestId":...,"error":{...}}. Route through
+        // resolveErrorDisplay so the CONFLICT / EPISODE_NO_CLIPS /
+        // TASK_STILL_PROCESSING codes get their targeted friendly text.
+        let errBody: { error?: { code?: string; message?: string }; message?: string } = {}
+        try {
+          errBody = await res.json()
+        } catch {
+          // body not JSON — fall through to status-based message
+        }
+        const display = resolveErrorDisplay({
+          code: errBody?.error?.code ?? null,
+          message: errBody?.error?.message ?? errBody?.message ?? null,
+        })
+        throw new Error(display?.message ?? `提交失敗 (HTTP ${res.status})`)
       }
       setAnalyzeState({ status: 'submitted' })
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId), exact: false })

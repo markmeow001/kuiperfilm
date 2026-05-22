@@ -107,4 +107,33 @@ describe('resolveErrorDisplay — Prisma leak prevention (F-QA-1)', () => {
     })
     expect(display?.code).toBe('EPISODE_NO_CLIPS')
   })
+
+  it('maps "still processing" CONFLICT to TASK_STILL_PROCESSING (2026-05-21)', () => {
+    // Real-world payload from script-to-storyboard task-conflict guard:
+    // route throws CONFLICT with this exact message. Generic CONFLICT
+    // friendly text ("请刷新后重试") sent users into a refresh loop;
+    // the targeted message tells them to wait a few seconds instead.
+    const display = resolveErrorDisplay({
+      code: 'CONFLICT',
+      message: 'Cannot start script_to_storyboard_run: another task (clips_build) is still processing for this episode. Wait for it to finish and try again.',
+    })
+    expect(display?.code).toBe('TASK_STILL_PROCESSING')
+    expect(display?.message).toMatch(/等幾秒|處理中/)
+    // Must NOT fall back to the generic CONFLICT 「请刷新后重试」 message.
+    expect(display?.message).not.toMatch(/刷新/)
+  })
+
+  it('shorter "still processing" / "another task" snippets also map to TASK_STILL_PROCESSING', () => {
+    // Defensive: if the route layer ever shortens the message, the
+    // inference should still fire. Anchor on the load-bearing phrases.
+    const variants = [
+      'another task is still processing for this episode',
+      'Wait for it to finish and try again',
+      'still processing for this',
+    ]
+    for (const message of variants) {
+      const display = resolveErrorDisplay({ code: 'CONFLICT', message })
+      expect(display?.code, `variant: ${message}`).toBe('TASK_STILL_PROCESSING')
+    }
+  })
 })

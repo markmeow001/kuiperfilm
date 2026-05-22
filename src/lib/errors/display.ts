@@ -11,16 +11,23 @@ export function resolveErrorDisplay(input?: {
   // 如果不做这个判断，normalizeAnyError 会对空输入兜底返回 INTERNAL_ERROR，导致所有面板误报
   if (!input.code && !input.message) return null
 
+  // 2026-05-21 — Catch-all codes that benefit from message inference.
+  // INTERNAL_ERROR (worker fallback) and CONFLICT (route task-conflict
+  // guard, ambiguous between "still processing — wait" and "duplicate
+  // — refresh") both have specific sub-codes the message can resolve.
+  // Other resolved codes (SENSITIVE_CONTENT, NOT_FOUND etc.) are
+  // trustworthy and used directly.
   const code = resolveUnifiedErrorCode(input.code)
-  if (code && code !== 'INTERNAL_ERROR') {
+  const inferenceCandidates = new Set(['INTERNAL_ERROR', 'CONFLICT'])
+  if (code && !inferenceCandidates.has(code)) {
     return {
       code,
       message: getUserMessageByCode(code),
     }
   }
 
-  // 当 code 是兜底的 INTERNAL_ERROR 或 code 缺失时，尝试从 message 推断更具体的错误码
-  // 这样像"敏感内容"、"余额不足"、"网络错误"等具体错误能正确显示
+  // 当 code 是兜底的 INTERNAL_ERROR / CONFLICT 或 code 缺失时，尝试从 message 推断更具体的错误码
+  // 这样像"敏感内容"、"余额不足"、"网络错误"、"上一个任务还在跑"等具体错误能正确显示
   const normalized = normalizeAnyError(
     { code: input.code || undefined, message: input.message || undefined },
     { context: 'api' },
