@@ -1427,13 +1427,24 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2}
+              // 2026-05-21 — also disable while analyzeBusy so user doesn't
+              // trigger 自動切組 against an incomplete panel list (script
+              // analysis at 65% means more panels are still arriving — LLM
+              // would group only the ones persisted so far → user has to
+              // re-group after analysis finishes anyway).
+              disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2 || analyzeBusy}
               onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
-              title="把分鏡按角色 / 場景連續性切成 multi-shot 群"
+              title={
+                analyzeBusy
+                  ? '劇本分析中,等分鏡全部生成完再切組(不然 LLM 只會看到目前已有的分鏡)'
+                  : autoGroup.isPending
+                    ? '切組中…'
+                    : '把分鏡按對白 / 角色 / 場景連續性切成 multi-shot 群,並依目標時長分配秒數'
+              }
               className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[13px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              {autoGroup.isPending ? '切組中…' : '自動切組'}
+              {autoGroup.isPending ? '切組中…' : analyzeBusy ? '切組(分析中)' : '自動切組'}
             </button>
             <button
               type="button"
@@ -1629,13 +1640,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               </button>
               <button
                 type="button"
-                disabled={autoGroup.isPending || allPanels.length < 2}
+                disabled={autoGroup.isPending || allPanels.length < 2 || analyzeBusy}
                 onClick={handleAutoGroup}
-                title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群"
+                title={
+                  analyzeBusy
+                    ? '劇本分析中,等分鏡全部生成完再切組(不然 LLM 只會看到目前已有的分鏡)'
+                    : 'LLM 按對白完整性 / 角色 / 場景連續性切成 2-6 個 panel/群,依目標時長算秒數'
+                }
                 className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
+                {autoGroup.isPending ? '切組中…' : analyzeBusy ? '切組(分析中)' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
               </button>
               <button
                 type="button"
@@ -2078,11 +2093,25 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             提交失敗:{analyzeState.message}
           </div>
         ) : null}
-        {autoGroup.isError ? (
-          <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
-            切組失敗:{(autoGroup.error as Error)?.message ?? '未知錯誤'}
-          </div>
-        ) : null}
+        {autoGroup.isError ? (() => {
+          // 2026-05-21 — route mutation error through resolveErrorDisplay
+          // so CONFLICT / TASK_STILL_PROCESSING / EPISODE_NO_CLIPS all
+          // surface their targeted friendly text instead of the raw
+          // payload message (which was already partly friendly via
+          // resolveTaskErrorMessage, but didn't pick up our specific
+          // sub-codes like TASK_STILL_PROCESSING).
+          const err = autoGroup.error as Error & { payload?: { error?: { code?: string; message?: string } } }
+          const payload = err?.payload
+          const display = resolveErrorDisplay({
+            code: payload?.error?.code ?? null,
+            message: payload?.error?.message ?? err?.message ?? null,
+          })
+          return (
+            <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
+              切組失敗:{display?.message ?? err?.message ?? '未知錯誤'}
+            </div>
+          )
+        })() : null}
         <div className="flex gap-2 overflow-x-auto pb-2">
           {allPanels.map((p, i) => {
             const active = p.id === selectedId
