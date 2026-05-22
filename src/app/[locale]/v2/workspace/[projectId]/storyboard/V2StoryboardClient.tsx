@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { VideoModelPickerInline } from './VideoModelPickerInline'
 import { getVideoModelVariant, isMultiShotCapable } from '@/lib/video-models/variants'
 import {
@@ -171,6 +172,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const queryClient = useQueryClient()
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLikeFull | undefined
+  // Phase 12.5 — viewer-role users see disabled mutation buttons across
+  // the storyboard page + per-group cards (passed via GroupCard prop).
+  const { canEdit } = useProjectAccess(projectId)
+  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
   const projectVideoRatio = project?.novelPromotionData?.videoRatio ?? '16:9'
   const aspectClass = aspectClassFromRatio(projectVideoRatio)
   const projectVideoModel = project?.novelPromotionData?.videoModel ?? ''
@@ -1207,7 +1212,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   }
 
   if (allPanels.length === 0) {
-    const submitDisabled = analyzeBusy || !currentEpisodeId
+    const submitDisabled = analyzeBusy || !currentEpisodeId || !canEdit
     const ctaLabel = analyzeBusy
       ? analyzeBusyLabel
       : analyzeStatus === 'failed'
@@ -1400,7 +1405,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled={analyzeBusy || !currentEpisodeId}
+              disabled={analyzeBusy || !currentEpisodeId || !canEdit}
               onClick={handleAnalyzeStoryboard}
               title="重新從劇本生成分鏡"
               className={`flex items-center gap-1.5 rounded-sm border px-3 py-1.5 font-mono text-[13px] tracking-wider transition-all disabled:cursor-not-allowed ${
@@ -1432,7 +1437,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               // analysis at 65% means more panels are still arriving — LLM
               // would group only the ones persisted so far → user has to
               // re-group after analysis finishes anyway).
-              disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2 || analyzeBusy}
+              disabled={autoGroup.isPending || !currentEpisodeId || allPanels.length < 2 || analyzeBusy || !canEdit}
               onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
               title={
                 analyzeBusy
@@ -1487,6 +1492,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         canMultiShot={canMultiShot}
         videoFamily={videoFamily}
         projectVisualStyleId={project?.novelPromotionData?.visualStyleId ?? null}
+        canEdit={canEdit}
+        viewerTip={viewerTip}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 或 Seedance 2.0 720p (BobAPI) 模型' }
@@ -1621,7 +1628,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={analyzeBusy || !currentEpisodeId}
+                disabled={analyzeBusy || !currentEpisodeId || !canEdit}
                 onClick={handleAnalyzeStoryboard}
                 title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
                 className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -1640,7 +1647,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               </button>
               <button
                 type="button"
-                disabled={autoGroup.isPending || allPanels.length < 2 || analyzeBusy}
+                disabled={autoGroup.isPending || allPanels.length < 2 || analyzeBusy || !canEdit}
                 onClick={handleAutoGroup}
                 title={
                   analyzeBusy
@@ -1810,7 +1817,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    disabled={!selected || regenPanel.isPending}
+                    disabled={!selected || regenPanel.isPending || !canEdit}
                     onClick={() => {
                       if (!selected) return
                       const panelIdAtSubmit = selected.id
@@ -1838,7 +1845,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   </button>
                   <button
                     type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => handleGenerateVideo()}
                     className="rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-serif-cn text-xs text-amber-300 transition-all hover:bg-amber-500/20 disabled:opacity-50"
                   >
@@ -1860,7 +1867,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   <span className="shrink-0">fal Seedance →</span>
                   <button
                     type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
                     title="fal Seedance 2.0 (1080p + native audio, ~$0.3-0.5/支)"
                     className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
@@ -1869,7 +1876,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   </button>
                   <button
                     type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
                     title="fal Seedance 2.0 Fast (cheap variant, ~$0.1-0.2/支,稍弱)"
                     className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
@@ -1885,7 +1892,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       <button
                         type="button"
                         onClick={handleSaveDescription}
-                        disabled={!descChanged || updatePanelText.isPending || !selected}
+                        disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
                         className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
                       >
                         {updatePanelText.isPending ? '儲存中…' : '儲存'}
@@ -1904,7 +1911,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       <button
                         type="button"
                         onClick={handleSaveDialogue}
-                        disabled={!dialogueChanged || updatePanelText.isPending || !selected}
+                        disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
                         className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
                       >
                         {updatePanelText.isPending ? '儲存中…' : '儲存'}
@@ -1996,7 +2003,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <div className="flex items-center gap-3">
             <button
               type="button"
-              disabled={analyzeBusy || !currentEpisodeId}
+              disabled={analyzeBusy || !currentEpisodeId || !canEdit}
               onClick={handleAnalyzeStoryboard}
               title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2015,7 +2022,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled={autoGroup.isPending || allPanels.length < 2}
+              disabled={autoGroup.isPending || allPanels.length < 2 || !canEdit}
               onClick={handleAutoGroup}
               title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群,提升 Kling 多鏡頭品質"
               className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2036,7 +2043,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               return (
                 <button
                   type="button"
-                  disabled={batchImageState !== null || regenPanel.isPending}
+                  disabled={batchImageState !== null || regenPanel.isPending || !canEdit}
                   onClick={handleBatchGenerateImages}
                   title={`一鍵把還沒有圖的 ${missingImages} 個分鏡都送去生圖(每張 30-60s,後台跑)`}
                   className="flex items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2056,7 +2063,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               return (
                 <button
                   type="button"
-                  disabled={batchVideoState !== null || generateVideo.isPending}
+                  disabled={batchVideoState !== null || generateVideo.isPending || !canEdit}
                   onClick={handleBatchGenerateVideos}
                   title={`一鍵把已有圖、還沒有影片的 ${eligibleForVideo} 個分鏡都送去生 5 秒影片`}
                   className="flex items-center gap-1.5 rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-sky-300 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2252,7 +2259,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <button
                 type="button"
                 onClick={handleSaveDescription}
-                disabled={!descChanged || updatePanelText.isPending || !selected}
+                disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
                 className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {updatePanelText.isPending ? '儲存中…' : '儲存'}
@@ -2275,7 +2282,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <button
                 type="button"
                 onClick={handleSaveDialogue}
-                disabled={!dialogueChanged || updatePanelText.isPending || !selected}
+                disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
                 className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {updatePanelText.isPending ? '儲存中…' : '儲存'}
@@ -2430,7 +2437,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           ) : selected?.videoUrl && !selected?.imageUrl ? (
             <button
               type="button"
-              disabled={!selected || regenPanel.isPending || isCurrentPanelImageInFlight}
+              disabled={!selected || regenPanel.isPending || isCurrentPanelImageInFlight || !canEdit}
               onClick={() => {
                 if (!selected) return
                 const panelIdAtSubmit = selected.id
@@ -2593,7 +2600,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           <div className="mt-5 flex items-center gap-3">
             <button
               type="button"
-              disabled={!selected || regenPanel.isPending}
+              disabled={!selected || regenPanel.isPending || !canEdit}
               onClick={() => {
                 if (!selected) return
                 const panelIdAtSubmit = selected.id
@@ -2624,7 +2631,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
               onClick={() => handleGenerateVideo()}
               title={
                 !selected?.imageUrl
@@ -2656,7 +2663,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             <span className="shrink-0">或用 fal Seedance →</span>
             <button
               type="button"
-              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
               onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
               title={
                 !selected?.imageUrl
@@ -2670,7 +2677,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             <button
               type="button"
-              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight}
+              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
               onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
               title={
                 !selected?.imageUrl

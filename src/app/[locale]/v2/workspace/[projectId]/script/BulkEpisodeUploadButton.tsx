@@ -63,9 +63,12 @@ const SCRIPT_LABELS: Record<ScriptCode, string> = {
 interface BulkEpisodeUploadButtonProps {
   projectId: string
   hasExistingEpisodes: boolean
+  /** Phase 12.5 — when false, disables the upload trigger and shows a viewer tooltip. */
+  canEdit?: boolean
+  viewerTip?: string
 }
 
-export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes }: BulkEpisodeUploadButtonProps) {
+export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes, canEdit = true, viewerTip }: BulkEpisodeUploadButtonProps) {
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [extracting, setExtracting] = useState(false)
@@ -181,9 +184,9 @@ export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes }: Bulk
       <button
         type="button"
         onClick={openPicker}
-        disabled={extracting}
+        disabled={extracting || !canEdit}
         className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/5 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-        title="支援 .docx / .txt / .md,自動偵測「第X集」標題或 集数 表格,一鍵分集"
+        title={!canEdit ? viewerTip : '支援 .docx / .txt / .md,自動偵測「第X集」標題或 集数 表格,一鍵分集'}
       >
         <AppIcon name="upload" className="h-4 w-4" />
         {extracting ? '抽取中…' : '上傳劇本檔案'}

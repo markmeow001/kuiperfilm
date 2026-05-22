@@ -25,6 +25,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { useEpisodePreservingHref } from '../hooks/useEpisodePreservingHref'
@@ -51,6 +52,9 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
   const novelData = project?.novelPromotionData ?? null
   const { currentEpisodeId, currentEpisode, episodes } = useCurrentEpisode(projectId)
   const buildHref = useEpisodePreservingHref()
+  // Phase 12.5 — viewer-role users see disabled buttons + a hint tooltip.
+  const { canEdit } = useProjectAccess(projectId)
+  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
 
   const [novelText, setNovelText] = useState('')
   const [savedText, setSavedText] = useState<string | null>(null)
@@ -170,6 +174,8 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
               <BulkEpisodeUploadButton
                 projectId={projectId}
                 hasExistingEpisodes={episodes.length > 0}
+                canEdit={canEdit}
+                viewerTip={viewerTip}
               />
               <span className="text-stone-600">{charCount} chars</span>
               {currentEpisodeId ? (
@@ -188,12 +194,16 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
             value={novelText}
             onChange={(e) => setNovelText(e.target.value)}
             onBlur={handleBlur}
+            readOnly={!canEdit}
+            title={viewerTip}
             placeholder={
               currentEpisode
                 ? `輸入第 ${currentEpisode.episodeNumber} 集的劇本內容…\n\n格式不限——可以是分場大綱、完整對白劇本、或場景敘述。後續「劇本拆解」step 會自動從這份文本抽出角色 / 場景 / 物品,「分鏡」step 會自動切鏡頭。`
                 : '輸入第 1 集的劇本內容(按「儲存」會自動建立第 1 集)'
             }
-            className="h-[420px] w-full resize-none rounded-sm border border-amber-900/30 bg-stone-950 px-5 py-4 font-serif-cn text-base leading-relaxed text-stone-200 placeholder:text-stone-700 focus:border-amber-500/60 focus:outline-none"
+            className={`h-[420px] w-full resize-none rounded-sm border border-amber-900/30 bg-stone-950 px-5 py-4 font-serif-cn text-base leading-relaxed text-stone-200 placeholder:text-stone-700 focus:border-amber-500/60 focus:outline-none ${
+              !canEdit ? 'cursor-not-allowed opacity-70' : ''
+            }`}
           />
 
           {errorMsg ? (
@@ -206,7 +216,8 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
             <button
               type="button"
               onClick={() => void handleSave()}
-              disabled={saving || creatingEpisode || !hasContent || !isDirty}
+              disabled={saving || creatingEpisode || !hasContent || !isDirty || !canEdit}
+              title={viewerTip}
               className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="check" className="h-4 w-4" />

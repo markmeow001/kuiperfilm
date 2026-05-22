@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { useStitchEpisodeMp4 } from '@/lib/query/mutations/episode-stitch-mutations'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
@@ -63,6 +64,9 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   // available on this page.
   const { currentEpisodeId } = useCurrentEpisode(projectId)
   const buildHref = useEpisodePreservingHref()
+  // Phase 12.5 — viewer-role users see disabled stitch buttons.
+  const { canEdit } = useProjectAccess(projectId)
+  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
   const episodes = project?.novelPromotionData?.episodes ?? []
   const currentEpisode = episodes.find((ep) => ep?.id === currentEpisodeId) ?? episodes[0] ?? null
   const storyboardsQuery = useStoryboards(projectId, currentEpisode?.id ?? null)
@@ -216,8 +220,9 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
               </p>
               <button
                 type="button"
-                disabled={stitchMp4.isPending || !currentEpisodeId || !hasPackageableContent}
+                disabled={stitchMp4.isPending || !currentEpisodeId || !hasPackageableContent || !canEdit}
                 onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
+                title={viewerTip}
                 className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {stitchMp4.isPending ? '重新打包中…' : '↻ 重新打包素材包'}
@@ -230,11 +235,14 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                 stitchMp4.isPending ||
                 !currentEpisodeId ||
                 !hasPackageableContent ||
-                currentEpisode?.stitchStatus === 'rendering'
+                currentEpisode?.stitchStatus === 'rendering' ||
+                !canEdit
               }
               onClick={() => currentEpisodeId && stitchMp4.mutate({ episodeId: currentEpisodeId })}
               title={
-                !hasPackageableContent
+                !canEdit
+                  ? viewerTip
+                  : !hasPackageableContent
                   ? '需先生成至少 1 個分鏡視頻或多鏡頭群組才能打包素材包'
                   : '把所有分鏡 / 多鏡頭視頻 + 參考圖 + 對白腳本打包成 zip,直接下載到剪映/CapCut 剪輯'
               }

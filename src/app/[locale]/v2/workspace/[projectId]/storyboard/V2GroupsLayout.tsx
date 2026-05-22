@@ -122,6 +122,10 @@ interface V2GroupsLayoutProps {
    * Per-group picker overrides this.
    */
   projectVisualStyleId?: string | null
+  /** Phase 12.5 — passed through to GroupCard so viewer-role users see
+   *  disabled mutation buttons in each group card. */
+  canEdit?: boolean
+  viewerTip?: string
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
@@ -157,6 +161,8 @@ export function V2GroupsLayout({
   canMultiShot = true,
   videoFamily = null,
   projectVisualStyleId = null,
+  canEdit = true,
+  viewerTip,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -254,6 +260,8 @@ export function V2GroupsLayout({
                   canMultiShot={canMultiShot}
                   videoFamily={videoFamily}
                   projectVisualStyleId={projectVisualStyleId}
+                  canEdit={canEdit}
+                  viewerTip={viewerTip}
                   onRegenerate={(panelIds, overrides) =>
                     onRegenerateGroup(g.groupId, panelIds, overrides)
                   }

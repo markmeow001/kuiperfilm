@@ -242,6 +242,11 @@ interface GroupCardProps {
    * (worker still applies its own resolveProjectVisualStyle on the server).
    */
   projectVisualStyleId?: string | null
+  /** Phase 12.5 — when false, all mutation buttons in the card render
+   *  disabled with a viewer tooltip. Defaults to true for backward compat. */
+  canEdit?: boolean
+  /** Phase 12.5 — tooltip text shown on disabled mutation buttons. */
+  viewerTip?: string
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
@@ -275,6 +280,8 @@ export function GroupCard({
   canMultiShot = true,
   videoFamily = null,
   projectVisualStyleId = null,
+  canEdit = true,
+  viewerTip,
   onRegenerate,
 }: GroupCardProps) {
   // Build episode binding lookup ONCE. Empty map when no bindings prop
@@ -1481,7 +1488,7 @@ export function GroupCard({
           {expanded ? (
             <button
               type="button"
-              disabled={regenState.status === 'submitting' || panels.length < 2 || !canMultiShot}
+              disabled={regenState.status === 'submitting' || panels.length < 2 || !canMultiShot || !canEdit}
               onClick={(e) => {
                 e.stopPropagation()
                 void handleRegenerate()
@@ -1562,7 +1569,7 @@ export function GroupCard({
             <button
               type="button"
               onClick={() => void handleRegenerate()}
-              disabled={!canMultiShot}
+              disabled={!canMultiShot || !canEdit}
               title={
                 canMultiShot
                   ? undefined
@@ -1647,7 +1654,7 @@ export function GroupCard({
                 Row 2 selects get. */}
             <button
               type="button"
-              disabled={!narrativeDirty}
+              disabled={!narrativeDirty || !canEdit}
               onClick={() => {
                 const fresh = buildInitialNarrativeForFamily()
                 setNarrativeDraft('')
@@ -1721,12 +1728,12 @@ export function GroupCard({
                     const next = e.target.value as FrameLockMode
                     setFrameLockMode(next)
                   }}
-                  disabled={!panels[0]?.imageUrl}
+                  disabled={!panels[0]?.imageUrl || !canEdit}
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <option value="off">Off · 多鏡頭(現在)</option>
                   <option value="first_frame">鎖首幀 · 用 SHOT 01 圖</option>
-                  <option value="first_last_frame" disabled={!panels[panels.length - 1]?.imageUrl}>
+                  <option value="first_last_frame" disabled={!panels[panels.length - 1]?.imageUrl || !canEdit}>
                     {panels[panels.length - 1]?.imageUrl
                       ? `鎖首尾 · 用 SHOT 01 + SHOT ${panels.length}`
                       : `鎖首尾 · 需 SHOT ${panels.length} 也有圖`}
@@ -1971,7 +1978,7 @@ export function GroupCard({
                           <button
                             type="button"
                             onClick={() => void handleRemoveCharacterFromGroup(c.character.id, c.character.name)}
-                            disabled={removingCharId === c.character.id}
+                            disabled={removingCharId === c.character.id || !canEdit}
                             title={`從此 group 所有分鏡移除 ${c.character.name}（影響 DB,下次重生會生效）`}
                             className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
@@ -2045,7 +2052,7 @@ export function GroupCard({
                           <button
                             type="button"
                             onClick={() => void handleRemoveSceneFromGroup(s.location.id, s.location.name)}
-                            disabled={removingSceneId === s.location.id}
+                            disabled={removingSceneId === s.location.id || !canEdit}
                             title={`從此 group 所有分鏡移除場景 ${s.location.name}（影響 DB,下次重生會生效）`}
                             className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
@@ -2100,7 +2107,7 @@ export function GroupCard({
                           <button
                             type="button"
                             onClick={handleClick}
-                            disabled={!character}
+                            disabled={!character || !canEdit}
                             className={`inline-flex items-center gap-1.5 pr-1 ${character ? 'cursor-pointer' : 'cursor-default'}`}
                             title={title}
                           >
@@ -2127,7 +2134,7 @@ export function GroupCard({
                           <button
                             type="button"
                             onClick={() => void handleRemoveCharacterFromGroup(c.id, c.name)}
-                            disabled={removingCharId === c.id}
+                            disabled={removingCharId === c.id || !canEdit}
                             title={`從此 group 所有分鏡移除 ${c.name}（影響 DB,下次重生會生效）`}
                             className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
@@ -2193,7 +2200,7 @@ export function GroupCard({
                       {descChanged ? (
                         <button
                           type="button"
-                          disabled={isSavingThis}
+                          disabled={isSavingThis || !canEdit}
                           onClick={() => handleSaveDescription(p.id)}
                           className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
                         >
@@ -2213,7 +2220,7 @@ export function GroupCard({
                         {dialChanged ? (
                           <button
                             type="button"
-                            disabled={isSavingThis}
+                            disabled={isSavingThis || !canEdit}
                             onClick={() => handleSaveDialogue(p.id)}
                             className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
                           >

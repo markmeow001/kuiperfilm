@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { AppIcon } from '@/components/ui/icons'
+import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { useProjectCharacters, useProjectLocations, useProjectProps } from '@/lib/query/hooks/useProjectAssets'
 import {
   useRegenerateSingleCharacterImage,
@@ -159,6 +160,9 @@ function pickLocationImage(l: LocationLike): string | null {
 
 export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const queryClient = useQueryClient()
+  // Phase 12.5 — viewer-role users see disabled mutation buttons.
+  const { canEdit } = useProjectAccess(projectId)
+  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
   // Tab persisted in URL ?tab= so F5 + bookmarks + cross-project
   // navigation 都能落到對的 tab。Earlier we kept it in React state and
   // the user reported "F5 後跑到首頁" — actual behaviour was that F5
@@ -1065,7 +1069,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       : taskStatus === 'completed'
         ? '重新分析'
         : '一鍵分析'
-  const analyzeDisabled = analyze.isPending || isAnalyzing || !currentEpisodeId
+  const analyzeDisabled = analyze.isPending || isAnalyzing || !currentEpisodeId || !canEdit
 
   const compactAnalyzeButton = (
     <div className="flex items-center gap-3">
@@ -1203,13 +1207,14 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               既不依賴劇本分析,也不阻擋自動分析流程。 */}
           <button
             type="button"
+            disabled={!canEdit}
             onClick={() =>
               setManualAddOpen(
                 tab === 'character' ? 'character' : tab === 'scene' ? 'scene' : 'prop',
               )
             }
-            className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-200 transition-all hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-300"
-            title={`手動新增${tab === 'character' ? '角色' : tab === 'scene' ? '場景' : '道具'}`}
+            className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-200 transition-all hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            title={!canEdit ? viewerTip : `手動新增${tab === 'character' ? '角色' : tab === 'scene' ? '場景' : '道具'}`}
           >
             <AppIcon name="plus" className="h-4 w-4" />
             手動新增
@@ -1218,7 +1223,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             <button
               type="button"
               onClick={handleBatchRegenCharacters}
-              disabled={!!batchGenInFlight}
+              disabled={!!batchGenInFlight || !canEdit}
+              title={viewerTip}
               className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
@@ -1231,7 +1237,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             <button
               type="button"
               onClick={handleBatchRegenLocations}
-              disabled={!!batchGenInFlight}
+              disabled={!!batchGenInFlight || !canEdit}
+              title={viewerTip}
               className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
@@ -1244,7 +1251,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             <button
               type="button"
               onClick={handleBatchGenProps}
-              disabled={!!batchGenInFlight}
+              disabled={!!batchGenInFlight || !canEdit}
+              title={viewerTip}
               className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
@@ -1290,26 +1298,30 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               description: roleSummary,
               visualPrompt,
               imageUrl: pickCharacterImage(c),
-              onRegenerate: () => handleRegenChar(c),
+              // Phase 12.5 — mutation handlers undefined for viewers
+              // so SubjectGrid card buttons render disabled / hidden.
+              onRegenerate: canEdit ? () => handleRegenChar(c) : undefined,
               isRegenerating: regenInFlight.has(apId) || serverInflightIds.has(apId),
               isLocked: Boolean(c.profileConfirmed),
-              onLock: () => handleConfirmProfile(c),
+              onLock: canEdit ? () => handleConfirmProfile(c) : undefined,
               isLocking: confirmProfile.isPending,
-              onUpload: (file) => handleUploadChar(c, file),
+              onUpload: canEdit ? (file) => handleUploadChar(c, file) : undefined,
               isUploading: uploadInFlight.has(apId),
               onZoom: (url) => setZoomImage(url),
+              // Open editor stays available — opens read-only modal for viewers
               onOpenEditor: () => handleOpenCharacterModal(c),
-              onEditDescription: () => handleEditDescStart(c),
+              // Inline description editing is local-only UI state until save fires
+              onEditDescription: canEdit ? () => handleEditDescStart(c) : undefined,
               isEditingDescription: editingDescId === apId && apId.length > 0,
               descriptionDraft: editingDescId === apId ? editingDescDraft : '',
               onDescriptionDraftChange: setEditingDescDraft,
-              onDescriptionSave: () => handleEditDescSave(c),
+              onDescriptionSave: canEdit ? () => handleEditDescSave(c) : undefined,
               onDescriptionCancel: handleEditDescCancel,
               isSavingDescription: updateAppearanceDesc.isPending,
               // "從圖抽描述" — only meaningful when the appearance has
               // an image to look at. Skip otherwise so the button
               // doesn't render dead.
-              onRedescribe: ap?.imageUrl || ap?.imageUrls
+              onRedescribe: canEdit && (ap?.imageUrl || ap?.imageUrls)
                 ? () => { void handleRedescribe(c) }
                 : undefined,
               isRedescribing: redescribeInFlight.has(apId),
@@ -1334,13 +1346,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               caption: '場景',
               description: l.description ?? null,
               imageUrl: pickLocationImage(l),
-              onRegenerate: () => handleRegenLoc(l),
+              onRegenerate: canEdit ? () => handleRegenLoc(l) : undefined,
               isRegenerating: regenInFlight.has(l.id) || serverInflightIds.has(l.id),
-              onUpload: (file) => handleUploadLoc(l, file),
+              onUpload: canEdit ? (file) => handleUploadLoc(l, file) : undefined,
               isUploading: uploadInFlight.has(l.id),
               onZoom: (url) => setZoomImage(url),
               onOpenEditor: () => setEditingLocationId(l.id),
-              onRedescribe: targetImage?.imageUrl
+              onRedescribe: canEdit && targetImage?.imageUrl
                 ? () => { void handleRedescribeLoc(l) }
                 : undefined,
               isRedescribing: targetImage ? redescribeInFlight.has(targetImage.id) : false,
@@ -1359,16 +1371,16 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             caption: '道具',
             description: p.summary ?? null,
             imageUrl: p.imageUrl ?? null,
-            onRegenerate: () => {
+            onRegenerate: canEdit ? () => {
               markRegenStart(p.id)
               const mut = p.imageUrl ? regenProp : generateProp
               mut.mutate({ propId: p.id })
-            },
+            } : undefined,
             isRegenerating: regenInFlight.has(p.id) || serverInflightIds.has(p.id),
-            onUpload: (file) => handleUploadProp(p, file),
+            onUpload: canEdit ? (file) => handleUploadProp(p, file) : undefined,
             isUploading: uploadInFlight.has(p.id),
             onZoom: (url) => setZoomImage(url),
-            onRedescribe: p.imageUrl
+            onRedescribe: canEdit && p.imageUrl
               ? () => { void handleRedescribeProp(p) }
               : undefined,
             isRedescribing: redescribeInFlight.has(p.id),
