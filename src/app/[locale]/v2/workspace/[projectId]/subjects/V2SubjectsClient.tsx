@@ -986,41 +986,78 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     || locationsQuery.isLoading
     || (!!currentEpisodeId && (episodeBindingsQuery.isLoading || episodeLocationBindingsQuery.isLoading))
 
+  // 2026-05-21 — replaced the always-on amber CTA strip with two
+  // surfaces that share the same handleAnalyze action:
+  //   1. compactAnalyzeButton (top of content area) — ambient access
+  //      to 「重新分析」 when the grid already has items, so the user
+  //      never has to hunt for the entry point
+  //   2. emptyStateCta (passed into SubjectGrid as `emptyAction`) —
+  //      big centered card with the same button + 素材庫 link, so a
+  //      brand-new EP doesn't make the user read a sentence to find
+  //      the next action
+  // Page title 「劇本拆解」 (sidebar) now carries the page-level
+  // orientation the deleted banner used to provide; the description
+  // sentence is dropped as redundant.
+  const analyzeLabel = analyze.isPending
+    ? '提交中…'
+    : isAnalyzing
+      ? `分析中… ${taskProgress}%`
+      : taskStatus === 'completed'
+        ? '重新分析'
+        : '一鍵分析'
+  const analyzeDisabled = analyze.isPending || isAnalyzing || !currentEpisodeId
+
+  const compactAnalyzeButton = (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={handleAnalyze}
+        disabled={analyzeDisabled}
+        className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <AppIcon name="sparklesAlt" className="h-3 w-3" />
+        {analyzeLabel} {currentEpisode ? `· ${currentEpisode.name}` : ''}
+      </button>
+      <Link
+        href={`/${locale}/workspace/asset-hub`}
+        className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
+      >
+        素材庫導入 →
+      </Link>
+    </div>
+  )
+
+  const emptyStateCta = (
+    <div className="flex flex-col items-center gap-4">
+      <button
+        type="button"
+        onClick={handleAnalyze}
+        disabled={analyzeDisabled}
+        className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 shadow-lg shadow-amber-500/20 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <AppIcon name="sparklesAlt" className="h-5 w-5" />
+        {`✨ ${analyzeLabel}${currentEpisode ? ` ${currentEpisode.name} 劇本` : ''}`}
+      </button>
+      <div className="font-mono text-[12px] tracking-wider text-stone-500">
+        AI 自動抽出角色 / 場景 / 道具
+      </div>
+      <Link
+        href={`/${locale}/workspace/asset-hub`}
+        className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
+      >
+        或從素材庫導入 →
+      </Link>
+    </div>
+  )
+
   return (
     <div className="px-12 py-10">
-      {/* Analyze CTA strip — Stage C: independent subjects analysis */}
-      <div className="mb-6 flex flex-col gap-4 rounded-sm border border-amber-500/30 bg-amber-500/5 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="font-fraunces text-sm italic text-amber-400">
-            分析{currentEpisode ? `「${currentEpisode.name}」` : '當前集'}的劇本
-          </div>
-          <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
-            從劇本自動抽出角色 / 場景 / 道具 — 完成後在下方卡片可單張「生成」/「重新生成」/上傳替換,或用上方「一鍵生圖所有X」批次跑
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleAnalyze}
-            disabled={analyze.isPending || isAnalyzing || !currentEpisodeId}
-            className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2.5 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <AppIcon name="sparklesAlt" className="h-4 w-4" />
-            {analyze.isPending
-              ? '提交中…'
-              : isAnalyzing
-                ? `分析中… ${taskProgress}%`
-                : taskStatus === 'completed'
-                  ? '重新分析'
-                  : '一鍵分析'}
-          </button>
-          <Link
-            href={`/${locale}/workspace/asset-hub`}
-            className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
-          >
-            或從素材庫導入 →
-          </Link>
-        </div>
+      {/* Compact analyze toolbar — replaces the deleted amber CTA strip.
+          Ambient access to 重新分析 when the grid already has items.
+          When grid is empty, SubjectGrid renders the bigger emptyStateCta
+          inside its empty card so the user has a clearer next action. */}
+      <div className="mb-4 flex items-center justify-end">
+        {compactAnalyzeButton}
       </div>
 
       {/* Status banner — reads from server task snapshot, persists across navigation */}
@@ -1218,7 +1255,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               isRedescribing: redescribeInFlight.has(apId),
             }
           })}
-          emptyHint="此項目還沒有角色 — 點上方「一鍵分析」抽出此集的角色,或從素材庫導入"
+          emptyHint={currentEpisode ? `${currentEpisode.name} 還沒有角色` : '還沒有角色'}
+          emptyAction={emptyStateCta}
         />
       ) : tab === 'scene' ? (
         <SubjectGrid
@@ -1248,7 +1286,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               isRedescribing: targetImage ? redescribeInFlight.has(targetImage.id) : false,
             }
           })}
-          emptyHint="此項目還沒有場景 — 點上方「一鍵分析」抽出此集的場景,或從素材庫導入"
+          emptyHint={currentEpisode ? `${currentEpisode.name} 還沒有場景` : '還沒有場景'}
+          emptyAction={emptyStateCta}
         />
       ) : (
         <SubjectGrid
@@ -1274,7 +1313,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               : undefined,
             isRedescribing: redescribeInFlight.has(p.id),
           }))}
-          emptyHint="此項目還沒有道具 — 點上方「一鍵分析」抽出此集的道具(刀/信封/戒指等劇情關鍵物件)"
+          emptyHint={
+            currentEpisode
+              ? `${currentEpisode.name} 還沒有道具(刀 / 信封 / 戒指等劇情關鍵物件)`
+              : '還沒有道具(刀 / 信封 / 戒指等劇情關鍵物件)'
+          }
+          emptyAction={emptyStateCta}
         />
       )}
 
@@ -1509,10 +1553,15 @@ interface SubjectItem {
 function SubjectGrid({
   items,
   emptyHint,
+  emptyAction,
   aspect = 'portrait',
 }: {
   items: SubjectItem[]
   emptyHint: string
+  /** Optional action node rendered below the emptyHint when items is
+   *  empty. Used to surface the page-level "一鍵分析" CTA directly in
+   *  the empty card so users don't have to find a button elsewhere. */
+  emptyAction?: React.ReactNode
   // Characters are 3:4 portrait (full-body 三视图). Scenes are 16:9
   // wide (Approach A widescreen). Forcing portrait on a wide source
   // center-crops it into a vertical strip and hides the left/right
@@ -1522,8 +1571,9 @@ function SubjectGrid({
   const aspectClass = aspect === 'wide' ? 'aspect-video' : 'aspect-[3/4]'
   if (items.length === 0) {
     return (
-      <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
+      <div className="flex flex-col items-center gap-6 rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
         <p className="font-fraunces text-base italic text-stone-400">{emptyHint}</p>
+        {emptyAction}
       </div>
     )
   }
