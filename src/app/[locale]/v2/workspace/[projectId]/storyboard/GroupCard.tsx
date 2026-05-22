@@ -247,6 +247,13 @@ interface GroupCardProps {
   canEdit?: boolean
   /** Phase 12.5 — tooltip text shown on disabled mutation buttons. */
   viewerTip?: string
+  /**
+   * 2026-05-22 — per-group fair share of project.targetDuration (sec).
+   * Threaded from V2GroupsLayout so the "Auto (推薦 Ns)" hint here matches
+   * the time-range badge there. Null = no project target → legacy 10s
+   * default floor in computeGroupRecommendedDurationSec.
+   */
+  targetSecPerGroup?: number | null
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
@@ -282,6 +289,7 @@ export function GroupCard({
   projectVisualStyleId = null,
   canEdit = true,
   viewerTip,
+  targetSecPerGroup = null,
   onRegenerate,
 }: GroupCardProps) {
   // Build episode binding lookup ONCE. Empty map when no bindings prop
@@ -1087,8 +1095,8 @@ export function GroupCard({
   // can compute the same recommendations across all groups (for the
   // cumulative time-range badge) without duplicating logic.
   const recommendedDurationSec = useMemo<number | null>(
-    () => computeGroupRecommendedDurationSec(panels),
-    [panels],
+    () => computeGroupRecommendedDurationSec(panels, { targetSecPerGroup }),
+    [panels, targetSecPerGroup],
   )
   // Re-seed the narrative when panels, duration, cast, or scenes change AND
   // the user hasn't edited it locally — avoids clobbering an in-progress edit.

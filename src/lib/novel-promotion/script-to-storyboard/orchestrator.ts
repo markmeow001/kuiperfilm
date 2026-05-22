@@ -335,8 +335,15 @@ export async function runScriptToStoryboardOrchestrator(
   const locationsLibName = (novelPromotionData.locations || []).map((l) => l.name).join(', ') || '无'
   const charactersIntroduction = buildCharactersIntroduction(novelPromotionData.characters || [])
 
-  // Calculate per-clip target panel counts based on target duration
-  const AVG_PANEL_DURATION_SEC = 3.5
+  // 2026-05-22 — AVG_PANEL_DURATION_SEC raised from 3.5 → 6.0.
+  // Rationale: the Phase 1 prompt (agent_storyboard_plan.zh.txt:13) tells
+  // the LLM to aim for "5-12s per panel". The old 3.5s constant computed a
+  // target_panel_count that was ~70% higher than what the LLM was being
+  // asked to produce — so the LLM consistently undershot (《迁徙》ep3:
+  // 21 panels vs target 51 = 41% delivery). Aligning to 6.0 (mid-range
+  // 5-7s) means targets the LLM can actually hit, and per-group durations
+  // sum closer to the user's targetDuration instead of half of it.
+  const AVG_PANEL_DURATION_SEC = 6.0
   const totalTargetPanels = Math.round(targetDuration / AVG_PANEL_DURATION_SEC)
   const totalContentLength = clips.reduce((sum, c) => sum + (typeof c.content === 'string' ? c.content.trim().length : 0), 0)
   const clipTargetPanels = clips.map((c) => {

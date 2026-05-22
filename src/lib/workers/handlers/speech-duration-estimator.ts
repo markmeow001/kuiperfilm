@@ -235,6 +235,23 @@ export function buildDialogueDrivenDurations(
   }
 }
 
+export interface GroupRecommendedDurationOptions {
+  /**
+   * 2026-05-22 — per-group fair share derived from project.targetDuration.
+   * Caller computes `targetSecPerGroup = targetTotalSec / groupCount` and
+   * passes it here so silent groups don't collapse to the 10s default when
+   * the user explicitly wants a longer total. Honored as a soft floor —
+   * still clamped to [5, 15] for Seedance per-call hard limits, and still
+   * overridden by panel-count floor (~2.5s/panel) when that's larger so
+   * dense groups don't shrink.
+   *
+   * Omit (or pass null/undefined) to keep the legacy "fixed 10s floor"
+   * behavior — used by tests + any caller that hasn't been threaded to
+   * carry targetDuration yet.
+   */
+  targetSecPerGroup?: number | null
+}
+
 /**
  * Single-group recommended duration helper used by frontend group cards
  * and the cumulative time-range computation in V2GroupsLayout. Mirrors
@@ -248,14 +265,15 @@ export function buildDialogueDrivenDurations(
  *   2. Run buildDialogueDrivenDurations. If it returns hasDialogue,
  *      use its totalDuration.
  *   3. Otherwise (no dialogue, or DIALOGUE_EXCEEDS_KLING_BUDGET) fall
- *      back to max(10, panels*2.5) clamped to [4, 15] — the Phase M
- *      worker baseline.
+ *      back to max(targetFloor, panels*2.5) clamped to [4, 15]. targetFloor
+ *      is options.targetSecPerGroup when supplied, else the legacy 10s.
  *
  * Returns null only when panels is empty (caller can decide what to
  * render then — typically just hide the segment).
  */
 export function computeGroupRecommendedDurationSec(
   panels: Array<{ id: string; srtSegment?: string | null }>,
+  options?: GroupRecommendedDurationOptions,
 ): number | null {
   if (panels.length === 0) return null
 
@@ -282,7 +300,14 @@ export function computeGroupRecommendedDurationSec(
     // DIALOGUE_EXCEEDS_KLING_BUDGET — fall through to baseline.
   }
 
-  // Phase M baseline parity with worker.
-  const baseline = Math.max(10, Math.round(panels.length * 2.5))
-  return Math.max(4, Math.min(15, baseline))
+  // 2026-05-22 — when caller supplies a target share, use it as the floor.
+  // Otherwise keep the legacy fixed-10s floor. Panel-count floor (2.5s per
+  // panel) wins when groups are dense so we don't squeeze visual beats.
+  const targetFloor =
+    typeof options?.targetSecPerGroup === 'number' && Number.isFinite(options.targetSecPerGroup)
+      ? options.targetSecPerGroup
+      : 10
+  const panelFloor = Math.round(panels.length * 2.5)
+  const baseline = Math.max(targetFloor, panelFloor)
+  return Math.max(4, Math.min(15, Math.round(baseline)))
 }

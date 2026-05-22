@@ -1494,6 +1494,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         projectVisualStyleId={project?.novelPromotionData?.visualStyleId ?? null}
         canEdit={canEdit}
         viewerTip={viewerTip}
+        targetDurationSec={project?.novelPromotionData?.targetDuration ?? null}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 或 Seedance 2.0 720p (BobAPI) 模型' }

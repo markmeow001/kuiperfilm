@@ -173,3 +173,81 @@ describe('computeGroupRecommendedDurationSec', () => {
     expect(result!).toBeGreaterThan(0)
   })
 })
+
+describe('computeGroupRecommendedDurationSec — targetSecPerGroup (2026-05-22)', () => {
+  // Bug context: 《迁徙》ep3 hit 95s for a 180s target because the silent-
+  // group fallback was a hard-coded 10s regardless of project ambition.
+  // The new option lets the caller pass the per-group fair share derived
+  // from project.targetDuration / groupCount.
+
+  it('uses targetSecPerGroup as floor for silent groups (replaces 10s default)', () => {
+    // target=180s / 12 groups = 15s/group share. 2 silent panels → panel
+    // floor = 5. Baseline = max(15, 5) = 15, clamp [4,15] = 15.
+    const result = computeGroupRecommendedDurationSec(
+      [{ id: 'p1' }, { id: 'p2' }],
+      { targetSecPerGroup: 15 },
+    )
+    expect(result).toBe(15)
+  })
+
+  it('honors a sub-10s target share when user picks a short total', () => {
+    // target=80s / 10 groups = 8s share. 2 silent panels → panel floor 5.
+    // baseline = max(8, 5) = 8. Without the target option this would have
+    // been a hard-coded 10s.
+    const result = computeGroupRecommendedDurationSec(
+      [{ id: 'p1' }, { id: 'p2' }],
+      { targetSecPerGroup: 8 },
+    )
+    expect(result).toBe(8)
+  })
+
+  it('panel-count floor still wins when groups are dense', () => {
+    // 8 panels * 2.5 = 20s panel floor. target share is 5s. Take the max,
+    // then clamp to 15. Dense groups don't shrink just because target is low.
+    const result = computeGroupRecommendedDurationSec(
+      Array.from({ length: 8 }, (_, i) => ({ id: `p${i}` })),
+      { targetSecPerGroup: 5 },
+    )
+    expect(result).toBe(15)
+  })
+
+  it('still clamps high target shares to the 15s Seedance ceiling', () => {
+    // target=300s / 5 groups = 60s share. Hard-capped to 15s per group.
+    const result = computeGroupRecommendedDurationSec(
+      [{ id: 'p1' }, { id: 'p2' }],
+      { targetSecPerGroup: 60 },
+    )
+    expect(result).toBe(15)
+  })
+
+  it('null targetSecPerGroup preserves legacy 10s default', () => {
+    // 1 silent panel — panel floor 2.5 → baseline = max(10 legacy, 2.5) = 10.
+    const result = computeGroupRecommendedDurationSec(
+      [{ id: 'p1' }],
+      { targetSecPerGroup: null },
+    )
+    expect(result).toBe(10)
+  })
+
+  it('dialogue-driven duration overrides target floor', () => {
+    // Long dialogue should drive duration, not the target share.
+    const longLine = 'A: ' + '對白'.repeat(15)
+    const result = computeGroupRecommendedDurationSec(
+      [{ id: 'p1', srtSegment: longLine }],
+      { targetSecPerGroup: 5 },
+    )
+    expect(result).not.toBeNull()
+    expect(result!).toBeGreaterThan(5)
+  })
+
+  it('《迁徙》 ep3 silent-group case: 21 panels / 10 groups → each silent group hits 15s with target 180', () => {
+    // Real prod regression — 21 panels in 10 groups, target 180s → share
+    // 18 per group → clamp 15. With this fix, total = 10*15 = 150s
+    // (vs broken 10*10 = 100s before). Up from ~53% to ~83% of target.
+    const groupOf2Silent = [{ id: 'a' }, { id: 'b' }]
+    const result = computeGroupRecommendedDurationSec(groupOf2Silent, {
+      targetSecPerGroup: 18,
+    })
+    expect(result).toBe(15)
+  })
+})

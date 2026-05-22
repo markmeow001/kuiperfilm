@@ -126,6 +126,14 @@ interface V2GroupsLayoutProps {
    *  disabled mutation buttons in each group card. */
   canEdit?: boolean
   viewerTip?: string
+  /**
+   * 2026-05-22 — project.targetDuration in seconds, threaded down so the
+   * cumulative time-range badge + each group's "Auto (推薦 Ns)" hint know
+   * how to allocate per-group share. Without this, silent groups default
+   * to 10s and undershoot the project target by ~50% (《迁徙》ep3 hit
+   * 95s for a 180s target). When null, callers preserve legacy behavior.
+   */
+  targetDurationSec?: number | null
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
@@ -163,6 +171,7 @@ export function V2GroupsLayout({
   projectVisualStyleId = null,
   canEdit = true,
   viewerTip,
+  targetDurationSec = null,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -204,17 +213,51 @@ export function V2GroupsLayout({
   // can drift. The header label is read-only and far from the
   // dropdown so the drift isn't disorienting; lifting that state
   // up is a separate change.
+  // 2026-05-22 — when projectVisualStyleId carries a targetDuration, split
+  // it evenly across visible groups as a per-group floor. Silent groups
+  // then default to the user's intended share instead of a flat 10s; dense
+  // groups still grow via the panel*2.5 floor inside the helper. Both
+  // floors stay capped at 15s for Seedance per-call limits.
+  const targetSecPerGroup = useMemo<number | null>(() => {
+    if (typeof targetDurationSec !== 'number' || !Number.isFinite(targetDurationSec)) return null
+    if (groups.ordered.length === 0) return null
+    return targetDurationSec / groups.ordered.length
+  }, [targetDurationSec, groups.ordered.length])
+
   const groupTimings = useMemo(() => {
     const FALLBACK = 15
     const result: Array<{ groupId: string; startSec: number; durationSec: number }> = []
     let cursor = 0
     for (const g of groups.ordered) {
-      const durationSec = computeGroupRecommendedDurationSec(g.panels) ?? FALLBACK
+      const durationSec =
+        computeGroupRecommendedDurationSec(g.panels, { targetSecPerGroup }) ?? FALLBACK
       result.push({ groupId: g.groupId, startSec: cursor, durationSec })
       cursor += durationSec
     }
     return result
-  }, [groups.ordered])
+  }, [groups.ordered, targetSecPerGroup])
+
+  // 2026-05-22 — total recommended duration across all groups. When it
+  // undershoots the project target by >15% surface an amber banner so
+  // the user knows to either add more panels (重新分析) or raise per-group
+  // sec manually. Without this, users see a 95s storyboard for a 180s
+  // target with no signal that something's off.
+  const cumulativeDurationSec = useMemo(
+    () => groupTimings.reduce((sum, g) => sum + g.durationSec, 0),
+    [groupTimings],
+  )
+  const durationShortfall = useMemo(() => {
+    if (typeof targetDurationSec !== 'number' || !Number.isFinite(targetDurationSec)) return null
+    if (targetDurationSec <= 0) return null
+    if (cumulativeDurationSec <= 0) return null
+    const ratio = cumulativeDurationSec / targetDurationSec
+    if (ratio >= 0.85) return null
+    return {
+      cumulativeSec: cumulativeDurationSec,
+      targetSec: targetDurationSec,
+      ratio,
+    }
+  }, [cumulativeDurationSec, targetDurationSec])
 
   const hasNoGroups = groups.ordered.length === 0
 
@@ -225,6 +268,18 @@ export function V2GroupsLayout({
       </div>
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
+        {durationShortfall ? (
+          <div className="mb-4 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+            <p className="font-fraunces text-sm text-amber-300">
+              ⚠ 總時長 {Math.round(durationShortfall.cumulativeSec)}s / 目標{' '}
+              {Math.round(durationShortfall.targetSec)}s（
+              {Math.round(durationShortfall.ratio * 100)}%）— 多鏡頭合成出來會比劇本短。
+            </p>
+            <p className="mt-1 text-xs text-amber-200/80">
+              修法選一：(a) 點「重新分析」讓分鏡 LLM 給出更多 panel；(b) 手動拉開每組「時長」下拉到 15s；(c) 把專案目標時長改短。
+            </p>
+          </div>
+        ) : null}
         {hasNoGroups ? (
           <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 px-6 py-8 text-center">
             <p className="font-fraunces text-base italic text-amber-400">
@@ -256,6 +311,7 @@ export function V2GroupsLayout({
                   episodeBindings={episodeBindings}
                   segmentStartSec={timing?.startSec}
                   segmentDurationSeconds={timing?.durationSec}
+                  targetSecPerGroup={targetSecPerGroup}
                   episodeNumber={episodeNumber}
                   canMultiShot={canMultiShot}
                   videoFamily={videoFamily}
