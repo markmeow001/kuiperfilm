@@ -65,8 +65,8 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
   {
     id: 'fal::bytedance/seedance-2.0/reference-to-video',
     family: 'seedance',
-    label: 'Seedance 2.0 R2V (fal · 9-ref)',
-    hint: '參考圖驅動,最多 9 張 @Image1...@Image9 · audio · 多鏡頭由 prompt 編碼',
+    label: '✓ Seedance 2.0 R2V (fal · 9 圖綁定 · 推薦)',
+    hint: '參考圖驅動,最多 9 張 @Image1...@Image9 · 視覺一致性最佳 · audio · 多鏡頭由 prompt 編碼',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
   {
@@ -79,8 +79,8 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
   {
     id: 'fal::bytedance/seedance-2.0/fast/reference-to-video',
     family: 'seedance',
-    label: 'Seedance 2.0 Fast R2V (fal · 9-ref cheap)',
-    hint: 'fast 版 9 張參考圖 · audio · 多鏡頭由 prompt 編碼',
+    label: '✓ Seedance 2.0 Fast R2V (fal · 9 圖綁定 · cheap)',
+    hint: 'fast 版 9 張參考圖 · 視覺一致性最佳 · audio · 多鏡頭由 prompt 編碼',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
   },
   {
@@ -89,8 +89,8 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
     // 2026-05-17 — only Seedance variant with multi-ref composite support.
     // BobAPI/taijiai serves the content[] @N endpoint; fal Seedance is
     // flat i2v only, so only THIS id lights up the 多鏡頭 button.
-    label: 'Seedance 2.0 720p (BobAPI)',
-    hint: '透過 BobAPI / taijiai 中轉,720p · audio · 支援多鏡頭合成 (9-ref @N)',
+    label: '✓ Seedance 2.0 720p (BobAPI · 9 圖綁定 · 推薦)',
+    hint: '透過 BobAPI / taijiai 中轉 · 9 張角色 / 場景圖綁定 · 視覺一致性最佳 · 720p · audio · 支援多鏡頭合成 (9-ref @N)',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
   // 2026-05-20 — AtlasCloud Seedance 2.0 line (6 variants: t2v/i2v/r2v × standard/fast).
@@ -105,43 +105,43 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
   {
     id: 'atlascloud::seedance-2.0-t2v',
     family: 'seedance',
-    label: 'Seedance 2.0 T2V (AtlasCloud · audio)',
-    hint: '純文字驅動,720p/480p · native audio · 4-15s · 多鏡頭由 prompt 編碼',
+    label: '⚠️ Seedance 2.0 T2V (AtlasCloud · 純文字 · 無圖綁定)',
+    hint: '純文字驅動 · 不送任何角色 / 場景參考圖,角色臉每次都會不同 · 適合無主角的氛圍鏡 / 環境鏡 · 720p · audio · 4-15s',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
   {
     id: 'atlascloud::seedance-2.0-i2v',
     family: 'seedance',
-    label: 'Seedance 2.0 I2V (AtlasCloud · audio)',
-    hint: '起始圖驅動,720p/480p · native audio · 4-15s · 多鏡頭由 prompt 編碼',
+    label: 'Seedance 2.0 I2V (AtlasCloud · 首幀綁定)',
+    hint: '首幀 1 張圖當錨點,後續鏡頭可能微飄 · 720p · audio · 4-15s · 多鏡頭由 prompt 編碼',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
   {
     id: 'atlascloud::seedance-2.0-r2v',
     family: 'seedance',
-    label: 'Seedance 2.0 R2V (AtlasCloud · 9-ref)',
-    hint: '參考圖驅動,最多 9 張角色/場景圖 · audio · 4-15s · 多鏡頭由 prompt 編碼',
+    label: '✓ Seedance 2.0 R2V (AtlasCloud · 9 圖綁定 · 推薦)',
+    hint: '參考圖驅動,最多 9 張角色 / 場景圖 · 視覺一致性最佳 · 720p · audio · 4-15s · 多鏡頭由 prompt 編碼',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
   {
     id: 'atlascloud::seedance-2.0-fast-t2v',
     family: 'seedance',
-    label: 'Seedance 2.0 Fast T2V (AtlasCloud · cheap)',
-    hint: '便宜的 fast 版,純文字驅動 · audio · 4-15s · 多鏡頭由 prompt 編碼',
+    label: '⚠️ Seedance 2.0 Fast T2V (AtlasCloud · 純文字 · 無圖綁定)',
+    hint: '便宜的 fast 版 · 純文字驅動,不送角色 / 場景參考圖,適合氛圍鏡 · audio · 4-15s',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
   },
   {
     id: 'atlascloud::seedance-2.0-fast-i2v',
     family: 'seedance',
-    label: 'Seedance 2.0 Fast I2V (AtlasCloud · cheap)',
-    hint: '便宜的 fast 版,起始圖驅動 · audio · 4-15s · 多鏡頭由 prompt 編碼',
+    label: 'Seedance 2.0 Fast I2V (AtlasCloud · 首幀綁定 · cheap)',
+    hint: '便宜的 fast 版 · 首幀 1 張圖當錨點 · audio · 4-15s · 多鏡頭由 prompt 編碼',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
   },
   {
     id: 'atlascloud::seedance-2.0-fast-r2v',
     family: 'seedance',
-    label: 'Seedance 2.0 Fast R2V (AtlasCloud · 9-ref cheap)',
-    hint: '便宜的 fast 版,9 張參考圖驅動 · audio · 4-15s · 多鏡頭由 prompt 編碼',
+    label: '✓ Seedance 2.0 Fast R2V (AtlasCloud · 9 圖綁定 · cheap)',
+    hint: '便宜的 fast 版 · 9 張參考圖驅動 · 視覺一致性最佳 · audio · 4-15s · 多鏡頭由 prompt 編碼',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
   },
 
