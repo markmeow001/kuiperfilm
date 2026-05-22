@@ -70,21 +70,22 @@ import { buildDialogueDrivenDurations } from './speech-duration-estimator'
 import { extractSpokenLineFromSrtSegment } from './multi-shot-video-b-path'
 
 // AtlasCloud Seedance 2.0's request schema has NO `negative_prompt`
-// field (verified from static.atlascloud.ai/model/schema/...). Inline
-// the negatives into the prompt with an explicit AVOID marker so the
-// model still suppresses CG / animation artifacts. Matches the
-// fallback the BobAPI generator does when its negative_prompt slot
-// goes empty.
-const UNIVERSAL_ATLASCLOUD_NEGATIVE = [
-  'subtitles',
-  'on-screen text',
-  'watermark',
-  'logo',
-  '字幕',
-  '文字',
-  '屏幕信息',
-  '水印',
-].join(', ')
+// field (verified from static.atlascloud.ai/model/schema/...). User
+// reported (2026-05-22) that the previous "AVOID: 字幕, 文字, ..."
+// inline-negative approach BACKFIRED — Seedance models occasionally
+// render the AVOID list itself as on-screen text (a known "pink
+// elephant" failure mode: mentioning 字幕 in any context primes the
+// model to paint subtitles).
+//
+// Phase R-1 fix: switch to a POSITIVE aspirational phrasing that
+// describes the desired clean frame without ever naming the artifact
+// we're suppressing. Style-library's `negativePrompt` (per-style CG
+// suppressors) STILL ships via buildVisualStyleNegative because those
+// terms (animation/3D render/plastic skin) are recognised as visual
+// styles by the model, not as text-to-render. Only the "字幕 / 文字 /
+// watermark" trio gets the positive-phrasing treatment.
+const UNIVERSAL_ATLASCLOUD_CLEAN_FRAME_DIRECTIVE =
+  '純電影級實拍畫面,畫面內僅包含敘事主體與環境,無任何文字疊加 / 圖形 UI 覆蓋 / 浮水印 / 角標 / 平台 logo,畫面整潔乾淨,模擬無後製字幕的純拍攝素材。'
 
 const MAX_REFERENCE_IMAGES = 9
 const MIN_DURATION_SEC = 4
@@ -477,10 +478,13 @@ export async function runMultiShotAtlasCloudComposite(params: {
 
   const stylePrefix = buildVisualStylePrefix(resolvedStyle).trim()
   const styleSuffix = buildVisualStyleSuffix(resolvedStyle).trim()
+  // Style-library's per-style negativePrompt (animation/3D render/plastic
+  // skin etc.) still ships as a negative annotation — those terms are
+  // visual-style descriptors the model interprets as "don't render in
+  // this style", not as literal text to paint. The on-screen-text /
+  // watermark suppression has moved to UNIVERSAL_ATLASCLOUD_CLEAN_FRAME_DIRECTIVE
+  // (positive phrasing) to avoid the 字幕→"無字幕" backfire.
   const styleNegative = buildVisualStyleNegative(resolvedStyle).trim()
-  const composedNegative = [styleNegative, UNIVERSAL_ATLASCLOUD_NEGATIVE]
-    .filter((s) => s && s.length > 0)
-    .join(', ')
 
   // ── PROMPT ASSEMBLY ──
   let promptCore: string
@@ -506,16 +510,23 @@ export async function runMultiShotAtlasCloudComposite(params: {
     dialogueBeatCount = built.dialogueBeatCount
   }
 
-  // Wrap: styleAnchor + lighting → core → visualModifiers → AVOID list.
-  // Match Kling B-path's official ordering (Scene → Action → Style →
-  // Negative-as-text). Even when style is null, the universal AVOID
-  // list still ships so on-screen-text / watermark artifacts get
-  // suppressed across all 3 modes.
+  // Wrap: styleAnchor + lighting → core → visualModifiers → style
+  // negative (visual-style suppressors) → clean-frame positive
+  // directive. The clean-frame directive replaces the previous
+  // "AVOID: 字幕,..." inline negative which caused the model to
+  // sometimes paint the words 字幕 / 文字 / watermark into the frame
+  // (the AVOID list itself rendered as on-screen text — a classic
+  // pink-elephant failure for video models). Positive phrasing keeps
+  // the artifact suppressed without ever naming it.
+  const styleNegativeFragment = styleNegative
+    ? `視覺風格負面詞(避免出現以下風格傾向): ${styleNegative}.`
+    : ''
   const prompt = [
     stylePrefix,
     promptCore,
     styleSuffix,
-    composedNegative ? `AVOID: ${composedNegative}.` : '',
+    styleNegativeFragment,
+    UNIVERSAL_ATLASCLOUD_CLEAN_FRAME_DIRECTIVE,
   ]
     .filter((s) => s.length > 0)
     .join('\n\n')
@@ -603,7 +614,8 @@ export async function runMultiShotAtlasCloudComposite(params: {
       dialogueBeatCount,
       promptLength: prompt.length,
       visualStyleId: resolvedStyle?.style.id ?? null,
-      negativeLength: composedNegative.length,
+      negativeLength: styleNegative.length,
+      cleanFrameDirective: true,
     },
   })
 

@@ -67,17 +67,14 @@ import { extractSpokenLineFromSrtSegment } from './multi-shot-video-b-path'
 
 // fal Seedance r2v has no negative_prompt field at the API level either
 // (verified from fal.ai/models/bytedance/seedance-2.0/reference-to-video).
-// Inline the universal AVOID list — same approach as AtlasCloud.
-const UNIVERSAL_FAL_NEGATIVE = [
-  'subtitles',
-  'on-screen text',
-  'watermark',
-  'logo',
-  '字幕',
-  '文字',
-  '屏幕信息',
-  '水印',
-].join(', ')
+// Phase R-1 (2026-05-22) — switched from inline "AVOID: 字幕,..." to a
+// POSITIVE clean-frame directive after user reported the AVOID list
+// itself being rendered as on-screen text (pink-elephant failure mode:
+// mentioning 字幕 primes the model to paint subtitles). Style-library
+// negativePrompt still ships separately because those visual-style
+// suppressors (animation/3D render/etc.) work as expected.
+const UNIVERSAL_FAL_CLEAN_FRAME_DIRECTIVE =
+  'Pure live-action cinematic frame; only the narrative subject and environment appear; no text overlays, no UI graphics, no watermarks, no platform logos, no captions of any kind. The frame simulates clean unposted raw camera footage.'
 
 const MAX_REFERENCE_IMAGES = 9
 const MIN_DURATION_SEC = 4
@@ -383,10 +380,9 @@ export async function runMultiShotFalComposite(params: {
     : await resolveProjectVisualStyle(prisma, projectId)
   const stylePrefix = buildVisualStylePrefix(resolvedStyle).trim()
   const styleSuffix = buildVisualStyleSuffix(resolvedStyle).trim()
+  // Style-library negativePrompt (visual-style suppressors) still ships
+  // as a separate annotation; clean-frame uses positive phrasing.
   const styleNegative = buildVisualStyleNegative(resolvedStyle).trim()
-  const composedNegative = [styleNegative, UNIVERSAL_FAL_NEGATIVE]
-    .filter((s) => s && s.length > 0)
-    .join(', ')
 
   // Prompt assembly
   let promptCore: string
@@ -408,11 +404,15 @@ export async function runMultiShotFalComposite(params: {
     dialogueBeatCount = built.dialogueBeatCount
   }
 
+  const styleNegativeFragment = styleNegative
+    ? `Visual style to AVOID (don't render in this style): ${styleNegative}.`
+    : ''
   const prompt = [
     stylePrefix,
     promptCore,
     styleSuffix,
-    composedNegative ? `AVOID: ${composedNegative}.` : '',
+    styleNegativeFragment,
+    UNIVERSAL_FAL_CLEAN_FRAME_DIRECTIVE,
   ]
     .filter((s) => s.length > 0)
     .join('\n\n')
@@ -477,7 +477,8 @@ export async function runMultiShotFalComposite(params: {
       dialogueBeatCount,
       promptLength: prompt.length,
       visualStyleId: resolvedStyle?.style.id ?? null,
-      negativeLength: composedNegative.length,
+      negativeLength: styleNegative.length,
+      cleanFrameDirective: true,
     },
   })
 

@@ -21,6 +21,8 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProp } from '@/lib/media/attach'
+import { propagatePropRename } from '@/lib/novel-promotion/rename-propagation'
+import { logInfo as _ulogInfo } from '@/lib/logging/core'
 
 export const GET = apiHandler(async (
   _request: NextRequest,
@@ -120,18 +122,36 @@ export const PATCH = apiHandler(async (
     throw new ApiError('INVALID_PARAMS', { message: 'no updatable fields' })
   }
 
-  // Multi-user isolation: chain ownership
+  // Multi-user isolation: chain ownership + capture old name for propagation.
   const owned = await prisma.novelPromotionProp.findFirst({
     where: { id: propId, novelPromotionProject: { projectId } },
-    select: { id: true },
+    select: { id: true, name: true },
   })
   if (!owned) {
     throw new ApiError('NOT_FOUND')
   }
 
-  const prop = await prisma.novelPromotionProp.update({
-    where: { id: propId },
-    data: updateData,
+  // Phase R-2 (2026-05-22) — propagate prop rename to panel.props JSON
+  // refs (same shape as character refs). Same atomicity guarantee as
+  // character / location PATCH.
+  const isRename =
+    typeof updateData.name === 'string' &&
+    updateData.name.length > 0 &&
+    updateData.name !== owned.name
+  const oldName = owned.name
+
+  const prop = await prisma.$transaction(async (tx) => {
+    const updated = await tx.novelPromotionProp.update({
+      where: { id: propId },
+      data: updateData,
+    })
+    if (isRename) {
+      const result = await propagatePropRename(tx, projectId, oldName, updated.name)
+      _ulogInfo(
+        `✓ 道具改名 propagated: "${oldName}" → "${updated.name}" — ${result.panelsRewritten}/${result.panelsScanned} panels rewritten`,
+      )
+    }
+    return updated
   })
 
   return NextResponse.json({ success: true, prop })

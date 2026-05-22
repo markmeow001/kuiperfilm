@@ -1,4 +1,4 @@
-import { logError as _ulogError } from '@/lib/logging/core'
+import { logError as _ulogError, logInfo as _ulogInfo } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuth, requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
@@ -6,6 +6,7 @@ import { encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { PRIMARY_APPEARANCE_INDEX } from '@/lib/constants'
 import { resolveTaskLocale } from '@/lib/task/resolve-locale'
+import { propagateCharacterRename } from '@/lib/novel-promotion/rename-propagation'
 
 function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -60,18 +61,40 @@ export const PATCH = apiHandler(async (
   if (customVoiceUrl !== undefined) updateData.customVoiceUrl = typeof customVoiceUrl === 'string' && customVoiceUrl ? customVoiceUrl : null
 
   // ⚠️ Multi-user isolation: ensure the character belongs to this project.
+  // Also fetch the existing name so we can detect a rename + propagate
+  // it to every panel that references the old name.
   const owned = await prisma.novelPromotionCharacter.findFirst({
     where: { id: characterId, novelPromotionProject: { projectId } },
-    select: { id: true },
+    select: { id: true, name: true },
   })
   if (!owned) {
     throw new ApiError('NOT_FOUND')
   }
 
-  // 更新角色
-  const character = await prisma.novelPromotionCharacter.update({
-    where: { id: characterId },
-    data: updateData
+  // Phase R-2 (2026-05-22) — when name changes, atomically rewrite
+  // every panel.characters JSON in the project that references the
+  // old name. Pre-Phase-R-2 the catalog row updated but panels still
+  // had the old name → multi-shot worker's findCharacterByName lookup
+  // returned undefined → ref image silently dropped → renamed
+  // character no longer anchored any shot.
+  const isRename =
+    typeof updateData.name === 'string' &&
+    updateData.name.length > 0 &&
+    updateData.name !== owned.name
+  const oldName = owned.name
+
+  const character = await prisma.$transaction(async (tx) => {
+    const updated = await tx.novelPromotionCharacter.update({
+      where: { id: characterId },
+      data: updateData,
+    })
+    if (isRename) {
+      const result = await propagateCharacterRename(tx, projectId, oldName, updated.name)
+      _ulogInfo(
+        `✓ 角色改名 propagated: "${oldName}" → "${updated.name}" — ${result.panelsRewritten}/${result.panelsScanned} panels rewritten`,
+      )
+    }
+    return updated
   })
 
   return NextResponse.json({ success: true, character })

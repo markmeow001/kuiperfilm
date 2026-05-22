@@ -1,4 +1,4 @@
-import { logError as _ulogError } from '@/lib/logging/core'
+import { logError as _ulogError, logInfo as _ulogInfo } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { removeLocationPromptSuffix } from '@/lib/constants'
@@ -10,6 +10,7 @@ import {
 import { requireProjectAuth, requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { resolveTaskLocale } from '@/lib/task/resolve-locale'
+import { propagateLocationRename } from '@/lib/novel-promotion/rename-propagation'
 
 function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -150,9 +151,10 @@ export const PATCH = apiHandler(async (
   }
 
   // ⚠️ Multi-user isolation: ensure the location belongs to this project.
+  // Also fetch the existing name so we can detect a rename + propagate it.
   const ownedLoc = await prisma.novelPromotionLocation.findFirst({
     where: { id: locationId, novelPromotionProject: { projectId } },
-    select: { id: true },
+    select: { id: true, name: true },
   })
   if (!ownedLoc) {
     throw new ApiError('NOT_FOUND')
@@ -189,9 +191,28 @@ export const PATCH = apiHandler(async (
       updateData.summary = stringifyLocationSummary({ note: nextNote, metadata: nextMeta })
     }
 
-    const location = await prisma.novelPromotionLocation.update({
-      where: { id: locationId },
-      data: updateData
+    // Phase R-2 (2026-05-22) — propagate rename to panel.location strings.
+    // panel.location stores "Name" or "Name#viewHint"; we rewrite only
+    // the head segment so substring collisions (e.g. "院子" inside
+    // "別院子") never trigger.
+    const isRename =
+      typeof updateData.name === 'string' &&
+      updateData.name.length > 0 &&
+      updateData.name !== ownedLoc.name
+    const oldName = ownedLoc.name
+
+    const location = await prisma.$transaction(async (tx) => {
+      const updated = await tx.novelPromotionLocation.update({
+        where: { id: locationId },
+        data: updateData,
+      })
+      if (isRename) {
+        const result = await propagateLocationRename(tx, projectId, oldName, updated.name)
+        _ulogInfo(
+          `✓ 場景改名 propagated: "${oldName}" → "${updated.name}" — ${result.panelsRewritten}/${result.panelsScanned} panels rewritten`,
+        )
+      }
+      return updated
     })
     return NextResponse.json({ success: true, location })
   }

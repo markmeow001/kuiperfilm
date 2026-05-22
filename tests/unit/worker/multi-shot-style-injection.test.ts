@@ -74,15 +74,26 @@ describe('multi-shot worker paths use style-library helpers (Phase I)', () => {
     expect(bobapiPath).toMatch(/prompt:\s*stylizedPrompt/)
   })
 
-  it('AtlasCloud path universal AVOID covers subtitles + watermark + on-screen-text', () => {
-    // Locks the on-screen-text / watermark suppressor list. Seedance
-    // 2.0's training set leaks subtitled content; without these
-    // suppressors the output frequently bakes in Chinese subtitles
-    // or platform watermarks. Tags both languages so regex doesn't
-    // care about ordering.
-    expect(atlascloudPath).toMatch(/字幕/)
-    expect(atlascloudPath).toMatch(/watermark/)
-    expect(atlascloudPath).toMatch(/on-screen text/i)
+  it('AtlasCloud path uses POSITIVE clean-frame directive (NOT inline AVOID with 字幕 keyword)', () => {
+    // Phase R-1 (2026-05-22) — switched from "AVOID: 字幕..." inline
+    // negative to positive aspirational phrasing. The previous AVOID
+    // approach occasionally caused Seedance to RENDER the AVOID list
+    // itself as on-screen text (pink-elephant failure: mentioning 字幕
+    // primes the model to paint subtitles).
+    //
+    // New directive must:
+    //   1. Describe the desired clean state positively (純電影/cinematic frame)
+    //   2. NOT mention 字幕 / subtitles / watermark as bare keywords in
+    //      an AVOID list — must wrap them in positive phrasing.
+    //   3. Mention 浮水印 / logo / UI / text overlay (so the model knows
+    //      what to omit, but framed as "the frame is clean of X").
+    expect(atlascloudPath).toMatch(/CLEAN_FRAME_DIRECTIVE/)
+    expect(atlascloudPath).toMatch(/純電影級實拍|無任何文字疊加/)
+    // The legacy "AVOID: ${composedNegative}.`" string template must
+    // NOT be present in the prompt assembly anymore. Style-library's
+    // negativePrompt does ship in a separate styleNegativeFragment but
+    // never as the bare "AVOID:" inline form.
+    expect(atlascloudPath).not.toMatch(/AVOID: \$\{composedNegative\}/)
   })
 
   it('AtlasCloud describe...ForPrompt helpers branch on ModeKey (Phase L)', () => {
