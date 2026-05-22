@@ -73,8 +73,10 @@ export interface V2CharacterEditModalProps {
   isExpanding?: boolean
 
   // Text edits
+  onSaveName: (name: string) => void
   onSaveIntroduction: (introduction: string) => void
   onSaveVisualPrompt: (visualPrompt: string) => void
+  isSavingName: boolean
   isSavingIntroduction: boolean
   isSavingVisualPrompt: boolean
 
@@ -102,8 +104,10 @@ export function V2CharacterEditModal({
   isRegenerating,
   isUploading,
   isExpanding,
+  onSaveName,
   onSaveIntroduction,
   onSaveVisualPrompt,
+  isSavingName,
   isSavingIntroduction,
   isSavingVisualPrompt,
   onRedescribe,
@@ -115,14 +119,19 @@ export function V2CharacterEditModal({
   projectId,
 }: V2CharacterEditModalProps) {
   const ap = character.appearances?.[0]
+  const initialName = character.name ?? ''
   const initialIntroduction = character.introduction ?? character.description ?? ''
   const initialVisualPrompt = ap?.description ?? ''
 
+  const [nameDraft, setNameDraft] = useState(initialName)
   const [introductionDraft, setIntroductionDraft] = useState(initialIntroduction)
   const [visualPromptDraft, setVisualPromptDraft] = useState(initialVisualPrompt)
 
   // Re-seed drafts when the character payload changes (e.g. after regen
   // refetches and the parent passes a fresh CharacterLike).
+  useEffect(() => {
+    setNameDraft(character.name ?? '')
+  }, [character.name])
   useEffect(() => {
     setIntroductionDraft(character.introduction ?? character.description ?? '')
   }, [character.introduction, character.description])
@@ -139,6 +148,8 @@ export function V2CharacterEditModal({
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
+  const nameTrimmed = nameDraft.trim()
+  const nameChanged = nameTrimmed !== initialName.trim() && nameTrimmed.length > 0
   const introductionChanged = introductionDraft !== initialIntroduction
   const visualPromptChanged = visualPromptDraft !== initialVisualPrompt
 
@@ -310,9 +321,44 @@ export function V2CharacterEditModal({
           {/* Right: text editors */}
           <div className="space-y-5">
             <div>
-              <div className="mb-1 font-mono text-[14px] tracking-wider text-stone-500">角色名稱</div>
-              <div className="rounded-sm border border-stone-800 bg-stone-900/50 px-3 py-2 font-fraunces text-base italic text-stone-200">
-                {character.name ?? '未命名'}
+              <div className="mb-1 flex items-center justify-between font-mono text-[14px] tracking-wider">
+                <span className="text-stone-500">角色名稱</span>
+                <span className="text-stone-600">
+                  {nameChanged ? '改名後分鏡引用會自動同步' : ''}
+                </span>
+              </div>
+              {/* Phase R-3 (2026-05-22) — editable input. Backend PATCH
+                  + transactional panel propagation already shipped in
+                  Phase R-2 (rename-propagation.ts); UI just feeds the
+                  mutation. Trimmed empty names are rejected client-side
+                  so the user gets immediate feedback rather than a 400
+                  from the route's `if (!name) ApiError` guard. */}
+              <input
+                type="text"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                placeholder="角色名稱"
+                className="w-full rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-fraunces text-base italic text-stone-200 outline-none transition-colors focus:border-amber-500 disabled:opacity-60"
+                disabled={isSavingName}
+                maxLength={64}
+              />
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNameDraft(initialName)}
+                  disabled={!nameChanged || isSavingName}
+                  className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  還原
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSaveName(nameTrimmed)}
+                  disabled={!nameChanged || isSavingName}
+                  className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isSavingName ? '儲存中…' : '儲存名稱'}
+                </button>
               </div>
             </div>
 

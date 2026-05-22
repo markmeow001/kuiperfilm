@@ -36,6 +36,7 @@ import {
 import {
   useUploadProjectCharacterImage,
   useDeleteProjectCharacter,
+  useUpdateProjectCharacterName,
 } from '@/lib/query/mutations/character-base-mutations'
 import {
   useConfirmProjectCharacterProfile,
@@ -195,6 +196,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const deleteLocationView = useDeleteLocationView(projectId)
   const createCharAppearance = useCreateCharacterAppearance(projectId)
   const updateCharIntro = useUpdateProjectCharacterIntroduction(projectId)
+  const updateCharName = useUpdateProjectCharacterName(projectId)
   const deleteCharacter = useDeleteProjectCharacter(projectId)
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
@@ -545,6 +547,26 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       {
         onError: (err) => {
           alert(`儲存角色描述失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
+  }
+
+  // Phase R-3 (2026-05-22) — submit character rename. Backend
+  // (PATCH /api/novel-promotion/[projectId]/character) atomically
+  // updates the catalog row AND propagates the new name across every
+  // panel.characters JSON in the project via Phase R-2's
+  // propagateCharacterRename helper. So a successful save here means
+  // all downstream multi-shot ref lookups will already see the new
+  // name on next regenerate.
+  function handleSaveCharacterName(characterId: string, name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    updateCharName.mutate(
+      { characterId, name: trimmed },
+      {
+        onError: (err) => {
+          alert(`角色改名失敗:${(err as Error)?.message ?? '未知錯誤'}`)
         },
       },
     )
@@ -1340,6 +1362,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             isRegenerating={regenInFlight.has(apId)}
             isUploading={uploadInFlight.has(apId)}
             isExpanding={uploadExpand.isPending}
+            onSaveName={(name) => handleSaveCharacterName(c.id, name)}
             onSaveIntroduction={(intro) => handleSaveIntroduction(c.id, intro)}
             onSaveVisualPrompt={(prompt) => {
               if (!apId) {
@@ -1348,6 +1371,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               }
               handleSaveVisualPromptFromModal(c.id, apId, prompt)
             }}
+            isSavingName={updateCharName.isPending}
             isSavingIntroduction={updateCharIntro.isPending}
             isSavingVisualPrompt={updateAppearanceDesc.isPending}
             onRedescribe={apId ? () => handleRedescribe(c) : undefined}
