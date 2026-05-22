@@ -1762,9 +1762,13 @@ export function GroupCard({
                       ? `Auto (推薦 ${recommendedDurationSec}s)`
                       : 'Auto (對白驅動)'}
                   </option>
-                  <option value={5}>5s</option>
-                  <option value={10}>10s</option>
-                  <option value={15}>15s</option>
+                  {/* 2026-05-22 — Seedance / Kling 全家族都支援 4-15 整數秒。
+                      Phase O 原本只開 5/10/15 三檔,user 反映想要 6-14 中間
+                      值。改成 5-15 全枚舉 (4s 太短捨去) 對齊 backend 已支援
+                      範圍。Auto 仍為首選, recommendedDurationSec 走對白驅動。 */}
+                  {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (
+                    <option key={sec} value={sec}>{sec}s</option>
+                  ))}
                 </select>
               </label>
               <label
