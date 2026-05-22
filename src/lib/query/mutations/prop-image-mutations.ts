@@ -95,3 +95,77 @@ export function useUploadProjectPropImage(projectId: string) {
     onSuccess: invalidateProjectAssets,
   })
 }
+
+/**
+ * Phase R-3 (2026-05-22) — PATCH /api/novel-promotion/[projectId]/prop
+ * with { propId, name }. Backend route runs propagatePropRename inside
+ * a $transaction so panel.props JSON refs all get rewritten atomically.
+ */
+export function useUpdateProjectPropName(projectId: string) {
+  const queryClient = useQueryClient()
+  const invalidateProjectAssets = () =>
+    invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+
+  return useMutation({
+    mutationFn: async ({ propId, name }: { propId: string; name: string }) => {
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/prop`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ propId, name }),
+        },
+        'Failed to update prop name',
+      )
+    },
+    onSuccess: invalidateProjectAssets,
+  })
+}
+
+/**
+ * Edits the prop's `summary` field — short description used by the
+ * image generator + multi-shot worker as anchor text. No panel
+ * propagation needed (summary is not referenced from panel.props).
+ */
+export function useUpdateProjectPropSummary(projectId: string) {
+  const queryClient = useQueryClient()
+  const invalidateProjectAssets = () =>
+    invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+
+  return useMutation({
+    mutationFn: async ({ propId, summary }: { propId: string; summary: string }) => {
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/prop`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ propId, summary }),
+        },
+        'Failed to update prop summary',
+      )
+    },
+    onSuccess: invalidateProjectAssets,
+  })
+}
+
+/**
+ * Phase R-3 — DELETE /api/novel-promotion/[projectId]/prop?id=<propId>.
+ * Backend handles cascade (panel.props strings stay as-is and resolve
+ * to null at worker time — harmless).
+ */
+export function useDeleteProjectProp(projectId: string) {
+  const queryClient = useQueryClient()
+  const invalidateProjectAssets = () =>
+    invalidateQueryTemplates(queryClient, [queryKeys.projectAssets.all(projectId)])
+
+  return useMutation({
+    mutationFn: async ({ propId }: { propId: string }) => {
+      return await requestJsonWithError(
+        `/api/novel-promotion/${projectId}/prop?id=${encodeURIComponent(propId)}`,
+        { method: 'DELETE' },
+        'Failed to delete prop',
+      )
+    },
+    onSuccess: invalidateProjectAssets,
+  })
+}

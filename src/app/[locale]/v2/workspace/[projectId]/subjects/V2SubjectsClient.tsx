@@ -32,7 +32,11 @@ import {
   useGenerateProjectPropImage,
   useRegenerateSinglePropImage,
   useUploadProjectPropImage,
+  useUpdateProjectPropName,
+  useUpdateProjectPropSummary,
+  useDeleteProjectProp,
 } from '@/lib/query/mutations/prop-image-mutations'
+import { V2PropEditModal } from './V2PropEditModal'
 import {
   useUploadProjectCharacterImage,
   useDeleteProjectCharacter,
@@ -184,6 +188,9 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const generateProp = useGenerateProjectPropImage(projectId)
   const regenProp = useRegenerateSinglePropImage(projectId)
   const uploadPropImage = useUploadProjectPropImage(projectId)
+  const updatePropName = useUpdateProjectPropName(projectId)
+  const updatePropSummary = useUpdateProjectPropSummary(projectId)
+  const deleteProp = useDeleteProjectProp(projectId)
   const regenCharGroup = useRegenerateCharacterGroup(projectId)
   const regenLocGroup = useRegenerateLocationGroup(projectId)
   const uploadCharImage = useUploadProjectCharacterImage(projectId)
@@ -231,6 +238,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const [editingDescDraft, setEditingDescDraft] = useState<string>('')
   const [editingCharacterId, setEditingCharacterId] = useState<string | null>(null)
   const [editingLocationId, setEditingLocationId] = useState<string | null>(null)
+  const [editingPropId, setEditingPropId] = useState<string | null>(null)
   const [manualAddOpen, setManualAddOpen] = useState<ManualAddSubjectType | null>(null)
   const [manualAddSubmitting, setManualAddSubmitting] = useState(false)
 
@@ -568,6 +576,36 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         onError: (err) => {
           alert(`角色改名失敗:${(err as Error)?.message ?? '未知錯誤'}`)
         },
+      },
+    )
+  }
+
+  // Phase R-3 — prop edit handlers. PATCH route runs
+  // propagatePropRename atomically (same shape as character rename).
+  function handleSavePropName(propId: string, name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    updatePropName.mutate(
+      { propId, name: trimmed },
+      {
+        onError: (err) => alert(`道具改名失敗:${(err as Error)?.message ?? '未知錯誤'}`),
+      },
+    )
+  }
+  function handleSavePropSummary(propId: string, summary: string) {
+    updatePropSummary.mutate(
+      { propId, summary },
+      {
+        onError: (err) => alert(`儲存道具描述失敗:${(err as Error)?.message ?? '未知錯誤'}`),
+      },
+    )
+  }
+  function handleDeletePropFromModal(propId: string) {
+    deleteProp.mutate(
+      { propId },
+      {
+        onSuccess: () => setEditingPropId(null),
+        onError: (err) => alert(`刪除道具失敗:${(err as Error)?.message ?? '未知錯誤'}`),
       },
     )
   }
@@ -1334,6 +1372,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               ? () => { void handleRedescribeProp(p) }
               : undefined,
             isRedescribing: redescribeInFlight.has(p.id),
+            onOpenEditor: () => setEditingPropId(p.id),
           }))}
           emptyHint={
             currentEpisode
@@ -1469,6 +1508,38 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             }}
             isViewRegenerating={(_imageIndex) => regenInFlight.has(l.id) || serverInflightIds.has(l.id)}
             isDeletingView={deleteLocationView.isPending}
+          />
+        )
+      })() : null}
+
+      {editingPropId ? (() => {
+        const p = props.find((pp) => pp.id === editingPropId)
+        if (!p) return null
+        return (
+          <V2PropEditModal
+            prop={{
+              id: p.id,
+              name: p.name ?? null,
+              summary: p.summary ?? null,
+              imageUrl: p.imageUrl ?? null,
+            }}
+            imageUrl={p.imageUrl ?? null}
+            onClose={() => setEditingPropId(null)}
+            onZoomImage={(url) => setZoomImage(url)}
+            onSaveName={(name) => handleSavePropName(p.id, name)}
+            onSaveSummary={(summary) => handleSavePropSummary(p.id, summary)}
+            isSavingName={updatePropName.isPending}
+            isSavingSummary={updatePropSummary.isPending}
+            onRegenerate={() => {
+              markRegenStart(p.id)
+              const mut = p.imageUrl ? regenProp : generateProp
+              mut.mutate({ propId: p.id })
+            }}
+            onUploadFile={(file) => handleUploadProp(p, file)}
+            isRegenerating={regenInFlight.has(p.id) || serverInflightIds.has(p.id)}
+            isUploading={uploadInFlight.has(p.id)}
+            onDelete={() => handleDeletePropFromModal(p.id)}
+            isDeleting={deleteProp.isPending}
           />
         )
       })() : null}
