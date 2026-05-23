@@ -46,6 +46,14 @@ interface StoredProvider {
   baseUrl?: string
   apiKey?: string
   apiMode?: ApiModeType
+  // 2026-05-22 — 火山方舟 asset API credentials (id='ark' only). See
+  // src/lib/ark-asset-api.ts. accessKeyId is plaintext; secretAccessKey
+  // gets encrypted on PUT same as apiKey. assetGroupId is auto-populated
+  // by register-ark-asset worker on first use — the PUT endpoint round-
+  // trips it without touching.
+  accessKeyId?: string
+  secretAccessKey?: string
+  assetGroupId?: string
 }
 
 interface StoredModelLlmCustomPricing {
@@ -717,6 +725,13 @@ function normalizeProvidersInput(rawProviders: unknown): StoredProvider[] {
       baseUrl: readTrimmedString(item.baseUrl) || undefined,
       apiKey: typeof item.apiKey === 'string' ? item.apiKey.trim() : undefined,
       apiMode: apiModeRaw,
+      // 2026-05-22 — 火山方舟 asset API. accessKeyId / assetGroupId are
+      // plaintext; secretAccessKey gets encrypted alongside apiKey in
+      // the PUT handler. Round-trip undefined → undefined so unrelated
+      // PATCH-style updates (changing apiKey only) preserve existing AK/SK.
+      accessKeyId: typeof item.accessKeyId === 'string' ? item.accessKeyId.trim() : undefined,
+      secretAccessKey: typeof item.secretAccessKey === 'string' ? item.secretAccessKey.trim() : undefined,
+      assetGroupId: typeof item.assetGroupId === 'string' ? item.assetGroupId.trim() : undefined,
     })
   }
 
@@ -1213,10 +1228,25 @@ export const GET = apiHandler(async () => {
     }
   }
 
-  const providers = parseStoredProviders(pref?.customProviders).map((provider) => ({
-    ...provider,
-    apiKey: provider.apiKey ? decryptApiKey(provider.apiKey) : '',
-  }))
+  const providers = parseStoredProviders(pref?.customProviders).map((provider) => {
+    // 2026-05-22 — 火山方舟 asset API: accessKeyId is plaintext (not a
+    // secret), surface as-is so the form can render it. secretAccessKey
+    // is encrypted — DO NOT decrypt + return; only signal presence via
+    // hasSecretAccessKey, mirroring the apiKey UX (mask if hasApiKey).
+    // assetGroupId is plaintext metadata, surface as-is.
+    const arkExtras = provider.id === 'ark'
+      ? {
+          accessKeyId: (provider as { accessKeyId?: string }).accessKeyId ?? '',
+          hasSecretAccessKey: Boolean((provider as { secretAccessKey?: string }).secretAccessKey),
+          assetGroupId: (provider as { assetGroupId?: string }).assetGroupId ?? '',
+        }
+      : {}
+    return {
+      ...provider,
+      apiKey: provider.apiKey ? decryptApiKey(provider.apiKey) : '',
+      ...arkExtras,
+    }
+  })
 
   const billingMode = await getBillingMode()
   const parsedModels = parseStoredModels(pref?.customModels)
@@ -1368,7 +1398,9 @@ export const PUT = apiHandler(async (request: NextRequest) => {
 
   if (normalizedProviders !== undefined) {
     const providersToSave = normalizedProviders.map((provider) => {
-      const existing = existingProviders.find((candidate) => candidate.id === provider.id)
+      const existing = existingProviders.find((candidate) => candidate.id === provider.id) as
+        | { apiKey?: string; secretAccessKey?: string; accessKeyId?: string; assetGroupId?: string }
+        | undefined
       let finalApiKey: string | undefined
       if (provider.apiKey === undefined) {
         finalApiKey = existing?.apiKey
@@ -1378,12 +1410,37 @@ export const PUT = apiHandler(async (request: NextRequest) => {
         finalApiKey = encryptApiKey(provider.apiKey)
       }
 
+      // 2026-05-22 — 火山方舟 asset API: same edit-resilient semantics
+      // as apiKey above. undefined → preserve existing encrypted value,
+      // '' → clear, plaintext → encrypt.
+      let finalSecretAccessKey: string | undefined
+      if (provider.secretAccessKey === undefined) {
+        finalSecretAccessKey = existing?.secretAccessKey
+      } else if (provider.secretAccessKey === '') {
+        finalSecretAccessKey = undefined
+      } else {
+        finalSecretAccessKey = encryptApiKey(provider.secretAccessKey)
+      }
+
+      const finalAccessKeyId =
+        provider.accessKeyId === undefined
+          ? existing?.accessKeyId
+          : (provider.accessKeyId === '' ? undefined : provider.accessKeyId)
+
+      // assetGroupId is auto-populated by register-ark-asset worker — UI
+      // should never send it. Always round-trip existing (or undefined).
+      const finalAssetGroupId =
+        provider.assetGroupId === undefined ? existing?.assetGroupId : provider.assetGroupId
+
       return {
         id: provider.id,
         name: provider.name,
         baseUrl: provider.baseUrl,
         apiMode: provider.apiMode,
         apiKey: finalApiKey,
+        ...(finalAccessKeyId ? { accessKeyId: finalAccessKeyId } : {}),
+        ...(finalSecretAccessKey ? { secretAccessKey: finalSecretAccessKey } : {}),
+        ...(finalAssetGroupId ? { assetGroupId: finalAssetGroupId } : {}),
       }
     })
     updateData.customProviders = JSON.stringify(providersToSave)

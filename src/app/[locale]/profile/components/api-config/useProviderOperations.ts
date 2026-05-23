@@ -146,12 +146,40 @@ export function useProviderOperations({
         })
     }, [performSave, setProviders, latestProvidersRef])
 
+    // 2026-05-22 — 火山方舟 asset API credentials (id='ark').
+    // Updates accessKeyId and/or secretAccessKey independently — passing
+    // undefined leaves the existing value, passing '' clears it.
+    // Same persist-on-edit semantics as updateProviderApiKey.
+    const updateProviderArkCredentials = useCallback((
+        providerId: string,
+        patch: { accessKeyId?: string; secretAccessKey?: string },
+    ) => {
+        setProviders(prev => {
+            const next = prev.map(p => {
+                if (p.id !== providerId) return p
+                const merged: typeof p = { ...p }
+                if (patch.accessKeyId !== undefined) {
+                    merged.accessKeyId = patch.accessKeyId
+                }
+                if (patch.secretAccessKey !== undefined) {
+                    merged.secretAccessKey = patch.secretAccessKey
+                    merged.hasSecretAccessKey = !!patch.secretAccessKey
+                }
+                return merged
+            })
+            latestProvidersRef.current = next
+            void performSave(undefined, true)
+            return next
+        })
+    }, [performSave, setProviders, latestProvidersRef])
+
     return {
         updateProviderApiKey,
         addProvider,
         deleteProvider,
         updateProviderInfo,
         updateProviderBaseUrl,
+        updateProviderArkCredentials,
     }
 }
 

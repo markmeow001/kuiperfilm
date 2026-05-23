@@ -24,6 +24,11 @@ interface ApiConfigProviderListProps {
   onToggleModel: (modelKey: string, providerId: string) => void
   onUpdateApiKey: (providerId: string, apiKey: string) => void
   onUpdateBaseUrl: (providerId: string, baseUrl: string) => void
+  // 2026-05-22 — 火山方舟 asset API AK/SK update. Only invoked for ark provider.
+  onUpdateArkCredentials?: (
+    providerId: string,
+    patch: { accessKeyId?: string; secretAccessKey?: string },
+  ) => void
   onDeleteModel: (modelKey: string, providerId: string) => void
   onUpdateModel: (modelKey: string, updates: Partial<CustomModel>, providerId: string) => void
   onDeleteProvider: (providerId: string) => void
@@ -51,6 +56,7 @@ export function ApiConfigProviderList({
   onToggleModel,
   onUpdateApiKey,
   onUpdateBaseUrl,
+  onUpdateArkCredentials,
   onDeleteModel,
   onUpdateModel,
   onDeleteProvider,
@@ -88,6 +94,7 @@ export function ApiConfigProviderList({
               onToggleModel={(modelKey) => onToggleModel(modelKey, provider.id)}
               onUpdateApiKey={onUpdateApiKey}
               onUpdateBaseUrl={onUpdateBaseUrl}
+              {...(onUpdateArkCredentials ? { onUpdateArkCredentials } : {})}
               onDeleteModel={(modelKey) => onDeleteModel(modelKey, provider.id)}
               onUpdateModel={(modelKey, updates) => onUpdateModel(modelKey, updates, provider.id)}
               onDeleteProvider={onDeleteProvider}

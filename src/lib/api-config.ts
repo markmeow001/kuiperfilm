@@ -40,6 +40,18 @@ interface CustomProvider {
   baseUrl?: string
   apiKey?: string
   apiMode?: 'gemini-sdk' | 'openai-official'
+  // 2026-05-22 — 火山方舟 asset API (CreateAssetGroup / CreateAsset / GetAsset)
+  // uses AK/SK HMAC-SHA256 auth on a different domain
+  // (ark.cn-beijing.volcengineapi.com) than Seedance video API
+  // (ark.cn-beijing.volces.com, Bearer). These three fields are only
+  // populated for providerId='ark' and only when the user has opened
+  // 「Seedance 2.0 高级创作权益包」 + signed the authorization in console.
+  // accessKeyId is plaintext (not a secret); secretAccessKey is
+  // encrypted same as apiKey; assetGroupId is lazy-created by
+  // register-ark-asset worker on first use.
+  accessKeyId?: string
+  secretAccessKey?: string
+  assetGroupId?: string
 }
 
 function normalizeProviderBaseUrl(providerId: string, rawBaseUrl?: string): string | undefined {
@@ -130,6 +142,13 @@ function parseCustomProviders(rawProviders: string | null | undefined): CustomPr
       baseUrl: readTrimmedString(raw.baseUrl) || undefined,
       apiKey: readTrimmedString(raw.apiKey) || undefined,
       apiMode,
+      // 2026-05-22 — 火山方舟 asset API credentials. Roundtrip only —
+      // parseCustomProviders preserves these so writes don't blow away
+      // the user's AK/SK/group_id when they update unrelated fields
+      // like apiKey or apiMode.
+      accessKeyId: readTrimmedString(raw.accessKeyId) || undefined,
+      secretAccessKey: readTrimmedString(raw.secretAccessKey) || undefined,
+      assetGroupId: readTrimmedString(raw.assetGroupId) || undefined,
     })
   }
 
@@ -396,6 +415,105 @@ export async function getProviderConfig(userId: string, providerId: string): Pro
     baseUrl: normalizeProviderBaseUrl(provider.id, provider.baseUrl),
     apiMode: provider.apiMode,
   }
+}
+
+/**
+ * 火山方舟 asset API 凭证。
+ *
+ * 2026-05-22 — Separate from getProviderConfig because the asset API uses
+ * a different auth mechanism (AK/SK + HMAC-SHA256) than the Seedance
+ * video API (Bearer apiKey). Both are namespaced under providerId='ark'
+ * in CustomProvider, but consumers ask for credentials explicitly so we
+ * never accidentally hand AK/SK to a Bearer-only client.
+ *
+ * Cascade mirrors getProviderConfig: try the user's own config, fall
+ * back to admin's. Returns null when neither has AK/SK set — caller
+ * should surface a clear error ("先在 /profile 填火山 AK/SK" rather
+ * than 403 / Invalid Signature).
+ *
+ * assetGroupId is mutable (lazy-created by register-ark-asset on first
+ * use, then written back via setArkAssetGroupId). Caller must NOT cache
+ * across requests — read fresh each time.
+ */
+export interface ArkAssetCredentials {
+  accessKeyId: string
+  secretAccessKey: string
+  assetGroupId: string | null
+  /** Which user's config the credentials came from. Lets callers know
+   *  where to write `assetGroupId` back when they lazy-create one. */
+  ownerUserId: string
+}
+
+export async function getArkAssetCredentials(userId: string): Promise<ArkAssetCredentials | null> {
+  const { providers: userProviders } = await readUserConfig(userId)
+  const userArk = userProviders.find((p) => p.id === 'ark') ?? null
+
+  // Prefer user's own AK/SK if both are set. accessKeyId is plaintext;
+  // secretAccessKey is encrypted same as apiKey.
+  if (userArk?.accessKeyId && userArk?.secretAccessKey) {
+    return {
+      accessKeyId: userArk.accessKeyId,
+      secretAccessKey: decryptApiKey(userArk.secretAccessKey),
+      assetGroupId: userArk.assetGroupId ?? null,
+      ownerUserId: userId,
+    }
+  }
+
+  // Fall back to admin's config (multi-user inheritance pattern from
+  // getProviderConfig). Members don't need to fill AK/SK themselves.
+  const adminConfig = await readAdminConfig()
+  if (adminConfig && adminConfig.userId !== userId) {
+    const adminArk = adminConfig.providers.find((p) => p.id === 'ark') ?? null
+    if (adminArk?.accessKeyId && adminArk?.secretAccessKey) {
+      return {
+        accessKeyId: adminArk.accessKeyId,
+        secretAccessKey: decryptApiKey(adminArk.secretAccessKey),
+        assetGroupId: adminArk.assetGroupId ?? null,
+        ownerUserId: adminConfig.userId,
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Lazy-write the asset group id back to the owning user's customProviders
+ * JSON after register-ark-asset creates a new group. Idempotent — calling
+ * with the same group id twice is a no-op. Throws if the user has no ark
+ * provider entry (caller should have already invoked
+ * getArkAssetCredentials, so the provider exists by this point).
+ *
+ * Race tolerance: if two concurrent CreateAssetGroup calls each get a new
+ * id (low probability, async API + ~seconds latency), the second write
+ * wins. The first group leaks but is harmless — register-ark-asset always
+ * re-reads credentials before using, so subsequent CreateAsset calls go
+ * to the persisted (second) group. Cleanup of orphan groups left as
+ * manual task in console.
+ */
+export async function setArkAssetGroupId(ownerUserId: string, assetGroupId: string): Promise<void> {
+  const pref = await prisma.userPreference.findUnique({
+    where: { userId: ownerUserId },
+    select: { customProviders: true },
+  })
+  const providers = parseCustomProviders(pref?.customProviders ?? null)
+  const arkIndex = providers.findIndex((p) => p.id === 'ark')
+  if (arkIndex === -1) {
+    throw new Error(`ARK_PROVIDER_MISSING: cannot set assetGroupId for user ${ownerUserId} — no ark provider entry`)
+  }
+  if (providers[arkIndex].assetGroupId === assetGroupId) return
+
+  providers[arkIndex] = {
+    ...providers[arkIndex],
+    assetGroupId,
+  }
+
+  // Round-trip: preserve apiKey + secretAccessKey encrypted form (they
+  // came from the DB already encrypted), don't re-encrypt.
+  await prisma.userPreference.update({
+    where: { userId: ownerUserId },
+    data: { customProviders: JSON.stringify(providers) },
+  })
 }
 
 /**

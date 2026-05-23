@@ -36,6 +36,12 @@ interface UseProvidersReturn {
     saveStatus: 'idle' | 'saving' | 'saved' | 'error'
     updateProviderApiKey: (providerId: string, apiKey: string) => void
     updateProviderBaseUrl: (providerId: string, baseUrl: string) => void
+    // 2026-05-22 — 火山方舟 asset API AK/SK update. Patch semantics:
+    // undefined field = preserve, '' = clear, non-empty = set.
+    updateProviderArkCredentials: (
+        providerId: string,
+        patch: { accessKeyId?: string; secretAccessKey?: string },
+    ) => void
     addProvider: (provider: Omit<Provider, 'hasApiKey'>) => void
     deleteProvider: (providerId: string) => void
     updateProviderInfo: (providerId: string, name: string, baseUrl?: string) => void

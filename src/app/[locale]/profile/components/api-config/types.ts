@@ -16,6 +16,15 @@ export interface Provider {
     apiKey?: string
     hasApiKey?: boolean
     apiMode?: 'gemini-sdk' | 'openai-official'
+    // 2026-05-22 — 火山方舟 asset API credentials (id='ark' only).
+    // Separate from apiKey because asset API uses AK/SK + HMAC, not Bearer.
+    // accessKeyId is plaintext (not a secret); secretAccessKey gets
+    // encrypted on the way to DB same as apiKey. assetGroupId is
+    // auto-populated by register-ark-asset worker on first use.
+    accessKeyId?: string
+    secretAccessKey?: string
+    hasSecretAccessKey?: boolean
+    assetGroupId?: string
 }
 
 export interface LlmCustomPricing {

@@ -102,6 +102,7 @@ export function ApiConfigTabContainer() {
     saveStatus,
     updateProviderApiKey,
     updateProviderBaseUrl,
+    updateProviderArkCredentials,
     addProvider,
     deleteProvider,
     toggleModel,
@@ -363,6 +364,7 @@ export function ApiConfigTabContainer() {
             onToggleModel={toggleModel}
             onUpdateApiKey={updateProviderApiKey}
             onUpdateBaseUrl={updateProviderBaseUrl}
+            onUpdateArkCredentials={updateProviderArkCredentials}
             onDeleteModel={deleteModel}
             onUpdateModel={updateModel}
             onDeleteProvider={deleteProvider}

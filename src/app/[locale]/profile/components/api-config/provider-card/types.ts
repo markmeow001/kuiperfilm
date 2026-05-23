@@ -18,6 +18,13 @@ export interface ProviderCardProps {
   onToggleModel: (modelKey: string) => void
   onUpdateApiKey: (providerId: string, apiKey: string) => void
   onUpdateBaseUrl?: (providerId: string, baseUrl: string) => void
+  // 2026-05-22 — Volcengine Ark asset API credentials. Only invoked for
+  // provider.id === 'ark'. Pass undefined in a patch field to leave the
+  // existing value untouched; '' to clear; non-empty string to update.
+  onUpdateArkCredentials?: (
+    providerId: string,
+    patch: { accessKeyId?: string; secretAccessKey?: string },
+  ) => void
   onDeleteModel: (modelKey: string) => void
   onUpdateModel?: (modelKey: string, updates: Partial<CustomModel>) => void
   onDeleteProvider?: (providerId: string) => void
