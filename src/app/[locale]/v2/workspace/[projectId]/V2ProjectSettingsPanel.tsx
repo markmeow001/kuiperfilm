@@ -51,7 +51,32 @@ const LIBRARY_CATEGORY_ORDER = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
 interface ProjectShape {
   novelPromotionData?: {
     videoRatio?: string | null
+    videoResolution?: string | null
+    videoModel?: string | null
   } | null
+}
+
+// 2026-05-22 — keep in sync with src/lib/generators/ark.ts
+// ARK_SEEDANCE_MODEL_SPECS.resolutionOptions. Fast variant tops at 720p.
+const RESOLUTION_OPTIONS: Array<{ value: '480p' | '720p' | '1080p'; label: string; caption: string }> = [
+  { value: '480p', label: '480p', caption: '草稿 · 最省' },
+  { value: '720p', label: '720p', caption: '默認 · 推薦' },
+  { value: '1080p', label: '1080p', caption: '高畫質 · ~2.25× 成本' },
+]
+
+// Models with resolution choice. Other Seedance routes (taijiai 720p-only,
+// AtlasCloud's per-variant ids, fal's per-endpoint ids) bake the resolution
+// into the model id so the picker is meaningless for them.
+function modelSupportsResolutionChoice(videoModel: string | null | undefined): boolean {
+  if (!videoModel) return false
+  return videoModel === 'ark::doubao-seedance-2-0-260128'
+    || videoModel === 'ark::doubao-seedance-2-0-fast-260128'
+}
+
+function modelSupports1080p(videoModel: string | null | undefined): boolean {
+  if (!videoModel) return true
+  // Fast variant rejects 1080p per Volcengine docs.
+  return videoModel !== 'ark::doubao-seedance-2-0-fast-260128'
 }
 
 interface V2ProjectSettingsPanelProps {
@@ -66,6 +91,10 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
 
   const project = projectQuery.data as ProjectShape | undefined
   const videoRatio = project?.novelPromotionData?.videoRatio ?? '9:16'
+  const videoResolution = (project?.novelPromotionData?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
+  const videoModel = project?.novelPromotionData?.videoModel ?? null
+  const showResolutionPicker = modelSupportsResolutionChoice(videoModel)
+  const allow1080p = modelSupports1080p(videoModel)
   const selectedPresetKey = (styleQuery.data?.stylePresetKey ?? null) as PresetKey | null
   const selectedPresetLabel = selectedPresetKey
     ? STYLE_PROFILE_PRESETS[selectedPresetKey].zhLabel
@@ -107,6 +136,10 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
 
   function handleRatioChange(value: string) {
     updateConfig.mutate({ key: 'videoRatio', value })
+  }
+
+  function handleResolutionChange(value: '480p' | '720p' | '1080p') {
+    updateConfig.mutate({ key: 'videoResolution', value })
   }
 
   function handleApplyPreset(key: PresetKey) {
@@ -160,6 +193,43 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
           })}
         </div>
       </div>
+
+      {/* Resolution — only when the selected video model lets the user
+          choose. taijiai/atlascloud/fal Seedance variants bake resolution
+          into the model id, so the selector would be misleading there. */}
+      {showResolutionPicker ? (
+        <div className="mb-5">
+          <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
+            畫面解析度 · RESOLUTION
+            <span className="ml-2 font-serif-cn text-[14px] text-stone-600">
+              1080p 大約是 720p 的 2.25× 成本
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {RESOLUTION_OPTIONS.map((r) => {
+              const disabled = r.value === '1080p' && !allow1080p
+              const active = r.value === videoResolution && !disabled
+              return (
+                <button
+                  key={r.value}
+                  type="button"
+                  onClick={() => !disabled && handleResolutionChange(r.value)}
+                  disabled={updateConfig.isPending || disabled}
+                  title={disabled ? '當前模型 (Fast 變體) 不支援 1080p' : undefined}
+                  className={`rounded-sm border px-3 py-2 font-mono text-xs transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                    active
+                      ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                      : 'border-stone-800 text-stone-500 hover:border-stone-700'
+                  }`}
+                >
+                  {r.label}
+                  <span className="ml-1.5 font-serif-cn text-[14px] opacity-70">{r.caption}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {/* Style preset */}
       <div>

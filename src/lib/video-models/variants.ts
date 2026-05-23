@@ -102,15 +102,15 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
   {
     id: 'ark::doubao-seedance-2-0-260128',
     family: 'seedance',
-    label: '✓ Seedance 2.0 (火山 ARK 直连 · 480p/720p/1080p · audio)',
-    hint: '直连 Volcengine 方舟 · 480p/720p/1080p · audio · 4-15s · 模型支援 T2V/I2V/首尾幀/R2V/編輯/延長 · 多鏡頭走 R2V 最多 9 張角色/場景圖 · 帳戶餘額 ≥ 200元 才能開通',
+    label: '✓ Seedance 2.0 (火山 ARK 直连 · 解析度可選 480p/720p/1080p)',
+    hint: '直连 Volcengine 方舟 · 4-15s · 解析度在「Project Settings · 畫面解析度」選 (預設 720p; 1080p 約 2.25× 成本) · audio · 多鏡頭走 R2V 最多 9 張角色/場景圖 · 帳戶餘額 ≥ 200元 才能開通',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
   {
     id: 'ark::doubao-seedance-2-0-fast-260128',
     family: 'seedance',
-    label: 'Seedance 2.0 Fast (火山 ARK · 480p/720p · cheap, no 1080p)',
-    hint: '便宜的 fast 版火山直连 · 只支援 480p/720p · audio · 4-15s · 模型支援 T2V/I2V/首尾幀/R2V/編輯/延長 · 多鏡頭走 R2V 最多 9 張角色/場景圖',
+    label: 'Seedance 2.0 Fast (火山 ARK · 解析度可選 480p/720p, no 1080p)',
+    hint: '便宜的 fast 版火山直连 · 4-15s · 解析度在「Project Settings」選 480p/720p (本變體不支援 1080p) · audio · 多鏡頭走 R2V 最多 9 張角色/場景圖',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
   },
   // 2026-05-20 — AtlasCloud Seedance 2.0 line (6 variants: t2v/i2v/r2v × standard/fast).

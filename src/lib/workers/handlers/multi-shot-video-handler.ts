@@ -168,8 +168,37 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ? payload.lightingPresetId.trim()
       : undefined
 
+  // 2026-05-22 — resolution choice (ARK 2.0 only — taijiai/atlascloud/fal
+  // bake it into the model id). Payload wins; falls back to project.
+  // videoResolution; falls back to '720p' if project setting is missing.
+  // Validated as the enum the API accepts; bogus values trigger the worker's
+  // generator-level validator rather than crashing the dispatcher.
+  const resolutionRaw =
+    typeof payload.resolution === 'string' && payload.resolution.trim()
+      ? payload.resolution.trim()
+      : null
+  let resolution: '480p' | '720p' | '1080p' | undefined =
+    resolutionRaw === '480p' || resolutionRaw === '720p' || resolutionRaw === '1080p'
+      ? resolutionRaw
+      : undefined
+
   if (!Array.isArray(panelIds) || panelIds.length < 2) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
+  }
+
+  // 2026-05-22 — when payload didn't carry resolution, fall back to the
+  // project-level setting (NovelPromotionProject.videoResolution, default
+  // '720p'). Cheap single Prisma read keyed by projectId; only runs when
+  // the caller hasn't already supplied a per-call override.
+  if (!resolution) {
+    const projectRow = await prisma.novelPromotionProject.findUnique({
+      where: { projectId },
+      select: { videoResolution: true },
+    })
+    const projRes = projectRow?.videoResolution
+    if (projRes === '480p' || projRes === '720p' || projRes === '1080p') {
+      resolution = projRes
+    }
   }
 
   const useBPath = shouldUseTencentBPath(videoModel)
@@ -277,6 +306,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
       ...(visualStyleId ? { visualStyleId } : {}),
       ...(lightingPresetId ? { lightingPresetId } : {}),
+      ...(resolution ? { resolution } : {}),
     })
   }
 

@@ -111,6 +111,14 @@ export async function runMultiShotArkComposite(params: {
   totalDurationSeconds?: number
   visualStyleId?: string
   lightingPresetId?: string
+  /**
+   * 2026-05-22 — output resolution. Threaded from project.videoResolution
+   * via the dispatcher; user picks per project in V2 settings. When
+   * omitted ARK Seedance 2.0 series defaults to 720p (per Volcengine
+   * docs). Fast variant rejects 1080p — the generator's validator catches
+   * that combination upfront before the API call.
+   */
+  resolution?: '480p' | '720p' | '1080p'
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -278,6 +286,11 @@ export async function runMultiShotArkComposite(params: {
       aspectRatio,
       generateAudio: sound,
       referenceImages: referenceUrls,
+      // 2026-05-22 — user-selected resolution. Omitted (undefined) means
+      // ARK falls back to its model default (720p for 2.0 series).
+      // Fast variant rejects 1080p — caught upstream by ark.ts validator
+      // (modelSpec.resolutionOptions check), not silently swallowed.
+      ...(params.resolution ? { resolution: params.resolution } : {}),
     },
   })
 

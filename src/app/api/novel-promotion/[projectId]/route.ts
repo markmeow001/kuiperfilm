@@ -272,6 +272,7 @@ export const PATCH = apiHandler(async (
   const allowedProjectFields = [
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
     'editModel', 'videoModel', 'videoRatio',
+    'videoResolution',
     'ttsRate', 'lipSyncEnabled', 'lipSyncMode', 'capabilityOverrides',
     'targetDuration',
   ] as const
@@ -288,6 +289,19 @@ export const PATCH = apiHandler(async (
       const v = body[field]
       if (typeof v !== 'number' || !Number.isInteger(v) || v < 15 || v > 300) {
         throw new ApiError('INVALID_PARAMS', { field: 'targetDuration', message: 'targetDuration must be an integer between 15 and 300' })
+      }
+      updateData[field] = v
+      continue
+    }
+
+    if (field === 'videoResolution') {
+      const v = body[field]
+      // 2026-05-22 — enum 480p / 720p / 1080p. ARK Seedance 2.0 Fast
+      // rejects 1080p at the worker layer (model-spec validation in
+      // ark.ts ARK_SEEDANCE_MODEL_SPECS), so allow it through here but
+      // surface the model-level error on the actual gen call.
+      if (v !== '480p' && v !== '720p' && v !== '1080p') {
+        throw new ApiError('INVALID_PARAMS', { field: 'videoResolution', message: 'videoResolution must be one of: 480p / 720p / 1080p' })
       }
       updateData[field] = v
       continue
@@ -313,7 +327,7 @@ export const PATCH = apiHandler(async (
   // Q-006: artStyle removed from preference sync — styleProfile replaces it.
   const preferenceFields = [
     'analysisModel', 'characterModel', 'locationModel', 'storyboardModel',
-    'editModel', 'videoModel', 'videoRatio', 'ttsRate',
+    'editModel', 'videoModel', 'videoRatio', 'videoResolution', 'ttsRate',
   ] as const
   const preferenceUpdate: Record<string, unknown> = {}
   for (const field of preferenceFields) {

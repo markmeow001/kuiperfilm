@@ -80,6 +80,7 @@ interface ProjectLikeFull {
   novelPromotionData?: {
     videoModel?: string | null
     videoRatio?: string | null
+    videoResolution?: string | null
     episodes?: Array<{ id: string }> | null
     // 2026-05-18 — top-level column on NovelPromotionProject. The Seedance
     // narrative builder uses it to drive the styleAnchor + visualModifiers
@@ -177,6 +178,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const { canEdit } = useProjectAccess(projectId)
   const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
   const projectVideoRatio = project?.novelPromotionData?.videoRatio ?? '16:9'
+  // 2026-05-22 — project-level resolution choice (480p / 720p / 1080p).
+  // Threaded into every multi-shot dispatch so ARK Seedance 2.0 worker
+  // honors user pick instead of always defaulting to 720p. taijiai /
+  // atlascloud / fal Seedance routes ignore this (their model id bakes
+  // resolution).
+  const projectVideoResolution = (project?.novelPromotionData?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
   const aspectClass = aspectClassFromRatio(projectVideoRatio)
   const projectVideoModel = project?.novelPromotionData?.videoModel ?? ''
   // 2026-05-17 — Derived from variant registry. Drives multi-shot button
@@ -1159,6 +1166,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             panelIds: group.panelIds,
             videoModel,
             aspectRatio: projectVideoRatio,
+            resolution: projectVideoResolution,
             sound: true,
             meta: { locale: 'zh-TW' },
             async: true,
@@ -1513,6 +1521,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               panelIds,
               videoModel: projectVideoModel,
               aspectRatio: projectVideoRatio,
+              resolution: projectVideoResolution,
               sound: true,
               async: true,
               meta: { locale: 'zh-TW' },
