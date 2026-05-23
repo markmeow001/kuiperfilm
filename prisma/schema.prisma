@@ -43,6 +43,19 @@ model CharacterAppearance {
   // identity is bound by Element ID rather than ad-hoc FileInfos reference.
   // Registered lazily on first video gen that needs this appearance.
   tencentVodElementId  String?                 @db.VarChar(64)
+  // 2026-05-22 — 火山方舟 asset API pre-registered ID (per CreateAsset
+  // doc, see src/lib/ark-asset-api.ts). When status='active', the ARK
+  // multi-shot worker passes `asset://<arkAssetId>` in content[].image_url
+  // instead of the raw imageUrl, bypassing Seedance 2.0's real-person
+  // face filter. arkAssetSourceUrl is a snapshot of imageUrl at register
+  // time so we can detect stale assets (user regenerated the appearance)
+  // and re-register transparently. Registered async via register-ark-asset
+  // worker; status walks pending → processing → active|failed.
+  arkAssetId           String?                 @db.VarChar(64)
+  arkAssetStatus       String?                 @db.VarChar(16) // pending / processing / active / failed
+  arkAssetSourceUrl    String?                 @db.Text
+  arkAssetRegisteredAt DateTime?
+  arkAssetError        String?                 @db.Text
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @default(now()) @updatedAt
   previousImageUrl     String?                 @db.Text
@@ -78,6 +91,13 @@ model LocationImage {
   // Tencent VOD AIGC Element ID — see CharacterAppearance.tencentVodElementId.
   // Registered lazily per image (each view has its own Element).
   tencentVodElementId String?                  @db.VarChar(64)
+  // 2026-05-22 — 火山方舟 asset API — see CharacterAppearance.arkAssetId.
+  // Per-view registration (each LocationImage is its own asset).
+  arkAssetId           String?                 @db.VarChar(64)
+  arkAssetStatus       String?                 @db.VarChar(16)
+  arkAssetSourceUrl    String?                 @db.Text
+  arkAssetRegisteredAt DateTime?
+  arkAssetError        String?                 @db.Text
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @default(now()) @updatedAt
   previousImageUrl    String?                  @db.Text
@@ -1285,6 +1305,12 @@ model NovelPromotionProp {
   sourceGlobalPropId      String?
   // Tencent VOD AIGC Element ID — see CharacterAppearance.tencentVodElementId.
   tencentVodElementId     String?               @db.VarChar(64)
+  // 2026-05-22 — 火山方舟 asset API — see CharacterAppearance.arkAssetId.
+  arkAssetId              String?               @db.VarChar(64)
+  arkAssetStatus          String?               @db.VarChar(16)
+  arkAssetSourceUrl       String?               @db.Text
+  arkAssetRegisteredAt    DateTime?
+  arkAssetError           String?               @db.Text
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @default(now()) @updatedAt
   novelPromotionProject   NovelPromotionProject @relation(fields: [novelPromotionProjectId], references: [id], onDelete: Cascade)

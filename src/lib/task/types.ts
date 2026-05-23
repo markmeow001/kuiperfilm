@@ -78,6 +78,11 @@ export const TASK_TYPE = {
   VIDEO_MULTI_SHOT: 'video_multi_shot',
   VIDEO_EDITOR_RENDER: 'video_editor_render',
   EPISODE_STITCH_MP4: 'episode_stitch_mp4',
+  // 2026-05-22 — 火山方舟 asset registration. Async pre-flight that
+  // turns a character appearance / location image / prop image into an
+  // ARK asset:// reference so Seedance 2.0 will accept it (its real-
+  // person face filter rejects raw URLs of photorealistic AI portraits).
+  REGISTER_ARK_ASSET: 'register_ark_asset',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

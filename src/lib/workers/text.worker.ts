@@ -33,6 +33,7 @@ import { handleAssetHubAIModifyTask } from './handlers/asset-hub-ai-modify'
 import { handleReferenceToCharacterTask } from './handlers/reference-to-character'
 import { handleShotAITask } from './handlers/shot-ai-tasks'
 import { handleCharacterProfileTask } from './handlers/character-profile'
+import { handleRegisterArkAssetTask } from './handlers/register-ark-asset'
 
 type AnyObj = Record<string, unknown>
 type JsonRecord = Record<string, unknown>
@@ -651,6 +652,8 @@ async function processTextTask(job: Job<TaskJobData>) {
       return await handleRegenerateStoryboardTextTask(job)
     case TASK_TYPE.INSERT_PANEL:
       return await handleInsertPanelTask(job)
+    case TASK_TYPE.REGISTER_ARK_ASSET:
+      return await handleRegisterArkAssetTask(job)
     default:
       throw new Error(`Unsupported text task type: ${job.data.type}`)
   }
