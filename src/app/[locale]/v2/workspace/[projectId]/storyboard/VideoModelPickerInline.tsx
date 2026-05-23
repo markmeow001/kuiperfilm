@@ -27,6 +27,7 @@
 
 import { useMemo } from 'react'
 import { useUpdateProjectConfig } from '@/lib/query/mutations/useProjectConfigMutations'
+import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import {
   VIDEO_MODEL_VARIANTS,
   getVideoModelVariant,
@@ -71,11 +72,36 @@ export function VideoModelPickerInline({
   videoResolution,
 }: VideoModelPickerInlineProps) {
   const updateConfig = useUpdateProjectConfig(projectId)
+  const userModelsQuery = useUserModels()
   const currentVariant = getVideoModelVariant(currentVideoModel)
   const currentFamily: VideoModelFamily | null = currentVariant?.family ?? null
 
-  const seedanceVariants = useMemo(() => getVariantsByFamily('seedance'), [])
-  const klingVariants = useMemo(() => getVariantsByFamily('kling'), [])
+  // 2026-05-22 — picker only surfaces models the admin has TOGGLED ON in
+  // /profile (admin → 視頻 tab). Without this gate the dropdown shows the
+  // full catalog (~13 entries), confusing users who only enabled 2-3.
+  // When the admin payload hasn't loaded yet OR contains zero video
+  // models (fresh install), fall back to the full catalog so the picker
+  // remains usable — better than an empty list.
+  const enabledModelIds = useMemo<Set<string> | null>(() => {
+    const data = userModelsQuery.data
+    if (!data || !Array.isArray(data.video) || data.video.length === 0) return null
+    return new Set(data.video.map((m) => m.value))
+  }, [userModelsQuery.data])
+
+  // Keep the currently-selected variant in its list even if the admin
+  // disabled it post-selection, so the dropdown can render the active
+  // choice instead of falling back to "選擇模型…" silently.
+  const currentVariantId = currentVariant?.id
+  const seedanceVariants = useMemo(() => {
+    const all = getVariantsByFamily('seedance')
+    if (!enabledModelIds) return all
+    return all.filter((v) => enabledModelIds.has(v.id) || v.id === currentVariantId)
+  }, [enabledModelIds, currentVariantId])
+  const klingVariants = useMemo(() => {
+    const all = getVariantsByFamily('kling')
+    if (!enabledModelIds) return all
+    return all.filter((v) => enabledModelIds.has(v.id) || v.id === currentVariantId)
+  }, [enabledModelIds, currentVariantId])
 
   function setVariant(id: string) {
     updateConfig.mutate({ key: 'videoModel', value: id })
