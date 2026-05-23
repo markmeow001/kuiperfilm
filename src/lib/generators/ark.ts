@@ -10,9 +10,13 @@ import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core
  * - Seedance 1.0 Pro (doubao-seedance-1-0-pro-250528)
  * - Seedance 1.0 Lite (doubao-seedance-1-0-lite-i2v-250428)
  * - Seedance 1.5 Pro (doubao-seedance-1-5-pro-251215)
+ * - Seedance 2.0 (doubao-seedance-2-0-260128) — 音畫同生, 4-15s, 480p/720p/1080p
+ * - Seedance 2.0 Fast (doubao-seedance-2-0-fast-260128) — 音畫同生, 4-15s, 480p/720p (no 1080p)
  * - 支持批量模式 (-batch 后缀)
  * - 支持首尾帧模式
- * - 支持音频生成 (Seedance 1.5 Pro)
+ * - 支持音频生成 (Seedance 1.5 Pro / 2.0 系列)
+ * - 2.0 系列支持多模态 content[]: image_url + video_url + audio_url
+ *   參考 https://www.volcengine.com/docs/82379/1520757
  */
 
 import {
@@ -65,6 +69,16 @@ interface ArkSeedanceModelSpec {
     supportsGenerateAudio: boolean
     supportsDraft: boolean
     supportsFrames: boolean
+    /** 2026-05-22 — Seedance 2.0 系列「不支持」camera_fixed；1.x 系列支持。
+     *  Per docs https://www.volcengine.com/docs/82379/1520757. */
+    supportsCameraFixed: boolean
+    /** 2026-05-22 — Seedance 2.0 系列只支持 default; 1.x 系列另外支持 flex (离线). */
+    supportsFlexTier: boolean
+    /** 2026-05-22 — duration=-1 智能选时长. 1.5 pro + 2.0 系列支持. */
+    supportsSmartDuration: boolean
+    /** 2026-05-22 — multi-modal content[]: video_url / audio_url roles.
+     *  仅 Seedance 2.0 系列支持视频 / 音频参考输入. */
+    supportsMultiModalReference: boolean
     resolutionOptions: ReadonlyArray<'480p' | '720p' | '1080p'>
 }
 
@@ -76,6 +90,10 @@ const ARK_SEEDANCE_MODEL_SPECS: Record<string, ArkSeedanceModelSpec> = {
         supportsGenerateAudio: false,
         supportsDraft: false,
         supportsFrames: true,
+        supportsCameraFixed: true,
+        supportsFlexTier: true,
+        supportsSmartDuration: false,
+        supportsMultiModalReference: false,
         resolutionOptions: ['480p', '720p', '1080p'],
     },
     'doubao-seedance-1-0-pro-250528': {
@@ -85,6 +103,10 @@ const ARK_SEEDANCE_MODEL_SPECS: Record<string, ArkSeedanceModelSpec> = {
         supportsGenerateAudio: false,
         supportsDraft: false,
         supportsFrames: true,
+        supportsCameraFixed: true,
+        supportsFlexTier: true,
+        supportsSmartDuration: false,
+        supportsMultiModalReference: false,
         resolutionOptions: ['480p', '720p', '1080p'],
     },
     'doubao-seedance-1-0-lite-i2v-250428': {
@@ -94,6 +116,10 @@ const ARK_SEEDANCE_MODEL_SPECS: Record<string, ArkSeedanceModelSpec> = {
         supportsGenerateAudio: false,
         supportsDraft: false,
         supportsFrames: true,
+        supportsCameraFixed: true,
+        supportsFlexTier: true,
+        supportsSmartDuration: false,
+        supportsMultiModalReference: false,
         resolutionOptions: ['480p', '720p', '1080p'],
     },
     'doubao-seedance-1-5-pro-251215': {
@@ -103,7 +129,47 @@ const ARK_SEEDANCE_MODEL_SPECS: Record<string, ArkSeedanceModelSpec> = {
         supportsGenerateAudio: true,
         supportsDraft: true,
         supportsFrames: false,
+        supportsCameraFixed: true,
+        supportsFlexTier: true,
+        supportsSmartDuration: true,
+        supportsMultiModalReference: false,
         resolutionOptions: ['480p', '720p', '1080p'],
+    },
+    // 2026-05-22 — Seedance 2.0 系列 (火山方舟直连). Doubao Seedance 最强模型,
+    // 音畫同生 (native dialogue/SFX/BGM via generate_audio=true), 多模态参考输入
+    // (image + video + audio), 4-15s, 24fps.
+    //
+    // 不支持: camera_fixed / frames / draft / service_tier=flex (强校验报错).
+    // 帐户余额必须 ≥ 200 元才能开通 (Volcengine 平台限制).
+    //
+    // Spec ref: https://www.volcengine.com/docs/82379/1520757
+    'doubao-seedance-2-0-260128': {
+        durationMin: 4,
+        durationMax: 15,
+        supportsFirstLastFrame: true,
+        supportsGenerateAudio: true,
+        supportsDraft: false,
+        supportsFrames: false,
+        supportsCameraFixed: false,
+        supportsFlexTier: false,
+        supportsSmartDuration: true,
+        supportsMultiModalReference: true,
+        resolutionOptions: ['480p', '720p', '1080p'],
+    },
+    'doubao-seedance-2-0-fast-260128': {
+        durationMin: 4,
+        durationMax: 15,
+        supportsFirstLastFrame: true,
+        supportsGenerateAudio: true,
+        supportsDraft: false,
+        supportsFrames: false,
+        supportsCameraFixed: false,
+        supportsFlexTier: false,
+        supportsSmartDuration: true,
+        supportsMultiModalReference: true,
+        // 2.0 fast 不支持 1080p — per model list at
+        // https://www.volcengine.com/docs/82379/1330310#2705b333
+        resolutionOptions: ['480p', '720p'],
     },
 }
 
@@ -296,6 +362,11 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
         if (!modelSpec) {
             throw new Error(`ARK_VIDEO_MODEL_UNSUPPORTED: ${realModel}`)
         }
+        // 2026-05-22 — batch mode forces service_tier=flex; 2.0 系列不支持 flex.
+        // Fail fast so we don't ship a request the API will 400 on.
+        if (isBatchMode && !modelSpec.supportsFlexTier) {
+            throw new Error(`ARK_VIDEO_MODEL_UNSUPPORTED: -batch mode for ${realModel} (model does not support flex tier)`)
+        }
 
         if (resolution !== undefined && !modelSpec.resolutionOptions.includes(resolution as '480p' | '720p' | '1080p')) {
             throw new Error(`ARK_VIDEO_OPTION_VALUE_UNSUPPORTED: resolution=${resolution}`)
@@ -308,8 +379,8 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             if (durationOutOfRange) {
                 throw new Error(`ARK_VIDEO_OPTION_VALUE_UNSUPPORTED: duration=${duration}`)
             }
-            if (duration === -1 && realModel !== 'doubao-seedance-1-5-pro-251215') {
-                throw new Error('ARK_VIDEO_OPTION_VALUE_UNSUPPORTED: duration=-1 only supported by Seedance 1.5 Pro')
+            if (duration === -1 && !modelSpec.supportsSmartDuration) {
+                throw new Error(`ARK_VIDEO_OPTION_VALUE_UNSUPPORTED: duration=-1 not supported by ${realModel}`)
             }
         }
         if (frames !== undefined) {
@@ -332,8 +403,16 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
         if (generateAudio !== undefined && !modelSpec.supportsGenerateAudio) {
             throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: generateAudio for ${realModel}`)
         }
-        if (serviceTier !== undefined && serviceTier !== 'default' && serviceTier !== 'flex') {
-            throw new Error(`ARK_VIDEO_OPTION_VALUE_UNSUPPORTED: serviceTier=${serviceTier}`)
+        if (serviceTier !== undefined) {
+            if (serviceTier !== 'default' && serviceTier !== 'flex') {
+                throw new Error(`ARK_VIDEO_OPTION_VALUE_UNSUPPORTED: serviceTier=${serviceTier}`)
+            }
+            if (serviceTier === 'flex' && !modelSpec.supportsFlexTier) {
+                throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: flex tier for ${realModel}`)
+            }
+        }
+        if (cameraFixed !== undefined && !modelSpec.supportsCameraFixed) {
+            throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: cameraFixed for ${realModel}`)
         }
         if (executionExpiresAfter !== undefined) {
             if (!isInteger(executionExpiresAfter)) {

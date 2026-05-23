@@ -108,10 +108,12 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance 1.0 Pro Fast', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-0-lite-i2v-250428', name: 'Seedance 1.0 Lite', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-5-pro-251215', name: 'Seedance 1.5 Pro', type: 'video', provider: 'ark' },
-    // 2026-05-16 — Seedance 2.0 via BobAPI (taijiai.online) reseller.
-    // 火山 ARK 直連 placeholder 暫留待官方放開個人端 API；目前實際生
-    // 視訊走 BobAPI 中転站，model id 是 'seedance-2.0-720p'。
-    { modelId: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0（火山直連待上线）', type: 'video', provider: 'ark' },
+    // 2026-05-22 — Seedance 2.0 火山直连 (ARK) 接入. 帐户余额 ≥ 200元 才能开通,
+    // 音畫同生 (native dialogue+SFX+BGM via generate_audio=true), 多模态 content[]
+    // 支持 image+video+audio 参考. 详见 src/lib/generators/ark.ts ARK_SEEDANCE_MODEL_SPECS.
+    { modelId: 'doubao-seedance-2-0-260128', name: 'Seedance 2.0 (火山 ARK · audio)', type: 'video', provider: 'ark' },
+    { modelId: 'doubao-seedance-2-0-fast-260128', name: 'Seedance 2.0 Fast (火山 ARK · audio, no 1080p)', type: 'video', provider: 'ark' },
+    // BobAPI / taijiai 中转 — 保留作为火山 ARK 没设额度时的备援.
     { modelId: 'seedance-2.0-720p', name: 'Seedance 2.0 (720p · BobAPI)', type: 'video', provider: 'taijiai' },
     { modelId: 'doubao-seedance-1-0-pro-250528', name: 'Seedance 1.0 Pro', type: 'video', provider: 'ark' },
     // Google Veo
@@ -219,7 +221,8 @@ export const PRESET_MODELS: PresetModel[] = [
 ]
 
 const PRESET_COMING_SOON_MODEL_KEYS = new Set<string>([
-    encodeModelKey('ark', 'doubao-seedance-2-0-260128'),
+    // 2026-05-22 — Seedance 2.0 火山 ARK 直连 已激活 (账户余额 ≥ 200元 即可开通).
+    // 之前留 placeholder 时挂在 coming-soon, 现已移除.
 ])
 
 export function isPresetComingSoonModel(provider: string, modelId: string): boolean {
