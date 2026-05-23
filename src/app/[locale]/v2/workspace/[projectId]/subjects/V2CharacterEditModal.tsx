@@ -479,12 +479,27 @@ export function V2CharacterEditModal({
                     }
                   }
                 }
+                // 2026-05-23 Phase 3 — forward ARK asset registration
+                // state so the panel's ArkAssetRegisterChip can render
+                // the correct chip variant. Missing these fields would
+                // make every appearance show the default "报备火山"
+                // button even when already registered.
+                const arkAppearance = a as typeof a & {
+                  arkAssetId?: string | null
+                  arkAssetStatus?: string | null
+                  arkAssetSourceUrl?: string | null
+                  arkAssetError?: string | null
+                }
                 return {
                   id: a.id,
                   appearanceIndex: a.appearanceIndex ?? null,
                   changeReason: a.changeReason ?? null,
                   imageUrl: primaryUrl,
                   description: a.description ?? null,
+                  arkAssetId: arkAppearance.arkAssetId ?? null,
+                  arkAssetStatus: arkAppearance.arkAssetStatus ?? null,
+                  arkAssetSourceUrl: arkAppearance.arkAssetSourceUrl ?? null,
+                  arkAssetError: arkAppearance.arkAssetError ?? null,
                 }
               })}
             />

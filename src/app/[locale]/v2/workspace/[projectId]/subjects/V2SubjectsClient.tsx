@@ -54,6 +54,8 @@ import {
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { V2LocationEditModal } from './V2LocationEditModal'
+import { ArkAssetRegisterChip } from './ArkAssetRegisterChip'
+import { useRegisterArkAsset } from '@/lib/query/mutations/useRegisterArkAsset'
 import { V2ManualAddSubjectModal, type ManualAddSubjectType } from './V2ManualAddSubjectModal'
 import { V2LocationCreationModal } from './V2LocationCreationModal'
 import { V2CharacterCreationModal } from './V2CharacterCreationModal'
@@ -211,6 +213,21 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const deleteCharacter = useDeleteProjectCharacter(projectId)
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
+  const registerArkAsset = useRegisterArkAsset(projectId)
+  // 2026-05-23 Phase 3 — single shared callback the SubjectGrid card
+  // chips invoke. Mirrors useRegisterArkAsset semantics; alert on error.
+  const handleArkRegister = canEdit
+    ? async (args: {
+        targetType: 'CharacterAppearance' | 'LocationImage' | 'NovelPromotionProp'
+        targetId: string
+      }) => {
+        try {
+          await registerArkAsset.mutateAsync(args)
+        } catch (err) {
+          alert(`報備失敗:${(err as Error)?.message ?? '未知'}`)
+        }
+      }
+    : undefined
   const { currentEpisodeId, currentEpisode } = useCurrentEpisode(projectId)
   const buildHref = useEpisodePreservingHref()
 
@@ -1290,6 +1307,16 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             // is what the inline editor mutates.
             const roleSummary = c.introduction ?? c.description ?? null
             const visualPrompt = ap?.description ?? null
+            // Phase 3 — 火山 asset state on the primary appearance.
+            // useProjectCharacters already pulls all appearance columns
+            // via prisma `include: { appearances: true }`; cast to widen
+            // the type to include the new ARK fields.
+            const apWithArk = ap as typeof ap & {
+              arkAssetId?: string | null
+              arkAssetStatus?: string | null
+              arkAssetSourceUrl?: string | null
+              arkAssetError?: string | null
+            } | undefined
             return {
               id: c.id,
               targetId: apId,
@@ -1325,6 +1352,19 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
                 ? () => { void handleRedescribe(c) }
                 : undefined,
               isRedescribing: redescribeInFlight.has(apId),
+              // 2026-05-23 Phase 3 — ARK asset chip for the primary
+              // appearance. apId guards: no appearance → chip doesn't
+              // render (caller checks arkTargetId truthy). Multi-
+              // appearance characters surface the [0] chip here;
+              // the per-appearance chips inside V2CharacterEditModal
+              // handle the rest.
+              arkTargetType: 'CharacterAppearance' as const,
+              arkTargetId: apId || null,
+              arkAssetId: apWithArk?.arkAssetId ?? null,
+              arkAssetStatus: apWithArk?.arkAssetStatus ?? null,
+              arkAssetSourceUrl: apWithArk?.arkAssetSourceUrl ?? null,
+              arkAssetError: apWithArk?.arkAssetError ?? null,
+              ...(handleArkRegister ? { onArkRegister: handleArkRegister } : {}),
             }
           })}
           emptyHint={currentEpisode ? `${currentEpisode.name} 還沒有角色` : '還沒有角色'}
@@ -1655,6 +1695,22 @@ interface SubjectItem {
   // upload-time auto-rewrite path landed.
   onRedescribe?: () => void
   isRedescribing?: boolean
+  // 2026-05-23 Phase 3 — 火山方舟 asset registration state for the
+  // primary appearance (character cards) / primary image (scene/prop).
+  // When ark hooks resolve, the SubjectGrid renders ArkAssetRegisterChip
+  // in the card footer so the user sees status without diving into the
+  // edit modal. arkTargetType / arkTargetId identify which row to mutate
+  // when the chip's register button is clicked.
+  arkTargetType?: 'CharacterAppearance' | 'LocationImage' | 'NovelPromotionProp'
+  arkTargetId?: string | null
+  arkAssetId?: string | null
+  arkAssetStatus?: string | null
+  arkAssetSourceUrl?: string | null
+  arkAssetError?: string | null
+  onArkRegister?: (args: {
+    targetType: 'CharacterAppearance' | 'LocationImage' | 'NovelPromotionProp'
+    targetId: string
+  }) => Promise<void> | void
 }
 
 function SubjectGrid({
@@ -1890,6 +1946,23 @@ function SubjectGrid({
             ) : null}
 
             <span className="ml-auto" />
+            {/* 2026-05-23 Phase 3 — 火山 asset registration chip.
+                Renders to the left of the lock action so it's the last
+                thing the user sees scanning across the footer. Only
+                surfaces when ark fields are wired up by the caller
+                (character cards only, until scene/prop wiring lands). */}
+            {item.arkTargetType && item.arkTargetId && item.onArkRegister && item.imageUrl ? (
+              <ArkAssetRegisterChip
+                targetType={item.arkTargetType}
+                targetId={item.arkTargetId}
+                imageUrl={item.imageUrl}
+                arkAssetId={item.arkAssetId}
+                arkAssetStatus={item.arkAssetStatus}
+                arkAssetSourceUrl={item.arkAssetSourceUrl}
+                arkAssetError={item.arkAssetError}
+                onRegister={item.onArkRegister}
+              />
+            ) : null}
             {item.onLock ? (
               <button
                 type="button"
