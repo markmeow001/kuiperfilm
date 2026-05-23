@@ -48,6 +48,11 @@ async function loadSubjectForRegister(
   arkAssetStatus: string | null
   arkAssetSourceUrl: string | null
 } | null> {
+  // The API route's [projectId] segment is the *parent* Project.id, not
+  // NovelPromotionProject.id. Subject rows link to NovelPromotionProject
+  // via novelPromotionProjectId, so we have to hop one more level to
+  // compare against the URL's projectId. Missing this hop returns
+  // ARK_REGISTER_SUBJECT_NOT_FOUND on every legitimate call.
   if (targetType === 'CharacterAppearance') {
     const row = await prisma.characterAppearance.findUnique({
       where: { id: targetId },
@@ -56,10 +61,14 @@ async function loadSubjectForRegister(
         arkAssetId: true,
         arkAssetStatus: true,
         arkAssetSourceUrl: true,
-        character: { select: { novelPromotionProjectId: true } },
+        character: {
+          select: {
+            novelPromotionProject: { select: { projectId: true } },
+          },
+        },
       },
     })
-    if (!row || row.character?.novelPromotionProjectId !== projectId) return null
+    if (!row || row.character?.novelPromotionProject?.projectId !== projectId) return null
     return {
       imageUrl: row.imageUrl,
       arkAssetId: row.arkAssetId,
@@ -75,10 +84,14 @@ async function loadSubjectForRegister(
         arkAssetId: true,
         arkAssetStatus: true,
         arkAssetSourceUrl: true,
-        location: { select: { novelPromotionProjectId: true } },
+        location: {
+          select: {
+            novelPromotionProject: { select: { projectId: true } },
+          },
+        },
       },
     })
-    if (!row || row.location?.novelPromotionProjectId !== projectId) return null
+    if (!row || row.location?.novelPromotionProject?.projectId !== projectId) return null
     return {
       imageUrl: row.imageUrl,
       arkAssetId: row.arkAssetId,
@@ -94,10 +107,10 @@ async function loadSubjectForRegister(
       arkAssetId: true,
       arkAssetStatus: true,
       arkAssetSourceUrl: true,
-      novelPromotionProjectId: true,
+      novelPromotionProject: { select: { projectId: true } },
     },
   })
-  if (!row || row.novelPromotionProjectId !== projectId) return null
+  if (!row || row.novelPromotionProject?.projectId !== projectId) return null
   return {
     imageUrl: row.imageUrl,
     arkAssetId: row.arkAssetId,
