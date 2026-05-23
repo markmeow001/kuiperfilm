@@ -307,7 +307,29 @@ export async function querySeedanceVideoStatus(taskId: string, apiKey: string): 
         const status = queryData.status
 
         if (status === 'succeeded') {
-            const videoUrl = queryData.content?.video_url
+            // 2026-05-22 — ARK content[] is an array of { type, video_url:{url} }
+            // (per Volcengine docs https://www.volcengine.com/docs/82379/1520757).
+            // Earlier 1.x-era code read `queryData.content?.video_url` (object
+            // shape) which made every Seedance 2.0 poll silently fail with
+            // "No video URL in response". Also tolerate older object shape
+            // and the rare `video_url` direct string in case 1.x backends
+            // ever return a different envelope.
+            const rawContent = queryData.content
+            let videoUrl: string | undefined
+            if (Array.isArray(rawContent)) {
+                const hit = rawContent.find(
+                    (c): c is { type: string; video_url?: { url?: string } } =>
+                        !!c && typeof c === 'object' && c.type === 'video_url',
+                )
+                videoUrl = hit?.video_url?.url
+            } else if (rawContent && typeof rawContent === 'object') {
+                const obj = rawContent as { video_url?: { url?: string } | string }
+                if (typeof obj.video_url === 'string') {
+                    videoUrl = obj.video_url
+                } else {
+                    videoUrl = obj.video_url?.url
+                }
+            }
 
             if (videoUrl) {
                 return { status: 'completed', videoUrl }

@@ -20,6 +20,7 @@ import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { VideoModelPickerInline } from './VideoModelPickerInline'
 import { getVideoModelVariant, isMultiShotCapable } from '@/lib/video-models/variants'
+import { videoModelToleratesTextOnlyPanels } from '@/lib/video-models/multi-shot-text-only'
 import {
   useStoryboards,
   useUpdatePanelText,
@@ -1085,19 +1086,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       })
       return
     }
-    // B path = Tencent VOD Kling-3 / Omni / O1 (text-to-video with
-    // multi_shot=intelligence). Panels without imageUrl are still
-    // eligible because the model goes straight from text to video.
-    // Seedance composite (BobAPI taijiai::) also tolerates text-only panels
-    // (falls back to project's character/scene refs).
-    // AtlasCloud composite (atlascloud::seedance-2.0-*) also tolerates
-    // text-only panels: t2v uses no images at all; i2v/r2v fall back to
-    // character/scene refs when panels are imageless.
-    // C path (Kling i2v) needs imageUrl for first-frame.
-    const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
-    const isSeedanceComposite = /^taijiai::seedance-2\.0/i.test(videoModel)
-    const isAtlasCloudComposite = /^atlascloud::seedance-2\.0/i.test(videoModel)
-    const tolerateTextOnly = isBPath || isSeedanceComposite || isAtlasCloudComposite
+    // Routes that anchor identity outside per-panel imageUrl (B-path
+    // SubjectInfos.N, Seedance composite via taijiai/atlascloud/ark/fal which
+    // pull from project character/scene catalog) tolerate text-only panels.
+    // Single source of truth in videoModelToleratesTextOnlyPanels — keep this
+    // in sync with the route + worker dispatcher (regression test enforces).
+    const tolerateTextOnly = videoModelToleratesTextOnlyPanels(videoModel)
     const eligible = tolerateTextOnly
       ? allPanels
       : allPanels.filter((p) => Boolean(p.imageUrl))

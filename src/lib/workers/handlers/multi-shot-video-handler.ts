@@ -64,7 +64,7 @@ function sanitizeName(name: string): string {
  *
  * Otherwise we fall back to the existing C path (KieAI Kling i2v).
  */
-function shouldUseTencentBPath(videoModel: string): boolean {
+export function shouldUseTencentBPath(videoModel: string): boolean {
   const parsed = parseModelKeyStrict(videoModel)
   if (!parsed) return false
   if (parsed.provider !== 'tencent-vod') return false

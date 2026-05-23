@@ -6,6 +6,7 @@ import { apiHandler, ApiError, getRequestId } from '@/lib/api-errors'
 import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
+import { videoModelToleratesTextOnlyPanels } from '@/lib/video-models/multi-shot-text-only'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -321,26 +322,13 @@ export const POST = apiHandler(async (
   }
 
   // Panel imageUrl is required only on the C path (KieAI / image-to-video).
-  // On the B path (Tencent VOD Kling-3 / Omni with multi_shot=intelligence)
-  // the model is text-to-video and SubjectInfos.N carries the per-character
-  // reference, so we accept text-only panels.
-  // 2026-05-17 Phase 2 — Seedance composite (taijiai BobAPI content[] @N)
-  // also accepts text-only panels: the worker falls back to project's
-  // character/scene catalog images as content[] references and runs in
-  // pure t2v mode. The worker still fails closed if NO references exist
-  // anywhere (no panel image AND no character/scene catalog) — that case
-  // BobAPI guaranteed-rejects, so we'd rather fail fast in the worker
-  // with a specific code than waste a round-trip.
-  const isBPath = /^tencent-vod::Kling-(3|O1)/i.test(videoModel)
-  const isSeedanceComposite = /^taijiai::seedance-2\.0/i.test(videoModel)
-  // 2026-05-20 — AtlasCloud Seedance 2.0 composite (any of t2v/i2v/r2v ×
-  // std/fast) also tolerates text-only panels:
-  //   - t2v: no images sent at all
-  //   - i2v: worker takes first panel image OR first char ref as anchor
-  //   - r2v: 1-9 reference_images[] auto-collected from char/scene/panel refs
-  // Worker has its own per-mode validation; route only screens shape.
-  const isAtlasCloudComposite = /^atlascloud::seedance-2\.0/i.test(videoModel)
-  if (!isBPath && !isSeedanceComposite && !isAtlasCloudComposite) {
+  // Routes that anchor identity outside per-panel imageUrl (B-path
+  // SubjectInfos.N, Seedance composite via taijiai/atlascloud/ark/fal which
+  // pull from project character/scene catalog) tolerate text-only panels.
+  // The single source of truth lives in videoModelToleratesTextOnlyPanels —
+  // route + V2StoryboardClient + worker dispatcher all read from there to
+  // prevent the "missed-one-list" regression that hit ARK + fal on 2026-05-22.
+  if (!videoModelToleratesTextOnlyPanels(videoModel)) {
     const panelsWithoutImage = panels.filter((p) => !p.imageUrl)
     if (panelsWithoutImage.length > 0) {
       throw new ApiError('INVALID_PARAMS', {
