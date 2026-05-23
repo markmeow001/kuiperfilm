@@ -29,6 +29,39 @@ import {
 import { getProviderConfig } from '@/lib/api-config'
 import { arkImageGeneration, arkCreateVideoTask } from '@/lib/ark-api'
 import { imageUrlToBase64 } from '@/lib/cos'
+import { toSignedUrlIfCos } from '@/lib/workers/utils'
+
+/**
+ * Resolve an image reference for the ARK video API.
+ *
+ * 2026-05-22 — cross-border POST root cause:
+ * DigitalOcean NYC1 droplet → ark.cn-beijing.volces.com (北京).
+ * Even with only 2 reference_images, base64-encoding each one + uploading
+ * the resulting 10-30 MB POST body across the Pacific consistently times
+ * out at the 60 s mark (verified: invalid-key POST with empty body returns
+ * 401 in ~800 ms; a real multi-ref POST never completes a single attempt).
+ *
+ * Fix: prefer URL. ARK accepts public https URLs in `content[].image_url.url`
+ * (and video_url / audio_url) — the Volcengine backend fetches the asset
+ * server-side from within China, sidestepping our cross-border upload
+ * entirely. Reference images live in Cloudflare R2 (signed URLs), which
+ * Volcengine can reach via R2's global edge.
+ *
+ * Fallback chain (per call, no network I/O in the URL branch):
+ *   1. toSignedUrlIfCos: if input is a COS key (images/ / video/ / voice/),
+ *      sign it into an https URL.
+ *   2. If the result is https/http, pass it through — ARK fetches it.
+ *   3. Otherwise (local file path, data: URL, or anything else without a
+ *      reachable scheme), fall back to base64 — slow but correct, and
+ *      matches the old behavior so dev with STORAGE_TYPE=local still works.
+ */
+async function resolveArkImageRef(input: string): Promise<string> {
+    const signed = toSignedUrlIfCos(input)
+    if (typeof signed === 'string' && /^https?:\/\//i.test(signed)) {
+        return signed
+    }
+    return await imageUrlToBase64(input)
+}
 
 interface ArkImageOptions {
     aspectRatio?: string
@@ -478,29 +511,32 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
         // generator types imageUrl as a required string, but the worker
         // contract treats '' as "no first_frame" — match that here.
         const hasFirstFrame = typeof imageUrl === 'string' && imageUrl.trim().length > 0
-        const imageBase64 = hasFirstFrame ? await imageUrlToBase64(imageUrl) : null
+        // 2026-05-22 — URL-first (see resolveArkImageRef rationale). Was
+        // imageUrlToBase64 unconditionally, which made the POST body
+        // bloat 30+ MB and TCP-stall over the NYC1→cn-beijing link.
+        const imageRef = hasFirstFrame ? await resolveArkImageRef(imageUrl) : null
 
         if (lastFrameImageUrl) {
-            if (!hasFirstFrame || !imageBase64) {
+            if (!hasFirstFrame || !imageRef) {
                 throw new Error('ARK_VIDEO_OPTION_INVALID: lastFrameImageUrl requires a non-empty imageUrl (first_frame)')
             }
             // 首尾帧模式
-            const lastImageBase64 = await imageUrlToBase64(lastFrameImageUrl)
+            const lastImageRef = await resolveArkImageRef(lastFrameImageUrl)
             content.push({
                 type: 'image_url',
-                image_url: { url: imageBase64 },
+                image_url: { url: imageRef },
                 role: 'first_frame'
             })
             content.push({
                 type: 'image_url',
-                image_url: { url: lastImageBase64 },
+                image_url: { url: lastImageRef },
                 role: 'last_frame'
             })
             _ulogInfo(`[ARK Video] 首尾帧模式`)
-        } else if (hasFirstFrame && imageBase64) {
+        } else if (hasFirstFrame && imageRef) {
             content.push({
                 type: 'image_url',
-                image_url: { url: imageBase64 }
+                image_url: { url: imageRef }
             })
         }
 
@@ -510,16 +546,23 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
         // ordering deterministic matches Seedance's @1/@2 conventions in the
         // prompt body).
         if (Array.isArray(referenceImages) && referenceImages.length > 0) {
+            let urlRefCount = 0
+            let base64RefCount = 0
             for (const url of referenceImages) {
                 if (typeof url !== 'string' || !url.trim()) continue
-                const refBase64 = await imageUrlToBase64(url)
+                const ref = await resolveArkImageRef(url)
+                if (ref.startsWith('http')) urlRefCount += 1
+                else base64RefCount += 1
                 content.push({
                     type: 'image_url',
-                    image_url: { url: refBase64 },
+                    image_url: { url: ref },
                     role: 'reference_image',
                 })
             }
-            _ulogInfo(`[ARK Video] multi-modal refs 数: ${referenceImages.length}`)
+            // 2026-05-22 — surface URL vs base64 split so prod log lets us
+            // detect base64-fallback regressions (which trigger cross-border
+            // 60s POST timeouts) without re-pulling the timeout traces.
+            _ulogInfo(`[ARK Video] multi-modal refs 数: ${referenceImages.length} (url=${urlRefCount}, base64=${base64RefCount})`)
         }
 
         const requestBody: {

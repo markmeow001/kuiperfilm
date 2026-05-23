@@ -13,7 +13,15 @@ import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core
 const ARK_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3'
 
 // 超时配置
-const DEFAULT_TIMEOUT_MS = 60 * 1000  // 60秒
+// 2026-05-22 — 60s was insufficient for cross-border POSTs (US droplet →
+// cn-beijing). With URL-first refs (see generators/ark.ts resolveArkImageRef)
+// the payload is now ~1 KB JSON instead of 10-30 MB base64, so this 180s
+// budget mostly absorbs Volcengine backend processing time when it pulls
+// the referenced images itself. If a request still hits this ceiling, the
+// generator's outer retry loop will surface it as "ARK 视频任务创建失败:
+// This operation was aborted" — usually a sign that Volcengine couldn't
+// fetch the referenced image URL (R2 / COS reachability issue from China).
+const DEFAULT_TIMEOUT_MS = 180 * 1000  // 180秒
 const MAX_RETRIES = 3
 const RETRY_DELAY_BASE_MS = 2000  // 2秒起始延迟
 
