@@ -63,8 +63,132 @@ import {
   buildSeedancePrompt,
   wrapRawPromptWithAudioDirective,
   planReferenceBudget,
+  type CharacterRef,
+  type SceneRef,
   type PanelLite,
 } from './multi-shot-video-seedance-path'
+
+/**
+ * Resolve raw image URLs back to their active arkAssetId (if any).
+ *
+ * Walks the three subject tables (character_appearances, location_images,
+ * novel_promotion_props) and pulls the rows where imageUrl matches +
+ * arkAssetStatus='active' + arkAssetSourceUrl matches the current
+ * imageUrl (stale assets where the user regenerated the image since
+ * register are intentionally skipped — they'd point at the wrong art).
+ *
+ * Returns a Map<imageUrl, asset://<id>> the caller substitutes into the
+ * ref list. Misses (no active asset for that URL) just stay absent — the
+ * caller falls back to the raw URL.
+ *
+ * Performance: one OR'd findMany per table = 3 queries per video gen,
+ * each indexed by no specific column (full scan of subjects in this
+ * project). Cheap because subject counts are O(dozens) per project. If
+ * this ever becomes a hot path, add an index on imageUrl or denormalize
+ * arkAssetId into panels at register time.
+ */
+async function loadActiveArkAssetIdsByImageUrl(
+  urls: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (urls.length === 0) return out
+  const uniqueUrls = [...new Set(urls.filter((u) => u && !u.startsWith('asset://')))]
+  if (uniqueUrls.length === 0) return out
+
+  const [appearances, views, props] = await Promise.all([
+    prisma.characterAppearance.findMany({
+      where: {
+        arkAssetStatus: 'active',
+        arkAssetId: { not: null },
+        imageUrl: { in: uniqueUrls },
+      },
+      select: { imageUrl: true, arkAssetId: true, arkAssetSourceUrl: true },
+    }),
+    prisma.locationImage.findMany({
+      where: {
+        arkAssetStatus: 'active',
+        arkAssetId: { not: null },
+        imageUrl: { in: uniqueUrls },
+      },
+      select: { imageUrl: true, arkAssetId: true, arkAssetSourceUrl: true },
+    }),
+    prisma.novelPromotionProp.findMany({
+      where: {
+        arkAssetStatus: 'active',
+        arkAssetId: { not: null },
+        imageUrl: { in: uniqueUrls },
+      },
+      select: { imageUrl: true, arkAssetId: true, arkAssetSourceUrl: true },
+    }),
+  ])
+
+  // Only trust active assets whose registered sourceUrl still matches —
+  // any drift means the user regenerated the underlying image and the
+  // old asset still points at the prior art. Caller fall-through to raw
+  // URL then surfaces InputImageSensitiveContentDetected if applicable,
+  // prompting the user to re-register.
+  for (const row of [...appearances, ...views, ...props]) {
+    if (!row.imageUrl || !row.arkAssetId) continue
+    if (row.arkAssetSourceUrl && row.arkAssetSourceUrl !== row.imageUrl) continue
+    if (!out.has(row.imageUrl)) {
+      out.set(row.imageUrl, `asset://${row.arkAssetId}`)
+    }
+  }
+
+  return out
+}
+
+/**
+ * Build the "图片N 用作 ..." prefix lines that tell Seedance which
+ * registered asset corresponds to which character/scene by ordinal
+ * position. Per CreateAsset docs § "三、注意事项" the prompt must
+ * reference assets as 图片1 / 图片2, NOT by raw Asset ID — the asset_id
+ * lives in content[].image_url.url only.
+ *
+ * Image numbering convention (matches ARK content[] assembly order in
+ * generators/ark.ts):
+ *   - first_frame (if present) → 图片1
+ *   - reference_images[0..n] → 图片2..N+1 (or 图片1..N if no first_frame)
+ *
+ * Returns one line per image slot that we know maps to a named subject.
+ * Unmapped slots are skipped silently (their image still goes through
+ * content[] — Seedance just doesn't get a hint about what they are).
+ */
+function buildArkAssetMappingLines(args: {
+  firstFrameUrl: string | undefined
+  referenceUrls: string[]
+  urlToAssetId: Map<string, string>
+  characterRefs: CharacterRef[]
+  sceneRefs: SceneRef[]
+}): string[] {
+  const { firstFrameUrl, referenceUrls, urlToAssetId, characterRefs, sceneRefs } = args
+  const lines: string[] = []
+
+  // Build a reverse lookup: imageUrl → display label (character or scene).
+  const labelByUrl = new Map<string, string>()
+  for (const c of characterRefs) {
+    if (c.imageUrl && !labelByUrl.has(c.imageUrl)) {
+      labelByUrl.set(c.imageUrl, `角色「${c.name}」`)
+    }
+  }
+  for (const s of sceneRefs) {
+    if (s.imageUrl && !labelByUrl.has(s.imageUrl)) {
+      labelByUrl.set(s.imageUrl, `场景「${s.name}」`)
+    }
+  }
+
+  const orderedUrls = firstFrameUrl ? [firstFrameUrl, ...referenceUrls] : referenceUrls
+  for (let i = 0; i < orderedUrls.length; i += 1) {
+    const url = orderedUrls[i]!
+    const label = labelByUrl.get(url)
+    if (!label) continue
+    const isRegistered = urlToAssetId.has(url)
+    const tag = isRegistered ? '（已报备素材）' : ''
+    lines.push(`图片${i + 1} 是${label}${tag}`)
+  }
+
+  return lines
+}
 
 /**
  * True when this videoModel routes to ARK Seedance 2.0 composite.
@@ -197,6 +321,22 @@ export async function runMultiShotArkComposite(params: {
     throw new Error('ARK_COMPOSITE_NO_REFERENCES')
   }
 
+  // ─────────────── Phase 3 (2026-05-23): asset:// substitution ───────
+  // For each ref URL, look up whether the source subject (appearance /
+  // location image / prop) has an ACTIVE arkAssetId pointing at this
+  // exact imageUrl. If yes, swap the URL for `asset://<id>` so Seedance
+  // 2.0 accepts the ref (otherwise the face filter rejects photoreal
+  // AI portraits — see project_kuiperfilm_ark_seedance_2_face_policy
+  // memory). Stale registrations (imageUrl regenerated since register)
+  // fail the sourceUrl match and fall back to the raw URL — caller
+  // surfaces the SensitiveContentDetected error from there.
+  const allRefUrls = firstFrameUrl ? [firstFrameUrl, ...referenceUrls] : referenceUrls
+  const urlToAssetId = await loadActiveArkAssetIdsByImageUrl(allRefUrls)
+  const resolveRef = (url: string): string => urlToAssetId.get(url) ?? url
+  const firstFrameRef = firstFrameUrl ? resolveRef(firstFrameUrl) : undefined
+  const referenceRefs = referenceUrls.map(resolveRef)
+  const assetIdHits = [...allRefUrls].filter((u) => urlToAssetId.has(u)).length
+
   // Prompt source priority — identical to seedance-path: rawPrompt > built.
   let prompt: string
   let dialogueBeatCount: number
@@ -269,7 +409,29 @@ export async function runMultiShotArkComposite(params: {
   const arkNegativeSuffix =
     `（请勿在画面中渲染：${UNIVERSAL_SEEDANCE_NEGATIVE}。保持画面干净，无任何屏幕信息。）`
 
-  const stylizedPrompt = [stylePrefix, prompt, styleSuffix, arkNegativeSuffix]
+  // Phase 3 (2026-05-23) — asset:// mapping line. Per Volcengine
+  // CreateAsset docs § "三、注意事项":
+  //   "生成视频时,提示词中需使用「图片1/视频1」等格式指代素材,
+  //    不要直接填写 Asset ID"
+  // So the asset:// strings go into content[] (handled by the generator),
+  // and the prompt itself only references them by 「图片1」 / 「图片2」
+  // / etc. We build a small mapping line that prefixes the prompt with
+  // "图片N 用作 <role-of-subject>" pointing at what each slot binds to.
+  // Order is: first_frame is image 1 (if present), then reference_images
+  // in the order planReferenceBudget assembled them (characters first,
+  // then scenes, then leftover panel images).
+  const assetMappingLines = buildArkAssetMappingLines({
+    firstFrameUrl,
+    referenceUrls,
+    urlToAssetId,
+    characterRefs,
+    sceneRefs,
+  })
+  const assetMappingPrefix = assetMappingLines.length > 0
+    ? `素材引用说明（请勿在台词或画面文字中重复以下编号）：\n${assetMappingLines.join('\n')}`
+    : ''
+
+  const stylizedPrompt = [assetMappingPrefix, stylePrefix, prompt, styleSuffix, arkNegativeSuffix]
     .filter((s) => s.length > 0)
     .join('\n\n')
 
@@ -277,15 +439,21 @@ export async function runMultiShotArkComposite(params: {
   const generateResult = await generator.generate({
     userId,
     // Same '' convention as BobAPI path — ArkVideoGenerator treats empty
-    // imageUrl as "pure t2v with reference_image content items".
-    imageUrl: firstFrameUrl ?? '',
+    // imageUrl as "pure t2v with reference_image content items". Phase 3:
+    // pass firstFrameRef (asset:// or URL) so ARK uses the registered
+    // asset when available.
+    imageUrl: firstFrameRef ?? '',
     prompt: stylizedPrompt,
     options: {
       modelId: arkModelId,
       duration,
       aspectRatio,
       generateAudio: sound,
-      referenceImages: referenceUrls,
+      // Phase 3: referenceRefs already has asset:// substituted in for
+      // every URL that maps to an active arkAssetId. Mixed mode (some
+      // URLs, some asset://) is supported — ARK happily fetches URLs
+      // for unregistered refs and looks up asset:// inline.
+      referenceImages: referenceRefs,
       // 2026-05-22 — user-selected resolution. Omitted (undefined) means
       // ARK falls back to its model default (720p for 2.0 series).
       // Fast variant rejects 1080p — caught upstream by ark.ts validator

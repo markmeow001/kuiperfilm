@@ -87,6 +87,32 @@ function inferCodeFromMessage(message: string): UnifiedErrorCode | null {
   if (containsAny(message, ['invalid', 'missing', 'required', 'bad request', 'fieldinvalid'])) return 'INVALID_PARAMS'
   if (containsAny(message, ['quota', 'rate limit', 'resource_exhausted', 'throttle', '429', 'requestlimitexceeded', 'maximum concurrency', 'reached the maximum'])) return 'RATE_LIMIT'
   if (containsAny(message, ['insufficient balance', 'creditinsufficient', 'balance is not enough', '402', 'insufficient credits', '余额不足', '余额不够', '请充值'])) return 'INSUFFICIENT_BALANCE'
+  // 2026-05-23 — 火山方舟 Seedance 2.0 face filter sub-code.
+  // InputImageSensitiveContentDetected.PrivacyInformation is the
+  // specific error code Volcengine returns for "image may contain real
+  // person". Match BEFORE the generic SENSITIVE_CONTENT rule below so
+  // user gets the targeted 「报备火山」 hint rather than the generic
+  // "sensitive content" message.
+  if (containsAny(message, [
+    'inputimagesensitivecontentdetected',
+    'privacyinformation',
+    'may contain real person',
+    'may contain a real person',
+    '检测到真人',
+    'realpersondetected',
+  ])) return 'ARK_FACE_DETECTED'
+  // 2026-05-23 — 火山方舟 asset API paywall sub-code.
+  // CreateAssetGroup / CreateAsset / GetAsset return
+  // SubscriptionRequired when the account hasn't bought the Seedance 2.0
+  // 高级创作权益包. Match BEFORE INSUFFICIENT_BALANCE (which uses 402
+  // too) so user gets the specific 「购买权益包」 message.
+  if (containsAny(message, [
+    'subscriptionrequired',
+    'requires an active subscription',
+    'subscribe to an advanced or premium plan',
+    '请订阅',
+    '需开通',
+  ])) return 'ARK_SUBSCRIPTION_REQUIRED'
   if (containsAny(message, ['sensitive', 'unsafe', 'safety', 'blocked', 'prohibited', 'policy_violation', 'moderation', 'harm', 'celebrity', 'likenesses', '敏感', '违规', '不当']) && !containsAny(message, ['case-sensitive', 'case sensitive'])) return 'SENSITIVE_CONTENT'
   if (containsAny(message, ['timeout', 'timed out', 'deadline exceeded'])) return 'GENERATION_TIMEOUT'
   if (containsAny(message, ['503', 'unavailable', 'overloaded', 'upstream error', 'exceeds limit', 'size limit', 'no result url'])) return 'EXTERNAL_ERROR'

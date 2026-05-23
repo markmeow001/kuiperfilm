@@ -17,6 +17,8 @@ export const USER_ERROR_MESSAGES_ZH: Record<UnifiedErrorCode, string> = {
   NETWORK_ERROR: '网络异常，请稍后重试。',
   INSUFFICIENT_BALANCE: '余额不足，请先充值。',
   SENSITIVE_CONTENT: '内容可能涉及敏感信息，请修改后重试。',
+  ARK_FACE_DETECTED: '火山 Seedance 2.0 不接受未报备的真人臉参考图。請到該角色 / 場景 / 道具的編輯面板按「报备火山」，等狀態變綠後再重新生成。',
+  ARK_SUBSCRIPTION_REQUIRED: '火山方舟素材庫 API 需先購買「Seedance 2.0 高级创作权益包」才能使用。請至火山控制台訂閱後再試。',
   GENERATION_TIMEOUT: '生成超时，请重试。',
   GENERATION_FAILED: '生成失败，请稍后重试。',
   WATCHDOG_TIMEOUT: '任务执行超时，系统已终止该任务。',

@@ -135,6 +135,31 @@ export const ERROR_CATALOG = {
     userMessageKey: 'errors.SENSITIVE_CONTENT',
     defaultMessage: 'Sensitive content detected',
   },
+  // 2026-05-23 — 火山方舟 Seedance 2.0 real-person face filter rejects
+  // raw URLs of photoreal AI portraits. The escape hatch is to register
+  // the image via the asset API (CreateAsset → asset://<Id>). Surfaces
+  // when user picks ark::doubao-seedance-2-0-* without pre-registering
+  // refs. Sub-code of SENSITIVE_CONTENT but with a register-aware
+  // friendly message that points the user to the 「报备火山」 button.
+  ARK_FACE_DETECTED: {
+    httpStatus: 422,
+    retryable: false,
+    category: ERROR_CATEGORY.CONTENT,
+    userMessageKey: 'errors.ARK_FACE_DETECTED',
+    defaultMessage: 'ARK rejected the input image (face detected) — register via asset API first',
+  },
+  // 2026-05-23 — 火山方舟 asset API requires Seedance 2.0 高级创作权益包
+  // subscription before CreateAssetGroup / CreateAsset / GetAsset accept
+  // any call. Returned as 403 SubscriptionRequired by Volcengine; we
+  // translate to a friendly "请到火山控制台购买权益包" message rather
+  // than letting the user see a raw API error.
+  ARK_SUBSCRIPTION_REQUIRED: {
+    httpStatus: 402,
+    retryable: false,
+    category: ERROR_CATEGORY.BILLING,
+    userMessageKey: 'errors.ARK_SUBSCRIPTION_REQUIRED',
+    defaultMessage: 'ARK asset API requires Seedance 2.0 advanced/premium subscription',
+  },
   GENERATION_TIMEOUT: {
     httpStatus: 504,
     retryable: true,

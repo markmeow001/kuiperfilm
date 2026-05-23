@@ -26,7 +26,9 @@ import {
   useUpdateEpisodeCharacterBinding,
 } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { useUploadAndExpandCharacterToMultiView } from '@/lib/query/mutations/character-image-ops-mutations'
+import { useRegisterArkAsset } from '@/lib/query/mutations/useRegisterArkAsset'
 import { AppIcon } from '@/components/ui/icons'
+import { ArkAssetRegisterChip } from './ArkAssetRegisterChip'
 
 interface AppearanceOption {
   id: string
@@ -39,6 +41,14 @@ interface AppearanceOption {
    * the appearance name so the user can read the look without zooming the
    * thumbnail. */
   description?: string | null
+  // 2026-05-23 — Phase 3: 火山方舟 asset registration status. Surfaced
+  // as a chip in the row so the user knows whether this appearance's
+  // image is ready for Seedance 2.0 (which rejects raw photoreal URLs).
+  // Populated by the register-ark-asset worker; null = never registered.
+  arkAssetId?: string | null
+  arkAssetStatus?: string | null
+  arkAssetSourceUrl?: string | null
+  arkAssetError?: string | null
 }
 
 interface V2CharacterAppearancesPanelProps {
@@ -184,6 +194,7 @@ function AppearanceManageRow({
 
   const update = useUpdateCharacterAppearanceMeta(projectId)
   const del = useDeleteCharacterAppearance(projectId)
+  const register = useRegisterArkAsset(projectId)
 
   const display = appearance.changeReason || `造型 ${(appearance.appearanceIndex ?? 0) + 1}`
   const idxLabel = `#${(appearance.appearanceIndex ?? 0) + 1}`
@@ -346,6 +357,29 @@ function AppearanceManageRow({
           ) : (
             <div className="font-body text-[12px] italic text-stone-700">無描述</div>
           )}
+          {/* 2026-05-23 — Phase 3: 火山方舟 asset registration chip.
+              Sits below the caption so the row main content stays uncluttered.
+              Only renders when imageUrl exists (no point registering empty). */}
+          {appearance.imageUrl ? (
+            <div className="mt-0.5">
+              <ArkAssetRegisterChip
+                targetType="CharacterAppearance"
+                targetId={appearance.id}
+                imageUrl={appearance.imageUrl}
+                arkAssetId={appearance.arkAssetId}
+                arkAssetStatus={appearance.arkAssetStatus}
+                arkAssetSourceUrl={appearance.arkAssetSourceUrl}
+                arkAssetError={appearance.arkAssetError}
+                onRegister={async ({ targetType, targetId }) => {
+                  try {
+                    await register.mutateAsync({ targetType, targetId })
+                  } catch (err) {
+                    alert(`報備失敗:${(err as Error)?.message ?? '未知'}`)
+                  }
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 

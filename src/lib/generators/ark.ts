@@ -34,28 +34,41 @@ import { toSignedUrlIfCos } from '@/lib/workers/utils'
 /**
  * Resolve an image reference for the ARK video API.
  *
- * 2026-05-22 — cross-border POST root cause:
+ * Fallback chain (highest priority first):
+ *   1. **`asset://<Asset-ID>` (Phase 3, 2026-05-23)** — caller already
+ *      pre-registered the image via the asset API (see register-ark-asset
+ *      worker). Pass through verbatim; ARK trusts asset:// inputs and
+ *      skips the real-person face filter that rejects raw URLs of
+ *      photorealistic AI portraits. This is the only way Seedance 2.0
+ *      accepts character/scene/prop refs that look like real humans.
+ *   2. **Signed HTTPS URL** — if input is a COS key, sign it into a
+ *      public R2 URL Volcengine can fetch from cn-beijing. Pre-Phase-3
+ *      this was the only path, but it hits Seedance 2.0's face filter
+ *      for photoreal subjects.
+ *   3. **Base64 fallback** — local file paths, data: URLs, or any
+ *      unreachable scheme. Slow (cross-border upload — see 2026-05-22
+ *      timeout incident below) but correct for STORAGE_TYPE=local dev.
+ *
+ * 2026-05-22 — cross-border POST root cause for the base64 fallback:
  * DigitalOcean NYC1 droplet → ark.cn-beijing.volces.com (北京).
  * Even with only 2 reference_images, base64-encoding each one + uploading
  * the resulting 10-30 MB POST body across the Pacific consistently times
  * out at the 60 s mark (verified: invalid-key POST with empty body returns
  * 401 in ~800 ms; a real multi-ref POST never completes a single attempt).
  *
- * Fix: prefer URL. ARK accepts public https URLs in `content[].image_url.url`
- * (and video_url / audio_url) — the Volcengine backend fetches the asset
- * server-side from within China, sidestepping our cross-border upload
- * entirely. Reference images live in Cloudflare R2 (signed URLs), which
- * Volcengine can reach via R2's global edge.
- *
- * Fallback chain (per call, no network I/O in the URL branch):
- *   1. toSignedUrlIfCos: if input is a COS key (images/ / video/ / voice/),
- *      sign it into an https URL.
- *   2. If the result is https/http, pass it through — ARK fetches it.
- *   3. Otherwise (local file path, data: URL, or anything else without a
- *      reachable scheme), fall back to base64 — slow but correct, and
- *      matches the old behavior so dev with STORAGE_TYPE=local still works.
+ * URL branch + asset:// branch are both cross-border-friendly (body
+ * stays under 1 KB; Volcengine fetches the binary from R2 or its own
+ * asset store). Base64 only fires for dev or unreachable inputs.
  */
 async function resolveArkImageRef(input: string): Promise<string> {
+    // Phase 3 — pre-registered asset:// passes through verbatim. Caller
+    // (multi-shot-ark-path) feeds this when subject.arkAssetStatus is
+    // 'active'. Any malformed value (e.g. "asset://") would later be
+    // rejected by the Volcengine API, not us — keep this branch
+    // permissive to avoid double-validation.
+    if (input.startsWith('asset://')) {
+        return input
+    }
     const signed = toSignedUrlIfCos(input)
     if (typeof signed === 'string' && /^https?:\/\//i.test(signed)) {
         return signed
