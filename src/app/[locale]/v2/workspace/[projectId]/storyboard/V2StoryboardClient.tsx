@@ -1326,6 +1326,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       currentVideoModel={projectVideoModel || null}
       videoRatio={projectVideoRatio || '9:16'}
       targetDuration={project?.novelPromotionData?.targetDuration ?? null}
+      videoResolution={projectVideoResolution}
     />
   )
 

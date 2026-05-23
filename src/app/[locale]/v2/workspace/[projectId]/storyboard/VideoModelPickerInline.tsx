@@ -47,6 +47,20 @@ interface VideoModelPickerInlineProps {
    *  shot count. Now editable inline so user can iterate without bouncing
    *  to STEP 01. */
   targetDuration: number | null | undefined
+  /** 2026-05-22 — project.videoResolution (480p / 720p / 1080p). Inline
+   *  picker only renders when current model is an ARK Seedance 2.0 variant
+   *  (the only route where resolution isn't baked into the model id). */
+  videoResolution: '480p' | '720p' | '1080p' | null | undefined
+}
+
+// 2026-05-22 — keep in sync with V2ProjectSettingsPanel + ark.ts
+// ARK_SEEDANCE_MODEL_SPECS.resolutionOptions. Fast variant rejects 1080p.
+function modelSupportsResolutionChoice(videoModel: string | null | undefined): boolean {
+  return videoModel === 'ark::doubao-seedance-2-0-260128'
+    || videoModel === 'ark::doubao-seedance-2-0-fast-260128'
+}
+function modelSupports1080p(videoModel: string | null | undefined): boolean {
+  return videoModel !== 'ark::doubao-seedance-2-0-fast-260128'
 }
 
 export function VideoModelPickerInline({
@@ -54,6 +68,7 @@ export function VideoModelPickerInline({
   currentVideoModel,
   videoRatio,
   targetDuration,
+  videoResolution,
 }: VideoModelPickerInlineProps) {
   const updateConfig = useUpdateProjectConfig(projectId)
   const currentVariant = getVideoModelVariant(currentVideoModel)
@@ -194,6 +209,36 @@ export function VideoModelPickerInline({
           <option value={180}>3 分鐘</option>
         </select>
       </label>
+
+      {/* 2026-05-22 — resolution picker. Only shown for ARK 2.0 routes
+          (taijiai / atlascloud / fal bake resolution into the model id;
+          showing the picker there would be misleading). 1080p disabled
+          on Fast variant per Volcengine docs. */}
+      {modelSupportsResolutionChoice(currentVideoModel) ? (
+        <label
+          className="flex items-center gap-1.5 whitespace-nowrap"
+          title="輸出視頻解析度 — 480p 最省, 720p 預設, 1080p 大約是 720p 的 2.25× token 成本"
+        >
+          <span className="shrink-0">解析度</span>
+          <select
+            value={videoResolution ?? '720p'}
+            onChange={(e) => {
+              const next = e.target.value
+              if (next === '480p' || next === '720p' || next === '1080p') {
+                updateConfig.mutate({ key: 'videoResolution', value: next })
+              }
+            }}
+            disabled={updateConfig.isPending}
+            className="rounded-sm border border-stone-800 bg-stone-900/40 px-1.5 py-0.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+          >
+            <option value="480p">480p · 草稿</option>
+            <option value="720p">720p · 默認</option>
+            <option value="1080p" disabled={!modelSupports1080p(currentVideoModel)}>
+              1080p{modelSupports1080p(currentVideoModel) ? ' · 高畫質 ¥¥' : ' (Fast 不支援)'}
+            </option>
+          </select>
+        </label>
+      ) : null}
 
       <span className="ml-auto shrink-0">比例 {videoRatio}</span>
 
