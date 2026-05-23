@@ -83,7 +83,11 @@ import {
 // generative training set leaked subtitled content. Replaces the per-shot
 // "严格无任何字幕、文字、logo或屏幕信息" line previously inlined by
 // GroupCard's buildInitialNarrativeSeedance.
-const UNIVERSAL_SEEDANCE_NEGATIVE = [
+// 2026-05-22 — Exported so the ARK multi-shot path (火山直连) reuses the
+// same suppressor when composing its prompt, even though ARK doesn't
+// have a top-level negative_prompt field (the universal suppressor goes
+// into a final positive-prompt line for ARK).
+export const UNIVERSAL_SEEDANCE_NEGATIVE = [
   '字幕',
   '文字',
   'logo',
@@ -94,19 +98,22 @@ const UNIVERSAL_SEEDANCE_NEGATIVE = [
   'on-screen text',
 ].join(', ')
 
-/** BobAPI multi-ref cap: 9 images per the wiki Section 4.2. */
-const MAX_REFERENCE_IMAGES = 9
+/** BobAPI multi-ref cap: 9 images per the wiki Section 4.2.
+ *  Same hard limit on ARK Seedance 2.0 (per Volcengine docs). */
+export const MAX_REFERENCE_IMAGES = 9
 /** Soft cap on character refs so dialogue groups (3+ speakers) still
  * leave room for scene + panel references. */
-const MAX_CHARACTER_REFS = 4
+export const MAX_CHARACTER_REFS = 4
 /** Soft cap on scene refs. Most groups stay in 1 location; 2 covers the
  * "interior→exterior cut within one group" case. */
-const MAX_SCENE_REFS = 2
-/** Seedance 2.0 duration range per the wiki (also clamped by generator). */
-const MIN_DURATION_SEC = 4
-const MAX_DURATION_SEC = 15
+export const MAX_SCENE_REFS = 2
+/** Seedance 2.0 duration range per the wiki (also clamped by generator).
+ *  Both BobAPI 720p variant and ARK direct doubao-seedance-2-0-* share the
+ *  same 4-15s window. */
+export const MIN_DURATION_SEC = 4
+export const MAX_DURATION_SEC = 15
 
-interface PanelLite {
+export interface PanelLite {
   id: string
   imageUrl: string | null
   description: string | null
@@ -121,14 +128,14 @@ interface PanelLite {
 }
 
 /** Resolved character reference for the Seedance content[] payload. */
-interface CharacterRef {
+export interface CharacterRef {
   id: string
   name: string
   imageUrl: string
 }
 
 /** Resolved scene reference for the Seedance content[] payload. */
-interface SceneRef {
+export interface SceneRef {
   id: string
   name: string
   imageUrl: string
@@ -156,7 +163,7 @@ type NovelData = Awaited<ReturnType<typeof resolveNovelData>>
  * pipeline. Falls back to appearances[0] when no episode binding / panel
  * appearance hint is available — same priority as b-path.
  */
-function collectCharacterRefs(
+export function collectCharacterRefs(
   panels: PanelLite[],
   projectData: NovelData,
   episodeBindings: Map<string, string>,
@@ -187,7 +194,7 @@ interface LocationRow {
   images?: LocationImageRow[]
 }
 
-function collectSceneRefs(
+export function collectSceneRefs(
   panels: PanelLite[],
   projectData: NovelData,
   locOverrideById: Map<string, string>,
@@ -204,7 +211,7 @@ function collectSceneRefs(
  *   - "对白：..." / "[Cast: ...]"  prefixes
  *   - "Voiceover (off-camera)" / "OS:" off-screen narration markers
  */
-function countDialogueBeatsInRawPrompt(raw: string): number {
+export function countDialogueBeatsInRawPrompt(raw: string): number {
   let count = 0
   // Speaker: "line" or 「line」 — both Western and CJK quotes.
   const quoted = raw.match(/[「"“”'']([^「」"“”'']{2,})[」"”“'']/g)
@@ -222,7 +229,7 @@ function countDialogueBeatsInRawPrompt(raw: string): number {
  * buildSeedancePrompt() emits. The rawPrompt body stays verbatim so the
  * UI's "what you see is what runs" contract holds.
  */
-function wrapRawPromptWithAudioDirective(
+export function wrapRawPromptWithAudioDirective(
   rawPrompt: string,
 ): { prompt: string; dialogueBeatCount: number } {
   const dialogueBeatCount = countDialogueBeatsInRawPrompt(rawPrompt)
@@ -256,7 +263,7 @@ function wrapRawPromptWithAudioDirective(
  *      hint, plus a global audio directive ("native dialogue + ambient
  *      SFX, 自然唇形同步")
  */
-function buildSeedancePrompt(
+export function buildSeedancePrompt(
   panels: PanelLite[],
   characterRefs: CharacterRef[],
   sceneRefs: SceneRef[],
@@ -359,7 +366,7 @@ function buildSeedancePrompt(
  * panel references. Returns the URLs in the exact order they'll appear
  * in BobAPI's content[] so prompt @N markers stay aligned.
  */
-function planReferenceBudget(args: {
+export function planReferenceBudget(args: {
   panels: PanelLite[]
   characterRefs: CharacterRef[]
   sceneRefs: SceneRef[]

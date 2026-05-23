@@ -28,7 +28,8 @@ export function useWorkspaceUserModels() {
   const userModelsForSettings = (userModelsQuery.data || null) as UserModelsPayload | null
   const userVideoModels = useMemo<UserModelOption[]>(() => {
     if (!userModelsForSettings || !Array.isArray(userModelsForSettings.video)) return []
-    // 仅允许 AtlasCloud 视频模型
+    // 仅允许 AtlasCloud + ARK Seedance 2.0 视频模型 (其余太贵 / 不適合多鏡頭場景).
+    // 2026-05-22 — 加入火山 ARK 直连 Seedance 2.0 (260128 + fast).
     const allowed = userModelsForSettings.video.filter(
       (m) =>
         m.value === 'atlascloud::seedance-v1.5-pro' ||
@@ -38,7 +39,9 @@ export function useWorkspaceUserModels() {
         m.value === 'atlascloud::seedance-2.0-r2v' ||
         m.value === 'atlascloud::seedance-2.0-fast-t2v' ||
         m.value === 'atlascloud::seedance-2.0-fast-i2v' ||
-        m.value === 'atlascloud::seedance-2.0-fast-r2v'
+        m.value === 'atlascloud::seedance-2.0-fast-r2v' ||
+        m.value === 'ark::doubao-seedance-2-0-260128' ||
+        m.value === 'ark::doubao-seedance-2-0-fast-260128'
     )
     return allowed.length > 0 ? allowed : userModelsForSettings.video
   }, [userModelsForSettings])

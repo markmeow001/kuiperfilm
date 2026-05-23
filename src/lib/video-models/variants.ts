@@ -93,6 +93,26 @@ export const VIDEO_MODEL_VARIANTS: VideoModelVariant[] = [
     hint: '透過 BobAPI / taijiai 中轉 · 9 張角色 / 場景圖綁定 · 視覺一致性最佳 · 720p · audio · 支援多鏡頭合成 (9-ref @N)',
     capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
   },
+  // 2026-05-22 — 火山方舟 ARK 直连 Seedance 2.0 (and 2.0 Fast). Same
+  // Doubao Seedance 2.0 model as the taijiai entry above, but bypasses
+  // the BobAPI 中轉 (lower latency, account-billed via Volcengine
+  // directly, requires ≥ 200元 balance). Same content[] multi-modal
+  // shape, same 4-15s range. Worker dispatch goes through
+  // multi-shot-video-ark-path. See https://www.volcengine.com/docs/82379/1520757
+  {
+    id: 'ark::doubao-seedance-2-0-260128',
+    family: 'seedance',
+    label: '✓ Seedance 2.0 (火山 ARK 直连 · 9 圖綁定 · 1080p)',
+    hint: '直连 Volcengine 方舟,無 BobAPI 中轉延遲 · 9 張角色 / 場景圖綁定 · 480p/720p/1080p · audio · 4-15s · 帳戶餘額 ≥ 200元 才能開通',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥¥' },
+  },
+  {
+    id: 'ark::doubao-seedance-2-0-fast-260128',
+    family: 'seedance',
+    label: 'Seedance 2.0 Fast (火山 ARK · 9 圖綁定 · cheap, 無 1080p)',
+    hint: '便宜的 fast 版火山直连 · 480p/720p (無 1080p) · audio · 4-15s · 9 張角色 / 場景圖綁定',
+    capabilities: { audio: true, multiShot: true, maxDurationSec: 15, costTier: '¥' },
+  },
   // 2026-05-20 — AtlasCloud Seedance 2.0 line (6 variants: t2v/i2v/r2v × standard/fast).
   // Multi-shot is a MODEL capability, not an endpoint capability — Seedance 2.0
   // accepts shot breakdowns encoded in the prompt ("第一鏡：… 第二鏡：…") and

@@ -47,6 +47,16 @@ interface ArkVideoOptions {
     aspectRatio?: string
     generateAudio?: boolean
     lastFrameImageUrl?: string
+    /**
+     * 2026-05-22 — Seedance 2.0 系列 multi-modal reference inputs.
+     * Each url emits a `{ type: 'image_url', role: 'reference_image' }`
+     * content item. Used by multi-shot composite path to anchor character +
+     * scene identity across the generated clip. The first image still goes
+     * in the top-level `imageUrl` slot as `first_frame` (legacy behavior).
+     * Only models with `supportsMultiModalReference=true` accept these;
+     * others throw ARK_VIDEO_OPTION_UNSUPPORTED.
+     */
+    referenceImages?: string[]
     serviceTier?: 'default' | 'flex'
     executionExpiresAfter?: number
     returnLastFrame?: boolean
@@ -328,6 +338,7 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             seed,
             cameraFixed,
             watermark,
+            referenceImages,
         } = options as ArkVideoOptions
 
         const allowedOptionKeys = new Set([
@@ -340,6 +351,7 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             'aspectRatio',
             'generateAudio',
             'lastFrameImageUrl',
+            'referenceImages',
             'serviceTier',
             'executionExpiresAfter',
             'returnLastFrame',
@@ -414,6 +426,14 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
         if (cameraFixed !== undefined && !modelSpec.supportsCameraFixed) {
             throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: cameraFixed for ${realModel}`)
         }
+        if (referenceImages !== undefined) {
+            if (!Array.isArray(referenceImages)) {
+                throw new Error('ARK_VIDEO_OPTION_INVALID: referenceImages must be array of URLs')
+            }
+            if (referenceImages.length > 0 && !modelSpec.supportsMultiModalReference) {
+                throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: referenceImages for ${realModel}`)
+            }
+        }
         if (executionExpiresAfter !== undefined) {
             if (!isInteger(executionExpiresAfter)) {
                 throw new Error('ARK_VIDEO_OPTION_INVALID: executionExpiresAfter must be integer')
@@ -447,16 +467,23 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
 
         _ulogInfo(`[ARK Video] 模型: ${realModel}, 批量: ${isBatchMode}, 分辨率: ${resolution || '(默认)'}, 时长: ${duration ?? '(默认)'}`)
 
-        // 转换图片为 base64
-        const imageBase64 = await imageUrlToBase64(imageUrl)
-
         // 构建请求体 content
         const content: ArkVideoContentItem[] = []
         if (prompt.trim()) {
             content.push({ type: 'text', text: prompt })
         }
 
+        // 2026-05-22 — multi-shot composite path passes referenceImages and
+        // sometimes leaves imageUrl empty (pure t2v with refs). The base
+        // generator types imageUrl as a required string, but the worker
+        // contract treats '' as "no first_frame" — match that here.
+        const hasFirstFrame = typeof imageUrl === 'string' && imageUrl.trim().length > 0
+        const imageBase64 = hasFirstFrame ? await imageUrlToBase64(imageUrl) : null
+
         if (lastFrameImageUrl) {
+            if (!hasFirstFrame || !imageBase64) {
+                throw new Error('ARK_VIDEO_OPTION_INVALID: lastFrameImageUrl requires a non-empty imageUrl (first_frame)')
+            }
             // 首尾帧模式
             const lastImageBase64 = await imageUrlToBase64(lastFrameImageUrl)
             content.push({
@@ -470,11 +497,29 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
                 role: 'last_frame'
             })
             _ulogInfo(`[ARK Video] 首尾帧模式`)
-        } else {
+        } else if (hasFirstFrame && imageBase64) {
             content.push({
                 type: 'image_url',
                 image_url: { url: imageBase64 }
             })
+        }
+
+        // 2026-05-22 — Seedance 2.0 multi-modal: append reference_image entries.
+        // Pre-validated above to be empty for non-2.0 models. Resolve URLs to
+        // base64 in series (the per-ref upload cost is small but keeping
+        // ordering deterministic matches Seedance's @1/@2 conventions in the
+        // prompt body).
+        if (Array.isArray(referenceImages) && referenceImages.length > 0) {
+            for (const url of referenceImages) {
+                if (typeof url !== 'string' || !url.trim()) continue
+                const refBase64 = await imageUrlToBase64(url)
+                content.push({
+                    type: 'image_url',
+                    image_url: { url: refBase64 },
+                    role: 'reference_image',
+                })
+            }
+            _ulogInfo(`[ARK Video] multi-modal refs 数: ${referenceImages.length}`)
         }
 
         const requestBody: {

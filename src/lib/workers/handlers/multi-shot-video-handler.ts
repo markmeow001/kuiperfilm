@@ -5,6 +5,7 @@ import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { runMultiShotBPath } from './multi-shot-video-b-path'
 import { runMultiShotSeedanceComposite, shouldUseSeedanceComposite } from './multi-shot-video-seedance-path'
+import { runMultiShotArkComposite, shouldUseArkComposite } from './multi-shot-video-ark-path'
 import { runMultiShotAtlasCloudComposite, shouldUseAtlasCloudComposite } from './multi-shot-video-atlascloud-path'
 import { runMultiShotFalComposite, shouldUseFalComposite } from './multi-shot-video-fal-path'
 import {
@@ -173,6 +174,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   const useBPath = shouldUseTencentBPath(videoModel)
   const useSeedanceComposite = shouldUseSeedanceComposite(videoModel)
+  const useArkComposite = shouldUseArkComposite(videoModel)
   const useAtlasCloudComposite = shouldUseAtlasCloudComposite(videoModel)
   const useFalComposite = shouldUseFalComposite(videoModel)
 
@@ -215,7 +217,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     // AtlasCloud composite t2v + r2v also tolerate panels without imageUrl
     // (t2v ignores all images; r2v uses character / scene refs as fallback).
     // fal composite r2v also tolerates text-only panels for the same reason.
-    if (!useBPath && !useSeedanceComposite && !useAtlasCloudComposite && !useFalComposite && !panels[i]!.imageUrl) {
+    if (!useBPath && !useSeedanceComposite && !useArkComposite && !useAtlasCloudComposite && !useFalComposite && !panels[i]!.imageUrl) {
       throw new Error(`Panel ${panelIds[i]} has no imageUrl`)
     }
   }
@@ -245,6 +247,34 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       // 2026-05-18 — per-group curated visual style override mirrors the
       // b-path. Worker uses it to source negativePrompt (and, in due
       // course, style anchor) when overriding the project default.
+      ...(visualStyleId ? { visualStyleId } : {}),
+      ...(lightingPresetId ? { lightingPresetId } : {}),
+    })
+  }
+
+  // ─────────────── ARK COMPOSITE PATH ───────────────
+  // 2026-05-22 — Volcengine 火山方舟 直连 Seedance 2.0 / 2.0 Fast.
+  // Same Doubao Seedance 2.0 model as the BobAPI / taijiai route, same
+  // 4-15s window, same content[] multi-modal shape — but bypasses the
+  // taijiai 中转 (lower latency, no 302 redirect chain, account-billed
+  // via ARK directly). Reuses the seedance-path prompt + ref budget
+  // helpers; differences are limited to the wire layer. See
+  // multi-shot-video-ark-path.ts and Volcengine docs at
+  // https://www.volcengine.com/docs/82379/1520757.
+  if (useArkComposite) {
+    await reportTaskProgress(job, 15, { stage: 'ark_composite_start' })
+    return await runMultiShotArkComposite({
+      job,
+      projectId,
+      validPanels,
+      videoModel,
+      sound,
+      aspectRatio,
+      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
+      ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
+      ...(rawPrompt ? { rawPrompt } : {}),
+      ...(panelDurations ? { panelDurations } : {}),
+      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
       ...(visualStyleId ? { visualStyleId } : {}),
       ...(lightingPresetId ? { lightingPresetId } : {}),
     })
