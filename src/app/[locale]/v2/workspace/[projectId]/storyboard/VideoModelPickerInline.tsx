@@ -158,6 +158,39 @@ export function VideoModelPickerInline({
         ))}
       </select>
 
+      {/* 2026-05-22 — resolution picker. Placed adjacent to the model
+          dropdown (user-requested layout) so the visual link between
+          "this model" and "at this resolution" reads at a glance.
+          Only shown for ARK 2.0 routes (taijiai / atlascloud / fal
+          bake resolution into the model id; showing the picker there
+          would be misleading). 1080p disabled on Fast variant per
+          Volcengine docs. */}
+      {modelSupportsResolutionChoice(currentVideoModel) ? (
+        <label
+          className="flex items-center gap-1.5 whitespace-nowrap"
+          title="輸出視頻解析度 — 480p 最省, 720p 預設, 1080p 大約是 720p 的 2.25× token 成本"
+        >
+          <span className="shrink-0">解析度</span>
+          <select
+            value={videoResolution ?? '720p'}
+            onChange={(e) => {
+              const next = e.target.value
+              if (next === '480p' || next === '720p' || next === '1080p') {
+                updateConfig.mutate({ key: 'videoResolution', value: next })
+              }
+            }}
+            disabled={updateConfig.isPending}
+            className="rounded-sm border border-stone-800 bg-stone-900/40 px-1.5 py-0.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+          >
+            <option value="480p">480p · 草稿</option>
+            <option value="720p">720p · 默認</option>
+            <option value="1080p" disabled={!modelSupports1080p(currentVideoModel)}>
+              1080p{modelSupports1080p(currentVideoModel) ? ' · 高畫質 ¥¥' : ' (Fast 不支援)'}
+            </option>
+          </select>
+        </label>
+      ) : null}
+
       {/* Capability badges — only render when we know what variant the
           user is on. Falls silent on unknown ids (legacy DB values). */}
       {currentVariant && (
@@ -209,36 +242,6 @@ export function VideoModelPickerInline({
           <option value={180}>3 分鐘</option>
         </select>
       </label>
-
-      {/* 2026-05-22 — resolution picker. Only shown for ARK 2.0 routes
-          (taijiai / atlascloud / fal bake resolution into the model id;
-          showing the picker there would be misleading). 1080p disabled
-          on Fast variant per Volcengine docs. */}
-      {modelSupportsResolutionChoice(currentVideoModel) ? (
-        <label
-          className="flex items-center gap-1.5 whitespace-nowrap"
-          title="輸出視頻解析度 — 480p 最省, 720p 預設, 1080p 大約是 720p 的 2.25× token 成本"
-        >
-          <span className="shrink-0">解析度</span>
-          <select
-            value={videoResolution ?? '720p'}
-            onChange={(e) => {
-              const next = e.target.value
-              if (next === '480p' || next === '720p' || next === '1080p') {
-                updateConfig.mutate({ key: 'videoResolution', value: next })
-              }
-            }}
-            disabled={updateConfig.isPending}
-            className="rounded-sm border border-stone-800 bg-stone-900/40 px-1.5 py-0.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
-          >
-            <option value="480p">480p · 草稿</option>
-            <option value="720p">720p · 默認</option>
-            <option value="1080p" disabled={!modelSupports1080p(currentVideoModel)}>
-              1080p{modelSupports1080p(currentVideoModel) ? ' · 高畫質 ¥¥' : ' (Fast 不支援)'}
-            </option>
-          </select>
-        </label>
-      ) : null}
 
       <span className="ml-auto shrink-0">比例 {videoRatio}</span>
 
