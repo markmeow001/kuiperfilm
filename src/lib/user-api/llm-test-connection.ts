@@ -13,6 +13,7 @@ type SupportedProvider =
   | 'taijiai'
   | 'fal'
   | 'atlascloud'
+  | 'ark'
 
 type TestConnectionPayload = {
   provider?: string
@@ -49,10 +50,14 @@ function normalizeProvider(payload: TestConnectionPayload): SupportedProvider {
     case 'taijiai':
     case 'fal':
     case 'atlascloud':
+    case 'ark':
+    case 'volcengine':
       // VOD / Hunyuan share the same Tencent credential format; normalise
       // the legacy 'vod' / 'tencent' keys onto 'tencent-vod' so the rest
       // of the switch only deals with two canonical names.
       if (provider === 'vod' || provider === 'tencent') return 'tencent-vod'
+      // 'volcengine' is a common synonym for 'ark' on the docs side.
+      if (provider === 'volcengine') return 'ark'
       return provider
     default:
       throw new ApiError('INVALID_PARAMS', { message: `不支持的渠道: ${provider}` })
@@ -170,6 +175,10 @@ export async function testLlmConnection(payload: TestConnectionPayload): Promise
       await testTaijiai(apiKey)
       return { provider, message: 'BobAPI (taijiai) 凭证有效' }
     }
+    case 'ark': {
+      await testArk(apiKey)
+      return { provider, message: 'Volcengine ARK (火山方舟) 凭证有效' }
+    }
     case 'fal': {
       await testFal(apiKey)
       return { provider, message: 'fal.ai 凭证有效' }
@@ -220,6 +229,36 @@ async function testFal(apiKey: string): Promise<void> {
   // 404 / 200 / 422 = auth accepted by the queue host. We do not need
   // to assert the body shape; the only signal we care about is "did fal
   // recognise the key".
+}
+
+// 2026-05-22 — ARK (Volcengine 火山方舟) connectivity probe.
+// Free auth check: POST to /api/v3/contents/generations/tasks with an
+// empty body. ARK returns:
+//   401/403 → key bad
+//   400 MissingParameter (model required) → key OK, endpoint reachable
+//   5xx → service blip
+// Confirms both Bearer auth and 中国大陆 ARK endpoint reachability without
+// burning any 火山 token budget.
+async function testArk(apiKey: string): Promise<void> {
+  const response = await fetch(
+    'https://ark.cn-beijing.volces.com/api/v3/contents/generations/tasks',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({}),
+    },
+  )
+  if (response.status === 401 || response.status === 403) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`ARK_AUTH_FAILED: ${text || 'Invalid API key'}`)
+  }
+  if (response.status >= 500) {
+    throw new Error(`ARK_SERVICE_ERROR: ${response.status}`)
+  }
+  // 400 / 422 / any 2xx → auth passed.
 }
 
 async function testTaijiai(apiKey: string): Promise<void> {

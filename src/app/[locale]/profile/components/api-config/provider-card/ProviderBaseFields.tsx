@@ -6,7 +6,7 @@ import type { UseProviderCardStateResult } from './hooks/useProviderCardState'
 import { AppIcon } from '@/components/ui/icons'
 import { ProviderTencentVODFields } from './ProviderTencentVODFields'
 
-type TestConnectionApiProvider = 'openrouter' | 'google' | 'anthropic' | 'openai' | 'custom' | 'taijiai' | 'fal' | 'atlascloud'
+type TestConnectionApiProvider = 'openrouter' | 'google' | 'anthropic' | 'openai' | 'custom' | 'taijiai' | 'fal' | 'atlascloud' | 'ark'
 
 // Map the UI's internal providerKey to the /test-connection endpoint's
 // supported set. Anything not in the explicit list falls back to 'custom'
@@ -16,9 +16,9 @@ type TestConnectionApiProvider = 'openrouter' | 'google' | 'anthropic' | 'openai
 // pings /v1/videos/<probe>, not /v1/models) must be enumerated here.
 // Falling through to 'custom' calls models.list which can succeed even
 // when the token lacks permissions for the actual feature endpoint —
-// false-positive "connected" indicator. fal / atlascloud have no
-// /v1/models endpoint at all, so the fallthrough produces the
-// misleading "自定义渠道需要提供 baseUrl" error instead of testing
+// false-positive "connected" indicator. fal / atlascloud / ark have no
+// /v1/models endpoint we use (or any at all), so the fallthrough produces
+// the misleading "自定义渠道需要提供 baseUrl" error instead of testing
 // the real key.
 function mapToTestProvider(providerKey: string): TestConnectionApiProvider {
   switch (providerKey) {
@@ -29,6 +29,7 @@ function mapToTestProvider(providerKey: string): TestConnectionApiProvider {
     case 'taijiai': return 'taijiai'
     case 'fal': return 'fal'
     case 'atlascloud': return 'atlascloud'
+    case 'ark': return 'ark'
     default: return 'custom'
   }
 }
