@@ -11,12 +11,15 @@
  */
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { useProjectCharacters, useProjectLocations } from '@/lib/query/hooks/useProjectAssets'
 import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { V2_STEPS, type V2StepId } from '@/components/v2/v2-types'
 import { V2ProjectSettingsPanel } from './V2ProjectSettingsPanel'
+import { ProjectCollaboratorsModal } from './ProjectCollaboratorsModal'
 
 interface V2HomeClientProps {
   projectId: string
@@ -32,6 +35,9 @@ interface ProjectShape {
   name?: string | null
   createdAt?: string | null
   novelPromotionData?: NovelData | null
+  // Phase 12.5 — workspace assignment + optional eager-loaded workspace data
+  workspaceId?: string | null
+  workspace?: { id: string; name: string | null } | null
 }
 
 interface PanelLike {
@@ -42,6 +48,12 @@ interface PanelLike {
 
 export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
   const projectQuery = useProjectData(projectId)
+  // Phase 12.5 — show 協作者 management button only to owner / admin.
+  // Other roles (ws_owner / editor / viewer) can see the project but
+  // can't reshape its grant tree.
+  const { role: accessRole } = useProjectAccess(projectId)
+  const canManageCollaborators = accessRole === 'owner' || accessRole === 'admin'
+  const [collabModalOpen, setCollabModalOpen] = useState(false)
   const charsQuery = useProjectCharacters(projectId)
   const locsQuery = useProjectLocations(projectId)
   const project = projectQuery.data as ProjectShape | undefined
@@ -83,9 +95,19 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
         <h2 className="font-serif-cn text-3xl font-medium tracking-wide text-stone-100">
           《{projectName}》
         </h2>
-        <p className="mt-2 font-mono text-[11px] tracking-wider text-stone-500">
-          PROJECT_ID · {projectId}
-        </p>
+        <div className="mt-2 flex items-center gap-3 font-mono text-[11px] tracking-wider text-stone-500">
+          <span>PROJECT_ID · {projectId}</span>
+          {canManageCollaborators ? (
+            <button
+              type="button"
+              onClick={() => setCollabModalOpen(true)}
+              className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/15"
+              title="管理此專案的協作者 (per-project grant)"
+            >
+              👥 協作者
+            </button>
+          ) : null}
+        </div>
 
         <div className="mt-10 grid grid-cols-2 gap-3 lg:grid-cols-3">
           {V2_STEPS.filter((s) => s.id !== 'home').map((step) => {
@@ -145,6 +167,15 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
           </dl>
         </div>
       </div>
+
+      {collabModalOpen ? (
+        <ProjectCollaboratorsModal
+          projectId={projectId}
+          workspaceId={project?.workspaceId ?? null}
+          workspaceName={project?.workspace?.name ?? null}
+          onClose={() => setCollabModalOpen(false)}
+        />
+      ) : null}
     </div>
   )
 }
