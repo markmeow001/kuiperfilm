@@ -25,6 +25,7 @@ import { logInfo as _ulogInfo } from '@/lib/logging/core'
 import { logProjectAction } from '@/lib/logging/semantic'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { recordAudit } from '@/lib/audit-log'
 
 const RESTORE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -112,6 +113,18 @@ export const POST = apiHandler(async (
       restoredByRole: isAdmin ? 'admin' : 'owner',
     }
   )
+
+  await recordAudit(prisma, {
+    userId: session.user.id,
+    projectId,
+    action: 'project.restore',
+    entityType: 'Project',
+    entityId: projectId,
+    snapshot: {
+      previousDeletedAt: project.deletedAt.toISOString(),
+      previousDeletedBy: project.deletedBy,
+    },
+  })
 
   _ulogInfo(`[RESTORE] 项目已恢复: ${project.name} (${projectId}) by ${session.user.id}`)
 

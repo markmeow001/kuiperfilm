@@ -31,6 +31,7 @@ import {
   roleAtLeast,
 } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { recordAudit } from '@/lib/audit-log'
 
 const PUBLIC_USER_SELECT = {
   id: true,
@@ -138,6 +139,12 @@ export const POST = apiHandler(async (
     })
   }
 
+  // Track whether this was an add or a role-change so the audit row
+  // distinguishes the two flows. Cheap pre-check via the unique key.
+  const existing = await prisma.projectCollaborator.findUnique({
+    where: { projectId_userId: { projectId, userId: targetUserId } },
+    select: { role: true },
+  })
   const collab = await prisma.projectCollaborator.upsert({
     where: { projectId_userId: { projectId, userId: targetUserId } },
     create: {
@@ -151,6 +158,16 @@ export const POST = apiHandler(async (
       user: { select: PUBLIC_USER_SELECT },
       granter: { select: PUBLIC_USER_SELECT },
     },
+  })
+  await recordAudit(prisma, {
+    userId: session.user.id,
+    projectId,
+    action: existing
+      ? (existing.role === role ? 'collaborator.add' : 'collaborator.role_change')
+      : 'collaborator.add',
+    entityType: 'ProjectCollaborator',
+    entityId: targetUserId,
+    snapshot: existing ? { previousRole: existing.role, newRole: role } : { newRole: role },
   })
 
   return NextResponse.json({

@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { recordAudit } from '@/lib/audit-log'
 
 export const PATCH = apiHandler(async (
   request: NextRequest,
@@ -54,6 +55,14 @@ export const PATCH = apiHandler(async (
     where: { workspaceId_userId: { workspaceId, userId } },
     data: { role },
   })
+  await recordAudit(prisma, {
+    userId: session.user.id,
+    projectId: null,
+    action: 'workspace_member.role_change',
+    entityType: 'WorkspaceMember',
+    entityId: `${workspaceId}:${userId}`,
+    snapshot: { workspaceId, targetUserId: userId, previousRole: member.role, newRole: role },
+  })
 
   return NextResponse.json({
     success: true,
@@ -97,6 +106,14 @@ export const DELETE = apiHandler(async (
 
   await prisma.workspaceMember.delete({
     where: { workspaceId_userId: { workspaceId, userId } },
+  })
+  await recordAudit(prisma, {
+    userId: session.user.id,
+    projectId: null,
+    action: 'workspace_member.remove',
+    entityType: 'WorkspaceMember',
+    entityId: `${workspaceId}:${userId}`,
+    snapshot: { workspaceId, removedUserId: userId, lastRole: member.role },
   })
   return NextResponse.json({ success: true })
 })

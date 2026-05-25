@@ -621,6 +621,49 @@ Scenario 4: Workspace switching
 
 ---
 
+## 9.5 Day 3 architectural decisions (locked 2026-05-24, no AskUserQuestion gate)
+
+Reviewed via `/plan-eng-review` before implementation. Calls below are documented here so future readers know *why*.
+
+### Risk ranking
+| Sub-step | Risk | Reason |
+|---|---|---|
+| 3.3 Audit log | **HIGH** | Prisma `$use` deprecated; `$extends` has recursion + transaction-semantics footguns; pre-mutation snapshot doubles read load on Panel writes |
+| 3.4 WS switcher | MED | URL state must be in every React Query cache key or stale data on switch |
+| 3.1 EditRequest | LOW | Plain CRUD + count query against existing composite indexes |
+| 3.2 Notification | LOW | 10-20 internal users → polling 30s, no realtime infra |
+
+### Decisions
+
+1. **Rate limit storage = DB count query** (not Redis / in-memory). Cheap with existing `@@index([requesterId])`, survives restart, no new dep. Logic: `count(status='pending', requesterId=X) < 5` AND `count(status='pending', requesterId=X, projectId=Y) < 3`.
+
+2. **Notification delivery = polling every 30s** via single combined endpoint `GET /api/notifications/summary` (returns `{ incomingRequests, myRequests, adminDeletions }`). One poll instead of three. No SSE/WebSocket — Caddy reverse_proxy + BullMQ worker push complexity not worth it at 10-20 users.
+
+3. **Audit log scope NARROW in v1** — only Project / ProjectCollaborator / EditRequest / WorkspaceMember mutations. **Explicitly skip Panel + Character** (worker writes hundreds per run → noise + DB cost). Implementation gated by `AUDIT_LOG_ENABLED=true` env flag so we can disable in prod if it misbehaves. Panel-level audit can come later in Phase 2 if user signals demand.
+
+4. **Audit log = explicit `recordAudit()` helper, NO `$extends` extension.** Per CLAUDE.md §3 ("不打補丁. 不隱式回退."), Prisma client extensions are implicit magic that's hard to trace at the call site. Instead, every mutation that needs an audit row calls `recordAudit(client, { userId, projectId, action, entityType, entityId, snapshot? })` explicitly. Total ~12 call sites across our narrow model scope (Project / ProjectCollaborator / EditRequest / WorkspaceMember). For multi-statement transactions (e.g. EditRequest approve), `recordAudit` accepts a `tx` client so the audit row commits/rolls back with the parent. For single-statement mutations, it writes via the global `prisma` client. The helper wraps inserts in try/catch + warns on failure so a broken audit can never block the user mutation. Gated by `AUDIT_LOG_ENABLED=true` env.
+
+5. **Workspace switcher URL state = `?ws=<id>` (absent = personal)**. Don't introduce `?ws=personal` literal — keep null-sentinel semantics. React Query cache key includes ws so switching forces refetch.
+
+### Edge cases added beyond spec
+
+- **EditRequest POST**: reject 409 if requester already has access (any tier via `requireProjectAccess`); reject 400 if requester is project owner; **idempotent** — if pending request already exists for same (requester, project), return existing row not duplicate.
+- **EditRequest GET incoming**: filter `status='pending' AND createdAt > now - 7 days` (defense in depth before Day 4 cron expires them).
+- **EditRequest PATCH approve**: idempotent — if already resolved, return current state with `alreadyResolved: true`.
+- **Audit log GET**: cursor pagination required (project with many entries → thousands).
+
+### Effort sanity check
+- 3.1 API: ~1.5h
+- 3.2 Notification + modal: ~3h
+- 3.3 Audit (narrow scope): ~1.5h
+- 3.4 Workspace switcher: ~1.5h
+- Activity log tab UI: ~1h
+- Total ~8.5h — matches Section 8 estimate.
+
+**Highest-blow-up risk: 3.3 audit log.** Build it last, behind feature flag. If it's making prod weird, flip the env off and ship the rest.
+
+---
+
 ## 10. Known unresolved risks (acknowledged)
 
 1. **No version history**: editor overwriting editor's work is silent. Audit log says who, but doesn't restore content. Acceptable for v1, but flag in user-facing docs.

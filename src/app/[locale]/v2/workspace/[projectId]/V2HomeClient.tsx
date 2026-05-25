@@ -20,6 +20,7 @@ import { useStoryboards } from '@/lib/query/hooks/useStoryboards'
 import { V2_STEPS, type V2StepId } from '@/components/v2/v2-types'
 import { V2ProjectSettingsPanel } from './V2ProjectSettingsPanel'
 import { ProjectCollaboratorsModal } from './ProjectCollaboratorsModal'
+import { ProjectAuditLogModal } from './ProjectAuditLogModal'
 
 interface V2HomeClientProps {
   projectId: string
@@ -54,6 +55,7 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
   const { role: accessRole } = useProjectAccess(projectId)
   const canManageCollaborators = accessRole === 'owner' || accessRole === 'admin'
   const [collabModalOpen, setCollabModalOpen] = useState(false)
+  const [auditModalOpen, setAuditModalOpen] = useState(false)
   const charsQuery = useProjectCharacters(projectId)
   const locsQuery = useProjectLocations(projectId)
   const project = projectQuery.data as ProjectShape | undefined
@@ -107,6 +109,15 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
               👥 協作者
             </button>
           ) : null}
+          {/* Activity log — any read access can open. Transparency by design. */}
+          <button
+            type="button"
+            onClick={() => setAuditModalOpen(true)}
+            className="rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-0.5 font-mono text-[11px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-300"
+            title="查看活動記錄"
+          >
+            📜 活動
+          </button>
         </div>
 
         <div className="mt-10 grid grid-cols-2 gap-3 lg:grid-cols-3">
@@ -174,6 +185,13 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
           workspaceId={project?.workspaceId ?? null}
           workspaceName={project?.workspace?.name ?? null}
           onClose={() => setCollabModalOpen(false)}
+        />
+      ) : null}
+
+      {auditModalOpen ? (
+        <ProjectAuditLogModal
+          projectId={projectId}
+          onClose={() => setAuditModalOpen(false)}
         />
       ) : null}
     </div>

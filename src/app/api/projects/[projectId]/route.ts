@@ -6,6 +6,7 @@ import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
 import { logProjectAction } from '@/lib/logging/semantic'
 import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { recordAudit } from '@/lib/audit-log'
 
 // Public-safe User projection — never leak password/email/lastLoginAt to
 // clients. Default `include: { user: true }` would dump the full row.
@@ -277,6 +278,17 @@ export const DELETE = apiHandler(async (
   )
 
   _ulogInfo(`[SOFT-DELETE] 项目已软删除: ${project.name} (${projectId}) by ${session.user.id}`)
+
+  // Audit row. Snapshot captures the name + owner so admin restore /
+  // post-mortem can identify the project even if it stays soft-deleted.
+  await recordAudit(prisma, {
+    userId: session.user.id,
+    projectId,
+    action: 'project.soft_delete',
+    entityType: 'Project',
+    entityId: projectId,
+    snapshot: { name: project.name, ownerId: project.userId, effectiveRole: access.effectiveRole },
+  })
 
   // 30 天恢復窗口 (per spec §3.2 grace period)
   const restorableUntil = new Date(deletedAt.getTime() + 30 * 24 * 60 * 60 * 1000)

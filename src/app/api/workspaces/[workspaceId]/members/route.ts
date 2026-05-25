@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { recordAudit } from '@/lib/audit-log'
 
 async function loadWorkspaceWithRole(workspaceId: string, userId: string) {
   const [ws, requester] = await Promise.all([
@@ -121,6 +122,16 @@ export const POST = apiHandler(async (
     include: {
       user: { select: { id: true, name: true, displayName: true, role: true } },
     },
+  })
+  // workspaceId in audit goes to projectId=null since this is a
+  // workspace-level (not project-level) action.
+  await recordAudit(prisma, {
+    userId: session.user.id,
+    projectId: null,
+    action: 'workspace_member.add',
+    entityType: 'WorkspaceMember',
+    entityId: `${workspaceId}:${userId}`,
+    snapshot: { workspaceId, addedUserId: userId },
   })
   return NextResponse.json({
     member: {

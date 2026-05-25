@@ -15,6 +15,7 @@ import {
   roleAtLeast,
 } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { recordAudit } from '@/lib/audit-log'
 
 export const DELETE = apiHandler(async (
   _request: NextRequest,
@@ -48,6 +49,13 @@ export const DELETE = apiHandler(async (
   try {
     await prisma.projectCollaborator.delete({
       where: { projectId_userId: { projectId, userId: targetUserId } },
+    })
+    await recordAudit(prisma, {
+      userId: session.user.id,
+      projectId,
+      action: 'collaborator.remove',
+      entityType: 'ProjectCollaborator',
+      entityId: targetUserId,
     })
     return NextResponse.json({ success: true, revoked: true })
   } catch (err) {
