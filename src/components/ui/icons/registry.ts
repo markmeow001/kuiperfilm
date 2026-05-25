@@ -5,6 +5,7 @@ import {
   AudioLines,
   BadgeCheck,
   BarChart3,
+  Bell,
   BookOpen,
   Bookmark,
   Box,
@@ -186,6 +187,7 @@ export const iconRegistry = {
   cpu: Cpu,
   film: Film,
   folderOpen: FolderOpen,
+  bell: Bell,
 } as const satisfies Record<string, LucideIcon>
 
 export type AppIconName = keyof typeof iconRegistry

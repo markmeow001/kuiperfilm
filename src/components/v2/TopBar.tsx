@@ -22,6 +22,8 @@ import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess, type ProjectAccessRole } from '@/lib/query/hooks/useProjectAccess'
 import { AppIcon } from '@/components/ui/icons'
 import { UserMenu } from './UserMenu'
+import { NotificationBell } from './NotificationBell'
+import { RequestEditAccessModal } from './RequestEditAccessModal'
 import { findV2Step, V2_STEPS, v2StepIndex, type V2StepId } from './v2-types'
 
 interface TopBarProps {
@@ -80,7 +82,12 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
               Only renders when projectId is supplied (i.e. inside a
               project, not on /v2 home). Tells the user at a glance
               whether they own / admin / edit / view this project. */}
-          {projectId ? <RoleBadge projectId={projectId} /> : null}
+          {projectId ? (
+            <RoleBadgeWithRequest projectId={projectId} projectName={resolvedName} />
+          ) : null}
+          {/* Phase 12.5 — notification bell. Mounted on every page so
+              owners get incoming requests anywhere they navigate. */}
+          <NotificationBell locale={locale} />
           <UserMenu />
         </div>
       </div>
@@ -271,6 +278,60 @@ function RoleBadge({ projectId }: { projectId: string }) {
     >
       {label}
     </span>
+  )
+}
+
+/**
+ * Phase 12.5 — role badge + viewer's "請求編輯權限" CTA in one cluster.
+ *
+ * Why combined: putting the request button next to the role pill is the
+ * most discoverable place for viewers. Inline-tooltip on every disabled
+ * edit button (the original spec) would be more contextual but requires
+ * threading state through every page — and viewers can find this once,
+ * remember it, click it from anywhere.
+ *
+ * Re-fetches access on modal close so a freshly-approved request flips
+ * the page to editable without a manual reload.
+ */
+function RoleBadgeWithRequest({
+  projectId,
+  projectName,
+}: {
+  projectId: string
+  projectName: string
+}) {
+  const access = useProjectAccess(projectId)
+  const [requestOpen, setRequestOpen] = useState(false)
+
+  if (access.isLoading || !access.allowed || !access.role) return null
+
+  const isViewer = access.role === 'viewer'
+
+  return (
+    <>
+      <RoleBadge projectId={projectId} />
+      {isViewer ? (
+        <button
+          type="button"
+          onClick={() => setRequestOpen(true)}
+          className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/15"
+          title="點此向擁有者請求編輯權限"
+        >
+          請求編輯
+        </button>
+      ) : null}
+      {requestOpen ? (
+        <RequestEditAccessModal
+          projectId={projectId}
+          projectName={projectName}
+          onClose={() => {
+            setRequestOpen(false)
+            // If user just got approved, refetch so UI flips editable.
+            access.refetch()
+          }}
+        />
+      ) : null}
+    </>
   )
 }
 

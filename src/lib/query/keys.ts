@@ -91,6 +91,13 @@ export const queryKeys = {
      */
     episodeData: (projectId: string, episodeId: string) =>
         ['episode-data', projectId, episodeId] as const,
+
+    // ============ Phase 12.5 通知中心 ============
+    notifications: {
+        // Combined poll for bell badge: incoming requests + my requests
+        // + admin deletions. Single endpoint to avoid 3 separate polls.
+        summary: () => ['notifications', 'summary'] as const,
+    },
 } as const
 
 /**
