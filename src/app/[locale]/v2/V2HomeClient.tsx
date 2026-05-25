@@ -14,6 +14,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
 import { NotificationBell } from '@/components/v2/NotificationBell'
+import { WorkspaceCollabIntroBanner } from './WorkspaceCollabIntroBanner'
 
 const STICKY_STEP_VALUES = ['script', 'subjects', 'storyboard', 'voice', 'final'] as const
 type CarryStep = (typeof STICKY_STEP_VALUES)[number]
@@ -233,6 +234,11 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
       </header>
 
       <main className="px-12 py-10">
+        {/* Phase 12.5 — one-shot intro banner. Dismissible, persists
+            via cookie for 1 year. Renders above title so it's the
+            first thing returning users see (then never again). */}
+        <WorkspaceCollabIntroBanner />
+
         {/* Title row */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
