@@ -17,13 +17,55 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const page = parseInt(searchParams.get('page') || '1', 10)
   const pageSize = parseInt(searchParams.get('pageSize') || '12', 10)
   const search = searchParams.get('search') || ''
+  // Phase 12.5 (2026-05-24) — `?ws=<workspaceId>` filter.
+  // Empty / absent => personal (caller's own projects, status quo).
+  // Set       => projects in that workspace where caller is a WorkspaceMember
+  //              (or owner / admin — they bypass member check).
+  // Gate against enumeration: caller MUST be a member of the requested
+  // workspace, otherwise return empty list (don't throw 403, just no rows).
+  const wsParam = (searchParams.get('ws') || '').trim()
 
   // 构建查询条件
   // Phase 12.5 (2026-05-22) — exclude soft-deleted (deletedAt IS NULL).
   // Soft-deleted projects show up in admin restore queue, not user lists.
   const where: Record<string, unknown> = {
-    userId: session.user.id,
     deletedAt: null,
+  }
+
+  if (wsParam) {
+    // Workspace mode: caller must be a member (owner or member row),
+    // otherwise return empty list. Admin bypasses for support purposes.
+    const [requester, workspace] = await Promise.all([
+      prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } }),
+      prisma.workspace.findUnique({
+        where: { id: wsParam },
+        select: { id: true, ownerEditorId: true },
+      }),
+    ])
+    const isAdmin = requester?.role === 'admin'
+    const isWsOwner = workspace?.ownerEditorId === session.user.id
+    if (!workspace) {
+      return NextResponse.json({
+        projects: [],
+        pagination: { page: 1, pageSize, total: 0, totalPages: 0 },
+      })
+    }
+    if (!isAdmin && !isWsOwner) {
+      const membership = await prisma.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId: wsParam, userId: session.user.id } },
+        select: { workspaceId: true },
+      })
+      if (!membership) {
+        return NextResponse.json({
+          projects: [],
+          pagination: { page: 1, pageSize, total: 0, totalPages: 0 },
+        })
+      }
+    }
+    where.workspaceId = wsParam
+  } else {
+    // Personal mode: caller's own projects only (status quo, pre-12.5).
+    where.userId = session.user.id
   }
 
   // 如果有搜索关键词，搜索名称和描述

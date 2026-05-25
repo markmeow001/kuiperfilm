@@ -8,11 +8,12 @@
  * so users never see the Phase-11 frosted-blue dashboard.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
+import { NotificationBell } from '@/components/v2/NotificationBell'
 
 const STICKY_STEP_VALUES = ['script', 'subjects', 'storyboard', 'voice', 'final'] as const
 type CarryStep = (typeof STICKY_STEP_VALUES)[number]
@@ -58,6 +59,10 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
   // newly chosen project. Only carry valid step ids; "home" never needs
   // a ?startAt= (home is the natural redirect target).
   const carryStep = isCarryStep(carryStepRaw) ? carryStepRaw : null
+  // Phase 12.5 (2026-05-24) — workspace scope.
+  // Absent => "個人" (caller's own projects).
+  // `?ws=<id>` => projects in that workspace (gated server-side).
+  const wsParam = searchParams?.get('ws') ?? null
   const { data: session, status } = useSession()
   // Role gate — admin sees 設定中心 + 管理後台, members see only the
   // logout button. Mirrors the Navbar contract.
@@ -79,7 +84,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
   }, [session, status, router, locale])
 
   const fetchProjects = useCallback(
-    async (page: number, search: string) => {
+    async (page: number, search: string, ws: string | null) => {
       try {
         setLoading(true)
         const params = new URLSearchParams({
@@ -87,6 +92,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
           pageSize: String(PAGE_SIZE),
         })
         if (search.trim()) params.set('search', search.trim())
+        if (ws) params.set('ws', ws)
         const res = await fetch(`/api/projects?${params}`)
         if (!res.ok) return
         const data = (await res.json()) as { projects: ProjectRow[]; pagination: Pagination }
@@ -100,8 +106,15 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
   )
 
   useEffect(() => {
-    if (session) void fetchProjects(pagination.page, searchQuery)
-  }, [session, pagination.page, searchQuery, fetchProjects])
+    if (session) void fetchProjects(pagination.page, searchQuery, wsParam)
+    // Reset to page 1 when ws changes — separate concern from fetch.
+  }, [session, pagination.page, searchQuery, wsParam, fetchProjects])
+
+  // When workspace switches, always start at page 1 (otherwise we'd ask
+  // for page 5 of a workspace that only has 1 page of projects).
+  useEffect(() => {
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }))
+  }, [wsParam])
 
   function handleSearch() {
     setSearchQuery(searchInput)
@@ -126,7 +139,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
         alert('刪除失敗')
         return
       }
-      void fetchProjects(pagination.page, searchQuery)
+      void fetchProjects(pagination.page, searchQuery, wsParam)
     } finally {
       setDeletingId(null)
     }
@@ -164,6 +177,12 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
             </div>
           </div>
           <div className="flex items-center gap-3 font-mono text-[11px] tracking-wider">
+            {/* Phase 12.5 — workspace switcher. URL-driven (?ws=). Mounted
+                only on this page per spec §6.1 — project pages are
+                inherently scoped to their project's workspace. */}
+            <WorkspaceSwitcher activeWs={wsParam} locale={locale} />
+            {/* Phase 12.5 — bell. Same component as project pages. */}
+            <NotificationBell locale={locale} />
             <span className="text-stone-200">{session.user?.name ?? session.user?.email ?? ''}</span>
             {/* 團隊 / Workspaces — visible to every signed-in role. The
                 target page (/[locale]/workspaces) hides creation /
@@ -370,6 +389,177 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
           </div>
         ) : null}
       </main>
+    </div>
+  )
+}
+
+/**
+ * Phase 12.5 — URL-driven workspace switcher.
+ *
+ * State = `?ws=<workspaceId>` (absent = personal). React Query keys
+ * include the ws value so the project list automatically refetches on
+ * switch. router.replace keeps history clean (no back-button hell when
+ * users flip workspaces several times in a row).
+ *
+ * Lazy-loads workspace list on first open. Personal mode is always
+ * available as the top option.
+ */
+interface WorkspaceListItem {
+  id: string
+  name: string
+  organizationName?: string | null
+  projectCount?: number
+}
+
+function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; locale: string }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [items, setItems] = useState<WorkspaceListItem[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  useEffect(() => {
+    if (!open || items !== null) return
+    let cancelled = false
+    setLoading(true)
+    // /api/workspaces returns either
+    //   { workspaces: [...] }                               (admin)
+    //   { workspaces: [...], workspaceMemberships: [...] }  (member)
+    // Workspaces include { organization: { name } } and _count.members
+    // — flatten into the switcher item shape.
+    interface RawWs {
+      id: string
+      name: string
+      organization?: { name?: string | null } | null
+      _count?: { members?: number; projects?: number } | null
+    }
+    fetch('/api/workspaces', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: { workspaces?: RawWs[]; workspaceMemberships?: RawWs[] }) => {
+        if (cancelled) return
+        const owned = data.workspaces ?? []
+        const member = data.workspaceMemberships ?? []
+        // De-dupe by id (admin payload only has `workspaces`; member
+        // payload puts owned + member in two separate keys, and shouldn't
+        // overlap by design — but defensive dedupe is cheap).
+        const seen = new Set<string>()
+        const merged: WorkspaceListItem[] = []
+        for (const w of [...owned, ...member]) {
+          if (seen.has(w.id)) continue
+          seen.add(w.id)
+          merged.push({
+            id: w.id,
+            name: w.name,
+            organizationName: w.organization?.name ?? null,
+            projectCount: w._count?.projects ?? 0,
+          })
+        }
+        setItems(merged)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setItems([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, items])
+
+  const activeItem = items?.find((w) => w.id === activeWs) ?? null
+  const buttonLabel = activeWs ? (activeItem?.name ?? '工作區') : '個人專案'
+
+  function switchTo(wsId: string | null) {
+    const params = new URLSearchParams()
+    if (wsId) params.set('ws', wsId)
+    const qs = params.toString()
+    router.replace(qs ? `?${qs}` : window.location.pathname)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+        title="切換工作區"
+      >
+        <AppIcon name="folder" className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{buttonLabel}</span>
+        <AppIcon
+          name="chevronDown"
+          className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open ? (
+        <div className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
+          <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
+            切換工作區
+          </div>
+          <div className="max-h-72 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => switchTo(null)}
+              className={`block w-full px-4 py-2 text-left font-serif-cn text-sm transition-colors hover:bg-amber-500/10 hover:text-amber-300 ${
+                activeWs === null ? 'text-amber-300' : 'text-stone-300'
+              }`}
+            >
+              個人專案 {activeWs === null ? '✓' : ''}
+            </button>
+            <div className="my-1 border-t border-stone-800" />
+            {loading ? (
+              <div className="px-4 py-3 font-mono text-[14px] text-stone-500">載入中…</div>
+            ) : items && items.length > 0 ? (
+              items.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => switchTo(w.id)}
+                  className={`block w-full px-4 py-2 text-left font-serif-cn text-sm transition-colors hover:bg-amber-500/10 hover:text-amber-300 ${
+                    activeWs === w.id ? 'text-amber-300' : 'text-stone-300'
+                  }`}
+                >
+                  <div>
+                    {w.name} {activeWs === w.id ? '✓' : ''}
+                  </div>
+                  {w.organizationName ? (
+                    <div className="font-fraunces text-[11px] italic text-stone-500">
+                      {w.organizationName}
+                      {w.projectCount ? ` · ${w.projectCount} 個專案` : ''}
+                    </div>
+                  ) : null}
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-3 font-fraunces text-xs italic text-stone-500">
+                沒有可加入的工作區
+              </div>
+            )}
+          </div>
+          <div className="border-t border-amber-900/20">
+            <Link
+              href={`/${locale}/workspaces`}
+              className="block px-4 py-2 font-mono text-[11px] tracking-wider text-amber-500/70 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+              onClick={() => setOpen(false)}
+            >
+              管理工作區 →
+            </Link>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
