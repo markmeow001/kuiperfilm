@@ -624,6 +624,10 @@ model User {
   ownedWorkspaces       Workspace[]       @relation("WorkspaceOwner")
   workspaceMemberships  WorkspaceMember[] @relation("WorkspaceMembership")
   workspaceMembersAdded WorkspaceMember[] @relation("WorkspaceMemberAddedBy")
+  // Phase 5 (2026-05-25) — public API keys this user created. Soft-deleted
+  // keys (revokedAt) still reference back here so audit trails work even
+  // after the creator account is disabled.
+  apiKeysCreated        ApiKey[]          @relation("ApiKeyCreatedBy")
 
   // Sticky-step navigation: remembers per-user last step on each project
   userProjectStates UserProjectState[]
@@ -686,10 +690,94 @@ model Workspace {
   members      WorkspaceMember[]
   // Phase 12.5 — projects bound to this workspace (NULL projects = personal/legacy)
   projects     Project[]         @relation("WorkspaceProjects")
+  // Phase 5 (2026-05-25) — workspace-scoped API keys for public API access.
+  apiKeys      ApiKey[]
 
   @@index([organizationId])
   @@index([ownerEditorId])
   @@map("workspace")
+}
+
+// Phase 5 (2026-05-25) — Public API key for external automation (AI agents,
+// CLI, MCP, third-party integrations). Workspace-scoped per the design doc
+// — keys belong to a workspace, not a user. Workspace owner + admin can
+// create / revoke; members can view but not mutate. Mirrors GitHub PAT /
+// Stripe API key UX: full key shown ONCE at creation, after that only
+// keyPrefix + last 4 chars are queryable. Hash-based storage means a leak
+// from DB alone cannot recover the original token.
+//
+// Scope-based authorization (read / scripts.write / etc.) is enforced
+// per-endpoint via the public API middleware. revokedAt is a soft-delete
+// so historical usage logs stay readable for audit.
+model ApiKey {
+  id              String        @id @default(uuid())
+  workspaceId     String
+  name            String        @db.VarChar(64)
+  // First 12 chars of the key: `kfk_<8-char-random>`. Indexed so the
+  // middleware can look up the row in O(1) before doing the hash compare.
+  // Stored in plaintext because it's not a secret (it's used as a public
+  // identifier in dev console + logs + error messages).
+  keyPrefix       String        @unique @db.VarChar(16)
+  // SHA-256 hex of the full key (kfk_<prefix>_<secret>). 64 chars.
+  // Compared with timingSafeEqual at auth time.
+  keyHash         String        @db.VarChar(64)
+  // Last 4 chars of the full key, surfaced in UI as `kfk_xxxxxxxx…abcd`
+  // so the user can recognize which key is which without revealing the
+  // full token. Not a secret.
+  keyLast4        String        @db.VarChar(4)
+  // JSON array of scope strings. Validated against PUBLIC_API_SCOPES enum
+  // at create time; trusted at runtime (no re-validation per request).
+  // Example: ["read","scripts.write","videos.write"]
+  scopes          String        @db.Text
+  // Per-key sliding-window rate limit. Default 60 (matches PolyFilm).
+  // Enforced via Redis ZADD/ZCOUNT per `apiRate:{keyId}` key.
+  reqPerMinute    Int           @default(60)
+  // Optional cap on monthly call count (across all endpoints). null =
+  // unlimited. Checked against ApiKeyUsage.createdAt aggregation; if hit,
+  // 429 with code RATE_LIMIT_MONTHLY.
+  monthlyCredit   Int?
+  expiresAt       DateTime?
+  // Updated lazily on each successful auth — eventual-consistent within
+  // ~60s (we don't write on every call, only on rate-limit window flush).
+  lastUsedAt      DateTime?
+  createdById     String
+  // Soft delete. Once set, the key fails auth with REVOKED but
+  // ApiKeyUsage rows remain queryable for audit.
+  revokedAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @default(now()) @updatedAt
+
+  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy       User          @relation("ApiKeyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  usages          ApiKeyUsage[]
+
+  @@index([workspaceId])
+  @@index([keyPrefix])
+  @@index([createdById])
+  @@map("api_keys")
+}
+
+// Phase 5 (2026-05-25) — per-call audit log. Written async (best-effort,
+// fire-and-forget) so a slow DB doesn't block the API response. Used by
+// dev console usage chart + monthly credit enforcement.
+model ApiKeyUsage {
+  id              String   @id @default(uuid())
+  apiKeyId        String
+  // Canonical endpoint path: `/v1/projects`, `/v1/episodes/:id:produce`.
+  // Param placeholders (`:id`) instead of concrete values so the usage
+  // dashboard groups requests by endpoint kind, not individual resource.
+  endpoint        String   @db.VarChar(128)
+  method          String   @db.VarChar(8)
+  statusCode      Int
+  durationMs      Int
+  ipAddress       String?  @db.VarChar(45)  // IPv6 max 39 + safety
+  userAgent       String?  @db.Text
+  createdAt       DateTime @default(now())
+
+  apiKey          ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId, createdAt])
+  @@map("api_key_usages")
 }
 
 model WorkspaceMember {
