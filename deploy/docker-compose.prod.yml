@@ -146,6 +146,10 @@ services:
       LOG_DEBUG_ENABLED: "false"
       LOG_AUDIT_ENABLED: "true"
       LOG_SERVICE: "kuiper"
+      # Phase 12.5 — workspace collab audit log (recordAudit helper).
+      # Gated separately from LOG_AUDIT_ENABLED because audit_log table
+      # writes can be flipped off in prod without losing semantic logs.
+      AUDIT_LOG_ENABLED: ${AUDIT_LOG_ENABLED:-false}
       LOG_REDACT_KEYS: "password,token,apiKey,apikey,authorization,cookie,secret,access_token,refresh_token"
       # Billing (OFF by default; set to PER_REQUEST when you wire it)
       BILLING_MODE: ${BILLING_MODE:-OFF}
