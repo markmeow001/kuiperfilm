@@ -1,8 +1,7 @@
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { addSignedUrlsToProject, deleteCOSObjects } from '@/lib/cos'
-import { resolveStorageKeyFromMediaValue } from '@/lib/media/service'
+import { addSignedUrlsToProject } from '@/lib/cos'
 import { logProjectAction } from '@/lib/logging/semantic'
 import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
@@ -116,96 +115,9 @@ export const PATCH = apiHandler(async (
   return NextResponse.json({ project: updatedProject })
 })
 
-/**
- * 收集项目的所有COS文件Key
- */
-async function collectProjectCOSKeys(projectId: string): Promise<string[]> {
-  const keys: string[] = []
-
-  // 获取 NovelPromotionProject
-  const novelPromotion = await prisma.novelPromotionProject.findUnique({
-    where: { projectId },
-    include: {
-      // 角色及其形象图片
-      characters: {
-        include: {
-          appearances: true
-        }
-      },
-      // 场景及其图片
-      locations: {
-        include: {
-          images: true
-        }
-      },
-      // 剧集（包含音频、分镜等）
-      episodes: {
-        include: {
-          storyboards: {
-            include: {
-              panels: true
-            }
-          }
-        }
-      }
-    }
-  })
-
-  if (!novelPromotion) return keys
-
-  // 1. 收集角色形象图片
-  for (const character of novelPromotion.characters) {
-    for (const appearance of character.appearances) {
-      const key = await resolveStorageKeyFromMediaValue(appearance.imageUrl)
-      if (key) keys.push(key)
-    }
-  }
-
-  // 2. 收集场景图片
-  for (const location of novelPromotion.locations) {
-    for (const image of location.images) {
-      const key = await resolveStorageKeyFromMediaValue(image.imageUrl)
-      if (key) keys.push(key)
-    }
-  }
-
-  // 3. 收集剧集相关文件
-  for (const episode of novelPromotion.episodes) {
-    // 音频文件
-    const audioKey = await resolveStorageKeyFromMediaValue(episode.audioUrl)
-    if (audioKey) keys.push(audioKey)
-
-    // 分镜图片
-    for (const storyboard of episode.storyboards) {
-      // 分镜整体图
-      const sbKey = await resolveStorageKeyFromMediaValue(storyboard.storyboardImageUrl)
-      if (sbKey) keys.push(sbKey)
-
-      // 候选图片（JSON数组）
-      if (storyboard.candidateImages) {
-        try {
-          const candidates = JSON.parse(storyboard.candidateImages)
-          for (const url of candidates) {
-            const key = await resolveStorageKeyFromMediaValue(url)
-            if (key) keys.push(key)
-          }
-        } catch { }
-      }
-
-      // Panel 表中的图片和视频
-      for (const panel of storyboard.panels) {
-        const imgKey = await resolveStorageKeyFromMediaValue(panel.imageUrl)
-        if (imgKey) keys.push(imgKey)
-
-        const videoKey = await resolveStorageKeyFromMediaValue(panel.videoUrl)
-        if (videoKey) keys.push(videoKey)
-      }
-    }
-  }
-
-  _ulogInfo(`[Project ${projectId}] 收集到 ${keys.length} 个 COS 文件待删除`)
-  return keys
-}
+// collectProjectCOSKeys + hard-delete logic moved to
+// src/lib/project-cleanup.ts so the 30-day grace cron
+// (scripts/workspace-collab-cron.ts) can share the same walker.
 
 // DELETE - 软删除项目 (Phase 12.5 — 2026-05-22)
 //
