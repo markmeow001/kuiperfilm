@@ -53,7 +53,14 @@ export const GET = apiHandler(async (
       userId: m.userId,
       userName: m.user.name,
       displayName: m.user.displayName,
+      // Global app-level role (admin/editor/member) — kept for the existing
+      // "role pill" UI that shows what kind of user this is.
       role: m.user.role,
+      // Phase 12.5 (2026-05-22) — workspace-scoped role (editor/viewer).
+      // Drives WorkspaceDetailDrawer's per-member role toggle and the
+      // requireProjectAccess cascade. Existing rows backfilled to 'editor'
+      // (preserve RW); new invites land as 'viewer' per Decision 1B.
+      workspaceRole: m.role,
       addedBy: m.addedBy,
       joinedAt: m.joinedAt,
     })),
@@ -121,6 +128,7 @@ export const POST = apiHandler(async (
       userName: member.user.name,
       displayName: member.user.displayName,
       role: member.user.role,
+      workspaceRole: member.role,
       addedBy: member.addedBy,
       joinedAt: member.joinedAt,
     },

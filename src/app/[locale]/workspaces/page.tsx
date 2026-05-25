@@ -43,7 +43,11 @@ interface MemberRow {
   userId: string
   userName: string
   displayName: string | null
+  /** Global app-level role (admin / editor / member). */
   role: string
+  /** Phase 12.5 (2026-05-22) — workspace-scoped role.
+   *  Drives the editor/viewer toggle in the drawer. */
+  workspaceRole?: 'editor' | 'viewer'
   addedBy: string
   joinedAt: string
 }
@@ -653,6 +657,34 @@ function WorkspaceDetailDrawer({
     }
   }
 
+  // Phase 12.5 (2026-05-22) — change a member's workspace-scoped role.
+  // PATCH /api/workspaces/:id/members/:userId body: { role }
+  async function updateMemberRole(userId: string, nextRole: 'editor' | 'viewer') {
+    // Optimistic update so the select doesn't snap back during the request.
+    setMembers((prev) =>
+      prev.map((m) => (m.userId === userId ? { ...m, workspaceRole: nextRole } : m)),
+    )
+    try {
+      const res = await fetch(`/api/workspaces/${workspace.id}/members/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: nextRole }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        alert(j?.error?.details?.reason || j?.error?.code || `HTTP ${res.status}`)
+        // Revert by reloading from server
+        await loadMembers()
+        return
+      }
+      // Confirm by reloading (server is source of truth)
+      await loadMembers()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'failed')
+      await loadMembers()
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-stone-950/80">
       <div className="flex w-full max-w-2xl flex-col border-l border-stone-800 bg-stone-900">
@@ -805,14 +837,32 @@ function WorkspaceDetailDrawer({
                           <div className="font-mono text-[14px] tracking-wider text-stone-500">@{m.userName}</div>
                         </div>
                       </div>
-                      {canManage && (
-                        <button
-                          onClick={() => removeMember(m.userId)}
-                          className="rounded-sm border border-rose-500/30 px-2 py-1 font-mono text-[14px] uppercase tracking-wider text-rose-300 hover:border-rose-400 hover:text-rose-200"
-                        >
-                          踢出
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {/* Phase 12.5 — workspace-scoped role toggle.
+                            Determines whether this member can edit projects
+                            in this workspace by default (editor) or just
+                            read them (viewer). Per-project ProjectCollaborator
+                            grants can still override on individual projects. */}
+                        {canManage && m.workspaceRole ? (
+                          <select
+                            value={m.workspaceRole}
+                            onChange={(e) => updateMemberRole(m.userId, e.target.value as 'editor' | 'viewer')}
+                            className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+                            title="此成員在這個工作區的預設角色 (per-project grant 可覆寫)"
+                          >
+                            <option value="editor">editor</option>
+                            <option value="viewer">viewer</option>
+                          </select>
+                        ) : null}
+                        {canManage && (
+                          <button
+                            onClick={() => removeMember(m.userId)}
+                            className="rounded-sm border border-rose-500/30 px-2 py-1 font-mono text-[14px] uppercase tracking-wider text-rose-300 hover:border-rose-400 hover:text-rose-200"
+                          >
+                            踢出
+                          </button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
