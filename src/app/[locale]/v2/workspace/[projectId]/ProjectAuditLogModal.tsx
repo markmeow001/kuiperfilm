@@ -13,6 +13,17 @@
 
 import { useEffect, useState } from 'react'
 
+interface NamedUser {
+  id: string
+  name: string | null
+  displayName: string | null
+}
+
+interface NamedWorkspace {
+  id: string
+  name: string | null
+}
+
 interface AuditEntry {
   id: string
   action: string
@@ -20,11 +31,14 @@ interface AuditEntry {
   entityId: string
   snapshot: unknown
   createdAt: string
-  actor: {
-    id: string
-    name: string | null
-    displayName: string | null
-  } | null
+  actor: NamedUser | null
+  targets?: {
+    user: NamedUser | null
+    previousWorkspace: NamedWorkspace | null
+    newWorkspace: NamedWorkspace | null
+    workspace: NamedWorkspace | null
+    requester: NamedUser | null
+  }
 }
 
 interface AuditResponse {
@@ -114,10 +128,7 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
                       @{entry.actor?.displayName || entry.actor?.name || '未知'}
                     </span>
                     <span className="font-serif-cn text-sm text-stone-200">
-                      {actionLabel(entry.action)}
-                    </span>
-                    <span className="font-mono text-[11px] tracking-wider text-stone-600">
-                      {entry.entityType}#{entry.entityId.slice(0, 8)}
+                      {friendlyDescription(entry)}
                     </span>
                     {entry.snapshot && Object.keys(entry.snapshot as object).length > 0 ? (
                       <button
@@ -125,7 +136,7 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
                         onClick={() => setExpandedId((id) => (id === entry.id ? null : entry.id))}
                         className="ml-auto font-mono text-[11px] text-stone-500 hover:text-amber-300"
                       >
-                        {expandedId === entry.id ? '收起' : '詳情'}
+                        {expandedId === entry.id ? '收起 raw' : 'raw'}
                       </button>
                     ) : null}
                   </div>
@@ -172,21 +183,81 @@ function formatTs(iso: string): string {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
 }
 
-function actionLabel(action: string): string {
-  switch (action) {
-    case 'project.soft_delete': return '刪除專案'
-    case 'project.restore': return '恢復專案'
-    case 'project.update': return '更新專案'
-    case 'collaborator.add': return '新增協作者'
-    case 'collaborator.remove': return '移除協作者'
-    case 'collaborator.role_change': return '變更協作者角色'
-    case 'edit_request.create': return '請求編輯權限'
-    case 'edit_request.approve': return '批准請求'
-    case 'edit_request.deny': return '拒絕請求'
-    case 'edit_request.withdraw': return '撤回請求'
-    case 'workspace_member.add': return '加入工作區成員'
-    case 'workspace_member.remove': return '移除工作區成員'
-    case 'workspace_member.role_change': return '變更工作區角色'
-    default: return action
+/**
+ * Turn an audit entry into one Chinese sentence the user can read at a
+ * glance. Falls back to action verb + truncated id when targets are
+ * missing (entity deleted since the audit was written).
+ *
+ * Examples:
+ *   "把專案移到 Team A"
+ *   "把專案移回個人專案"
+ *   "邀請 @userA 為 editor"
+ *   "把 @userB 從 viewer 改成 editor"
+ *   "刪除專案"
+ *   "批准 @userC 的編輯請求"
+ */
+function friendlyDescription(entry: AuditEntry): string {
+  const snap = (entry.snapshot ?? {}) as Record<string, unknown>
+  const t = entry.targets
+
+  const userLabel = (u: { name: string | null; displayName: string | null } | null | undefined): string => {
+    if (!u) return '某人'
+    return `@${u.displayName || u.name || '未知'}`
+  }
+  const wsLabel = (w: { name: string | null } | null | undefined, idHint?: string | null): string => {
+    if (w?.name) return w.name
+    if (idHint) return `工作區#${idHint.slice(0, 8)}`
+    return '工作區'
+  }
+  const roleLabel = (r: unknown): string => {
+    if (r === 'editor') return 'editor'
+    if (r === 'viewer') return 'viewer'
+    return String(r ?? '?')
+  }
+
+  switch (entry.action) {
+    case 'project.update': {
+      // workspaceId move is the only project.update we audit (today).
+      if (snap.field === 'workspaceId') {
+        const newWs = t?.newWorkspace
+        const prevWs = t?.previousWorkspace
+        if (!snap.newWorkspaceId && snap.previousWorkspaceId) {
+          return `把專案從 ${wsLabel(prevWs, snap.previousWorkspaceId as string)} 移回個人專案`
+        }
+        if (snap.newWorkspaceId && !snap.previousWorkspaceId) {
+          return `把專案從個人專案移到 ${wsLabel(newWs, snap.newWorkspaceId as string)}`
+        }
+        if (snap.newWorkspaceId && snap.previousWorkspaceId) {
+          return `把專案從 ${wsLabel(prevWs, snap.previousWorkspaceId as string)} 移到 ${wsLabel(newWs, snap.newWorkspaceId as string)}`
+        }
+      }
+      return '更新專案'
+    }
+    case 'project.soft_delete':
+      return snap.phase === 'hard_delete' ? '永久刪除專案（30 天寬限期到）' : '刪除專案'
+    case 'project.restore':
+      return '恢復已刪除的專案'
+    case 'collaborator.add':
+      return `邀請 ${userLabel(t?.user)} 為 ${roleLabel(snap.newRole) || 'collaborator'}`
+    case 'collaborator.role_change':
+      return `把 ${userLabel(t?.user)} 從 ${roleLabel(snap.previousRole)} 改成 ${roleLabel(snap.newRole)}`
+    case 'collaborator.remove':
+      return `移除 ${userLabel(t?.user)} 的協作權限`
+    case 'edit_request.create':
+      return `${userLabel(t?.requester)} 請求編輯權限`
+    case 'edit_request.approve':
+      return `批准 ${userLabel(t?.requester)} 的編輯請求`
+    case 'edit_request.deny':
+      return `拒絕 ${userLabel(t?.requester)} 的編輯請求`
+    case 'edit_request.withdraw':
+      return `${userLabel(t?.requester)} 撤回了編輯請求`
+    case 'workspace_member.add':
+      return `把 ${userLabel(t?.user)} 加進 ${wsLabel(t?.workspace, snap.workspaceId as string | null)}`
+    case 'workspace_member.remove':
+      return `把 ${userLabel(t?.user)} 從 ${wsLabel(t?.workspace, snap.workspaceId as string | null)} 移除`
+    case 'workspace_member.role_change':
+      return `把 ${userLabel(t?.user)} 在 ${wsLabel(t?.workspace, snap.workspaceId as string | null)} 的角色從 ${roleLabel(snap.previousRole)} 改成 ${roleLabel(snap.newRole)}`
+    default:
+      return entry.action
   }
 }

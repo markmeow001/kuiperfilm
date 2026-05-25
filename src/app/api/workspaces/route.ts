@@ -106,7 +106,14 @@ export const GET = apiHandler(async () => {
       orderBy: { createdAt: 'desc' },
       include: {
         organization: { select: { id: true, name: true } },
-        _count: { select: { members: true } },
+        _count: {
+          select: {
+            members: true,
+            // Exclude soft-deleted so the dropdown count matches what
+            // /api/projects?ws= actually returns.
+            projects: { where: { deletedAt: null } },
+          },
+        },
       },
     })
     return NextResponse.json({ workspaces: all })
