@@ -183,7 +183,6 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
         <ProjectCollaboratorsModal
           projectId={projectId}
           workspaceId={project?.workspaceId ?? null}
-          workspaceName={project?.workspace?.name ?? null}
           onClose={() => setCollabModalOpen(false)}
         />
       ) : null}

@@ -34,7 +34,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AppIcon } from '@/components/ui/icons'
 
 type CollabRole = 'editor' | 'viewer'
 
@@ -61,10 +60,16 @@ interface WorkspaceMemberRow {
   role: string
 }
 
+// /api/workspaces shape (owned + member, deduped).
+interface UserWorkspaceRow {
+  id: string
+  name: string
+  organization?: { name?: string | null } | null
+}
+
 interface ProjectCollaboratorsModalProps {
   projectId: string
   workspaceId: string | null
-  workspaceName?: string | null
   onClose: () => void
 }
 
@@ -74,7 +79,6 @@ const WS_MEMBERS_QUERY_KEY = (wsId: string) => ['workspace', wsId, 'members'] as
 export function ProjectCollaboratorsModal({
   projectId,
   workspaceId,
-  workspaceName,
   onClose,
 }: ProjectCollaboratorsModalProps) {
   const queryClient = useQueryClient()
@@ -115,13 +119,21 @@ export function ProjectCollaboratorsModal({
     enabled: !!workspaceId,
   })
 
-  const collaborators = collabQuery.data?.collaborators ?? []
-  const wsMembers = membersQuery.data?.members ?? []
-  const existingCollabIds = new Set(collaborators.map((c) => c.userId))
+  // Memoize the upstream `?? []` fallbacks so addableMembers' deps are
+  // stable refs — re-creating empty arrays per render would trip the
+  // react-hooks/exhaustive-deps rule.
+  const collaborators = useMemo(
+    () => collabQuery.data?.collaborators ?? [],
+    [collabQuery.data?.collaborators],
+  )
+  const wsMembers = useMemo(
+    () => membersQuery.data?.members ?? [],
+    [membersQuery.data?.members],
+  )
 
-  // Members not yet added as project collaborators
   const addableMembers = useMemo(() => {
     const filter = pickerFilter.trim().toLowerCase()
+    const existingCollabIds = new Set(collaborators.map((c) => c.userId))
     return wsMembers
       .filter((m) => !existingCollabIds.has(m.userId))
       .filter((m) => {
@@ -129,7 +141,7 @@ export function ProjectCollaboratorsModal({
         const hay = `${m.userName} ${m.displayName ?? ''}`.toLowerCase()
         return hay.includes(filter)
       })
-  }, [wsMembers, existingCollabIds, pickerFilter])
+  }, [wsMembers, collaborators, pickerFilter])
 
   // Add / update role mutation
   const upsertMutation = useMutation({
@@ -156,6 +168,63 @@ export function ProjectCollaboratorsModal({
     },
     onError: (err) => {
       setErrMsg(err instanceof Error ? err.message : 'failed')
+    },
+  })
+
+  // Phase 12.5+ — assign / move workspace.
+  // Lists user's workspaces (owned + member). PATCH project.workspaceId.
+  // Owner / admin only on the server side; modal is already gated to
+  // owner/admin entry, so we don't add a second gate here.
+  const workspacesQuery = useQuery({
+    queryKey: ['user', 'workspaces', 'list'],
+    queryFn: async (): Promise<UserWorkspaceRow[]> => {
+      const res = await fetch('/api/workspaces')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as {
+        workspaces?: UserWorkspaceRow[]
+        workspaceMemberships?: UserWorkspaceRow[]
+      }
+      const owned = data.workspaces ?? []
+      const member = data.workspaceMemberships ?? []
+      const seen = new Set<string>()
+      const merged: UserWorkspaceRow[] = []
+      for (const w of [...owned, ...member]) {
+        if (seen.has(w.id)) continue
+        seen.add(w.id)
+        merged.push(w)
+      }
+      return merged
+    },
+  })
+
+  const assignMutation = useMutation({
+    mutationFn: async (newWorkspaceId: string | null) => {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: newWorkspaceId }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j?.error?.details?.reason || j?.error?.code || `HTTP ${res.status}`)
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      // Multi-invalidate: project detail (workspaceId changed),
+      // access (cascade might now resolve differently for other users),
+      // project list (might appear/disappear in different ?ws= views),
+      // and the workspaces list itself (so the dropdown shows accurate
+      // current state).
+      void queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      void queryClient.invalidateQueries({ queryKey: ['project', projectId, 'access'] })
+      void queryClient.invalidateQueries({ queryKey: ['project-data', projectId] })
+      // The modal will receive a refreshed `workspaceId` via parent re-render
+      // (parent reads from useProjectData); we don't try to mutate local state.
+      setErrMsg(null)
+    },
+    onError: (err) => {
+      setErrMsg(err instanceof Error ? err.message : 'failed to move project')
     },
   })
 
@@ -191,12 +260,34 @@ export function ProjectCollaboratorsModal({
         className="relative w-full max-w-lg rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl"
       >
         <header className="flex items-start justify-between gap-4 border-b border-amber-900/20 px-5 py-4">
-          <div>
+          <div className="flex-1">
             <h2 className="font-fraunces text-lg italic text-amber-300">協作者</h2>
-            <p className="mt-1 font-mono text-[12px] tracking-wider text-stone-500">
-              {workspaceName
-                ? `此專案在 ${workspaceName} 工作區 · 工作區成員預設 Viewer`
-                : '此專案未歸屬任何工作區 — 只有擁有者 / admin 能編輯'}
+            <div className="mt-2 flex items-center gap-2">
+              <span className="font-mono text-[11px] tracking-wider text-stone-500">所在工作區</span>
+              <select
+                value={workspaceId ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  assignMutation.mutate(v === '' ? null : v)
+                }}
+                disabled={assignMutation.isPending || workspacesQuery.isLoading}
+                className="rounded-sm border border-stone-700 bg-stone-900 px-2 py-1 font-serif-cn text-xs text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+              >
+                <option value="">個人專案（不歸任何工作區）</option>
+                {(workspacesQuery.data ?? []).map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}{w.organization?.name ? ` · ${w.organization.name}` : ''}
+                  </option>
+                ))}
+              </select>
+              {assignMutation.isPending ? (
+                <span className="font-mono text-[10px] text-stone-500">儲存中…</span>
+              ) : null}
+            </div>
+            <p className="mt-2 font-mono text-[11px] tracking-wider text-stone-500">
+              {workspaceId
+                ? `工作區成員預設可讀（Viewer）· 編輯需單獨授權`
+                : '個人專案：只有你 + admin 能存取'}
             </p>
           </div>
           <button

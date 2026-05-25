@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { addSignedUrlsToProject } from '@/lib/cos'
 import { logProjectAction } from '@/lib/logging/semantic'
-import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, requireProjectAccess, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { recordAudit } from '@/lib/audit-log'
 
@@ -95,6 +95,88 @@ export const PATCH = apiHandler(async (
 
   if (!project || project.deletedAt) {
     throw new ApiError('NOT_FOUND')
+  }
+
+  // Phase 12.5+ (2026-05-24) — workspaceId is a privileged field.
+  // Moving a project between workspaces changes who can read/write it
+  // via cascade step 5 (WorkspaceMember). Letting editors do this would
+  // be a quiet permission-grant — only owner / admin can decide.
+  //
+  // Setting to null = move back to "個人專案" (personal scope).
+  // Setting to a workspace id requires the caller to be a member of
+  // that workspace (no enumeration via random ids).
+  if ('workspaceId' in body) {
+    const rawWs = body.workspaceId
+    const newWorkspaceId: string | null =
+      rawWs === null || rawWs === undefined || rawWs === ''
+        ? null
+        : typeof rawWs === 'string'
+          ? rawWs.trim() || null
+          : null
+
+    if (newWorkspaceId !== (project.workspaceId ?? null)) {
+      // Only owner or admin can re-home a project.
+      const requester = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { role: true },
+      })
+      const isAdmin = roleAtLeast(requester?.role, 'admin')
+      const isOwner = project.userId === session.user.id
+      if (!isOwner && !isAdmin) {
+        throw new ApiError('FORBIDDEN', {
+          code: 'ONLY_OWNER_OR_ADMIN_CAN_MOVE_PROJECT',
+          details: { reason: '只有專案擁有者或管理員可以變更所在工作區' },
+        })
+      }
+
+      // If moving to a real workspace, validate membership.
+      if (newWorkspaceId) {
+        const ws = await prisma.workspace.findUnique({
+          where: { id: newWorkspaceId },
+          select: { id: true, ownerEditorId: true },
+        })
+        if (!ws) {
+          throw new ApiError('NOT_FOUND', {
+            code: 'WORKSPACE_NOT_FOUND',
+            details: { reason: '工作區不存在' },
+          })
+        }
+        const isWsOwner = ws.ownerEditorId === session.user.id
+        if (!isAdmin && !isWsOwner) {
+          const membership = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId: newWorkspaceId, userId: session.user.id } },
+            select: { workspaceId: true },
+          })
+          if (!membership) {
+            throw new ApiError('FORBIDDEN', {
+              code: 'NOT_WORKSPACE_MEMBER',
+              details: { reason: '你不是該工作區的成員，無法將專案移入' },
+            })
+          }
+        }
+      }
+
+      // Audit the move BEFORE the update — captures old → new in one row.
+      await recordAudit(prisma, {
+        userId: session.user.id,
+        projectId,
+        action: 'project.update',
+        entityType: 'Project',
+        entityId: projectId,
+        snapshot: {
+          field: 'workspaceId',
+          previousWorkspaceId: project.workspaceId ?? null,
+          newWorkspaceId,
+        },
+      })
+
+      // Normalise body so the downstream `data: body` writes the
+      // resolved value (handles "" / undefined → null).
+      body.workspaceId = newWorkspaceId
+    } else {
+      // No-op write — drop the field so it doesn't churn updatedAt.
+      delete body.workspaceId
+    }
   }
 
   // 更新项目

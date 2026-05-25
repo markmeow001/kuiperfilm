@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { toMoneyNumber } from '@/lib/billing/money'
 import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
@@ -211,7 +211,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 
-  const { name, description } = await request.json()
+  const { name, description, workspaceId: rawWorkspaceId } = await request.json()
 
   if (!name || name.trim().length === 0) {
     throw new ApiError('INVALID_PARAMS')
@@ -223,6 +223,47 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   if (description && description.length > 500) {
     throw new ApiError('INVALID_PARAMS')
+  }
+
+  // Phase 12.5+ — optional workspace assignment at create time.
+  // null / undefined / "" → 個人專案 (personal scope, status quo).
+  // Real workspace id → caller must be a member (or admin / ws owner).
+  // Doing the membership check at create time avoids a moments-later
+  // 403 on the PATCH path users would otherwise hit.
+  let workspaceId: string | null = null
+  if (rawWorkspaceId && typeof rawWorkspaceId === 'string' && rawWorkspaceId.trim()) {
+    const candidate = rawWorkspaceId.trim()
+    const [requester, ws] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { role: true },
+      }),
+      prisma.workspace.findUnique({
+        where: { id: candidate },
+        select: { id: true, ownerEditorId: true },
+      }),
+    ])
+    if (!ws) {
+      throw new ApiError('NOT_FOUND', {
+        code: 'WORKSPACE_NOT_FOUND',
+        details: { reason: '工作區不存在' },
+      })
+    }
+    const isAdmin = roleAtLeast(requester?.role, 'admin')
+    const isWsOwner = ws.ownerEditorId === session.user.id
+    if (!isAdmin && !isWsOwner) {
+      const membership = await prisma.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId: candidate, userId: session.user.id } },
+        select: { workspaceId: true },
+      })
+      if (!membership) {
+        throw new ApiError('FORBIDDEN', {
+          code: 'NOT_WORKSPACE_MEMBER',
+          details: { reason: '你不是該工作區的成員，無法在裡面建立專案' },
+        })
+      }
+    }
+    workspaceId = candidate
   }
 
   // 获取用户偏好配置 + admin 偏好（multi-user 繼承用）。
@@ -258,7 +299,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
       name: name.trim(),
       description: description?.trim() || null,
       mode: 'novel-promotion',
-      userId: session.user.id
+      userId: session.user.id,
+      workspaceId, // null = personal; validated above when set
     }
   })
 

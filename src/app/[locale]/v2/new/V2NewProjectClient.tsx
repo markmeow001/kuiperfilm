@@ -21,9 +21,9 @@
  *      import from inside the workspace via BulkEpisodeUploadButton.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { AppIcon } from '@/components/ui/icons'
 
 interface V2NewProjectClientProps {
@@ -68,13 +68,50 @@ const SCRIPT_LABELS: Record<ScriptCode, string> = {
   ar: 'العربية',
 }
 
+interface WorkspaceOption {
+  id: string
+  name: string
+  organization?: { name?: string | null } | null
+}
+
 export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Phase 12.5+ — pick the target workspace at create time.
+  // "" = 個人專案 (default). Pre-fills from `?ws=<id>` if user navigated
+  // here from a workspace-filtered project list (small UX win).
+  const [workspaceId, setWorkspaceId] = useState<string>(searchParams?.get('ws') ?? '')
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/workspaces')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: { workspaces?: WorkspaceOption[]; workspaceMemberships?: WorkspaceOption[] }) => {
+        if (cancelled) return
+        const owned = data.workspaces ?? []
+        const member = data.workspaceMemberships ?? []
+        const seen = new Set<string>()
+        const merged: WorkspaceOption[] = []
+        for (const w of [...owned, ...member]) {
+          if (seen.has(w.id)) continue
+          seen.add(w.id)
+          merged.push(w)
+        }
+        setWorkspaces(merged)
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspaces([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   // Set if /api/projects succeeded but bulk-import failed — used to
   // expose a manual "go to empty project" navigation escape hatch.
   const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
@@ -155,6 +192,8 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
           name: name.trim(),
           description: description.trim() || null,
           mode: 'novel-promotion',
+          // null sentinel — empty string = 個人專案
+          workspaceId: workspaceId || null,
         }),
       })
       if (!res.ok) {
@@ -271,6 +310,28 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
             <div className="mt-1 text-right font-mono text-[14px] text-stone-700">
               {description.length} / 500
             </div>
+          </div>
+
+          {/* Phase 12.5+ — workspace assignment. "" = 個人專案. */}
+          <div>
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+              所在工作區 · WORKSPACE
+            </label>
+            <select
+              value={workspaceId}
+              onChange={(e) => setWorkspaceId(e.target.value)}
+              className="w-full rounded-sm border border-stone-800 bg-stone-900/40 px-4 py-3 font-serif-cn text-sm text-stone-200 focus:border-amber-500/60 focus:outline-none"
+            >
+              <option value="">個人專案（只有你 + admin 能存取）</option>
+              {workspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}{w.organization?.name ? ` · ${w.organization.name}` : ''}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 font-fraunces text-[11px] italic text-stone-500">
+              建好之後也可以從專案首頁 [👥 協作者] 改
+            </p>
           </div>
 
           {/* Bulk-upload picker */}
