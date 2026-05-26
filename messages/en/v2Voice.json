@@ -1,0 +1,38 @@
+{
+  "header": {
+    "title": "Voices",
+    "loading": "Loading…"
+  },
+  "filters": {
+    "genderTitle": "Filter · Gender",
+    "emotionTitle": "Filter · Emotion",
+    "gender": {
+      "all": "All",
+      "female": "Female",
+      "male": "Male",
+      "child": "Child",
+      "group": "Crowd",
+      "special": "Special"
+    },
+    "emotion": {
+      "neutral": "Neutral",
+      "happy": "Happy",
+      "sad": "Sad",
+      "angry": "Angry",
+      "surprised": "Surprised",
+      "mysterious": "Mysterious",
+      "tender": "Tender",
+      "solemn": "Solemn",
+      "playful": "Playful"
+    }
+  },
+  "empty": {
+    "noVoices": "No voices in asset hub — add some there first",
+    "noMatches": "No voices match the filter"
+  },
+  "voice": {
+    "untitled": "Untitled voice",
+    "bindHint": "Will bind to {target}",
+    "controlsHint": "Intensity / speed / pitch controls coming next."
+  }
+}

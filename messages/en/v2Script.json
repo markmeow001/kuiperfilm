@@ -1,0 +1,41 @@
+{
+  "loading": "Loading…",
+  "viewerHint": "You are a viewer · read-only · request edit access to edit",
+  "noEpisodeSelected": "No episode selected",
+  "promptCreate": "Click \"+ New episode\" above to start, or just paste the script and press \"Save\" — Ep 1 is auto-created",
+  "promptPaste": "Paste this episode's script here, press \"Save\" to commit",
+  "chars": "{count} chars",
+  "saving": "Saving…",
+  "unsaved": "Unsaved",
+  "savedOk": "✓ Saved",
+  "placeholder": {
+    "withEpisode": "Type the script for Ep {ep}…\n\nFormat is flexible — scene outline, full dialogue script, or scene description all work. The \"Script breakdown\" step auto-extracts characters / scenes / props from this text. The \"Storyboard\" step auto-splits shots.",
+    "withoutEpisode": "Type the script for Ep 1 (pressing \"Save\" will auto-create Ep 1)"
+  },
+  "save": {
+    "creating": "Creating episode…",
+    "saving": "Saving…",
+    "label": "Save"
+  },
+  "nextStep": "Next → Script breakdown →",
+  "workflow": {
+    "title": "Workflow",
+    "summary": "Paste script → Breakdown → Storyboard",
+    "step1": "On this page, <em>paste script + press Save</em>. Each episode is independent; use the tabs above to switch.",
+    "step2": "On <em>Script breakdown</em>, tap Analyze to auto-extract characters / scenes / props. You can also upload your own assets.",
+    "step3": "On <em>Storyboard</em>, tap Analyze and Kling 3.0 Omni writes multi-shot panels for you.",
+    "step4": "<em>Voice</em> picks the actor, <em>Final</em> renders the full episode mp4.",
+    "footerPrefix": "Aspect ratio / style live on the",
+    "footerLink": "project home",
+    "footerSuffix": " — shared across episodes."
+  },
+  "errors": {
+    "createEpisode": "Create episode failed ({status}): {detail}",
+    "createEpisodeNoId": "Create episode failed: server returned no episode id",
+    "createEpisodeException": "Create episode failed: {reason}",
+    "save": "Save failed ({status}): {detail}",
+    "saveException": "Save failed: {reason}",
+    "unknown": "Unknown error"
+  },
+  "firstEpisodeName": "Ep 1"
+}

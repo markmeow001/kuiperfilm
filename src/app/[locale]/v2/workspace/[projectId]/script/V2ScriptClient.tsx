@@ -23,6 +23,7 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
@@ -46,6 +47,7 @@ interface ProjectDataLike {
 }
 
 export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientProps) {
+  const t = useTranslations('v2Script')
   const queryClient = useQueryClient()
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectDataLike | undefined
@@ -54,7 +56,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
   const buildHref = useEpisodePreservingHref()
   // Phase 12.5 — viewer-role users see disabled buttons + a hint tooltip.
   const { canEdit } = useProjectAccess(projectId)
-  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
+  const viewerTip = canEdit ? undefined : t('viewerHint')
 
   const [novelText, setNovelText] = useState('')
   const [savedText, setSavedText] = useState<string | null>(null)
@@ -78,23 +80,23 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
       const res = await fetch(`/api/novel-promotion/${projectId}/episodes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: '第 1 集' }),
+        body: JSON.stringify({ name: t('firstEpisodeName') }),
       })
       if (!res.ok) {
         const text = await res.text().catch(() => '')
-        setErrorMsg(`建立集數失敗 (${res.status}): ${text || '未知錯誤'}`)
+        setErrorMsg(t('errors.createEpisode', { status: res.status, detail: text || t('errors.unknown') }))
         return null
       }
       const json = (await res.json()) as { episode?: { id?: string } }
       const newId = json.episode?.id ?? null
       if (!newId) {
-        setErrorMsg('建立集數失敗:server 沒回 episode id')
+        setErrorMsg(t('errors.createEpisodeNoId'))
         return null
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectData(projectId) })
       return newId
     } catch (err) {
-      setErrorMsg(`建立集數失敗:${(err as Error).message}`)
+      setErrorMsg(t('errors.createEpisodeException', { reason: (err as Error).message }))
       return null
     } finally {
       setCreatingEpisode(false)
@@ -112,13 +114,13 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
       })
       if (!res.ok) {
         const text2 = await res.text().catch(() => '')
-        setErrorMsg(`儲存失敗 (${res.status}): ${text2 || '未知錯誤'}`)
+        setErrorMsg(t('errors.save', { status: res.status, detail: text2 || t('errors.unknown') }))
         return false
       }
       setSavedText(text)
       return true
     } catch (err) {
-      setErrorMsg(`儲存失敗:${(err as Error).message}`)
+      setErrorMsg(t('errors.saveException', { reason: (err as Error).message }))
       return false
     } finally {
       setSaving(false)
@@ -145,7 +147,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
   if (projectQuery.isLoading) {
     return (
       <div className="px-12 py-10">
-        <p className="font-mono text-xs tracking-wider text-stone-500">載入中…</p>
+        <p className="font-mono text-xs tracking-wider text-stone-500">{t('loading')}</p>
       </div>
     )
   }
@@ -162,12 +164,10 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
           <div className="mb-3 flex items-center justify-between">
             <div>
               <div className="font-fraunces text-sm italic text-amber-500/80">
-                {currentEpisode ? `${currentEpisode.name}` : '尚未選集'}
+                {currentEpisode ? `${currentEpisode.name}` : t('noEpisodeSelected')}
               </div>
               <div className="mt-0.5 font-mono text-[14px] tracking-wider text-stone-600">
-                {episodes.length === 0
-                  ? '點上方「+ 新建劇集」開始,或直接貼劇本後按「儲存」自動建立第 1 集'
-                  : '在這裡貼上這一集的劇本,按「儲存」寫入'}
+                {episodes.length === 0 ? t('promptCreate') : t('promptPaste')}
               </div>
             </div>
             <div className="flex items-center gap-3 font-mono text-[14px]">
@@ -177,14 +177,14 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
                 canEdit={canEdit}
                 viewerTip={viewerTip}
               />
-              <span className="text-stone-600">{charCount} chars</span>
+              <span className="text-stone-600">{t('chars', { count: charCount })}</span>
               {currentEpisodeId ? (
                 saving ? (
-                  <span className="text-amber-500/70">儲存中…</span>
+                  <span className="text-amber-500/70">{t('saving')}</span>
                 ) : isDirty && hasContent ? (
-                  <span className="text-stone-500">未儲存</span>
+                  <span className="text-stone-500">{t('unsaved')}</span>
                 ) : !isDirty && hasContent ? (
-                  <span className="text-emerald-500/70">✓ 已儲存</span>
+                  <span className="text-emerald-500/70">{t('savedOk')}</span>
                 ) : null
               ) : null}
             </div>
@@ -198,8 +198,8 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
             title={viewerTip}
             placeholder={
               currentEpisode
-                ? `輸入第 ${currentEpisode.episodeNumber} 集的劇本內容…\n\n格式不限——可以是分場大綱、完整對白劇本、或場景敘述。後續「劇本拆解」step 會自動從這份文本抽出角色 / 場景 / 物品,「分鏡」step 會自動切鏡頭。`
-                : '輸入第 1 集的劇本內容(按「儲存」會自動建立第 1 集)'
+                ? t('placeholder.withEpisode', { ep: currentEpisode.episodeNumber ?? 1 })
+                : t('placeholder.withoutEpisode')
             }
             className={`h-[420px] w-full resize-none rounded-sm border border-amber-900/30 bg-stone-950 px-5 py-4 font-serif-cn text-base leading-relaxed text-stone-200 placeholder:text-stone-700 focus:border-amber-500/60 focus:outline-none ${
               !canEdit ? 'cursor-not-allowed opacity-70' : ''
@@ -221,7 +221,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
               className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="check" className="h-4 w-4" />
-              {creatingEpisode ? '建立集數…' : saving ? '儲存中…' : '儲存'}
+              {creatingEpisode ? t('save.creating') : saving ? t('save.saving') : t('save.label')}
             </button>
 
             {!isDirty && hasContent && currentEpisodeId ? (
@@ -229,7 +229,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
                 href={buildHref(`/${locale}/v2/workspace/${projectId}/subjects`)}
                 className="font-mono text-xs tracking-wider text-stone-500 transition-colors hover:text-amber-300"
               >
-                下一步 → 劇本拆解 →
+                {t('nextStep')}
               </Link>
             ) : null}
           </div>
@@ -238,31 +238,31 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
         {/* Right column: workflow guide */}
         <aside className="space-y-4 self-start rounded-sm border border-stone-800/60 bg-stone-900/30 p-5">
           <div>
-            <div className="mb-1 font-fraunces text-sm italic text-amber-500/80">Workflow</div>
+            <div className="mb-1 font-fraunces text-sm italic text-amber-500/80">{t('workflow.title')}</div>
             <div className="font-mono text-[12px] uppercase tracking-[0.2em] text-stone-600">
-              貼劇本 → 劇本拆解 → 分鏡
+              {t('workflow.summary')}
             </div>
           </div>
           <ol className="space-y-3 font-serif-cn text-xs leading-relaxed text-stone-400">
             <li>
               <span className="mr-2 font-mono text-amber-500/70">01</span>
-              在這頁<span className="text-amber-300">貼劇本+按儲存</span>。每集獨立,用上方 tab 切換。
+              {t.rich('workflow.step1', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
             </li>
             <li>
               <span className="mr-2 font-mono text-amber-500/70">02</span>
-              到「<span className="text-amber-300">劇本拆解</span>」step 按一鍵分析,自動抽出角色 / 場景 / 物品。可以上傳自己準備好的素材取代。
+              {t.rich('workflow.step2', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
             </li>
             <li>
               <span className="mr-2 font-mono text-amber-500/70">03</span>
-              到「<span className="text-amber-300">分鏡</span>」step 按一鍵分析,系統用 Kling 3.0 Omni 多鏡頭把分鏡寫好。
+              {t.rich('workflow.step3', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
             </li>
             <li>
               <span className="mr-2 font-mono text-amber-500/70">04</span>
-              <span className="text-amber-300">配音</span>選音色,<span className="text-amber-300">合成</span>輸出整集 mp4。
+              {t.rich('workflow.step4', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
             </li>
           </ol>
           <div className="border-t border-stone-800/60 pt-3 font-fraunces text-[11px] italic text-stone-600">
-            畫面比例 / 風格在<Link href={`/${locale}/v2/workspace/${projectId}?stay=1`} className="ml-1 text-amber-500/80 hover:text-amber-300">專案首頁</Link>設定,跨集共用。
+            {t('workflow.footerPrefix')}<Link href={`/${locale}/v2/workspace/${projectId}?stay=1`} className="ml-1 text-amber-500/80 hover:text-amber-300">{t('workflow.footerLink')}</Link>{t('workflow.footerSuffix')}
           </div>
         </aside>
       </div>

@@ -1,0 +1,41 @@
+{
+  "loading": "载入中…",
+  "viewerHint": "你是 viewer · 唯读模式 · 编辑按钮需要请求权限",
+  "noEpisodeSelected": "尚未选集",
+  "promptCreate": "点上方「+ 新建剧集」开始，或直接贴剧本后按「储存」自动建立第 1 集",
+  "promptPaste": "在这里贴上这一集的剧本，按「储存」写入",
+  "chars": "{count} chars",
+  "saving": "储存中…",
+  "unsaved": "未储存",
+  "savedOk": "✓ 已储存",
+  "placeholder": {
+    "withEpisode": "输入第 {ep} 集的剧本内容…\n\n格式不限——可以是分场大纲、完整对白剧本、或场景叙述。后续「剧本拆解」step 会自动从这份文本抽出角色 / 场景 / 物品，「分镜」step 会自动切镜头。",
+    "withoutEpisode": "输入第 1 集的剧本内容（按「储存」会自动建立第 1 集）"
+  },
+  "save": {
+    "creating": "建立集数…",
+    "saving": "储存中…",
+    "label": "储存"
+  },
+  "nextStep": "下一步 → 剧本拆解 →",
+  "workflow": {
+    "title": "Workflow",
+    "summary": "贴剧本 → 剧本拆解 → 分镜",
+    "step1": "在这页 <em>贴剧本+按储存</em>。每集独立，用上方 tab 切换。",
+    "step2": "到「<em>剧本拆解</em>」step 按一键分析，自动抽出角色 / 场景 / 物品。可以上传自己准备好的素材取代。",
+    "step3": "到「<em>分镜</em>」step 按一键分析，系统用 Kling 3.0 Omni 多镜头把分镜写好。",
+    "step4": "<em>配音</em>选音色，<em>合成</em>输出整集 mp4。",
+    "footerPrefix": "画面比例 / 风格在",
+    "footerLink": "专案首页",
+    "footerSuffix": "设定，跨集共用。"
+  },
+  "errors": {
+    "createEpisode": "建立集数失败 ({status})：{detail}",
+    "createEpisodeNoId": "建立集数失败：server 没回 episode id",
+    "createEpisodeException": "建立集数失败：{reason}",
+    "save": "储存失败 ({status})：{detail}",
+    "saveException": "储存失败：{reason}",
+    "unknown": "未知错误"
+  },
+  "firstEpisodeName": "第 1 集"
+}

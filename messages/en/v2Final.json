@@ -1,0 +1,48 @@
+{
+  "viewerHint": "You are a viewer · read-only · request edit access to edit",
+  "player": {
+    "videoNotYet": "Video not generated yet for this panel",
+    "noStoryboard": "No storyboard data yet",
+    "header": "EP 01 · OPENING SEQUENCE"
+  },
+  "timeline": {
+    "title": "Timeline",
+    "ratio": "{done} / {total} panels with video",
+    "panelTitleReady": "Video ready",
+    "panelTitleImageOnly": "Image only",
+    "panelTitleNone": "Not generated yet"
+  },
+  "stats": {
+    "title": "Sheet",
+    "totalPanels": "Total panels",
+    "totalPanelsValue": "{count}",
+    "withImage": "With image",
+    "withVideo": "With video",
+    "resolution": "Aspect",
+    "targetDuration": "Target duration",
+    "estimatedDuration": "Estimated output",
+    "durationSeconds": "{n}s"
+  },
+  "package": {
+    "downloadZip": "Download assets ZIP",
+    "downloadHint": "Includes all panel mp4s + reference images + dialogue script. Drag into CapCut to edit.",
+    "repackaging": "Repackaging…",
+    "repackage": "↻ Repackage assets",
+    "needContent": "Need at least 1 panel video or multi-shot group before packaging",
+    "primaryHint": "Pack all panels / multi-shot videos + reference images + dialogue into a zip you can drop into CapCut",
+    "packaging": "Packaging…",
+    "renderingInBg": "Packaging in background…",
+    "packageWithSummary": "Package assets · {summary}",
+    "summaryPanels": "{count} panels",
+    "summaryMultiShot": "{count} multi-shot",
+    "summaryEmpty": "0 items",
+    "errorFallback": "Package failed"
+  },
+  "links": {
+    "viewScript": "View script"
+  },
+  "tagline": {
+    "title": "From spark to screen.",
+    "body": "Phase 12.7 stub — full export / preview wires up in 12.7.x. Use the timeline thumbnails above to preview each panel."
+  }
+}

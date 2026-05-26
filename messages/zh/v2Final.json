@@ -1,0 +1,48 @@
+{
+  "viewerHint": "你是 viewer · 唯读模式 · 编辑按钮需要请求权限",
+  "player": {
+    "videoNotYet": "尚未生成此分镜视频",
+    "noStoryboard": "还没有任何分镜资料",
+    "header": "EP 01 · OPENING SEQUENCE"
+  },
+  "timeline": {
+    "title": "Timeline",
+    "ratio": "{done} / {total} 段已生视频",
+    "panelTitleReady": "已生视频",
+    "panelTitleImageOnly": "只有图",
+    "panelTitleNone": "尚未生成"
+  },
+  "stats": {
+    "title": "Sheet",
+    "totalPanels": "总分镜",
+    "totalPanelsValue": "{count} 个",
+    "withImage": "已生图",
+    "withVideo": "已生视频",
+    "resolution": "解析度",
+    "targetDuration": "目标时长",
+    "estimatedDuration": "预估已产出",
+    "durationSeconds": "{n}s"
+  },
+  "package": {
+    "downloadZip": "下载素材包 ZIP",
+    "downloadHint": "包含全部分镜 mp4 + 参考图 + 对白脚本，拖进剪映/CapCut 即可剪辑。",
+    "repackaging": "重新打包中…",
+    "repackage": "↻ 重新打包素材包",
+    "needContent": "需先生成至少 1 个分镜视频或多镜头群组才能打包素材包",
+    "primaryHint": "把所有分镜 / 多镜头视频 + 参考图 + 对白脚本打包成 zip，直接下载到剪映/CapCut 剪辑",
+    "packaging": "打包中…",
+    "renderingInBg": "后台打包中…",
+    "packageWithSummary": "打包素材包 · {summary}",
+    "summaryPanels": "{count} 分镜",
+    "summaryMultiShot": "{count} 多镜头",
+    "summaryEmpty": "0 段",
+    "errorFallback": "打包失败"
+  },
+  "links": {
+    "viewScript": "查看剧本"
+  },
+  "tagline": {
+    "title": "From spark to screen.",
+    "body": "Phase 12.7 stub — 完整 export / preview 12.7.x 接通。先用 timeline 上的 thumbnail 点选预览各分镜视频。"
+  }
+}
