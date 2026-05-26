@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 
 interface V2NewProjectClientProps {
@@ -58,15 +59,9 @@ interface ExtractResponse {
   }
 }
 
-// Keep in sync with SCRIPT_LABELS in src/lib/script-language-detector.ts.
-const SCRIPT_LABELS: Record<ScriptCode, string> = {
-  zh: '中文',
-  en: 'English / 拉丁文',
-  ja: '日本語',
-  ko: '한국어',
-  ru: 'Русский',
-  ar: 'العربية',
-}
+// Script labels moved into messages/{locale}/v2New.json (upload.scriptLabels)
+// so en users see "Chinese" / "Japanese" etc. Source-of-truth catalog still
+// lives at src/lib/script-language-detector.ts SCRIPT_LABELS for non-V2 callers.
 
 interface WorkspaceOption {
   id: string
@@ -75,6 +70,7 @@ interface WorkspaceOption {
 }
 
 export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
+  const t = useTranslations('v2New')
   const router = useRouter()
   const searchParams = useSearchParams()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -143,7 +139,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
       })
       if (!res.ok) {
         const text = await res.text().catch(() => '')
-        setExtractError(`抽取失敗 (${res.status}): ${text || '未知錯誤'}`)
+        setExtractError(t('footer.errorExtract', { status: res.status, detail: text || t('footer.errorUnknown') }))
         return
       }
       const json = (await res.json()) as ExtractResponse
@@ -156,7 +152,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
         setChosenLang(null)
       }
     } catch (err) {
-      setExtractError(`抽取失敗:${(err as Error).message}`)
+      setExtractError(t('footer.errorExtractException', { reason: (err as Error).message }))
     } finally {
       setExtracting(false)
     }
@@ -198,13 +194,13 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
       })
       if (!res.ok) {
         const text = await res.text().catch(() => '')
-        setError(`建立失敗 (${res.status}): ${text || '未知錯誤'}`)
+        setError(t('footer.errorPrefix', { status: res.status, detail: text || t('footer.errorUnknown') }))
         return
       }
       const data = (await res.json()) as { project?: { id?: string } }
       const newId = data.project?.id
       if (!newId) {
-        setError('建立失敗:server 沒回 project id')
+        setError(t('footer.errorNoId'))
         return
       }
 
@@ -215,10 +211,10 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
       if (extracted) {
         const episodesToCreate = extracted.episodes.length > 0
           ? extracted.episodes.map((ep) => ({
-              name: ep.title || `第 ${ep.number} 集`,
+              name: ep.title || t('upload.episodeShort', { n: ep.number }),
               novelText: resolveEpisodeContent(ep),
             }))
-          : [{ name: '第 1 集', novelText: extracted.rawText }]
+          : [{ name: t('upload.episodeShort', { n: 1 }), novelText: extracted.rawText }]
         const batchRes = await fetch(`/api/novel-promotion/${newId}/episodes/batch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -231,8 +227,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
         if (!batchRes.ok) {
           const text = await batchRes.text().catch(() => '')
           setError(
-            `專案已建立但匯入劇集失敗 (${batchRes.status}): ${text || '未知錯誤'}。` +
-            `可點下方「前往空白專案」進入工作區,在劇本頁手動重試上傳。`,
+            `${t('footer.errorPrefix', { status: batchRes.status, detail: text || t('footer.errorUnknown') })}\n${t('footer.halfDoneNote')}`,
           )
           setCreatedProjectId(newId)
           return
@@ -241,7 +236,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
 
       router.push(`/${locale}/v2/workspace/${newId}`)
     } catch (err) {
-      setError(`建立失敗:${(err as Error).message}`)
+      setError(t('footer.errorBuildFailed', { reason: (err as Error).message }))
     } finally {
       setSubmitting(false)
     }
@@ -249,10 +244,14 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
 
   const episodeCount = extracted?.episodes.length ?? 0
   const modeLabel: Record<ExtractMode, string> = {
-    table: `表格 (${extracted?.meta.tableRowsDetected ?? 0} 列)`,
-    markers: `標題 (${extracted?.meta.markerType ?? ''})`,
-    prose: '無結構 — 將寫入單一集',
+    table: t('upload.modeTable', { rows: extracted?.meta.tableRowsDetected ?? 0 }),
+    markers: t('upload.modeMarkers', { type: extracted?.meta.markerType ?? '' }),
+    prose: t('upload.modeProse'),
   }
+  // Script labels via translations so en users see "Chinese" / "Japanese"
+  // etc. Caller passes the ScriptCode key from SCRIPT_LABELS.
+  const scriptLabel = (code: ScriptCode): string =>
+    t(`upload.scriptLabels.${code}` as `upload.scriptLabels.${ScriptCode}`)
 
   return (
     <div className="grain min-h-screen bg-stone-950 text-stone-200">
@@ -261,33 +260,33 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
           href={`/${locale}/v2`}
           className="font-mono text-[14px] tracking-[0.2em] text-stone-500 transition-colors hover:text-amber-400"
         >
-          ← 我的專案
+          {t('backToProjects')}
         </Link>
       </header>
 
       <main className="mx-auto max-w-2xl px-12 py-16">
         <div className="mb-10">
           <div className="font-mono text-[14px] tracking-[0.25em] text-amber-500/70">
-            STEP 00 — NEW
+            {t('step')}
           </div>
           <h1 className="mt-2 font-serif-cn text-3xl font-light text-stone-100">
-            新建專案
+            {t('title')}
           </h1>
           <p className="mt-1 font-fraunces text-sm italic text-stone-500">
-            Begin a new short-drama project
+            {t('subtitle')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
-              專案名稱 · NAME *
+              {t('form.nameLabel')}
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例:雨夜的火車站、總裁的小秘書、武林獨白…"
+              placeholder={t('form.namePlaceholder')}
               maxLength={100}
               required
               autoFocus
@@ -297,32 +296,32 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
 
           <div>
             <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
-              簡述 · DESCRIPTION（選填）
+              {t('form.descLabel')}
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="一句話描述故事大綱、目標觀眾、或這部專案的核心情緒…"
+              placeholder={t('form.descPlaceholder')}
               maxLength={500}
               rows={4}
               className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 px-4 py-3 font-serif-cn text-sm leading-relaxed text-stone-200 placeholder:text-stone-600 focus:border-amber-500/60 focus:outline-none"
             />
             <div className="mt-1 text-right font-mono text-[14px] text-stone-700">
-              {description.length} / 500
+              {t('form.descCounter', { count: description.length })}
             </div>
           </div>
 
-          {/* Phase 12.5+ — workspace assignment. "" = 個人專案. */}
+          {/* Phase 12.5+ — workspace assignment. "" = personal scope */}
           <div>
             <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
-              所在工作區 · WORKSPACE
+              {t('form.wsLabel')}
             </label>
             <select
               value={workspaceId}
               onChange={(e) => setWorkspaceId(e.target.value)}
               className="w-full rounded-sm border border-stone-800 bg-stone-900/40 px-4 py-3 font-serif-cn text-sm text-stone-200 focus:border-amber-500/60 focus:outline-none"
             >
-              <option value="">個人專案（只有你 + admin 能存取）</option>
+              <option value="">{t('form.wsPersonalOption')}</option>
               {workspaces.map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}{w.organization?.name ? ` · ${w.organization.name}` : ''}
@@ -330,14 +329,14 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               ))}
             </select>
             <p className="mt-1 font-fraunces text-[11px] italic text-stone-500">
-              建好之後也可以從專案首頁 [👥 協作者] 改
+              {t('form.wsHint')}
             </p>
           </div>
 
           {/* Bulk-upload picker */}
           <div>
             <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
-              劇本檔案 · SCRIPT FILE（選填）
+              {t('upload.label')}
             </label>
             <input
               ref={fileInputRef}
@@ -353,7 +352,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                 className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-amber-500/40 bg-amber-500/5 px-4 py-6 font-serif-cn text-sm text-amber-300 transition-all hover:bg-amber-500/10"
               >
                 <AppIcon name="upload" className="h-4 w-4" />
-                上傳 .docx / .txt / .md 自動拆集
+                {t('upload.cta')}
               </button>
             ) : (
               <div className="rounded-sm border border-amber-900/40 bg-stone-900/40 p-4">
@@ -370,7 +369,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                     type="button"
                     onClick={clearFile}
                     className="shrink-0 rounded-sm p-1 text-stone-500 transition-colors hover:bg-stone-800 hover:text-stone-300"
-                    aria-label="移除檔案"
+                    aria-label={t('upload.removeAria')}
                   >
                     <AppIcon name="close" className="h-4 w-4" />
                   </button>
@@ -380,7 +379,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                 <div className="mt-3 border-t border-stone-800/60 pt-3">
                   {extracting ? (
                     <p className="font-mono text-[12px] tracking-wider text-amber-500/70">
-                      抽取中…
+                      {t('upload.extracting')}
                     </p>
                   ) : extractError ? (
                     <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-serif-cn text-xs text-rose-300">
@@ -389,7 +388,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                   ) : extracted ? (
                     <div>
                       <p className="font-mono text-[12px] tracking-wider text-emerald-500/80">
-                        ✓ 偵測到 {episodeCount > 0 ? `${episodeCount} 集` : '0 集'}
+                        {episodeCount > 0 ? t('upload.detected', { count: episodeCount }) : t('upload.detectedZero')}
                         <span className="ml-2 text-stone-500">· {modeLabel[extracted.mode]}</span>
                       </p>
 
@@ -399,7 +398,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                       {extracted.meta.languages?.isMultilingual ? (
                         <div className="mt-3 rounded-sm border border-amber-500/30 bg-amber-500/5 px-3 py-2">
                           <p className="mb-2 font-serif-cn text-[12px] text-amber-200/90">
-                            偵測到多語言混排,匯入前選一種保留:
+                            {t('upload.multilingualPrompt')}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {extracted.meta.languages.detected.map((code) => (
@@ -418,12 +417,12 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                                   checked={chosenLang === code}
                                   onChange={() => setChosenLang(code)}
                                 />
-                                {SCRIPT_LABELS[code]}
+                                {scriptLabel(code)}
                               </label>
                             ))}
                           </div>
                           <p className="mt-2 font-mono text-[11px] text-stone-500">
-                            其他語言段落會被自動移除,場景頭(INT./EXT.)和雙語標題會保留。
+                            {t('upload.multilingualNote')}
                           </p>
                         </div>
                       ) : null}
@@ -433,20 +432,20 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                           {extracted.episodes.slice(0, 8).map((ep) => (
                             <li key={ep.number} className="truncate">
                               <span className="mr-2 font-mono text-amber-500/70">
-                                第 {ep.number} 集
+                                {t('upload.episodeShort', { n: ep.number })}
                               </span>
                               {ep.title}
                             </li>
                           ))}
                           {episodeCount > 8 ? (
                             <li className="font-mono text-[11px] text-stone-600">
-                              …還有 {episodeCount - 8} 集
+                              {t('upload.episodeShort', { n: `… +${episodeCount - 8}` })}
                             </li>
                           ) : null}
                         </ul>
                       ) : (
                         <p className="mt-2 font-serif-cn text-xs text-stone-500">
-                          檔案未偵測到分集結構,整份文本會寫入單一集,之後可在工作區手動拆分。
+                          {t('upload.noStructureHint')}
                         </p>
                       )}
                     </div>
@@ -461,10 +460,10 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               💡 TIP
             </div>
             <p className="mt-2 font-serif-cn text-xs leading-relaxed text-stone-400">
-              建立後進入工作區,你可以
-              <span className="text-amber-400">逐集貼劇本</span>、
-              <span className="text-amber-400">設定畫面比例與風格</span>、
-              然後在「劇本拆解」與「分鏡」step 用 AI 自動抽出角色 / 場景 / 鏡頭。
+              {t('footer.tipHeader')}
+              <span className="text-amber-400"> · {t('footer.tipBullet1')}</span>
+              <span className="text-amber-400"> · {t('footer.tipBullet2')}</span>
+              <span> · {t('footer.tipBullet3')}</span>
             </p>
           </div>
 
@@ -476,7 +475,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
                   href={`/${locale}/v2/workspace/${createdProjectId}`}
                   className="mt-3 inline-flex items-center gap-2 rounded-sm border border-rose-500/40 px-4 py-2 text-rose-200 transition-colors hover:bg-rose-500/10"
                 >
-                  前往空白專案 →
+                  {t('footer.goToBlank')}
                 </Link>
               ) : null}
             </div>
@@ -487,7 +486,7 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
               href={`/${locale}/v2`}
               className="rounded-sm border border-stone-800 bg-stone-900/30 px-5 py-2.5 font-serif-cn text-sm text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
             >
-              取消
+              {t('footer.cancel')}
             </Link>
             <button
               type="submit"
@@ -496,10 +495,10 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {submitting
-                ? '建立中…'
+                ? t('footer.submitting')
                 : episodeCount > 0
-                  ? `建立並匯入 ${episodeCount} 集`
-                  : '建立並進入工作區'}
+                  ? t('footer.submitWithImport', { count: episodeCount })
+                  : t('footer.submit')}
             </button>
           </div>
         </form>

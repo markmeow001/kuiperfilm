@@ -16,6 +16,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
@@ -56,6 +57,7 @@ interface ProjectLike {
 }
 
 export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
+  const t = useTranslations('v2Final')
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLike | undefined
   // URL-driven current episode (V2WorkspaceShell tab bar). Look up the
@@ -66,7 +68,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
   const buildHref = useEpisodePreservingHref()
   // Phase 12.5 — viewer-role users see disabled stitch buttons.
   const { canEdit } = useProjectAccess(projectId)
-  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
+  const viewerTip = canEdit ? undefined : t('viewerHint')
   const episodes = project?.novelPromotionData?.episodes ?? []
   const currentEpisode = episodes.find((ep) => ep?.id === currentEpisodeId) ?? episodes[0] ?? null
   const storyboardsQuery = useStoryboards(projectId, currentEpisode?.id ?? null)
@@ -123,26 +125,26 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                     className="h-full w-full object-cover"
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-stone-950/40">
-                    <p className="font-fraunces text-base italic text-stone-300">尚未生成此分鏡視頻</p>
+                    <p className="font-fraunces text-base italic text-stone-300">{t('player.videoNotYet')}</p>
                   </div>
                 </>
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <p className="font-fraunces text-base italic text-stone-500">還沒有任何分鏡資料</p>
+                  <p className="font-fraunces text-base italic text-stone-500">{t('player.noStoryboard')}</p>
                 </div>
               )}
             </div>
             <div className="absolute left-4 top-4 font-mono text-[14px] tracking-[0.3em] text-amber-300/80">
-              EP 01 · OPENING SEQUENCE
+              {t('player.header')}
             </div>
           </div>
 
           {/* Timeline strip */}
           <div className="mt-5 rounded-sm border border-stone-800/60 bg-stone-900/40 p-4">
             <div className="mb-3 flex items-center justify-between">
-              <div className="font-fraunces text-sm italic text-amber-500/80">Timeline</div>
+              <div className="font-fraunces text-sm italic text-amber-500/80">{t('timeline.title')}</div>
               <div className="font-mono text-[14px] tracking-wider text-stone-500">
-                {panelsWithVideo.length} / {allPanels.length} 段已生視頻
+                {t('timeline.ratio', { done: panelsWithVideo.length, total: allPanels.length })}
               </div>
             </div>
             <div className="flex h-12 gap-1 overflow-x-auto">
@@ -162,7 +164,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                           : 'border-stone-800/60 opacity-50'
                     }`}
                     style={{ width: 48 }}
-                    title={ready ? '已生視頻' : p.imageUrl ? '只有圖' : '尚未生成'}
+                    title={ready ? t('timeline.panelTitleReady') : p.imageUrl ? t('timeline.panelTitleImageOnly') : t('timeline.panelTitleNone')}
                   >
                     {p.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -184,15 +186,15 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
         {/* Stats + Export */}
         <div className="col-span-1 space-y-5">
           <div className="rounded-sm border border-amber-900/20 bg-stone-900/40 p-5">
-            <div className="mb-4 font-fraunces text-sm italic text-amber-500/80">Sheet</div>
+            <div className="mb-4 font-fraunces text-sm italic text-amber-500/80">{t('stats.title')}</div>
             <dl className="space-y-3">
               {[
-                { k: '總分鏡', v: `${allPanels.length} 個` },
-                { k: '已生圖', v: `${panelsWithImage.length}` },
-                { k: '已生視頻', v: `${panelsWithVideo.length}` },
-                { k: '解析度', v: ratio },
-                { k: '目標時長', v: `${targetDuration}s` },
-                { k: '預估已產出', v: `${generatedSeconds}s` },
+                { k: t('stats.totalPanels'), v: t('stats.totalPanelsValue', { count: allPanels.length }) },
+                { k: t('stats.withImage'), v: `${panelsWithImage.length}` },
+                { k: t('stats.withVideo'), v: `${panelsWithVideo.length}` },
+                { k: t('stats.resolution'), v: ratio },
+                { k: t('stats.targetDuration'), v: t('stats.durationSeconds', { n: targetDuration }) },
+                { k: t('stats.estimatedDuration'), v: t('stats.durationSeconds', { n: generatedSeconds }) },
               ].map((row) => (
                 <div
                   key={row.k}
@@ -213,10 +215,10 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                 className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
               >
                 <AppIcon name="download" className="h-4 w-4" />
-                下載素材包 ZIP
+                {t('package.downloadZip')}
               </a>
               <p className="rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-2 font-serif-cn text-xs text-stone-400">
-                包含全部分鏡 mp4 + 參考圖 + 對白腳本，拖進剪映/CapCut 即可剪輯。
+                {t('package.downloadHint')}
               </p>
               <button
                 type="button"
@@ -225,7 +227,7 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                 title={viewerTip}
                 className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-stone-800 bg-stone-900/40 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {stitchMp4.isPending ? '重新打包中…' : '↻ 重新打包素材包'}
+                {stitchMp4.isPending ? t('package.repackaging') : t('package.repackage')}
               </button>
             </div>
           ) : (
@@ -243,28 +245,28 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
                 !canEdit
                   ? viewerTip
                   : !hasPackageableContent
-                  ? '需先生成至少 1 個分鏡視頻或多鏡頭群組才能打包素材包'
-                  : '把所有分鏡 / 多鏡頭視頻 + 參考圖 + 對白腳本打包成 zip,直接下載到剪映/CapCut 剪輯'
+                  ? t('package.needContent')
+                  : t('package.primaryHint')
               }
               className="flex w-full items-center justify-center gap-2 rounded-sm bg-amber-500 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="download" className="h-4 w-4" />
               {stitchMp4.isPending
-                ? '打包中…'
+                ? t('package.packaging')
                 : currentEpisode?.stitchStatus === 'rendering'
-                  ? '後台打包中…'
+                  ? t('package.renderingInBg')
                   : (() => {
                       const parts: string[] = []
-                      if (panelsWithVideo.length > 0) parts.push(`${panelsWithVideo.length} 分鏡`)
-                      if (multiShotGroupCount > 0) parts.push(`${multiShotGroupCount} 多鏡頭`)
-                      const summary = parts.length > 0 ? parts.join(' + ') : '0 段'
-                      return `打包素材包 · ${summary}`
+                      if (panelsWithVideo.length > 0) parts.push(t('package.summaryPanels', { count: panelsWithVideo.length }))
+                      if (multiShotGroupCount > 0) parts.push(t('package.summaryMultiShot', { count: multiShotGroupCount }))
+                      const summary = parts.length > 0 ? parts.join(' + ') : t('package.summaryEmpty')
+                      return t('package.packageWithSummary', { summary })
                     })()}
             </button>
           )}
           {stitchMp4.isError ? (
             <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-              {(stitchMp4.error as Error)?.message ?? '打包失敗'}
+              {(stitchMp4.error as Error)?.message ?? t('package.errorFallback')}
             </p>
           ) : null}
 
@@ -272,15 +274,13 @@ export function V2FinalClient({ projectId, locale }: V2FinalClientProps) {
             href={buildHref(`/${locale}/v2/workspace/${projectId}/script`)}
             className="flex items-center justify-center rounded-sm border border-stone-800 bg-stone-900/40 py-2.5 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400"
           >
-            查看劇本
+            {t('links.viewScript')}
           </Link>
 
           <div className="rounded-sm border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-rose-900/10 p-4">
-            <div className="font-fraunces text-sm italic text-amber-400">From spark to screen.</div>
+            <div className="font-fraunces text-sm italic text-amber-400">{t('tagline.title')}</div>
             <div className="mt-2 font-serif-cn text-xs leading-relaxed text-stone-300">
-              Phase 12.7 stub — 完整 export / preview 12.7.x 接通。
-              <br />
-              先用 timeline 上的 thumbnail 點選預覽各分鏡視頻。
+              {t('tagline.body')}
             </div>
           </div>
         </div>

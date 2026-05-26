@@ -1,0 +1,57 @@
+{
+  "backToProjects": "← My projects",
+  "step": "STEP 00 — NEW",
+  "title": "New project",
+  "subtitle": "Begin a new short-drama project",
+  "form": {
+    "nameLabel": "Project name · NAME *",
+    "namePlaceholder": "e.g. Rainy night station, CEO's secretary, martial arts monologue…",
+    "descLabel": "Description · DESCRIPTION (optional)",
+    "descPlaceholder": "One sentence about the story, target audience, or core mood…",
+    "descCounter": "{count} / 500",
+    "wsLabel": "Workspace · WORKSPACE",
+    "wsPersonalOption": "Personal (only you + admin can access)",
+    "wsHint": "You can change this later from the project page [👥 Collaborators]"
+  },
+  "upload": {
+    "label": "Script file · SCRIPT FILE (optional)",
+    "cta": "Upload .docx / .txt / .md to auto-split episodes",
+    "removeAria": "Remove file",
+    "extracting": "Extracting…",
+    "detected": "✓ Detected {count} episodes",
+    "detectedZero": "✓ Detected 0 episodes",
+    "modeTable": "Table ({rows} rows)",
+    "modeMarkers": "Headings ({type})",
+    "modeProse": "Unstructured — will write to a single episode",
+    "multilingualPrompt": "Multilingual content detected. Choose one to keep before importing:",
+    "multilingualNote": "Other languages will be removed. Scene headers (INT./EXT.) and bilingual titles are kept.",
+    "scriptLabels": {
+      "zh": "Chinese",
+      "en": "English / Latin",
+      "ja": "Japanese",
+      "ko": "Korean",
+      "ru": "Russian",
+      "ar": "Arabic"
+    },
+    "episodeShort": "Ep {n}",
+    "noStructureHint": "No episode structure detected. The full text will write to a single episode — you can split manually later in the workspace."
+  },
+  "footer": {
+    "tipHeader": "After creation in the workspace, you can",
+    "tipBullet1": "Paste the script with [💾 Save]",
+    "tipBullet2": "Tap [Analyze] to auto-extract characters / scenes / shots",
+    "tipBullet3": "Then continue in the \"Script\" and \"Storyboard\" steps",
+    "submit": "Create and enter workspace",
+    "submitWithImport": "Create and import {count} episodes",
+    "submitting": "Creating…",
+    "cancel": "Cancel",
+    "errorPrefix": "Create failed ({status}): {detail}",
+    "errorUnknown": "Unknown error",
+    "errorNoId": "Create failed: server returned no project id",
+    "errorBuildFailed": "Create failed: {reason}",
+    "errorExtract": "Extract failed ({status}): {detail}",
+    "errorExtractException": "Extract failed: {reason}",
+    "halfDoneNote": "Project created but episode import failed — click \"Go to blank project\" below to enter the workspace and retry upload manually on the script page.",
+    "goToBlank": "Go to blank project →"
+  }
+}

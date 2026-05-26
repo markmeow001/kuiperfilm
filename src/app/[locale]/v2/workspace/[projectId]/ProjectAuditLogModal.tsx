@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useTranslations } from 'next-intl'
 
 interface NamedUser {
   id: string
@@ -53,6 +54,7 @@ interface ProjectAuditLogModalProps {
 }
 
 export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModalProps) {
+  const t = useTranslations('collab.auditModal')
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
@@ -73,7 +75,7 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
       setCursor(body.nextCursor)
       setHasMore(body.hasMore)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '載入失敗')
+      setError(err instanceof Error ? err.message : t('loadError'))
     } finally {
       setLoading(false)
     }
@@ -94,12 +96,12 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-3">
-          <h3 className="font-serif-cn text-lg text-stone-100">活動記錄</h3>
+          <h3 className="font-serif-cn text-lg text-stone-100">{t('title')}</h3>
           <button
             type="button"
             onClick={onClose}
             className="font-mono text-sm text-stone-500 transition-colors hover:text-stone-300"
-            aria-label="關閉"
+            aria-label={t('closeAria')}
           >
             ✕
           </button>
@@ -114,7 +116,7 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
 
           {entries.length === 0 && !loading ? (
             <div className="py-12 text-center font-fraunces text-sm italic text-stone-500">
-              沒有活動記錄
+              {t('empty')}
             </div>
           ) : (
             <ul className="divide-y divide-stone-800/60">
@@ -125,10 +127,10 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
                       {formatTs(entry.createdAt)}
                     </span>
                     <span className="w-28 shrink-0 font-serif-cn text-xs text-amber-400">
-                      @{entry.actor?.displayName || entry.actor?.name || '未知'}
+                      @{entry.actor?.displayName || entry.actor?.name || t('actorUnknown')}
                     </span>
                     <span className="font-serif-cn text-sm text-stone-200">
-                      {friendlyDescription(entry)}
+                      {friendlyDescription(entry, t)}
                     </span>
                     {entry.snapshot && Object.keys(entry.snapshot as object).length > 0 ? (
                       <button
@@ -136,7 +138,7 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
                         onClick={() => setExpandedId((id) => (id === entry.id ? null : entry.id))}
                         className="ml-auto font-mono text-[11px] text-stone-500 hover:text-amber-300"
                       >
-                        {expandedId === entry.id ? '收起 raw' : 'raw'}
+                        {expandedId === entry.id ? t('rawToggleHide') : t('rawToggleShow')}
                       </button>
                     ) : null}
                   </div>
@@ -153,7 +155,7 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
 
         <div className="flex items-center justify-between border-t border-amber-900/20 px-6 py-2">
           <span className="font-mono text-[11px] text-stone-500">
-            {entries.length} 筆{hasMore ? '+' : ''}
+            {entries.length} {t('countSuffix')}{hasMore ? '+' : ''}
           </span>
           {hasMore ? (
             <button
@@ -162,10 +164,10 @@ export function ProjectAuditLogModal({ projectId, onClose }: ProjectAuditLogModa
               disabled={loading}
               className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-1 font-mono text-[11px] text-amber-300 transition-colors hover:bg-amber-500/15 disabled:opacity-50"
             >
-              {loading ? '載入中…' : '載入更多'}
+              {loading ? t('loading') : t('loadMore')}
             </button>
           ) : (
-            <span className="font-fraunces text-[11px] italic text-stone-600">已到底</span>
+            <span className="font-fraunces text-[11px] italic text-stone-600">{t('atBottom')}</span>
           )}
         </div>
       </div>
@@ -183,31 +185,32 @@ function formatTs(iso: string): string {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
 }
 
+type AuditT = ReturnType<typeof useTranslations>
+
 /**
- * Turn an audit entry into one Chinese sentence the user can read at a
- * glance. Falls back to action verb + truncated id when targets are
- * missing (entity deleted since the audit was written).
+ * Turn an audit entry into one sentence the user can read at a glance.
+ * Falls back to action verb + truncated id when targets are missing
+ * (entity deleted since the audit was written).
  *
- * Examples:
+ * Examples (zh):
  *   "把專案移到 Team A"
- *   "把專案移回個人專案"
  *   "邀請 @userA 為 editor"
- *   "把 @userB 從 viewer 改成 editor"
- *   "刪除專案"
- *   "批准 @userC 的編輯請求"
+ * Examples (en):
+ *   "Moved project from Personal to Team A"
+ *   "Invited @userA as editor"
  */
-function friendlyDescription(entry: AuditEntry): string {
+function friendlyDescription(entry: AuditEntry, t: AuditT): string {
   const snap = (entry.snapshot ?? {}) as Record<string, unknown>
-  const t = entry.targets
+  const targets = entry.targets
 
   const userLabel = (u: { name: string | null; displayName: string | null } | null | undefined): string => {
-    if (!u) return '某人'
-    return `@${u.displayName || u.name || '未知'}`
+    if (!u) return t('unknownUser')
+    return `@${u.displayName || u.name || t('actorUnknown')}`
   }
   const wsLabel = (w: { name: string | null } | null | undefined, idHint?: string | null): string => {
     if (w?.name) return w.name
-    if (idHint) return `工作區#${idHint.slice(0, 8)}`
-    return '工作區'
+    if (idHint) return `${t('workspacePrefix')}${idHint.slice(0, 8)}`
+    return t('workspaceFallback')
   }
   const roleLabel = (r: unknown): string => {
     if (r === 'editor') return 'editor'
@@ -219,44 +222,71 @@ function friendlyDescription(entry: AuditEntry): string {
     case 'project.update': {
       // workspaceId move is the only project.update we audit (today).
       if (snap.field === 'workspaceId') {
-        const newWs = t?.newWorkspace
-        const prevWs = t?.previousWorkspace
+        const newWs = targets?.newWorkspace
+        const prevWs = targets?.previousWorkspace
         if (!snap.newWorkspaceId && snap.previousWorkspaceId) {
-          return `把專案從 ${wsLabel(prevWs, snap.previousWorkspaceId as string)} 移回個人專案`
+          return t('actions.projectMoveToPersonal', {
+            from: wsLabel(prevWs, snap.previousWorkspaceId as string),
+          })
         }
         if (snap.newWorkspaceId && !snap.previousWorkspaceId) {
-          return `把專案從個人專案移到 ${wsLabel(newWs, snap.newWorkspaceId as string)}`
+          return t('actions.projectMoveFromPersonal', {
+            to: wsLabel(newWs, snap.newWorkspaceId as string),
+          })
         }
         if (snap.newWorkspaceId && snap.previousWorkspaceId) {
-          return `把專案從 ${wsLabel(prevWs, snap.previousWorkspaceId as string)} 移到 ${wsLabel(newWs, snap.newWorkspaceId as string)}`
+          return t('actions.projectMoveBetween', {
+            from: wsLabel(prevWs, snap.previousWorkspaceId as string),
+            to: wsLabel(newWs, snap.newWorkspaceId as string),
+          })
         }
       }
-      return '更新專案'
+      return t('actions.projectUpdateUnknownChange')
     }
     case 'project.soft_delete':
-      return snap.phase === 'hard_delete' ? '永久刪除專案（30 天寬限期到）' : '刪除專案'
+      return snap.phase === 'hard_delete'
+        ? t('actions.projectHardDelete')
+        : t('actions.projectSoftDelete')
     case 'project.restore':
-      return '恢復已刪除的專案'
+      return t('actions.projectRestore')
     case 'collaborator.add':
-      return `邀請 ${userLabel(t?.user)} 為 ${roleLabel(snap.newRole) || 'collaborator'}`
+      return t('actions.collaboratorAdd', {
+        user: userLabel(targets?.user),
+        role: roleLabel(snap.newRole) || 'collaborator',
+      })
     case 'collaborator.role_change':
-      return `把 ${userLabel(t?.user)} 從 ${roleLabel(snap.previousRole)} 改成 ${roleLabel(snap.newRole)}`
+      return t('actions.collaboratorRoleChange', {
+        user: userLabel(targets?.user),
+        prev: roleLabel(snap.previousRole),
+        next: roleLabel(snap.newRole),
+      })
     case 'collaborator.remove':
-      return `移除 ${userLabel(t?.user)} 的協作權限`
+      return t('actions.collaboratorRemove', { user: userLabel(targets?.user) })
     case 'edit_request.create':
-      return `${userLabel(t?.requester)} 請求編輯權限`
+      return t('actions.editRequestCreate', { user: userLabel(targets?.requester) })
     case 'edit_request.approve':
-      return `批准 ${userLabel(t?.requester)} 的編輯請求`
+      return t('actions.editRequestApprove', { user: userLabel(targets?.requester) })
     case 'edit_request.deny':
-      return `拒絕 ${userLabel(t?.requester)} 的編輯請求`
+      return t('actions.editRequestDeny', { user: userLabel(targets?.requester) })
     case 'edit_request.withdraw':
-      return `${userLabel(t?.requester)} 撤回了編輯請求`
+      return t('actions.editRequestWithdraw', { user: userLabel(targets?.requester) })
     case 'workspace_member.add':
-      return `把 ${userLabel(t?.user)} 加進 ${wsLabel(t?.workspace, snap.workspaceId as string | null)}`
+      return t('actions.workspaceMemberAdd', {
+        user: userLabel(targets?.user),
+        workspace: wsLabel(targets?.workspace, snap.workspaceId as string | null),
+      })
     case 'workspace_member.remove':
-      return `把 ${userLabel(t?.user)} 從 ${wsLabel(t?.workspace, snap.workspaceId as string | null)} 移除`
+      return t('actions.workspaceMemberRemove', {
+        user: userLabel(targets?.user),
+        workspace: wsLabel(targets?.workspace, snap.workspaceId as string | null),
+      })
     case 'workspace_member.role_change':
-      return `把 ${userLabel(t?.user)} 在 ${wsLabel(t?.workspace, snap.workspaceId as string | null)} 的角色從 ${roleLabel(snap.previousRole)} 改成 ${roleLabel(snap.newRole)}`
+      return t('actions.workspaceMemberRoleChange', {
+        user: userLabel(targets?.user),
+        workspace: wsLabel(targets?.workspace, snap.workspaceId as string | null),
+        prev: roleLabel(snap.previousRole),
+        next: roleLabel(snap.newRole),
+      })
     default:
       return entry.action
   }

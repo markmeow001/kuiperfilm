@@ -1,0 +1,38 @@
+{
+  "header": {
+    "title": "音色列表",
+    "loading": "载入中…"
+  },
+  "filters": {
+    "genderTitle": "筛选 · 性别",
+    "emotionTitle": "筛选 · 情绪",
+    "gender": {
+      "all": "全部",
+      "female": "女",
+      "male": "男",
+      "child": "童",
+      "group": "群演",
+      "special": "特殊"
+    },
+    "emotion": {
+      "neutral": "中性",
+      "happy": "欢快",
+      "sad": "悲伤",
+      "angry": "愤怒",
+      "surprised": "惊讶",
+      "mysterious": "神秘",
+      "tender": "温柔",
+      "solemn": "庄严",
+      "playful": "俏皮"
+    }
+  },
+  "empty": {
+    "noVoices": "资产中心还没有音色 — 请先到资产中心新增",
+    "noMatches": "没有符合筛选的音色"
+  },
+  "voice": {
+    "untitled": "未命名音色",
+    "bindHint": "将绑到 {target}",
+    "controlsHint": "情绪强度 / 语速 / 语调 控制，下一步加。"
+  }
+}

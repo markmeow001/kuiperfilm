@@ -1,0 +1,57 @@
+{
+  "backToProjects": "← 我的专案",
+  "step": "STEP 00 — NEW",
+  "title": "新建专案",
+  "subtitle": "Begin a new short-drama project",
+  "form": {
+    "nameLabel": "专案名称 · NAME *",
+    "namePlaceholder": "例：雨夜的火车站、总裁的小秘书、武林独白…",
+    "descLabel": "简述 · DESCRIPTION（选填）",
+    "descPlaceholder": "一句话描述故事大纲、目标观众、或这部专案的核心情绪…",
+    "descCounter": "{count} / 500",
+    "wsLabel": "所在工作区 · WORKSPACE",
+    "wsPersonalOption": "个人专案（只有你 + admin 能存取）",
+    "wsHint": "建好之后也可以从专案首页 [👥 协作者] 改"
+  },
+  "upload": {
+    "label": "剧本档案 · SCRIPT FILE（选填）",
+    "cta": "上传 .docx / .txt / .md 自动拆集",
+    "removeAria": "移除档案",
+    "extracting": "抽取中…",
+    "detected": "✓ 侦测到 {count} 集",
+    "detectedZero": "✓ 侦测到 0 集",
+    "modeTable": "表格 ({rows} 列)",
+    "modeMarkers": "标题 ({type})",
+    "modeProse": "无结构 — 将写入单一集",
+    "multilingualPrompt": "侦测到多语言混排，汇入前选一种保留：",
+    "multilingualNote": "其他语言段落会被自动移除，场景头 (INT./EXT.) 和双语标题会保留。",
+    "scriptLabels": {
+      "zh": "中文",
+      "en": "English / 拉丁文",
+      "ja": "日本語",
+      "ko": "한국어",
+      "ru": "Русский",
+      "ar": "العربية"
+    },
+    "episodeShort": "第 {n} 集",
+    "noStructureHint": "档案未侦测到分集结构，整份文本会写入单一集，之后可在工作区手动拆分。"
+  },
+  "footer": {
+    "tipHeader": "建立后进入工作区，你可以",
+    "tipBullet1": "用 [💾 储存] 把剧本贴上",
+    "tipBullet2": "按 [一键分析] 自动抽出角色 / 场景 / 镜头",
+    "tipBullet3": "然后在「剧本拆解」和「分镜」step",
+    "submit": "建立并进入工作区",
+    "submitWithImport": "建立并汇入 {count} 集",
+    "submitting": "建立中…",
+    "cancel": "取消",
+    "errorPrefix": "建立失败 ({status}): {detail}",
+    "errorUnknown": "未知错误",
+    "errorNoId": "建立失败：server 没回 project id",
+    "errorBuildFailed": "建立失败：{reason}",
+    "errorExtract": "抽取失败 ({status}): {detail}",
+    "errorExtractException": "抽取失败：{reason}",
+    "halfDoneNote": "专案已建立但汇入剧集失败 — 可以点下方「前往空白专案」进入工作区，然后在剧本页手动重试上传。",
+    "goToBlank": "前往空白专案 →"
+  }
+}

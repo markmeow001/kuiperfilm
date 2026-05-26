@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useGlobalVoices } from '@/lib/query/hooks/useGlobalAssets'
 
@@ -25,10 +26,32 @@ interface VoiceLike {
   metadata?: { gender?: string; age?: string; emotion?: string } | null
 }
 
-const GENDER_FILTERS = ['全部', '女', '男', '童', '群演', '特殊'] as const
-const EMOTION_FILTERS = ['中性', '歡快', '悲傷', '憤怒', '驚訝', '神秘', '溫柔', '莊嚴', '俏皮'] as const
+// Filter values stay as Simplified Chinese literals because they match
+// the `metadata.gender` / `metadata.emotion` strings stored in DB rows.
+// Display labels come from the v2Voice namespace so en users see English
+// chip labels while the equality check stays stable.
+const GENDER_FILTERS: { key: string; labelKey: string }[] = [
+  { key: '全部', labelKey: 'all' },
+  { key: '女', labelKey: 'female' },
+  { key: '男', labelKey: 'male' },
+  { key: '童', labelKey: 'child' },
+  { key: '群演', labelKey: 'group' },
+  { key: '特殊', labelKey: 'special' },
+]
+const EMOTION_FILTERS: { key: string; labelKey: string }[] = [
+  { key: '中性', labelKey: 'neutral' },
+  { key: '欢快', labelKey: 'happy' },
+  { key: '悲伤', labelKey: 'sad' },
+  { key: '愤怒', labelKey: 'angry' },
+  { key: '惊讶', labelKey: 'surprised' },
+  { key: '神秘', labelKey: 'mysterious' },
+  { key: '温柔', labelKey: 'tender' },
+  { key: '庄严', labelKey: 'solemn' },
+  { key: '俏皮', labelKey: 'playful' },
+]
 
 export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
+  const t = useTranslations('v2Voice')
   const voicesQuery = useGlobalVoices(null)
   const voices = useMemo(
     () => (voicesQuery.data ?? []) as unknown as VoiceLike[],
@@ -93,27 +116,27 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
         {/* Filter rail */}
         <div className="col-span-1 space-y-6">
           <div>
-            <div className="mb-3 font-mono text-[14px] tracking-wider text-amber-600">篩選 · 性別</div>
+            <div className="mb-3 font-mono text-[14px] tracking-wider text-amber-600">{t('filters.genderTitle')}</div>
             <div className="grid grid-cols-3 gap-2">
               {GENDER_FILTERS.map((g) => (
                 <button
-                  key={g}
+                  key={g.key}
                   type="button"
-                  onClick={() => setGenderFilter(g)}
+                  onClick={() => setGenderFilter(g.key)}
                   className={`rounded-sm border px-3 py-2 font-serif-cn text-xs transition-all ${
-                    g === genderFilter
+                    g.key === genderFilter
                       ? 'border-amber-500/50 bg-amber-500/5 text-amber-400'
                       : 'border-stone-800 text-stone-500 hover:border-stone-700'
                   }`}
                 >
-                  {g}
+                  {t(`filters.gender.${g.labelKey}` as `filters.gender.${'all' | 'female' | 'male' | 'child' | 'group' | 'special'}`)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <div className="mb-3 font-mono text-[14px] tracking-wider text-amber-600">篩選 · 情緒</div>
+            <div className="mb-3 font-mono text-[14px] tracking-wider text-amber-600">{t('filters.emotionTitle')}</div>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
@@ -124,20 +147,20 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
                     : 'border-stone-800 text-stone-500'
                 }`}
               >
-                全部
+                {t('filters.gender.all')}
               </button>
               {EMOTION_FILTERS.map((e) => (
                 <button
-                  key={e}
+                  key={e.key}
                   type="button"
-                  onClick={() => setEmotionFilter(emotionFilter === e ? null : e)}
+                  onClick={() => setEmotionFilter(emotionFilter === e.key ? null : e.key)}
                   className={`rounded-sm border px-2.5 py-1.5 font-serif-cn text-xs transition-all ${
-                    emotionFilter === e
+                    emotionFilter === e.key
                       ? 'border-amber-500/50 bg-amber-500/5 text-amber-400'
                       : 'border-stone-800 text-stone-500'
                   }`}
                 >
-                  {e}
+                  {t(`filters.emotion.${e.labelKey}` as `filters.emotion.${'neutral' | 'happy' | 'sad' | 'angry' | 'surprised' | 'mysterious' | 'tender' | 'solemn' | 'playful'}`)}
                 </button>
               ))}
             </div>
@@ -146,7 +169,7 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
           <div className="rounded-sm border border-amber-900/20 bg-stone-900/40 p-4">
             <div className="mb-3 font-fraunces text-sm italic text-amber-500/80">Tuning</div>
             <p className="font-serif-cn text-xs leading-relaxed text-stone-500">
-              情緒強度 / 語速 / 語調 控制,12.6.x 將綁到 panel-level voice config。
+              {t('voice.controlsHint')}
             </p>
           </div>
         </div>
@@ -154,18 +177,18 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
         {/* Voice grid */}
         <div className="col-span-2">
           <div className="mb-4 flex items-center justify-between">
-            <div className="font-fraunces text-sm italic text-amber-500/80">音色列表</div>
+            <div className="font-fraunces text-sm italic text-amber-500/80">{t('header.title')}</div>
             <div className="font-mono text-[14px] tracking-wider text-stone-500">
               {voices.length} VOICES · {filtered.length} SHOWING
             </div>
           </div>
 
           {voicesQuery.isLoading ? (
-            <p className="font-mono text-xs tracking-wider text-stone-500">載入中…</p>
+            <p className="font-mono text-xs tracking-wider text-stone-500">{t('header.loading')}</p>
           ) : filtered.length === 0 ? (
             <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
               <p className="font-fraunces text-base italic text-stone-400">
-                {voices.length === 0 ? '資產中心還沒有音色 — 請先到資產中心新增' : '沒有符合篩選的音色'}
+                {voices.length === 0 ? t('empty.noVoices') : t('empty.noMatches')}
               </p>
             </div>
           ) : (
@@ -198,7 +221,7 @@ export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2">
                         <div className={`font-serif-cn text-base ${selected ? 'text-amber-100' : 'text-stone-200'}`}>
-                          {v.name ?? '未命名音色'}
+                          {v.name ?? t('voice.untitled')}
                         </div>
                         {v.metadata?.gender ? (
                           <div className="font-mono text-[14px] tracking-wider text-stone-600">

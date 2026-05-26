@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess, type ProjectAccessRole } from '@/lib/query/hooks/useProjectAccess'
 import { AppIcon } from '@/components/ui/icons'
@@ -48,9 +49,10 @@ interface ProjectListRow {
 export function TopBar({ currentStep, projectId, projectName, draftNumber }: TopBarProps) {
   const params = useParams<{ locale?: string }>()
   const locale = params?.locale ?? 'zh'
+  const tTopbar = useTranslations('collab.topbar')
   const projectQuery = useProjectData(projectId ?? null)
   const liveName = (projectQuery.data as ProjectShape | undefined)?.name ?? null
-  const resolvedName = projectName ?? liveName ?? '未命名劇本'
+  const resolvedName = projectName ?? liveName ?? tTopbar('untitledProject')
   const step = findV2Step(currentStep)
   const stepIdx = v2StepIndex(currentStep)
   const totalSteps = V2_STEPS.length
@@ -122,6 +124,7 @@ function ProjectSwitcher({
   draftLabel,
   totalSteps,
 }: ProjectSwitcherProps) {
+  const t = useTranslations('collab.topbar')
   const [open, setOpen] = useState(false)
   const [projects, setProjects] = useState<ProjectListRow[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -185,14 +188,14 @@ function ProjectSwitcher({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="group flex items-center gap-2 rounded-sm border border-transparent bg-transparent px-2 py-1 transition-colors hover:border-amber-900/30 hover:bg-stone-900/40"
-        title="切換專案"
+        title={t('switchProject')}
       >
         <div className="text-right">
           <div className="font-fraunces text-sm italic text-stone-300 group-hover:text-amber-300">
             《{currentProjectName}》
           </div>
           <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-600">
-            DRAFT · {draftLabel}/{String(totalSteps).padStart(2, '0')}
+            {t('draftFormat', { current: draftLabel, total: String(totalSteps).padStart(2, '0') })}
           </div>
         </div>
         <AppIcon
@@ -204,17 +207,17 @@ function ProjectSwitcher({
       {open ? (
         <div className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
           <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
-            切換專案
+            {t('switchProject')}
           </div>
 
           <div className="max-h-72 overflow-y-auto py-1">
             {loading ? (
               <div className="px-4 py-3 font-mono text-[14px] tracking-wider text-stone-500">
-                載入中…
+                {t('loading')}
               </div>
             ) : otherProjects.length === 0 ? (
               <div className="px-4 py-3 font-fraunces text-xs italic text-stone-500">
-                {projects === null ? '載入中…' : '沒有其他專案'}
+                {projects === null ? t('loading') : t('noOtherProjects')}
               </div>
             ) : (
               otherProjects.map((p) => (
@@ -224,7 +227,7 @@ function ProjectSwitcher({
                   className="block px-4 py-2 font-serif-cn text-sm text-stone-300 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
                   onClick={() => setOpen(false)}
                 >
-                  {p.name || '未命名劇本'}
+                  {p.name || t('untitledProject')}
                 </Link>
               ))
             )}
@@ -236,7 +239,7 @@ function ProjectSwitcher({
               className="block px-4 py-2.5 font-serif-cn text-sm text-amber-400 transition-colors hover:bg-amber-500/10"
               onClick={() => setOpen(false)}
             >
-              + 新建 / 所有專案
+              {t('newOrAllProjects')}
             </Link>
           </div>
         </div>
@@ -268,9 +271,10 @@ function ProjectSwitcher({
  */
 function RoleBadge({ projectId }: { projectId: string }) {
   const access = useProjectAccess(projectId)
+  const t = useTranslations('collab.roleBadge')
   if (access.isLoading || !access.allowed || !access.role) return null
 
-  const { label, className, title } = roleBadgeStyle(access.role, access.canEdit)
+  const { label, className, title } = roleBadgeStyle(access.role, access.canEdit, t)
   return (
     <span
       title={title}
@@ -301,6 +305,7 @@ function RoleBadgeWithRequest({
   projectName: string
 }) {
   const access = useProjectAccess(projectId)
+  const t = useTranslations('collab.roleBadge')
   const [requestOpen, setRequestOpen] = useState(false)
 
   if (access.isLoading || !access.allowed || !access.role) return null
@@ -315,9 +320,9 @@ function RoleBadgeWithRequest({
           type="button"
           onClick={() => setRequestOpen(true)}
           className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/15"
-          title="點此向擁有者請求編輯權限"
+          title={t('requestEditTitle')}
         >
-          請求編輯
+          {t('requestEdit')}
         </button>
       ) : null}
       {requestOpen ? (
@@ -335,43 +340,45 @@ function RoleBadgeWithRequest({
   )
 }
 
-function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean): {
+type RoleBadgeT = ReturnType<typeof useTranslations>
+
+function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean, t: RoleBadgeT): {
   label: string
   className: string
   title: string
 } {
   if (role === 'admin') {
     return {
-      label: 'admin',
+      label: t('admin'),
       className: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
-      title: '系統管理員 — 全 access',
+      title: t('adminTitle'),
     }
   }
   if (role === 'owner') {
     return {
-      label: 'owner',
+      label: t('owner'),
       className: 'border-amber-500/60 bg-amber-500/15 text-amber-200',
-      title: '你是此專案擁有者',
+      title: t('ownerTitle'),
     }
   }
   if (role === 'ws_owner' || role === 'ws_owner_legacy') {
     return {
-      label: 'editor',
+      label: t('editor'),
       className: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
-      title: '工作區負責人 — 對此專案有完整編輯權',
+      title: t('wsOwnerTitle'),
     }
   }
   if (role === 'editor' || canEdit) {
     return {
-      label: 'editor',
+      label: t('editor'),
       className: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
-      title: '可編輯',
+      title: t('editorTitle'),
     }
   }
   // viewer
   return {
-    label: 'viewer',
+    label: t('viewer'),
     className: 'border-stone-700 bg-stone-900/40 text-stone-400',
-    title: '唯讀模式 — 編輯按鈕需要請求權限',
+    title: t('viewerTitle'),
   }
 }

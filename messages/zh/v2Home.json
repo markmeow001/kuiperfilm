@@ -1,0 +1,61 @@
+{
+  "header": {
+    "brand": "Kuiper",
+    "brandSubtitle": "影界",
+    "tagline": "AI · MANHUA · STUDIO",
+    "teamLink": "团队",
+    "teamLinkTitle": "工作区 / 团队管理",
+    "profileLink": "设定中心",
+    "profileLinkTitle": "设定中心",
+    "adminLink": "管理后台",
+    "adminLinkTitle": "管理后台",
+    "logout": "登出"
+  },
+  "loading": "载入中…",
+  "title": {
+    "kicker": "MY PROJECTS",
+    "heading": "我的专案",
+    "subtitle": "Manage your AI cinematic projects"
+  },
+  "search": {
+    "placeholder": "搜寻专案名称或描述…",
+    "clear": "清除",
+    "search": "搜寻"
+  },
+  "grid": {
+    "newProject": "新建专案",
+    "deleteTitle": "删除专案",
+    "deleteConfirm": "删除专案「{name}」？此操作无法复原。",
+    "deleteFailed": "删除失败",
+    "untitledDraft": "Untitled draft"
+  },
+  "empty": {
+    "noMatch": "没有符合的专案",
+    "noneYet": "还没有专案，点上方「新建专案」开始"
+  },
+  "projectHome": {
+    "overviewKicker": "Project Overview",
+    "projectIdLabel": "PROJECT_ID",
+    "collaboratorsButton": "👥 协作者",
+    "collaboratorsTitle": "管理此专案的协作者 (per-project grant)",
+    "activityButton": "📜 活动",
+    "activityTitle": "查看活动记录",
+    "untitledProject": "未命名脚本",
+    "continueCta": "继续到 {label} step",
+    "statsKicker": "Stats",
+    "statCharacters": "角色",
+    "statLocations": "场景",
+    "statPanels": "分镜",
+    "statVideos": "已生视频"
+  },
+  "switcher": {
+    "title": "切换工作区",
+    "personal": "个人专案",
+    "checked": "✓",
+    "loading": "载入中…",
+    "noJoinable": "没有可加入的工作区",
+    "header": "切换工作区",
+    "manageLink": "管理工作区 →",
+    "projectCount": "{count} 个专案"
+  }
+}

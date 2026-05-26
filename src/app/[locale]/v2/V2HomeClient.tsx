@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { NotificationBell } from '@/components/v2/NotificationBell'
 import { WorkspaceCollabIntroBanner } from './WorkspaceCollabIntroBanner'
@@ -53,6 +54,7 @@ interface V2HomeClientProps {
 }
 
 export function V2HomeClient({ locale }: V2HomeClientProps) {
+  const t = useTranslations('v2Home')
   const router = useRouter()
   const searchParams = useSearchParams()
   const carryStepRaw = searchParams?.get('carryStep')
@@ -131,13 +133,13 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
   async function handleDelete(project: ProjectRow, e: React.MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
-    const ok = confirm(`刪除專案「${project.name}」?此操作無法復原。`)
+    const ok = confirm(t('grid.deleteConfirm', { name: project.name }))
     if (!ok) return
     setDeletingId(project.id)
     try {
       const res = await fetch(`/api/projects/${project.id}`, { method: 'DELETE' })
       if (!res.ok) {
-        alert('刪除失敗')
+        alert(t('grid.deleteFailed'))
         return
       }
       void fetchProjects(pagination.page, searchQuery, wsParam)
@@ -159,7 +161,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
   if (status === 'loading' || !session) {
     return (
       <div className="grain flex min-h-screen items-center justify-center bg-stone-950 font-mono text-xs tracking-wider text-stone-500">
-        載入中…
+        {t('loading')}
       </div>
     )
   }
@@ -171,10 +173,10 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
         <div className="flex items-center justify-between">
           <div>
             <div className="font-fraunces text-2xl italic tracking-tight text-amber-400">
-              Kuiper <span className="not-italic font-serif-cn">影界</span>
+              {t('header.brand')} <span className="not-italic font-serif-cn">{t('header.brandSubtitle')}</span>
             </div>
             <div className="mt-0.5 font-mono text-[14px] tracking-[0.2em] text-stone-400">
-              AI · MANHUA · STUDIO
+              {t('header.tagline')}
             </div>
           </div>
           <div className="flex items-center gap-3 font-mono text-[11px] tracking-wider">
@@ -193,10 +195,10 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
             <Link
               href={`/${locale}/workspaces`}
               className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
-              title="工作區 / 團隊管理"
+              title={t('header.teamLinkTitle')}
             >
               <AppIcon name="userAlt" className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">團隊</span>
+              <span className="hidden sm:inline">{t('header.teamLink')}</span>
             </Link>
             {/* Admin-only nav: profile (provider keys + default models)
                 and the admin console. Members hide both — their config
@@ -207,18 +209,18 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
                 <Link
                   href={`/${locale}/profile`}
                   className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
-                  title="設定中心"
+                  title={t('header.profileLinkTitle')}
                 >
                   <AppIcon name="userRoundCog" className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">設定中心</span>
+                  <span className="hidden sm:inline">{t('header.profileLink')}</span>
                 </Link>
                 <Link
                   href={`/${locale}/admin`}
                   className="flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-amber-300 transition-colors hover:bg-amber-500/20"
-                  title="管理後台"
+                  title={t('header.adminLinkTitle')}
                 >
                   <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">管理後台</span>
+                  <span className="hidden sm:inline">{t('header.adminLink')}</span>
                 </Link>
               </>
             ) : null}
@@ -227,7 +229,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               onClick={() => void signOut({ callbackUrl: `/${locale}/auth/signin` })}
               className="rounded-sm border border-stone-600 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
             >
-              登出
+              {t('header.logout')}
             </button>
           </div>
         </div>
@@ -243,13 +245,13 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="font-mono text-[11px] tracking-[0.25em] text-amber-400">
-              MY PROJECTS
+              {t('title.kicker')}
             </div>
             <h1 className="mt-2 font-serif-cn text-3xl font-light text-white">
-              我的專案
+              {t('title.heading')}
             </h1>
             <p className="mt-1 font-fraunces text-sm italic text-stone-300">
-              Manage your AI cinematic projects
+              {t('title.subtitle')}
             </p>
           </div>
 
@@ -259,7 +261,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
-              placeholder="搜尋專案名稱或描述…"
+              placeholder={t('search.placeholder')}
               className="w-64 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-500 focus:border-amber-500 focus:outline-none"
             />
             {searchQuery ? (
@@ -268,7 +270,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
                 onClick={clearSearch}
                 className="rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-2 font-mono text-xs text-stone-300 transition-colors hover:border-stone-600 hover:text-white"
               >
-                清除
+                {t('search.clear')}
               </button>
             ) : null}
             <button
@@ -276,7 +278,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               onClick={handleSearch}
               className="rounded-sm border border-amber-500/60 bg-amber-500/20 px-4 py-2 font-mono text-xs text-amber-300 transition-colors hover:border-amber-500 hover:bg-amber-500/30"
             >
-              搜尋
+              {t('search.search')}
             </button>
           </div>
         </div>
@@ -292,7 +294,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500 bg-amber-500/30 transition-all group-hover:scale-110">
                 <AppIcon name="plus" className="h-5 w-5 text-amber-300" />
               </div>
-              <span className="font-serif-cn text-base font-medium text-amber-300">新建專案</span>
+              <span className="font-serif-cn text-base font-medium text-amber-300">{t('grid.newProject')}</span>
             </div>
           </Link>
 
@@ -316,7 +318,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
                     onClick={(e) => void handleDelete(project, e)}
                     disabled={deletingId === project.id}
                     className="absolute right-3 top-3 hidden h-7 w-7 items-center justify-center rounded-sm border border-stone-600 bg-stone-900 text-stone-300 transition-colors hover:border-rose-500 hover:bg-rose-500/20 hover:text-rose-200 group-hover:flex disabled:opacity-50"
-                    title="刪除專案"
+                    title={t('grid.deleteTitle')}
                   >
                     <AppIcon name="trash" className="h-3.5 w-3.5" />
                   </button>
@@ -331,7 +333,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
                     </p>
                   ) : (
                     <p className="mt-2 font-fraunces text-xs italic text-stone-500">
-                      Untitled draft
+                      {t('grid.untitledDraft')}
                     </p>
                   )}
 
@@ -365,7 +367,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
         {!loading && projects.length === 0 ? (
           <div className="mt-16 text-center font-serif-cn text-stone-500">
             <p className="font-fraunces italic">
-              {searchQuery ? '沒有符合的專案' : '還沒有專案,點上方「新建專案」開始'}
+              {searchQuery ? t('empty.noMatch') : t('empty.noneYet')}
             </p>
           </div>
         ) : null}
@@ -418,6 +420,7 @@ interface WorkspaceListItem {
 }
 
 function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; locale: string }) {
+  const t = useTranslations('v2Home.switcher')
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<WorkspaceListItem[] | null>(null)
@@ -484,7 +487,7 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
   }, [open, items])
 
   const activeItem = items?.find((w) => w.id === activeWs) ?? null
-  const buttonLabel = activeWs ? (activeItem?.name ?? '工作區') : '個人專案'
+  const buttonLabel = activeWs ? (activeItem?.name ?? t('title')) : t('personal')
 
   function switchTo(wsId: string | null) {
     const params = new URLSearchParams()
@@ -500,7 +503,7 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
-        title="切換工作區"
+        title={t('title')}
       >
         <AppIcon name="folder" className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">{buttonLabel}</span>
@@ -513,7 +516,7 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
       {open ? (
         <div className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
           <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
-            切換工作區
+            {t('header')}
           </div>
           <div className="max-h-72 overflow-y-auto py-1">
             <button
@@ -523,11 +526,11 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
                 activeWs === null ? 'text-amber-300' : 'text-stone-300'
               }`}
             >
-              個人專案 {activeWs === null ? '✓' : ''}
+              {t('personal')} {activeWs === null ? t('checked') : ''}
             </button>
             <div className="my-1 border-t border-stone-800" />
             {loading ? (
-              <div className="px-4 py-3 font-mono text-[14px] text-stone-500">載入中…</div>
+              <div className="px-4 py-3 font-mono text-[14px] text-stone-500">{t('loading')}</div>
             ) : items && items.length > 0 ? (
               items.map((w) => (
                 <button
@@ -539,19 +542,19 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
                   }`}
                 >
                   <div>
-                    {w.name} {activeWs === w.id ? '✓' : ''}
+                    {w.name} {activeWs === w.id ? t('checked') : ''}
                   </div>
                   {w.organizationName ? (
                     <div className="font-fraunces text-[11px] italic text-stone-500">
                       {w.organizationName}
-                      {w.projectCount ? ` · ${w.projectCount} 個專案` : ''}
+                      {w.projectCount ? ` · ${t('projectCount', { count: w.projectCount })}` : ''}
                     </div>
                   ) : null}
                 </button>
               ))
             ) : (
               <div className="px-4 py-3 font-fraunces text-xs italic text-stone-500">
-                沒有可加入的工作區
+                {t('noJoinable')}
               </div>
             )}
           </div>
@@ -561,7 +564,7 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
               className="block px-4 py-2 font-mono text-[11px] tracking-wider text-amber-500/70 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
               onClick={() => setOpen(false)}
             >
-              管理工作區 →
+              {t('manageLink')}
             </Link>
           </div>
         </div>
