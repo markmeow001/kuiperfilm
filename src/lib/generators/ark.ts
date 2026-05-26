@@ -103,6 +103,19 @@ interface ArkVideoOptions {
      * others throw ARK_VIDEO_OPTION_UNSUPPORTED.
      */
     referenceImages?: string[]
+    /**
+     * 2026-05-26 — multi-modal video reference input (2.0 series only).
+     * Single URL accepted today; ARK content[] technically permits multiple
+     * but workers don't use that yet. Used for r2v-from-video / edit /
+     * extend modes.
+     */
+    referenceVideoUrl?: string
+    /**
+     * 2026-05-26 — multi-modal audio reference input (2.0 series only).
+     * Used for lip-sync to existing audio; requires at least one image or
+     * video companion (caller's contract, not validated here).
+     */
+    referenceAudioUrl?: string
     serviceTier?: 'default' | 'flex'
     executionExpiresAfter?: number
     returnLastFrame?: boolean
@@ -110,6 +123,15 @@ interface ArkVideoOptions {
     seed?: number
     cameraFixed?: boolean
     watermark?: boolean
+    // 2026-05-26 — Seedance 2.0 系列 new fields. All optional; ark-api.ts
+    // shape-validates. Worker-side gate by ARK_SEEDANCE_MODEL_SPECS
+    // (supportsMultiModalReference flag) — 1.x silently accepts in the
+    // body but ignores at the server, so leaving them off keeps behavior
+    // identical there.
+    tools?: Array<Record<string, unknown>>
+    priority?: number
+    safetyIdentifier?: string
+    callbackUrl?: string
     provider?: string
     modelKey?: string
 }
@@ -117,6 +139,9 @@ interface ArkVideoOptions {
 type ArkVideoContentItem =
     | { type: 'text'; text: string }
     | { type: 'image_url'; image_url: { url: string }; role?: 'first_frame' | 'last_frame' | 'reference_image' }
+    // 2026-05-26 — Seedance 2.0 multi-modal references.
+    | { type: 'video_url'; video_url: { url: string }; role?: 'reference_video' }
+    | { type: 'audio_url'; audio_url: { url: string }; role?: 'reference_audio' }
 
 interface ArkSeedanceModelSpec {
     durationMin: number
@@ -385,6 +410,12 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             cameraFixed,
             watermark,
             referenceImages,
+            referenceVideoUrl,
+            referenceAudioUrl,
+            tools,
+            priority,
+            safetyIdentifier,
+            callbackUrl,
         } = options as ArkVideoOptions
 
         const allowedOptionKeys = new Set([
@@ -398,6 +429,8 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             'generateAudio',
             'lastFrameImageUrl',
             'referenceImages',
+            'referenceVideoUrl',
+            'referenceAudioUrl',
             'serviceTier',
             'executionExpiresAfter',
             'returnLastFrame',
@@ -405,6 +438,10 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             'seed',
             'cameraFixed',
             'watermark',
+            'tools',
+            'priority',
+            'safetyIdentifier',
+            'callbackUrl',
         ])
         for (const [key, value] of Object.entries(options)) {
             if (value === undefined) continue
@@ -479,6 +516,26 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             if (referenceImages.length > 0 && !modelSpec.supportsMultiModalReference) {
                 throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: referenceImages for ${realModel}`)
             }
+        }
+        if (referenceVideoUrl !== undefined && !modelSpec.supportsMultiModalReference) {
+            throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: referenceVideoUrl for ${realModel}`)
+        }
+        if (referenceAudioUrl !== undefined && !modelSpec.supportsMultiModalReference) {
+            throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: referenceAudioUrl for ${realModel}`)
+        }
+        // 2026-05-26 — tools / priority / safety_identifier are 2.0-series
+        // exclusive per Volcengine docs. 1.x ignores silently but we reject
+        // upfront so callers don't ship them blind and wonder why nothing
+        // happens. supportsMultiModalReference is the closest proxy for
+        // "this is a 2.0 model" — both gate-cases want the same answer.
+        if (tools !== undefined && !modelSpec.supportsMultiModalReference) {
+            throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: tools for ${realModel}`)
+        }
+        if (priority !== undefined && !modelSpec.supportsMultiModalReference) {
+            throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: priority for ${realModel}`)
+        }
+        if (safetyIdentifier !== undefined && !modelSpec.supportsMultiModalReference) {
+            throw new Error(`ARK_VIDEO_OPTION_UNSUPPORTED: safetyIdentifier for ${realModel}`)
         }
         if (executionExpiresAfter !== undefined) {
             if (!isInteger(executionExpiresAfter)) {
@@ -578,6 +635,35 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             _ulogInfo(`[ARK Video] multi-modal refs 数: ${referenceImages.length} (url=${urlRefCount}, base64=${base64RefCount})`)
         }
 
+        // 2026-05-26 — Seedance 2.0 reference_video. Single URL today; ARK
+        // content[] technically permits multiple but worker flow only uses
+        // one (extend / r2v-from-video). HTTPS-only — no base64 fallback
+        // because cross-border video upload would dwarf the image case.
+        if (typeof referenceVideoUrl === 'string' && referenceVideoUrl.trim()) {
+            if (!/^https?:\/\//i.test(referenceVideoUrl)) {
+                throw new Error('ARK_VIDEO_OPTION_INVALID: referenceVideoUrl must be http(s) URL')
+            }
+            content.push({
+                type: 'video_url',
+                video_url: { url: referenceVideoUrl },
+                role: 'reference_video',
+            })
+            _ulogInfo(`[ARK Video] reference video appended`)
+        }
+
+        // 2026-05-26 — Seedance 2.0 reference_audio. Same HTTPS-only rule.
+        if (typeof referenceAudioUrl === 'string' && referenceAudioUrl.trim()) {
+            if (!/^https?:\/\//i.test(referenceAudioUrl)) {
+                throw new Error('ARK_VIDEO_OPTION_INVALID: referenceAudioUrl must be http(s) URL')
+            }
+            content.push({
+                type: 'audio_url',
+                audio_url: { url: referenceAudioUrl },
+                role: 'reference_audio',
+            })
+            _ulogInfo(`[ARK Video] reference audio appended`)
+        }
+
         const requestBody: {
             model: string
             content: ArkVideoContentItem[]
@@ -593,6 +679,10 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             execution_expires_after?: number
             generate_audio?: boolean
             draft?: boolean
+            tools?: Array<Record<string, unknown>>
+            priority?: number
+            safety_identifier?: string
+            callback_url?: string
         } = {
             model: realModel,
             content
@@ -641,9 +731,26 @@ export class ArkVideoGenerator extends BaseVideoGenerator {
             _ulogInfo('[ARK Video] 批量模式: service_tier=flex')
         }
 
-        // 音频生成（仅 Seedance 1.5 Pro）
+        // 音频生成（仅 Seedance 1.5 Pro / 2.0 系列）
         if (generateAudio !== undefined) {
             requestBody.generate_audio = generateAudio
+        }
+
+        // 2026-05-26 — Seedance 2.0 系列 new top-level fields. Per-model
+        // gating done above (only the 2.0 spec branch reaches here with
+        // these defined). All optional; ark-api.ts shape-validates again
+        // before the wire to catch hand-rolled callers.
+        if (Array.isArray(tools)) {
+            requestBody.tools = tools
+        }
+        if (typeof priority === 'number') {
+            requestBody.priority = priority
+        }
+        if (typeof safetyIdentifier === 'string' && safetyIdentifier.length > 0) {
+            requestBody.safety_identifier = safetyIdentifier
+        }
+        if (typeof callbackUrl === 'string' && callbackUrl.length > 0) {
+            requestBody.callback_url = callbackUrl
         }
 
         try {

@@ -632,6 +632,36 @@
   {
     "apiType": "video",
     "provider": "ark",
+    "modelId": "doubao-seedance-2-0-260128",
+    "pricing": {
+      "mode": "capability",
+      "tiers": [
+        { "when": { "resolution": "480p", "generateAudio": true },  "amount": 0.8 },
+        { "when": { "resolution": "720p", "generateAudio": true },  "amount": 1.73 },
+        { "when": { "resolution": "1080p", "generateAudio": true }, "amount": 3.89 },
+        { "when": { "resolution": "480p", "generateAudio": false },  "amount": 0.4 },
+        { "when": { "resolution": "720p", "generateAudio": false },  "amount": 0.86 },
+        { "when": { "resolution": "1080p", "generateAudio": false }, "amount": 1.94 }
+      ]
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "ark",
+    "modelId": "doubao-seedance-2-0-fast-260128",
+    "pricing": {
+      "mode": "capability",
+      "tiers": [
+        { "when": { "resolution": "480p", "generateAudio": true }, "amount": 0.2 },
+        { "when": { "resolution": "720p", "generateAudio": true }, "amount": 0.43 },
+        { "when": { "resolution": "480p", "generateAudio": false }, "amount": 0.1 },
+        { "when": { "resolution": "720p", "generateAudio": false }, "amount": 0.21 }
+      ]
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "ark",
     "modelId": "doubao-seedance-1-5-pro-251215-batch",
     "pricing": {
       "mode": "capability",

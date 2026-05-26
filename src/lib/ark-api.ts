@@ -74,13 +74,20 @@ interface ArkImageGenerationResponse {
     }>
 }
 
-interface ArkVideoTaskRequest {
+export interface ArkVideoTaskRequest {
     model: string
     content: Array<{
-        type: 'image_url' | 'text' | 'draft_task'
+        // 2026-05-26 — 2.0 series added video_url + audio_url content
+        // types per https://www.volcengine.com/docs/82379/1520757 §请求体.
+        // Roles: reference_video (i2v-from-existing-video / extend / edit)
+        // and reference_audio (lip-sync to existing audio). 1.x rejects
+        // these silently if forwarded — caller must gate by model spec.
+        type: 'image_url' | 'video_url' | 'audio_url' | 'text' | 'draft_task'
         image_url?: { url: string }
+        video_url?: { url: string }
+        audio_url?: { url: string }
         text?: string
-        role?: 'first_frame' | 'last_frame' | 'reference_image'
+        role?: 'first_frame' | 'last_frame' | 'reference_image' | 'reference_video' | 'reference_audio'
         draft_task?: { id: string }
     }>
     resolution?: '480p' | '720p' | '1080p'
@@ -95,6 +102,14 @@ interface ArkVideoTaskRequest {
     execution_expires_after?: number
     generate_audio?: boolean
     draft?: boolean
+    // 2026-05-26 — Seedance 2.0 系列 only. tools enables web_search etc.
+    // (caller passes through opaquely; ARK validates shape). priority
+    // (0-9) raises the request in the queue. safety_identifier helps
+    // platform abuse detection — typically a hash of user id.
+    tools?: Array<Record<string, unknown>>
+    priority?: number
+    safety_identifier?: string
+    callback_url?: string
 }
 
 interface ArkVideoTaskResponse {
@@ -123,7 +138,7 @@ function isInteger(value: unknown): value is number {
     return typeof value === 'number' && Number.isInteger(value)
 }
 
-function validateArkVideoTaskRequest(request: ArkVideoTaskRequest) {
+export function validateArkVideoTaskRequest(request: ArkVideoTaskRequest) {
     const allowedTopLevelKeys = new Set([
         'model',
         'content',
@@ -139,6 +154,12 @@ function validateArkVideoTaskRequest(request: ArkVideoTaskRequest) {
         'execution_expires_after',
         'generate_audio',
         'draft',
+        // 2026-05-26 — Seedance 2.0 系列 new fields per
+        // https://www.volcengine.com/docs/82379/1520757
+        'tools',
+        'priority',
+        'safety_identifier',
+        'callback_url',
     ])
     for (const key of Object.keys(request)) {
         if (!allowedTopLevelKeys.has(key)) {
@@ -166,7 +187,14 @@ function validateArkVideoTaskRequest(request: ArkVideoTaskRequest) {
         if (!isInteger(request.duration)) {
             throw new Error('ARK_VIDEO_REQUEST_INVALID: duration must be integer')
         }
-        if (request.duration !== -1 && (request.duration < 2 || request.duration > 12)) {
+        // 2026-05-26 — widen from [2,12] to [2,15]. Seedance 2.0 series
+        // accepts 4-15s and 1.5 pro accepts 4-12s; the wrapper here is
+        // the lower-bound validator. Per-model accuracy (model-specific
+        // min/max + smart-duration support for -1) lives in ark.ts
+        // ARK_SEEDANCE_MODEL_SPECS, which runs before this. Keeping the
+        // wrapper as a coarse upper bound avoids duplicating the model
+        // table and lets us silently widen when ByteDance adds 30s.
+        if (request.duration !== -1 && (request.duration < 2 || request.duration > 15)) {
             throw new Error(`ARK_VIDEO_REQUEST_INVALID: duration=${request.duration}`)
         }
     }
@@ -218,6 +246,35 @@ function validateArkVideoTaskRequest(request: ArkVideoTaskRequest) {
         }
     }
 
+    // 2026-05-26 — Seedance 2.0 系列 new fields. Shape validation only;
+    // semantic validity (tools schema / safety_identifier hashing) is the
+    // caller's contract with Volcengine, not ours to enforce.
+    if (request.priority !== undefined) {
+        if (!isInteger(request.priority) || request.priority < 0 || request.priority > 9) {
+            throw new Error(`ARK_VIDEO_REQUEST_INVALID: priority=${String(request.priority)} (must be integer 0-9)`)
+        }
+    }
+    if (request.safety_identifier !== undefined) {
+        if (typeof request.safety_identifier !== 'string' || request.safety_identifier.length === 0 || request.safety_identifier.length > 64) {
+            throw new Error(`ARK_VIDEO_REQUEST_INVALID: safety_identifier must be string 1-64 chars`)
+        }
+    }
+    if (request.tools !== undefined) {
+        if (!Array.isArray(request.tools)) {
+            throw new Error('ARK_VIDEO_REQUEST_INVALID: tools must be an array')
+        }
+        for (let i = 0; i < request.tools.length; i += 1) {
+            if (!isRecord(request.tools[i])) {
+                throw new Error(`ARK_VIDEO_REQUEST_INVALID: tools[${i}] must be object`)
+            }
+        }
+    }
+    if (request.callback_url !== undefined) {
+        if (!isNonEmptyString(request.callback_url) || !/^https?:\/\//i.test(request.callback_url)) {
+            throw new Error('ARK_VIDEO_REQUEST_INVALID: callback_url must be http(s) URL')
+        }
+    }
+
     for (let index = 0; index < request.content.length; index += 1) {
         const item = request.content[index]
         const path = `content[${index}]`
@@ -243,6 +300,36 @@ function validateArkVideoTaskRequest(request: ArkVideoTaskRequest) {
                 && item.role !== 'reference_image'
             ) {
                 throw new Error(`ARK_VIDEO_REQUEST_INVALID: ${path}.role=${String(item.role)}`)
+            }
+            continue
+        }
+
+        // 2026-05-26 — Seedance 2.0 multi-modal video reference. Used for
+        // r2v-from-existing-video / extend-video / edit-video. role is
+        // 'reference_video' or omitted (default same as reference_video).
+        if (item.type === 'video_url') {
+            const videoUrl = (item as { video_url?: unknown }).video_url
+            if (!isRecord(videoUrl) || !isNonEmptyString(videoUrl.url)) {
+                throw new Error(`ARK_VIDEO_REQUEST_INVALID: ${path}.video_url.url is required`)
+            }
+            if (item.role !== undefined && item.role !== 'reference_video') {
+                throw new Error(`ARK_VIDEO_REQUEST_INVALID: ${path}.role=${String(item.role)} (video_url only accepts 'reference_video')`)
+            }
+            continue
+        }
+
+        // 2026-05-26 — Seedance 2.0 multi-modal audio reference. Used for
+        // lip-sync to existing audio / dub matching. role is
+        // 'reference_audio'. Spec requires at least one image or video
+        // companion (no audio-only generation) — validation is loose
+        // here, deferred to API server.
+        if (item.type === 'audio_url') {
+            const audioUrl = (item as { audio_url?: unknown }).audio_url
+            if (!isRecord(audioUrl) || !isNonEmptyString(audioUrl.url)) {
+                throw new Error(`ARK_VIDEO_REQUEST_INVALID: ${path}.audio_url.url is required`)
+            }
+            if (item.role !== undefined && item.role !== 'reference_audio') {
+                throw new Error(`ARK_VIDEO_REQUEST_INVALID: ${path}.role=${String(item.role)} (audio_url only accepts 'reference_audio')`)
             }
             continue
         }
