@@ -366,6 +366,160 @@
     "title": "注记 · NOTES",
     "empty": "(无注记)"
   },
+  "groupCard": {
+    "errors": {
+      "saveDescFailed": "储存描述失败",
+      "saveDialogueFailed": "储存对白失败",
+      "removeSceneFailed": "移除场景失败：{reason}",
+      "removeFailed": "移除失败：{reason}",
+      "needTwoPanels": "至少需要 2 镜才能跑多镜头",
+      "tooManyPanels": "一组最多 {max} 镜（会送前 {max} 个）",
+      "unknown": "未知"
+    },
+    "confirmRemoveLocation": "从此 group 的所有分镜移除场景「{name}」？\n\n影响 DB，下次重新生成时这个场景不再被当作 reference 上传到 Kling。\n（不会删除场景本身，只是这几个分镜不再引用他）",
+    "confirmRemoveCharacter": "从此 group 的所有分镜移除「{name}」？\n\n影响 DB，下次重新生成图/影片时这个角色就不会被绑入。\n（不会删除角色本身，只是这几个分镜不再引用他）",
+    "status": {
+      "submitting": "送出中…",
+      "failedTapRetry": "失败 · 点重新生成",
+      "generating": "生成中…",
+      "completed": "已完成",
+      "submitted": "已送出",
+      "notGenerated": "尚未生成"
+    },
+    "cta": {
+      "tipModelNotMultiShot": "当前模型不支持多镜头 — 请从上方视频模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)",
+      "tipSeedanceComposite": "把这个 group 的所有分镜合成为一支 4-15s 影片（Seedance BobAPI 9-ref @N 合成）",
+      "tipKlingRegen": "重新送这个 group 跑 Kling 多镜头",
+      "submitting": "送出中…",
+      "submitted": "✓ 已送出",
+      "failedRetry": "⚠ 失败，点重试",
+      "regenerate": "重新生成",
+      "generateVideo": "生成视频"
+    },
+    "submitHint": {
+      "seedancePending": "送 Seedance 中…task 已 queue，大约 30 秒进到 worker。BobAPI 合成大约 2-5 分钟出影片，完成后左边会自动刷新。",
+      "klingPending": "送 Kling 中…task 已 queue，大约 30 秒进到 worker。Kling Omni 算 3-5 分钟出影片，完成后左边会自动刷新。",
+      "seedanceSubmitted": "✓ 已送出 — Seedance 合成大约 2-5 分钟出影片，进度会显示在左边绑定区。可以同时去其他 group 编辑。",
+      "klingSubmitted": "✓ 已送出 — Kling Omni 大约 3-5 分钟出影片，进度会显示在左边绑定区。可以同时去其他 group 编辑。",
+      "errorPrefix": "⚠ 送出失败：{message}",
+      "retry": "重试"
+    },
+    "overrides": {
+      "edited": "✏ 已修改 {count} 个绑定 — 「重新生成」会套用",
+      "clear": "清空"
+    },
+    "narrative": {
+      "title": "叙事提示词",
+      "charCount": "· {count} 字",
+      "regenButton": "↻ 重生叙事",
+      "regenTitleDirty": "丢弃手动编辑，从分镜描述+绑定角色/场景重新生成叙事",
+      "regenTitleClean": "叙事目前已是预设值 — 没有手动编辑，不需要重生",
+      "placeholder": "0-5 seconds: 角色 + 场景 + 动作 + 镜头 + 氛围&#10;5-10 seconds: ...&#10;10-15 seconds: ...",
+      "editedHint": "✏ 叙事已修改 — 「{action}」会以这段为主 prompt（覆盖分镜描述，并关闭对白驱动时长）",
+      "editedActionRegen": "重新生成",
+      "editedActionGenerate": "生成影片",
+      "previewWithDialogue": "预览由 {count} 个分镜拼接 · 送出时 worker 会用对白长度自动分配每镜时长（{count} 镜）。直接编辑这段可改 prompt（会关闭对白驱动）。",
+      "previewWithoutDialogue": "预设由 {count} 个分镜描述自动拼接，{total}s 平均切。直接编辑这段即可，送出时会以你写的为准。"
+    },
+    "hook": {
+      "label": "钩子",
+      "title": "冷开场钩子模式 - 套用 ReelShort 4 镜 × 2s 结构 (Wide → Medium → OTS → Slow push-in)。auto 模式由群组文字自动判断风格。",
+      "options": {
+        "off": "Off (自由结构)",
+        "auto": "Auto (自动侦测)",
+        "modern": "Modern (现代剧)",
+        "period": "Period (古装/仙侠)",
+        "action": "Action (动作/灾劫)"
+      }
+    },
+    "frameLock": {
+      "label": "锁帧",
+      "tipReady": "首帧锁定 - 用 SHOT 01 图当首帧，选「首尾」会再用最后一镜图当尾帧。Kling 3.0 i2v 单镜头模式 (5-15s)，牺牲多镜头换像素级角色/场景一致。",
+      "tipNeedImage": "首帧锁定需要 SHOT 01 已产生图片 — 先到时间轴/画廊一键生图",
+      "options": {
+        "off": "Off · 多镜头（现在）",
+        "firstFrame": "锁首帧 · 用 SHOT 01 图",
+        "firstLastReady": "锁首尾 · 用 SHOT 01 + SHOT {n}",
+        "firstLastNeedImage": "锁首尾 · 需 SHOT {n} 也有图"
+      }
+    },
+    "duration": {
+      "label": "时长",
+      "tipAuto": "Auto = 从本组对白长度估算推荐 {n}s（中文 ~4 字/秒、英文 ~2.3 词/秒；无对白时用 max(10, 分镜数×2.5)）。选 5/10/15 会手动覆盖。",
+      "tipManual": "AUTO 模式 worker 会用对白长度自动分配每镜时长；选 5/10/15 则平均切到该秒数",
+      "autoWithRec": "Auto (推荐 {n}s)",
+      "autoNoRec": "Auto (对白驱动)"
+    },
+    "style": {
+      "label": "风格",
+      "title": "选一个风格会覆盖此组的专案预设 (visualStyleId)。Worker 在 multi_prompt 每段 prompt 前后注入该风格的 styleAnchor + visualModifiers。",
+      "inheritOption": "依专案预设",
+      "styleWithThumbTitle": "{category} · {nameZh} (缩图未生成)",
+      "frameKeyTitle": "首帧",
+      "frameTailTitle": "尾帧",
+      "shotNoImageHint": "SHOT {n}<br />没图",
+      "frameKeyHint": "「首帧」",
+      "frameTailHint": "「尾帧」",
+      "shotTransitionHint": "角色登场 / 反应镜头 / 转场",
+      "thumbnailPending": "(缩图未生成)"
+    },
+    "frameLockPreview": {
+      "modeFirstLast": "首尾锁定",
+      "modeFirstOnly": "首帧锁定",
+      "modeSuffix": "模式",
+      "modeHint": "· 此 group 将跑单镜头 i2v (5-15s)，多镜头暂停",
+      "firstFrameLabel": "首帧",
+      "firstFrameAlt": "首帧 SHOT 01",
+      "lastFrameLabel": "尾帧",
+      "lastFrameAlt": "尾帧 SHOT {n}",
+      "noImageLabel": "SHOT {n}\n没图",
+      "noImageLabel01": "SHOT 01\n没图",
+      "klingDescBefore": "Kling 3.0 i2v 会以",
+      "klingDescAfter": "像素锁死起点",
+      "klingDescBoth": "像素锁死",
+      "klingDescAnd": "和",
+      "klingDescMid": "，中间 5-15 秒由上方叙事 prompt 推动。适合",
+      "klingDescUseCase": "角色登场 / 反应镜头 / 转场",
+      "klingDescEnd": "这种要求像素级一致的 group。要回到多镜头模式请把上面「锁帧」改回 Off。",
+      "unlockHint": "💡 想用「锁帧」(Kling 3.0 i2v 像素锁)？先到时间轴/画廊跑「一键生图」帮 SHOT 01 产张图，选单就会解锁"
+    },
+    "castSection": {
+      "characterHeader": "出场角色 · {count}",
+      "sceneHeader": "出场场景 · {count}",
+      "noLinks": "无关联角色 / 场景",
+      "boundCharsHeader": "本集绑定 · {count}"
+    },
+    "panelEditMore": {
+      "shotNum": "SHOT {n}",
+      "remove": "✕",
+      "removeTitle": "从此分鏡移除",
+      "noImage": "没图",
+      "regenerateImage": "↻ 重生图",
+      "regenerateImageTitle": "重新生成这张图",
+      "toggle": "进阶分镜编辑（{count} 镜 · 编辑各分镜描述 / 对白）",
+      "saving": "储存中…",
+      "saveDesc": "储存描述",
+      "saveDialogue": "储存对白",
+      "descPlaceholder": "镜头描述",
+      "dialoguePlaceholder": "对白（可空白）"
+    },
+    "chips": {
+      "characterTitleClick": "{name} · {appearance} — 点击换造型",
+      "characterTitleNoClick": "{name} · {appearance}",
+      "boundCharOverrideTitle": "{name} — 下次重生会改用新造型（尚未送出）",
+      "defaultAppearance": "默认造型",
+      "removeCharFromGroup": "从此 group 所有分镜移除 {name}（影响 DB，下次重生会生效）",
+      "sceneTitleClick": "{name} · {view} — 点击换视角",
+      "defaultView": "主视角",
+      "mainView": "主视角",
+      "editedFlag": "✏ 已改",
+      "removeSceneFromGroup": "从此 group 所有分镜移除场景 {name}（影响 DB，下次重生会生效）"
+    },
+    "panelEditor": {
+      "panelDescPlaceholder": "镜头描述",
+      "dialoguePlaceholder": "对白（可空白）"
+    }
+  },
   "regenerateStoryboardModal": {
     "title": "重新生成分镜",
     "warning": "会覆盖既有 {count} 个分镜",

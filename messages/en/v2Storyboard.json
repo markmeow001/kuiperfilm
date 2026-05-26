@@ -366,6 +366,160 @@
     "title": "Notes · NOTES",
     "empty": "(no notes)"
   },
+  "groupCard": {
+    "errors": {
+      "saveDescFailed": "Save description failed",
+      "saveDialogueFailed": "Save dialogue failed",
+      "removeSceneFailed": "Remove scene failed: {reason}",
+      "removeFailed": "Remove failed: {reason}",
+      "needTwoPanels": "Need at least 2 panels for multi-shot",
+      "tooManyPanels": "Max {max} panels per group (will send the first {max})",
+      "unknown": "unknown"
+    },
+    "confirmRemoveLocation": "Remove scene \"{name}\" from all panels in this group?\n\nAffects the DB — next regenerate will not reference this scene in Kling.\n(The scene itself is kept; only these panels stop referencing it.)",
+    "confirmRemoveCharacter": "Remove \"{name}\" from all panels in this group?\n\nAffects the DB — next image/video regen won't bind this character.\n(The character is kept; only these panels stop referencing it.)",
+    "status": {
+      "submitting": "Submitting…",
+      "failedTapRetry": "Failed · tap to retry",
+      "generating": "Generating…",
+      "completed": "Done",
+      "submitted": "Sent",
+      "notGenerated": "Not generated"
+    },
+    "cta": {
+      "tipModelNotMultiShot": "Current model doesn't support multi-shot — switch to Kling or Seedance 2.0 720p (BobAPI) from the video model picker above",
+      "tipSeedanceComposite": "Render this group as a single 4-15s video (Seedance BobAPI 9-ref @N composite)",
+      "tipKlingRegen": "Resubmit this group to Kling multi-shot",
+      "submitting": "Submitting…",
+      "submitted": "✓ Sent",
+      "failedRetry": "⚠ Failed, retry",
+      "regenerate": "Regenerate",
+      "generateVideo": "Generate video"
+    },
+    "submitHint": {
+      "seedancePending": "Sending to Seedance… task queued; worker picks up in ~30s. BobAPI render takes 2-5 min; the panel rail on the left auto-refreshes when done.",
+      "klingPending": "Sending to Kling… task queued; worker picks up in ~30s. Kling Omni takes 3-5 min; the panel rail on the left auto-refreshes when done.",
+      "seedanceSubmitted": "✓ Sent — Seedance render takes 2-5 min; progress shows in the binding rail on the left. You can move to another group meanwhile.",
+      "klingSubmitted": "✓ Sent — Kling Omni takes 3-5 min; progress shows in the binding rail on the left. You can move to another group meanwhile.",
+      "errorPrefix": "⚠ Submit failed: {message}",
+      "retry": "Retry"
+    },
+    "overrides": {
+      "edited": "✏ {count} binding overrides — \"Regenerate\" will apply them",
+      "clear": "Clear"
+    },
+    "narrative": {
+      "title": "Narrative prompt",
+      "charCount": "· {count} chars",
+      "regenButton": "↻ Regen narrative",
+      "regenTitleDirty": "Discard manual edits, regenerate narrative from panel descriptions + bound characters/scenes",
+      "regenTitleClean": "Narrative matches the default — no manual edits to regen",
+      "placeholder": "0-5 seconds: characters + scene + action + camera + mood&#10;5-10 seconds: ...&#10;10-15 seconds: ...",
+      "editedHint": "✏ Narrative edited — \"{action}\" will use this as the primary prompt (overrides panel description and dialogue-driven duration)",
+      "editedActionRegen": "Regenerate",
+      "editedActionGenerate": "Generate video",
+      "previewWithDialogue": "Preview is {count} panels joined · worker auto-allocates per-shot seconds from dialogue length on submit ({count} shots). Edit here to override (turns off dialogue-driven duration).",
+      "previewWithoutDialogue": "Default joins {count} panel descriptions, splitting {total}s evenly. Edit here and the submit uses your version."
+    },
+    "hook": {
+      "label": "Hook",
+      "title": "Cold-open hook mode — applies ReelShort 4-panel × 2s structure (Wide → Medium → OTS → Slow push-in). Auto mode infers style from the group text.",
+      "options": {
+        "off": "Off (free structure)",
+        "auto": "Auto (detect)",
+        "modern": "Modern (contemporary drama)",
+        "period": "Period (historical/xianxia)",
+        "action": "Action (action/disaster)"
+      }
+    },
+    "frameLock": {
+      "label": "Frame lock",
+      "tipReady": "First-frame lock — use SHOT 01 image as first frame; selecting \"first+last\" also uses the final panel's image as last frame. Kling 3.0 i2v single-shot (5-15s) — gives up multi-shot for pixel-level character/scene consistency.",
+      "tipNeedImage": "Frame lock needs SHOT 01 image generated first — generate from timeline/gallery first",
+      "options": {
+        "off": "Off · Multi-shot (current)",
+        "firstFrame": "Lock first · SHOT 01 image",
+        "firstLastReady": "Lock first+last · SHOT 01 + SHOT {n}",
+        "firstLastNeedImage": "Lock first+last · needs SHOT {n} image too"
+      }
+    },
+    "duration": {
+      "label": "Duration",
+      "tipAuto": "Auto = estimated {n}s from group dialogue length (Chinese ~4 chars/sec, English ~2.3 words/sec; with no dialogue uses max(10, panels × 2.5)). Picking 5/10/15 overrides manually.",
+      "tipManual": "AUTO mode lets the worker allocate per-shot seconds from dialogue; picking 5/10/15 splits evenly to that total",
+      "autoWithRec": "Auto (rec {n}s)",
+      "autoNoRec": "Auto (dialogue-driven)"
+    },
+    "style": {
+      "label": "Style",
+      "title": "Picking a style overrides this group's project default (visualStyleId). Worker injects the style's styleAnchor + visualModifiers around each multi_prompt segment.",
+      "inheritOption": "Use project default",
+      "styleWithThumbTitle": "{category} · {nameZh} (thumbnail not generated)",
+      "frameKeyTitle": "First",
+      "frameTailTitle": "Last",
+      "shotNoImageHint": "SHOT {n}<br />no image",
+      "frameKeyHint": "\"first\"",
+      "frameTailHint": "\"last\"",
+      "shotTransitionHint": "Character entrance / reaction / transition",
+      "thumbnailPending": "(thumbnail not generated)"
+    },
+    "frameLockPreview": {
+      "modeFirstLast": "First+Last lock",
+      "modeFirstOnly": "First-frame lock",
+      "modeSuffix": " mode",
+      "modeHint": "· This group runs single-shot i2v (5-15s); multi-shot paused",
+      "firstFrameLabel": "First",
+      "firstFrameAlt": "First frame SHOT 01",
+      "lastFrameLabel": "Last",
+      "lastFrameAlt": "Last frame SHOT {n}",
+      "noImageLabel": "SHOT {n}\nno image",
+      "noImageLabel01": "SHOT 01\nno image",
+      "klingDescBefore": "Kling 3.0 i2v locks the",
+      "klingDescAfter": "pixel-lock starts",
+      "klingDescBoth": "pixel-locked",
+      "klingDescAnd": "and",
+      "klingDescMid": ", with 5-15 seconds in between driven by the narrative prompt above. Best for",
+      "klingDescUseCase": "character entrances / reaction shots / transitions",
+      "klingDescEnd": " — groups needing pixel-level consistency. To return to multi-shot, set \"Frame lock\" above back to Off.",
+      "unlockHint": "💡 Want \"Frame lock\" (Kling 3.0 i2v pixel lock)? Generate an image for SHOT 01 from the timeline/gallery first and this option unlocks."
+    },
+    "castSection": {
+      "characterHeader": "Characters in shot · {count}",
+      "sceneHeader": "Scenes in shot · {count}",
+      "noLinks": "No linked characters / scenes",
+      "boundCharsHeader": "Bound to this episode · {count}"
+    },
+    "panelEditMore": {
+      "shotNum": "SHOT {n}",
+      "remove": "✕",
+      "removeTitle": "Remove from this panel",
+      "noImage": "No image",
+      "regenerateImage": "↻ Regen image",
+      "regenerateImageTitle": "Regenerate this image",
+      "toggle": "Advanced panel editor ({count} shots · edit per-shot description / dialogue)",
+      "saving": "Saving…",
+      "saveDesc": "Save description",
+      "saveDialogue": "Save dialogue",
+      "descPlaceholder": "Shot description",
+      "dialoguePlaceholder": "Dialogue (optional)"
+    },
+    "chips": {
+      "characterTitleClick": "{name} · {appearance} — click to switch look",
+      "characterTitleNoClick": "{name} · {appearance}",
+      "boundCharOverrideTitle": "{name} — next regen will use the new look (not yet submitted)",
+      "defaultAppearance": "default look",
+      "removeCharFromGroup": "Remove {name} from all panels in this group (affects DB — applies on next regen)",
+      "sceneTitleClick": "{name} · {view} — click to switch view",
+      "defaultView": "main view",
+      "mainView": "main view",
+      "editedFlag": "✏ edited",
+      "removeSceneFromGroup": "Remove scene {name} from all panels in this group (affects DB — applies on next regen)"
+    },
+    "panelEditor": {
+      "panelDescPlaceholder": "Shot description",
+      "dialoguePlaceholder": "Dialogue (optional)"
+    }
+  },
   "regenerateStoryboardModal": {
     "title": "Regenerate storyboard",
     "warning": "Will overwrite {count} existing panels",

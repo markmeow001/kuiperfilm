@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
@@ -292,6 +293,7 @@ export function GroupCard({
   targetSecPerGroup = null,
   onRegenerate,
 }: GroupCardProps) {
+  const t = useTranslations('v2Storyboard.groupCard')
   // Build episode binding lookup ONCE. Empty map when no bindings prop
   // (legacy callers) — falls through to panel-hint / default-[0] priority.
   const episodeBindingByCharId = useMemo(() => {
@@ -1141,7 +1143,7 @@ export function GroupCard({
       { panelId, description: value },
       {
         onSettled: () => setSavingPanelId((prev) => (prev === panelId ? null : prev)),
-        onError: (err) => alert(err instanceof Error ? err.message : '儲存描述失敗'),
+        onError: (err) => alert(err instanceof Error ? err.message : t('errors.saveDescFailed')),
       },
     )
   }
@@ -1152,7 +1154,7 @@ export function GroupCard({
       { panelId, srtSegment: value },
       {
         onSettled: () => setSavingPanelId((prev) => (prev === panelId ? null : prev)),
-        onError: (err) => alert(err instanceof Error ? err.message : '儲存對白失敗'),
+        onError: (err) => alert(err instanceof Error ? err.message : t('errors.saveDialogueFailed')),
       },
     )
   }
@@ -1192,7 +1194,7 @@ export function GroupCard({
    */
   async function handleRemoveSceneFromGroup(locationId: string, locationName: string) {
     if (removingSceneId) return
-    if (!confirm(`從此 group 的所有分鏡移除場景「${locationName}」?\n\n影響 DB,下次重新生成時這個場景不再被當作 reference 上傳到 Kling。\n（不會刪除場景本身,只是這幾個分鏡不再引用他）`)) {
+    if (!confirm(t('confirmRemoveLocation', { name: locationName }))) {
       return
     }
     setRemovingSceneId(locationId)
@@ -1210,7 +1212,7 @@ export function GroupCard({
         })
       }
     } catch (err) {
-      alert(`移除場景失敗:${(err as Error)?.message ?? '未知'}`)
+      alert(t('errors.removeSceneFailed', { reason: (err as Error)?.message ?? t('errors.unknown') }))
     } finally {
       setRemovingSceneId(null)
     }
@@ -1218,7 +1220,7 @@ export function GroupCard({
 
   async function handleRemoveCharacterFromGroup(characterId: string, characterName: string) {
     if (removingCharId) return
-    if (!confirm(`從此 group 的所有分鏡移除「${characterName}」?\n\n影響 DB,下次重新生成圖/影片時這個角色就不會被綁入。\n（不會刪除角色本身,只是這幾個分鏡不再引用他）`)) {
+    if (!confirm(t('confirmRemoveCharacter', { name: characterName }))) {
       return
     }
     setRemovingCharId(characterId)
@@ -1264,14 +1266,14 @@ export function GroupCard({
         })
       }
     } catch (err) {
-      alert(`移除失敗:${(err as Error)?.message ?? '未知'}`)
+      alert(t('errors.removeFailed', { reason: (err as Error)?.message ?? t('errors.unknown') }))
     } finally {
       setRemovingCharId(null)
     }
   }
   async function handleRegenerate() {
     if (panels.length < 2) {
-      setRegenState({ status: 'error', message: '至少需要 2 鏡才能跑多鏡頭' })
+      setRegenState({ status: 'error', message: t('errors.needTwoPanels') })
       return
     }
     // Kling 多鏡頭 single dispatch caps at 6 clips per group; Seedance
@@ -1282,7 +1284,7 @@ export function GroupCard({
     if (panels.length > maxPanels) {
       setRegenState({
         status: 'error',
-        message: `一組最多 ${maxPanels} 鏡(會送前 ${maxPanels} 個)`,
+        message: t('errors.tooManyPanels', { max: maxPanels }),
       })
     } else {
       setRegenState({ status: 'submitting' })
@@ -1455,12 +1457,12 @@ export function GroupCard({
   }, [taskFailed, regenState.status])
 
   const statusLabel = (() => {
-    if (regenState.status === 'submitting') return { text: '送出中…', tone: 'pending' }
-    if (taskFailed) return { text: '失敗 · 點重新生成', tone: 'error' }
-    if (taskProcessing) return { text: '生成中…', tone: 'pending' }
-    if (taskCompleted) return { text: '已完成', tone: 'done' }
-    if (taskId) return { text: '已送出', tone: 'done' }
-    return { text: '尚未生成', tone: 'idle' }
+    if (regenState.status === 'submitting') return { text: t('status.submitting'), tone: 'pending' }
+    if (taskFailed) return { text: t('status.failedTapRetry'), tone: 'error' }
+    if (taskProcessing) return { text: t('status.generating'), tone: 'pending' }
+    if (taskCompleted) return { text: t('status.completed'), tone: 'done' }
+    if (taskId) return { text: t('status.submitted'), tone: 'done' }
+    return { text: t('status.notGenerated'), tone: 'idle' }
   })()
   const statusToneClass =
     statusLabel.tone === 'done'
@@ -1510,10 +1512,10 @@ export function GroupCard({
               }}
               title={
                 !canMultiShot
-                  ? '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                  ? t('cta.tipModelNotMultiShot')
                   : videoFamily === 'seedance'
-                    ? '把這個 group 的所有分鏡合成為一支 4-15s 影片(Seedance BobAPI 9-ref @N 合成)'
-                    : '重新送這個 group 跑 Kling 多鏡頭'
+                    ? t('cta.tipSeedanceComposite')
+                    : t('cta.tipKlingRegen')
               }
               className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[12px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 regenState.status === 'submitting'
@@ -1539,14 +1541,14 @@ export function GroupCard({
                   both families now read "生成視頻" / "重新生成", per user
                   feedback that "合成此組" was unclear jargon. */}
               {regenState.status === 'submitting'
-                ? '送出中…'
+                ? t('cta.submitting')
                 : regenState.status === 'done'
-                  ? '✓ 已送出'
+                  ? t('cta.submitted')
                   : regenState.status === 'error'
-                    ? '⚠ 失敗,點重試'
+                    ? t('cta.failedRetry')
                     : taskId
-                      ? '重新生成'
-                      : '生成視頻'}
+                      ? t('cta.regenerate')
+                      : t('cta.generateVideo')}
             </button>
           ) : null}
           <div className="font-mono text-[14px] tracking-wider text-stone-500">
@@ -1562,8 +1564,8 @@ export function GroupCard({
             <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-400/40 border-t-amber-200" />
             <div className="font-serif-cn text-[12px] text-amber-200">
               {videoFamily === 'seedance'
-                ? '送 Seedance 中…task 已 queue,大約 30 秒進到 worker。BobAPI 合成大約 2-5 分鐘出影片,完成後左邊會自動刷新。'
-                : '送 Kling 中…task 已 queue,大約 30 秒進到 worker。Kling Omni 算 3-5 分鐘出影片,完成後左邊會自動刷新。'}
+                ? t('submitHint.seedancePending')
+                : t('submitHint.klingPending')}
             </div>
           </div>
         ) : regenState.status === 'done' ? (
@@ -1571,15 +1573,15 @@ export function GroupCard({
             <AppIcon name="check" className="h-3 w-3 text-emerald-300" />
             <div className="font-serif-cn text-[12px] text-emerald-200">
               {videoFamily === 'seedance'
-                ? '✓ 已送出 — Seedance 合成大約 2-5 分鐘出影片,進度會顯示在左邊綁定區。可以同時去其他 group 編輯。'
-                : '✓ 已送出 — Kling Omni 大約 3-5 分鐘出影片,進度會顯示在左邊綁定區。可以同時去其他 group 編輯。'}
+                ? t('submitHint.seedanceSubmitted')
+                : t('submitHint.klingSubmitted')}
             </div>
           </div>
         ) : regenState.status === 'error' ? (
           <div className="flex items-center gap-2 rounded-sm border border-rose-500/40 bg-rose-500/10 px-3 py-2">
             <AppIcon name="alert" className="h-3 w-3 text-rose-300" />
             <div className="flex-1 font-serif-cn text-[12px] text-rose-200">
-              ⚠ 送出失敗:{regenState.message}
+              {t('submitHint.errorPrefix', { message: regenState.message })}
             </div>
             <button
               type="button"
@@ -1588,11 +1590,11 @@ export function GroupCard({
               title={
                 canMultiShot
                   ? undefined
-                  : '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                  : t('cta.tipModelNotMultiShot')
               }
               className="rounded-sm border border-rose-500/50 bg-rose-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-rose-200 transition-colors hover:bg-rose-500/25 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              重試
+              {t('submitHint.retry')}
             </button>
           </div>
         ) : null}
@@ -1632,14 +1634,14 @@ export function GroupCard({
           {overrideCount > 0 ? (
             <div className="mt-2 flex items-center justify-between rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1.5">
               <div className="font-mono text-[12px] tracking-wider text-violet-300">
-                ✏ 已修改 {overrideCount} 個綁定 — 「重新生成」會套用
+                {t('overrides.edited', { count: overrideCount })}
               </div>
               <button
                 type="button"
                 onClick={handleResetOverrides}
                 className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-violet-300"
               >
-                清空
+                {t('overrides.clear')}
               </button>
             </div>
           ) : null}
@@ -1661,8 +1663,8 @@ export function GroupCard({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              叙事提示词
-              <span className="text-stone-500">· {narrativeDraft.length} 字</span>
+              {t('narrative.title')}
+              <span className="text-stone-500">{t('narrative.charCount', { count: narrativeDraft.length })}</span>
             </div>
             {/* ↻ 重生敘事 — pinned right of the title row so it stays on
                 the SAME line as 叙事提示词 regardless of how wide the
@@ -1684,11 +1686,11 @@ export function GroupCard({
                 window.setTimeout(() => setNarrativeRegenFlash(false), 1500)
               }}
               title={narrativeDirty
-                ? '丟棄手動編輯,從分鏡描述+綁定角色/場景重新生成敘事'
-                : '敘事目前已是預設值 — 沒有手動編輯,不需要重生'}
+                ? t('narrative.regenTitleDirty')
+                : t('narrative.regenTitleClean')}
               className="whitespace-nowrap rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
             >
-              ↻ 重生敘事
+              {t('narrative.regenButton')}
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1697,10 +1699,10 @@ export function GroupCard({
                   docs/design/reelshort-cold-open-evaluation.md. */}
               <label
                 className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
-                title="冷開場鉤子模式 - 套用 ReelShort 4 鏡 × 2s 結構 (Wide → Medium → OTS → Slow push-in)。auto 模式由群組文字自動判斷風格。"
+                title={t('hook.title')}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                鉤子
+                {t('hook.label')}
                 <select
                   value={coldOpenMode}
                   onChange={(e) => {
@@ -1714,11 +1716,11 @@ export function GroupCard({
                   }}
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
                 >
-                  <option value="off">Off (自由結構)</option>
-                  <option value="auto">Auto (自動偵測)</option>
-                  <option value="modern">Modern (現代劇)</option>
-                  <option value="period">Period (古裝/仙俠)</option>
-                  <option value="action">Action (動作/災劫)</option>
+                  <option value="off">{t('hook.options.off')}</option>
+                  <option value="auto">{t('hook.options.auto')}</option>
+                  <option value="modern">{t('hook.options.modern')}</option>
+                  <option value="period">{t('hook.options.period')}</option>
+                  <option value="action">{t('hook.options.action')}</option>
                 </select>
               </label>
               {/* 2026-05-13 — Option B 首幀鎖定 toggle.
@@ -1732,11 +1734,11 @@ export function GroupCard({
                   panels[0]?.imageUrl ? 'text-stone-400' : 'text-stone-700'
                 }`}
                 title={panels[0]?.imageUrl
-                  ? '首幀鎖定 - 用 SHOT 01 圖當首幀，選「首尾」會再用最後一鏡圖當尾幀。Kling 3.0 i2v 單鏡頭模式 (5-15s)，犧牲多鏡頭換像素級角色/場景一致。'
-                  : '首幀鎖定需要 SHOT 01 已產生圖片 — 先到時間軸/畫廊一鍵生圖'}
+                  ? t('frameLock.tipReady')
+                  : t('frameLock.tipNeedImage')}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                鎖幀
+                {t('frameLock.label')}
                 <select
                   value={frameLockMode}
                   onChange={(e) => {
@@ -1746,18 +1748,18 @@ export function GroupCard({
                   disabled={!panels[0]?.imageUrl || !canEdit}
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <option value="off">Off · 多鏡頭(現在)</option>
-                  <option value="first_frame">鎖首幀 · 用 SHOT 01 圖</option>
+                  <option value="off">{t('frameLock.options.off')}</option>
+                  <option value="first_frame">{t('frameLock.options.firstFrame')}</option>
                   <option value="first_last_frame" disabled={!panels[panels.length - 1]?.imageUrl || !canEdit}>
                     {panels[panels.length - 1]?.imageUrl
-                      ? `鎖首尾 · 用 SHOT 01 + SHOT ${panels.length}`
-                      : `鎖首尾 · 需 SHOT ${panels.length} 也有圖`}
+                      ? t('frameLock.options.firstLastReady', { n: panels.length })
+                      : t('frameLock.options.firstLastNeedImage', { n: panels.length })}
                   </option>
                 </select>
               </label>
               <label className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400">
                 <AppIcon name="play" className="h-3 w-3" />
-                时长
+                {t('duration.label')}
                 <select
                   value={totalDurationDraft}
                   onChange={(e) => {
@@ -1772,17 +1774,15 @@ export function GroupCard({
                   }}
                   title={
                     recommendedDurationSec !== null
-                      ? `Auto = 從本組對白長度估算推薦 ${recommendedDurationSec}s` +
-                        `(中文 ~4 字/秒、英文 ~2.3 詞/秒;無對白時用 max(10, 分鏡數×2.5))。` +
-                        `選 5/10/15 會手動覆蓋。`
-                      : 'AUTO 模式 worker 會用對白長度自動分配每鏡時長;選 5/10/15 則平均切到該秒數'
+                      ? t('duration.tipAuto', { n: recommendedDurationSec })
+                      : t('duration.tipManual')
                   }
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
                 >
                   <option value={0}>
                     {recommendedDurationSec !== null
-                      ? `Auto (推薦 ${recommendedDurationSec}s)`
-                      : 'Auto (對白驅動)'}
+                      ? t('duration.autoWithRec', { n: recommendedDurationSec })
+                      : t('duration.autoNoRec')}
                   </option>
                   {/* 2026-05-22 — Seedance / Kling 全家族都支援 4-15 整數秒。
                       Phase O 原本只開 5/10/15 三檔,user 反映想要 6-14 中間
@@ -1795,16 +1795,16 @@ export function GroupCard({
               </label>
               <label
                 className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
-                title="選一個風格會覆蓋此組的專案預設 (visualStyleId)。Worker 在 multi_prompt 每段 prompt 前後注入該風格的 styleAnchor + visualModifiers。"
+                title={t('style.title')}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                風格
+                {t('style.label')}
                 <select
                   value={visualStyleOverride}
                   onChange={(e) => setVisualStyleOverride(e.target.value)}
                   className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
                 >
-                  <option value={STYLE_INHERIT}>依專案預設</option>
+                  <option value={STYLE_INHERIT}>{t('style.inheritOption')}</option>
                   {sortedStyleOptions.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.category} · {s.nameZh}
@@ -1841,20 +1841,20 @@ export function GroupCard({
               setNarrativeDirty(true)
             }}
             rows={panels.length >= 4 ? 14 : 9}
-            placeholder="0-5 seconds: 角色 + 場景 + 動作 + 鏡頭 + 氛圍&#10;5-10 seconds: ...&#10;10-15 seconds: ..."
+            placeholder={t('narrative.placeholder')}
             characterNames={groupCast.map((c) => c.character.name)}
             sceneNames={groupScenes.map((s) => s.location.name)}
             flashing={narrativeRegenFlash}
           />
           {narrativeDirty ? (
             <div className="font-mono text-[12px] tracking-wider text-violet-300">
-              ✏ 敘事已修改 — 「{taskId ? '重新生成' : '生成影片'}」會以這段為主 prompt(覆蓋分鏡描述,並關閉對白驅動時長)
+              {t('narrative.editedHint', { action: taskId ? t('narrative.editedActionRegen') : t('narrative.editedActionGenerate') })}
             </div>
           ) : (
             <div className="font-mono text-[12px] tracking-wider text-stone-600">
               {totalDurationDraft === 0
-                ? `預覽由 ${panels.length} 個分鏡拼接 · 送出時 worker 會用對白長度自動分配每鏡時長(${panels.length} 鏡)。直接編輯這段可改 prompt(會關閉對白驅動)。`
-                : `預設由 ${panels.length} 個分鏡描述自動拼接,${totalDurationDraft}s 平均切。直接編輯這段即可,送出時會以你寫的為準。`}
+                ? t('narrative.previewWithDialogue', { count: panels.length })
+                : t('narrative.previewWithoutDialogue', { count: panels.length, total: totalDurationDraft })}
             </div>
           )}
 
@@ -1866,68 +1866,68 @@ export function GroupCard({
             <div className="rounded-sm border border-amber-500/40 bg-amber-500/5 p-2">
               <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-300">
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                {frameLockMode === 'first_last_frame' ? '首尾鎖定' : '首幀鎖定'}模式
+                {frameLockMode === 'first_last_frame' ? t('frameLockPreview.modeFirstLast') : t('frameLockPreview.modeFirstOnly')}{t('frameLockPreview.modeSuffix')}
                 <span className="font-serif-cn text-[11px] normal-case tracking-normal text-amber-400/70 italic">
-                  · 此 group 將跑單鏡頭 i2v(5-15s)，多鏡頭暫停
+                  {t('frameLockPreview.modeHint')}
                 </span>
               </div>
               <div className="flex items-stretch gap-2">
                 {/* SHOT 01 thumbnail */}
                 <div className="flex flex-col items-center">
-                  <div className="font-mono text-[10px] tracking-wider text-amber-400/80">首幀</div>
+                  <div className="font-mono text-[10px] tracking-wider text-amber-400/80">{t('frameLockPreview.firstFrameLabel')}</div>
                   {panels[0]?.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={panels[0].imageUrl}
-                      alt="首幀 SHOT 01"
+                      alt={t('frameLockPreview.firstFrameAlt')}
                       className="mt-0.5 h-16 w-12 rounded-sm border border-amber-500/40 object-cover"
                     />
                   ) : (
-                    <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300">
-                      SHOT 01<br />沒圖
+                    <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300 whitespace-pre-line">
+                      {t('frameLockPreview.noImageLabel01')}
                     </div>
                   )}
                   <div className="mt-0.5 font-mono text-[10px] text-stone-500">SHOT 01</div>
                 </div>
                 {frameLockMode === 'first_last_frame' ? (
                   <div className="flex flex-col items-center">
-                    <div className="font-mono text-[10px] tracking-wider text-amber-400/80">尾幀</div>
+                    <div className="font-mono text-[10px] tracking-wider text-amber-400/80">{t('frameLockPreview.lastFrameLabel')}</div>
                     {panels[panels.length - 1]?.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={panels[panels.length - 1]!.imageUrl!}
-                        alt={`尾幀 SHOT ${panels.length}`}
+                        alt={t('frameLockPreview.lastFrameAlt', { n: panels.length })}
                         className="mt-0.5 h-16 w-12 rounded-sm border border-amber-500/40 object-cover"
                       />
                     ) : (
-                      <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300">
-                        SHOT {panels.length}<br />沒圖
+                      <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300 whitespace-pre-line">
+                        {t('frameLockPreview.noImageLabel', { n: panels.length })}
                       </div>
                     )}
                     <div className="mt-0.5 font-mono text-[10px] text-stone-500">SHOT {panels.length}</div>
                   </div>
                 ) : null}
                 <div className="flex-1 font-serif-cn text-[12px] leading-relaxed text-stone-400">
-                  Kling 3.0 i2v 會以
-                  <span className="text-amber-300">「首幀」</span>
+                  {t('frameLockPreview.klingDescBefore')}
+                  <span className="text-amber-300">{t('style.frameKeyHint')}</span>
                   {frameLockMode === 'first_last_frame' ? (
                     <>
-                      和
-                      <span className="text-amber-300">「尾幀」</span>
-                      像素鎖死
+                      {t('frameLockPreview.klingDescAnd')}
+                      <span className="text-amber-300">{t('style.frameTailHint')}</span>
+                      {t('frameLockPreview.klingDescBoth')}
                     </>
                   ) : (
-                    '像素鎖死起點'
+                    t('frameLockPreview.klingDescAfter')
                   )}
-                  ，中間 5-15 秒由上方敘事 prompt 推動。適合
-                  <span className="text-stone-300">角色登場 / 反應鏡頭 / 轉場</span>
-                  這種要求像素級一致的 group。要回到多鏡頭模式請把上面「鎖幀」改回 Off。
+                  {t('frameLockPreview.klingDescMid')}
+                  <span className="text-stone-300">{t('frameLockPreview.klingDescUseCase')}</span>
+                  {t('frameLockPreview.klingDescEnd')}
                 </div>
               </div>
             </div>
           ) : !panels[0]?.imageUrl ? (
             <div className="rounded-sm border border-stone-800/60 bg-stone-950/40 px-2 py-1.5 font-mono text-[11px] italic tracking-wider text-stone-600">
-              💡 想用「鎖幀」(Kling 3.0 i2v 像素鎖)? 先到時間軸/畫廊跑「一鍵生圖」幫 SHOT 01 產張圖,選單就會解鎖
+              {t('frameLockPreview.unlockHint')}
             </div>
           ) : null}
 
@@ -1937,7 +1937,7 @@ export function GroupCard({
                 <div>
                   <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
                     <AppIcon name="user" className="h-3 w-3" />
-                    出場角色 · {groupCast.length}
+                    {t('castSection.characterHeader', { count: groupCast.length })}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {groupCast.map((c) => {
@@ -1968,7 +1968,7 @@ export function GroupCard({
                               })
                             }}
                             className="inline-flex items-center gap-1.5 pr-1"
-                            title={`${c.character.name} · ${c.appearanceLabel ?? '默認造型'} — 點擊換造型`}
+                            title={t('chips.characterTitleClick', { name: c.character.name, appearance: c.appearanceLabel ?? t('chips.defaultAppearance') })}
                           >
                             <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
                               {c.avatarUrl ? (
@@ -1994,7 +1994,7 @@ export function GroupCard({
                             type="button"
                             onClick={() => void handleRemoveCharacterFromGroup(c.character.id, c.character.name)}
                             disabled={removingCharId === c.character.id || !canEdit}
-                            title={`從此 group 所有分鏡移除 ${c.character.name}（影響 DB,下次重生會生效）`}
+                            title={t('chips.removeCharFromGroup', { name: c.character.name })}
                             className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
                             {removingCharId === c.character.id ? (
@@ -2014,7 +2014,7 @@ export function GroupCard({
                 <div>
                   <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-emerald-500/70">
                     <AppIcon name="image" className="h-3 w-3" />
-                    場景 · {groupScenes.length}
+                    {t('castSection.sceneHeader', { count: groupScenes.length })}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {groupScenes.map((s) => {
@@ -2042,7 +2042,7 @@ export function GroupCard({
                               })
                             }}
                             className="inline-flex items-center gap-1.5 pr-1"
-                            title={`${s.location.name} · ${s.viewName ?? '主視角'} — 點擊換視角`}
+                            title={t('chips.sceneTitleClick', { name: s.location.name, view: s.viewName ?? t('chips.mainView') })}
                           >
                             <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
                               {s.avatarUrl ? (
@@ -2056,11 +2056,11 @@ export function GroupCard({
                               {s.location.name}
                             </span>
                             <span className="font-mono text-[12px] tracking-wider text-emerald-500/70">
-                              {s.viewName ?? '主視角'}
+                              {s.viewName ?? t('chips.mainView')}
                             </span>
                             {overridden ? (
                               <span className="font-mono text-[12px] tracking-wider text-violet-300">
-                                ✏ 已改
+                                {t('chips.editedFlag')}
                               </span>
                             ) : null}
                           </button>
@@ -2068,7 +2068,7 @@ export function GroupCard({
                             type="button"
                             onClick={() => void handleRemoveSceneFromGroup(s.location.id, s.location.name)}
                             disabled={removingSceneId === s.location.id || !canEdit}
-                            title={`從此 group 所有分鏡移除場景 ${s.location.name}（影響 DB,下次重生會生效）`}
+                            title={t('chips.removeSceneFromGroup', { name: s.location.name })}
                             className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
                             {removingSceneId === s.location.id ? (
@@ -2088,7 +2088,7 @@ export function GroupCard({
                 <div>
                   <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
                     <AppIcon name="user" className="h-3 w-3" />
-                    演員綁定 · {boundCharacters.length}
+                    {t('castSection.boundCharsHeader', { count: boundCharacters.length })}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {boundCharacters.map((c) => {
@@ -2109,8 +2109,10 @@ export function GroupCard({
                         setPickerCharacter({ character, currentAppearanceId })
                       }
                       const title = hasOverride
-                        ? `${c.name} — 下次重生會改用新造型(尚未送出)`
-                        : `${c.name} · ${c.appearanceLabel ?? '默認造型'}${character ? ' — 點擊換造型' : ''}`
+                        ? t('chips.boundCharOverrideTitle', { name: c.name })
+                        : character
+                          ? t('chips.characterTitleClick', { name: c.name, appearance: c.appearanceLabel ?? t('chips.defaultAppearance') })
+                          : t('chips.characterTitleNoClick', { name: c.name, appearance: c.appearanceLabel ?? t('chips.defaultAppearance') })
                       // 2026-05-13 — 演員綁定 chip now also has × remove.
                       // Calls the same handleRemoveCharacterFromGroup as
                       // 出場角色 chip (single source of truth for removal).
@@ -2138,11 +2140,11 @@ export function GroupCard({
                               {c.name}
                             </span>
                             <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
-                              {c.appearanceLabel ?? '默認造型'}
+                              {c.appearanceLabel ?? t('chips.defaultAppearance')}
                             </span>
                             {hasOverride ? (
                               <span className="font-mono text-[12px] tracking-wider text-violet-300">
-                                ✏ 已改
+                                {t('chips.editedFlag')}
                               </span>
                             ) : null}
                           </button>
@@ -2150,7 +2152,7 @@ export function GroupCard({
                             type="button"
                             onClick={() => void handleRemoveCharacterFromGroup(c.id, c.name)}
                             disabled={removingCharId === c.id || !canEdit}
-                            title={`從此 group 所有分鏡移除 ${c.name}（影響 DB,下次重生會生效）`}
+                            title={t('chips.removeCharFromGroup', { name: c.name })}
                             className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
                             {removingCharId === c.id ? (
@@ -2174,7 +2176,7 @@ export function GroupCard({
               onClick={() => setShowAdvancedEditor((v) => !v)}
               className="flex items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
             >
-              {showAdvancedEditor ? '▼' : '▶'} 進階分鏡編輯({panels.length} 鏡 · 編輯各分鏡描述 / 對白)
+              {showAdvancedEditor ? '▼' : '▶'} {t('panelEditMore.toggle', { count: panels.length })}
             </button>
             {showAdvancedEditor ? (
               <div className="mt-2 space-y-2">
@@ -2209,7 +2211,7 @@ export function GroupCard({
                           setDescDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
                         }
                         rows={2}
-                        placeholder="鏡頭描述"
+                        placeholder={t('panelEditMore.descPlaceholder')}
                         className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-1.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
                       />
                       {descChanged ? (
@@ -2219,7 +2221,7 @@ export function GroupCard({
                           onClick={() => handleSaveDescription(p.id)}
                           className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
                         >
-                          {isSavingThis ? '儲存中…' : '儲存描述'}
+                          {isSavingThis ? t('panelEditMore.saving') : t('panelEditMore.saveDesc')}
                         </button>
                       ) : null}
                       <div className="mt-1.5">
@@ -2229,7 +2231,7 @@ export function GroupCard({
                             setDialogueDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))
                           }
                           rows={1}
-                          placeholder="對白(可空白)"
+                          placeholder={t('panelEditMore.dialoguePlaceholder')}
                           className="w-full resize-none rounded-sm border border-amber-500/15 bg-amber-500/5 p-1.5 font-serif-cn text-[11px] leading-relaxed italic text-amber-300/80 outline-none focus:border-amber-500/40"
                         />
                         {dialChanged ? (
@@ -2239,7 +2241,7 @@ export function GroupCard({
                             onClick={() => handleSaveDialogue(p.id)}
                             className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
                           >
-                            {isSavingThis ? '儲存中…' : '儲存對白'}
+                            {isSavingThis ? t('panelEditMore.saving') : t('panelEditMore.saveDialogue')}
                           </button>
                         ) : null}
                       </div>
@@ -2282,6 +2284,7 @@ export function GroupCard({
 }
 
 function StyleOverridePreview({ styleId }: { styleId: string }) {
+  const t = useTranslations('v2Storyboard.groupCard')
   const style = visualStyles.find((s) => s.id === styleId)
   if (!style) return null
   return style.thumbnailUrl ? (
@@ -2295,7 +2298,7 @@ function StyleOverridePreview({ styleId }: { styleId: string }) {
     />
   ) : (
     <span
-      title={`${style.category} · ${style.nameZh} (縮圖未生成)`}
+      title={`${style.category} · ${style.nameZh} ${t('style.thumbnailPending')}`}
       className="flex h-10 w-8 items-center justify-center rounded-sm border border-stone-800 bg-stone-900/60 font-mono text-[14px] tracking-wider text-stone-600"
     >
       {style.category}
