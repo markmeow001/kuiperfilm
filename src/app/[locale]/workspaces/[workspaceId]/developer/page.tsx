@@ -17,7 +17,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
-import { PUBLIC_API_SCOPES, SCOPE_LABELS, type PublicApiScope } from '@/lib/api-keys'
+// Import directly from the leaf 'scopes' module instead of the barrel
+// '@/lib/api-keys' — the barrel re-exports validator/rate-limit which
+// transitively pulls in ioredis (Node net/tls). Webpack sees those during
+// client bundling and fails with "Module not found: Can't resolve 'net'".
+// Leaf-import avoids dragging server-only code into the client bundle.
+import { PUBLIC_API_SCOPES, SCOPE_LABELS, type PublicApiScope } from '@/lib/api-keys/scopes'
 
 interface ApiKeyRow {
   id: string
