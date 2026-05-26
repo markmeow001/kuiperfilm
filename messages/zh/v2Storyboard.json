@@ -1,0 +1,145 @@
+{
+  "viewerHint": "你是 viewer · 唯读模式 · 编辑按钮需要请求权限",
+  "loading": "载入中…",
+  "page": {
+    "kicker": "STEP 04 — STORYBOARD",
+    "title": "分镜",
+    "subtitle": "把剧本拆成镜头",
+    "noEpisode": "尚未选集",
+    "noStoryboardYet": "还没有分镜 — 请到上方点「一键生成分镜」开始",
+    "noPanelsYet": "这一集还没有任何分镜",
+    "selectPanel": "上方点选一个分镜"
+  },
+  "buttons": {
+    "save": "储存",
+    "saving": "储存中…",
+    "saved": "✓ 已储存",
+    "unsaved": "未储存",
+    "cancel": "取消",
+    "close": "关闭",
+    "confirm": "确认",
+    "delete": "删除",
+    "reset": "重设",
+    "analyze": "分析",
+    "reanalyze": "重新分析",
+    "regenerateStoryboard": "重新生成分镜",
+    "generateAllImages": "一键生图",
+    "generateAllImagesDetail": "一键把还没有图的 {count} 个分镜都送去生图",
+    "generateAllVideos": "一键生影片",
+    "generateAllVideosDetail": "一键把已有图、还没有影片的 {count} 个分镜都送去生影片",
+    "splitGroups": "切组",
+    "splitting": "切组中…",
+    "splitGroupsDetail": "依场景/角色连续性切组，{count} 个分镜分组送多镜头合成",
+    "downloadImage": "下载图",
+    "downloadStaticImage": "下载静态图",
+    "downloadVideo": "下载影片",
+    "merge": "合成",
+    "mergeToSingle": "合成为一支 mp4",
+    "multiShot": "多镜头",
+    "multiShotComposite": "多镜头合成"
+  },
+  "status": {
+    "analyzingTitle": "分析中",
+    "analyzingProgress": "分析中… {progress}%",
+    "analyzeSubmitting": "提交中…",
+    "splittingTitle": "切组中",
+    "imageGenerating": "图生成中",
+    "imageGenerated": "图已生成",
+    "imageGeneratedNoVideo": "图已生成，视频待跑",
+    "imageInGen": "图片生成中",
+    "videoQueued": "影片排队中",
+    "videoGenerating": "影片生成中",
+    "queued": "任务已排队，等 {minutes} 分钟后点下方按钮重试。",
+    "tasksDot": "任务",
+    "done": "完成",
+    "doneAuto": "完成后分镜会自动刷新",
+    "failed": "失败",
+    "noVideoYet": "尚未生成"
+  },
+  "errors": {
+    "saveFailed": "储存失败",
+    "saveFailedWithReason": "储存失败：{reason}",
+    "saveDialogueFailed": "储存对话失败",
+    "saveDescriptionFailed": "储存描述词失败",
+    "splitFailed": "切组失败",
+    "splitFailedWithReason": "切组失败：{reason}",
+    "lastAnalyzeFailed": "上次分析失败 {reason}",
+    "contentBlocked": "内容审核被挡",
+    "contentViolation": "内容违规",
+    "tooManyTasks": "同时跑太多任务，请稍后再试",
+    "unknown": "未知错误"
+  },
+  "shotSize": {
+    "panorama": "全景",
+    "medium": "中景",
+    "title": "景别"
+  },
+  "movement": {
+    "pushIn": "中度推进",
+    "title": "运镜"
+  },
+  "quality": {
+    "title": "品质",
+    "upgrade": "升格",
+    "friendly": "友善",
+    "highQualityYen": "高画质 ¥¥"
+  },
+  "multiShot": {
+    "compositeTitle": "多镜头合成",
+    "qualityTitle": "多镜头品质",
+    "layoutTitle": "多镜头版面",
+    "perGroupCount": "{count} 个一组送",
+    "outputSingleVideo": "一次出多镜头视频",
+    "imageFreeMode": "免生图",
+    "imageFreeDescription": "免生图直接出多镜头视频",
+    "viewSwitchHint": "之后就能在图/视频之间切换。",
+    "switchHint": "图/视频显示切换",
+    "needImages": "{count} 个有图的分镜才能跑 {label}",
+    "needPanels": "{count} 个分镜才能跑 {label}",
+    "needModelSupport": "不支持多镜头。请从分镜顶部的视频模型 picker 选 Kling Omni / Seedance 2",
+    "alreadySendingAll": "{count} 个分镜都送去生 {label}",
+    "alreadySendingAllImages": "{count} 个分镜都送去生图",
+    "noVideoModelSelected": "专案还没选视频模型",
+    "noVideoModelHint": "请先到右侧选择 video model"
+  },
+  "section": {
+    "scriptStillAnalyzing": "剧本分析中，等分镜全部生成完再切组",
+    "stalePanelsHint": "再分析失败时旧分镜会残留 — 切到 {label} 可以清掉",
+    "onlyShowingExisting": "只会看到目前已有的分镜",
+    "switchAndSee": "切着看",
+    "or": "或",
+    "or2": "不然",
+    "afterThis": "之后 ",
+    "downloadAssetBundle": "剪映 / CapCut 直接下载素材包",
+    "compositeOption": "{count} 个一组送 · 一次出多镜头视频",
+    "perGroupOption": "{count} 个一组送 · 一次出多镜头视频"
+  },
+  "inspector": {
+    "castTitle": "卡司 · 角色",
+    "castEmpty": "这一格没有列角色",
+    "initialAppearance": "初始形象",
+    "describePlaceholder": "描述这一格的画面…",
+    "dialogueTitle": "对白",
+    "dialoguePlaceholder": "这一格的对白（每行一条）",
+    "notesTitle": "笔记",
+    "notesPlaceholder": "拍摄/分镜笔记…",
+    "saveSeconds": "{seconds}s 自动储存"
+  },
+  "below": {
+    "existing": "下方既有的"
+  },
+  "thumbsModes": {
+    "all": "全部",
+    "withImage": "有图",
+    "noImage": "没图",
+    "states3": "三种状态",
+    "onlyImages": "只有图"
+  },
+  "regenerateStoryboardModal": {
+    "title": "重新生成分镜",
+    "warning": "会覆盖既有 {count} 个分镜",
+    "warningDetail": "再分析失败时旧分镜会残留，所以先备份再覆盖。",
+    "confirm": "确认覆盖",
+    "cancel": "取消"
+  }
+}

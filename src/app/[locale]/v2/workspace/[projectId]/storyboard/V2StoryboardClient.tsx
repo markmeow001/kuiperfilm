@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
@@ -171,13 +172,14 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
+  const t = useTranslations('v2Storyboard')
   const queryClient = useQueryClient()
   const projectQuery = useProjectData(projectId)
   const project = projectQuery.data as ProjectLikeFull | undefined
   // Phase 12.5 — viewer-role users see disabled mutation buttons across
   // the storyboard page + per-group cards (passed via GroupCard prop).
   const { canEdit } = useProjectAccess(projectId)
-  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
+  const viewerTip = canEdit ? undefined : t('viewerHint')
   const projectVideoRatio = project?.novelPromotionData?.videoRatio ?? '16:9'
   // 2026-05-22 — project-level resolution choice (480p / 720p / 1080p).
   // Threaded into every multi-shot dispatch so ARK Seedance 2.0 worker

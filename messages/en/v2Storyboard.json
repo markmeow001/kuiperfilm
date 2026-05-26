@@ -1,0 +1,145 @@
+{
+  "viewerHint": "You are a viewer · read-only · request edit access to edit",
+  "loading": "Loading…",
+  "page": {
+    "kicker": "STEP 04 — STORYBOARD",
+    "title": "Storyboard",
+    "subtitle": "Break the script into shots",
+    "noEpisode": "No episode selected",
+    "noStoryboardYet": "No storyboard yet — click \"Generate storyboard\" above to start",
+    "noPanelsYet": "This episode has no panels yet",
+    "selectPanel": "Select a panel above"
+  },
+  "buttons": {
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "✓ Saved",
+    "unsaved": "Unsaved",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "reset": "Reset",
+    "analyze": "Analyze",
+    "reanalyze": "Re-analyze",
+    "regenerateStoryboard": "Regenerate storyboard",
+    "generateAllImages": "Generate images",
+    "generateAllImagesDetail": "Send {count} unimaged panels to image generation",
+    "generateAllVideos": "Generate videos",
+    "generateAllVideosDetail": "Send {count} panels with images but no video to video generation",
+    "splitGroups": "Group shots",
+    "splitting": "Grouping…",
+    "splitGroupsDetail": "Group by scene/character continuity — {count} panels split into multi-shot groups",
+    "downloadImage": "Download image",
+    "downloadStaticImage": "Download still",
+    "downloadVideo": "Download video",
+    "merge": "Render",
+    "mergeToSingle": "Render to single mp4",
+    "multiShot": "Multi-shot",
+    "multiShotComposite": "Multi-shot composite"
+  },
+  "status": {
+    "analyzingTitle": "Analyzing",
+    "analyzingProgress": "Analyzing… {progress}%",
+    "analyzeSubmitting": "Submitting…",
+    "splittingTitle": "Grouping",
+    "imageGenerating": "Image generating",
+    "imageGenerated": "Image ready",
+    "imageGeneratedNoVideo": "Image ready, video pending",
+    "imageInGen": "Generating image",
+    "videoQueued": "Video queued",
+    "videoGenerating": "Video generating",
+    "queued": "Task queued — please retry in {minutes} min.",
+    "tasksDot": "tasks",
+    "done": "Done",
+    "doneAuto": "Panels refresh automatically",
+    "failed": "Failed",
+    "noVideoYet": "Not generated yet"
+  },
+  "errors": {
+    "saveFailed": "Save failed",
+    "saveFailedWithReason": "Save failed: {reason}",
+    "saveDialogueFailed": "Save dialogue failed",
+    "saveDescriptionFailed": "Save description failed",
+    "splitFailed": "Group failed",
+    "splitFailedWithReason": "Group failed: {reason}",
+    "lastAnalyzeFailed": "Last analysis failed: {reason}",
+    "contentBlocked": "Blocked by content moderation",
+    "contentViolation": "Content violation",
+    "tooManyTasks": "Too many tasks at once — please try again later",
+    "unknown": "Unknown error"
+  },
+  "shotSize": {
+    "panorama": "Wide",
+    "medium": "Medium",
+    "title": "Shot size"
+  },
+  "movement": {
+    "pushIn": "Medium push-in",
+    "title": "Camera move"
+  },
+  "quality": {
+    "title": "Quality",
+    "upgrade": "Upgrade",
+    "friendly": "Friendly",
+    "highQualityYen": "High quality ¥¥"
+  },
+  "multiShot": {
+    "compositeTitle": "Multi-shot composite",
+    "qualityTitle": "Multi-shot quality",
+    "layoutTitle": "Multi-shot layout",
+    "perGroupCount": "{count} per group",
+    "outputSingleVideo": "Output as a single multi-shot video",
+    "imageFreeMode": "Image-free",
+    "imageFreeDescription": "Skip image generation, render multi-shot video directly",
+    "viewSwitchHint": "Switch between image / video views afterwards.",
+    "switchHint": "Toggle image / video",
+    "needImages": "Need {count} panels with images to run {label}",
+    "needPanels": "Need {count} panels to run {label}",
+    "needModelSupport": "Multi-shot not supported. Pick Kling Omni / Seedance 2 from the video model picker at the top.",
+    "alreadySendingAll": "Sending all {count} panels to {label}",
+    "alreadySendingAllImages": "Sending all {count} panels to image gen",
+    "noVideoModelSelected": "Project has no video model selected",
+    "noVideoModelHint": "Pick a video model on the right first"
+  },
+  "section": {
+    "scriptStillAnalyzing": "Script still being analyzed — wait for all panels to finish generating before grouping",
+    "stalePanelsHint": "Old panels remain when re-analysis fails — switch to {label} to clean them up",
+    "onlyShowingExisting": "Only showing existing panels",
+    "switchAndSee": "Switch to see",
+    "or": "or",
+    "or2": "or else",
+    "afterThis": "after this",
+    "downloadAssetBundle": "Download asset bundle directly to CapCut",
+    "compositeOption": "{count} per group · one multi-shot video output",
+    "perGroupOption": "{count} per group · one multi-shot video output"
+  },
+  "inspector": {
+    "castTitle": "Cast · Characters",
+    "castEmpty": "No characters listed for this panel",
+    "initialAppearance": "Initial appearance",
+    "describePlaceholder": "Describe this panel's frame…",
+    "dialogueTitle": "Dialogue",
+    "dialoguePlaceholder": "Dialogue for this panel (one per line)",
+    "notesTitle": "Notes",
+    "notesPlaceholder": "Shooting / staging notes…",
+    "saveSeconds": "Auto-save in {seconds}s"
+  },
+  "below": {
+    "existing": "existing below"
+  },
+  "thumbsModes": {
+    "all": "All",
+    "withImage": "With image",
+    "noImage": "No image",
+    "states3": "Three states",
+    "onlyImages": "Images only"
+  },
+  "regenerateStoryboardModal": {
+    "title": "Regenerate storyboard",
+    "warning": "Will overwrite {count} existing panels",
+    "warningDetail": "Old panels persist when re-analysis fails, so back up first before overwriting.",
+    "confirm": "Confirm overwrite",
+    "cancel": "Cancel"
+  }
+}
