@@ -17,6 +17,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { useProjectCharacters, useProjectLocations, useProjectProps } from '@/lib/query/hooks/useProjectAssets'
@@ -161,10 +162,11 @@ function pickLocationImage(l: LocationLike): string | null {
 }
 
 export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
+  const t = useTranslations('v2Subjects')
   const queryClient = useQueryClient()
   // Phase 12.5 — viewer-role users see disabled mutation buttons.
   const { canEdit } = useProjectAccess(projectId)
-  const viewerTip = canEdit ? undefined : '你是 viewer · 唯讀模式 · 編輯按鈕需要請求權限'
+  const viewerTip = canEdit ? undefined : t('viewerHint')
   // Tab persisted in URL ?tab= so F5 + bookmarks + cross-project
   // navigation 都能落到對的 tab。Earlier we kept it in React state and
   // the user reported "F5 後跑到首頁" — actual behaviour was that F5
@@ -224,7 +226,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         try {
           await registerArkAsset.mutateAsync(args)
         } catch (err) {
-          alert(`報備失敗:${(err as Error)?.message ?? '未知'}`)
+          alert(t('alerts.registerArkFailed', { reason: (err as Error)?.message ?? t('alerts.unknownReason') }))
         }
       }
     : undefined
@@ -522,7 +524,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
 
   function handleAnalyze() {
     if (!currentEpisodeId) {
-      alert('還沒有任何集數 — 請先到「劇本」step 貼劇本並儲存')
+      alert(t('alerts.needEpisode'))
       return
     }
     analyze.mutate(
@@ -550,7 +552,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   function handleRegenChar(c: CharacterLike) {
     const appearanceId = c.appearances?.[0]?.id
     if (!appearanceId) {
-      alert('此角色還沒有 appearance,請先回劇本 step 跑分析')
+      alert(t('alerts.needAppearanceFirst'))
       return
     }
     markRegenStart(appearanceId)
@@ -575,7 +577,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       { characterId, introduction },
       {
         onError: (err) => {
-          alert(`儲存角色描述失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+          alert(t('alerts.saveCharDescFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
       },
     )
@@ -595,7 +597,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       { characterId, name: trimmed },
       {
         onError: (err) => {
-          alert(`角色改名失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+          alert(t('alerts.renameCharFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
       },
     )
@@ -609,7 +611,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     updatePropName.mutate(
       { propId, name: trimmed },
       {
-        onError: (err) => alert(`道具改名失敗:${(err as Error)?.message ?? '未知錯誤'}`),
+        onError: (err) => alert(t('alerts.renamePropFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') })),
       },
     )
   }
@@ -617,7 +619,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     updatePropSummary.mutate(
       { propId, summary },
       {
-        onError: (err) => alert(`儲存道具描述失敗:${(err as Error)?.message ?? '未知錯誤'}`),
+        onError: (err) => alert(t('alerts.savePropDescFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') })),
       },
     )
   }
@@ -626,7 +628,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       { propId },
       {
         onSuccess: () => setEditingPropId(null),
-        onError: (err) => alert(`刪除道具失敗:${(err as Error)?.message ?? '未知錯誤'}`),
+        onError: (err) => alert(t('alerts.deletePropFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') })),
       },
     )
   }
@@ -636,7 +638,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       { characterId, appearanceId, description: visualPrompt, descriptionIndex: 0 },
       {
         onError: (err) => {
-          alert(`儲存外觀提示詞失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+          alert(t('alerts.saveAppearanceFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
       },
     )
@@ -645,7 +647,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   function handleUploadAndExpandToMultiView(c: CharacterLike, file: File) {
     const ap = c.appearances?.[0]
     if (!ap?.id) {
-      alert('此角色還沒有 appearance,請先點重新生成建立首張')
+      alert(t('alerts.needAppearanceRegen'))
       return
     }
     // Track via the same regen overlay since the worker generates 3
@@ -657,7 +659,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       { file, characterId: c.id, appearanceId: ap.id },
       {
         onError: (err) => {
-          alert(`提交多視角生成失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+          alert(t('alerts.multiViewFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
       },
     )
@@ -667,7 +669,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     deleteCharacter.mutate(characterId, {
       onSuccess: () => setEditingCharacterId(null),
       onError: (err) => {
-        alert(`刪除失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        alert(t('alerts.deleteFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
       },
     })
   }
@@ -675,7 +677,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   function handleEditDescStart(c: CharacterLike) {
     const ap = c.appearances?.[0]
     if (!ap) {
-      alert('此角色還沒有 appearance,請先點重新生成建立首張 appearance')
+      alert(t('alerts.needAppearanceMultiView'))
       return
     }
     setEditingDescId(ap.id)
@@ -692,7 +694,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     if (!ap) return
     const description = editingDescDraft.trim()
     if (!description) {
-      alert('描述不能為空')
+      alert(t('alerts.descCannotEmpty'))
       return
     }
     updateAppearanceDesc.mutate(
@@ -736,13 +738,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data?.success) {
         const code = typeof data?.error === 'string' ? data.error : `HTTP ${res.status}`
-        alert(`抽描述失敗:${code}`)
+        alert(t('alerts.redescribeFailedCode', { code }))
         return false
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.all(projectId) })
       return true
     } catch (err) {
-      alert(`抽描述失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+      alert(t('alerts.redescribeFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
       return false
     } finally {
       setRedescribeInFlight((prev) => {
@@ -774,7 +776,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       (selectedId ? images.find((img) => img.id === selectedId) : null)
       ?? images.find((img) => Boolean(img.imageUrl))
     if (!target?.id) {
-      alert('這個場景還沒有圖,先上傳或重新生成一張')
+      alert(t('alerts.sceneNoImage'))
       return
     }
     await callRedescribe(
@@ -786,7 +788,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
 
   async function handleRedescribeProp(p: { id: string; imageUrl?: string | null }) {
     if (!p.imageUrl) {
-      alert('這個道具還沒有圖,先上傳或重新生成一張')
+      alert(t('alerts.propNoImage'))
       return
     }
     await callRedescribe(
@@ -799,7 +801,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   async function handleBatchRegenCharacters() {
     if (batchGenInFlight) return
     if (characters.length === 0) {
-      alert('沒有角色 — 先到上方點「一鍵分析」')
+      alert(t('alerts.noCharsAnalyze'))
       return
     }
     setBatchGenInFlight('characters')
@@ -833,7 +835,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   async function handleBatchRegenLocations() {
     if (batchGenInFlight) return
     if (locations.length === 0) {
-      alert('沒有場景 — 先到上方點「一鍵分析」')
+      alert(t('alerts.noScenesAnalyze'))
       return
     }
     setBatchGenInFlight('locations')
@@ -859,7 +861,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   async function handleBatchGenProps() {
     if (batchGenInFlight) return
     if (props.length === 0) {
-      alert('沒有道具 — 先到上方點「一鍵分析」')
+      alert(t('alerts.noPropsAnalyze'))
       return
     }
     setBatchGenInFlight('props')
@@ -898,36 +900,36 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     // before ever generating, we need to materialize a default appearance
     // ourselves before the upload-asset-image call has a row to attach to.
     let appearanceId = c.appearances?.[0]?.id
-    let appearanceChangeReason = c.appearances?.[0]?.changeReason ?? '形象'
+    let appearanceChangeReason = c.appearances?.[0]?.changeReason ?? t('appearanceLabel.default')
     if (!appearanceId) {
       try {
         const created = (await createCharAppearance.mutateAsync({
           characterId: c.id,
-          changeReason: '原始造型',
+          changeReason: t('appearanceLabel.original'),
           description: c.description ?? '',
         })) as { appearance?: { id?: string } } | undefined
         const newId = created?.appearance?.id
         if (!newId) {
-          alert('上傳失敗:無法建立 appearance(後端未回傳 id)')
+          alert(t('alerts.uploadAppearanceNoId'))
           return
         }
         appearanceId = newId
-        appearanceChangeReason = '原始造型'
+        appearanceChangeReason = t('appearanceLabel.original')
       } catch (err) {
-        alert(`上傳失敗:無法建立 appearance — ${(err as Error)?.message ?? '未知錯誤'}`)
+        alert(t('alerts.uploadAppearanceFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         return
       }
     }
     setUploadInFlight((prev) => new Set(prev).add(appearanceId!))
     // labelText is required by /upload-asset-image. Use a deterministic
     // human-readable label so it appears the same way generated images do.
-    const labelText = `${c.name ?? '角色'} - ${appearanceChangeReason}`
+    const labelText = `${c.name ?? t('entityNames.character')} - ${appearanceChangeReason}`
     uploadCharImage.mutate(
       { file, characterId: c.id, appearanceId: appearanceId!, imageIndex: 0, labelText },
       {
         onSettled: () => markUploadDone(appearanceId!),
         onError: (err) => {
-          alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+          alert(t('alerts.uploadFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
       },
     )
@@ -935,13 +937,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
 
   function handleUploadLoc(l: LocationLike, file: File) {
     setUploadInFlight((prev) => new Set(prev).add(l.id))
-    const labelText = `${l.name ?? '場景'}`
+    const labelText = `${l.name ?? t('entityNames.scene')}`
     uploadLocImage.mutate(
       { file, locationId: l.id, imageIndex: 0, labelText },
       {
         onSettled: () => markUploadDone(l.id),
         onError: (err) => {
-          alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+          alert(t('alerts.uploadFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
       },
     )
@@ -949,13 +951,13 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
 
   function handleUploadProp(p: { id: string; name: string }, file: File) {
     setUploadInFlight((prev) => new Set(prev).add(p.id))
-    const labelText = `${p.name ?? '道具'}`
+    const labelText = `${p.name ?? t('entityNames.prop')}`
     uploadPropImage.mutate(
       { file, propId: p.id, labelText },
       {
         onSettled: () => markUploadDone(p.id),
         onError: (err) => {
-          alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+          alert(t('alerts.uploadFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
         },
       },
     )
@@ -1002,7 +1004,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.locations(projectId) })
       setManualAddOpen(null)
     } catch (err) {
-      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+      alert(t('alerts.createFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
     } finally {
       setManualAddSubmitting(false)
     }
@@ -1040,7 +1042,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.props(projectId) })
       setManualAddOpen(null)
     } catch (err) {
-      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+      alert(t('alerts.createFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
     } finally {
       setManualAddSubmitting(false)
     }
@@ -1054,9 +1056,9 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     imageUrl?: string | null
   }>
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
-    { id: 'character', label: '角色', count: characters.length },
-    { id: 'scene', label: '場景', count: locations.length },
-    { id: 'prop', label: '道具', count: props.length },
+    { id: 'character', label: t('tabs.character'), count: characters.length },
+    { id: 'scene', label: t('tabs.scene'), count: locations.length },
+    { id: 'prop', label: t('tabs.prop'), count: props.length },
   ]
 
   // Include binding queries — without them, the strict per-episode filter
@@ -1080,12 +1082,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   // orientation the deleted banner used to provide; the description
   // sentence is dropped as redundant.
   const analyzeLabel = analyze.isPending
-    ? '提交中…'
+    ? t('analyze.submitting')
     : isAnalyzing
-      ? `分析中… ${taskProgress}%`
+      ? t('analyze.analyzing', { progress: taskProgress })
       : taskStatus === 'completed'
-        ? '重新分析'
-        : '一鍵分析'
+        ? t('analyze.reAnalyze')
+        : t('analyze.first')
   const analyzeDisabled = analyze.isPending || isAnalyzing || !currentEpisodeId || !canEdit
 
   const compactAnalyzeButton = (
@@ -1103,7 +1105,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         href={`/${locale}/workspace/asset-hub`}
         className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
       >
-        素材庫導入 →
+        {t('header.importFromLibrary')}
       </Link>
     </div>
   )
@@ -1117,16 +1119,18 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 shadow-lg shadow-amber-500/20 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <AppIcon name="sparklesAlt" className="h-5 w-5" />
-        {`✨ ${analyzeLabel}${currentEpisode ? ` ${currentEpisode.name} 劇本` : ''}`}
+        {currentEpisode
+          ? t('analyze.ctaWithEpisode', { label: analyzeLabel, episode: currentEpisode.name })
+          : t('analyze.ctaWithoutEpisode', { label: analyzeLabel })}
       </button>
       <div className="font-mono text-[12px] tracking-wider text-stone-500">
-        AI 自動抽出角色 / 場景 / 道具
+        {t('header.aiAnalyzeHelp')}
       </div>
       <Link
         href={`/${locale}/workspace/asset-hub`}
         className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
       >
-        或從素材庫導入 →
+        {t('header.orFromLibrary')}
       </Link>
     </div>
   )
@@ -1144,77 +1148,79 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       {/* Status banner — reads from server task snapshot, persists across navigation */}
       {analyze.isError ? (
         <div className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300">
-          提交失敗:{(analyze.error as Error)?.message ?? '未知錯誤'}
+          {t('analyze.submitFailed', { reason: (analyze.error as Error)?.message ?? t('analyze.submitFailedUnknown') })}
         </div>
       ) : taskStatus === 'failed' ? (
         <div
           className="mb-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 font-serif-cn text-sm text-rose-300"
           title={taskError ?? undefined}
         >
-          分析任務失敗:{taskErrorDisplay?.message ?? '請點「重新分析」重試'}
+          {t('analyze.taskFailed', { message: taskErrorDisplay?.message ?? t('analyze.taskFailedNoMsg') })}
         </div>
       ) : isAnalyzing ? (
         <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
-          ⏳ 分析中… 進度 {taskProgress}% (LLM 跑完約 30-90 秒,完成後角色/場景/道具會自動出現)
+          {t('analyze.inProgress', { progress: taskProgress })}
         </div>
       ) : taskStatus === 'completed' && serverInflightIds.size > 0 ? (
         <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
-          ⚙️ 分析完成 — 後台正在自動生成
+          {t('analyze.completeBackground')}
           {(() => {
-            // Build a comma-separated breakdown of what's actually
-            // in flight ("3 張角色圖、1 張場景圖、4 張道具圖") so the
-            // banner reads accurately on every tab. If only one asset
-            // class is running, the breakdown collapses to a single
-            // term — no awkward "0 張角色" noise.
+            // Localised comma-joined breakdown — "3 character images,
+            // 1 scene image" in en, "3 張角色圖、1 張場景圖" in zh.
             const parts: string[] = []
             if (serverInflightCounts.character > 0) {
-              parts.push(`${serverInflightCounts.character} 張角色圖`)
+              parts.push(t('analyze.inflightCounts.character', { count: serverInflightCounts.character }))
             }
             if (serverInflightCounts.location > 0) {
-              parts.push(`${serverInflightCounts.location} 張場景圖`)
+              parts.push(t('analyze.inflightCounts.location', { count: serverInflightCounts.location }))
             }
             if (serverInflightCounts.prop > 0) {
-              parts.push(`${serverInflightCounts.prop} 張道具圖`)
+              parts.push(t('analyze.inflightCounts.prop', { count: serverInflightCounts.prop }))
             }
-            const text = parts.length > 0 ? parts.join('、') : `${serverInflightIds.size} 張資產圖`
+            const text = parts.length > 0 ? parts.join('、') : t('analyze.inflightCounts.generic', { count: serverInflightIds.size })
             return <strong> {text}</strong>
           })()}
-          ,每張約 30-90 秒,完成後卡片會自動更新(別離開頁面也沒關係,任務在 server 端跑)
+          {t('analyze.inflightCounts.tail')}
         </div>
       ) : taskStatus === 'completed' && hasStoryboardPanels ? (
         <div className="mb-6 flex flex-col gap-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="font-serif-cn text-sm text-emerald-300">
-            ✓ 分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} —
-            角色 / 場景 / 道具 / <strong>分鏡 {storyboardPanelCount} 個</strong> 都好了
+            {t.rich('analyze.doneFullPipeline', {
+              when: taskUpdatedAt ? t('analyze.whenAt', { time: new Date(taskUpdatedAt).toLocaleTimeString() }) : '',
+              panelCount: storyboardPanelCount,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </div>
           <Link
             href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
             className="flex flex-shrink-0 items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/20 px-4 py-1.5 font-mono text-[14px] tracking-wider text-emerald-200 transition-all hover:bg-emerald-500/30"
           >
-            → 進入分鏡頁 <AppIcon name="chevronRight" className="h-3 w-3" />
+            {t('analyze.doneFullPipelineLink')} <AppIcon name="chevronRight" className="h-3 w-3" />
           </Link>
         </div>
       ) : taskStatus === 'completed' ? (
         <div className="mb-6 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 font-serif-cn text-sm text-emerald-300">
-          ✓ 上次分析已完成{taskUpdatedAt ? ` · ${new Date(taskUpdatedAt).toLocaleTimeString('zh-TW')}` : ''} — 角色 / 場景 / 道具已寫入下方卡片(分鏡正在後台繼續處理)
+          {t('analyze.doneAssetsOnly', {
+            when: taskUpdatedAt ? t('analyze.whenAt', { time: new Date(taskUpdatedAt).toLocaleTimeString() }) : '',
+          })}
         </div>
       ) : null}
 
       <div className="mb-8 flex items-center justify-between">
         <div className="flex gap-1 rounded-sm border border-stone-800/50 bg-stone-900/50 p-1">
-          {tabs.map((t) => (
+          {tabs.map((tabRow) => (
             <button
-              key={t.id}
+              key={tabRow.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => setTab(tabRow.id)}
               className={`rounded-sm px-5 py-2 font-serif-cn text-sm transition-all ${
-                tab === t.id
+                tab === tabRow.id
                   ? 'bg-amber-500/10 text-amber-400'
                   : 'text-stone-400 hover:text-stone-200'
               }`}
             >
-              {t.label}
-              <span className="ml-2 font-mono text-[14px] opacity-60">{t.count}</span>
+              {tabRow.label}
+              <span className="ml-2 font-mono text-[14px] opacity-60">{tabRow.count}</span>
             </button>
           ))}
         </div>
@@ -1231,10 +1237,10 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               )
             }
             className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-200 transition-all hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
-            title={!canEdit ? viewerTip : `手動新增${tab === 'character' ? '角色' : tab === 'scene' ? '場景' : '道具'}`}
+            title={!canEdit ? viewerTip : t('manualAdd.titleByTab', { entity: tab === 'character' ? t('entityNames.character') : tab === 'scene' ? t('entityNames.scene') : t('entityNames.prop') })}
           >
             <AppIcon name="plus" className="h-4 w-4" />
-            手動新增
+            {t('manualAdd.button')}
           </button>
           {tab === 'character' && characters.length > 0 ? (
             <button
@@ -1246,8 +1252,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {batchGenInFlight === 'characters' && batchProgress
-                ? `生成中… ${batchProgress.done}/${batchProgress.total}`
-                : '一鍵生圖所有角色'}
+                ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
+                : t('batch.allChars')}
             </button>
           ) : null}
           {tab === 'scene' && locations.length > 0 ? (
@@ -1260,8 +1266,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {batchGenInFlight === 'locations' && batchProgress
-                ? `生成中… ${batchProgress.done}/${batchProgress.total}`
-                : '一鍵生圖所有場景'}
+                ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
+                : t('batch.allScenes')}
             </button>
           ) : null}
           {tab === 'prop' && props.length > 0 ? (
@@ -1274,28 +1280,31 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {batchGenInFlight === 'props' && batchProgress
-                ? `生成中… ${batchProgress.done}/${batchProgress.total}`
-                : '一鍵生圖所有道具'}
+                ? t('batch.generating', { done: batchProgress.done, total: batchProgress.total })
+                : t('batch.allProps')}
             </button>
           ) : null}
           <Link
             href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
             className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/50 hover:text-amber-300"
           >
-            下一步 → 分鏡 <AppIcon name="chevronRight" className="h-4 w-4" />
+            {t('nextStep')} <AppIcon name="chevronRight" className="h-4 w-4" />
           </Link>
         </div>
       </div>
 
       {tab === 'character' && currentEpisode && isFilteringByEpisode && hiddenInThisEpisodeCount > 0 ? (
         <div className="mb-4 rounded-sm border border-stone-800/50 bg-stone-900/40 px-3 py-2 font-mono text-[14px] tracking-wider text-stone-400">
-          只顯示「{currentEpisode.name}」出現的 {characters.length} 個角色 ·
-          其他集數有 {hiddenInThisEpisodeCount} 個隱藏 · 切到其他集數 tab 可看到那邊的角色
+          {t('filteredHint', {
+            episode: currentEpisode.name,
+            visibleCount: characters.length,
+            hiddenCount: hiddenInThisEpisodeCount,
+          })}
         </div>
       ) : null}
 
       {isLoading ? (
-        <p className="font-mono text-xs tracking-wider text-stone-500">載入中…</p>
+        <p className="font-mono text-xs tracking-wider text-stone-500">{t('loading')}</p>
       ) : tab === 'character' ? (
         <SubjectGrid
           items={characters.map((c) => {
@@ -1320,8 +1329,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             return {
               id: c.id,
               targetId: apId,
-              name: c.name ?? '未命名角色',
-              caption: c.role ?? '角色',
+              name: c.name ?? t('entityNames.untitledCharacter'),
+              caption: c.role ?? t('entityNames.character'),
               description: roleSummary,
               visualPrompt,
               imageUrl: pickCharacterImage(c),
@@ -1367,7 +1376,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               ...(handleArkRegister ? { onArkRegister: handleArkRegister } : {}),
             }
           })}
-          emptyHint={currentEpisode ? `${currentEpisode.name} 還沒有角色` : '還沒有角色'}
+          emptyHint={currentEpisode ? t('card.emptyDefault', { episode: currentEpisode.name }) : t('card.emptyDefaultNoEpisode')}
           emptyAction={emptyStateCta}
         />
       ) : tab === 'scene' ? (
@@ -1382,8 +1391,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             return {
               id: l.id,
               targetId: l.id,
-              name: l.name ?? '未命名場景',
-              caption: '場景',
+              name: l.name ?? t('entityNames.untitledLocation'),
+              caption: t('entityNames.scene'),
               description: l.description ?? null,
               imageUrl: pickLocationImage(l),
               onRegenerate: canEdit ? () => handleRegenLoc(l) : undefined,
@@ -1398,7 +1407,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               isRedescribing: targetImage ? redescribeInFlight.has(targetImage.id) : false,
             }
           })}
-          emptyHint={currentEpisode ? `${currentEpisode.name} 還沒有場景` : '還沒有場景'}
+          emptyHint={currentEpisode ? t('card.emptySceneDefault', { episode: currentEpisode.name }) : t('card.emptySceneDefaultNoEpisode')}
           emptyAction={emptyStateCta}
         />
       ) : (
@@ -1407,8 +1416,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           items={props.map((p) => ({
             id: p.id,
             targetId: p.id,
-            name: p.name ?? '未命名道具',
-            caption: '道具',
+            name: p.name ?? t('entityNames.untitledProp'),
+            caption: t('entityNames.prop'),
             description: p.summary ?? null,
             imageUrl: p.imageUrl ?? null,
             onRegenerate: canEdit ? () => {
@@ -1428,8 +1437,8 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           }))}
           emptyHint={
             currentEpisode
-              ? `${currentEpisode.name} 還沒有道具(刀 / 信封 / 戒指等劇情關鍵物件)`
-              : '還沒有道具(刀 / 信封 / 戒指等劇情關鍵物件)'
+              ? t('card.emptyPropDefault', { episode: currentEpisode.name })
+              : t('card.emptyPropDefaultNoEpisode')
           }
           emptyAction={emptyStateCta}
         />
@@ -1457,7 +1466,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             onSaveIntroduction={(intro) => handleSaveIntroduction(c.id, intro)}
             onSaveVisualPrompt={(prompt) => {
               if (!apId) {
-                alert('此角色還沒有 appearance — 請先點重新生成建立首張')
+                alert(t('alerts.needAppearanceRegen'))
                 return
               }
               handleSaveVisualPromptFromModal(c.id, apId, prompt)
@@ -1504,7 +1513,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
                 },
                 {
                   onError: (err) => {
-                    alert(err instanceof Error ? err.message : '儲存失敗')
+                    alert(err instanceof Error ? err.message : t('alerts.saveFailed'))
                   },
                 },
               )
@@ -1515,7 +1524,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
                 { locationId: l.id, description, imageIndex: 0 },
                 {
                   onError: (err) => {
-                    alert(err instanceof Error ? err.message : '儲存失敗')
+                    alert(err instanceof Error ? err.message : t('alerts.saveFailed'))
                   },
                 },
               )
@@ -1543,7 +1552,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
                   regenLoc.mutate({ locationId: l.id, imageIndex: newImage.imageIndex })
                 }
               } catch (err) {
-                alert(err instanceof Error ? err.message : '建立視角失敗')
+                alert(err instanceof Error ? err.message : t('alerts.createViewFailed'))
               }
             }}
             isCreatingView={createLocationView.isPending}
@@ -1555,7 +1564,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               try {
                 await deleteLocationView.mutateAsync({ locationId: l.id, imageIndex })
               } catch (err) {
-                alert(err instanceof Error ? err.message : '刪除視角失敗')
+                alert(err instanceof Error ? err.message : t('alerts.deleteViewFailed'))
               }
             }}
             isViewRegenerating={(_imageIndex) => regenInFlight.has(l.id) || serverInflightIds.has(l.id)}
@@ -1599,19 +1608,19 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       {zoomImage ? (
         <button
           type="button"
-          aria-label="關閉預覽"
+          aria-label={t('lightbox.closeAria')}
           onClick={() => setZoomImage(null)}
           className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/90 p-6 backdrop-blur-md"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={zoomImage}
-            alt="預覽"
+            alt={t('lightbox.alt')}
             className="max-h-full max-w-full object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
           <span className="absolute right-6 top-6 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300">
-            ESC / 點背景關閉
+            {t('lightbox.escHint')}
           </span>
         </button>
       ) : null}
@@ -1722,15 +1731,16 @@ function SubjectGrid({
   items: SubjectItem[]
   emptyHint: string
   /** Optional action node rendered below the emptyHint when items is
-   *  empty. Used to surface the page-level "一鍵分析" CTA directly in
+   *  empty. Used to surface the page-level "Analyze" CTA directly in
    *  the empty card so users don't have to find a button elsewhere. */
   emptyAction?: React.ReactNode
-  // Characters are 3:4 portrait (full-body 三视图). Scenes are 16:9
+  // Characters are 3:4 portrait (full-body triple-view). Scenes are 16:9
   // wide (Approach A widescreen). Forcing portrait on a wide source
   // center-crops it into a vertical strip and hides the left/right
   // composition we explicitly told the model to draw.
   aspect?: 'portrait' | 'wide'
 }) {
+  const t = useTranslations('v2Subjects.card')
   const aspectClass = aspect === 'wide' ? 'aspect-video' : 'aspect-[3/4]'
   if (items.length === 0) {
     return (
@@ -1780,15 +1790,15 @@ function SubjectGrid({
             {item.isRegenerating ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
                 <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                <div className="font-mono text-[14px] tracking-wider text-amber-300">生圖中…</div>
+                <div className="font-mono text-[14px] tracking-wider text-amber-300">{t('generating')}</div>
                 <div className="px-4 text-center font-serif-cn text-[14px] text-stone-400">
-                  Tencent VOD AIGC 30-90 秒,撞並發限制會自動重試
+                  {t('generatingHint')}
                 </div>
               </div>
             ) : item.isUploading ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
                 <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-amber-400" />
-                <div className="font-mono text-[14px] tracking-wider text-amber-300">上傳中…</div>
+                <div className="font-mono text-[14px] tracking-wider text-amber-300">{t('uploading')}</div>
               </div>
             ) : showGenerateCta ? (
               <button
@@ -1798,11 +1808,11 @@ function SubjectGrid({
                   item.onRegenerate?.()
                 }}
                 className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/40 backdrop-blur-[1px] transition-all hover:bg-amber-500/15"
-                title="只生成這一張 — 不會動到其他卡"
+                title={t('generateOneTitle')}
               >
                 <AppIcon name="sparklesAlt" className="h-7 w-7 text-amber-400/80" />
-                <div className="font-serif-cn text-base text-amber-300">點此生成</div>
-                <div className="font-mono text-[11px] tracking-wider text-stone-400">單張 · 不影響其他</div>
+                <div className="font-serif-cn text-base text-amber-300">{t('generateOne')}</div>
+                <div className="font-mono text-[11px] tracking-wider text-stone-400">{t('generateOneSub')}</div>
               </button>
             ) : null}
           </div>
@@ -1812,7 +1822,7 @@ function SubjectGrid({
                 type="button"
                 onClick={item.onOpenEditor}
                 disabled={!item.onOpenEditor}
-                title={item.onOpenEditor ? '點擊編輯角色完整檔案' : undefined}
+                title={item.onOpenEditor ? t('editOpenTitle') : undefined}
                 className="truncate text-left font-serif-cn text-base text-stone-100 transition-colors enabled:hover:text-amber-300 disabled:cursor-default"
               >
                 {item.name}
@@ -1823,10 +1833,10 @@ function SubjectGrid({
                     type="button"
                     onClick={item.onOpenEditor}
                     className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
-                    title="開啟完整編輯器 — 改名/描述/外觀提示詞/刪除"
+                    title={t('editButtonTitle')}
                   >
                     <AppIcon name="edit" className="h-3 w-3" />
-                    編輯
+                    {t('editButton')}
                   </button>
                 ) : null}
                 {item.onEditDescription && !item.isEditingDescription ? (
@@ -1834,9 +1844,9 @@ function SubjectGrid({
                     type="button"
                     onClick={item.onEditDescription}
                     className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
-                    title="只快速改外觀提示詞"
+                    title={t('appearanceEditTitle')}
                   >
-                    改外觀
+                    {t('appearanceEdit')}
                   </button>
                 ) : null}
                 {item.onRedescribe && !item.isEditingDescription ? (
@@ -1845,9 +1855,9 @@ function SubjectGrid({
                     onClick={item.onRedescribe}
                     disabled={item.isRedescribing}
                     className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-                    title="用 AI 從目前圖片重新抽出外觀提示詞 — 用於上傳新圖後同步描述"
+                    title={t('redescribeTitle')}
                   >
-                    {item.isRedescribing ? '抽描述中…' : '從圖抽描述'}
+                    {item.isRedescribing ? t('redescribing') : t('redescribe')}
                   </button>
                 ) : null}
               </div>
@@ -1860,15 +1870,15 @@ function SubjectGrid({
             {item.isEditingDescription ? (
               <div className="mt-3 space-y-2 rounded-sm border border-amber-500/30 bg-stone-950/40 p-2">
                 <div className="flex items-center justify-between font-mono text-[12px] tracking-wider text-amber-500/70">
-                  <span>外觀提示詞 (image prompt)</span>
-                  <span className="text-stone-600">{item.descriptionDraft?.length ?? 0} 字</span>
+                  <span>{t('appearancePrompt')}</span>
+                  <span className="text-stone-600">{t('wordCount', { count: item.descriptionDraft?.length ?? 0 })}</span>
                 </div>
                 <textarea
                   value={item.descriptionDraft ?? ''}
                   onChange={(e) => item.onDescriptionDraftChange?.(e.target.value)}
                   rows={5}
                   className="w-full resize-none rounded-sm border border-amber-500/40 bg-stone-900/80 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
-                  placeholder="例:三十岁中年男性,黑短发,商务衬衫卷袖,深灰西裤,腕表,神情冷峻... (越具體越穩)"
+                  placeholder={t('appearancePlaceholder')}
                   disabled={item.isSavingDescription}
                 />
                 <div className="flex items-center justify-end gap-2 font-mono text-[14px] tracking-wider">
@@ -1878,7 +1888,7 @@ function SubjectGrid({
                     disabled={item.isSavingDescription}
                     className="text-stone-500 transition-colors hover:text-stone-300 disabled:opacity-50"
                   >
-                    取消
+                    {t('cancel')}
                   </button>
                   <button
                     type="button"
@@ -1886,14 +1896,14 @@ function SubjectGrid({
                     disabled={item.isSavingDescription}
                     className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {item.isSavingDescription ? '儲存中…' : '儲存提示詞'}
+                    {item.isSavingDescription ? t('saving') : t('savePrompt')}
                   </button>
                 </div>
               </div>
             ) : item.visualPrompt ? (
               <div className="mt-2 rounded-sm border border-stone-800/40 bg-stone-950/30 p-2">
                 <div className="mb-1 font-mono text-[12px] tracking-wider text-stone-500">
-                  外觀提示詞
+                  {t('appearancePromptStatic')}
                 </div>
                 <div className="line-clamp-3 font-body text-[11px] leading-relaxed text-stone-400">
                   {item.visualPrompt}
@@ -1901,7 +1911,7 @@ function SubjectGrid({
               </div>
             ) : item.onEditDescription ? (
               <div className="mt-2 font-body text-[11px] italic text-stone-600">
-                (還沒有外觀提示詞 — 點「改外觀」加上,或重跑「一鍵分析」自動生成)
+                {t('appearanceEmpty')}
               </div>
             ) : null}
           </div>
@@ -1912,14 +1922,14 @@ function SubjectGrid({
                 disabled={item.isRegenerating}
                 onClick={item.onRegenerate}
                 className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-                title={item.imageUrl ? '用 AI 重新生成此圖' : '用 AI 生成此圖'}
+                title={item.imageUrl ? t('regenImageTitle') : t('genImageTitle')}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {item.isRegenerating
-                  ? '生成中…'
+                  ? t('generating2')
                   : item.imageUrl
-                    ? '重新生成'
-                    : '生成'}
+                    ? t('regenerate')
+                    : t('generate')}
               </button>
             ) : null}
 
@@ -1927,7 +1937,7 @@ function SubjectGrid({
               <UploadButton
                 disabled={!!item.isUploading}
                 onFile={item.onUpload}
-                label={item.isUploading ? '上傳中…' : '上傳替換'}
+                label={item.isUploading ? t('uploading') : t('uploadReplaceLabel')}
               />
             ) : null}
 
@@ -1938,10 +1948,10 @@ function SubjectGrid({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400"
-                title="下載原圖"
+                title={t('downloadTitle')}
               >
                 <AppIcon name="cloudUpload" className="h-3 w-3 rotate-180" />
-                下載
+                {t('download')}
               </a>
             ) : null}
 
@@ -1968,12 +1978,12 @@ function SubjectGrid({
                 type="button"
                 disabled={item.isLocking || item.isLocked}
                 onClick={item.onLock}
-                title={item.isLocked ? '已標記為「定稿」(純註記,沒有實際 binding 影響)' : '標記為「定稿」(純註記用)— 角色與集數的綁定是自動的,不需要鎖定'}
+                title={item.isLocked ? t('lockedTitle') : t('lockTitle')}
                 className={`transition-all disabled:cursor-not-allowed ${
                   item.isLocked ? 'text-amber-400' : 'text-stone-400 hover:text-amber-400'
                 } ${item.isLocking ? 'opacity-50' : ''}`}
               >
-                {item.isLocking ? '鎖定中…' : item.isLocked ? '✓ 已鎖定' : '⊙ 鎖定'}
+                {item.isLocking ? t('locking') : item.isLocked ? t('locked') : t('lock')}
               </button>
             ) : null}
           </div>
@@ -1993,6 +2003,7 @@ function UploadButton({
   disabled: boolean
   label: string
 }) {
+  const t = useTranslations('v2Subjects.card')
   const inputRef = useRef<HTMLInputElement | null>(null)
   return (
     <>
@@ -2013,7 +2024,7 @@ function UploadButton({
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
         className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-        title="上傳自製圖片替換"
+        title={t('uploadReplaceTitle')}
       >
         <AppIcon name="cloudUpload" className="h-3 w-3" />
         {label}

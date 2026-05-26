@@ -53,7 +53,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
         v2New,
         v2Voice,
         v2Script,
-        v2Final
+        v2Final,
+        v2Subjects
     ] = await Promise.all([
         import(`../messages/${locale}/common.json`),
         import(`../messages/${locale}/stages.json`),
@@ -91,7 +92,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
         import(`../messages/${locale}/v2New.json`),
         import(`../messages/${locale}/v2Voice.json`),
         import(`../messages/${locale}/v2Script.json`),
-        import(`../messages/${locale}/v2Final.json`)
+        import(`../messages/${locale}/v2Final.json`),
+        import(`../messages/${locale}/v2Subjects.json`)
     ]);
 
     return {
@@ -133,7 +135,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
             v2New: v2New.default,
             v2Voice: v2Voice.default,
             v2Script: v2Script.default,
-            v2Final: v2Final.default
+            v2Final: v2Final.default,
+            v2Subjects: v2Subjects.default
         }
     };
 });
