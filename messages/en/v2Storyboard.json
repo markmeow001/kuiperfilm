@@ -8,7 +8,8 @@
     "noEpisode": "No episode selected",
     "noStoryboardYet": "No storyboard yet — click \"Generate storyboard\" above to start",
     "noPanelsYet": "This episode has no panels yet",
-    "selectPanel": "Select a panel above"
+    "selectPanel": "Select a panel above",
+    "noEpisodeHint": "This project has no episodes yet — run LLM analysis from the Script step first"
   },
   "buttons": {
     "save": "Save",
@@ -23,6 +24,7 @@
     "analyze": "Analyze",
     "reanalyze": "Re-analyze",
     "regenerateStoryboard": "Regenerate storyboard",
+    "regenerateStoryboardArrow": "↻ Re-analyze",
     "generateAllImages": "Generate images",
     "generateAllImagesDetail": "Send {count} unimaged panels to image generation",
     "generateAllVideos": "Generate videos",
@@ -30,18 +32,35 @@
     "splitGroups": "Group shots",
     "splitting": "Grouping…",
     "splitGroupsDetail": "Group by scene/character continuity — {count} panels split into multi-shot groups",
+    "splitWhileAnalyzing": "Group (analyzing)",
+    "autoSplit": "Auto-group",
+    "smartSplit": "🧠 Smart group",
+    "resplit": "↻ Re-group",
+    "smartMultiShot": "Smart multi-shot",
+    "sendingMultiShot": "Sending {sent}/{total}",
     "downloadImage": "Download image",
     "downloadStaticImage": "Download still",
     "downloadVideo": "Download video",
     "merge": "Render",
     "mergeToSingle": "Render to single mp4",
     "multiShot": "Multi-shot",
-    "multiShotComposite": "Multi-shot composite"
+    "multiShotComposite": "Multi-shot composite",
+    "manualAdd": "Add manually",
+    "manualAddTitle": "Write your own prompt + pick characters/scenes — single panel manual create",
+    "regenerateStoryboardTitle": "Regenerate storyboard from script",
+    "regenerateStoryboardTitleOverwrite": "Regenerate storyboard from script (overwrites existing)",
+    "cleanupSource": "Cleanup source",
+    "cleanupSourceFull": "Cleanup panel sources",
+    "cleanupSourceTitle": "Old panels persist when re-analysis fails — pick the redundant source panels to delete"
   },
   "status": {
     "analyzingTitle": "Analyzing",
     "analyzingProgress": "Analyzing… {progress}%",
     "analyzeSubmitting": "Submitting…",
+    "analyzeQueued": "Queued…",
+    "submitting": "Submitting analyze task…",
+    "queuedWaitWorker": "Task queued — waiting for worker (about 3-10 seconds)…",
+    "reanalyzeProgress": "Re-analyzing script… {progress}% — panels refresh automatically when done",
     "splittingTitle": "Grouping",
     "imageGenerating": "Image generating",
     "imageGenerated": "Image ready",
@@ -64,10 +83,31 @@
     "splitFailed": "Group failed",
     "splitFailedWithReason": "Group failed: {reason}",
     "lastAnalyzeFailed": "Last analysis failed: {reason}",
+    "lastAnalyzeFailedRetry": "Last analysis failed: {message}",
+    "lastAnalyzeFailedNoMsg": "Click \"Re-analyze\" to retry",
     "contentBlocked": "Blocked by content moderation",
     "contentViolation": "Content violation",
     "tooManyTasks": "Too many tasks at once — please try again later",
-    "unknown": "Unknown error"
+    "unknown": "Unknown error",
+    "noVideoModelPicked": "Project has no video model — pick one (Seedance or Kling) from the \"Video model\" picker at the top",
+    "submitVideoFailed": "Submit video generation failed",
+    "needEpisodeFirst": "Pick an episode and paste the script first",
+    "submitFailedHttp": "Submit failed (HTTP {status})",
+    "submitFailedGeneric": "Submit failed",
+    "submitFailed": "Submit failed: {message}",
+    "needPanelEpisode": "Pick an episode before adding a panel",
+    "cannotCreateGroup": "Could not create panel group — please retry",
+    "createFailed": "Create failed: {reason}",
+    "noStoryboardLLM": "No episodes available — create or pick one above, then paste a script in the Script step",
+    "noVideoModelMultiShot": "Pick a multi-shot-capable video model (Kling family or Seedance 2.0 720p BobAPI) from the top picker",
+    "modelNotMultiShot": "\"{model}\" does not support multi-shot. Switch to Kling or Seedance 2.0 720p (BobAPI) from the video model picker at the top.",
+    "needTwoPanels": "Need at least 2 panels to run multi-shot",
+    "needTwoImagedPanels": "Need at least 2 panels with images to run multi-shot (or switch to a t2v-capable model — image-free)",
+    "noMultiShotGroups": "No multi-shot groups to submit",
+    "modelNotMultiShotShort": "No video model set — pick a Kling or Seedance 2.0 720p (BobAPI) model from the video model picker at the top",
+    "sendFailed": "Submit failed: {reason}",
+    "sendFailedHttp": "Submit failed ({status})",
+    "sendFailedCode": "Submit failed: {code}"
   },
   "shotSize": {
     "panorama": "Wide",
@@ -100,7 +140,14 @@
     "alreadySendingAll": "Sending all {count} panels to {label}",
     "alreadySendingAllImages": "Sending all {count} panels to image gen",
     "noVideoModelSelected": "Project has no video model selected",
-    "noVideoModelHint": "Pick a video model on the right first"
+    "noVideoModelHint": "Pick a video model on the right first",
+    "tipScriptAnalyzing": "Script still analyzing — wait for all panels to finish before grouping (otherwise the LLM only sees the panels currently present)",
+    "tipSplitDetail": "Group panels by dialogue / character / scene continuity into multi-shot groups, and allocate seconds based on target duration",
+    "tipSplitDetailLLM": "LLM groups by dialogue completeness / character / scene continuity into 2-6 panels per group, computing seconds from target duration",
+    "tipCurrentModelNotMultiShot": "Current model doesn't support multi-shot — switch to Kling or Seedance 2.0 720p (BobAPI) from the video model picker above",
+    "tipSeedancePerGroup": "Each group renders as a single 4-15s clip (Seedance BobAPI 9-ref @N composite)",
+    "tipKlingMultiShot": "Send all groups to Kling multi-shot at once",
+    "tipKlingPerGroup": "Send panels to Kling multi-shot — single multi-shot video output"
   },
   "section": {
     "scriptStillAnalyzing": "Script still being analyzed — wait for all panels to finish generating before grouping",
@@ -113,6 +160,32 @@
     "downloadAssetBundle": "Download asset bundle directly to CapCut",
     "compositeOption": "{count} per group · one multi-shot video output",
     "perGroupOption": "{count} per group · one multi-shot video output"
+  },
+  "header": {
+    "panelsHeader": "Panels",
+    "groupSummary": "{groups} GROUPS · {grouped}/{total} grouped",
+    "shotsAndRatio": "{total} SHOTS · {ratio}",
+    "noGroupsHint": "No panel groups yet — the first one will be auto-created on submit"
+  },
+  "layouts": {
+    "gallery": "▦ Gallery",
+    "galleryTitle": "Gallery layout — portrait 9:16 friendly (per-panel image driven)",
+    "timeline": "☰ Timeline",
+    "timelineTitle": "Timeline layout — landscape 16:9 friendly (per-panel image driven)",
+    "multiShot": "◷ Multi-shot",
+    "multiShotTitle": "Multi-shot layout — text-driven (Kling-3 / Omni B-path, image-free)"
+  },
+  "generateSplash": {
+    "titleForEpisode": "Generate storyboard for \"{episode}\"",
+    "titleGeneric": "Generate storyboard",
+    "subtitle": "Auto-split the script into multi-shot panels — LLM groups by scene/character continuity. Adjust image / video / prompts per panel after generation.",
+    "submitErrorPrefix": "Submit failed: {message}",
+    "lastAnalyzeErrorPrefix": "Last analysis failed: {message}",
+    "noEpisodes": "No episodes available — create or pick one above, then paste a script in the Script step"
+  },
+  "untitled": {
+    "character": "Untitled character",
+    "scene": "Untitled scene"
   },
   "inspector": {
     "castTitle": "Cast · Characters",
@@ -134,6 +207,164 @@
     "noImage": "No image",
     "states3": "Three states",
     "onlyImages": "Images only"
+  },
+  "gallery": {
+    "videoBadge": "▶ Video",
+    "videoGenerating": "Video generating",
+    "imageGenerating": "Image generating",
+    "panelPlaceholder": "Panel {n}",
+    "shotLabel": "Shot {n}",
+    "videoGenerated": "✓ Video ready",
+    "imageGeneratedBadge": "Image ready",
+    "notGenerated": "Not generated",
+    "autoUpdateHint": "30-60s, panel updates automatically",
+    "videoGeneratingFull": "Video generating",
+    "imageGeneratingFull": "Image generating",
+    "submitting": "Submitting…",
+    "regenImage": "↻ Regenerate image",
+    "generateImage": "Generate image",
+    "regenVideo": "↻ Regenerate video",
+    "generateVideo": "Generate video",
+    "generating": "Generating…",
+    "regenVideoArrow": "↻ Regen video",
+    "fields": {
+      "descriptionLabel": "Description",
+      "dialogueLabel": "Dialogue",
+      "save": "Save",
+      "savingButton": "Saving…",
+      "dialoguePlaceholder": "Lines / VO / subtitles for this shot"
+    },
+    "downloads": {
+      "image": "Download image",
+      "video": "Download video"
+    },
+    "noSelected": "Pick a panel on the left to edit",
+    "fal": {
+      "label": "fal Seedance →",
+      "seedance": "Seedance",
+      "fast": "Fast",
+      "seedanceTitle": "fal Seedance 2.0 (1080p + native audio, ~$0.3-0.5/clip)",
+      "fastTitle": "fal Seedance 2.0 Fast (cheap variant, ~$0.1-0.2/clip, slightly weaker)"
+    }
+  },
+  "timeline": {
+    "header": "Storyboard Strip",
+    "regenStoryboardTitle": "Regenerate storyboard from script (overwrites existing)",
+    "cleanupSourceTitle": "Old panels persist when re-analysis fails — pick the redundant source panels to delete",
+    "autoGroupTitle": "LLM groups panels by scene / character continuity into 2-6 panels per group — improves Kling multi-shot quality",
+    "batchImageTitle": "Send {count} unimaged panels to image generation (about 30-60s each, runs in background)",
+    "batchImageLabel": "Generate images ({count})",
+    "batchImageSubmitting": "Sending {done}/{total}",
+    "batchVideoTitle": "Send {count} panels with images (but no video) to 5-second video generation",
+    "batchVideoLabel": "Generate videos ({count})",
+    "batchVideoSubmitting": "Sending {done}/{total}",
+    "panelFailedLabels": {
+      "rateLimit": "Rate limit",
+      "violation": "Content blocked",
+      "generic": "Failed"
+    },
+    "panelFailedRetryHint": "Tap {action} to retry",
+    "shotDescTitle": "SHOT {n} · Description",
+    "shotDialogueTitle": "SHOT {n} · Dialogue",
+    "descPlaceholder": "Scene / composition description for this shot — fed to image gen. e.g. \"Close-up — CATHERINE in old apron, gaze to camera, both hands on counter\"",
+    "dialoguePlaceholder": "Lines / VO / subtitles for this shot's playback. Empty = silent.",
+    "shotsDraft": "{count} SHOTS · DRAFT 03"
+  },
+  "multiShotSubmitted": {
+    "doneTemplate": "✓ Submitted {count} multi-shot tasks",
+    "failuresSuffix": " ({count} groups failed)"
+  },
+  "chips": {
+    "shotSizeLabel": "Shot size",
+    "shotSizes": {
+      "wide": "Long",
+      "panorama": "Wide",
+      "medium": "Medium",
+      "near": "Near",
+      "closeup": "Close-up"
+    },
+    "movementLabel": "Camera move",
+    "movements": {
+      "pushIn": "Medium push-in",
+      "tiltDown": "Tilt down",
+      "handheld": "Handheld",
+      "snapZoom": "Snap zoom",
+      "upgrade": "Speed ramp"
+    },
+    "saving": "Saving…",
+    "saveFailedWith": "Save failed: {reason}",
+    "saveFailedUnknown": "unknown"
+  },
+  "details": {
+    "modelNotMultiShotInline": "Current model doesn't support multi-shot — switch to Kling or Seedance 2.0 720p (BobAPI) from the video model picker above",
+    "tipSeedanceComposite": "Seedance composite (BobAPI): one 4-15s video with up to 9 references; the model handles shot motion + transitions",
+    "tipBPath": "B-path (Tencent VOD {model}): t2v + SubjectInfos.N + multi_shot=intelligence — multi-shot video direct, no image step",
+    "tipKlingC": "Send all imaged panels (5 per group) to Kling multi-shot=intelligence (C-path i2v)",
+    "multiShotSeedance": "Multi-shot (Seedance)",
+    "multiShotBPath": "Smart multi-shot (B-path)",
+    "multiShotKlingBatch": "Kling multi-shot (batch)"
+  },
+  "toggle": {
+    "showImage": "Show original image",
+    "image": "Image",
+    "showVideo": "Show generated video",
+    "video": "Video"
+  },
+  "bpath": {
+    "missingImageHint": "B-path generated only a video, no image. Tap here to generate the missing image — then you can toggle between image/video views.",
+    "submittingImage": "Generating image…",
+    "submitting": "Submitting…",
+    "generateImageButton": "🖼 Generate image (B-path backfill)"
+  },
+  "selectedShot": {
+    "shotLabel": "Shot {n}",
+    "videoReady": "✓ Video ready",
+    "videoGenerating": "Video generating… 30-60s, updates automatically when done",
+    "imageReadyVideoPending": "Image ready, video pending",
+    "notGenerated": "Not generated",
+    "zoomTitle": "Click to zoom",
+    "videoGeneratingFull": "Video generating",
+    "imageGeneratingFull": "Image generating",
+    "klingUpdateHint": "Kling 30-60s, updates automatically when done",
+    "tencentUpdateHint": "Tencent VOD 30-60s, updates automatically when done"
+  },
+  "panelFailure": {
+    "rateLimit": "Tencent VOD rate limit",
+    "violation": "Blocked by content moderation",
+    "generic": "Generation failed",
+    "rateLimitDetail": "Too many tasks at once — Tencent throttled. Wait 1-2 min and retry with the button below.",
+    "violationDetail": "Prompt blocked by content filter. Edit the description on the left, remove possibly-violating wording, then retry.",
+    "retryHint": "Click the button below to retry"
+  },
+  "genBlocked": {
+    "needImageFirst": "Need a still image first — click \"Generate image\"",
+    "videoStillGenerating": "Video is still generating — wait for the worker (~60s)"
+  },
+  "downloads": {
+    "staticImage": "Download still",
+    "video": "Download video"
+  },
+  "regenResult": {
+    "errorFallback": "Regenerate failed",
+    "successQueued": "Regenerate task queued — worker will process (about 30-60s each)"
+  },
+  "cast": {
+    "title": "Cast · CAST",
+    "epBinding": "Ep {episode} binding",
+    "appearanceLabel": "Look {n}",
+    "initialAppearance": "Initial look",
+    "noAppearance": "No look yet",
+    "appearancePresetSuffix": "{label} (default)",
+    "titleDefault": "No look bound for this episode — using the first look ({label}). Change it in Script breakdown.",
+    "titleBound": "Bound look for this episode: {label}",
+    "titleBoundNone": "(none)",
+    "unboundChipTitle": "This character has multiple looks but none is bound to this episode",
+    "unboundChipLabel": "Unbound",
+    "noCharacters": "(no linked characters)"
+  },
+  "notes": {
+    "title": "Notes · NOTES",
+    "empty": "(no notes)"
   },
   "regenerateStoryboardModal": {
     "title": "Regenerate storyboard",

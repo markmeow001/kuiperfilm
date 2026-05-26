@@ -8,7 +8,8 @@
     "noEpisode": "尚未选集",
     "noStoryboardYet": "还没有分镜 — 请到上方点「一键生成分镜」开始",
     "noPanelsYet": "这一集还没有任何分镜",
-    "selectPanel": "上方点选一个分镜"
+    "selectPanel": "上方点选一个分镜",
+    "noEpisodeHint": "此 project 还没有 episode — 请先到剧本 step 跑 LLM 分析"
   },
   "buttons": {
     "save": "储存",
@@ -23,6 +24,7 @@
     "analyze": "分析",
     "reanalyze": "重新分析",
     "regenerateStoryboard": "重新生成分镜",
+    "regenerateStoryboardArrow": "↻ 重新分析",
     "generateAllImages": "一键生图",
     "generateAllImagesDetail": "一键把还没有图的 {count} 个分镜都送去生图",
     "generateAllVideos": "一键生影片",
@@ -30,18 +32,35 @@
     "splitGroups": "切组",
     "splitting": "切组中…",
     "splitGroupsDetail": "依场景/角色连续性切组，{count} 个分镜分组送多镜头合成",
+    "splitWhileAnalyzing": "切组（分析中）",
+    "autoSplit": "自动切组",
+    "smartSplit": "🧠 智能切组",
+    "resplit": "↻ 重新切组",
+    "smartMultiShot": "智能多镜头",
+    "sendingMultiShot": "送出中 {sent}/{total}",
     "downloadImage": "下载图",
     "downloadStaticImage": "下载静态图",
     "downloadVideo": "下载影片",
     "merge": "合成",
     "mergeToSingle": "合成为一支 mp4",
     "multiShot": "多镜头",
-    "multiShotComposite": "多镜头合成"
+    "multiShotComposite": "多镜头合成",
+    "manualAdd": "手动新增",
+    "manualAddTitle": "自己写提示词 + 选角色场景，单一镜头手动建立",
+    "regenerateStoryboardTitle": "重新从剧本生成分镜",
+    "regenerateStoryboardTitleOverwrite": "重新从剧本生成分镜（会覆盖现有分镜）",
+    "cleanupSource": "整理来源",
+    "cleanupSourceFull": "整理分镜来源",
+    "cleanupSourceTitle": "再分析失败时旧分镜会残留 — 从这里挑出多余的分镜来源删掉"
   },
   "status": {
     "analyzingTitle": "分析中",
     "analyzingProgress": "分析中… {progress}%",
     "analyzeSubmitting": "提交中…",
+    "analyzeQueued": "排队中…",
+    "submitting": "正在提交分析任务…",
+    "queuedWaitWorker": "任务已排队，等 worker 开始处理（约 3-10 秒）…",
+    "reanalyzeProgress": "正在重新分析剧本… {progress}% — 完成后分镜会自动刷新",
     "splittingTitle": "切组中",
     "imageGenerating": "图生成中",
     "imageGenerated": "图已生成",
@@ -64,10 +83,31 @@
     "splitFailed": "切组失败",
     "splitFailedWithReason": "切组失败：{reason}",
     "lastAnalyzeFailed": "上次分析失败 {reason}",
+    "lastAnalyzeFailedRetry": "上次分析失败：{message}",
+    "lastAnalyzeFailedNoMsg": "请点「重新分析」重试",
     "contentBlocked": "内容审核被挡",
     "contentViolation": "内容违规",
     "tooManyTasks": "同时跑太多任务，请稍后再试",
-    "unknown": "未知错误"
+    "unknown": "未知错误",
+    "noVideoModelPicked": "专案还没选视频模型 — 请从分镜顶部的「视频模型」picker 选一个（Seedance 或 Kling）",
+    "submitVideoFailed": "提交视频生成失败",
+    "needEpisodeFirst": "请先选择集数并贴好剧本",
+    "submitFailedHttp": "提交失败 (HTTP {status})",
+    "submitFailedGeneric": "提交失败",
+    "submitFailed": "提交失败：{message}",
+    "needPanelEpisode": "请先选一集再新增分镜",
+    "cannotCreateGroup": "无法建立分镜组，请重试",
+    "createFailed": "建立失败：{reason}",
+    "noStoryboardLLM": "没有可用集数 — 请先回上方分页建立或选择集数，并到剧本 step 贴剧本",
+    "noVideoModelMultiShot": "请从分镜顶部的「视频模型」picker 选一个支持多镜头的变体（Kling 系列或 Seedance 2.0 720p BobAPI）",
+    "modelNotMultiShot": "「{model}」不支持多镜头。请从分镜顶部的视频模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)。",
+    "needTwoPanels": "至少需要 2 个分镜才能跑 multi-shot",
+    "needTwoImagedPanels": "至少需要 2 个有图的分镜才能跑 multi-shot（或切到支持 t2v 的模型，免生图）",
+    "noMultiShotGroups": "没有可送出的 multi-shot 群组",
+    "modelNotMultiShotShort": "尚未设定视频模型 — 请从分镜顶部的「视频模型」picker 选一个 Kling 或 Seedance 2.0 720p (BobAPI) 模型",
+    "sendFailed": "送出失败：{reason}",
+    "sendFailedHttp": "送出失败 ({status})",
+    "sendFailedCode": "送出失败：{code}"
   },
   "shotSize": {
     "panorama": "全景",
@@ -100,7 +140,14 @@
     "alreadySendingAll": "{count} 个分镜都送去生 {label}",
     "alreadySendingAllImages": "{count} 个分镜都送去生图",
     "noVideoModelSelected": "专案还没选视频模型",
-    "noVideoModelHint": "请先到右侧选择 video model"
+    "noVideoModelHint": "请先到右侧选择 video model",
+    "tipScriptAnalyzing": "剧本分析中，等分镜全部生成完再切组（不然 LLM 只会看到目前已有的分镜）",
+    "tipSplitDetail": "把分镜按对白 / 角色 / 场景连续性切成 multi-shot 群，并依目标时长分配秒数",
+    "tipSplitDetailLLM": "LLM 按对白完整性 / 角色 / 场景连续性切成 2-6 个 panel/群，依目标时长算秒数",
+    "tipCurrentModelNotMultiShot": "当前模型不支持多镜头 — 请从上方视频模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)",
+    "tipSeedancePerGroup": "每个 group 合成为一支 4-15s 影片（Seedance BobAPI 9-ref @N 合成）",
+    "tipKlingMultiShot": "把所有 group 一次送 Kling 多镜头",
+    "tipKlingPerGroup": "把分镜送 Kling multi-shot 一次出多镜头视频"
   },
   "section": {
     "scriptStillAnalyzing": "剧本分析中，等分镜全部生成完再切组",
@@ -113,6 +160,32 @@
     "downloadAssetBundle": "剪映 / CapCut 直接下载素材包",
     "compositeOption": "{count} 个一组送 · 一次出多镜头视频",
     "perGroupOption": "{count} 个一组送 · 一次出多镜头视频"
+  },
+  "header": {
+    "panelsHeader": "分镜",
+    "groupSummary": "{groups} GROUPS · {grouped}/{total} 已切组",
+    "shotsAndRatio": "{total} SHOTS · 比例 {ratio}",
+    "noGroupsHint": "本集还没有分镜组，送出时会自动建立第一组"
+  },
+  "layouts": {
+    "gallery": "▦ 画廊",
+    "galleryTitle": "画廊版面 — 直幅 9:16 友善（每分镜图驱动）",
+    "timeline": "☰ 时间轴",
+    "timelineTitle": "时间轴版面 — 横幅 16:9 友善（每分镜图驱动）",
+    "multiShot": "◷ 多镜头",
+    "multiShotTitle": "多镜头版面 — 文字驱动（Kling-3 / Omni B-path，免生图）"
+  },
+  "generateSplash": {
+    "titleForEpisode": "为「{episode}」生成分镜",
+    "titleGeneric": "一键生成分镜",
+    "subtitle": "从剧本自动拆解成多个镜头 — 由 LLM 依场景/角色连续性切组，生成后可在每个分镜卡片做图像 / 视频 / 提示词调整。",
+    "submitErrorPrefix": "提交失败：{message}",
+    "lastAnalyzeErrorPrefix": "上次分析失败：{message}",
+    "noEpisodes": "没有可用集数 — 请先回上方分页建立或选择集数，并到剧本 step 贴剧本"
+  },
+  "untitled": {
+    "character": "未命名角色",
+    "scene": "未命名场景"
   },
   "inspector": {
     "castTitle": "卡司 · 角色",
@@ -134,6 +207,164 @@
     "noImage": "没图",
     "states3": "三种状态",
     "onlyImages": "只有图"
+  },
+  "gallery": {
+    "videoBadge": "▶ 视频",
+    "videoGenerating": "视频生成中",
+    "imageGenerating": "图生成中",
+    "panelPlaceholder": "分镜 {n}",
+    "shotLabel": "镜头 {n}",
+    "videoGenerated": "✓ 视频已生成",
+    "imageGeneratedBadge": "图已生成",
+    "notGenerated": "尚未生成",
+    "autoUpdateHint": "30-60 秒，完成后自动更新",
+    "videoGeneratingFull": "视频生成中",
+    "imageGeneratingFull": "图片生成中",
+    "submitting": "提交中…",
+    "regenImage": "↻ 重新生成图",
+    "generateImage": "生成图片",
+    "regenVideo": "↻ 重新生成视频",
+    "generateVideo": "生成视频",
+    "generating": "生成中…",
+    "regenVideoArrow": "↻ 重生视频",
+    "fields": {
+      "descriptionLabel": "描述词",
+      "dialogueLabel": "对话",
+      "save": "储存",
+      "savingButton": "储存中…",
+      "dialoguePlaceholder": "这个镜头的台词 / 旁白 / 字幕"
+    },
+    "downloads": {
+      "image": "下载图",
+      "video": "下载影片"
+    },
+    "noSelected": "点左边任一分镜进行编辑",
+    "fal": {
+      "label": "fal Seedance →",
+      "seedance": "Seedance",
+      "fast": "Fast",
+      "seedanceTitle": "fal Seedance 2.0 (1080p + native audio, ~$0.3-0.5/支)",
+      "fastTitle": "fal Seedance 2.0 Fast（cheap variant，~$0.1-0.2/支，稍弱）"
+    }
+  },
+  "timeline": {
+    "header": "Storyboard Strip",
+    "regenStoryboardTitle": "重新从剧本生成分镜（会覆盖现有分镜）",
+    "cleanupSourceTitle": "再分析失败时旧分镜会残留 — 从这里挑出多余的分镜来源删掉",
+    "autoGroupTitle": "LLM 把分镜按场景/角色连续性切成 2-6 个 panel/群，提升 Kling 多镜头品质",
+    "batchImageTitle": "一键把还没有图的 {count} 个分镜都送去生图（每张 30-60s，后台跑）",
+    "batchImageLabel": "一键生图 ({count} 个)",
+    "batchImageSubmitting": "送出中 {done}/{total}",
+    "batchVideoTitle": "一键把已有图、还没有影片的 {count} 个分镜都送去生 5 秒影片",
+    "batchVideoLabel": "一键生影片 ({count} 个)",
+    "batchVideoSubmitting": "送出中 {done}/{total}",
+    "panelFailedLabels": {
+      "rateLimit": "配额限制",
+      "violation": "内容违规",
+      "generic": "失败"
+    },
+    "panelFailedRetryHint": "点 {action} 重试",
+    "shotDescTitle": "SHOT {n} · 描述词",
+    "shotDialogueTitle": "SHOT {n} · 对话",
+    "descPlaceholder": "这个镜头的场景/构图描述，生图会用到。例：近景 — CATHERINE 穿旧围裙，目光看向镜头，双手扶在工作台前",
+    "dialoguePlaceholder": "这个镜头播放时的台词 / 旁白 / 字幕。空白即为无对白。",
+    "shotsDraft": "{count} SHOTS · DRAFT 03"
+  },
+  "multiShotSubmitted": {
+    "doneTemplate": "✓ 已送出 {count} 个 multi-shot 任务",
+    "failuresSuffix": "（{count} 组失败）"
+  },
+  "chips": {
+    "shotSizeLabel": "景别",
+    "shotSizes": {
+      "wide": "远景",
+      "panorama": "全景",
+      "medium": "中景",
+      "near": "近景",
+      "closeup": "特写"
+    },
+    "movementLabel": "运镜",
+    "movements": {
+      "pushIn": "中度推进",
+      "tiltDown": "摇降",
+      "handheld": "手持",
+      "snapZoom": "快速变焦",
+      "upgrade": "升格"
+    },
+    "saving": "储存中…",
+    "saveFailedWith": "储存失败：{reason}",
+    "saveFailedUnknown": "未知"
+  },
+  "details": {
+    "modelNotMultiShotInline": "当前模型不支持多镜头 — 请从上方视频模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)",
+    "tipSeedanceComposite": "Seedance 合成（BobAPI）：一支 4-15s 影片含最多 9 个 reference，模型自决镜头运动与过渡",
+    "tipBPath": "B 路径（Tencent VOD {model}）：t2v + SubjectInfos.N + multi_shot=intelligence，免生图直接出多镜头视频",
+    "tipKlingC": "把所有有图的分镜 5 个一组送 Kling multi-shot=intelligence（C 路径 i2v）",
+    "multiShotSeedance": "多镜头合成 (Seedance)",
+    "multiShotBPath": "智能多镜头 (B 路径)",
+    "multiShotKlingBatch": "Kling 多镜头（批次）"
+  },
+  "toggle": {
+    "showImage": "显示原图",
+    "image": "图",
+    "showVideo": "显示生成视频",
+    "video": "视频"
+  },
+  "bpath": {
+    "missingImageHint": "B 路径只生了视频没生图。点这里补生一张原图，之后就能在图/视频之间切换。",
+    "submittingImage": "生成原图中…",
+    "submitting": "提交中…",
+    "generateImageButton": "🖼 生成原图（B 路径补图）"
+  },
+  "selectedShot": {
+    "shotLabel": "镜头 {n}",
+    "videoReady": "✓ 视频已生成",
+    "videoGenerating": "视频生成中… 30-60 秒，完成后自动更新",
+    "imageReadyVideoPending": "图已生成，视频待跑",
+    "notGenerated": "尚未生成",
+    "zoomTitle": "点击放大",
+    "videoGeneratingFull": "视频生成中",
+    "imageGeneratingFull": "图片生成中",
+    "klingUpdateHint": "Kling 模型 30-60 秒，完成后自动更新",
+    "tencentUpdateHint": "Tencent VOD 30-60 秒，完成后自动更新"
+  },
+  "panelFailure": {
+    "rateLimit": "Tencent VOD 配额限制",
+    "violation": "内容审核被挡",
+    "generic": "生成失败",
+    "rateLimitDetail": "同时跑太多任务，Tencent 拒绝了。等 1-2 分钟后点下方按钮重试。",
+    "violationDetail": "描述词被内容过滤挡下。请编辑左侧「描述词」，移除可能违规的字眼后重试。",
+    "retryHint": "点下方按钮重试"
+  },
+  "genBlocked": {
+    "needImageFirst": "需要先有静态图才能生影片 — 请先点「生成图片」",
+    "videoStillGenerating": "视频生成中，请等 worker 完成（~60s）"
+  },
+  "downloads": {
+    "staticImage": "下载静态图",
+    "video": "下载影片"
+  },
+  "regenResult": {
+    "errorFallback": "重生失败",
+    "successQueued": "已送出重生任务，稍候 worker 处理（每张约 30-60s）"
+  },
+  "cast": {
+    "title": "卡司 · CAST",
+    "epBinding": "ep {episode} 绑定",
+    "appearanceLabel": "造型 {n}",
+    "initialAppearance": "初始形象",
+    "noAppearance": "尚无造型",
+    "appearancePresetSuffix": "{label} (预设)",
+    "titleDefault": "这集没绑造型 — 用第一个造型（{label}）。要改去剧本拆解页设定。",
+    "titleBound": "这集绑定造型: {label}",
+    "titleBoundNone": "(无)",
+    "unboundChipTitle": "这个角色有多个造型，但这集还没绑定",
+    "unboundChipLabel": "未绑",
+    "noCharacters": "(无关联角色)"
+  },
+  "notes": {
+    "title": "注记 · NOTES",
+    "empty": "(无注记)"
   },
   "regenerateStoryboardModal": {
     "title": "重新生成分镜",

@@ -383,19 +383,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const analyzeBusy = analyzePhase !== 'idle'
   const analyzeBusyLabel =
     analyzePhase === 'submitting'
-      ? '提交中…'
+      ? t('status.analyzeSubmitting')
       : analyzePhase === 'queued'
-        ? '排隊中…'
+        ? t('status.analyzeQueued')
         : analyzePhase === 'processing'
-          ? `分析中… ${analyzeProgress}%`
-          : '重新分析'
+          ? t('status.analyzingProgress', { progress: analyzeProgress })
+          : t('buttons.reanalyze')
   const analyzeBannerLabel =
     analyzePhase === 'submitting'
-      ? '正在提交分析任務…'
+      ? t('status.submitting')
       : analyzePhase === 'queued'
-        ? '任務已排隊,等 worker 開始處理(約 3-10 秒)…'
+        ? t('status.queuedWaitWorker')
         : analyzePhase === 'processing'
-          ? `正在重新分析劇本… ${analyzeProgress}% — 完成後分鏡會自動刷新`
+          ? t('status.reanalyzeProgress', { progress: analyzeProgress })
           : ''
   const analyzeError = analyzeSnapshot.data?.errorMessage ?? null
   // Map the raw worker error to a user-facing string via the shared
@@ -500,14 +500,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!selected) return
     updatePanelText.mutate(
       { panelId: selected.id, description: descDraft },
-      { onError: (err) => alert(err instanceof Error ? err.message : '儲存描述詞失敗') },
+      { onError: (err) => alert(err instanceof Error ? err.message : t('errors.saveDescriptionFailed')) },
     )
   }
   function handleSaveDialogue() {
     if (!selected) return
     updatePanelText.mutate(
       { panelId: selected.id, srtSegment: dialogueDraft },
-      { onError: (err) => alert(err instanceof Error ? err.message : '儲存對話失敗') },
+      { onError: (err) => alert(err instanceof Error ? err.message : t('errors.saveDialogueFailed')) },
     )
   }
   // Track per-panel image / video gen in-flight so the user sees a clear
@@ -689,7 +689,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!selected) return
     const videoModel = modelOverride ?? project?.novelPromotionData?.videoModel
     if (!videoModel) {
-      alert('專案還沒選視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個（Seedance 或 Kling）')
+      alert(t('errors.noVideoModelPicked'))
       return
     }
     const panelIdAtSubmit = selected.id
@@ -708,7 +708,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             return next
           })
         },
-        onError: (err) => alert(err instanceof Error ? err.message : '提交視頻生成失敗'),
+        onError: (err) => alert(err instanceof Error ? err.message : t('errors.submitVideoFailed')),
       },
     )
   }
@@ -832,7 +832,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   async function handleAnalyzeStoryboard() {
     if (!currentEpisodeId) {
-      setAnalyzeState({ status: 'error', message: '請先選擇集數並貼好劇本' })
+      setAnalyzeState({ status: 'error', message: t('errors.needEpisodeFirst') })
       return
     }
     setAnalyzeState({ status: 'submitting' })
@@ -870,7 +870,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           code: errBody?.error?.code ?? null,
           message: errBody?.error?.message ?? errBody?.message ?? null,
         })
-        throw new Error(display?.message ?? `提交失敗 (HTTP ${res.status})`)
+        throw new Error(display?.message ?? t('errors.submitFailedHttp', { status: res.status }))
       }
       setAnalyzeState({ status: 'submitted' })
       await queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId), exact: false })
@@ -878,7 +878,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     } catch (err) {
       setAnalyzeState({
         status: 'error',
-        message: err instanceof Error ? err.message : '提交失敗',
+        message: err instanceof Error ? err.message : t('errors.submitFailedGeneric'),
       })
     }
   }
@@ -913,7 +913,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
    */
   async function handleManualPanelSubmit(draft: ManualPanelDraft) {
     if (!currentEpisodeId) {
-      alert('請先選一集再新增分鏡')
+      alert(t('errors.needPanelEpisode'))
       return
     }
     setManualPanelSubmitting(true)
@@ -929,7 +929,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         storyboardId =
           (created && (created.storyboard?.id ?? created.id ?? null)) || null
         if (!storyboardId) {
-          throw new Error('無法建立分鏡組,請重試')
+          throw new Error(t('errors.cannotCreateGroup'))
         }
       }
 
@@ -976,7 +976,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
       setManualPanelOpen(false)
     } catch (err) {
-      alert(`建立失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+      alert(t('errors.createFailed', { reason: (err as Error)?.message ?? t('errors.unknown') }))
     } finally {
       setManualPanelSubmitting(false)
     }
@@ -1035,7 +1035,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   async function handleBatchGenerateVideos() {
     const videoModel = project?.novelPromotionData?.videoModel
     if (!videoModel) {
-      alert('專案還沒選視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個（Seedance 或 Kling）')
+      alert(t('errors.noVideoModelPicked'))
       return
     }
     const targets = allPanels.filter(
@@ -1072,7 +1072,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!videoModel) {
       setMultiShotState({
         status: 'error',
-        message: '請從分鏡頂部的「視頻模型」picker 選一個支援多鏡頭的變體(Kling 系列或 Seedance 2.0 720p BobAPI)',
+        message: t('errors.noVideoModelMultiShot'),
       })
       return
     }
@@ -1084,7 +1084,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (!isMultiShotCapable(videoModel)) {
       setMultiShotState({
         status: 'error',
-        message: `「${videoModel}」不支援多鏡頭。請從分鏡頂部的視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)。`,
+        message: t('errors.modelNotMultiShot', { model: videoModel }),
       })
       return
     }
@@ -1101,8 +1101,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       setMultiShotState({
         status: 'error',
         message: tolerateTextOnly
-          ? '至少需要 2 個分鏡才能跑 multi-shot'
-          : '至少需要 2 個有圖的分鏡才能跑 multi-shot(或切到支援 t2v 的模型,免生圖)',
+          ? t('errors.needTwoPanels')
+          : t('errors.needTwoImagedPanels'),
       })
       return
     }
@@ -1145,7 +1145,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     if (groups.length === 0) {
       setMultiShotState({
         status: 'error',
-        message: '沒有可送出的 multi-shot 群組',
+        message: t('errors.noMultiShotGroups'),
       })
       return
     }
@@ -1198,7 +1198,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   if (projectQuery.isLoading || storyboardsQuery.isLoading) {
     return (
       <div className="px-12 py-10">
-        <p className="font-mono text-xs tracking-wider text-stone-500">載入中…</p>
+        <p className="font-mono text-xs tracking-wider text-stone-500">{t('loading')}</p>
       </div>
     )
   }
@@ -1208,7 +1208,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       <div className="px-12 py-10">
         <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
           <p className="font-fraunces text-base italic text-stone-400">
-            此 project 還沒有 episode — 請先到劇本 step 跑 LLM 分析
+            {t('page.noEpisodeHint')}
           </p>
         </div>
       </div>
@@ -1220,18 +1220,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     const ctaLabel = analyzeBusy
       ? analyzeBusyLabel
       : analyzeStatus === 'failed'
-        ? '重新分析'
-        : '一鍵生成分鏡'
+        ? t('buttons.reanalyze')
+        : t('generateSplash.titleGeneric')
     return (
       <div className="px-12 py-10">
         <div className="rounded-sm border border-amber-500/30 bg-amber-500/5 p-8 text-center">
           <div className="mx-auto max-w-xl space-y-4">
             <div className="font-fraunces text-lg italic text-amber-400">
-              {currentEpisode ? `為「${currentEpisode.name}」生成分鏡` : '一鍵生成分鏡'}
+              {currentEpisode ? t('generateSplash.titleForEpisode', { episode: currentEpisode.name }) : t('generateSplash.titleGeneric')}
             </div>
             <p className="font-serif-cn text-sm leading-relaxed text-stone-400">
-              從劇本自動拆解成多個鏡頭 — 由 LLM 依場景/角色連續性切組,
-              生成後可在每個分鏡卡片做圖像 / 視頻 / 提示詞調整。
+              {t('generateSplash.subtitle')}
             </p>
             <button
               type="button"
@@ -1244,7 +1243,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </button>
             {analyzeState.status === 'error' ? (
               <p className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-                提交失敗:{analyzeState.message}
+                {t('generateSplash.submitErrorPrefix', { message: analyzeState.message })}
               </p>
             ) : null}
             {analyzeStatus === 'failed' && (analyzeErrorDisplay || analyzeError) ? (
@@ -1252,12 +1251,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
                 title={analyzeError ?? undefined}
               >
-                上次分析失敗:{analyzeErrorDisplay?.message ?? '請點「重新分析」重試'}
+                {t('generateSplash.lastAnalyzeErrorPrefix', { message: analyzeErrorDisplay?.message ?? t('errors.lastAnalyzeFailedNoMsg') })}
               </p>
             ) : null}
             {!currentEpisodeId ? (
               <p className="font-mono text-[14px] tracking-wider text-stone-500">
-                沒有可用集數 — 請先回上方分頁建立或選擇集數,並到劇本 step 貼劇本
+                {t('generateSplash.noEpisodes')}
               </p>
             ) : null}
           </div>
@@ -1274,38 +1273,38 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       <button
         type="button"
         onClick={() => setLayoutMode('gallery')}
-        title="畫廊版面 — 直幅 9:16 友善(每分鏡圖驅動)"
+        title={t('layouts.galleryTitle')}
         className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
           layoutMode === 'gallery'
             ? 'bg-amber-500/15 text-amber-300'
             : 'text-stone-500 hover:text-amber-400'
         }`}
       >
-        ▦ 畫廊
+        {t('layouts.gallery')}
       </button>
       <button
         type="button"
         onClick={() => setLayoutMode('timeline')}
-        title="時間軸版面 — 橫幅 16:9 友善(每分鏡圖驅動)"
+        title={t('layouts.timelineTitle')}
         className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
           layoutMode === 'timeline'
             ? 'bg-amber-500/15 text-amber-300'
             : 'text-stone-500 hover:text-amber-400'
         }`}
       >
-        ☰ 時間軸
+        {t('layouts.timeline')}
       </button>
       <button
         type="button"
         onClick={() => setLayoutMode('groups')}
-        title="多鏡頭版面 — 文字驅動(Kling-3 / Omni B-path,免生圖)"
+        title={t('layouts.multiShotTitle')}
         className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
           layoutMode === 'groups'
             ? 'bg-amber-500/15 text-amber-300'
             : 'text-stone-500 hover:text-amber-400'
         }`}
       >
-        ◷ 多鏡頭
+        {t('layouts.multiShot')}
       </button>
     </div>
   )
@@ -1336,14 +1335,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     <>
       {manualPanelOpen ? (
         <V2ManualPanelModal
-          characters={characterRoster.map((c) => ({ id: c.id, name: c.name ?? '未命名角色' }))}
-          locations={locationRoster.map((l) => ({ id: l.id, name: l.name ?? '未命名場景' }))}
+          characters={characterRoster.map((c) => ({ id: c.id, name: c.name ?? t('untitled.character') }))}
+          locations={locationRoster.map((l) => ({ id: l.id, name: l.name ?? t('untitled.scene') }))}
           onSubmit={handleManualPanelSubmit}
           onClose={() => setManualPanelOpen(false)}
           isSubmitting={manualPanelSubmitting}
           contextHint={
             (storyboardsData?.storyboards?.length ?? 0) === 0
-              ? '本集還沒有分鏡組,送出時會自動建立第一組'
+              ? t('header.noGroupsHint')
               : undefined
           }
         />
@@ -1388,7 +1387,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {hasGroups ? (
             <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-              ◷ {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+              ◷ {t('header.groupSummary', { groups: orderedGroupIds.length, grouped: groupedPanelCount, total: allPanels.length })}
             </span>
           ) : null}
           {videoModelPickerNode}
@@ -1402,17 +1401,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               type="button"
               disabled={!currentEpisodeId || manualPanelSubmitting}
               onClick={() => setManualPanelOpen(true)}
-              title="自己寫提示詞 + 選角色場景,單一鏡頭手動建立"
+              title={t('buttons.manualAddTitle')}
               className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="plus" className="h-3 w-3" />
-              手動新增
+              {t('buttons.manualAdd')}
             </button>
             <button
               type="button"
               disabled={analyzeBusy || !currentEpisodeId || !canEdit}
               onClick={handleAnalyzeStoryboard}
-              title="重新從劇本生成分鏡"
+              title={t('buttons.regenerateStoryboardTitle')}
               className={`flex items-center gap-1.5 rounded-sm border px-3 py-1.5 font-mono text-[13px] tracking-wider transition-all disabled:cursor-not-allowed ${
                 analyzeBusy
                   ? 'border-amber-500/50 bg-amber-500/15 text-amber-200'
@@ -1426,10 +1425,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               type="button"
               disabled={!currentEpisodeId}
               onClick={() => setStaleCleanupOpen(true)}
-              title="再分析失敗時舊分鏡會殘留 — 從這裡挑出多餘的分鏡來源刪掉"
+              title={t('buttons.cleanupSourceTitle')}
               className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              整理來源
+              {t('buttons.cleanupSource')}
             </button>
           </div>
 
@@ -1446,15 +1445,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               onClick={() => autoGroup.mutate({ episodeId: currentEpisodeId! })}
               title={
                 analyzeBusy
-                  ? '劇本分析中,等分鏡全部生成完再切組(不然 LLM 只會看到目前已有的分鏡)'
+                  ? t('multiShot.tipScriptAnalyzing')
                   : autoGroup.isPending
-                    ? '切組中…'
-                    : '把分鏡按對白 / 角色 / 場景連續性切成 multi-shot 群,並依目標時長分配秒數'
+                    ? t('buttons.splitting')
+                    : t('multiShot.tipSplitDetail')
               }
               className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[13px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              {autoGroup.isPending ? '切組中…' : analyzeBusy ? '切組(分析中)' : '自動切組'}
+              {autoGroup.isPending ? t('buttons.splitting') : analyzeBusy ? t('buttons.splitWhileAnalyzing') : t('buttons.autoSplit')}
             </button>
             <button
               type="button"
@@ -1462,19 +1461,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               onClick={handleSubmitMultiShot}
               title={
                 !canMultiShot
-                  ? '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                  ? t('multiShot.tipCurrentModelNotMultiShot')
                   : videoFamily === 'seedance'
-                    ? '每個 group 合成為一支 4-15s 影片(Seedance BobAPI 9-ref @N 合成)'
-                    : '把所有 group 一次送 Kling 多鏡頭'
+                    ? t('multiShot.tipSeedancePerGroup')
+                    : t('multiShot.tipKlingMultiShot')
               }
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/60 bg-amber-500/25 px-3.5 py-1.5 font-mono text-[14px] font-semibold tracking-wider text-amber-100 shadow-sm shadow-amber-500/10 transition-all hover:border-amber-400 hover:bg-amber-500/35 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
               {multiShotState.status === 'submitting'
-                ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
+                ? t('buttons.sendingMultiShot', { sent: multiShotState.sent, total: multiShotState.total })
                 : videoFamily === 'seedance'
-                  ? '多鏡頭合成'
-                  : '智能多鏡頭'}
+                  ? t('buttons.multiShotComposite')
+                  : t('buttons.smartMultiShot')}
             </button>
           </div>
         </div>
@@ -1502,7 +1501,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         targetDurationSec={project?.novelPromotionData?.targetDuration ?? null}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
-            return { taskId: null, error: '尚未設定視頻模型 — 請從分鏡頂部的「視頻模型」picker 選一個 Kling 或 Seedance 2.0 720p (BobAPI) 模型' }
+            return { taskId: null, error: t('errors.modelNotMultiShotShort') }
           }
           // 2026-05-17 — use the variant registry's capability bit so this
           // gate stays in sync with the inline picker + handleSubmitMultiShot.
@@ -1510,7 +1509,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           if (!isMultiShotCapable(projectVideoModel)) {
             return {
               taskId: null,
-              error: `「${projectVideoModel}」不支援多鏡頭。請從分鏡頂部的視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)。`,
+              error: t('errors.modelNotMultiShot', { model: projectVideoModel }),
             }
           }
           try {
@@ -1568,11 +1567,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               },
             )
             if (!res.ok) {
-              let errMessage = `送出失敗 (${res.status})`
+              let errMessage = t('errors.sendFailedHttp', { status: res.status })
               try {
                 const errBody = await res.json()
                 if (errBody && typeof errBody.message === 'string') errMessage = errBody.message
-                else if (errBody?.error?.code) errMessage = `送出失敗:${errBody.error.code}`
+                else if (errBody?.error?.code) errMessage = t('errors.sendFailedCode', { code: errBody.error.code })
               } catch {
                 // body not JSON — keep status fallback
               }
@@ -1589,7 +1588,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           } catch (err) {
             return {
               taskId: null,
-              error: err instanceof Error ? err.message : '送出失敗',
+              error: err instanceof Error ? err.message : t('errors.submitFailedGeneric'),
             }
           }
         }}
@@ -1622,14 +1621,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </div>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="font-fraunces text-sm italic text-amber-500/80">分鏡</div>
+                <div className="font-fraunces text-sm italic text-amber-500/80">{t('header.panelsHeader')}</div>
                 {hasGroups ? (
                   <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-                    {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+                    {t('header.groupSummary', { groups: orderedGroupIds.length, grouped: groupedPanelCount, total: allPanels.length })}
                   </span>
                 ) : null}
                 <div className="font-mono text-[14px] tracking-wider text-stone-500">
-                  {allPanels.length} SHOTS · 比例 {projectVideoRatio}
+                  {t('header.shotsAndRatio', { total: allPanels.length, ratio: projectVideoRatio })}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1637,20 +1636,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 type="button"
                 disabled={analyzeBusy || !currentEpisodeId || !canEdit}
                 onClick={handleAnalyzeStoryboard}
-                title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
+                title={t('buttons.regenerateStoryboardTitleOverwrite')}
                 className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
-                {analyzeBusy ? analyzeBusyLabel : '↻ 重新分析'}
+                {analyzeBusy ? analyzeBusyLabel : t('buttons.regenerateStoryboardArrow')}
               </button>
               <button
                 type="button"
                 disabled={!currentEpisodeId}
                 onClick={() => setStaleCleanupOpen(true)}
-                title="再分析失敗時舊分鏡會殘留 — 從這裡挑出多餘的分鏡來源刪掉"
+                title={t('buttons.cleanupSourceTitle')}
                 className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                整理分鏡來源
+                {t('buttons.cleanupSourceFull')}
               </button>
               <button
                 type="button"
@@ -1658,13 +1657,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 onClick={handleAutoGroup}
                 title={
                   analyzeBusy
-                    ? '劇本分析中,等分鏡全部生成完再切組(不然 LLM 只會看到目前已有的分鏡)'
-                    : 'LLM 按對白完整性 / 角色 / 場景連續性切成 2-6 個 panel/群,依目標時長算秒數'
+                    ? t('multiShot.tipScriptAnalyzing')
+                    : t('multiShot.tipSplitDetailLLM')
                 }
                 className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                {autoGroup.isPending ? '切組中…' : analyzeBusy ? '切組(分析中)' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
+                {autoGroup.isPending ? t('buttons.splitting') : analyzeBusy ? t('buttons.splitWhileAnalyzing') : hasGroups ? t('buttons.resplit') : t('buttons.smartSplit')}
               </button>
               <button
                 type="button"
@@ -1672,19 +1671,19 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 disabled={multiShotState.status === 'submitting' || !canMultiShot}
                 title={
                   !canMultiShot
-                    ? '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                    ? t('multiShot.tipCurrentModelNotMultiShot')
                     : videoFamily === 'seedance'
-                      ? '每個 group 合成為一支 4-15s 影片(Seedance BobAPI 9-ref @N 合成)'
-                      : '把分鏡送 Kling multi-shot 一次出多鏡頭視頻'
+                      ? t('multiShot.tipSeedancePerGroup')
+                      : t('multiShot.tipKlingPerGroup')
                 }
                 className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {multiShotState.status === 'submitting'
-                  ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
+                  ? t('buttons.sendingMultiShot', { sent: multiShotState.sent, total: multiShotState.total })
                   : videoFamily === 'seedance'
-                    ? '多鏡頭合成'
-                    : '智能多鏡頭'}
+                    ? t('buttons.multiShotComposite')
+                    : t('buttons.smartMultiShot')}
               </button>
               </div>
             </div>
@@ -1705,8 +1704,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           ) : null}
           {multiShotState.status === 'done' ? (
             <div className="mt-2 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
-              ✓ 已送出 {multiShotState.sent} 個 multi-shot 任務
-              {multiShotState.failures > 0 ? `(${multiShotState.failures} 組失敗)` : ''}
+              {t('multiShotSubmitted.doneTemplate', { count: multiShotState.sent })}
+              {multiShotState.failures > 0 ? t('multiShotSubmitted.failuresSuffix', { count: multiShotState.failures }) : ''}
             </div>
           ) : null}
           {multiShotState.status === 'error' ? (
@@ -1755,21 +1754,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       </div>
                       {p.videoUrl ? (
                         <div className="absolute bottom-2 right-2 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[12px] text-stone-950 backdrop-blur-sm">
-                          ▶ 視頻
+                          {t('gallery.videoBadge')}
                         </div>
                       ) : null}
                       {isImg || isVid ? (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
                           <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
                           <div className="font-mono text-[12px] tracking-wider text-amber-300">
-                            {isVid ? '視頻生成中' : '圖生成中'}
+                            {isVid ? t('gallery.videoGenerating') : t('gallery.imageGenerating')}
                           </div>
                         </div>
                       ) : null}
                     </div>
                     <div className="bg-stone-900/40 px-3 py-2">
                       <div className="line-clamp-2 font-serif-cn text-xs leading-snug text-stone-200">
-                        {p.description?.slice(0, 60) ?? `分鏡 ${i + 1}`}
+                        {p.description?.slice(0, 60) ?? t('gallery.panelPlaceholder', { n: i + 1 })}
                       </div>
                     </div>
                   </button>
@@ -1784,10 +1783,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               <>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="font-fraunces text-base italic text-amber-500/80">
-                    鏡頭 {String(selectedIdxForGallery + 1).padStart(2, '0')}
+                    {t('gallery.shotLabel', { n: String(selectedIdxForGallery + 1).padStart(2, '0') })}
                   </div>
                   <div className="font-mono text-[14px] tracking-wider text-stone-500">
-                    {selected.videoUrl ? '✓ 視頻已生成' : selected.imageUrl ? '圖已生成' : '尚未生成'}
+                    {selected.videoUrl ? t('gallery.videoGenerated') : selected.imageUrl ? t('gallery.imageGeneratedBadge') : t('gallery.notGenerated')}
                   </div>
                 </div>
                 <div className={`relative mx-auto max-h-[480px] max-w-[280px] overflow-hidden rounded-sm border border-stone-800 ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
@@ -1812,10 +1811,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/75 backdrop-blur-sm">
                       <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
                       <div className="font-fraunces text-sm italic text-amber-300">
-                        {isCurrentPanelVideoInFlight ? '視頻生成中' : '圖片生成中'}
+                        {isCurrentPanelVideoInFlight ? t('gallery.videoGeneratingFull') : t('gallery.imageGeneratingFull')}
                       </div>
                       <div className="px-3 text-center font-serif-cn text-[14px] text-stone-300">
-                        30-60 秒,完成後自動更新
+                        {t('gallery.autoUpdateHint')}
                       </div>
                     </div>
                   ) : null}
@@ -1845,10 +1844,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     className="rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
                   >
                     {regenPanel.isPending
-                      ? '提交中…'
+                      ? t('gallery.submitting')
                       : selected?.imageUrl
-                        ? '↻ 重新生成圖'
-                        : '生成圖片'}
+                        ? t('gallery.regenImage')
+                        : t('gallery.generateImage')}
                   </button>
                   <button
                     type="button"
@@ -1857,12 +1856,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     className="rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-serif-cn text-xs text-amber-300 transition-all hover:bg-amber-500/20 disabled:opacity-50"
                   >
                     {generateVideo.isPending
-                      ? '提交中…'
+                      ? t('gallery.submitting')
                       : isCurrentPanelVideoInFlight
-                        ? '生成中…'
+                        ? t('gallery.generating')
                         : selected.videoUrl
-                          ? '↻ 重生視頻'
-                          : '生成視頻'}
+                          ? t('gallery.regenVideoArrow')
+                          : t('gallery.generateVideo')}
                   </button>
                 </div>
 
@@ -1871,38 +1870,38 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     the main 生成視頻 CTA. Compact labels (Seedance / Fast)
                     because the panel-card mini area is narrow. */}
                 <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-stone-500">
-                  <span className="shrink-0">fal Seedance →</span>
+                  <span className="shrink-0">{t('gallery.fal.label')}</span>
                   <button
                     type="button"
                     disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
-                    title="fal Seedance 2.0 (1080p + native audio, ~$0.3-0.5/支)"
+                    title={t('gallery.fal.seedanceTitle')}
                     className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
                   >
-                    Seedance
+                    {t('gallery.fal.seedance')}
                   </button>
                   <button
                     type="button"
                     disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
-                    title="fal Seedance 2.0 Fast (cheap variant, ~$0.1-0.2/支,稍弱)"
+                    title={t('gallery.fal.fastTitle')}
                     className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
                   >
-                    Fast
+                    {t('gallery.fal.fast')}
                   </button>
                 </div>
 
                 <div className="mt-4 space-y-4">
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[14px] tracking-wider text-amber-600">描述詞</div>
+                      <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('gallery.fields.descriptionLabel')}</div>
                       <button
                         type="button"
                         onClick={handleSaveDescription}
                         disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
                         className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
                       >
-                        {updatePanelText.isPending ? '儲存中…' : '儲存'}
+                        {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
                       </button>
                     </div>
                     <textarea
@@ -1914,21 +1913,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   </div>
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[14px] tracking-wider text-amber-600">對話</div>
+                      <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('gallery.fields.dialogueLabel')}</div>
                       <button
                         type="button"
                         onClick={handleSaveDialogue}
                         disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
                         className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
                       >
-                        {updatePanelText.isPending ? '儲存中…' : '儲存'}
+                        {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
                       </button>
                     </div>
                     <textarea
                       value={dialogueDraft}
                       onChange={(e) => setDialogueDraft(e.target.value)}
                       rows={3}
-                      placeholder="這個鏡頭的台詞 / 旁白 / 字幕"
+                      placeholder={t('gallery.fields.dialoguePlaceholder')}
                       className="w-full rounded-sm border border-stone-800 bg-stone-900/50 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500/50"
                     />
                   </div>
@@ -1955,7 +1954,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.imageUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
                   >
                     <AppIcon name="download" className="h-3 w-3" />
-                    下載圖
+                    {t('gallery.downloads.image')}
                   </a>
                   <a
                     href={selected.videoUrl ?? '#'}
@@ -1967,13 +1966,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.videoUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
                   >
                     <AppIcon name="download" className="h-3 w-3" />
-                    下載影片
+                    {t('gallery.downloads.video')}
                   </a>
                 </div>
               </>
             ) : (
               <div className="flex h-full items-center justify-center text-center">
-                <p className="font-fraunces text-sm italic text-stone-500">點左邊任一分鏡進行編輯</p>
+                <p className="font-fraunces text-sm italic text-stone-500">{t('gallery.noSelected')}</p>
               </div>
             )}
           </aside>
@@ -2000,10 +1999,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="font-fraunces text-sm italic text-amber-500/80">Storyboard Strip</div>
+              <div className="font-fraunces text-sm italic text-amber-500/80">{t('timeline.header')}</div>
               {hasGroups ? (
                 <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-                  {orderedGroupIds.length} GROUPS · {groupedPanelCount}/{allPanels.length} 已切組
+                  {t('header.groupSummary', { groups: orderedGroupIds.length, grouped: groupedPanelCount, total: allPanels.length })}
                 </span>
               ) : null}
             </div>
@@ -2012,30 +2011,30 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               type="button"
               disabled={analyzeBusy || !currentEpisodeId || !canEdit}
               onClick={handleAnalyzeStoryboard}
-              title="重新從劇本生成分鏡(會覆蓋現有分鏡)"
+              title={t('timeline.regenStoryboardTitle')}
               className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
-              {analyzeBusy ? analyzeBusyLabel : '↻ 重新分析'}
+              {analyzeBusy ? analyzeBusyLabel : t('buttons.regenerateStoryboardArrow')}
             </button>
             <button
               type="button"
               disabled={!currentEpisodeId}
               onClick={() => setStaleCleanupOpen(true)}
-              title="再分析失敗時舊分鏡會殘留 — 從這裡挑出多餘的分鏡來源刪掉"
+              title={t('timeline.cleanupSourceTitle')}
               className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              整理分鏡來源
+              {t('buttons.cleanupSourceFull')}
             </button>
             <button
               type="button"
               disabled={autoGroup.isPending || allPanels.length < 2 || !canEdit}
               onClick={handleAutoGroup}
-              title="LLM 把分鏡按場景/角色連續性切成 2-6 個 panel/群,提升 Kling 多鏡頭品質"
+              title={t('timeline.autoGroupTitle')}
               className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              {autoGroup.isPending ? '切組中…' : hasGroups ? '↻ 重新切組' : '🧠 智能切組'}
+              {autoGroup.isPending ? t('buttons.splitting') : hasGroups ? t('buttons.resplit') : t('buttons.smartSplit')}
             </button>
             {/*
               Batch generate buttons — surface a one-click path to fill
@@ -2052,13 +2051,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   type="button"
                   disabled={batchImageState !== null || regenPanel.isPending || !canEdit}
                   onClick={handleBatchGenerateImages}
-                  title={`一鍵把還沒有圖的 ${missingImages} 個分鏡都送去生圖(每張 30-60s,後台跑)`}
+                  title={t('timeline.batchImageTitle', { count: missingImages })}
                   className="flex items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <AppIcon name="image" className="h-3 w-3" />
                   {batchImageState
-                    ? `送出中 ${batchImageState.submitted}/${batchImageState.total}`
-                    : `一鍵生圖 (${missingImages} 個)`}
+                    ? t('timeline.batchImageSubmitting', { done: batchImageState.submitted, total: batchImageState.total })
+                    : t('timeline.batchImageLabel', { count: missingImages })}
                 </button>
               )
             })()}
@@ -2072,18 +2071,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   type="button"
                   disabled={batchVideoState !== null || generateVideo.isPending || !canEdit}
                   onClick={handleBatchGenerateVideos}
-                  title={`一鍵把已有圖、還沒有影片的 ${eligibleForVideo} 個分鏡都送去生 5 秒影片`}
+                  title={t('timeline.batchVideoTitle', { count: eligibleForVideo })}
                   className="flex items-center gap-1.5 rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-sky-300 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <AppIcon name="play" className="h-3 w-3" />
                   {batchVideoState
-                    ? `送出中 ${batchVideoState.submitted}/${batchVideoState.total}`
-                    : `一鍵生影片 (${eligibleForVideo} 個)`}
+                    ? t('timeline.batchVideoSubmitting', { done: batchVideoState.submitted, total: batchVideoState.total })
+                    : t('timeline.batchVideoLabel', { count: eligibleForVideo })}
                 </button>
               )
             })()}
             <div className="font-mono text-[14px] tracking-wider text-stone-500">
-              {allPanels.length} SHOTS · DRAFT 03
+              {t('timeline.shotsDraft', { count: allPanels.length })}
             </div>
             </div>
           </div>
@@ -2104,7 +2103,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         ) : null}
         {analyzeState.status === 'error' ? (
           <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
-            提交失敗:{analyzeState.message}
+            {t('generateSplash.submitErrorPrefix', { message: analyzeState.message })}
           </div>
         ) : null}
         {autoGroup.isError ? (() => {
@@ -2122,7 +2121,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           })
           return (
             <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
-              切組失敗:{display?.message ?? err?.message ?? '未知錯誤'}
+              {t('errors.splitFailedWithReason', { reason: display?.message ?? err?.message ?? t('errors.unknown') })}
             </div>
           )
         })() : null}
@@ -2181,7 +2180,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
                           <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
                           <div className="font-mono text-[12px] tracking-wider text-amber-300">
-                            {isVid ? '視頻生成中' : '圖生成中'}
+                            {isVid ? t('gallery.videoGenerating') : t('gallery.imageGenerating')}
                           </div>
                         </div>
                       )
@@ -2202,11 +2201,11 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       // description, then retry". Anything else falls
                       // through to a generic 失敗 with a tooltip.
                       const label = code === 'RATE_LIMIT'
-                        ? '配額限制'
+                        ? t('timeline.panelFailedLabels.rateLimit')
                         : /Violation|Content/i.test(failed.errorMessage ?? '')
-                          ? '內容違規'
-                          : '失敗'
-                      const tooltip = `${code || ''}${code ? ' — ' : ''}${failed.errorMessage ?? '點重試'}`
+                          ? t('timeline.panelFailedLabels.violation')
+                          : t('timeline.panelFailedLabels.generic')
+                      const tooltip = `${code || ''}${code ? ' — ' : ''}${failed.errorMessage ?? t('timeline.panelFailedRetryHint', { action: failedImg ? t('gallery.generateImage') : t('gallery.generateVideo') })}`
                       return (
                         <div
                           title={tooltip}
@@ -2217,7 +2216,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                             ✗ {label}
                           </div>
                           <div className="font-mono text-[8px] tracking-wider text-rose-400/80">
-                            點 {failedImg ? '生成圖片' : '生成視頻'} 重試
+                            {t('timeline.panelFailedRetryHint', { action: failedImg ? t('gallery.generateImage') : t('gallery.generateVideo') })}
                           </div>
                         </div>
                       )
@@ -2261,7 +2260,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           <div>
             <div className="mb-2 flex items-center justify-between">
               <div className="font-mono text-[14px] tracking-wider text-amber-600">
-                SHOT {String(selectedIndex + 1).padStart(2, '0')} · 描述詞
+                {t('timeline.shotDescTitle', { n: String(selectedIndex + 1).padStart(2, '0') })}
               </div>
               <button
                 type="button"
@@ -2269,14 +2268,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
                 className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {updatePanelText.isPending ? '儲存中…' : '儲存'}
+                {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
               </button>
             </div>
             <textarea
               value={descDraft}
               onChange={(e) => setDescDraft(e.target.value)}
               rows={5}
-              placeholder="這個鏡頭的場景/構圖描述,生圖會用到。例:近景 — CATHERINE 穿舊圍裙,目光看向鏡頭,雙手扶在工作台前"
+              placeholder={t('timeline.descPlaceholder')}
               className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
             />
           </div>
@@ -2284,7 +2283,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
           <div>
             <div className="mb-2 flex items-center justify-between">
               <div className="font-mono text-[14px] tracking-wider text-amber-600">
-                SHOT {String(selectedIndex + 1).padStart(2, '0')} · 對話
+                {t('timeline.shotDialogueTitle', { n: String(selectedIndex + 1).padStart(2, '0') })}
               </div>
               <button
                 type="button"
@@ -2292,14 +2291,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
                 className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {updatePanelText.isPending ? '儲存中…' : '儲存'}
+                {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
               </button>
             </div>
             <textarea
               value={dialogueDraft}
               onChange={(e) => setDialogueDraft(e.target.value)}
               rows={3}
-              placeholder="這個鏡頭播放時的台詞 / 旁白 / 字幕。空白即為無對白。"
+              placeholder={t('timeline.dialoguePlaceholder')}
               className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
             />
           </div>
@@ -2323,8 +2322,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             viewAngle / qualityTags fields.
           */}
           <PromptChipGroup
-            label="景別"
-            options={['遠景', '全景', '中景', '近景', '特寫']}
+            label={t('chips.shotSizeLabel')}
+            options={[t('chips.shotSizes.wide'), t('chips.shotSizes.panorama'), t('chips.shotSizes.medium'), t('chips.shotSizes.near'), t('chips.shotSizes.closeup')]}
             cols={3}
             active={selected?.shotType ?? null}
             onChange={(value) => {
@@ -2337,8 +2336,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             }}
           />
           <PromptChipGroup
-            label="運鏡"
-            options={['中度推進', '搖降', '手持', '快速變焦', '升格']}
+            label={t('chips.movementLabel')}
+            options={[t('chips.movements.pushIn'), t('chips.movements.tiltDown'), t('chips.movements.handheld'), t('chips.movements.snapZoom'), t('chips.movements.upgrade')]}
             cols={1}
             active={selected?.cameraMove ?? null}
             onChange={(value) => {
@@ -2351,10 +2350,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             }}
           />
           {updatePanel.isPending ? (
-            <div className="font-mono text-[12px] tracking-wider text-stone-500">儲存中…</div>
+            <div className="font-mono text-[12px] tracking-wider text-stone-500">{t('chips.saving')}</div>
           ) : updatePanel.isError ? (
             <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-mono text-[12px] tracking-wider text-rose-300">
-              儲存失敗:{(updatePanel.error as Error)?.message ?? '未知'}
+              {t('chips.saveFailedWith', { reason: (updatePanel.error as Error)?.message ?? t('chips.saveFailedUnknown') })}
             </div>
           ) : null}
         </div>
@@ -2376,28 +2375,28 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               title={(() => {
                 const m = project?.novelPromotionData?.videoModel ?? ''
                 if (!canMultiShot) {
-                  return '當前模型不支援多鏡頭 — 請從上方視頻模型 picker 切到 Kling 或 Seedance 2.0 720p (BobAPI)'
+                  return t('details.modelNotMultiShotInline')
                 }
                 if (videoFamily === 'seedance') {
-                  return `Seedance 合成(BobAPI):一支 4-15s 影片含最多 9 個 reference,模型自決鏡頭運動與過渡`
+                  return t('details.tipSeedanceComposite')
                 }
                 if (/^tencent-vod::Kling-(3|O1)/i.test(m)) {
-                  return `B 路徑(Tencent VOD ${m.split('::')[1]}):t2v + SubjectInfos.N + multi_shot=intelligence,免生圖直接出多鏡頭視頻`
+                  return t('details.tipBPath', { model: m.split('::')[1] })
                 }
-                return '把所有有圖的分鏡 5 個一組送 Kling multi-shot=intelligence(C 路徑 i2v)'
+                return t('details.tipKlingC')
               })()}
             >
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {multiShotState.status === 'submitting'
-                ? `送出中 ${multiShotState.sent}/${multiShotState.total}`
+                ? t('buttons.sendingMultiShot', { sent: multiShotState.sent, total: multiShotState.total })
                 : (() => {
                     const m = project?.novelPromotionData?.videoModel ?? ''
                     if (videoFamily === 'seedance') {
-                      return '多鏡頭合成 (Seedance)'
+                      return t('details.multiShotSeedance')
                     }
                     return /^tencent-vod::Kling-(3|O1)/i.test(m)
-                      ? '智能多鏡頭 (B 路徑)'
-                      : 'Kling 多鏡頭(批次)'
+                      ? t('details.multiShotBPath')
+                      : t('details.multiShotKlingBatch')
                   })()}
             </button>
           </div>
@@ -2420,10 +2419,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     ? 'bg-amber-500/20 text-amber-300'
                     : 'text-stone-500 hover:text-stone-300'
                 }`}
-                title="顯示原圖"
+                title={t('toggle.showImage')}
               >
                 <AppIcon name="image" className="h-3 w-3" />
-                圖
+                {t('toggle.image')}
               </button>
               <button
                 type="button"
@@ -2435,10 +2434,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     ? 'bg-amber-500/20 text-amber-300'
                     : 'text-stone-500 hover:text-stone-300'
                 }`}
-                title="顯示生成視頻"
+                title={t('toggle.showVideo')}
               >
                 <span aria-hidden>▶</span>
-                視頻
+                {t('toggle.video')}
               </button>
             </div>
           ) : selected?.videoUrl && !selected?.imageUrl ? (
@@ -2463,20 +2462,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 )
               }}
               className="mb-3 inline-flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title="B 路徑只生了視頻沒生圖。點這裡補生一張原圖，之後就能在圖/視頻之間切換。"
+              title={t('bpath.missingImageHint')}
             >
               <AppIcon name="image" className="h-3 w-3" />
               {isCurrentPanelImageInFlight
-                ? '生成原圖中…'
+                ? t('bpath.submittingImage')
                 : regenPanel.isPending
-                  ? '提交中…'
-                  : '🖼 生成原圖（B 路徑補圖）'}
+                  ? t('bpath.submitting')
+                  : t('bpath.generateImageButton')}
             </button>
           ) : null}
           {multiShotState.status === 'done' ? (
             <div className="mb-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-              ✓ 已送出 {multiShotState.sent} 個 multi-shot 任務
-              {multiShotState.failures > 0 ? `(${multiShotState.failures} 組失敗)` : ''}
+              {t('multiShotSubmitted.doneTemplate', { count: multiShotState.sent })}
+              {multiShotState.failures > 0 ? t('multiShotSubmitted.failuresSuffix', { count: multiShotState.failures }) : ''}
             </div>
           ) : null}
           {multiShotState.status === 'error' ? (
@@ -2524,7 +2523,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                   alt="selected"
                   className="h-full w-full cursor-zoom-in object-cover"
                   onClick={() => selected.imageUrl && setZoomImageUrl(selected.imageUrl)}
-                  title="點擊放大"
+                  title={t('selectedShot.zoomTitle')}
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
@@ -2535,12 +2534,12 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-stone-950/75 backdrop-blur-sm">
                   <AppIcon name="sparklesAlt" className="h-8 w-8 animate-pulse text-amber-400" />
                   <div className="font-fraunces text-base italic text-amber-300">
-                    {isCurrentPanelVideoInFlight ? '視頻生成中' : '圖片生成中'}
+                    {isCurrentPanelVideoInFlight ? t('selectedShot.videoGeneratingFull') : t('selectedShot.imageGeneratingFull')}
                   </div>
                   <div className="px-6 text-center font-serif-cn text-xs text-stone-300">
                     {isCurrentPanelVideoInFlight
-                      ? 'Kling 模型 30-60 秒,完成後自動更新'
-                      : 'Tencent VOD 30-60 秒,完成後自動更新'}
+                      ? t('selectedShot.klingUpdateHint')
+                      : t('selectedShot.tencentUpdateHint')}
                   </div>
                   <div className="mt-1 h-0.5 w-48 overflow-hidden rounded-full bg-stone-800/60">
                     <div className="h-full w-1/3 animate-[progressSlide_2s_linear_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
@@ -2559,15 +2558,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 const isRateLimit = code === 'RATE_LIMIT'
                 const isViolation = /Violation|Content/i.test(failed.errorMessage ?? '')
                 const headline = isRateLimit
-                  ? 'Tencent VOD 配額限制'
+                  ? t('panelFailure.rateLimit')
                   : isViolation
-                    ? '內容審核被擋'
-                    : '生成失敗'
+                    ? t('panelFailure.violation')
+                    : t('panelFailure.generic')
                 const detail = isRateLimit
-                  ? '同時跑太多任務,Tencent 拒絕了。等 1-2 分鐘後點下方按鈕重試。'
+                  ? t('panelFailure.rateLimitDetail')
                   : isViolation
-                    ? '描述詞被內容過濾擋下。請編輯左側「描述詞」,移除可能違規的字眼後重試。'
-                    : (failed.errorMessage ?? '點下方按鈕重試')
+                    ? t('panelFailure.violationDetail')
+                    : (failed.errorMessage ?? t('panelFailure.retryHint'))
                 return (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-rose-950/85 backdrop-blur-sm">
                     <AppIcon name="alert" className="h-8 w-8 text-rose-300" />
@@ -2583,23 +2582,23 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             </div>
             <div className="bg-stone-900/60 px-4 py-3">
               <div className="font-serif-cn text-stone-100">
-                鏡頭 {String(selectedIndex + 1).padStart(2, '0')}
+                {t('selectedShot.shotLabel', { n: String(selectedIndex + 1).padStart(2, '0') })}
               </div>
               {selected?.videoUrl ? (
                 <div className="mt-1 font-mono text-[14px] tracking-wider text-amber-500">
-                  ✓ 視頻已生成
+                  {t('selectedShot.videoReady')}
                 </div>
               ) : isCurrentPanelVideoInFlight ? (
                 <div className="mt-1 flex items-center gap-1.5 font-mono text-[14px] tracking-wider text-amber-400">
                   <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-                  視頻生成中… 30-60 秒,完成後自動更新
+                  {t('selectedShot.videoGenerating')}
                 </div>
               ) : selected?.imageUrl ? (
                 <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
-                  圖已生成,視頻待跑
+                  {t('selectedShot.imageReadyVideoPending')}
                 </div>
               ) : (
-                <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">尚未生成</div>
+                <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">{t('selectedShot.notGenerated')}</div>
               )}
             </div>
           </div>
@@ -2631,10 +2630,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             >
               <AppIcon name="image" className="h-3.5 w-3.5" />
               {regenPanel.isPending
-                ? '提交中…'
+                ? t('gallery.submitting')
                 : selected?.imageUrl
-                  ? '↻ 重新生成圖'
-                  : '生成圖片'}
+                  ? t('gallery.regenImage')
+                  : t('gallery.generateImage')}
             </button>
             <button
               type="button"
@@ -2642,21 +2641,21 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               onClick={() => handleGenerateVideo()}
               title={
                 !selected?.imageUrl
-                  ? '需要先有靜態圖才能生影片 — 請先點「生成圖片」'
+                  ? t('genBlocked.needImageFirst')
                   : isCurrentPanelVideoInFlight
-                    ? '視頻生成中,請等 worker 完成(~60s)'
-                    : '把這個鏡頭的圖送 video model(專案預設 Kling)生成 5 秒影片'
+                    ? t('genBlocked.videoStillGenerating')
+                    : t('multiShot.tipKlingPerGroup')
               }
               className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2.5 font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="play" className="h-3.5 w-3.5" />
               {generateVideo.isPending
-                ? '提交中…'
+                ? t('gallery.submitting')
                 : isCurrentPanelVideoInFlight
-                  ? '生成中…'
+                  ? t('gallery.generating')
                   : selected?.videoUrl
-                    ? '↻ 重生視頻'
-                    : '生成視頻'}
+                    ? t('gallery.regenVideoArrow')
+                    : t('gallery.generateVideo')}
             </button>
           </div>
           {/* 2026-05-17 — Seedance 2.0 (fal) alternate row. Lets the user
@@ -2667,20 +2666,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               the project-default "生成視頻" CTA above. Disabled state
               tracks the same prerequisites (need image, no inflight). */}
           <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-stone-500">
-            <span className="shrink-0">或用 fal Seedance →</span>
+            <span className="shrink-0">{t('gallery.fal.label')}</span>
             <button
               type="button"
               disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
               onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
               title={
                 !selected?.imageUrl
-                  ? '需要先有靜態圖才能生影片'
-                  : 'fal Seedance 2.0 (1080p + native audio, ~$0.3-0.5/支)'
+                  ? t('genBlocked.needImageFirst')
+                  : t('gallery.fal.seedanceTitle')
               }
               className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="play" className="h-3 w-3" />
-              Seedance (1080p+audio)
+              {t('gallery.fal.seedance')} (1080p+audio)
             </button>
             <button
               type="button"
@@ -2688,13 +2687,13 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
               title={
                 !selected?.imageUrl
-                  ? '需要先有靜態圖才能生影片'
-                  : 'fal Seedance 2.0 Fast (cheap variant, ~$0.1-0.2/支,稍弱)'
+                  ? t('genBlocked.needImageFirst')
+                  : t('gallery.fal.fastTitle')
               }
               className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="play" className="h-3 w-3" />
-              Seedance Fast
+              {t('gallery.fal.seedance')} {t('gallery.fal.fast')}
             </button>
           </div>
           {/* Download row — surface the underlying COS URL as a direct
@@ -2719,7 +2718,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 }`}
               >
                 <AppIcon name="download" className="h-3 w-3" />
-                下載靜態圖
+                {t('downloads.staticImage')}
               </a>
               <a
                 href={selected.videoUrl ?? '#'}
@@ -2735,18 +2734,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 }`}
               >
                 <AppIcon name="download" className="h-3 w-3" />
-                下載影片
+                {t('downloads.video')}
               </a>
             </div>
           ) : null}
           {regenPanel.isError ? (
             <p className="mt-3 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-              {(regenPanel.error as Error)?.message ?? '重生失敗'}
+              {(regenPanel.error as Error)?.message ?? t('regenResult.errorFallback')}
             </p>
           ) : null}
           {regenPanel.isSuccess ? (
             <p className="mt-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-              已送出重生任務,稍候 worker 處理(每張約 30-60s)
+              {t('regenResult.successQueued')}
             </p>
           ) : null}
         </div>
@@ -2768,10 +2767,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[14px] tracking-wider text-amber-600">卡司 · CAST</div>
+              <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('cast.title')}</div>
               {currentEpisode?.episodeNumber ? (
                 <div className="font-mono text-[11px] tracking-wider text-stone-500">
-                  ep {currentEpisode.episodeNumber} 綁定
+                  {t('cast.epBinding', { episode: currentEpisode.episodeNumber })}
                 </div>
               ) : null}
             </div>
@@ -2831,7 +2830,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     if (ap) {
                       resolved = {
                         id: ap.id ?? null,
-                        label: ap.changeReason || `造型 ${(ap.appearanceIndex ?? 0) + 1}`,
+                        label: ap.changeReason || t('cast.appearanceLabel', { n: (ap.appearanceIndex ?? 0) + 1 }),
                         imageUrl: ap.imageUrl ?? null,
                         isDefault: false,
                       }
@@ -2841,7 +2840,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                     const ap = appearances[0]
                     resolved = {
                       id: ap.id ?? null,
-                      label: ap.changeReason || '初始形象',
+                      label: ap.changeReason || t('cast.initialAppearance'),
                       imageUrl: ap.imageUrl ?? null,
                       isDefault: true,
                     }
@@ -2852,8 +2851,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                       className="flex items-center gap-2.5 rounded-sm border border-stone-800/60 bg-stone-900/40 px-2.5 py-1.5"
                       title={
                         resolved?.isDefault
-                          ? `這集沒綁造型 — 用第一個造型(${resolved.label})。要改去劇本拆解頁設定。`
-                          : `這集綁定造型: ${resolved?.label ?? '(無)'}`
+                          ? t('cast.titleDefault', { label: resolved.label })
+                          : t('cast.titleBound', { label: resolved?.label ?? t('cast.titleBoundNone') })
                       }
                     >
                       <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-sm bg-gradient-to-br from-amber-500 to-rose-700">
@@ -2871,17 +2870,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                         <div className="truncate font-mono text-[11px] tracking-wider text-amber-500/70">
                           {resolved
                             ? resolved.isDefault
-                              ? `${resolved.label} (預設)`
+                              ? t('cast.appearancePresetSuffix', { label: resolved.label })
                               : resolved.label
-                            : '尚無造型'}
+                            : t('cast.noAppearance')}
                         </div>
                       </div>
                       {resolved?.isDefault && appearances.length > 1 ? (
                         <span
                           className="flex-shrink-0 rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-amber-300"
-                          title="這個角色有多個造型,但這集還沒綁定"
+                          title={t('cast.unboundChipTitle')}
                         >
-                          未綁
+                          {t('cast.unboundChipLabel')}
                         </span>
                       ) : null}
                     </div>
@@ -2889,14 +2888,14 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
                 })}
               </div>
             ) : (
-              <p className="font-serif-cn text-xs text-stone-500">(無關聯角色)</p>
+              <p className="font-serif-cn text-xs text-stone-500">{t('cast.noCharacters')}</p>
             )}
           </div>
 
           <div>
-            <div className="mb-2 font-mono text-[14px] tracking-wider text-amber-600">註記 · NOTES</div>
+            <div className="mb-2 font-mono text-[14px] tracking-wider text-amber-600">{t('notes.title')}</div>
             <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-2 font-serif-cn text-xs leading-relaxed text-stone-400">
-              {selected?.videoPrompt ?? '(無註記)'}
+              {selected?.videoPrompt ?? t('notes.empty')}
             </div>
           </div>
         </div>
