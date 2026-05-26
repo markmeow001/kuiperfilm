@@ -1,0 +1,61 @@
+{
+  "header": {
+    "brand": "Kuiper",
+    "brandSubtitle": "Studio",
+    "tagline": "AI · MANHUA · STUDIO",
+    "teamLink": "Team",
+    "teamLinkTitle": "Workspace / Team management",
+    "profileLink": "Settings",
+    "profileLinkTitle": "Settings",
+    "adminLink": "Admin",
+    "adminLinkTitle": "Admin console",
+    "logout": "Sign out"
+  },
+  "loading": "Loading…",
+  "title": {
+    "kicker": "MY PROJECTS",
+    "heading": "My projects",
+    "subtitle": "Manage your AI cinematic projects"
+  },
+  "search": {
+    "placeholder": "Search projects…",
+    "clear": "Clear",
+    "search": "Search"
+  },
+  "grid": {
+    "newProject": "New project",
+    "deleteTitle": "Delete project",
+    "deleteConfirm": "Delete project \"{name}\"? This cannot be undone.",
+    "deleteFailed": "Delete failed",
+    "untitledDraft": "Untitled draft"
+  },
+  "empty": {
+    "noMatch": "No matching projects",
+    "noneYet": "No projects yet — click \"New project\" above to start"
+  },
+  "projectHome": {
+    "overviewKicker": "Project Overview",
+    "projectIdLabel": "PROJECT_ID",
+    "collaboratorsButton": "👥 Collaborators",
+    "collaboratorsTitle": "Manage collaborators for this project (per-project grant)",
+    "activityButton": "📜 Activity",
+    "activityTitle": "View activity log",
+    "untitledProject": "Untitled script",
+    "continueCta": "Continue to {label} step",
+    "statsKicker": "Stats",
+    "statCharacters": "Characters",
+    "statLocations": "Scenes",
+    "statPanels": "Panels",
+    "statVideos": "Videos"
+  },
+  "switcher": {
+    "title": "Switch workspace",
+    "personal": "Personal",
+    "checked": "✓",
+    "loading": "Loading…",
+    "noJoinable": "No workspaces available",
+    "header": "Switch workspace",
+    "manageLink": "Manage workspaces →",
+    "projectCount": "{count} projects"
+  }
+}

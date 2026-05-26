@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useNotificationSummary } from '@/lib/query/hooks/useNotificationSummary'
 import { queryKeys } from '@/lib/query/keys'
@@ -33,6 +34,7 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ locale }: NotificationBellProps) {
+  const t = useTranslations('collab.bell')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const { data, refetch } = useNotificationSummary()
@@ -91,8 +93,8 @@ export function NotificationBell({ locale }: NotificationBellProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="relative flex items-center justify-center rounded-sm border border-transparent p-1.5 transition-colors hover:border-amber-900/30 hover:bg-stone-900/40"
-        title={badge > 0 ? `${badge} 個待處理通知` : '通知'}
-        aria-label={badge > 0 ? `通知（${badge} 個待處理）` : '通知'}
+        title={badge > 0 ? t('titleWithCount', { count: badge }) : t('title')}
+        aria-label={badge > 0 ? t('labelWithCount', { count: badge }) : t('labelDefault')}
       >
         <AppIcon name="bell" className="h-4 w-4 text-stone-400 group-hover:text-amber-300" />
         {badge > 0 ? (
@@ -105,23 +107,26 @@ export function NotificationBell({ locale }: NotificationBellProps) {
       {open ? (
         <div className="absolute right-0 top-full z-40 mt-2 w-96 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
           <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
-            通知
+            {t('title')}
           </div>
           <div className="max-h-[28rem] overflow-y-auto">
             {/* Section 1 — incoming requests */}
             {data && data.incomingRequests.length > 0 ? (
               <div className="border-b border-amber-900/20">
                 <div className="px-4 pb-1 pt-3 font-fraunces text-xs italic text-amber-500/80">
-                  收到的編輯請求（{data.incomingRequests.length}）
+                  {t('sectionIncoming', { count: data.incomingRequests.length })}
                 </div>
                 {data.incomingRequests.map((r) => (
                   <div key={r.id} className="px-4 py-2">
                     <div className="font-serif-cn text-sm text-stone-200">
-                      @{r.requester.displayName || r.requester.name || '匿名'} 想編輯《{r.project.name || '未命名'}》
+                      {t('incomingDescription', {
+                        name: r.requester.displayName || r.requester.name || t('anonymousActor'),
+                        project: r.project.name || t('untitledProject'),
+                      })}
                     </div>
                     {r.message ? (
                       <div className="mt-1 font-fraunces text-[11px] italic text-stone-500">
-                        留言: {r.message}
+                        {t('messagePrefix')} {r.message}
                       </div>
                     ) : null}
                     <div className="mt-2 flex gap-2">
@@ -130,14 +135,14 @@ export function NotificationBell({ locale }: NotificationBellProps) {
                         onClick={() => resolveRequest(r.id, 'approve')}
                         className="rounded-sm border border-emerald-600/50 bg-emerald-600/10 px-2 py-0.5 font-mono text-[11px] text-emerald-300 transition-colors hover:bg-emerald-600/20"
                       >
-                        批准
+                        {t('actionApprove')}
                       </button>
                       <button
                         type="button"
                         onClick={() => resolveRequest(r.id, 'deny')}
                         className="rounded-sm border border-stone-700 bg-stone-900 px-2 py-0.5 font-mono text-[11px] text-stone-400 transition-colors hover:border-rose-500/50 hover:text-rose-300"
                       >
-                        拒絕
+                        {t('actionDeny')}
                       </button>
                     </div>
                   </div>
@@ -149,12 +154,12 @@ export function NotificationBell({ locale }: NotificationBellProps) {
             {data && data.myRequests.length > 0 ? (
               <div className="border-b border-amber-900/20">
                 <div className="px-4 pb-1 pt-3 font-fraunces text-xs italic text-amber-500/80">
-                  你的請求
+                  {t('sectionMyRequests')}
                 </div>
                 {data.myRequests.map((r) => (
                   <div key={r.id} className="px-4 py-2">
                     <div className="font-serif-cn text-sm text-stone-300">
-                      《{r.project.name || '未命名'}》— {myRequestStatusLabel(r.status)}
+                      《{r.project.name || t('untitledProject')}》— {myRequestStatusLabel(r.status, t)}
                     </div>
                   </div>
                 ))}
@@ -165,15 +170,15 @@ export function NotificationBell({ locale }: NotificationBellProps) {
             {data && data.adminDeletions.length > 0 ? (
               <div>
                 <div className="px-4 pb-1 pt-3 font-fraunces text-xs italic text-rose-400/80">
-                  ⚠️ 你的專案被管理員刪除
+                  {t('sectionAdminDeletions')}
                 </div>
                 {data.adminDeletions.map((d) => (
                   <div key={d.projectId} className="px-4 py-2">
                     <div className="font-serif-cn text-sm text-stone-300">
-                      《{d.projectName || '未命名'}》
+                      《{d.projectName || t('untitledProject')}》
                     </div>
                     <div className="mt-1 font-fraunces text-[11px] italic text-stone-500">
-                      {restoreCountdownLabel(d.deletedAt)}
+                      {restoreCountdownLabel(d.deletedAt, t)}
                     </div>
                     <div className="mt-2 flex gap-2">
                       <button
@@ -181,7 +186,7 @@ export function NotificationBell({ locale }: NotificationBellProps) {
                         onClick={() => restoreProject(d.projectId)}
                         className="rounded-sm border border-amber-600/50 bg-amber-600/10 px-2 py-0.5 font-mono text-[11px] text-amber-300 transition-colors hover:bg-amber-600/20"
                       >
-                        恢復
+                        {t('actionRestore')}
                       </button>
                     </div>
                   </div>
@@ -195,7 +200,7 @@ export function NotificationBell({ locale }: NotificationBellProps) {
             data.myRequests.length === 0 &&
             data.adminDeletions.length === 0 ? (
               <div className="px-4 py-6 text-center font-fraunces text-xs italic text-stone-500">
-                沒有新通知
+                {t('empty')}
               </div>
             ) : null}
           </div>
@@ -206,7 +211,7 @@ export function NotificationBell({ locale }: NotificationBellProps) {
               className="block font-mono text-[11px] tracking-wider text-amber-500/70 hover:text-amber-300"
               onClick={() => setOpen(false)}
             >
-              查看所有專案 →
+              {t('viewAll')}
             </Link>
           </div>
         </div>
@@ -215,18 +220,25 @@ export function NotificationBell({ locale }: NotificationBellProps) {
   )
 }
 
-function myRequestStatusLabel(status: 'pending' | 'approved' | 'denied' | 'expired'): string {
-  if (status === 'approved') return '已批准 ✓'
-  if (status === 'denied') return '已拒絕'
-  if (status === 'expired') return '已逾期'
-  return '等待回應…'
+// Helpers take the bell namespace's translator so they don't need their
+// own `useTranslations` call (can't call hooks inside non-component fn).
+type BellT = ReturnType<typeof useTranslations>
+
+function myRequestStatusLabel(
+  status: 'pending' | 'approved' | 'denied' | 'expired',
+  t: BellT,
+): string {
+  if (status === 'approved') return t('statusApproved')
+  if (status === 'denied') return t('statusDenied')
+  if (status === 'expired') return t('statusExpired')
+  return t('statusPending')
 }
 
-function restoreCountdownLabel(deletedAt: string | null): string {
+function restoreCountdownLabel(deletedAt: string | null, t: BellT): string {
   if (!deletedAt) return ''
   const deletedTime = new Date(deletedAt).getTime()
   const expiresAt = deletedTime + 30 * 24 * 60 * 60 * 1000
   const daysLeft = Math.max(0, Math.ceil((expiresAt - Date.now()) / (24 * 60 * 60 * 1000)))
-  if (daysLeft <= 0) return '已逾期，無法恢復'
-  return `剩 ${daysLeft} 天可恢復`
+  if (daysLeft <= 0) return t('deletedExpired')
+  return t('deletedDaysLeft', { days: daysLeft })
 }

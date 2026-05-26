@@ -12,6 +12,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
@@ -48,6 +49,7 @@ interface PanelLike {
 }
 
 export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
+  const t = useTranslations('v2Home.projectHome')
   const projectQuery = useProjectData(projectId)
   // Phase 12.5 — show 協作者 management button only to owner / admin.
   // Other roles (ws_owner / editor / viewer) can see the project but
@@ -88,25 +90,25 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
   const nextStep =
     V2_STEPS.find((s) => s.id !== 'home' && stepStatus[s.id] !== 'done')?.id ?? 'final'
 
-  const projectName = project?.name?.trim() ? project.name : '未命名劇本'
+  const projectName = project?.name?.trim() ? project.name : t('untitledProject')
 
   return (
     <div className="px-12 py-10">
       <div className="max-w-5xl">
-        <p className="mb-2 font-fraunces text-base italic text-amber-500/80">Project Overview</p>
+        <p className="mb-2 font-fraunces text-base italic text-amber-500/80">{t('overviewKicker')}</p>
         <h2 className="font-serif-cn text-3xl font-medium tracking-wide text-stone-100">
           《{projectName}》
         </h2>
         <div className="mt-2 flex items-center gap-3 font-mono text-[11px] tracking-wider text-stone-500">
-          <span>PROJECT_ID · {projectId}</span>
+          <span>{t('projectIdLabel')} · {projectId}</span>
           {canManageCollaborators ? (
             <button
               type="button"
               onClick={() => setCollabModalOpen(true)}
               className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/15"
-              title="管理此專案的協作者 (per-project grant)"
+              title={t('collaboratorsTitle')}
             >
-              👥 協作者
+              {t('collaboratorsButton')}
             </button>
           ) : null}
           {/* Activity log — any read access can open. Transparency by design. */}
@@ -114,9 +116,9 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
             type="button"
             onClick={() => setAuditModalOpen(true)}
             className="rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-0.5 font-mono text-[11px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-300"
-            title="查看活動記錄"
+            title={t('activityTitle')}
           >
-            📜 活動
+            {t('activityButton')}
           </button>
         </div>
 
@@ -158,7 +160,7 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
             href={`/${locale}/v2/workspace/${projectId}/${nextStep}`}
             className="inline-flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400"
           >
-            繼續到 {V2_STEPS.find((s) => s.id === nextStep)?.label} step
+            {t('continueCta', { label: V2_STEPS.find((s) => s.id === nextStep)?.label ?? '' })}
             <AppIcon name="chevronRight" className="h-4 w-4" />
           </Link>
         </div>
@@ -169,12 +171,12 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
         </div>
 
         <div className="mt-12 rounded-sm border border-stone-800/60 bg-stone-900/30 p-6">
-          <div className="mb-3 font-fraunces text-sm italic text-amber-500/80">Stats</div>
+          <div className="mb-3 font-fraunces text-sm italic text-amber-500/80">{t('statsKicker')}</div>
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Stat label="角色" value={charCount} />
-            <Stat label="場景" value={locCount} />
-            <Stat label="分鏡" value={allPanels.length} />
-            <Stat label="已生視頻" value={panelsWithVideo} />
+            <Stat label={t('statCharacters')} value={charCount} />
+            <Stat label={t('statLocations')} value={locCount} />
+            <Stat label={t('statPanels')} value={allPanels.length} />
+            <Stat label={t('statVideos')} value={panelsWithVideo} />
           </dl>
         </div>
       </div>
