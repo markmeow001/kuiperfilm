@@ -287,6 +287,7 @@ export default function WorkspacesPage() {
           workspace={selectedWs}
           role={role}
           myUserId={myUserId}
+          locale={locale}
           onClose={() => setSelectedWs(null)}
           onChanged={reload}
         />
@@ -515,11 +516,12 @@ function CreateWorkspaceModal({ orgs, role, onClose, onCreated }: {
 // ─── Workspace detail drawer ───────────────────────────────────────
 
 function WorkspaceDetailDrawer({
-  workspace, role, myUserId, onClose, onChanged,
+  workspace, role, myUserId, locale, onClose, onChanged,
 }: {
   workspace: Workspace
   role: Role
   myUserId: string
+  locale: string
   onClose: () => void
   onChanged: () => void
 }) {
@@ -702,6 +704,19 @@ function WorkspaceDetailDrawer({
                 <span className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[14px] uppercase tracking-wider text-amber-300">
                   {isOwner ? 'OWNER' : 'ADMIN ACCESS'}
                 </span>
+              )}
+              {/* Phase 5 (2026-05-27) — entry into the workspace's API key
+                  console. Visibility-gated to owner/admin because the
+                  underlying management API enforces the same. Member-tier
+                  users wouldn't see anything useful even if they reached
+                  the page (the GET /api-keys call returns 403). */}
+              {canManage && (
+                <Link
+                  href={`/${locale}/workspaces/${workspace.id}/developer`}
+                  className="rounded-sm border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[14px] uppercase tracking-wider text-indigo-300 hover:border-indigo-500/60 hover:bg-indigo-500/20"
+                >
+                  🔑 開發者
+                </Link>
               )}
             </div>
           </div>
