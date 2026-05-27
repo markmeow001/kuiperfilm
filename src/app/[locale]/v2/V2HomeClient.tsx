@@ -187,6 +187,18 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
             {/* Phase 12.5 — bell. Same component as project pages. */}
             <NotificationBell locale={locale} />
             <span className="text-stone-200">{session.user?.name ?? session.user?.email ?? ''}</span>
+            {/* Phase T-3 (2026-05-27) — Playground / Freedom Mode entry
+                point. Project-independent tool so it lives in the global
+                header, not the per-project sidebar. Violet accent to
+                visually separate from amber project actions. */}
+            <Link
+              href={`/${locale}/playground`}
+              className="flex items-center gap-1 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-violet-300 transition-colors hover:bg-violet-500/20 hover:border-violet-400"
+              title="創作 Playground · 不綁專案,直接上傳素材生成單張圖片或單支影片"
+            >
+              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">創作 Playground</span>
+            </Link>
             {/* 團隊 / Workspaces — visible to every signed-in role. The
                 target page (/[locale]/workspaces) hides creation /
                 management affordances when the requester isn't
