@@ -35,6 +35,7 @@ import {
   useUploadPlaygroundReference,
   useSubmitPlaygroundRun,
   usePlaygroundRuns,
+  usePlaygroundCostEstimate,
   type PlaygroundRunRow,
 } from '@/lib/query/mutations/playground-mutations'
 
@@ -77,9 +78,56 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   // Output state
   const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
 
+  // T-3 cost estimate (live) — refetches when model/outputType/duration changes.
+  // Resolution isn't currently a user-controlled state in Playground T-1/T-2
+  // (defaults to whatever the model defaults), so we omit it. If the user
+  // later sees "—" cost, the pricing entry is capability-based and probably
+  // needs resolution to compute — Phase T-4 can add a resolution dropdown.
+  const costEstimate = usePlaygroundCostEstimate({
+    modelKey,
+    outputType,
+    ...(outputType === 'video' ? { durationSec } : {}),
+  })
+
   // File picker refs
   const imageInputRef = useRef<HTMLInputElement | null>(null)
   const videoInputRef = useRef<HTMLInputElement | null>(null)
+  // Phase T-3 — prompt textarea ref for caret-aware @-token insertion.
+  // Without this, "insert @image1" would have to append at end-of-text and
+  // users couldn't position the reference mid-sentence.
+  const promptRef = useRef<HTMLTextAreaElement | null>(null)
+
+  /**
+   * Phase T-3 — insert a reference token (@image1 / @video1 etc) at the
+   * current caret position in the prompt textarea. Replaces selection
+   * when there is one. Keeps focus + moves caret to right after the
+   * inserted token so the user can keep typing.
+   */
+  function insertReferenceToken(token: string) {
+    const ta = promptRef.current
+    if (!ta) {
+      setPrompt((prev) => (prev ? `${prev} ${token}` : token))
+      return
+    }
+    const start = ta.selectionStart ?? prompt.length
+    const end = ta.selectionEnd ?? prompt.length
+    const before = prompt.slice(0, start)
+    const after = prompt.slice(end)
+    // Add a leading space if the previous char isn't whitespace, and a
+    // trailing space if the next char isn't whitespace. Avoids 'rooftop@image1'
+    // mid-word collisions that would confuse the model.
+    const needLeadingSpace = before.length > 0 && !/\s$/.test(before)
+    const needTrailingSpace = after.length > 0 && !/^\s/.test(after)
+    const insert = `${needLeadingSpace ? ' ' : ''}${token}${needTrailingSpace ? ' ' : ''}`
+    const next = before + insert + after
+    setPrompt(next)
+    // Restore focus + position caret right after the inserted token.
+    setTimeout(() => {
+      ta.focus()
+      const caretPos = start + insert.length
+      ta.setSelectionRange(caretPos, caretPos)
+    }, 0)
+  }
 
   // Build model lists for both output modes; picker filters by current
   // outputType. Both populated from useUserModels (admin-enabled lists).
@@ -159,14 +207,20 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
     setRefVideo(null)
   }
 
-  async function handleRun() {
+  async function handleRun(overrideModelKey?: string) {
     if (!prompt.trim()) {
       alert('請先輸入提示詞')
       return
     }
-    if (!modelKey) {
+    const useModelKey = overrideModelKey ?? modelKey
+    if (!useModelKey) {
       alert('請先選擇模型')
       return
+    }
+    // Phase T-3 — when this is a cross-model swap, also sync the picker so
+    // subsequent runs and the cost estimate reflect the new selection.
+    if (overrideModelKey && overrideModelKey !== modelKey) {
+      setModelKey(overrideModelKey)
     }
     try {
       const result = await submit.mutateAsync({
@@ -175,7 +229,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
         referenceVideos: refVideo ? [refVideo.key] : [],
         referenceText: refText.trim() || undefined,
         outputType,
-        modelKey,
+        modelKey: useModelKey,
         aspectRatio,
         ...(outputType === 'video' ? { durationSec } : {}),
       })
@@ -243,12 +297,45 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
           {/* Prompt */}
           <div className="mb-5">
             <textarea
+              ref={promptRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={6}
-              placeholder="描述你想生成的畫面... 譬如「賽博龐克城市夜景, 巨型廣告牌特寫, 雨夜霓虹倒映」"
+              placeholder="描述你想生成的畫面... 譬如「賽博龐克城市夜景, 巨型廣告牌特寫, 雨夜霓虹倒映」&#10;&#10;💡 上傳參考素材後可點下方紫色 chip 插入 @image1 / @video1 引用"
               className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
             />
+            {/* Phase T-3 — @-token quick-insert toolbar.
+                Shows up only when there's at least one uploaded ref. Click
+                inserts @imageN / @videoN at the prompt's caret position. */}
+            {(refImages.length > 0 || refVideo) ? (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-stone-600">引用</span>
+                {refImages.map((_, idx) => {
+                  const token = `@image${idx + 1}`
+                  return (
+                    <button
+                      type="button"
+                      key={`tok-${token}`}
+                      onClick={() => insertReferenceToken(token)}
+                      title={`插入 ${token} 引用第 ${idx + 1} 張參考圖`}
+                      className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+                    >
+                      {token}
+                    </button>
+                  )
+                })}
+                {refVideo ? (
+                  <button
+                    type="button"
+                    onClick={() => insertReferenceToken('@video1')}
+                    title="插入 @video1 引用參考影片"
+                    className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+                  >
+                    @video1
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           {/* Reference images grid */}
@@ -426,6 +513,35 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
             )}
           </div>
 
+          {/* Phase T-3 — cross-model chip strip. After a run completes,
+              show 2-3 OTHER user-enabled models of the same outputType
+              for one-click re-execute with the same prompt + refs.
+              Encourages comparison shopping without re-typing. */}
+          {latestRun?.status === 'succeeded' && activeModels.length > 1 ? (
+            <div className="mb-3 rounded-sm border border-stone-800 bg-stone-900/30 p-3">
+              <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                您可以繼續：用其他模型試同一 prompt
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {activeModels
+                  .filter((m) => m.value !== modelKey)
+                  .slice(0, 4)
+                  .map((m) => (
+                    <button
+                      type="button"
+                      key={m.value}
+                      onClick={() => handleRun(m.value)}
+                      disabled={isBusy}
+                      className="rounded-sm border border-stone-700 bg-stone-900/40 px-3 py-1.5 font-mono text-[11px] text-stone-300 hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                      title={`用 ${m.label} 重跑同一 prompt + refs`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ) : null}
+
           {/* History rail */}
           <div className="mt-2">
             <div className="mb-2 flex items-center justify-between font-mono text-[12px] uppercase tracking-wider">
@@ -563,9 +679,23 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
           >
             重置
           </button>
+          {/* Phase T-3 — live cost estimate next to RUN.
+              "—" when pricing entry doesn't exist or capability tier didn't
+              match. Hover for the detail string ("0.0960/秒 × 5s" etc). */}
+          <div
+            className="text-right"
+            title={costEstimate.data?.detail ?? '尚無計費資訊'}
+          >
+            <div className="font-mono text-[10px] uppercase tracking-wider text-stone-600">估算成本</div>
+            <div className="font-mono text-[14px] text-amber-300">
+              {typeof costEstimate.data?.amountUsd === 'number'
+                ? `≈ $${costEstimate.data.amountUsd.toFixed(costEstimate.data.amountUsd < 1 ? 4 : 2)}`
+                : '—'}
+            </div>
+          </div>
           <button
             type="button"
-            onClick={handleRun}
+            onClick={() => handleRun()}
             disabled={isBusy || !modelKey || !prompt.trim()}
             className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-2.5 font-mono text-[13px] font-semibold uppercase tracking-wider text-stone-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
           >

@@ -103,6 +103,46 @@ export interface PlaygroundRunRow {
   completedAt: string | null
 }
 
+export interface PlaygroundCostEstimate {
+  amountUsd: number | null
+  unit: 'flat' | 'per_second' | 'capability' | 'unknown'
+  detail?: string
+  perSecond?: number
+  perGeneration?: number
+}
+
+/**
+ * Phase T-3 (2026-05-27) — Playground cost estimate.
+ * Fetches /api/playground/estimate-cost for the current selection.
+ * Returns null amount when pricing is unknown; UI shows "—" in that case.
+ */
+export function usePlaygroundCostEstimate(params: {
+  modelKey: string
+  outputType: 'image' | 'video'
+  durationSec?: number
+  resolution?: string
+  generationMode?: string
+}) {
+  const { modelKey, outputType, durationSec, resolution, generationMode } = params
+  return useQuery({
+    queryKey: ['playgroundCostEstimate', modelKey, outputType, durationSec, resolution, generationMode],
+    enabled: Boolean(modelKey),
+    queryFn: async (): Promise<PlaygroundCostEstimate> => {
+      const sp = new URLSearchParams({ modelKey, outputType })
+      if (durationSec) sp.set('durationSec', String(durationSec))
+      if (resolution) sp.set('resolution', resolution)
+      if (generationMode) sp.set('generationMode', generationMode)
+      return await requestJsonWithError(
+        `/api/playground/estimate-cost?${sp.toString()}`,
+        { method: 'GET' },
+        'Failed to estimate cost',
+      ) as PlaygroundCostEstimate
+    },
+    // Pricing is essentially static — only changes on deploy. 5min stale is plenty.
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 export function usePlaygroundRuns(workspaceId?: string | null) {
   return useQuery({
     queryKey: ['playgroundRuns', workspaceId ?? 'personal'],
