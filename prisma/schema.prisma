@@ -475,6 +475,15 @@ model NovelPromotionStoryboard {
   // set; falls back to wrapping multiShotVideoUrl in a single-element
   // array for legacy storyboards.
   multiShotClipUrls   String?               @db.Text
+  // Phase S (2026-05-27) — per-group motion / camera reference video.
+  // User uploads a short clip (≤15s, ≤50MB, mp4/mov/webm) and the
+  // worker passes it to the R2V endpoint of whichever Seedance vendor
+  // is selected: fal.video_urls[], atlascloud.reference_videos[],
+  // BobAPI content[]:video_url, ARK content[]:video_url. NULL = no
+  // motion ref (default; image-only flow). Stored as COS key, signed
+  // via toSignedUrlIfCos at worker time. Single field because all four
+  // vendors converge on "1 reference video per generation".
+  referenceVideoUrl   String?               @db.Text
   panels              NovelPromotionPanel[]
   clip                NovelPromotionClip    @relation(fields: [clipId], references: [id], onDelete: Cascade)
   episode             NovelPromotionEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)

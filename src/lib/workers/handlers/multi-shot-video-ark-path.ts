@@ -39,6 +39,7 @@ import type { TaskJobData } from '@/lib/task/types'
 import { ArkSeedanceVideoGenerator } from '@/lib/generators/ark'
 import {
   assertTaskActive,
+  toSignedUrlIfCos,
   uploadVideoSourceToCos,
   waitExternalResult,
 } from '../utils'
@@ -286,11 +287,13 @@ export async function runMultiShotArkComposite(params: {
   // Episode-level appearance bindings (all panels in a group share an
   // episode via storyboard).
   const episodeBindings = new Map<string, string>()
+  // Phase S — per-group motion/camera reference video.
+  let groupReferenceVideoUrl: string | null = null
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true },
+      select: { episodeId: true, referenceVideoUrl: true },
     })
     if (sb?.episodeId) {
       const rows = await prisma.episodeCharacter.findMany({
@@ -300,6 +303,9 @@ export async function runMultiShotArkComposite(params: {
       for (const row of rows) {
         if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
       }
+    }
+    if (sb?.referenceVideoUrl) {
+      groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
   for (const [charId, appearanceId] of charOverrideById) {
@@ -459,6 +465,11 @@ export async function runMultiShotArkComposite(params: {
       // Fast variant rejects 1080p — caught upstream by ark.ts validator
       // (modelSpec.resolutionOptions check), not silently swallowed.
       ...(params.resolution ? { resolution: params.resolution } : {}),
+      // Phase S — ARK Seedance 2.0 multi-modal `content[]` accepts a
+      // single `referenceVideoUrl` (signed COS URL). Generator gates on
+      // `modelSpec.supportsMultiModalReference` so non-2.0 models reject
+      // it cleanly instead of silently dropping.
+      ...(groupReferenceVideoUrl ? { referenceVideoUrl: groupReferenceVideoUrl } : {}),
     },
   })
 

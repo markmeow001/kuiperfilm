@@ -49,6 +49,10 @@ interface PanelLike {
   location?: string | null
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
+  // Phase S — needed to resolve which storyboard a group belongs to so
+  // the GroupCard can hand the reference-video upload widget the right
+  // storyboardId. All panels in a multi-shot group share one storyboard.
+  storyboardId?: string | null
 }
 
 type UpdatePanelTextMutation = UseMutationResult<
@@ -134,6 +138,13 @@ interface V2GroupsLayoutProps {
    * 95s for a 180s target). When null, callers preserve legacy behavior.
    */
   targetDurationSec?: number | null
+  /** Phase S (2026-05-27) — storyboardId → already-signed referenceVideoUrl
+   *  lookup. GroupCard uses `panels[0]?.storyboardId` to derive which entry
+   *  to consume. Each group has its own reference video; this map covers
+   *  every storyboard in the current episode. */
+  referenceVideoByStoryboardId?: Record<string, string | null>
+  /** Phase S — used by the upload mutation + cache invalidation. */
+  episodeId?: string | null
   onRegenerateGroup: (
     groupId: string,
     panelIds: string[],
@@ -172,6 +183,8 @@ export function V2GroupsLayout({
   canEdit = true,
   viewerTip,
   targetDurationSec = null,
+  referenceVideoByStoryboardId,
+  episodeId = null,
   onRegenerateGroup,
 }: V2GroupsLayoutProps) {
   const groups = useMemo(() => {
@@ -295,6 +308,11 @@ export function V2GroupsLayout({
               const accent = accentForOrdinal(idx)
               const groupLabel = `GROUP ${String(ordinal).padStart(2, '0')}`
               const timing = groupTimings[idx]
+              const groupStoryboardId = g.panels[0]?.storyboardId ?? null
+              const groupReferenceVideoUrl =
+                groupStoryboardId && referenceVideoByStoryboardId
+                  ? referenceVideoByStoryboardId[groupStoryboardId] ?? null
+                  : null
               return (
                 <GroupCard
                   key={g.groupId}
@@ -318,6 +336,9 @@ export function V2GroupsLayout({
                   projectVisualStyleId={projectVisualStyleId}
                   canEdit={canEdit}
                   viewerTip={viewerTip}
+                  groupStoryboardId={groupStoryboardId}
+                  groupReferenceVideoUrl={groupReferenceVideoUrl}
+                  episodeId={episodeId}
                   onRegenerate={(panelIds, overrides) =>
                     onRegenerateGroup(g.groupId, panelIds, overrides)
                   }

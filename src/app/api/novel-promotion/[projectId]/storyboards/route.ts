@@ -4,6 +4,7 @@ import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { decodePanelCharacters } from '@/lib/novel-promotion/panel-characters-decode'
+import { getSignedUrl } from '@/lib/cos'
 
 /**
  * GET /api/novel-promotion/[projectId]/storyboards
@@ -116,9 +117,18 @@ export const GET = apiHandler(async (
     // panel-characters-decode.ts for shape history.
     const normalised = (processedStoryboards as Array<{
         panels?: Array<{ id?: string; characters?: string | unknown; srtSegment?: string | null; [k: string]: unknown }>
+        referenceVideoUrl?: string | null
         [k: string]: unknown
     }>).map((sb) => ({
         ...sb,
+        // Phase S (2026-05-27) — sign the per-group motion reference video
+        // COS key for browser playback. Empty / null stays null.
+        // Worker still reads the raw key from DB; this is read-only display.
+        referenceVideoUrl: sb.referenceVideoUrl
+            ? (sb.referenceVideoUrl.startsWith('video/') || sb.referenceVideoUrl.startsWith('images/')
+                ? getSignedUrl(sb.referenceVideoUrl, 3600)
+                : sb.referenceVideoUrl)
+            : null,
         panels: (sb.panels ?? []).map((p) => {
             const panelId = typeof p.id === 'string' ? p.id : ''
             const voiceLines = panelId ? voiceLinesByPanelId.get(panelId) ?? [] : []

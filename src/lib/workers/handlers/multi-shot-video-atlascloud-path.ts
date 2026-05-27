@@ -377,11 +377,15 @@ export async function runMultiShotAtlasCloudComposite(params: {
 
   // Episode-level appearance bindings (same shape as BobAPI path).
   const episodeBindings = new Map<string, string>()
+  // Phase S — per-group motion/camera reference video. Selected in the
+  // same findUnique to avoid an extra round-trip. Signed for fal/AtlasCloud
+  // body consumption; null when user hasn't uploaded one.
+  let groupReferenceVideoUrl: string | null = null
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true },
+      select: { episodeId: true, referenceVideoUrl: true },
     })
     if (sb?.episodeId) {
       const rows = await prisma.episodeCharacter.findMany({
@@ -391,6 +395,9 @@ export async function runMultiShotAtlasCloudComposite(params: {
       for (const row of rows) {
         if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
       }
+    }
+    if (sb?.referenceVideoUrl) {
+      groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
 
@@ -633,6 +640,12 @@ export async function runMultiShotAtlasCloudComposite(params: {
       aspectRatio,
       generateAudio: sound,
       ...(referenceImages.length > 0 ? { referenceImages } : {}),
+      // Phase S — forward per-group motion/camera reference video to
+      // AtlasCloud's reference_videos[] (max 3, we send the 1 we have).
+      // Skipped when user hasn't uploaded one or when the mode is t2v
+      // (text-only models ignore reference inputs anyway, but pass-through
+      // keeps the contract uniform; generator gates on r2v mode).
+      ...(groupReferenceVideoUrl ? { referenceVideos: [groupReferenceVideoUrl] } : {}),
     },
   })
 

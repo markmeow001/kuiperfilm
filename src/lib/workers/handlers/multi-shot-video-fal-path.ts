@@ -297,11 +297,13 @@ export async function runMultiShotFalComposite(params: {
 
   // Episode-level appearance bindings (same as other vendor paths).
   const episodeBindings = new Map<string, string>()
+  // Phase S — per-group motion/camera reference video (mirrors atlascloud path).
+  let groupReferenceVideoUrl: string | null = null
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true },
+      select: { episodeId: true, referenceVideoUrl: true },
     })
     if (sb?.episodeId) {
       const rows = await prisma.episodeCharacter.findMany({
@@ -311,6 +313,9 @@ export async function runMultiShotFalComposite(params: {
       for (const row of rows) {
         if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
       }
+    }
+    if (sb?.referenceVideoUrl) {
+      groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
 
@@ -496,6 +501,9 @@ export async function runMultiShotFalComposite(params: {
       aspectRatio,
       generateAudio: sound,
       ...(referenceImages.length > 0 ? { referenceImages } : {}),
+      // Phase S — fal r2v video_urls[] takes up to 3 (cited as @Video1).
+      // We send the 1 we have when user uploaded a per-group motion ref.
+      ...(groupReferenceVideoUrl ? { referenceVideos: [groupReferenceVideoUrl] } : {}),
     },
   })
 

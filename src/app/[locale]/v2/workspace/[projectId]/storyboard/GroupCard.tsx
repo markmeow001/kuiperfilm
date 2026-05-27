@@ -38,6 +38,10 @@ import {
   computeGroupRecommendedDurationSec,
 } from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
+import {
+  useUploadGroupReferenceVideo,
+  useDeleteGroupReferenceVideo,
+} from '@/lib/query/mutations/group-reference-video-mutations'
 
 /**
  * Cold-open UI state. `off` = no hook formatting. `auto` = pick the
@@ -255,6 +259,18 @@ interface GroupCardProps {
    * default floor in computeGroupRecommendedDurationSec.
    */
   targetSecPerGroup?: number | null
+  /**
+   * Phase S (2026-05-27) — per-group motion / camera reference video.
+   * `groupStoryboardId` is the parent storyboard the upload writes to;
+   * derived from `panels[0]?.storyboardId` upstream. `groupReferenceVideoUrl`
+   * is the already-signed playback URL (null when not uploaded). `episodeId`
+   * threads through so the mutation hook can invalidate the right caches.
+   * All three optional → upload widget hides when storyboardId missing
+   * (defensive — only an orphaned group would hit that path).
+   */
+  groupStoryboardId?: string | null
+  groupReferenceVideoUrl?: string | null
+  episodeId?: string | null
   onRegenerate: (
     panelIds: string[],
     overrides: GroupRegenOverrides,
@@ -268,6 +284,164 @@ function formatTimeRange(startSec: number, endSec: number): string {
     return `${m}:${String(sec).padStart(2, '0')}`
   }
   return `${fmt(startSec)}-${fmt(endSec)}`
+}
+
+/**
+ * Phase S (2026-05-27) — per-group motion / camera reference video.
+ *
+ * UI states:
+ *   - Empty: a single "＋動作參考視頻" button. Click opens file picker.
+ *   - Validating: client-side duration probe via HTML5 video.duration.
+ *     Rejects > 15s before hitting the server. MIME/size also checked
+ *     against the server's gate (50MB / mp4|mov|webm).
+ *   - Uploaded: small preview thumbnail (<video> 60×60) + "× 移除" button.
+ *
+ * Why client-side duration probe: the server endpoint deliberately skips
+ * ffprobe to keep deploy simple. Internal team threat model makes the
+ * bypass acceptable; if a hostile user submits a 30s clip via curl, the
+ * worker just sends a long reference to the model — costs a bit more
+ * generation time but doesn't break anything.
+ */
+const MAX_VIDEO_DURATION_SEC = 15
+const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024
+const ALLOWED_MIMES_DISPLAY = 'mp4 / mov / webm'
+
+interface GroupReferenceVideoSlotProps {
+  projectId: string
+  storyboardId: string
+  episodeId: string
+  referenceVideoUrl: string | null
+}
+
+function probeVideoDuration(file: File): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const v = document.createElement('video')
+    v.preload = 'metadata'
+    v.muted = true
+    v.onloadedmetadata = () => {
+      const d = v.duration
+      URL.revokeObjectURL(url)
+      Number.isFinite(d) ? resolve(d) : reject(new Error('Could not read video duration'))
+    }
+    v.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Failed to load video for duration probe'))
+    }
+    v.src = url
+  })
+}
+
+function GroupReferenceVideoSlot({
+  projectId,
+  storyboardId,
+  episodeId,
+  referenceVideoUrl,
+}: GroupReferenceVideoSlotProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const upload = useUploadGroupReferenceVideo(projectId)
+  const remove = useDeleteGroupReferenceVideo(projectId)
+
+  async function handlePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+
+    // Size gate (matches server) — faster feedback than waiting for network.
+    if (file.size > MAX_VIDEO_SIZE_BYTES) {
+      alert(`檔案 ${(file.size / 1024 / 1024).toFixed(1)} MB 超過 50 MB 上限`)
+      return
+    }
+    // Duration gate (client-only).
+    try {
+      const dur = await probeVideoDuration(file)
+      if (dur > MAX_VIDEO_DURATION_SEC + 0.5) {
+        alert(`影片長度 ${dur.toFixed(1)}s 超過 ${MAX_VIDEO_DURATION_SEC}s 上限。請先剪短再上傳。`)
+        return
+      }
+    } catch {
+      // Duration unreadable → let the server take it; worst case it
+      // works fine because we only enforce duration client-side.
+    }
+
+    upload.mutate(
+      { storyboardId, file, episodeId },
+      {
+        onError: (err) => {
+          alert(`上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
+  }
+
+  function handleRemove() {
+    if (!window.confirm('確定要移除這個分鏡群的動作參考視頻?')) return
+    remove.mutate(
+      { storyboardId, episodeId },
+      {
+        onError: (err) => {
+          alert(`移除失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+        },
+      },
+    )
+  }
+
+  const busy = upload.isPending || remove.isPending
+
+  if (referenceVideoUrl) {
+    return (
+      <div
+        className="flex items-center gap-2 whitespace-nowrap rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1"
+        title={`動作參考視頻已綁定 — worker 會送進 R2V 模型 (≤${MAX_VIDEO_DURATION_SEC}s, ${ALLOWED_MIMES_DISPLAY})`}
+      >
+        <AppIcon name="play" className="h-3 w-3 text-violet-300" />
+        <video
+          src={referenceVideoUrl}
+          controls
+          muted
+          playsInline
+          preload="metadata"
+          className="h-12 w-20 rounded-sm object-cover"
+        />
+        <span className="font-mono text-[11px] uppercase tracking-wider text-violet-300">
+          動作參考
+        </span>
+        <button
+          type="button"
+          onClick={handleRemove}
+          disabled={busy}
+          title="移除動作參考視頻"
+          className="rounded-sm border border-stone-700 px-1.5 py-0.5 font-mono text-[11px] text-stone-400 transition-colors hover:border-rose-500/60 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {remove.isPending ? '移除中…' : '×'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <label
+      className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
+      title={`上傳一段 ≤${MAX_VIDEO_DURATION_SEC}s 的動作 / 鏡頭參考視頻 (${ALLOWED_MIMES_DISPLAY}, ≤50MB)。所有 4 家 Seedance 都會把它送進 R2V endpoint。`}
+    >
+      <AppIcon name="upload" className="h-3 w-3" />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={busy}
+        className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-0.5 font-mono text-[12px] text-stone-300 transition-colors hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {upload.isPending ? '上傳中…' : '＋動作參考視頻'}
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="video/mp4,video/quicktime,video/webm"
+        className="hidden"
+        onChange={handlePick}
+      />
+    </label>
+  )
 }
 
 export function GroupCard({
@@ -291,6 +465,9 @@ export function GroupCard({
   canEdit = true,
   viewerTip,
   targetSecPerGroup = null,
+  groupStoryboardId = null,
+  groupReferenceVideoUrl = null,
+  episodeId = null,
   onRegenerate,
 }: GroupCardProps) {
   const t = useTranslations('v2Storyboard.groupCard')
@@ -1793,6 +1970,18 @@ export function GroupCard({
                   ))}
                 </select>
               </label>
+              {/* Phase S (2026-05-27) — per-group motion / camera reference video.
+                  Sits next to 時長 because it directly informs the model how
+                  the group should move. Hides when storyboardId is unknown
+                  (orphan groups) or canEdit is false (viewer role). */}
+              {groupStoryboardId && episodeId && canEdit ? (
+                <GroupReferenceVideoSlot
+                  projectId={projectId}
+                  storyboardId={groupStoryboardId}
+                  episodeId={episodeId}
+                  referenceVideoUrl={groupReferenceVideoUrl}
+                />
+              ) : null}
               <label
                 className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
                 title={t('style.title')}

@@ -510,11 +510,13 @@ export async function runMultiShotSeedanceComposite(params: {
   // Episode-level appearance bindings (same shape as b-path lines 1240+).
   // All panels in a group live under one storyboard → one episode.
   const episodeBindings = new Map<string, string>()
+  // Phase S — per-group motion/camera reference video.
+  let groupReferenceVideoUrl: string | null = null
   const firstStoryboardId = validPanels[0]?.storyboardId
   if (firstStoryboardId) {
     const sb = await prisma.novelPromotionStoryboard.findUnique({
       where: { id: firstStoryboardId },
-      select: { episodeId: true },
+      select: { episodeId: true, referenceVideoUrl: true },
     })
     if (sb?.episodeId) {
       const rows = await prisma.episodeCharacter.findMany({
@@ -524,6 +526,9 @@ export async function runMultiShotSeedanceComposite(params: {
       for (const row of rows) {
         if (row.appearanceId) episodeBindings.set(row.characterId, row.appearanceId)
       }
+    }
+    if (sb?.referenceVideoUrl) {
+      groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
   }
   // Per-call override beats episode binding — match the b-path priority
@@ -670,6 +675,9 @@ export async function runMultiShotSeedanceComposite(params: {
       aspectRatio,
       generateAudio: sound,
       referenceImages: referenceUrls,
+      // Phase S — taijiai/BobAPI content[] supports video_url role.
+      // Generator pushes the entry with role: 'reference_video' (line 185).
+      ...(groupReferenceVideoUrl ? { referenceVideos: [groupReferenceVideoUrl] } : {}),
       negativePrompt: composedNegative,
     },
   })

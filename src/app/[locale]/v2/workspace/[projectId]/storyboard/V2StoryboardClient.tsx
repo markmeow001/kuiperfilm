@@ -1499,6 +1499,18 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         canEdit={canEdit}
         viewerTip={viewerTip}
         targetDurationSec={project?.novelPromotionData?.targetDuration ?? null}
+        episodeId={currentEpisodeId}
+        referenceVideoByStoryboardId={(() => {
+          // Phase S — flatten storyboards[].referenceVideoUrl into a lookup
+          // map keyed by storyboardId. Already-signed by the route response.
+          const map: Record<string, string | null> = {}
+          for (const sb of storyboardsData?.storyboards ?? []) {
+            const id = (sb as { id?: string }).id
+            const url = (sb as { referenceVideoUrl?: string | null }).referenceVideoUrl ?? null
+            if (typeof id === 'string') map[id] = url
+          }
+          return map
+        })()}
         onRegenerateGroup={async (groupId, panelIds, overrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: t('errors.modelNotMultiShotShort') }
