@@ -372,7 +372,7 @@ function CreateKeyModal({
           <label className="block text-sm font-medium text-gray-700">名称</label>
           <input
             type="text"
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
+            className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400"
             value={name}
             maxLength={64}
             placeholder="例如:Production CI"
@@ -410,7 +410,7 @@ function CreateKeyModal({
               type="number"
               min={1}
               max={600}
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
               value={reqPerMinute}
               onChange={(e) => setReqPerMinute(Number(e.target.value) || 60)}
             />
@@ -421,7 +421,7 @@ function CreateKeyModal({
             </label>
             <input
               type="date"
-              className="mt-1 w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
+              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900"
               value={expiresAt}
               onChange={(e) => setExpiresAt(e.target.value)}
             />
@@ -480,14 +480,14 @@ function RevealOnceModal({
         <div className="rounded border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
           ⚠️ 这是唯一一次能看到完整密钥的机会。关闭后将无法再次显示。
         </div>
-        <div className="rounded border border-gray-300 bg-gray-50 p-3 font-mono text-xs break-all">
+        <div className="rounded border border-gray-300 bg-gray-50 p-3 font-mono text-xs text-gray-900 break-all">
           {fullKey}
         </div>
         <div className="flex justify-between">
           <button
             type="button"
             onClick={copy}
-            className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+            className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
           >
             {copied ? '已复制' : '复制到剪贴板'}
           </button>
