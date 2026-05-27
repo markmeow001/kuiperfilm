@@ -649,6 +649,9 @@ model User {
   auditLogActions        AuditLog[]            @relation("AuditActor")
   deletedProjects        Project[]             @relation("ProjectDeletedBy")
 
+  // Phase T (2026-05-27) — Playground / Freedom Mode runs owned by this user.
+  playgroundRuns         PlaygroundRun[]       @relation("PlaygroundRunUser")
+
   @@map("user")
 }
 
@@ -701,10 +704,71 @@ model Workspace {
   projects     Project[]         @relation("WorkspaceProjects")
   // Phase 5 (2026-05-25) — workspace-scoped API keys for public API access.
   apiKeys      ApiKey[]
+  // Phase T (2026-05-27) — Playground freedom-mode runs (independent of projects).
+  playgroundRuns PlaygroundRun[]
 
   @@index([organizationId])
   @@index([ownerEditorId])
   @@map("workspace")
+}
+
+// Phase T (2026-05-27) — Playground / Freedom Mode runs.
+// Independent of NovelPromotionProject — users come here to generate a single
+// image or video from a prompt + references without setting up a full storyboard
+// project. Each run is one image OR one video generation. Reuses the existing
+// 4-vendor video dispatcher (fal / atlascloud / bobapi / ark) and existing image
+// generators (Tencent / OpenAI / Gemini / Replicate) — no new generator code.
+//
+// Workspace-scoped (optional). When workspaceId is set, all workspace members
+// can see the run in shared history; when null, it's a personal run only the
+// userId owner can see.
+//
+// Reference uploads: COS keys stored as JSON arrays. Same single-video cap as
+// the per-group ref video (Phase S) — vendor parity with ARK's singular
+// referenceVideoUrl. See feedback_kuiperfilm_ref_video_lowest_common_denominator.
+model PlaygroundRun {
+  id              String   @id @default(uuid())
+  userId          String
+  workspaceId     String?
+  // User-typed prompt with @imageN / @videoN tokens. Worker resolves @-tokens
+  // against referenceImages / referenceVideos arrays by 1-indexed position.
+  prompt          String   @db.Text
+  // JSON array of COS keys (strings). max 9 per Phase T-1 cap; mirrors picker grid.
+  referenceImages String?  @db.Text
+  // JSON array — max 1 today per Phase S decision (ARK lowest common denominator).
+  referenceVideos String?  @db.Text
+  // Optional free-form style / tone hint.
+  referenceText   String?  @db.Text
+  // 'image' | 'video' — drives which generator the worker dispatches to.
+  outputType      String
+  // Canonical 'provider::modelId' (e.g. 'fal::bytedance/seedance-2.0/reference-to-video',
+  // 'atlascloud::imagen-3', etc).
+  modelKey        String
+  // Optional generation params; null = generator default.
+  resolution      String?
+  durationSec     Int?
+  aspectRatio     String?
+  // Number of variants to generate per run (Phase T-1 caps at 1).
+  generationCount Int      @default(1)
+  // 'pending' | 'running' | 'succeeded' | 'failed'
+  status          String   @default("pending")
+  // JSON array of result COS keys when succeeded.
+  resultUrls      String?  @db.Text
+  // Task / external job id for poll-and-retrieve flows.
+  externalTaskId  String?
+  costEstimate    Float?
+  costActual      Float?
+  errorMessage    String?  @db.Text
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  user      User       @relation("PlaygroundRunUser", fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([workspaceId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("playground_runs")
 }
 
 // Phase 5 (2026-05-25) — Public API key for external automation (AI agents,

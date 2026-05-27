@@ -136,6 +136,35 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
         })}
       </nav>
 
+      {/* Phase T (2026-05-27) — TOOLS section, project-independent. Lives
+          below the 6 project steps so users can jump to Playground without
+          leaving the current project context. Future tools (e.g. asset
+          gallery, batch tools) can slot in here.
+
+          NOTE: The 6 steps above are mutually exclusive (`currentStep` is
+          one V2StepId at a time). This section deliberately uses Link not
+          onSelect — Playground is a separate route, no step highlight needed. */}
+      <div className="border-t border-amber-900/15 px-3 py-3">
+        <div className="mb-2 px-2 font-mono text-[10px] uppercase tracking-widest text-stone-600">
+          工具
+        </div>
+        <Link
+          href={`/${locale}/playground`}
+          className="group flex w-full items-center gap-2 rounded-md border border-transparent px-2.5 py-2 text-left transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
+        >
+          <div className="w-5 font-mono text-[13px] tracking-wider text-violet-400">★</div>
+          <AppIcon name="sparklesAlt" className="h-4 w-4 flex-shrink-0 text-violet-400" />
+          <div className="min-w-0 flex-1">
+            <div className="whitespace-nowrap font-serif-cn text-sm leading-none text-stone-300">
+              創作 Playground
+            </div>
+            <div className="mt-0.5 truncate font-fraunces text-[13px] italic text-stone-600">
+              Freedom Mode
+            </div>
+          </div>
+        </Link>
+      </div>
+
       {/* 2026-05-02: User block moved to TopBar UserMenu — frees up the
           narrow w-52 column footer for future entries and matches
           Linear/Notion convention (avatar top-right). Sidebar keeps a
