@@ -19,6 +19,7 @@ import { getProviderConfig } from '@/lib/api-config'
 import { handleMultiShotVideoTask } from './handlers/multi-shot-video-handler'
 import { handleVideoEditorRenderTask } from './handlers/video-editor-render'
 import { handleEpisodePackageZipTask } from './handlers/episode-package-zip'
+import { handlePlaygroundVideoTask, type PlaygroundVideoJobData } from './handlers/playground-video'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 type AnyObj = Record<string, unknown>
@@ -323,9 +324,20 @@ async function processVideoTask(job: Job<TaskJobData>) {
 }
 
 export function createVideoWorker() {
-  return new Worker<TaskJobData>(
+  // Phase T-2 (2026-05-27) — Playground jobs share the video queue but
+  // bypass withTaskLifecycle. They write status directly to the
+  // PlaygroundRun row (which IS the unit of tracking) instead of going
+  // through the project-scoped Task table. The `job.data.type ===
+  // 'playground_video'` check below routes those jobs into the dedicated
+  // handler before the regular pipeline takes over.
+  return new Worker<TaskJobData | PlaygroundVideoJobData>(
     QUEUE_NAME.VIDEO,
-    async (job) => await withTaskLifecycle(job, processVideoTask),
+    async (job) => {
+      if ((job.data as { type?: string }).type === 'playground_video') {
+        return await handlePlaygroundVideoTask(job as Job<PlaygroundVideoJobData>)
+      }
+      return await withTaskLifecycle(job as Job<TaskJobData>, processVideoTask)
+    },
     {
       connection: queueRedis,
       // Default 2 — same Tencent VOD AIGC concurrency-quota constraint as the

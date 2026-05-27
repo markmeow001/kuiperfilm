@@ -31,6 +31,7 @@ import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { generateImage } from '@/lib/generator-api'
 import { getSignedUrl } from '@/lib/cos'
+import { enqueuePlaygroundVideoJob } from '@/lib/playground/enqueue'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 const MAX_REFERENCE_IMAGES = 9
@@ -114,16 +115,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const refText = typeof referenceText === 'string' ? referenceText.trim() : ''
   const wsId = typeof workspaceId === 'string' && workspaceId.length > 0 ? workspaceId : null
 
-  // Phase T-1 — video not supported yet.
-  if (outputType === 'video') {
-    throw new ApiError('INVALID_PARAMS', {
-      code: 'VIDEO_NOT_YET_SUPPORTED',
-      details: {
-        message: 'Video output is coming in Phase T-2. Use image output for now.',
-      },
-    })
-  }
-
   // If workspaceId provided, verify membership (light check).
   if (wsId) {
     const member = await prisma.workspaceMember.findFirst({
@@ -144,7 +135,10 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ? `${prompt.trim()}\n\n[參考文字 / Style hint] ${refText}`
     : prompt.trim()
 
-  // Create row in pending state up front so failures still leave a record.
+  // Create row up front so failures still leave a record.
+  // Image: 'running' (starts immediately, synchronous).
+  // Video: 'pending' → worker picks up and flips to 'running'.
+  const initialStatus = outputType === 'video' ? 'pending' : 'running'
   const run = await prisma.playgroundRun.create({
     data: {
       userId,
@@ -159,17 +153,54 @@ export const POST = apiHandler(async (request: NextRequest) => {
       aspectRatio: typeof aspectRatio === 'string' ? aspectRatio : null,
       durationSec: typeof durationSec === 'number' && Number.isFinite(durationSec) ? Math.round(durationSec) : null,
       generationCount: 1,
-      status: 'running',
+      status: initialStatus,
     },
   })
 
   _ulogInfo(
-    `[playground.run] start id=${run.id} userId=${userId} model=${modelKey} refs.images=${referenceImages.length} refs.videos=${referenceVideos.length}`,
+    `[playground.run] start id=${run.id} userId=${userId} outputType=${outputType} model=${modelKey} refs.images=${referenceImages.length} refs.videos=${referenceVideos.length}`,
   )
 
-  // Resolve signed URLs for reference images so the generator can fetch them.
-  // Worker / generator helpers also accept raw COS keys but this gives us
-  // direct interop with all image generators that expect public URLs.
+  // Phase T-2 (2026-05-27) — video flow is async. Enqueue + return
+  // immediately; client polls via GET /api/playground/runs (auto-refetch
+  // every 3s when any row is pending/running). Worker writes back to
+  // PlaygroundRun row (status + resultUrls + errorMessage).
+  if (outputType === 'video') {
+    try {
+      await enqueuePlaygroundVideoJob({
+        playgroundRunId: run.id,
+        userId,
+      })
+    } catch (err) {
+      // Enqueue failure is fatal — flip row to failed so the UI doesn't
+      // show a stuck 'pending' state forever. Re-throw so the API call
+      // surfaces the problem to the user.
+      const errMsg = err instanceof Error ? err.message : 'enqueue_failed'
+      await prisma.playgroundRun.update({
+        where: { id: run.id },
+        data: { status: 'failed', errorMessage: errMsg, completedAt: new Date() },
+      }).catch(() => {})
+      _ulogError(`[playground.run] enqueue failed id=${run.id} err=${errMsg}`)
+      throw new ApiError('EXTERNAL_ERROR', {
+        code: 'PLAYGROUND_ENQUEUE_FAILED',
+        details: { runId: run.id, message: errMsg },
+      })
+    }
+    return NextResponse.json({
+      success: true,
+      run: {
+        id: run.id,
+        status: run.status,
+        resultUrl: null,
+        outputType: run.outputType,
+        modelKey: run.modelKey,
+        createdAt: run.createdAt,
+        completedAt: null,
+      },
+    })
+  }
+
+  // Image flow — synchronous (image gen ~5-15s).
   const signedRefImages = referenceImages.map((k) => getSignedUrl(k, 3600))
 
   try {

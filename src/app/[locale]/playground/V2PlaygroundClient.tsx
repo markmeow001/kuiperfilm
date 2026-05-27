@@ -65,9 +65,14 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   const [refText, setRefText] = useState('')
   const [refImages, setRefImages] = useState<Array<{ key: string; signedUrl: string }>>([])
   const [refVideo, setRefVideo] = useState<{ key: string; signedUrl: string } | null>(null)
-  const [outputType, _setOutputType] = useState<'image' | 'video'>('image') // T-1: locked to image
+  // T-2 (2026-05-27): output type toggle is live. Switching resets the
+  // model picker because image / video catalogs don't overlap.
+  const [outputType, setOutputType] = useState<'image' | 'video'>('image')
   const [modelKey, setModelKey] = useState<string>('')
   const [aspectRatio, setAspectRatio] = useState('9:16')
+  // Video-only: duration in seconds. Defaulted to 5 for first-run snappiness;
+  // Seedance / Kling all accept 4-15.
+  const [durationSec, setDurationSec] = useState<number>(5)
 
   // Output state
   const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
@@ -76,16 +81,41 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   const imageInputRef = useRef<HTMLInputElement | null>(null)
   const videoInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Build the image-only model list. Image models from useUserModels (admin-enabled).
+  // Build model lists for both output modes; picker filters by current
+  // outputType. Both populated from useUserModels (admin-enabled lists).
   const imageModels = useMemo<UserModelOption[]>(() => {
     return userModelsQuery.data?.image ?? []
   }, [userModelsQuery.data])
+  const videoModels = useMemo<UserModelOption[]>(() => {
+    return userModelsQuery.data?.video ?? []
+  }, [userModelsQuery.data])
+  const activeModels = outputType === 'image' ? imageModels : videoModels
 
-  // Default to the first model when payload arrives.
+  // Reset model picker when output type changes; the two catalogs don't
+  // overlap (image keys never appear in the video allowlist and vice versa).
   useEffect(() => {
-    if (modelKey || imageModels.length === 0) return
-    setModelKey(imageModels[0].value)
-  }, [imageModels, modelKey])
+    if (activeModels.length === 0) {
+      if (modelKey) setModelKey('')
+      return
+    }
+    // Keep current selection if it's still valid; otherwise default to first.
+    const found = activeModels.find((m) => m.value === modelKey)
+    if (!found) setModelKey(activeModels[0].value)
+  }, [activeModels, modelKey])
+
+  // Auto-pick up worker-completed video runs: when usePlaygroundRuns
+  // refetches (every 3s while pending/running rows exist), promote the
+  // most recent succeeded run into the preview if it matches the
+  // currently-displayed one. Without this, the preview stays on the
+  // 'pending' placeholder until the user manually clicks the history
+  // thumbnail.
+  useEffect(() => {
+    if (!latestRun || latestRun.status !== 'pending' && latestRun.status !== 'running') return
+    const updated = runsQuery.data?.runs?.find((r) => r.id === latestRun.id)
+    if (updated && (updated.status === 'succeeded' || updated.status === 'failed')) {
+      setLatestRun(updated)
+    }
+  }, [runsQuery.data, latestRun])
 
   // ── Handlers ──────────────────────────────────────────────────────
 
@@ -147,6 +177,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
         outputType,
         modelKey,
         aspectRatio,
+        ...(outputType === 'video' ? { durationSec } : {}),
       })
       // Latest run goes to the preview area.
       setLatestRun({
@@ -431,22 +462,51 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
         </div>
       </div>
 
-      {/* BOTTOM toolbar — model / aspect / RUN */}
+      {/* BOTTOM toolbar — output / model / params / RUN */}
       <footer className="flex items-center justify-between border-t border-stone-800 bg-stone-950 px-8 py-3">
         <div className="flex items-center gap-4">
+          {/* Phase T-2 (2026-05-27) — output toggle. Image stays synchronous;
+              video enqueues + polls (see usePlaygroundRuns auto-refetch). */}
+          <div className="inline-flex items-center gap-0 rounded-sm border border-stone-800 bg-stone-900 p-0.5">
+            <button
+              type="button"
+              onClick={() => setOutputType('image')}
+              disabled={isBusy}
+              className={`rounded-sm px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                outputType === 'image'
+                  ? 'bg-amber-500/15 text-amber-400'
+                  : 'text-stone-500 hover:text-stone-300'
+              }`}
+            >
+              圖片
+            </button>
+            <button
+              type="button"
+              onClick={() => setOutputType('video')}
+              disabled={isBusy}
+              className={`rounded-sm px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                outputType === 'video'
+                  ? 'bg-amber-500/15 text-amber-400'
+                  : 'text-stone-500 hover:text-stone-300'
+              }`}
+            >
+              影片
+            </button>
+          </div>
+
           <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
             <AppIcon name="sparklesAlt" className="h-3 w-3" />
             <span>模型</span>
             <select
               value={modelKey}
               onChange={(e) => setModelKey(e.target.value)}
-              disabled={isBusy || imageModels.length === 0}
+              disabled={isBusy || activeModels.length === 0}
               className="max-w-[260px] truncate rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
             >
-              {imageModels.length === 0 ? (
-                <option value="">尚無啟用的圖片模型 — 請到 /profile 啟用</option>
+              {activeModels.length === 0 ? (
+                <option value="">尚無啟用的{outputType === 'image' ? '圖片' : '影片'}模型 — 請到 /profile 啟用</option>
               ) : null}
-              {imageModels.map((m) => (
+              {activeModels.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
@@ -470,9 +530,23 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
             </select>
           </label>
 
-          <div className="font-mono text-[10px] uppercase tracking-wider text-stone-600">
-            輸出 · 圖片 (T-1)
-          </div>
+          {/* Video-only: duration. Mirrors GroupCard 5-15s integer dropdown. */}
+          {outputType === 'video' ? (
+            <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+              <AppIcon name="play" className="h-3 w-3" />
+              <span>時長</span>
+              <select
+                value={durationSec}
+                onChange={(e) => setDurationSec(Number.parseInt(e.target.value, 10) || 5)}
+                disabled={isBusy}
+                className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+              >
+                {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (
+                  <option key={sec} value={sec}>{sec}s</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3">
