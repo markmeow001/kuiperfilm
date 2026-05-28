@@ -88,5 +88,17 @@ export const GET = apiHandler(async (
     tasksByGroup[groupId] = t.id
   }
 
+  // Phase V (2026-05-28) — debug log: only emits counts, no PII /
+  // userIds / payload contents, so we can verify from prod logs whether
+  // the endpoint is reaching the right data shape.
+  // eslint-disable-next-line no-console
+  console.log(
+    `[multi-shot-tasks-by-group] projectId-suffix=${projectId.slice(-6)} ` +
+    `episodeId-suffix=${episodeId.slice(-6)} ` +
+    `panels-with-group=${groupByPanelId.size} ` +
+    `tasks-found=${tasks.length} ` +
+    `groups-mapped=${Object.keys(tasksByGroup).length}`,
+  )
+
   return NextResponse.json({ tasksByGroup })
 })
