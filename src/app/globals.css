@@ -44,6 +44,31 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
+/* Phase V (2026-05-28) — Global font-family utility classes.
+ *
+ * These were originally defined inside a scoped <style> block in
+ * src/app/[locale]/preview/page.tsx and never reached production. As a
+ * result, ~378 call sites of `font-serif-cn` etc. applied the class
+ * but resolved to UA defaults — visible side-effect: <pre> rendered
+ * CJK glyphs in monospace while <textarea> used system-ui, drifting
+ * cursor positions in the narrative editor by enough that the caret
+ * landed inside glyphs.
+ *
+ * Stack ordering — prefer locally-installed CJK serif fonts so we
+ * don't force a webfont download on every page; webfont loading is
+ * still done explicitly on the preview marketing page where the
+ * design intent is to use Google Fonts copies of Noto Serif SC etc.
+ */
+.font-serif-cn {
+  font-family: 'Noto Serif SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', serif;
+}
+.font-display {
+  font-family: 'Cormorant Garamond', 'Noto Serif SC', 'PingFang SC', serif;
+}
+.font-fraunces {
+  font-family: 'Fraunces', 'Noto Serif SC', 'PingFang SC', serif;
+}
+
 /* 可复用组件类 */
 .card-base {
   background: var(--bg-card);

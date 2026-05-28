@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { isErrorResponse, requireUserAuth } from '@/lib/api-auth'
+import { isErrorResponse, requireUserAuth, requireProjectAccess } from '@/lib/api-auth'
 import { cancelTask } from '@/lib/task/service'
 import { getRunById, requestRunCancel } from '@/lib/run-runtime/service'
 import { publishRunEvent } from '@/lib/run-runtime/publisher'
@@ -16,8 +16,20 @@ export const POST = apiHandler(async (
   const { runId } = await context.params
 
   const run = await getRunById(runId)
-  if (!run || run.userId !== session.user.id) {
+  if (!run) {
     throw new ApiError('NOT_FOUND')
+  }
+  // Phase V (2026-05-28) — run cancel via cascade (write action). Owner /
+  // admin / ws_owner / editor collaborators can cancel teammate runs;
+  // viewer cannot.
+  if (run.userId !== session.user.id) {
+    if (!run.projectId) {
+      throw new ApiError('NOT_FOUND')
+    }
+    const access = await requireProjectAccess(run.projectId, session.user.id, 'write')
+    if (!access.allowed) {
+      throw new ApiError('NOT_FOUND')
+    }
   }
 
   const cancelledRun = await requestRunCancel({

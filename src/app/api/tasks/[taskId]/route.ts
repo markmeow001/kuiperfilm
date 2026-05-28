@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { isErrorResponse, requireUserAuth } from '@/lib/api-auth'
+import { isErrorResponse, requireUserAuth, requireProjectAccess } from '@/lib/api-auth'
 import { removeTaskJob } from '@/lib/task/queues'
 import { listTaskLifecycleEvents, publishTaskEvent } from '@/lib/task/publisher'
 import { cancelTask, getTaskById } from '@/lib/task/service'
@@ -22,8 +22,22 @@ export const GET = apiHandler(async (
   const { taskId } = await context.params
 
   const task = await getTaskById(taskId)
-  if (!task || task.userId !== session.user.id) {
+  if (!task) {
     throw new ApiError('NOT_FOUND')
+  }
+  // Phase V (2026-05-28) — task read auth via the task's projectId so
+  // workspace members / admin can see teammate-generated tasks (multi-
+  // shot video, image gen, etc). Without this, useMultiShotTask hook
+  // returned 404 on every cross-user lookup and the UI rendered "未生成"
+  // even when the teammate's video was actually finished and stored.
+  if (task.userId !== session.user.id) {
+    if (!task.projectId) {
+      throw new ApiError('NOT_FOUND')
+    }
+    const access = await requireProjectAccess(task.projectId, session.user.id, 'read')
+    if (!access.allowed) {
+      throw new ApiError('NOT_FOUND')
+    }
   }
 
   const includeEvents = request.nextUrl.searchParams.get('includeEvents') === '1'
@@ -49,8 +63,20 @@ export const DELETE = apiHandler(async (
   const { taskId } = await context.params
 
   const task = await getTaskById(taskId)
-  if (!task || task.userId !== session.user.id) {
+  if (!task) {
     throw new ApiError('NOT_FOUND')
+  }
+  // Phase V (2026-05-28) — DELETE is cancel. Owner / admin / ws_owner /
+  // editor collaborators can cancel; viewer cannot. action='write' on
+  // the cascade enforces that.
+  if (task.userId !== session.user.id) {
+    if (!task.projectId) {
+      throw new ApiError('NOT_FOUND')
+    }
+    const access = await requireProjectAccess(task.projectId, session.user.id, 'write')
+    if (!access.allowed) {
+      throw new ApiError('NOT_FOUND')
+    }
   }
 
   const { task: updatedTask, cancelled } = await cancelTask(taskId)
