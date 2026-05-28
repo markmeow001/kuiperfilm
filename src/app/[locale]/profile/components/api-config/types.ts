@@ -113,6 +113,13 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'imagen-4.0-generate-001', name: 'Imagen 4', type: 'image', provider: 'google' },
     { modelId: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4 Ultra', type: 'image', provider: 'google' },
     { modelId: 'imagen-4.0-fast-generate-001', name: 'Imagen 4 Fast', type: 'image', provider: 'google' },
+    // Phase U (2026-05-28) — AtlasCloud 图像模型。AtlasCloud 用 Google 内部
+    // 代号 "nano-banana"，对应它们 UI 的 "Gemini 3 X Image" 命名。我们用
+    // 真实 API slug 作为 canonical id，picker 显示 user 友善标签。
+    { modelId: 'nano-banana-pro', name: 'Gemini 3 Pro Image (AtlasCloud · 推薦)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'nano-banana', name: 'Gemini 3 Flash Image (AtlasCloud · 快速)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'nano-banana-2', name: 'Gemini 3.1 Flash Image (AtlasCloud · 經濟)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'gpt-image-2', name: 'GPT Image 2 (AtlasCloud · OpenAI 按 token 計費)', type: 'image', provider: 'atlascloud' },
     // 视频模型
     { modelId: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance 1.0 Pro Fast', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-0-lite-i2v-250428', name: 'Seedance 1.0 Lite', type: 'video', provider: 'ark' },

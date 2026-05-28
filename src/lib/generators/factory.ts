@@ -18,6 +18,7 @@ import {
     KieAIImageGenerator,
     KieAINanoBananaGenerator,
     TencentVODImageGenerator,
+    AtlasCloudImageGenerator,
 } from './image'
 import { GoogleVeoVideoGenerator } from './video/google'
 import { OpenAICompatibleVideoGenerator } from './video'
@@ -71,6 +72,13 @@ export function createImageGenerator(provider: string, modelId?: string): ImageG
             return new KieAIImageGenerator(actualModelId)
         case 'tencent-vod':
             return new TencentVODImageGenerator(provider)
+        case 'atlascloud':
+            // Phase U (2026-05-28) — AtlasCloud image generation. Same
+            // Bearer auth + same /api/v1/model/prediction polling as the
+            // video generator. Per-model schema dispatch lives inside
+            // AtlasCloudImageGenerator (GPT Image 2 uses size enum;
+            // Nano Banana family uses aspect_ratio + resolution).
+            return new AtlasCloudImageGenerator()
         default:
             throw new Error(`Unknown image generator provider: ${provider}`)
     }

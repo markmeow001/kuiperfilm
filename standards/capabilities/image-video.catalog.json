@@ -1227,6 +1227,50 @@
     }
   },
   {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "nano-banana-pro",
+    "capabilities": {
+      "image": {
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "nano-banana",
+    "capabilities": {
+      "image": {
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "nano-banana-2",
+    "capabilities": {
+      "image": {
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "gpt-image-2",
+    "capabilities": {
+      "image": {
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
     "modelType": "video",
     "provider": "atlascloud",
     "modelId": "seedance-v1.5-pro",

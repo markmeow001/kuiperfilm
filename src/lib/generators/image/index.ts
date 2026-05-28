@@ -19,6 +19,9 @@ export { KieAINanoBananaGenerator } from './kieai-nanobanana'
 // 騰訊雲 VOD AIGC 生成器
 export { TencentVODImageGenerator } from './tencent-vod'
 
+// AtlasCloud image (Phase U, 2026-05-28) — GPT Image 2 + Nano Banana family
+export { AtlasCloudImageGenerator } from './atlascloud'
+
 // 向后兼容：从合并文件重新导出
 export { FalBananaGenerator, FalImageGenerator } from '../fal'
 export { ArkSeedreamGenerator, ArkImageGenerator } from '../ark'

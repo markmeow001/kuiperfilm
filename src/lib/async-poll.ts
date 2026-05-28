@@ -183,12 +183,16 @@ export function parseExternalId(externalId: string): {
         const parts = externalId.split(':')
         const type = parts[1]
         const requestId = parts.slice(2).join(':')
-        if (type !== 'VIDEO' || !requestId) {
-            throw new Error(`无效 ATLASCLOUD externalId: "${externalId}"，应为 ATLASCLOUD:VIDEO:requestId`)
+        // Phase U (2026-05-28) — added IMAGE alongside VIDEO. AtlasCloud
+        // image gen uses the same /api/v1/model/prediction/{id} polling
+        // endpoint as video, so the poll handler dispatches by the same
+        // requestId regardless of media type.
+        if ((type !== 'VIDEO' && type !== 'IMAGE') || !requestId) {
+            throw new Error(`无效 ATLASCLOUD externalId: "${externalId}"，应为 ATLASCLOUD:VIDEO|IMAGE:requestId`)
         }
         return {
             provider: 'ATLASCLOUD',
-            type: 'VIDEO',
+            type: type as 'VIDEO' | 'IMAGE',
             requestId,
         }
     }
