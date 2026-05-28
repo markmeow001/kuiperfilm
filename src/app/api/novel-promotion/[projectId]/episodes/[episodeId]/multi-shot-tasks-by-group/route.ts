@@ -128,5 +128,22 @@ export const GET = apiHandler(async (
     `tasks-any-matches=${tasksWithAnyMatchingPanel}`,
   )
 
+  // Extra diagnostic — emit the payload top-level KEYS (not values)
+  // for the first 3 tasks so we can see whether they use panelIds,
+  // panelId, panelGroup, or something else entirely.
+  const sampleKeys: string[][] = []
+  for (const t of tasks.slice(0, 3)) {
+    const p = t.payload as unknown
+    if (!p || typeof p !== 'object' || Array.isArray(p)) {
+      sampleKeys.push(['__not_object__'])
+      continue
+    }
+    sampleKeys.push(Object.keys(p as Record<string, unknown>))
+  }
+  // eslint-disable-next-line no-console
+  console.log(
+    `[multi-shot-tasks-by-group] payload-keys=${JSON.stringify(sampleKeys)}`,
+  )
+
   return NextResponse.json({ tasksByGroup })
 })
