@@ -92,16 +92,5 @@ export const GET = apiHandler(async (
     tasksByGroup[groupId] = r.taskId
   }
 
-  // Brief telemetry — counts only, no PII / no full IDs. Used to verify
-  // production data flow from server logs without exposing details.
-  // eslint-disable-next-line no-console
-  console.log(
-    `[multi-shot-tasks-by-group] projectId-suffix=${projectId.slice(-6)} ` +
-    `episodeId-suffix=${episodeId.slice(-6)} ` +
-    `panels-with-group=${groupByPanelId.size} ` +
-    `runs-found=${runs.length} ` +
-    `groups-mapped=${Object.keys(tasksByGroup).length}`,
-  )
-
   return NextResponse.json({ tasksByGroup })
 })
