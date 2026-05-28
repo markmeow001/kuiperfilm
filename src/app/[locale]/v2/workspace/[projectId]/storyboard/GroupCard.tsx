@@ -21,6 +21,8 @@ import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { CharacterAppearancePickerModal } from './CharacterAppearancePickerModal'
 import { LocationViewPickerModal } from './LocationViewPickerModal'
+import { GroupCharacterAddPickerModal } from './GroupCharacterAddPickerModal'
+import { GroupSceneAddPickerModal } from './GroupSceneAddPickerModal'
 import { NarrativeHighlighter } from './NarrativeHighlighter'
 import { visualStyles, getStyleSafe, sanitizeStyleString } from '@/lib/style-library'
 import {
@@ -500,6 +502,13 @@ export function GroupCard({
     location: LocationRef
     currentViewName: string | null
   } | null>(null)
+  // Phase V (2026-05-28) — add-from-roster pickers. Counterpart to the
+  // × remove button on each chip. User asked for the "freely add any
+  // project character / scene" affordance (see huobao-drama reference).
+  const [addCharOpen, setAddCharOpen] = useState<boolean>(false)
+  const [addSceneOpen, setAddSceneOpen] = useState<boolean>(false)
+  const [addingCharId, setAddingCharId] = useState<string | null>(null)
+  const [addingSceneId, setAddingSceneId] = useState<string | null>(null)
 
   const characterById = useMemo(() => {
     const map = new Map<string, CharacterRef>()
@@ -1269,6 +1278,15 @@ export function GroupCard({
   const [narrativeDirty, setNarrativeDirty] = useState<boolean>(false)
   const [narrativeRegenFlash, setNarrativeRegenFlash] = useState<boolean>(false)
   const narrativeTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  // Phase V (2026-05-28) — explicit "save narrative" UX confirmation.
+  // User feedback: 「需要加個儲存按鈕確保有吃到描述詞」. The narrative
+  // textarea already wires through to handleRegenerate via rawPrompt
+  // (sendRaw gate at line ~1530), so saving doesn't change behavior —
+  // it confirms the user's edit will be used at next "生成視頻" click.
+  // savedSnapshot tracks WHAT text was acknowledged so editing again
+  // after save resets the UI to "未保存修改".
+  const [narrativeSavedSnapshot, setNarrativeSavedSnapshot] = useState<string | null>(null)
+  const [narrativeSavedFlash, setNarrativeSavedFlash] = useState<boolean>(false)
 
   // Phase O (2026-05-21) — Recommended total duration for this group,
   // derived from panel.srtSegment via the shared dialogue estimator. Used
@@ -1290,6 +1308,10 @@ export function GroupCard({
   useEffect(() => {
     if (narrativeDirty) return
     setNarrativeDraft(buildInitialNarrativeForFamily())
+    // Phase V (2026-05-28) — re-seed wipes the saved snapshot too,
+    // otherwise the "✓ 已保存" banner would falsely claim a previous
+    // saved version covers the new auto-seeded text.
+    setNarrativeSavedSnapshot(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panels, totalDurationDraft, groupCast, groupScenes, coldOpenMode, videoFamily])
 
@@ -1448,6 +1470,96 @@ export function GroupCard({
       setRemovingCharId(null)
     }
   }
+
+  /**
+   * Phase V (2026-05-28) — Append a character from the project roster
+   * to EVERY panel.characters in this group. Mirrors the remove flow
+   * but in the inverse direction. Skips panels that already mention
+   * the character (case-insensitive name match) so re-clicking is
+   * idempotent.
+   */
+  async function handleAddCharacterToGroup(characterId: string) {
+    if (addingCharId) return
+    const char = characterById.get(characterId)
+    if (!char) return
+    setAddingCharId(characterId)
+    const targetLower = char.name.trim().toLowerCase()
+    try {
+      for (const p of panels) {
+        const raw: unknown[] = Array.isArray(p.characters) ? p.characters : []
+        const existing: Array<{ name: string; appearance?: string }> = []
+        let already = false
+        for (const item of raw) {
+          let entryName: string | null = null
+          let entryAppearance: string | undefined
+          if (typeof item === 'string') {
+            const trimmed = item.trim()
+            if (trimmed.startsWith('{')) {
+              try {
+                const parsed = JSON.parse(trimmed) as { name?: unknown; appearance?: unknown }
+                if (typeof parsed.name === 'string') entryName = parsed.name
+                if (typeof parsed.appearance === 'string') entryAppearance = parsed.appearance
+              } catch {
+                entryName = trimmed
+              }
+            } else {
+              entryName = trimmed
+            }
+          } else if (item && typeof item === 'object') {
+            const r = item as { name?: unknown; appearance?: unknown }
+            if (typeof r.name === 'string') entryName = r.name
+            if (typeof r.appearance === 'string') entryAppearance = r.appearance
+          }
+          if (!entryName) continue
+          if (entryName.trim().toLowerCase() === targetLower) {
+            already = true
+          }
+          existing.push(entryAppearance ? { name: entryName, appearance: entryAppearance } : { name: entryName })
+        }
+        if (already) continue
+        existing.push({ name: char.name })
+        await updatePanelText.mutateAsync({
+          panelId: p.id,
+          characters: existing,
+        })
+      }
+      setAddCharOpen(false)
+    } catch (err) {
+      alert((err as Error)?.message ?? 'failed to add character')
+    } finally {
+      setAddingCharId(null)
+    }
+  }
+
+  /**
+   * Phase V (2026-05-28) — Assign a scene from the project roster to
+   * the group. panel.location is single-valued, so we target the
+   * first panel that has no location yet (to preserve existing
+   * assignments); if every panel already has a location we set on
+   * the first panel. groupScenes dedups by name so the chip appears
+   * once regardless of which panel we wrote to.
+   */
+  async function handleAddSceneToGroup(locationId: string) {
+    if (addingSceneId) return
+    const loc = locationById.get(locationId)
+    if (!loc) return
+    setAddingSceneId(locationId)
+    try {
+      const targetPanel = panels.find((p) => !p.location) ?? panels[0]
+      if (targetPanel) {
+        await updatePanelText.mutateAsync({
+          panelId: targetPanel.id,
+          location: loc.name,
+        })
+      }
+      setAddSceneOpen(false)
+    } catch (err) {
+      alert((err as Error)?.message ?? 'failed to add scene')
+    } finally {
+      setAddingSceneId(null)
+    }
+  }
+
   async function handleRegenerate() {
     if (panels.length < 2) {
       setRegenState({ status: 'error', message: t('errors.needTwoPanels') })
@@ -1843,32 +1955,64 @@ export function GroupCard({
               {t('narrative.title')}
               <span className="text-stone-500">{t('narrative.charCount', { count: narrativeDraft.length })}</span>
             </div>
-            {/* ↻ 重生敘事 — pinned right of the title row so it stays on
-                the SAME line as 叙事提示词 regardless of how wide the
-                Row 2 selects get. */}
-            <button
-              type="button"
-              disabled={!narrativeDirty || !canEdit}
-              onClick={() => {
-                const fresh = buildInitialNarrativeForFamily()
-                setNarrativeDraft('')
-                setNarrativeDirty(false)
-                setNarrativeRegenFlash(true)
-                window.requestAnimationFrame(() => {
-                  setNarrativeDraft(fresh)
-                  if (narrativeTextareaRef.current) {
-                    narrativeTextareaRef.current.scrollTop = 0
-                  }
-                })
-                window.setTimeout(() => setNarrativeRegenFlash(false), 1500)
-              }}
-              title={narrativeDirty
-                ? t('narrative.regenTitleDirty')
-                : t('narrative.regenTitleClean')}
-              className="whitespace-nowrap rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
-            >
-              {t('narrative.regenButton')}
-            </button>
+            {/* Phase V (2026-05-28) — 保存 + ↻ 重生敘事 button cluster.
+                Both pinned right of the title row to stay on the same
+                line as 叙事提示词. 保存 is the explicit "ingest my edit"
+                confirmation; 重生敘事 throws away the user's edit and
+                re-runs the auto-seed builder. */}
+            <div className="flex items-center gap-1.5">
+              {/* 保存 — disabled when there's nothing new to confirm
+                  (snapshot matches current text). Flashes "✓ 已保存" for
+                  2.5s after click, then settles into "✓ 已套用" idle state
+                  so the user keeps seeing the system acknowledges the
+                  edit. The narrative is plumbed into worker rawPrompt
+                  on next 生成視頻 click — saving doesn't write DB (the
+                  edit lives in component state until regen). */}
+              <button
+                type="button"
+                disabled={!canEdit || (narrativeSavedSnapshot === narrativeDraft && !narrativeDirty)}
+                onClick={() => {
+                  setNarrativeSavedSnapshot(narrativeDraft)
+                  setNarrativeSavedFlash(true)
+                  window.setTimeout(() => setNarrativeSavedFlash(false), 2500)
+                }}
+                title="保存敘事草稿 — 下次「生成視頻」會以這段為主 prompt"
+                className={`whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[12px] tracking-wider transition-colors disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 ${
+                  narrativeSavedFlash
+                    ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-200'
+                    : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-200'
+                }`}
+              >
+                {narrativeSavedFlash ? '✓ 已保存' : '保存敘事'}
+              </button>
+              {/* ↻ 重生敘事 — pinned right of the title row so it stays on
+                  the SAME line as 叙事提示词 regardless of how wide the
+                  Row 2 selects get. */}
+              <button
+                type="button"
+                disabled={!narrativeDirty || !canEdit}
+                onClick={() => {
+                  const fresh = buildInitialNarrativeForFamily()
+                  setNarrativeDraft('')
+                  setNarrativeDirty(false)
+                  setNarrativeSavedSnapshot(null)
+                  setNarrativeRegenFlash(true)
+                  window.requestAnimationFrame(() => {
+                    setNarrativeDraft(fresh)
+                    if (narrativeTextareaRef.current) {
+                      narrativeTextareaRef.current.scrollTop = 0
+                    }
+                  })
+                  window.setTimeout(() => setNarrativeRegenFlash(false), 1500)
+                }}
+                title={narrativeDirty
+                  ? t('narrative.regenTitleDirty')
+                  : t('narrative.regenTitleClean')}
+                className="whitespace-nowrap rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
+              >
+                {t('narrative.regenButton')}
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
               {/* 2026-05-13 — ReelShort 8-second cold-open hook toggle.
@@ -2035,9 +2179,22 @@ export function GroupCard({
             sceneNames={groupScenes.map((s) => s.location.name)}
             flashing={narrativeRegenFlash}
           />
-          {narrativeDirty ? (
-            <div className="font-mono text-[12px] tracking-wider text-violet-300">
-              {t('narrative.editedHint', { action: taskId ? t('narrative.editedActionRegen') : t('narrative.editedActionGenerate') })}
+          {/* Phase V (2026-05-28) — Status banner has three states:
+              1. Unsaved edit (narrativeDirty && snapshot !== draft):
+                 amber violet "✏ 未保存修改 — 點保存敘事將套用至下次生成"
+              2. Saved edit (snapshot === draft && snapshot !== null):
+                 green "✓ 敘事已保存 — 下次「生成視頻」會以這段為主 prompt"
+              3. Clean default (no edits): stone hint with preview info
+              State 1+2 directly addresses the user complaint「修改後沒有
+              任何的提示」 by surfacing whether the system has ingested
+              the edit. */}
+          {narrativeDirty && narrativeSavedSnapshot !== narrativeDraft ? (
+            <div className="rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1 font-mono text-[12px] tracking-wider text-violet-300">
+              ✏ 未保存修改 — 點「保存敘事」確認此版本，下次「{taskId ? '重新生成' : '生成視頻'}」會以這段為主 prompt
+            </div>
+          ) : narrativeSavedSnapshot !== null ? (
+            <div className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-1 font-mono text-[12px] tracking-wider text-emerald-300">
+              ✓ 敘事已保存 — 下次「{taskId ? '重新生成' : '生成視頻'}」會以這段為主 prompt（覆蓋分鏡描述，並關閉對白驅動時長）
             </div>
           ) : (
             <div className="font-mono text-[12px] tracking-wider text-stone-600">
@@ -2120,13 +2277,29 @@ export function GroupCard({
             </div>
           ) : null}
 
-          {(groupCast.length > 0 || groupScenes.length > 0 || boundCharacters.length > 0) ? (
+          {/* Phase V (2026-05-28) — even when both rosters are empty
+              we still render the section (when canEdit) so the +加
+              buttons stay discoverable. */}
+          {(groupCast.length > 0 || groupScenes.length > 0 || boundCharacters.length > 0 || canEdit) ? (
             <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-950/30 p-2">
-              {groupCast.length > 0 ? (
+              {(groupCast.length > 0 || canEdit) ? (
                 <div>
-                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
-                    <AppIcon name="user" className="h-3 w-3" />
-                    {t('castSection.characterHeader', { count: groupCast.length })}
+                  <div className="mb-1 flex items-center justify-between gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
+                    <div className="flex items-center gap-1">
+                      <AppIcon name="user" className="h-3 w-3" />
+                      {t('castSection.characterHeader', { count: groupCast.length })}
+                    </div>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => setAddCharOpen(true)}
+                        disabled={addingCharId !== null}
+                        title="从专案角色库中加一位角色到这组"
+                        className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        + 加角色
+                      </button>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {groupCast.map((c) => {
@@ -2199,11 +2372,24 @@ export function GroupCard({
                 </div>
               ) : null}
 
-              {groupScenes.length > 0 ? (
+              {(groupScenes.length > 0 || canEdit) ? (
                 <div>
-                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-emerald-500/70">
-                    <AppIcon name="image" className="h-3 w-3" />
-                    {t('castSection.sceneHeader', { count: groupScenes.length })}
+                  <div className="mb-1 flex items-center justify-between gap-1 font-mono text-[12px] uppercase tracking-wider text-emerald-500/70">
+                    <div className="flex items-center gap-1">
+                      <AppIcon name="image" className="h-3 w-3" />
+                      {t('castSection.sceneHeader', { count: groupScenes.length })}
+                    </div>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => setAddSceneOpen(true)}
+                        disabled={addingSceneId !== null}
+                        title="从专案场景库中加一个场景到这组"
+                        className="rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-emerald-300 transition-colors hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        + 加场景
+                      </button>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {groupScenes.map((s) => {
@@ -2467,6 +2653,30 @@ export function GroupCard({
           const locationId = pickerLocation.location.id
           setLocationOverrides((prev) => ({ ...prev, [locationId]: viewName }))
         }}
+      />
+
+      {/* Phase V (2026-05-28) — add-from-roster pickers. Mounted at
+          article root so they overlay correctly via portal-style fixed
+          positioning. Candidates exclude IDs already present in
+          groupCast / groupScenes so the picker doesn't show dupes. */}
+      <GroupCharacterAddPickerModal
+        open={addCharOpen}
+        onClose={() => setAddCharOpen(false)}
+        candidates={(() => {
+          const used = new Set(groupCast.map((c) => c.character.id))
+          return (characterRoster ?? []).filter((c) => !used.has(c.id))
+        })()}
+        onSelect={(characterId) => void handleAddCharacterToGroup(characterId)}
+      />
+
+      <GroupSceneAddPickerModal
+        open={addSceneOpen}
+        onClose={() => setAddSceneOpen(false)}
+        candidates={(() => {
+          const used = new Set(groupScenes.map((s) => s.location.id))
+          return (locationRoster ?? []).filter((l) => !used.has(l.id))
+        })()}
+        onSelect={(locationId) => void handleAddSceneToGroup(locationId)}
       />
     </article>
   )
