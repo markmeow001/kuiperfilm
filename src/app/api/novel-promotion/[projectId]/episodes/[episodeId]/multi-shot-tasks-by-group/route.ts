@@ -88,16 +88,44 @@ export const GET = apiHandler(async (
     tasksByGroup[groupId] = t.id
   }
 
-  // Phase V (2026-05-28) — debug log: only emits counts, no PII /
-  // userIds / payload contents, so we can verify from prod logs whether
-  // the endpoint is reaching the right data shape.
+  // Phase V (2026-05-28) — debug log: only emits counts + ID suffixes
+  // (last 6 chars, no full IDs / no PII), so we can compare task panelIds
+  // against episode panel IDs and detect stale-reference mismatch.
+  const samplePanelIds = Array.from(groupByPanelId.keys()).slice(0, 3).map((id) => id.slice(-6))
+  const sampleTaskFirstPanel: string[] = []
+  let tasksWithPanelIds = 0
+  let tasksWithMatchingFirstPanel = 0
+  let tasksWithAnyMatchingPanel = 0
+  for (const t of tasks.slice(0, 5)) {
+    const p = t.payload as unknown
+    if (!p || typeof p !== 'object' || Array.isArray(p)) continue
+    const ids = (p as { panelIds?: unknown }).panelIds
+    if (!Array.isArray(ids) || ids.length === 0) continue
+    tasksWithPanelIds++
+    const first = ids[0]
+    if (typeof first === 'string') {
+      sampleTaskFirstPanel.push(first.slice(-6))
+      if (groupByPanelId.has(first)) tasksWithMatchingFirstPanel++
+      for (const id of ids) {
+        if (typeof id === 'string' && groupByPanelId.has(id)) {
+          tasksWithAnyMatchingPanel++
+          break
+        }
+      }
+    }
+  }
   // eslint-disable-next-line no-console
   console.log(
     `[multi-shot-tasks-by-group] projectId-suffix=${projectId.slice(-6)} ` +
     `episodeId-suffix=${episodeId.slice(-6)} ` +
     `panels-with-group=${groupByPanelId.size} ` +
     `tasks-found=${tasks.length} ` +
-    `groups-mapped=${Object.keys(tasksByGroup).length}`,
+    `groups-mapped=${Object.keys(tasksByGroup).length} ` +
+    `sample-episode-panel-suffix=${JSON.stringify(samplePanelIds)} ` +
+    `sample-task-first-panel-suffix=${JSON.stringify(sampleTaskFirstPanel)} ` +
+    `tasks-with-panelIds=${tasksWithPanelIds} ` +
+    `tasks-first-matches=${tasksWithMatchingFirstPanel} ` +
+    `tasks-any-matches=${tasksWithAnyMatchingPanel}`,
   )
 
   return NextResponse.json({ tasksByGroup })
