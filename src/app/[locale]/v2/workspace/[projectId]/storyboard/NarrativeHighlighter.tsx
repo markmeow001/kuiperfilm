@@ -60,14 +60,32 @@ interface EntityToken {
   kind: EntityKind
 }
 
+// Phase V (2026-05-28) — DROPPED px-0.5 from token spans.
+//
+// User report: clicking at the visual end of a line ending with 。 put
+// the caret BEFORE the 。 instead of after. Root cause: the synced
+// overlay technique requires the textarea and the pre to render text
+// at IDENTICAL pixel positions. Token spans had `px-0.5` (2px L/R)
+// which pushed every character AFTER an entity name (e.g. Kent) right
+// by 4px in the colored pre layer — but the textarea below had no
+// such padding, so its 。 sat 4px to the left of where the user saw
+// it. Browsers hit-test against the textarea's text positions, so
+// clicking visually-at-the-end-of-。 landed on the textarea's 「.」
+// glyph's left-half (since textarea's 。 is 4px left of where the user
+// thought it was), producing caret-before-。.
+//
+// The fix is to drop padding entirely so highlight bg sits tight
+// against the entity text, no horizontal width drift. Slight visual
+// loss (pills are tighter) but caret reliability is more important
+// than chip aesthetics here.
 function classForKind(kind: EntityKind): string {
   switch (kind) {
     case 'character':
-      return 'bg-amber-500/25 text-amber-200 rounded-sm px-0.5'
+      return 'bg-amber-500/25 text-amber-200 rounded-sm'
     case 'scene':
-      return 'bg-emerald-500/25 text-emerald-200 rounded-sm px-0.5'
+      return 'bg-emerald-500/25 text-emerald-200 rounded-sm'
     case 'prop':
-      return 'bg-sky-500/25 text-sky-200 rounded-sm px-0.5'
+      return 'bg-sky-500/25 text-sky-200 rounded-sm'
   }
 }
 
