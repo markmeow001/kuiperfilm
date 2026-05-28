@@ -319,6 +319,50 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     }
   }, [taskByGroup, taskByGroupStorageKey])
 
+  // Phase V (2026-05-28) — fetch server-side groupId → taskId map and
+  // merge into taskByGroup so cross-user viewers (admin / workspace
+  // teammate) can see the project owner's generated videos on first
+  // visit. localStorage on its own only carries entries for tasks the
+  // viewer's own browser submitted — for a teammate's project that's
+  // always empty, so without this fetch every group reads as 「尚未生成」
+  // regardless of how many videos the owner has actually rendered.
+  //
+  // Merge policy: server fills MISSING entries only. localStorage wins
+  // for groups the viewer has just submitted in this session so the
+  // chip rail's optimistic update doesn't get overwritten by a stale
+  // server snapshot.
+  useEffect(() => {
+    if (!currentEpisodeId || !projectId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/novel-promotion/${projectId}/episodes/${currentEpisodeId}/multi-shot-tasks-by-group`,
+        )
+        if (!res.ok) return
+        const body = (await res.json()) as { tasksByGroup?: Record<string, string> }
+        const fromServer = body.tasksByGroup ?? {}
+        if (cancelled) return
+        setTaskByGroup((prev) => {
+          const merged = { ...prev }
+          let touched = false
+          for (const [groupId, taskId] of Object.entries(fromServer)) {
+            if (!merged[groupId]) {
+              merged[groupId] = taskId
+              touched = true
+            }
+          }
+          return touched ? merged : prev
+        })
+      } catch {
+        // Best-effort. Falls back to localStorage-only behavior.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, currentEpisodeId])
+
   // Layout mode toggle — three modes:
   //   gallery  — V3 portrait grid + right-side detail (image-driven)
   //   timeline — V4 horizontal strip + 3-col body  (image-driven)
