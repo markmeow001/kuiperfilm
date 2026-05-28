@@ -477,10 +477,32 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
             ) : null}
           </div>
 
-          {/* Preview */}
+          {/* Preview — height-driven for portrait ratios, width-driven for
+              landscape. CSS aspect-ratio alone gives runaway height on
+              9:16 because the right column is ~700px wide → 700×1244px
+              overflows the viewport. Picking the right driver per ratio
+              keeps the preview frame snug. */}
+          {(() => {
+            const [aw, ah] = aspectRatio.split(':').map(Number)
+            const isPortrait = ah > aw
+            const previewStyle: React.CSSProperties = isPortrait
+              ? {
+                  aspectRatio: `${aw} / ${ah}`,
+                  height: 'min(64vh, 640px)',
+                  width: 'auto',
+                  maxWidth: '100%',
+                }
+              : {
+                  aspectRatio: `${aw} / ${ah}`,
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: 'min(64vh, 640px)',
+                }
+            return (
+          <div className="mb-3 flex justify-center">
           <div
-            className="relative mb-3 overflow-hidden rounded-sm border border-stone-800 bg-stone-900/40"
-            style={{ aspectRatio: aspectRatio.replace(':', ' / ') }}
+            className="relative overflow-hidden rounded-sm border border-stone-800 bg-stone-900/40"
+            style={previewStyle}
           >
             {submit.isPending ? (
               <div className="flex h-full w-full items-center justify-center text-stone-500">
@@ -512,6 +534,9 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
               </div>
             )}
           </div>
+          </div>
+            )
+          })()}
 
           {/* Phase T-3 — cross-model chip strip. After a run completes,
               show 2-3 OTHER user-enabled models of the same outputType
