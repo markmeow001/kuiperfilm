@@ -169,13 +169,23 @@ export function NarrativeHighlighter({
     return () => ta.removeEventListener('scroll', sync)
   }, [textareaRef])
 
-  // Wrapper owns the visible bg + border. Inner layers (pre, textarea)
+  // Wrapper owns the visible bg + "border". Inner layers (pre, textarea)
   // are transparent so the colored overlay can shine through. Focus
   // state is hoisted to the wrapper via focus-within.
+  //
+  // Phase V (2026-05-28) caret-alignment rewrite — the previous wrapper
+  // used `border` (1px solid). Because pre was `absolute inset-0` it
+  // overlapped the wrapper's border-box, while textarea was `relative
+  // w-full` so its width subtracted the wrapper's 2px border (1px each
+  // side). Net: textarea text rendered 1px to the right of pre text,
+  // accumulating into multi-character caret drift over a few lines.
+  // Switched to `ring-1 ring-inset` which is implemented as box-shadow
+  // (does NOT participate in layout) — both pre and textarea now sit
+  // identically inside the same border-box.
   const wrapperClasses = [
-    'relative w-full rounded-sm border bg-stone-900/40 transition-colors',
-    'focus-within:border-amber-500/40',
-    flashing ? 'border-emerald-400/60 ring-2 ring-emerald-400/60' : 'border-stone-800',
+    'relative w-full rounded-sm bg-stone-900/40 transition-colors',
+    'ring-1 ring-inset ring-stone-800 focus-within:ring-amber-500/40',
+    flashing ? 'ring-2 ring-emerald-400/60' : '',
   ].join(' ')
 
   // Both layers MUST share these classes verbatim. Padding/font/leading
@@ -184,12 +194,30 @@ export function NarrativeHighlighter({
     'font-serif-cn text-[12px] leading-relaxed whitespace-pre-wrap break-words'
   const sharedPadding = 'p-2.5'
 
+  // Phase V (2026-05-28) — force identical layout/rendering pipeline.
+  // - scrollbarGutter 'stable' reserves scrollbar space on BOTH layers
+  //   so textarea narrowing-by-scrollbar can't drift content width vs
+  //   pre. Critical for long narratives where the textarea scrollbar
+  //   appears and silently shifts wrap positions by ~15px.
+  // - fontKerning + fontFeatureSettings nail down CJK glyph spacing so
+  //   the UA defaults for <pre> (often monospace-ish) and <textarea>
+  //   (often system-ui) can't produce divergent character widths.
+  // - boxSizing border-box is also Tailwind preflight default; declared
+  //   here to be explicit in case the preflight is overridden.
+  const sharedSyncStyle: React.CSSProperties = {
+    scrollbarGutter: 'stable',
+    fontKerning: 'normal',
+    fontFeatureSettings: 'normal',
+    boxSizing: 'border-box',
+  }
+
   return (
     <div className={wrapperClasses}>
       <pre
         ref={preRef}
         aria-hidden="true"
-        className={`${sharedTypography} ${sharedPadding} pointer-events-none absolute inset-0 m-0 overflow-hidden text-stone-200`}
+        className={`${sharedTypography} ${sharedPadding} pointer-events-none absolute inset-0 m-0 overflow-y-auto overflow-x-hidden text-stone-200`}
+        style={sharedSyncStyle}
       >
         {value.length === 0 ? (
           <span className="text-stone-600">{placeholder ?? ''}</span>
@@ -217,6 +245,7 @@ export function NarrativeHighlighter({
         placeholder={value.length === 0 ? undefined : placeholder}
         spellCheck={false}
         className={`${sharedTypography} ${sharedPadding} relative w-full resize-y border-0 bg-transparent text-transparent caret-stone-100 outline-none`}
+        style={sharedSyncStyle}
       />
     </div>
   )
