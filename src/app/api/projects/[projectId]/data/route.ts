@@ -1,7 +1,7 @@
 import { logError as _ulogError } from '@/lib/logging/core'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 import { applyAdminFallbackToNovelPromotionProject } from '@/lib/multi-user/preference-inheritance'
@@ -29,6 +29,18 @@ export const GET = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 
+  // Phase V (2026-05-28) — switched from hard `project.userId === session.user.id`
+  // to the Phase 12.5 8-tier cascade so workspace members / admin / collaborators
+  // can read the project data. Without this, /api/workspaces/[id]/projects would
+  // list a teammate's project but clicking through returned 403 → empty UI.
+  const access = await requireProjectAccess(projectId, session.user.id, 'read')
+  if (!access.allowed) {
+    if (access.reason === 'NOT_FOUND' || access.reason === 'NOT_AUTHENTICATED') {
+      throw new ApiError('NOT_FOUND')
+    }
+    throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
+  }
+
   // 获取基础项目信息
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -37,10 +49,6 @@ export const GET = apiHandler(async (
 
   if (!project) {
     throw new ApiError('NOT_FOUND')
-  }
-
-  if (project.userId !== session.user.id) {
-    throw new ApiError('FORBIDDEN')
   }
 
   // 🔥 更新最近访问时间（异步，不阻塞响应）

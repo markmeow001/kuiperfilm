@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getProjectCostDetails } from '@/lib/billing'
 import { BILLING_CURRENCY } from '@/lib/billing/currency'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 
 /**
  * GET /api/projects/[projectId]/costs
  * 获取项目费用详情
+ *
+ * Phase V (2026-05-28) — auth uses 8-tier cascade so workspace members can
+ * read teammate project cost summary (previously hard owner check returned 403).
  */
 export const GET = apiHandler(async (
   request: NextRequest,
@@ -20,7 +23,14 @@ export const GET = apiHandler(async (
 
   const { projectId } = await context.params
 
-  // 验证项目归属
+  const access = await requireProjectAccess(projectId, session.user.id, 'read')
+  if (!access.allowed) {
+    if (access.reason === 'NOT_FOUND' || access.reason === 'NOT_AUTHENTICATED') {
+      throw new ApiError('NOT_FOUND')
+    }
+    throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
+  }
+
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { userId: true, name: true }
@@ -28,10 +38,6 @@ export const GET = apiHandler(async (
 
   if (!project) {
     throw new ApiError('NOT_FOUND')
-  }
-
-  if (project.userId !== session.user.id) {
-    throw new ApiError('FORBIDDEN')
   }
 
   // 获取费用详情

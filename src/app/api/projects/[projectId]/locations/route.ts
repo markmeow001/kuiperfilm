@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
+import { requireUserAuth, isErrorResponse, requireProjectAccess } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { attachMediaFieldsToProject } from '@/lib/media/attach'
 
@@ -9,6 +9,9 @@ import { attachMediaFieldsToProject } from '@/lib/media/attach'
  *
  * Returns project-level locations with the episodes they appear in (via the
  * EpisodeLocation junction = source of truth).
+ *
+ * Phase V (2026-05-28) — auth uses 8-tier cascade so workspace members can
+ * read teammate projects (previously hard owner check returned 403).
  */
 export const GET = apiHandler(async (
   _request: NextRequest,
@@ -20,12 +23,13 @@ export const GET = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { userId: true },
-  })
-  if (!project) throw new ApiError('NOT_FOUND')
-  if (project.userId !== session.user.id) throw new ApiError('FORBIDDEN')
+  const access = await requireProjectAccess(projectId, session.user.id, 'read')
+  if (!access.allowed) {
+    if (access.reason === 'NOT_FOUND' || access.reason === 'NOT_AUTHENTICATED') {
+      throw new ApiError('NOT_FOUND')
+    }
+    throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
+  }
 
   const novelProject = await prisma.novelPromotionProject.findUnique({
     where: { projectId },
