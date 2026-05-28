@@ -63,86 +63,44 @@ export const GET = apiHandler(async (
     return NextResponse.json({ tasksByGroup: {} })
   }
 
-  // Pull all VIDEO_MULTI_SHOT tasks for this project, newest first,
-  // so the first match per group wins (= latest task). Filter by
-  // projectId only — `episodeId` on the Task row may be null for
-  // legacy entries, and the panel-derived check below already
-  // confines us to this episode.
-  const tasks = await prisma.task.findMany({
-    where: { projectId, type: TASK_TYPE.VIDEO_MULTI_SHOT },
+  // Pull GraphRun rows instead of Task rows. submitTask creates both
+  // a Task and a Run, then OVERWRITES task.payload with runtime event
+  // metadata (stage / flowId / flowStageIndex / etc.) — the original
+  // panelIds gets clobbered. GraphRun.input retains the user-submitted
+  // shape, so it's the only reliable source for cross-user group
+  // derivation. We still return the task.id (via run.taskId) so the
+  // frontend's useMultiShotTask(taskId) → /api/tasks/[id] hook keeps
+  // working unchanged.
+  const runs = await prisma.graphRun.findMany({
+    where: { projectId, workflowType: TASK_TYPE.VIDEO_MULTI_SHOT },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, payload: true },
+    select: { id: true, taskId: true, input: true },
   })
 
   const tasksByGroup: Record<string, string> = {}
-  for (const t of tasks) {
-    const payload = t.payload as unknown
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue
-    const panelIds = (payload as { panelIds?: unknown }).panelIds
+  for (const r of runs) {
+    if (!r.taskId) continue
+    const input = r.input as unknown
+    if (!input || typeof input !== 'object' || Array.isArray(input)) continue
+    const panelIds = (input as { panelIds?: unknown }).panelIds
     if (!Array.isArray(panelIds) || panelIds.length === 0) continue
     const firstPanelId = panelIds[0]
     if (typeof firstPanelId !== 'string') continue
     const groupId = groupByPanelId.get(firstPanelId)
     if (!groupId) continue
     if (tasksByGroup[groupId]) continue
-    tasksByGroup[groupId] = t.id
+    tasksByGroup[groupId] = r.taskId
   }
 
-  // Phase V (2026-05-28) — debug log: only emits counts + ID suffixes
-  // (last 6 chars, no full IDs / no PII), so we can compare task panelIds
-  // against episode panel IDs and detect stale-reference mismatch.
-  const samplePanelIds = Array.from(groupByPanelId.keys()).slice(0, 3).map((id) => id.slice(-6))
-  const sampleTaskFirstPanel: string[] = []
-  let tasksWithPanelIds = 0
-  let tasksWithMatchingFirstPanel = 0
-  let tasksWithAnyMatchingPanel = 0
-  for (const t of tasks.slice(0, 5)) {
-    const p = t.payload as unknown
-    if (!p || typeof p !== 'object' || Array.isArray(p)) continue
-    const ids = (p as { panelIds?: unknown }).panelIds
-    if (!Array.isArray(ids) || ids.length === 0) continue
-    tasksWithPanelIds++
-    const first = ids[0]
-    if (typeof first === 'string') {
-      sampleTaskFirstPanel.push(first.slice(-6))
-      if (groupByPanelId.has(first)) tasksWithMatchingFirstPanel++
-      for (const id of ids) {
-        if (typeof id === 'string' && groupByPanelId.has(id)) {
-          tasksWithAnyMatchingPanel++
-          break
-        }
-      }
-    }
-  }
+  // Brief telemetry — counts only, no PII / no full IDs. Used to verify
+  // production data flow from server logs without exposing details.
   // eslint-disable-next-line no-console
   console.log(
     `[multi-shot-tasks-by-group] projectId-suffix=${projectId.slice(-6)} ` +
     `episodeId-suffix=${episodeId.slice(-6)} ` +
     `panels-with-group=${groupByPanelId.size} ` +
-    `tasks-found=${tasks.length} ` +
-    `groups-mapped=${Object.keys(tasksByGroup).length} ` +
-    `sample-episode-panel-suffix=${JSON.stringify(samplePanelIds)} ` +
-    `sample-task-first-panel-suffix=${JSON.stringify(sampleTaskFirstPanel)} ` +
-    `tasks-with-panelIds=${tasksWithPanelIds} ` +
-    `tasks-first-matches=${tasksWithMatchingFirstPanel} ` +
-    `tasks-any-matches=${tasksWithAnyMatchingPanel}`,
-  )
-
-  // Extra diagnostic — emit the payload top-level KEYS (not values)
-  // for the first 3 tasks so we can see whether they use panelIds,
-  // panelId, panelGroup, or something else entirely.
-  const sampleKeys: string[][] = []
-  for (const t of tasks.slice(0, 3)) {
-    const p = t.payload as unknown
-    if (!p || typeof p !== 'object' || Array.isArray(p)) {
-      sampleKeys.push(['__not_object__'])
-      continue
-    }
-    sampleKeys.push(Object.keys(p as Record<string, unknown>))
-  }
-  // eslint-disable-next-line no-console
-  console.log(
-    `[multi-shot-tasks-by-group] payload-keys=${JSON.stringify(sampleKeys)}`,
+    `runs-found=${runs.length} ` +
+    `groups-mapped=${Object.keys(tasksByGroup).length}`,
   )
 
   return NextResponse.json({ tasksByGroup })
