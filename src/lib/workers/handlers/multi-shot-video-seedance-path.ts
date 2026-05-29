@@ -308,7 +308,10 @@ export function buildSeedancePrompt(
   // accuracy depends on the line being verbatim.
   let dialogueBeatCount = 0
   const beats = panels.map((p, i) => {
-    const visualRaw = (p.videoPrompt || p.description || `分鏡 ${i + 1}`).trim()
+    // 2026-05-29 — description FIRST (was videoPrompt||description): description
+    // now holds the rich five-element narrative WITH names; videoPrompt is the
+    // legacy name-stripped T2I field. Matches b-path / atlascloud-path.
+    const visualRaw = (p.description || p.videoPrompt || `分鏡 ${i + 1}`).trim()
     const visual = visualRaw.length > 200 ? `${visualRaw.slice(0, 200)}…` : visualRaw
     const lines: string[] = [`${i + 1}. ${visual}`]
 

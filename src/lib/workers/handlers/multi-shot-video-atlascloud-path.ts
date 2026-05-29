@@ -360,7 +360,13 @@ function buildAtlasCloudPrompt(
   for (let i = 0; i < panels.length; i++) {
     const panel = panels[i]
     const shotNum = i + 1
-    const desc = (panel.videoPrompt || panel.description || '').trim()
+    // 2026-05-29 — description FIRST (was videoPrompt||description). description
+    // now carries the full five-element rich structure WITH character names;
+    // videoPrompt is the legacy T2I-era field that strips names to 年龄段+性别.
+    // R2V binds names→images via the ref-map, so the named-rich description is
+    // the correct source. Was shadowing the description-richness upgrade.
+    // Matches b-path (already description-first). videoPrompt = fallback only.
+    const desc = (panel.description || panel.videoPrompt || '').trim()
     const dialogue = (panel.srtSegment || '').trim()
     if (dialogue) dialogueBeatCount += 1
 
@@ -608,7 +614,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
   // Each tier also yields `perShotDurations` (aligned to usedPanels).
   const actionSecondsByPanelId = new Map<string, number>()
   for (const panel of usedPanels) {
-    const sec = estimateSilentActionSeconds(panel.videoPrompt || panel.description || '')
+    const sec = estimateSilentActionSeconds(panel.description || panel.videoPrompt || '')
     if (sec > 0) actionSecondsByPanelId.set(panel.id, sec)
   }
 
