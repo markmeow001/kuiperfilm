@@ -351,7 +351,14 @@ export function MultiShotBindingsRail({
       {status === 'failed' ? (() => {
         const rawMsg = data?.error?.message || data?.errorMessage || ''
         const rawCode = data?.error?.code || ''
-        const isRateLimit = /70000|requestlimitexceeded|maximum concurrency/i.test(rawMsg)
+        const isRateLimit = /70000|requestlimitexceeded|maximum concurrency|rate limit|too many requests|\b429\b/i.test(rawMsg)
+        // Name the provider only when the error is unambiguously theirs;
+        // otherwise stay neutral. 70000 / requestlimitexceeded are Tencent
+        // VOD codes; everything else (AtlasCloud / fal / ARK rate limits)
+        // shouldn't be mislabeled "Tencent". (2026-05-29)
+        const rateLimitProvider = /70000|requestlimitexceeded/i.test(rawMsg)
+          ? 'Tencent VOD'
+          : '影片供應商'
         const isOrphaned = /queue job (already terminated|missing).*db/i.test(rawMsg)
           || /queue job missing.*restart/i.test(rawMsg)
         // Provider content-moderation rejection (Seedance / AtlasCloud).
@@ -372,13 +379,13 @@ export function MultiShotBindingsRail({
           <div className="rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1.5 font-serif-cn text-[11px] text-rose-300">
             {isRateLimit ? (
               <>
-                <strong className="text-rose-200">Tencent VOD 並發上限被打到</strong>
+                <strong className="text-rose-200">{rateLimitProvider} 並發 / 速率上限被打到</strong>
                 <div className="mt-0.5 text-[14px] text-rose-300/80">
-                  你的 Tencent 帳號同時跑的視頻任務太多。建議:
+                  同時送出的視頻任務太多(可能還有其他 group 在跑)。建議:
                   <ul className="mt-0.5 list-inside list-disc space-y-0.5">
                     <li>等 30-60 秒後點上方「重新生成」</li>
                     <li>不要一次送多個 group(改成一次跑一組)</li>
-                    <li>長期解法:聯絡 Tencent 提高並發配額</li>
+                    <li>長期解法:聯絡 {rateLimitProvider} 提高並發配額</li>
                   </ul>
                 </div>
               </>
