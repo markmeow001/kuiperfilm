@@ -1990,7 +1990,15 @@ export function GroupCard({
                   Row 2 selects get. */}
               <button
                 type="button"
-                disabled={!narrativeDirty || !canEdit}
+                // 2026-05-29 — was `!narrativeDirty || !canEdit`, which locked
+                // the button whenever the narrative was clean (the saved/seed
+                // version). But after 重新分析 regenerates the underlying
+                // panels, the clean narrative is STALE — the user needs to
+                // rebuild it from the new panels, and that's exactly when the
+                // button was disabled. Always allow rebuild (the title already
+                // has a clean-state variant); rebuilding a matching seed is a
+                // harmless no-op.
+                disabled={!canEdit}
                 onClick={() => {
                   const fresh = buildInitialNarrativeForFamily()
                   setNarrativeDraft('')
