@@ -172,10 +172,20 @@ Self-check before output (every panel):
 ⚠️ Write every panel in three layers — Setup / Develop / Resolve (added
 2026-05-29, the core source of quality):
 
-Write each video_prompt as a "Setup → Develop → Resolve" tension arc of THE
-SAME main beat (NOT 3 sequential actions — still bound by rule 2 "one main
-action"). Fill each layer with these "visual anchors" (they coexist, cost no
-time, more is fine):
+Write BOTH description AND video_prompt as a "Setup → Develop → Resolve"
+tension arc of THE SAME main beat (NOT 3 sequential actions — still bound by
+rule 2 "one main action").
+
+⚠️ CRITICAL — description is the R2V narrative main text (the frontend preview
+AND the string fed to the video model both read `description`). It must be
+written JUST AS RICH as video_prompt — full spatial anchors + ambient sound +
+micro-action layering + Setup/Develop/Resolve. The ONLY difference: description
+keeps full character names (@Name), video_prompt swaps to age+gender. Do NOT
+leave description as thin prose — that makes the R2V narrative look sparse even
+when video_prompt is rich.
+
+Fill each layer with these "visual anchors" (they coexist, cost no time, more
+is fine):
 
 1. Spatial anchor (REQUIRED): each character's in-frame position + facing.
    e.g. "@A (frame right, foreground) faces left, @B (frame left, background)
