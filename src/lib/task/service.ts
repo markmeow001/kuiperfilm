@@ -374,10 +374,15 @@ export async function updateTaskBillingInfo(taskId: string, billingInfo: TaskBil
  * pay it.
  */
 async function mergePayloadMetaWithExisting(
-  taskId: string,
+  taskId: string | undefined | null,
   payload: Record<string, unknown> | null,
 ): Promise<Record<string, unknown> | null> {
   if (!payload) return payload
+  // Playground jobs have no backing Task row (state lives on PlaygroundRun).
+  // Skip the meta-merge read entirely — there's nothing to merge with.
+  // 2026-05-28: caused playground-video to crash on Prisma findUnique
+  // with id: undefined.
+  if (!taskId) return payload
   const existing = await taskModel.findUnique({
     where: { id: taskId },
     select: { payload: true },
@@ -400,7 +405,9 @@ async function mergePayloadMetaWithExisting(
   }
 }
 
-export async function updateTaskPayload(taskId: string, payload: Record<string, unknown> | null) {
+export async function updateTaskPayload(taskId: string | undefined | null, payload: Record<string, unknown> | null) {
+  // Playground jobs have no Task row — nothing to update.
+  if (!taskId) return null
   const merged = await mergePayloadMetaWithExisting(taskId, payload)
   return await taskModel.update({
     where: { id: taskId },
@@ -434,7 +441,8 @@ export async function isTaskActive(taskId: string | undefined | null) {
   return isActiveStatus(task.status)
 }
 
-export async function tryMarkTaskProcessing(taskId: string, externalId?: string | null) {
+export async function tryMarkTaskProcessing(taskId: string | undefined | null, externalId?: string | null) {
+  if (!taskId) return false
   const result = await taskModel.updateMany({
     where: activeTaskWhere(taskId),
     data: {
@@ -448,7 +456,8 @@ export async function tryMarkTaskProcessing(taskId: string, externalId?: string 
   return result.count > 0
 }
 
-export async function trySetTaskExternalId(taskId: string, externalId: string) {
+export async function trySetTaskExternalId(taskId: string | undefined | null, externalId: string) {
+  if (!taskId) return false
   const value = typeof externalId === 'string' ? externalId.trim() : ''
   if (!value) return false
   const result = await taskModel.updateMany({
@@ -466,7 +475,8 @@ export async function trySetTaskExternalId(taskId: string, externalId: string) {
   return result.count > 0
 }
 
-export async function touchTaskHeartbeat(taskId: string) {
+export async function touchTaskHeartbeat(taskId: string | undefined | null) {
+  if (!taskId) return false
   const result = await taskModel.updateMany({
     where: activeTaskWhere(taskId),
     data: { heartbeatAt: new Date() },
@@ -474,7 +484,12 @@ export async function touchTaskHeartbeat(taskId: string) {
   return result.count > 0
 }
 
-export async function tryUpdateTaskProgress(taskId: string, progress: number, payload?: Record<string, unknown> | null) {
+export async function tryUpdateTaskProgress(taskId: string | undefined | null, progress: number, payload?: Record<string, unknown> | null) {
+  // Playground jobs run via PlaygroundRun, not Task. They reach the
+  // shared worker progress helper because the BullMQ job is the same
+  // shape, but there's no Task row to update. Soft no-op so the worker
+  // can keep streaming progress events without blowing up. (2026-05-28)
+  if (!taskId) return false
   // payload meta keys (locale, route, userTier, runId, provider, etc.)
   // are owned across multiple layers — merge instead of replace so
   // worker progress events don't blow away upstream writes. See
@@ -490,7 +505,8 @@ export async function tryUpdateTaskProgress(taskId: string, progress: number, pa
   return result.count > 0
 }
 
-export async function tryMarkTaskCompleted(taskId: string, resultPayload?: Record<string, unknown> | null) {
+export async function tryMarkTaskCompleted(taskId: string | undefined | null, resultPayload?: Record<string, unknown> | null) {
+  if (!taskId) return false
   const result = await taskModel.updateMany({
     where: activeTaskWhere(taskId),
     data: {
@@ -504,7 +520,8 @@ export async function tryMarkTaskCompleted(taskId: string, resultPayload?: Recor
   return result.count > 0
 }
 
-export async function tryMarkTaskFailed(taskId: string, errorCode: string, errorMessage: string) {
+export async function tryMarkTaskFailed(taskId: string | undefined | null, errorCode: string, errorMessage: string) {
+  if (!taskId) return false
   const result = await taskModel.updateMany({
     where: activeTaskWhere(taskId),
     data: {
@@ -518,19 +535,19 @@ export async function tryMarkTaskFailed(taskId: string, errorCode: string, error
   return result.count > 0
 }
 
-export async function markTaskProcessing(taskId: string, externalId?: string | null) {
+export async function markTaskProcessing(taskId: string | undefined | null, externalId?: string | null) {
   return await tryMarkTaskProcessing(taskId, externalId)
 }
 
-export async function updateTaskProgress(taskId: string, progress: number, payload?: Record<string, unknown> | null) {
+export async function updateTaskProgress(taskId: string | undefined | null, progress: number, payload?: Record<string, unknown> | null) {
   return await tryUpdateTaskProgress(taskId, progress, payload)
 }
 
-export async function markTaskCompleted(taskId: string, result?: Record<string, unknown> | null) {
+export async function markTaskCompleted(taskId: string | undefined | null, result?: Record<string, unknown> | null) {
   return await tryMarkTaskCompleted(taskId, result)
 }
 
-export async function markTaskFailed(taskId: string, errorCode: string, errorMessage: string) {
+export async function markTaskFailed(taskId: string | undefined | null, errorCode: string, errorMessage: string) {
   return await tryMarkTaskFailed(taskId, errorCode, errorMessage)
 }
 
