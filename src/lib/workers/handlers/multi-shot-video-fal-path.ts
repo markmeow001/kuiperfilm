@@ -259,6 +259,14 @@ export async function runMultiShotFalComposite(params: {
    *  atlascloud-path for full rationale. */
   totalDurationSeconds?: number
   visualStyleId?: string
+  /** Per-call character appearance overrides ("swap costume" from the
+   *  bindings rail). characterId → appearanceId. Wins over the episode
+   *  binding so a user who switches William to 半裸 actually gets that
+   *  appearance's reference image. 2026-05-28 — was missing entirely on
+   *  this path (parity gap with seedance/ark/atlascloud/b paths). */
+  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
+  /** Per-call location view overrides. locationId → viewName. */
+  locationOverrides?: Array<{ locationId: string; viewName?: string }>
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -319,10 +327,22 @@ export async function runMultiShotFalComposite(params: {
     }
   }
 
+  // Per-call character appearance overrides ("swap costume" from the
+  // bindings rail) win over the episode binding — same merge order as
+  // seedance/atlascloud paths. Without this fal silently rendered the
+  // default appearance (2026-05-28 fix: user switched William to 半裸 but
+  // kept getting the full-suit default).
+  for (const o of params.characterOverrides ?? []) {
+    if (o.characterId && o.appearanceId) episodeBindings.set(o.characterId, o.appearanceId)
+  }
+
   const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
 
   const locOverrideById = new Map<string, string>()
+  for (const o of params.locationOverrides ?? []) {
+    if (o.locationId && o.viewName) locOverrideById.set(o.locationId, o.viewName)
+  }
   const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
   const propRefs = collectPropRefs(usedPanels, projectData)

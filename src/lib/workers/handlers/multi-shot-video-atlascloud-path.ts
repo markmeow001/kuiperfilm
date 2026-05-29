@@ -411,6 +411,11 @@ export async function runMultiShotAtlasCloudComposite(params: {
    *  appearance's reference image. 2026-05-28 — was silently dropped on
    *  this path (parity gap with seedance/ark/b paths). */
   characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
+  /** Per-call location view overrides ("swap scene view" from the bindings
+   *  rail). locationId → viewName. Wins over the panel's default view.
+   *  2026-05-28 — wired for parity with seedance/ark paths (was a hardcoded
+   *  empty map before). */
+  locationOverrides?: Array<{ locationId: string; viewName?: string }>
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -489,7 +494,10 @@ export async function runMultiShotAtlasCloudComposite(params: {
   // t2v / i2v use them as INLINE TEXT anchors; r2v also pushes them
   // as reference_images[]. Either way the bindings response surfaces
   // what the worker had access to, so the chip rail stays accurate.
-  const locOverrideById = new Map<string, string>() // no per-call override surface yet
+  const locOverrideById = new Map<string, string>()
+  for (const o of params.locationOverrides ?? []) {
+    if (o.locationId && o.viewName) locOverrideById.set(o.locationId, o.viewName)
+  }
   // Pass the hand-edited rawPrompt as extra mining text so a character
   // named only in the narrative ("@Vera") still resolves to a reference
   // image even when the storyboard parser never wrote them into
