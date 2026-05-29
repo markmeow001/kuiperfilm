@@ -4,6 +4,7 @@ import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { toMoneyNumber } from '@/lib/billing/money'
 import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
+import { normalizeGenerationMode, normalizeOpeningPacing } from '@/lib/novel-promotion/generation-mode'
 
 // GET - 获取用户的项目（支持分页和搜索）
 export const GET = apiHandler(async (request: NextRequest) => {
@@ -211,7 +212,18 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 
-  const { name, description, workspaceId: rawWorkspaceId } = await request.json()
+  const {
+    name,
+    description,
+    workspaceId: rawWorkspaceId,
+    generationMode: rawGenerationMode,
+    openingPacing: rawOpeningPacing,
+  } = await request.json()
+  // New projects default to R2V-narrative (no T2I). normalize* falls back to
+  // 'r2v-narrative' / 'hook' for any missing/invalid value, so even non-UI
+  // create paths get the modern flow. (2026-05-29)
+  const generationMode = normalizeGenerationMode(rawGenerationMode)
+  const openingPacing = normalizeOpeningPacing(rawOpeningPacing)
 
   if (!name || name.trim().length === 0) {
     throw new ApiError('INVALID_PARAMS')
@@ -332,6 +344,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
       editModel: pick('editModel'),
       videoModel: pick('videoModel'),
       videoRatio: pick('videoRatio') ?? undefined,
+      generationMode,
+      openingPacing,
       artStyle: pick('artStyle') || 'american-comic',
       ttsRate: pick('ttsRate') ?? undefined,
       stylePresetKey: 'realistic',
