@@ -39,11 +39,14 @@ export async function enqueuePlaygroundVideoJob(params: {
     // Deduplicate by run id — if API gets two clicks before the first
     // job lands, the second collapses into the same job. BullMQ jobId
     // uniqueness handles this naturally.
-    jobId: `playground-video:${params.playgroundRunId}`,
+    // NOTE: BullMQ forbids ":" in a custom jobId (it's the Redis key
+    // separator) — it throws "Custom Id cannot contain :". Use "-".
+    // playgroundRunId is a UUID (no colon) so uniqueness is preserved.
+    jobId: `playground-video-${params.playgroundRunId}`,
     // 3 attempts — for transient network / rate-limit blips. The
     // generator-side rate-limit-aware backoff in queues.ts handles
     // the spacing.
     attempts: 3,
   })
-  return { jobId: job.id ?? `playground-video:${params.playgroundRunId}` }
+  return { jobId: job.id ?? `playground-video-${params.playgroundRunId}` }
 }
