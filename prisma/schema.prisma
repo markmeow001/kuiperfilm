@@ -76,36 +76,36 @@ model CharacterAppearance {
 }
 
 model LocationImage {
-  id                  String                   @id @default(uuid())
-  locationId          String
-  imageIndex          Int
+  id                   String                   @id @default(uuid())
+  locationId           String
+  imageIndex           Int
   // Approach B-Standard 場景多視角:同一個 location 可有多張圖,
   // imageIndex=0 為主視角(legacy 的單張圖),imageIndex>=1 為額外
   // 視角(如「窗邊」、「正門」、「夜晚」)。viewName 為 nullable
   // string 標籤,worker 端 panel handler 解析 panel description
   // 比對 viewName 命中時改抓對應 imageUrl 當 ref。null 視為主視角。
-  viewName            String?                  @db.VarChar(255)
-  description         String?                  @db.Text
-  imageUrl            String?                  @db.Text
-  isSelected          Boolean                  @default(false)
+  viewName             String?                  @db.VarChar(255)
+  description          String?                  @db.Text
+  imageUrl             String?                  @db.Text
+  isSelected           Boolean                  @default(false)
   // Tencent VOD AIGC Element ID — see CharacterAppearance.tencentVodElementId.
   // Registered lazily per image (each view has its own Element).
-  tencentVodElementId String?                  @db.VarChar(64)
+  tencentVodElementId  String?                  @db.VarChar(64)
   // 2026-05-22 — 火山方舟 asset API — see CharacterAppearance.arkAssetId.
   // Per-view registration (each LocationImage is its own asset).
-  arkAssetId           String?                 @db.VarChar(64)
-  arkAssetStatus       String?                 @db.VarChar(16)
-  arkAssetSourceUrl    String?                 @db.Text
+  arkAssetId           String?                  @db.VarChar(64)
+  arkAssetStatus       String?                  @db.VarChar(16)
+  arkAssetSourceUrl    String?                  @db.Text
   arkAssetRegisteredAt DateTime?
-  arkAssetError        String?                 @db.Text
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @default(now()) @updatedAt
-  previousImageUrl    String?                  @db.Text
-  previousDescription String?                  @db.Text // 上一次的描述词（用于撤回）
-  imageMediaId        String?
-  imageMedia          MediaObject?             @relation("LocationImageMedia", fields: [imageMediaId], references: [id], onDelete: SetNull)
-  location            NovelPromotionLocation   @relation("LocationImages", fields: [locationId], references: [id], onDelete: Cascade)
-  selectedByLocations NovelPromotionLocation[] @relation("SelectedLocationImage")
+  arkAssetError        String?                  @db.Text
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @default(now()) @updatedAt
+  previousImageUrl     String?                  @db.Text
+  previousDescription  String?                  @db.Text // 上一次的描述词（用于撤回）
+  imageMediaId         String?
+  imageMedia           MediaObject?             @relation("LocationImageMedia", fields: [imageMediaId], references: [id], onDelete: SetNull)
+  location             NovelPromotionLocation   @relation("LocationImages", fields: [locationId], references: [id], onDelete: Cascade)
+  selectedByLocations  NovelPromotionLocation[] @relation("SelectedLocationImage")
 
   @@unique([locationId, imageIndex])
   @@index([locationId])
@@ -350,6 +350,15 @@ model NovelPromotionProject {
   videoModel           String? // 用户配置的视频模型
   videoRatio           String                    @default("9:16")
   targetDuration       Int                       @default(60) // 目标视频时长（秒）
+  // 2026-05-29 — per-project 生成模式。
+  //   r2v-narrative  = text→AI切組→Seedance R2V，無 T2I（新專案經建立 API 預設此值）
+  //   t2i-storyboard = 文生圖分鏡→圖生視頻（legacy）
+  // 欄位 @default 故意設 legacy：prod 走 prisma db push，新增此欄時既有 row 會
+  // 套欄位 default，設成 t2i 才能保留既有用戶現狀；新專案由建立 API 顯式帶
+  // r2v-narrative。read 端的 resolveGenerationModeBehavior(null) 另以 r2v 為安全預設。
+  generationMode       String                    @default("t2i-storyboard")
+  // 開場節奏：hook=短劇冷開場快節奏（現狀預設）；cinematic=電影氛圍開場（開場獨立成組慢鋪）
+  openingPacing        String                    @default("hook")
   ttsRate              String                    @default("+50%")
   globalAssetText      String?                   @db.Text
   // deprecated: replaced by styleProfile fields (stylePositivePrompt / styleNegativePrompt / styleReferenceImages),
@@ -642,15 +651,15 @@ model User {
   userProjectStates UserProjectState[]
 
   // Phase 12.5 (2026-05-22) — Figma-style collaboration
-  projectCollaborations  ProjectCollaborator[] @relation("CollaboratorUser")
+  projectCollaborations        ProjectCollaborator[] @relation("CollaboratorUser")
   projectCollaborationsGranted ProjectCollaborator[] @relation("CollaboratorGrantedBy")
-  editRequestsMade       EditRequest[]         @relation("EditRequester")
-  editRequestsResolved   EditRequest[]         @relation("EditRequestResolver")
-  auditLogActions        AuditLog[]            @relation("AuditActor")
-  deletedProjects        Project[]             @relation("ProjectDeletedBy")
+  editRequestsMade             EditRequest[]         @relation("EditRequester")
+  editRequestsResolved         EditRequest[]         @relation("EditRequestResolver")
+  auditLogActions              AuditLog[]            @relation("AuditActor")
+  deletedProjects              Project[]             @relation("ProjectDeletedBy")
 
   // Phase T (2026-05-27) — Playground / Freedom Mode runs owned by this user.
-  playgroundRuns         PlaygroundRun[]       @relation("PlaygroundRunUser")
+  playgroundRuns PlaygroundRun[] @relation("PlaygroundRunUser")
 
   @@map("user")
 }
@@ -697,13 +706,13 @@ model Workspace {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now()) @updatedAt
 
-  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  owner        User              @relation("WorkspaceOwner", fields: [ownerEditorId], references: [id], onDelete: Restrict)
-  members      WorkspaceMember[]
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner          User              @relation("WorkspaceOwner", fields: [ownerEditorId], references: [id], onDelete: Restrict)
+  members        WorkspaceMember[]
   // Phase 12.5 — projects bound to this workspace (NULL projects = personal/legacy)
-  projects     Project[]         @relation("WorkspaceProjects")
+  projects       Project[]         @relation("WorkspaceProjects")
   // Phase 5 (2026-05-25) — workspace-scoped API keys for public API access.
-  apiKeys      ApiKey[]
+  apiKeys        ApiKey[]
   // Phase T (2026-05-27) — Playground freedom-mode runs (independent of projects).
   playgroundRuns PlaygroundRun[]
 
@@ -727,18 +736,18 @@ model Workspace {
 // the per-group ref video (Phase S) — vendor parity with ARK's singular
 // referenceVideoUrl. See feedback_kuiperfilm_ref_video_lowest_common_denominator.
 model PlaygroundRun {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   userId          String
   workspaceId     String?
   // User-typed prompt with @imageN / @videoN tokens. Worker resolves @-tokens
   // against referenceImages / referenceVideos arrays by 1-indexed position.
-  prompt          String   @db.Text
+  prompt          String    @db.Text
   // JSON array of COS keys (strings). max 9 per Phase T-1 cap; mirrors picker grid.
-  referenceImages String?  @db.Text
+  referenceImages String?   @db.Text
   // JSON array — max 1 today per Phase S decision (ARK lowest common denominator).
-  referenceVideos String?  @db.Text
+  referenceVideos String?   @db.Text
   // Optional free-form style / tone hint.
-  referenceText   String?  @db.Text
+  referenceText   String?   @db.Text
   // 'image' | 'video' — drives which generator the worker dispatches to.
   outputType      String
   // Canonical 'provider::modelId' (e.g. 'fal::bytedance/seedance-2.0/reference-to-video',
@@ -749,17 +758,17 @@ model PlaygroundRun {
   durationSec     Int?
   aspectRatio     String?
   // Number of variants to generate per run (Phase T-1 caps at 1).
-  generationCount Int      @default(1)
+  generationCount Int       @default(1)
   // 'pending' | 'running' | 'succeeded' | 'failed'
-  status          String   @default("pending")
+  status          String    @default("pending")
   // JSON array of result COS keys when succeeded.
-  resultUrls      String?  @db.Text
+  resultUrls      String?   @db.Text
   // Task / external job id for poll-and-retrieve flows.
   externalTaskId  String?
   costEstimate    Float?
   costActual      Float?
-  errorMessage    String?  @db.Text
-  createdAt       DateTime @default(now())
+  errorMessage    String?   @db.Text
+  createdAt       DateTime  @default(now())
   completedAt     DateTime?
 
   user      User       @relation("PlaygroundRunUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -783,46 +792,46 @@ model PlaygroundRun {
 // per-endpoint via the public API middleware. revokedAt is a soft-delete
 // so historical usage logs stay readable for audit.
 model ApiKey {
-  id              String        @id @default(uuid())
-  workspaceId     String
-  name            String        @db.VarChar(64)
+  id            String    @id @default(uuid())
+  workspaceId   String
+  name          String    @db.VarChar(64)
   // First 12 chars of the key: `kfk_<8-char-random>`. Indexed so the
   // middleware can look up the row in O(1) before doing the hash compare.
   // Stored in plaintext because it's not a secret (it's used as a public
   // identifier in dev console + logs + error messages).
-  keyPrefix       String        @unique @db.VarChar(16)
+  keyPrefix     String    @unique @db.VarChar(16)
   // SHA-256 hex of the full key (kfk_<prefix>_<secret>). 64 chars.
   // Compared with timingSafeEqual at auth time.
-  keyHash         String        @db.VarChar(64)
+  keyHash       String    @db.VarChar(64)
   // Last 4 chars of the full key, surfaced in UI as `kfk_xxxxxxxx…abcd`
   // so the user can recognize which key is which without revealing the
   // full token. Not a secret.
-  keyLast4        String        @db.VarChar(4)
+  keyLast4      String    @db.VarChar(4)
   // JSON array of scope strings. Validated against PUBLIC_API_SCOPES enum
   // at create time; trusted at runtime (no re-validation per request).
   // Example: ["read","scripts.write","videos.write"]
-  scopes          String        @db.Text
+  scopes        String    @db.Text
   // Per-key sliding-window rate limit. Default 60 (matches PolyFilm).
   // Enforced via Redis ZADD/ZCOUNT per `apiRate:{keyId}` key.
-  reqPerMinute    Int           @default(60)
+  reqPerMinute  Int       @default(60)
   // Optional cap on monthly call count (across all endpoints). null =
   // unlimited. Checked against ApiKeyUsage.createdAt aggregation; if hit,
   // 429 with code RATE_LIMIT_MONTHLY.
-  monthlyCredit   Int?
-  expiresAt       DateTime?
+  monthlyCredit Int?
+  expiresAt     DateTime?
   // Updated lazily on each successful auth — eventual-consistent within
   // ~60s (we don't write on every call, only on rate-limit window flush).
-  lastUsedAt      DateTime?
-  createdById     String
+  lastUsedAt    DateTime?
+  createdById   String
   // Soft delete. Once set, the key fails auth with REVOKED but
   // ApiKeyUsage rows remain queryable for audit.
-  revokedAt       DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @default(now()) @updatedAt
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
 
-  workspace       Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy       User          @relation("ApiKeyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
-  usages          ApiKeyUsage[]
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User          @relation("ApiKeyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  usages    ApiKeyUsage[]
 
   @@index([workspaceId])
   @@index([keyPrefix])
@@ -834,20 +843,20 @@ model ApiKey {
 // fire-and-forget) so a slow DB doesn't block the API response. Used by
 // dev console usage chart + monthly credit enforcement.
 model ApiKeyUsage {
-  id              String   @id @default(uuid())
-  apiKeyId        String
+  id         String   @id @default(uuid())
+  apiKeyId   String
   // Canonical endpoint path: `/v1/projects`, `/v1/episodes/:id:produce`.
   // Param placeholders (`:id`) instead of concrete values so the usage
   // dashboard groups requests by endpoint kind, not individual resource.
-  endpoint        String   @db.VarChar(128)
-  method          String   @db.VarChar(8)
-  statusCode      Int
-  durationMs      Int
-  ipAddress       String?  @db.VarChar(45)  // IPv6 max 39 + safety
-  userAgent       String?  @db.Text
-  createdAt       DateTime @default(now())
+  endpoint   String   @db.VarChar(128)
+  method     String   @db.VarChar(8)
+  statusCode Int
+  durationMs Int
+  ipAddress  String?  @db.VarChar(45) // IPv6 max 39 + safety
+  userAgent  String?  @db.Text
+  createdAt  DateTime @default(now())
 
-  apiKey          ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
 
   @@index([apiKeyId, createdAt])
   @@map("api_key_usages")
@@ -903,9 +912,9 @@ model ProjectCollaborator {
   grantedBy String
   grantedAt DateTime          @default(now())
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User    @relation("CollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
-  granter   User    @relation("CollaboratorGrantedBy", fields: [grantedBy], references: [id], onDelete: Restrict)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation("CollaboratorUser", fields: [userId], references: [id], onDelete: Cascade)
+  granter User    @relation("CollaboratorGrantedBy", fields: [grantedBy], references: [id], onDelete: Restrict)
 
   @@id([projectId, userId])
   @@index([userId])
