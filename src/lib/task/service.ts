@@ -417,7 +417,13 @@ function activeTaskWhere(taskId: string) {
   }
 }
 
-export async function isTaskActive(taskId: string) {
+export async function isTaskActive(taskId: string | undefined | null) {
+  // Jobs without a backing Task row (e.g. playground_video, which tracks
+  // state on PlaygroundRun instead) have no taskId. The Task-cancellation
+  // concept doesn't apply to them, so treat as active and let the job
+  // proceed. Querying findUnique({ where: { id: undefined } }) would throw
+  // "needs at least one of id or dedupeKey" and kill the job. (2026-05-28)
+  if (!taskId) return true
   const task = await withPrismaRetry(() =>
     taskModel.findUnique({
       where: { id: taskId },
