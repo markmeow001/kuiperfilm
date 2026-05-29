@@ -112,9 +112,14 @@ Character-anchor rule for dialogue scenes:
 
 Five-element red lines (CRITICAL — applies to both description AND video_prompt):
 
-Root cause this solves: when description/video_prompt is overstuffed, the
-video model cannot identify the load-bearing visual beats, so character /
-scene / prop fidelity all degrade together.
+Core balance (recalibrated 2026-05-29): KEEP ACTIONS LEAN (1 main beat) BUT
+WRITE THE PICTURE RICH. The only "overstuffing" to avoid is: (1) stacked
+sequential actions (rule 2), (2) repeating appearance already in the refs
+(rule 1). Everything else — spatial anchors, ambient sound, micro-action
+layering, composition layers — must be written FULLY and concretely, not
+omitted. A thin one-sentence prose line = the model improvises = sparse,
+content-dropping output; dense description focused on ONE main beat = the
+model has clear direction = complete, faithful output.
 
   1. NO appearance details already in @image-N references (body, skin, hair,
      clothing). Write only current action / emotion / expression.
@@ -147,8 +152,12 @@ scene / prop fidelity all degrade together.
      / styleAnchor. video_prompt describes what's in frame, not the camera.
   5. NO vague collective nouns ("crowd", "everyone", "people", "all of
      them", "the group") — name specific characters or give a count.
-  6. Ambient sound and extreme facial detail (pores, sweat reflection,
-     micro-redness) are optional — omit unless central to the shot.
+  6. REQUIRED: every panel includes one "Ambient sound: …" line with a
+     concrete source (collar rustle / low bass drone / cold wind through metal
+     grating / countdown ticking…). This is part of the output quality and
+     must NOT be omitted (the old "optional, omit it" rule is retired). Only
+     EXTREME facial detail (pores / sweat reflection / micro-redness) stays
+     reserved for emotional-peak close-ups.
   7. Dialogue lines ≤ 30 words each — long lines destabilize TTS.
 
 Self-check before output (every panel):
@@ -156,7 +165,44 @@ Self-check before output (every panel):
   □ ≤ 1 main sequential action beat?  □ No negative directives?
   □ No camera/equipment terms?  □ No vague collective nouns?
   □ Dialogue lines ≤ 30 words each?
+  □ Has a "spatial anchor" (who is where in frame, facing which way)?
+  □ Has an "Ambient sound:" line?
   □ Any "transform / morph / shapeshift"? If so, split into two panels?
+
+⚠️ Write every panel in three layers — Setup / Develop / Resolve (added
+2026-05-29, the core source of quality):
+
+Write each video_prompt as a "Setup → Develop → Resolve" tension arc of THE
+SAME main beat (NOT 3 sequential actions — still bound by rule 2 "one main
+action"). Fill each layer with these "visual anchors" (they coexist, cost no
+time, more is fine):
+
+1. Spatial anchor (REQUIRED): each character's in-frame position + facing.
+   e.g. "@A (frame right, foreground) faces left, @B (frame left, background)
+   faces right"
+2. Micro-action layering (REQUIRED): write emotion as concrete body micro-
+   motion, not adjectives.
+   Wrong: "looks tense" → Right: "neck muscles contract, jaw clenches with
+   restrained excitement, fists tighten, nails digging into palms"
+3. Composition + camera grammar: reuse the composition-layers + dramatic-
+   camera vocabulary above (focus pull / over-the-shoulder / low-angle…).
+4. One "Ambient sound:" line (REQUIRED): see rule 6.
+
+Reference structure (match this density):
+   Setup: 【CU · sensing the gaze】
+   [Spatial anchor] @Kael (frame right, foreground) faces left; @Arthur (frame
+   left, background) faces right. Neck muscles contract, head turns smoothly.
+   Ambient sound: faint collar rustle.
+
+   Develop: 【focus pull · clash of intent】
+   Focus shifts from foreground @Kael to background @Arthur, then snaps back.
+   @Kael's mouth curls into a taunting cold smile, right jaw twitching.
+   Ambient sound: low bass drone building tension.
+
+   Resolve: 【POV · countdown ignites】
+   Cut to @Arthur's first-person view; a red holographic countdown flares
+   before the retina, frame freezes on the blinking red number.
+   Ambient sound: crisp electronic countdown ticking.
 
 ⚠️ Transformation / morph / shapeshift rule (added 2026-05-28):
 
