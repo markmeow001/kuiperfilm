@@ -11,7 +11,17 @@
     "descCounter": "{count} / 500",
     "wsLabel": "所在工作区 · WORKSPACE",
     "wsPersonalOption": "个人专案（只有你 + admin 能存取）",
-    "wsHint": "建好之后也可以从专案首页 [👥 协作者] 改"
+    "wsHint": "建好之后也可以从专案首页 [👥 协作者] 改",
+    "modeLabel": "生成模式 · GENERATION MODE",
+    "modeR2vTitle": "敘事直生（推薦）",
+    "modeR2vDesc": "文本→自动切组→R2V，无需先生分镜图，快",
+    "modeT2iTitle": "分镜卡",
+    "modeT2iDesc": "文生图分镜→图生视频，可精修每格、锁帧",
+    "pacingLabel": "开场节奏 · OPENING PACING",
+    "pacingHookTitle": "短剧快钩子",
+    "pacingHookDesc": "冷开场，3 秒内进冲突抓眼球",
+    "pacingCinematicTitle": "电影氛围",
+    "pacingCinematicDesc": "开场独立成组，先铺环境氛围慢揭示"
   },
   "upload": {
     "label": "剧本档案 · SCRIPT FILE（选填）",

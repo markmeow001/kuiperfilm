@@ -76,6 +76,9 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  // 2026-05-29 — per-project generation mode + opening pacing.
+  const [generationMode, setGenerationMode] = useState<'r2v-narrative' | 't2i-storyboard'>('r2v-narrative')
+  const [openingPacing, setOpeningPacing] = useState<'hook' | 'cinematic'>('hook')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Phase 12.5+ — pick the target workspace at create time.
@@ -190,6 +193,8 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
           mode: 'novel-promotion',
           // null sentinel — empty string = 個人專案
           workspaceId: workspaceId || null,
+          generationMode,
+          openingPacing,
         }),
       })
       if (!res.ok) {
@@ -331,6 +336,64 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
             <p className="mt-1 font-fraunces text-[11px] italic text-stone-500">
               {t('form.wsHint')}
             </p>
+          </div>
+
+          {/* 2026-05-29 — generation mode selector (R2V-narrative vs T2I-storyboard) */}
+          <div>
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+              {t('form.modeLabel')}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: 'r2v-narrative' as const, title: t('form.modeR2vTitle'), desc: t('form.modeR2vDesc') },
+                { v: 't2i-storyboard' as const, title: t('form.modeT2iTitle'), desc: t('form.modeT2iDesc') },
+              ]).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setGenerationMode(opt.v)}
+                  className={`rounded-sm border px-3 py-2.5 text-left transition-colors ${
+                    generationMode === opt.v
+                      ? 'border-amber-500/60 bg-amber-500/10'
+                      : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'
+                  }`}
+                >
+                  <div className={`font-mono text-[13px] tracking-wider ${generationMode === opt.v ? 'text-amber-300' : 'text-stone-300'}`}>
+                    {opt.title}
+                  </div>
+                  <div className="mt-0.5 font-fraunces text-[11px] italic text-stone-500">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 2026-05-29 — opening pacing selector (hook vs cinematic) */}
+          <div>
+            <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+              {t('form.pacingLabel')}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { v: 'hook' as const, title: t('form.pacingHookTitle'), desc: t('form.pacingHookDesc') },
+                { v: 'cinematic' as const, title: t('form.pacingCinematicTitle'), desc: t('form.pacingCinematicDesc') },
+              ]).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setOpeningPacing(opt.v)}
+                  className={`rounded-sm border px-3 py-2.5 text-left transition-colors ${
+                    openingPacing === opt.v
+                      ? 'border-amber-500/60 bg-amber-500/10'
+                      : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'
+                  }`}
+                >
+                  <div className={`font-mono text-[13px] tracking-wider ${openingPacing === opt.v ? 'text-amber-300' : 'text-stone-300'}`}>
+                    {opt.title}
+                  </div>
+                  <div className="mt-0.5 font-fraunces text-[11px] italic text-stone-500">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Bulk-upload picker */}

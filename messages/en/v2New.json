@@ -11,7 +11,17 @@
     "descCounter": "{count} / 500",
     "wsLabel": "Workspace · WORKSPACE",
     "wsPersonalOption": "Personal (only you + admin can access)",
-    "wsHint": "You can change this later from the project page [👥 Collaborators]"
+    "wsHint": "You can change this later from the project page [👥 Collaborators]",
+    "modeLabel": "Generation mode · GENERATION MODE",
+    "modeR2vTitle": "Narrative-direct (recommended)",
+    "modeR2vDesc": "Text → auto-group → R2V, no storyboard images, fast",
+    "modeT2iTitle": "Storyboard cards",
+    "modeT2iDesc": "Text-to-image storyboard → image-to-video, per-shot polish + frame-lock",
+    "pacingLabel": "Opening pacing · OPENING PACING",
+    "pacingHookTitle": "Short-drama hook",
+    "pacingHookDesc": "Cold open, hit the conflict within 3s",
+    "pacingCinematicTitle": "Cinematic mood",
+    "pacingCinematicDesc": "Opening as its own group, establish atmosphere first"
   },
   "upload": {
     "label": "Script file · SCRIPT FILE (optional)",
