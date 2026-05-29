@@ -16,7 +16,7 @@ export const USER_ERROR_MESSAGES_ZH: Record<UnifiedErrorCode, string> = {
   EXTERNAL_ERROR: '外部服务暂时不可用，请稍后重试。',
   NETWORK_ERROR: '网络异常，请稍后重试。',
   INSUFFICIENT_BALANCE: '余额不足，请先充值。',
-  SENSITIVE_CONTENT: '内容可能涉及敏感信息，请修改后重试。',
+  SENSITIVE_CONTENT: '内容被供应商的内容审核挡下（可能含敏感信息）。请调整叙事 / 角色 / 场景内容后重试；若是「输出音频」被挡，可关闭「音频」后重新生成。',
   ARK_FACE_DETECTED: '火山 Seedance 2.0 不接受未报备的真人臉参考图。請到該角色 / 場景 / 道具的編輯面板按「报备火山」，等狀態變綠後再重新生成。',
   ARK_SUBSCRIPTION_REQUIRED: '火山方舟素材庫 API 需先購買「Seedance 2.0 高级创作权益包」才能使用。請至火山控制台訂閱後再試。',
   GENERATION_TIMEOUT: '生成超时，请重试。',

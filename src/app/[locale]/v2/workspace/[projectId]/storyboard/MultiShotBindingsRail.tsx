@@ -30,6 +30,7 @@ import {
   type MultiShotSceneBinding,
   type MultiShotTaskRecord,
 } from '@/lib/query/hooks/useMultiShotTask'
+import { resolveErrorDisplay } from '@/lib/errors/display'
 
 /**
  * Heuristic stage label derived from progress percentage. Avoids the
@@ -349,9 +350,24 @@ export function MultiShotBindingsRail({
 
       {status === 'failed' ? (() => {
         const rawMsg = data?.error?.message || data?.errorMessage || ''
+        const rawCode = data?.error?.code || ''
         const isRateLimit = /70000|requestlimitexceeded|maximum concurrency/i.test(rawMsg)
         const isOrphaned = /queue job (already terminated|missing).*db/i.test(rawMsg)
           || /queue job missing.*restart/i.test(rawMsg)
+        // Provider content-moderation rejection (Seedance / AtlasCloud).
+        // Exclude "case-sensitive" so it doesn't false-match. The audio
+        // sub-case ("output audio may contain sensitive information") gets
+        // a specific, actionable hint: turn off 音頻.
+        const isSensitive = rawCode === 'SENSITIVE_CONTENT'
+          || (/sensitive|敏感|moderation|prohibited|nsfw|违规|不当/i.test(rawMsg)
+              && !/case[- ]?sensitive/i.test(rawMsg))
+        const isAudioSensitive = isSensitive && /audio|音[訊频]/i.test(rawMsg)
+        // Friendly fallback for anything else — route through the central
+        // resolver so users never see raw provider JSON. Raw stays in the
+        // title tooltip for ops debugging.
+        const friendlyFallback =
+          resolveErrorDisplay({ code: rawCode || null, message: rawMsg || null })?.message
+          || '視頻生成失敗 — 重試後綁定才會更新'
         return (
           <div className="rounded-sm border border-rose-500/30 bg-rose-500/5 px-2 py-1.5 font-serif-cn text-[11px] text-rose-300">
             {isRateLimit ? (
@@ -377,8 +393,28 @@ export function MultiShotBindingsRail({
                   </ul>
                 </div>
               </>
+            ) : isAudioSensitive ? (
+              <>
+                <strong className="text-rose-200">影片被供應商內容審核擋下（音訊）</strong>
+                <div className="mt-0.5 text-[14px] text-rose-300/80">
+                  Seedance 2.0 會配原生音訊,AtlasCloud 判定這次生成的「音訊」可能含敏感內容而擋下
+                  (與你的畫面 / 描述無關,常是誤判)。建議:
+                  <ul className="mt-0.5 list-inside list-disc space-y-0.5">
+                    <li>把上方「音頻」關掉再「重新生成」(此鏡若無對白,關了不影響)</li>
+                    <li>或微調敘事內容後重試</li>
+                  </ul>
+                </div>
+              </>
+            ) : isSensitive ? (
+              <>
+                <strong className="text-rose-200">內容被供應商審核擋下</strong>
+                <div className="mt-0.5 text-[14px] text-rose-300/80">
+                  這次生成被 AtlasCloud / Seedance 內容審核判定可能含敏感資訊。
+                  請調整敘事 / 角色 / 場景內容後重新生成。
+                </div>
+              </>
             ) : (
-              rawMsg || '視頻生成失敗 — 重試後綁定才會更新'
+              <span title={rawMsg || undefined}>{friendlyFallback}</span>
             )}
           </div>
         )
