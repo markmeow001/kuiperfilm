@@ -188,12 +188,15 @@ export function collectCharacterRefs(
   // narrative still anchors to Vera's reference image. "@" is stripped so
   // chip tokens and plain names both match.
   if (extraMiningText && refs.length < maxRefs) {
-    const minedText = extraMiningText.replace(/@/g, '')
+    // Case-insensitive: users type "@vera" / "@VERA" but the roster name is
+    // "Vera". Lowercase both sides so any casing binds (mirrors the frontend
+    // NarrativeHighlighter so the on-screen chip and the actual bind agree).
+    const minedText = extraMiningText.replace(/@/g, '').toLowerCase()
     for (const character of projectData.characters ?? []) {
       if (refs.length >= maxRefs) break
       if (seenIds.has(character.id)) continue
       const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
-      const hit = aliases.some((alias) => alias && minedText.includes(alias))
+      const hit = aliases.some((alias) => alias && minedText.includes(alias.toLowerCase()))
       if (!hit) continue
       const appearances = character.appearances || []
       let appearance = appearances[0]

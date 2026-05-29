@@ -99,13 +99,19 @@ function tokenize(value: string, tokens: EntityToken[]): Segment[] {
     return [{ text: value, kind: null }]
   }
   const sorted = [...tokens].sort((a, b) => b.name.length - a.name.length)
+  // Case-insensitive matching (2026-05-28): users type "@vera" but the
+  // roster name is "Vera". Match against a lowercased haystack, but slice
+  // the ORIGINAL `value` for display so the chip covers the as-typed text
+  // and casing is preserved. Mirrors the worker's case-insensitive
+  // rawPrompt name-mining so what highlights here is what binds at gen.
+  const haystack = value.toLowerCase()
   const segments: Segment[] = []
   let cursor = 0
   while (cursor < value.length) {
     let matched: { token: EntityToken; index: number } | null = null
     let bestIndex = Number.POSITIVE_INFINITY
     for (const token of sorted) {
-      const idx = value.indexOf(token.name, cursor)
+      const idx = haystack.indexOf(token.name.toLowerCase(), cursor)
       if (idx === -1) continue
       if (idx < bestIndex) {
         matched = { token, index: idx }
@@ -119,8 +125,11 @@ function tokenize(value: string, tokens: EntityToken[]): Segment[] {
     if (matched.index > cursor) {
       segments.push({ text: value.slice(cursor, matched.index), kind: null })
     }
-    segments.push({ text: matched.token.name, kind: matched.token.kind })
-    cursor = matched.index + matched.token.name.length
+    // token.name.length === its lowercase length (Latin/CJK), so the span
+    // is correct; slice the original to keep the user's casing on screen.
+    const matchLen = matched.token.name.length
+    segments.push({ text: value.slice(matched.index, matched.index + matchLen), kind: matched.token.kind })
+    cursor = matched.index + matchLen
   }
   return segments
 }
