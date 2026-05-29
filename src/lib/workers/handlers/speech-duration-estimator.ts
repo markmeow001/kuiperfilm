@@ -50,6 +50,21 @@ const PER_LINE_BUFFER_SEC = 0.4
 const PER_PANEL_MIN_SEC = KLING_OMNI_DEFAULT_PER_SHOT_DURATION
 const PER_PANEL_MAX_SEC = KLING_OMNI_MAX_TOTAL_DURATION
 
+// ── Action-density flooring (2026-05-28) ──
+// Why: a SILENT panel whose video_prompt packs several sequential actions
+// (e.g. "黑貓躍下，落地幻化成 Vera，走向 William，撫摸肩膀紋身") used to get
+// the flat PER_PANEL_MIN_SEC (3s) floor — same as an empty hold shot —
+// because the allocator only looked at dialogue length. Seedance then had
+// ~3s to render 4 actions and only managed the first ("貓躍下"), dropping
+// the rest. We now estimate how many distinct action beats a panel asks
+// for and give silent action-heavy shots proportionally more airtime.
+//
+// SEC_PER_ACTION_BEAT: empirical screen-time a single rendered action
+// needs to read clearly in a Seedance/Kling clip. SILENT_ACTION_MAX_SEC
+// caps a single silent panel so it can't swallow the whole 15s budget.
+const SEC_PER_ACTION_BEAT = 2
+const SILENT_ACTION_MAX_SEC = 12
+
 /**
  * True for CJK Unified Ideographs and common kana ranges. We treat
  * each codepoint as one syllable for the purposes of timing — close
@@ -118,6 +133,42 @@ export function estimatePanelSpeechSeconds(lines: ReadonlyArray<PanelDialogueLik
   return total
 }
 
+/**
+ * Count distinct "action beats" in a shot's visual description.
+ *
+ * Heuristic (deliberately err toward over-counting — more airtime is
+ * cheap, a truncated action is the bug we're fixing):
+ *   - Strong terminators (。！？.!?；;→ and newlines) each close a clause
+ *     → one beat. This mirrors the storyboard prompt convention
+ *     "一個句點 = 一個動作切換".
+ *   - CJK / ASCII commas (，,) chain sequential actions inside a sentence
+ *     ("躍下，幻化，走向") → weighted at half a beat each.
+ *   - Enumeration comma 、 is NOT counted (it lists nouns, not actions).
+ *
+ * Returns 0 for empty text and 1 for a single uninterrupted clause.
+ */
+export function countActionBeats(text: string | null | undefined): number {
+  const trimmed = (text ?? '').trim()
+  if (!trimmed) return 0
+  const strong = trimmed
+    .split(/[。！？!?；;→\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean).length
+  const commas = (trimmed.match(/[，,]/g) || []).length
+  return Math.max(1, strong) + Math.round(commas * 0.5)
+}
+
+/**
+ * Recommended minimum seconds for a SILENT panel based on its action
+ * density. Single-action (or descriptive) shots return 0 so the caller
+ * keeps the existing flat floor — only multi-action shots get boosted.
+ */
+export function estimateSilentActionSeconds(text: string | null | undefined): number {
+  const beats = countActionBeats(text)
+  if (beats <= 1) return 0
+  return Math.min(SILENT_ACTION_MAX_SEC, Math.ceil(beats * SEC_PER_ACTION_BEAT))
+}
+
 export interface DialogueDrivenDurationsResult {
   /** Per-panel duration in whole seconds, in input panel order. */
   durations: number[]
@@ -136,6 +187,15 @@ export interface BuildDialogueDrivenDurationsParams {
   dialogueByPanelId: ReadonlyMap<string, ReadonlyArray<PanelDialogueLike>>
   /** Optional override for the per-panel floor (silent panels). */
   silentPanelSeconds?: number
+  /**
+   * Optional per-panel action-density floor in seconds (2026-05-28).
+   * Caller computes this from each panel's video_prompt via
+   * `estimateSilentActionSeconds()` and passes it so multi-action shots
+   * — especially silent ones — get enough airtime to render every beat
+   * instead of collapsing to the flat 3s silent floor. A panel absent
+   * from the map (or mapped to 0) keeps the default floor.
+   */
+  actionSecondsByPanelId?: ReadonlyMap<string, number>
 }
 
 /**
@@ -153,6 +213,7 @@ export function buildDialogueDrivenDurations(
 ): DialogueDrivenDurationsResult | null {
   const { panels, dialogueByPanelId } = params
   const silentSec = params.silentPanelSeconds ?? PER_PANEL_MIN_SEC
+  const actionSecondsByPanelId = params.actionSecondsByPanelId
 
   let hasAny = false
   const rawEstimates: number[] = []
@@ -170,15 +231,23 @@ export function buildDialogueDrivenDurations(
   // least 3s for visual coherence (matches default).
   const clampedPanels: number[] = []
   const clamped = rawEstimates.map((sec, i) => {
-    if (sec === 0) return silentSec
+    // Action-density floor (silent or otherwise). Capped at the per-panel
+    // max so a single dense shot can't claim the whole budget outright;
+    // the overflow passes below still rebalance if the group can't fit.
+    const actionFloor = Math.min(
+      PER_PANEL_MAX_SEC,
+      actionSecondsByPanelId?.get(panels[i].id) ?? 0,
+    )
+    if (sec === 0) return Math.max(silentSec, actionFloor)
     if (sec > PER_PANEL_MAX_SEC) {
       clampedPanels.push(i)
       return PER_PANEL_MAX_SEC
     }
     // Round up — better to give the line an extra fraction-second than
     // truncate the tail. Kling rejects fractional durations (must be
-    // integer seconds).
-    return Math.max(silentSec, Math.ceil(sec))
+    // integer seconds). A dialogue panel that also packs heavy action
+    // still honours its action floor.
+    return Math.min(PER_PANEL_MAX_SEC, Math.max(silentSec, actionFloor, Math.ceil(sec)))
   })
 
   let total = clamped.reduce((a, b) => a + b, 0)

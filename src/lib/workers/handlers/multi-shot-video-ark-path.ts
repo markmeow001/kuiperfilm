@@ -314,7 +314,15 @@ export async function runMultiShotArkComposite(params: {
 
   const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
-  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
+  // Mine the hand-edited rawPrompt for character names too, so a name
+  // written only in the narrative still resolves to a reference asset
+  // (parity with the AtlasCloud path, 2026-05-28).
+  const characterRefs = collectCharacterRefs(
+    usedPanels,
+    projectData,
+    episodeBindings,
+    params.rawPrompt,
+  )
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
 
   const { firstFrameUrl, referenceUrls } = planReferenceBudget({

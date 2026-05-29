@@ -100,6 +100,15 @@ export function collectCharacterRefs(
   projectData: NovelData,
   episodeBindings: Map<string, string>,
   maxRefs: number = DEFAULT_MAX_CHARACTER_REFS,
+  /**
+   * 2026-05-28 — extra free text to mine for character names (Pass 3).
+   * The AtlasCloud r2v path passes the user's hand-edited rawPrompt here
+   * so a character named ONLY in the narrative ("黑貓幻化成 @Vera") still
+   * resolves to a reference image, even when the storyboard parser never
+   * wrote them into panel.characters. The leading "@" on chips is
+   * stripped before matching so both "@Vera" and "Vera" hit.
+   */
+  extraMiningText?: string | null,
 ): CharacterRef[] {
   const refs: CharacterRef[] = []
   const seenIds = new Set<string>()
@@ -172,6 +181,40 @@ export function collectCharacterRefs(
       refs.push({ id: character.id, name: character.name, imageUrl: publicUrl })
     }
   }
+
+  // Pass 3: mine free text (e.g. hand-edited rawPrompt narrative). Same
+  // alias-aware substring match as Pass 2, but against caller-supplied
+  // text rather than panel fields — so "@Vera" written only in the
+  // narrative still anchors to Vera's reference image. "@" is stripped so
+  // chip tokens and plain names both match.
+  if (extraMiningText && refs.length < maxRefs) {
+    const minedText = extraMiningText.replace(/@/g, '')
+    for (const character of projectData.characters ?? []) {
+      if (refs.length >= maxRefs) break
+      if (seenIds.has(character.id)) continue
+      const aliases = character.name.split('/').map((s) => s.trim()).filter(Boolean)
+      const hit = aliases.some((alias) => alias && minedText.includes(alias))
+      if (!hit) continue
+      const appearances = character.appearances || []
+      let appearance = appearances[0]
+      const boundAppearanceId = episodeBindings.get(character.id)
+      if (boundAppearanceId) {
+        const bound = appearances.find((a) => a.id === boundAppearanceId)
+        if (bound) appearance = bound
+      }
+      if (!appearance) continue
+      const imageUrls = parseImageUrls(appearance.imageUrls, 'characterAppearance.imageUrls')
+      const selectedIndex = appearance.selectedIndex
+      const selectedUrl =
+        selectedIndex !== null && selectedIndex !== undefined ? imageUrls[selectedIndex] : null
+      const imageKey = selectedUrl || imageUrls[0] || appearance.imageUrl
+      const publicUrl = toSignedUrlIfCos(imageKey, 7200)
+      if (!publicUrl) continue
+      seenIds.add(character.id)
+      refs.push({ id: character.id, name: character.name, imageUrl: publicUrl })
+    }
+  }
+
   return refs
 }
 

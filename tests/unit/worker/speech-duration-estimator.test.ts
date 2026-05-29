@@ -4,6 +4,8 @@ import {
   estimatePanelSpeechSeconds,
   buildDialogueDrivenDurations,
   computeGroupRecommendedDurationSec,
+  countActionBeats,
+  estimateSilentActionSeconds,
 } from '@/lib/workers/handlers/speech-duration-estimator'
 
 describe('estimateSpeechSeconds', () => {
@@ -121,6 +123,90 @@ describe('buildDialogueDrivenDurations', () => {
       silentPanelSeconds: 1,
     })
     expect(r!.durations[1]).toBe(1)
+  })
+})
+
+describe('countActionBeats (2026-05-28 action-density flooring)', () => {
+  it('returns 0 for empty / whitespace', () => {
+    expect(countActionBeats('')).toBe(0)
+    expect(countActionBeats('   ')).toBe(0)
+    expect(countActionBeats(null)).toBe(0)
+    expect(countActionBeats(undefined)).toBe(0)
+  })
+
+  it('returns 1 for a single uninterrupted clause', () => {
+    expect(countActionBeats('他站在窗邊望向遠方')).toBe(1)
+  })
+
+  it('counts the 《Heartbeat》 cat→Vera shot as ~4 beats', () => {
+    // The real prod regression line: 2 sentences (。) + 4 commas (，).
+    // strong=2, commas=4 → 2 + round(2.0) = 4.
+    const line =
+      '石柱影中的一隻黑貓躍下，落地瞬間幻化成 Vera。她步伐輕盈，緩慢走向 William，伸出纖細的手指輕柔撫摸他肩膀上浮現的紋身，那紋身正隱隱散發微光。'
+    expect(countActionBeats(line)).toBe(4)
+  })
+
+  it('counts arrow-chained and period-chained actions', () => {
+    expect(countActionBeats('他站起身。走向門口。推開門。')).toBe(3)
+    expect(countActionBeats('起身→走動→推門')).toBe(3)
+  })
+
+  it('does not count enumeration comma 、 as an action beat', () => {
+    // Listing nouns, not chaining actions → stays a single beat.
+    expect(countActionBeats('桌上擺著刀、叉、湯匙')).toBe(1)
+  })
+})
+
+describe('estimateSilentActionSeconds', () => {
+  it('returns 0 for single-action / descriptive shots (keep flat floor)', () => {
+    expect(estimateSilentActionSeconds('他靜靜站著')).toBe(0)
+    expect(estimateSilentActionSeconds('')).toBe(0)
+  })
+
+  it('scales multi-action shots by SEC_PER_ACTION_BEAT (2s)', () => {
+    // 4 beats * 2s = 8s.
+    const line =
+      '石柱影中的一隻黑貓躍下，落地瞬間幻化成 Vera。她步伐輕盈，緩慢走向 William，伸出纖細的手指輕柔撫摸他肩膀上浮現的紋身，那紋身正隱隱散發微光。'
+    expect(estimateSilentActionSeconds(line)).toBe(8)
+  })
+
+  it('caps a single dense shot at SILENT_ACTION_MAX_SEC (12s)', () => {
+    const dense = Array.from({ length: 20 }, (_, i) => `動作${i}`).join('。') + '。'
+    expect(estimateSilentActionSeconds(dense)).toBe(12)
+  })
+})
+
+describe('buildDialogueDrivenDurations — actionSecondsByPanelId (2026-05-28)', () => {
+  it('boosts a silent multi-action panel above the flat 3s floor', () => {
+    // p1 silent but action-heavy (8s), p2 short dialogue. Without the
+    // action floor p1 would have been 3s — the cat-shot starvation bug.
+    const panels = [{ id: 'p1' }, { id: 'p2' }]
+    const dialogue = new Map([['p2', [{ speaker: 'Vera', content: '短句' }]]])
+    const actionSecondsByPanelId = new Map([['p1', 8]])
+    const r = buildDialogueDrivenDurations({ panels, dialogueByPanelId: dialogue, actionSecondsByPanelId })
+    expect(r).not.toBeNull()
+    expect(r!.durations[0]).toBe(8) // action floor, not 3s
+    expect(r!.totalDuration).toBe(r!.durations.reduce((a, b) => a + b, 0))
+  })
+
+  it('does not lower a panel whose dialogue estimate exceeds its action floor', () => {
+    const panels = [{ id: 'p1' }]
+    // ~12 CJK chars ≈ 3s + buffer → ceil 4s, action floor only 2.
+    const dialogue = new Map([['p1', [{ speaker: 'A', content: '這是一段中等長度的對白測' }]]])
+    const actionSecondsByPanelId = new Map([['p1', 2]])
+    const r = buildDialogueDrivenDurations({ panels, dialogueByPanelId: dialogue, actionSecondsByPanelId })
+    expect(r!.durations[0]).toBeGreaterThanOrEqual(4)
+  })
+
+  it('panels absent from the action map keep the default silent floor', () => {
+    const panels = [{ id: 'p1' }, { id: 'p2' }]
+    const dialogue = new Map([['p2', [{ speaker: 'A', content: '一句話' }]]])
+    const r = buildDialogueDrivenDurations({
+      panels,
+      dialogueByPanelId: dialogue,
+      actionSecondsByPanelId: new Map(),
+    })
+    expect(r!.durations[0]).toBe(3)
   })
 })
 

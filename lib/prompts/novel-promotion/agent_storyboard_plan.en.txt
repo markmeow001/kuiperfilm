@@ -84,6 +84,12 @@ The following five merge patterns are historical bugs. They are FORBIDDEN:
      Right: push door (1) + scan room (1) + gaze locks on letter (POV/CU) = 3 panels
      Method: before writing panels for a paragraph, list every visual verb in it. Each verb gets at least 1 panel.
 
+  f) ❌ Do NOT keep a "transform / morph / shapeshift / appear / vanish" in one panel
+     Generative models cannot morph one subject into another reference image in a single
+     clip — the transition and the following actions get dropped. Split into before + after.
+     Wrong: "the black cat lands and morphs into Vera, she walks to the man" → 1 panel
+     Right: cat leaps and lands (1, cat only) + Vera stands in place, walks to the man (1, human form)
+
 Dialogue panel rule (the merge-friendly rule is GONE):
 - Continuous shot/reverse-shot dialogue is NOT merged. Each line of dialogue gets at least 1 speaker panel; each listener gets at least 1 reaction panel.
 - A says one line + B replies = at least 2 panels (A speaking + B speaking), and with reactions becomes 3-4 panels.

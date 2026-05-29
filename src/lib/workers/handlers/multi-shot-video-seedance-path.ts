@@ -167,8 +167,18 @@ export function collectCharacterRefs(
   panels: PanelLite[],
   projectData: NovelData,
   episodeBindings: Map<string, string>,
+  /** Extra free text (e.g. hand-edited rawPrompt) mined for character
+   *  names so a name written only in the narrative still anchors to a
+   *  reference image. Forwarded to the shared collector. (2026-05-28) */
+  extraMiningText?: string | null,
 ): CharacterRef[] {
-  return collectCharacterRefsShared(panels, projectData, episodeBindings, MAX_CHARACTER_REFS)
+  return collectCharacterRefsShared(
+    panels,
+    projectData,
+    episodeBindings,
+    MAX_CHARACTER_REFS,
+    extraMiningText,
+  )
 }
 
 /**

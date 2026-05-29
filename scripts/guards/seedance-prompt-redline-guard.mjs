@@ -91,7 +91,12 @@ const REQUIRED_TOKENS = [
     file: 'agent_storyboard_detail.en.txt',
     label: '五要素红线 + dramatic camera (detail en)',
     tokens: [
-      'Action chain ≤ 5',
+      // 2026-05-28: "Action chain ≤ 5 visual beats" retired in favour of the
+      // sequential-action vs simultaneous-visual-point distinction — a clip
+      // can hold many visual points but only ~1 sequential action beat, or
+      // the model renders only the first and drops the rest.
+      'One MAIN action per panel',
+      'Transformation / morph / shapeshift rule',
       'NO negative directives',
       'Dramatic camera vocabulary',
     ],

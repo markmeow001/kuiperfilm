@@ -66,7 +66,10 @@ import {
   buildVisualStyleNegative,
   getStyleSafe,
 } from '@/lib/style-library'
-import { buildDialogueDrivenDurations } from './speech-duration-estimator'
+import {
+  buildDialogueDrivenDurations,
+  estimateSilentActionSeconds,
+} from './speech-duration-estimator'
 import { extractSpokenLineFromSrtSegment } from './multi-shot-video-b-path'
 
 // AtlasCloud Seedance 2.0's request schema has NO `negative_prompt`
@@ -90,6 +93,69 @@ const UNIVERSAL_ATLASCLOUD_CLEAN_FRAME_DIRECTIVE =
 const MAX_REFERENCE_IMAGES = 9
 const MIN_DURATION_SEC = 4
 const MAX_DURATION_SEC = 15
+/** Floor for a single shot's airtime when sizing an all-silent group by
+ *  action density — keeps a hold shot from collapsing under 2s. */
+const MIN_PER_SHOT_SEC = 2
+
+type R2vRefEntry = { kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }
+
+/**
+ * Build the r2v "參考圖對應" mapping section that tells the model which
+ * reference_images[] slot is which subject ("image 1 = 角色「Vera」").
+ *
+ * Extracted (2026-05-28) so BOTH the auto-built prompt AND the user's
+ * hand-edited rawPrompt can emit it. Previously the rawPrompt branch
+ * skipped buildAtlasCloudPrompt entirely, so a user who wrote
+ * "黑貓落地幻化成 @Vera" shipped a bare @Vera token with no image
+ * binding — the model had no idea which reference image was Vera.
+ *
+ * Returns '' when there are no ordered refs (t2v/i2v, or no refs at all).
+ */
+function buildR2vRefMapSection(r2vRefOrder: R2vRefEntry[]): string {
+  if (r2vRefOrder.length === 0) return ''
+  const mapLines = r2vRefOrder.map((entry, i) => {
+    const label =
+      entry.kind === 'char'
+        ? `角色「${entry.ref.name}」`
+        : entry.kind === 'scene'
+          ? `場景「${entry.ref.name}」`
+          : `道具「${entry.ref.name}」`
+    return `image ${i + 1} = ${label}`
+  })
+  return `參考圖對應：\n${mapLines.join('\n')}`
+}
+
+/**
+ * Build a per-shot timing guide appended to a user's hand-edited
+ * rawPrompt (2026-05-28). The auto-built prompt inlines "（約Xs）" on
+ * each 第N鏡 line; the rawPrompt is verbatim user text so we can't
+ * inject inline — instead we append an explicit allocation table so
+ * Seedance doesn't starve a silent action shot by handing its seconds
+ * to a dialogue shot. Returns '' for <2 shots (nothing to allocate).
+ */
+function buildPerShotDurationGuide(perShotDurations: number[]): string {
+  if (perShotDurations.length < 2) return ''
+  const parts = perShotDurations.map((sec, i) => `第${i + 1}鏡約${sec}秒`)
+  const total = perShotDurations.reduce((a, b) => a + b, 0)
+  return (
+    `鏡頭時長分配（請嚴格按此節奏分配畫面時間，每一鏡必須完整演完其主要動作後才切下一鏡，`
+    + `不可為了趕後面的鏡頭而省略前一鏡的動作）：${parts.join('、')}，全片約${total}秒。`
+  )
+}
+
+/** Distribute a total duration as evenly as possible into n whole-second
+ *  slots (remainder spread onto the earliest shots). Used to derive
+ *  per-shot hints when the duration source isn't dialogue-driven. */
+function distributeEvenSeconds(total: number, n: number): number[] {
+  if (n <= 0) return []
+  const base = Math.floor(total / n)
+  let remainder = total - base * n
+  return Array.from({ length: n }, () => {
+    const extra = remainder > 0 ? 1 : 0
+    if (remainder > 0) remainder -= 1
+    return base + extra
+  })
+}
 
 interface PanelLite {
   id: string
@@ -237,7 +303,11 @@ function buildAtlasCloudPrompt(
   propRefs: PropRef[],
   projectData: Awaited<ReturnType<typeof resolveNovelData>>,
   /** Ordered refs used as reference_images[] for r2v mode. */
-  r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }>,
+  r2vRefOrder: R2vRefEntry[],
+  /** Per-shot duration hint (seconds), aligned to `panels` order. When
+   *  provided, each 第N鏡 line is annotated "（約Xs）" so Seedance knows
+   *  the time budget per shot and won't starve action-heavy shots. */
+  perShotDurations?: number[],
 ): { prompt: string; dialogueBeatCount: number } {
   const sections: string[] = []
 
@@ -279,17 +349,9 @@ function buildAtlasCloudPrompt(
   }
 
   // ── REF MAP (r2v only) ──
-  if (mode === 'r2v' && r2vRefOrder.length > 0) {
-    const mapLines = r2vRefOrder.map((entry, i) => {
-      const label =
-        entry.kind === 'char'
-          ? `角色「${entry.ref.name}」`
-          : entry.kind === 'scene'
-            ? `場景「${entry.ref.name}」`
-            : `道具「${entry.ref.name}」`
-      return `image ${i + 1} = ${label}`
-    })
-    sections.push(`參考圖對應：\n${mapLines.join('\n')}`)
+  if (mode === 'r2v') {
+    const refMap = buildR2vRefMapSection(r2vRefOrder)
+    if (refMap) sections.push(refMap)
   }
 
   // ── SHOTS ──
@@ -303,7 +365,11 @@ function buildAtlasCloudPrompt(
     if (dialogue) dialogueBeatCount += 1
 
     const parts: string[] = []
-    parts.push(`第${shotNum}鏡：${desc || '(無描述)'}`)
+    const durHint =
+      perShotDurations && Number.isFinite(perShotDurations[i])
+        ? `（約${perShotDurations[i]}秒）`
+        : ''
+    parts.push(`第${shotNum}鏡${durHint}：${desc || '(無描述)'}`)
     if (dialogue) parts.push(`對白：${dialogue}`)
     shotLines.push(parts.join(' '))
   }
@@ -409,7 +475,17 @@ export async function runMultiShotAtlasCloudComposite(params: {
   // as reference_images[]. Either way the bindings response surfaces
   // what the worker had access to, so the chip rail stays accurate.
   const locOverrideById = new Map<string, string>() // no per-call override surface yet
-  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
+  // Pass the hand-edited rawPrompt as extra mining text so a character
+  // named only in the narrative ("@Vera") still resolves to a reference
+  // image even when the storyboard parser never wrote them into
+  // panel.characters (2026-05-28).
+  const characterRefs = collectCharacterRefs(
+    usedPanels,
+    projectData,
+    episodeBindings,
+    undefined,
+    params.rawPrompt,
+  )
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
   const propRefs = collectPropRefs(usedPanels, projectData)
 
@@ -493,16 +569,108 @@ export async function runMultiShotAtlasCloudComposite(params: {
   // (positive phrasing) to avoid the 字幕→"無字幕" backfire.
   const styleNegative = buildVisualStyleNegative(resolvedStyle).trim()
 
+  // ── DURATION (Phase M dialogue-driven + Phase X action-density, 2026-05-28) ──
+  // Computed BEFORE prompt assembly so per-shot seconds can be injected
+  // into the prompt ("第N鏡（約Xs）" / a timing guide on rawPrompt). This
+  // is the core fix for "only the first action renders": a silent shot
+  // packed with sequential actions (cat leaps → morphs → walks → touches)
+  // used to get the flat 3s floor and Seedance dropped everything after
+  // the first beat. We now floor each shot by its action density.
+  //
+  // Priority:
+  //   1. params.panelDurations — explicit user override (UI 时长 dropdown).
+  //   1.5 params.totalDurationSeconds — atomic override (survives sendRaw).
+  //   2. buildDialogueDrivenDurations() — speech seconds + action floors.
+  //   3. Action-density / baseline split when NOTHING has dialogue.
+  // Each tier also yields `perShotDurations` (aligned to usedPanels).
+  const actionSecondsByPanelId = new Map<string, number>()
+  for (const panel of usedPanels) {
+    const sec = estimateSilentActionSeconds(panel.videoPrompt || panel.description || '')
+    if (sec > 0) actionSecondsByPanelId.set(panel.id, sec)
+  }
+
+  let duration: number
+  let durationSource: 'panelDurations' | 'totalDurationSeconds' | 'dialogueDriven' | 'baseline'
+  let perShotDurations: number[]
+  if (params.panelDurations && params.panelDurations.length > 0) {
+    const rounded = params.panelDurations.map((d) => Math.max(1, Math.round(Number.isFinite(d) ? d : 0)))
+    const sum = rounded.reduce((s, d) => s + d, 0)
+    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
+    perShotDurations =
+      rounded.length === usedPanels.length ? rounded : distributeEvenSeconds(duration, usedPanels.length)
+    durationSource = 'panelDurations'
+  } else if (typeof params.totalDurationSeconds === 'number' && params.totalDurationSeconds > 0) {
+    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(params.totalDurationSeconds)))
+    perShotDurations = distributeEvenSeconds(duration, usedPanels.length)
+    durationSource = 'totalDurationSeconds'
+  } else {
+    // Build dialogueByPanel from srtSegment (same source b-path uses).
+    const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
+    for (const panel of usedPanels) {
+      const seg = (panel.srtSegment ?? '').trim()
+      if (!seg) continue
+      const extracted = extractSpokenLineFromSrtSegment(seg, '旁白')
+      if (extracted) dialogueByPanel.set(panel.id, [extracted])
+    }
+
+    let driven: ReturnType<typeof buildDialogueDrivenDurations> = null
+    try {
+      driven = buildDialogueDrivenDurations({
+        panels: usedPanels,
+        dialogueByPanelId: dialogueByPanel,
+        actionSecondsByPanelId,
+      })
+    } catch (err) {
+      // DIALOGUE_EXCEEDS_KLING_BUDGET — fall through to baseline (cap will
+      // clamp). User can fix by shortening dialogue or splitting the group.
+      const message = (err as Error)?.message ?? ''
+      logger.warn({
+        message: 'buildDialogueDrivenDurations failed, falling back to baseline',
+        details: { error: message },
+      })
+    }
+
+    if (driven && driven.hasDialogue) {
+      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, driven.totalDuration))
+      perShotDurations = driven.durations
+      durationSource = 'dialogueDriven'
+    } else {
+      // No dialogue anywhere. Size each shot by its action density; shots
+      // with no detected action beats get a per-panel baseline share so a
+      // plain hold shot still reads. Scale down proportionally if the sum
+      // overruns the 15s cap (each shot kept ≥ MIN_PER_SHOT_SEC).
+      const baseline = Math.max(10, Math.round(usedPanels.length * 2.5))
+      const baselineShare = Math.max(MIN_PER_SHOT_SEC, Math.round(baseline / usedPanels.length))
+      let desired = usedPanels.map((p) =>
+        Math.max(actionSecondsByPanelId.get(p.id) ?? 0, baselineShare),
+      )
+      let total = desired.reduce((a, b) => a + b, 0)
+      if (total > MAX_DURATION_SEC) {
+        const scale = MAX_DURATION_SEC / total
+        desired = desired.map((s) => Math.max(MIN_PER_SHOT_SEC, Math.floor(s * scale)))
+        total = desired.reduce((a, b) => a + b, 0)
+      }
+      perShotDurations = desired
+      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, total))
+      durationSource = 'baseline'
+    }
+  }
+
   // ── PROMPT ASSEMBLY ──
   let promptCore: string
   let dialogueBeatCount: number
   if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
     // User-edited rawPrompt wins; ships verbatim. The Group Card's
-    // textarea is already the source of truth for the user's review
-    // ("what I see is what runs"). We trust the user to align it with
-    // the selected mode (e.g. don't reference @image-3 on t2v).
-    promptCore = params.rawPrompt.trim()
-    dialogueBeatCount = (promptCore.match(/對白：|说「|: "/g) || []).length
+    // textarea is the source of truth for the user's review ("what I see
+    // is what runs"). We still PREPEND the r2v ref-map and APPEND a
+    // per-shot timing guide: without the ref-map a hand-written "@Vera"
+    // is a bare token the model can't bind to a reference image; without
+    // the timing guide a hand-written multi-action shot gets starved.
+    const raw = params.rawPrompt.trim()
+    dialogueBeatCount = (raw.match(/對白：|说「|: "/g) || []).length
+    const refMap = mode === 'r2v' ? buildR2vRefMapSection(r2vRefOrder) : ''
+    const timingGuide = buildPerShotDurationGuide(perShotDurations)
+    promptCore = [refMap, raw, timingGuide].filter((s) => s.length > 0).join('\n\n')
   } else {
     const built = buildAtlasCloudPrompt(
       usedPanels,
@@ -512,6 +680,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
       propRefs,
       projectData,
       r2vRefOrder,
+      perShotDurations,
     )
     promptCore = built.prompt
     dialogueBeatCount = built.dialogueBeatCount
@@ -538,69 +707,6 @@ export async function runMultiShotAtlasCloudComposite(params: {
     .filter((s) => s.length > 0)
     .join('\n\n')
 
-  // ── DURATION (Phase M — dialogue-driven, 2026-05-21) ──
-  // Priority:
-  //   1. params.panelDurations — explicit user override (UI 时长 dropdown
-  //      sets 5/10/15; sum is what user picked). Frontend OMITS this when
-  //      sendRaw=true (narrativeDirty), so we fall through.
-  //   1.5 (Phase P, 2026-05-21) params.totalDurationSeconds — atomic
-  //      override forwarded by frontend EVEN when sendRaw=true. Honours
-  //      "user picked 15s + edited narrative" without bringing back
-  //      panelDurations (which BobAPI/Tencent customize mode would have
-  //      caused to silently drop rawPrompt).
-  //   2. buildDialogueDrivenDurations() — mirrors BobAPI / Kling b-path's
-  //      heuristic: estimate speech seconds from panel.srtSegment, allocate
-  //      per-panel airtime, sum the total. Returns null when NO panel has
-  //      dialogue → fall through to baseline.
-  //   3. Generous baseline — Math.max(10, panel_count * 2.5). Capped 4-15.
-  let duration: number
-  let durationSource: 'panelDurations' | 'totalDurationSeconds' | 'dialogueDriven' | 'baseline'
-  if (params.panelDurations && params.panelDurations.length > 0) {
-    const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
-    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
-    durationSource = 'panelDurations'
-  } else if (typeof params.totalDurationSeconds === 'number' && params.totalDurationSeconds > 0) {
-    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(params.totalDurationSeconds)))
-    durationSource = 'totalDurationSeconds'
-  } else {
-    // Build dialogueByPanel from srtSegment (same source b-path uses).
-    const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
-    for (const panel of usedPanels) {
-      const seg = (panel.srtSegment ?? '').trim()
-      if (!seg) continue
-      const extracted = extractSpokenLineFromSrtSegment(seg, '旁白')
-      if (extracted) dialogueByPanel.set(panel.id, [extracted])
-    }
-
-    let driven: ReturnType<typeof buildDialogueDrivenDurations> = null
-    try {
-      driven = buildDialogueDrivenDurations({
-        panels: usedPanels,
-        dialogueByPanelId: dialogueByPanel,
-      })
-    } catch (err) {
-      // DIALOGUE_EXCEEDS_KLING_BUDGET — fall through to baseline (cap will
-      // clamp). User can fix by shortening dialogue or splitting the group.
-      const message = (err as Error)?.message ?? ''
-      logger.warn({
-        message: 'buildDialogueDrivenDurations failed, falling back to baseline',
-        details: { error: message },
-      })
-    }
-
-    if (driven && driven.hasDialogue) {
-      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, driven.totalDuration))
-      durationSource = 'dialogueDriven'
-    } else {
-      // Generous baseline — 10s minimum so 3-4 panel groups don't drop to
-      // 6-8s. Multiplier 2.5 (vs 2) makes 4 panels = 10s, 5 panels = 12.5s
-      // (rounded 13), 6 panels = 15s (max).
-      const baseline = Math.max(10, Math.round(usedPanels.length * 2.5))
-      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))
-      durationSource = 'baseline'
-    }
-  }
-
   logger.info({
     message: 'AtlasCloud composite submit',
     details: {
@@ -616,6 +722,8 @@ export async function runMultiShotAtlasCloudComposite(params: {
       referenceImageCount: referenceImages.length,
       duration,
       durationSource,
+      perShotDurations,
+      actionFlooredPanels: actionSecondsByPanelId.size,
       aspectRatio,
       generateAudio: sound,
       dialogueBeatCount,

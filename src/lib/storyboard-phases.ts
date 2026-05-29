@@ -262,6 +262,11 @@ function parseJsonResponse<T extends JsonRecord>(responseText: string, clipId: s
 }
 
 // ========== Phase 1: 基础分镜规划 ==========
+// Mirrors orchestrator.ts AVG_PANEL_DURATION_SEC (2026-05-22). Kept in sync
+// so the single-clip regenerate path and the full orchestrator hand the LLM
+// the same panel-count↔duration relationship ("5-12s per panel").
+const AVG_PANEL_DURATION_SEC = 6.0
+
 export async function executePhase1(
     clip: ClipAsset,
     novelPromotionData: NovelPromotionAssetData,
@@ -269,6 +274,20 @@ export async function executePhase1(
     projectId: string,
     projectName: string,
     locale: Locale,
+    /**
+     * Target panel count for THIS clip/group. Drives {target_panel_count}.
+     * Previously this placeholder was never substituted on the regenerate
+     * path, so the LLM received the literal string "{target_panel_count}"
+     * and had no idea how many shots (or how many seconds) to plan — it
+     * under-split, packing several sequential actions into one panel
+     * ("only the first action renders"). Defaults to a content-length
+     * heuristic when omitted. (2026-05-28)
+     */
+    targetPanelCount?: number,
+    /** Target total seconds for THIS clip/group. Drives {target_duration}.
+     *  Defaults to targetPanelCount * AVG_PANEL_DURATION_SEC for a
+     *  self-consistent (count, duration) pair. */
+    targetDuration?: number,
     taskId?: string
 ): Promise<PhaseResult> {
     const clipId = formatClipId(clip)
@@ -304,6 +323,19 @@ export async function executePhase1(
     }
 
     // 构建提示词
+    // Resolve target panel count + duration so {target_panel_count} /
+    // {target_duration} never ship as literal placeholders (the LLM would
+    // otherwise see "{target_panel_count} 个镜头" and under-split).
+    const clipContentLength = typeof clip.content === 'string' ? clip.content.trim().length : 0
+    const effectivePanelCount =
+        targetPanelCount && targetPanelCount > 0
+            ? Math.round(targetPanelCount)
+            : Math.max(2, Math.round(clipContentLength / 120))
+    const effectiveDuration =
+        targetDuration && targetDuration > 0
+            ? Math.round(targetDuration)
+            : Math.round(effectivePanelCount * AVG_PANEL_DURATION_SEC)
+
     let planPrompt = planPromptTemplate
         .replace('{characters_lib_name}', charactersLibName)
         .replace('{locations_lib_name}', locationsLibName)
@@ -311,6 +343,9 @@ export async function executePhase1(
         .replace('{characters_appearance_list}', filteredAppearanceList)
         .replace('{characters_full_description}', filteredFullDescription)
         .replace('{clip_json}', clipJson)
+        .replace('{target_panel_count}', String(effectivePanelCount))
+        .replace(/\{target_panel_count\}/g, String(effectivePanelCount))
+        .replace('{target_duration}', String(effectiveDuration))
 
     if (screenplay) {
         planPrompt = planPrompt.replace('{clip_content}', `【剧本格式】\n${JSON.stringify(screenplay, null, 2)}`)

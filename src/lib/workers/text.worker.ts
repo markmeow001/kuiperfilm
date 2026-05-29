@@ -237,6 +237,12 @@ async function runStoryboardPhasesForClip(params: {
   projectName: string
   userId: string
   locale: TaskJobData['locale']
+  /** Target shot count for this group (defaults to the group's existing
+   *  panel count on the regenerate path) so the planner's
+   *  {target_panel_count}/{target_duration} placeholders are substituted
+   *  with a real, group-scoped number instead of shipping literally. */
+  targetPanelCount?: number
+  targetDuration?: number
 }) {
   const session = { user: { id: params.userId, name: 'Worker' } }
   const phase1 = await executePhase1(
@@ -246,6 +252,8 @@ async function runStoryboardPhasesForClip(params: {
     params.projectId,
     params.projectName,
     params.locale,
+    params.targetPanelCount,
+    params.targetDuration,
   )
   const [phase2, phase2Acting, phase3] = await Promise.all([
     executePhase2(
@@ -341,6 +349,15 @@ async function handleRegenerateStoryboardTextTask(job: Job<TaskJobData>) {
   const regenerateStreamContext = createWorkerLLMStreamContext(job, 'regenerate_storyboard')
   const regenerateCallbacks = createWorkerLLMStreamCallbacks(job, regenerateStreamContext)
 
+  // Group-scoped targets so the planner gets a concrete shot count / duration
+  // instead of literal "{target_panel_count}". Regenerating a single group
+  // should aim for at least its current granularity (existing panel count);
+  // duration follows from the shared 5-12s/panel average. (2026-05-28)
+  const existingPanelCount = await prisma.novelPromotionPanel.count({ where: { storyboardId } })
+  const regenTargetPanelCount = existingPanelCount > 0 ? existingPanelCount : undefined
+  const regenTargetDuration =
+    regenTargetPanelCount !== undefined ? Math.round(regenTargetPanelCount * 6) : undefined
+
   const finalPanels = await withInternalLLMStreamCallbacks(
     regenerateCallbacks,
     async () =>
@@ -351,6 +368,8 @@ async function handleRegenerateStoryboardTextTask(job: Job<TaskJobData>) {
         projectName: project.name,
         userId,
         locale: job.data.locale,
+        ...(regenTargetPanelCount !== undefined ? { targetPanelCount: regenTargetPanelCount } : {}),
+        ...(regenTargetDuration !== undefined ? { targetDuration: regenTargetDuration } : {}),
       }),
   )
   await regenerateCallbacks.flush()

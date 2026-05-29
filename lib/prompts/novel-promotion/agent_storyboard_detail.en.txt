@@ -122,9 +122,22 @@ scene / prop fidelity all degrade together.
             and sweat visible, long hair blown by wind" (entirely appearance)
      Right: "@WangXuan's aura bursts forth, chest heaves, vortex forms"
             (action + result)
-  2. Action chain ≤ 5 visual beats per panel, typically 1-3. One sentence =
-     one beat. One period = one switch. Do NOT chain action switches with
-     commas.
+  2. One MAIN action per panel (+ optional wind-up / settle micro-motion);
+     composition visual points are unlimited. Key distinction (this is the
+     root cause of "the description doesn't render, the back half is skipped"):
+       - "Visual points" = elements coexisting in the same instant (fore/mid/
+         background layers, expression, gesture, light) → as many as you like,
+         they share the frame and cost no extra time.
+       - "Action beats" = events that happen in sequence (cat leaps → lands →
+         morphs → walks → touches) → one main action per panel. A clip is only
+         a few seconds; pack 2+ sequential actions and the model renders only
+         the first and cuts away, dropping the rest (a measured bug).
+     One period / one "→" / one "then" = one action beat. More than one main
+     beat → split to the next panel (see split rule c).
+     Right: "@woman slowly turns to the window, brow faintly furrowing"
+            (1 main action = turn + micro expression, rich composition)
+     Wrong: "@woman stands, walks to the door, opens it, turns and smiles"
+            (4 sequential actions in one panel → only "stands" renders)
   3. NO negative directives ("no X", "no subtitles", "no on-screen text",
      "strictly without X") — handled by the worker's dedicated
      negative_prompt field. Mentioning them in the positive prompt
@@ -140,9 +153,36 @@ scene / prop fidelity all degrade together.
 
 Self-check before output (every panel):
   □ No appearance details already in @image-N?
-  □ ≤ 5 visual beats?  □ No negative directives?
+  □ ≤ 1 main sequential action beat?  □ No negative directives?
   □ No camera/equipment terms?  □ No vague collective nouns?
   □ Dialogue lines ≤ 30 words each?
+  □ Any "transform / morph / shapeshift"? If so, split into two panels?
+
+⚠️ Transformation / morph / shapeshift rule (added 2026-05-28):
+
+Generative models (Seedance / Kling R2V) CANNOT gradually morph one subject
+into a different reference image within a single clip — e.g. "the black cat
+lands and morphs into @Vera". Reference images are identity anchors (image N
+= character "X" looks like this); the model only renders one state (either a
+cat throughout, or Vera outright), the "morph" transition is always lost, and
+the following actions often get dropped with it.
+
+When the source has "X morphs / transforms / takes the form of / reveals true
+form as Y": you MUST split into two panels and express the change via the cut.
+NEVER ask a single R2V clip to fully replace the subject.
+
+  Wrong (single-clip morph + multi-action, measured to render only beat 1):
+    "a black cat leaps from the pillar shadow, lands and morphs into @Vera,
+     she walks to @William and strokes his shoulder"
+  Right (two panels, each one clear state):
+    Panel 1: "a black cat leaps from the pillar shadow and lands lightly"
+             (cat only, no human form)
+    Panel 2: "@Vera now stands in place, steps toward @William" (human from
+             the first frame, 1 main action)
+
+Same for appear / vanish / summon / teleport — any "subject replaced out of
+nowhere" transition: split into "before" + "after" panels, leave the change
+to the cut.
 
 Dramatic camera vocabulary (prefer these terms in video_prompt when context
 matches — do NOT invent abstract phrasing like "mysteriously orbit" or

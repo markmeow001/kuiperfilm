@@ -33,7 +33,7 @@ describe('AtlasCloud composite duration priority (Phase M)', () => {
     // BobAPI / Kling / AtlasCloud all derive timing from the same
     // speech estimate model.
     expect(src).toMatch(/from '\.\/speech-duration-estimator'/)
-    expect(src).toMatch(/import \{ buildDialogueDrivenDurations \}/)
+    expect(src).toMatch(/import \{[\s\S]*?buildDialogueDrivenDurations/)
   })
 
   it('imports extractSpokenLineFromSrtSegment from b-path for srtSegment parsing', () => {
@@ -97,6 +97,38 @@ describe('AtlasCloud composite duration priority (Phase M)', () => {
     expect(src).toMatch(/try \{\s*\n\s*driven = buildDialogueDrivenDurations/)
     expect(src).toMatch(/catch \(err\)/)
     expect(src).toMatch(/falling back to baseline/)
+  })
+
+  it('Phase X: floors each shot by action density (estimateSilentActionSeconds)', () => {
+    // Root-cause fix for "only the first action renders": a silent shot
+    // packed with sequential actions (cat leaps → morphs → walks → touches)
+    // must NOT collapse to the flat 3s silent floor. The worker builds an
+    // actionSecondsByPanelId map from each panel's video_prompt and passes
+    // it into buildDialogueDrivenDurations.
+    expect(src).toMatch(/import \{[\s\S]*?estimateSilentActionSeconds/)
+    expect(src).toMatch(/const actionSecondsByPanelId = new Map/)
+    expect(src).toMatch(/estimateSilentActionSeconds\(panel\.videoPrompt/)
+    expect(src).toMatch(/actionSecondsByPanelId,/)
+  })
+
+  it('Phase X: injects per-shot duration hints into the prompt', () => {
+    // Duration is computed BEFORE prompt assembly so per-shot seconds can
+    // be injected: "第N鏡（約Xs）" on the auto-built prompt, and a timing
+    // guide appended to a hand-edited rawPrompt. Without this the model
+    // self-allocates the total and starves silent action shots.
+    expect(src).toMatch(/let perShotDurations: number\[\]/)
+    expect(src).toMatch(/buildPerShotDurationGuide/)
+    expect(src).toMatch(/perShotDurations,\s*\n\s*\)/) // passed into buildAtlasCloudPrompt
+    // The 第N鏡 line must carry the （約Xs）hint.
+    expect(src).toMatch(/（約\$\{perShotDurations\[i\]\}秒）/)
+  })
+
+  it('Phase X: rawPrompt path emits the r2v ref-map so @name binds to an image', () => {
+    // Hand-edited narrative ("黑貓幻化成 @Vera") previously skipped the
+    // ref-map entirely, leaving @Vera an unbound token. Now the rawPrompt
+    // branch prepends buildR2vRefMapSection so the model knows image N = Vera.
+    expect(src).toMatch(/buildR2vRefMapSection/)
+    expect(src).toMatch(/const refMap = mode === 'r2v' \? buildR2vRefMapSection/)
   })
 
   it('totalDurationSeconds (Phase P) sits between panelDurations and dialogue-driven', () => {
