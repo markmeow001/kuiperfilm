@@ -152,15 +152,21 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   }, [activeModels, modelKey])
 
   // Auto-pick up worker-completed video runs: when usePlaygroundRuns
-  // refetches (every 3s while pending/running rows exist), promote the
-  // most recent succeeded run into the preview if it matches the
-  // currently-displayed one. Without this, the preview stays on the
-  // 'pending' placeholder until the user manually clicks the history
-  // thumbnail.
+  // refetches (every 3s while pending/running rows exist), promote ANY
+  // change (pending→running→succeeded/failed) into the preview state so
+  // the user sees the worker picked up + finished without manual refresh.
+  // Previously the effect only updated on terminal transitions, leaving
+  // the UI stuck on the initial 'pending' status for the entire 1-3 min
+  // generation window.
   useEffect(() => {
-    if (!latestRun || latestRun.status !== 'pending' && latestRun.status !== 'running') return
+    if (!latestRun) return
+    if (latestRun.status === 'succeeded' || latestRun.status === 'failed') return
     const updated = runsQuery.data?.runs?.find((r) => r.id === latestRun.id)
-    if (updated && (updated.status === 'succeeded' || updated.status === 'failed')) {
+    if (updated && updated.status !== latestRun.status) {
+      setLatestRun(updated)
+    } else if (updated && updated.status === 'succeeded' && (!latestRun.resultUrls?.[0] || latestRun.resultUrls?.[0] !== updated.resultUrls?.[0])) {
+      // Status was already 'succeeded' on a previous tick but URLs may
+      // have signed-URL refreshes from the server — promote those too.
       setLatestRun(updated)
     }
   }, [runsQuery.data, latestRun])
@@ -461,7 +467,17 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
             <div className="flex items-center gap-2">
               <div className="font-mono text-[12px] uppercase tracking-wider text-stone-500">輸出</div>
               <div className="font-mono text-[11px] text-stone-600">
-                {submit.isPending ? '生成中…' : latestRun ? latestRun.status : '閒置'}
+                {submit.isPending
+                  ? '提交中…'
+                  : latestRun?.status === 'pending'
+                    ? '排隊中'
+                    : latestRun?.status === 'running'
+                      ? '生成中'
+                      : latestRun?.status === 'succeeded'
+                        ? '已完成'
+                        : latestRun?.status === 'failed'
+                          ? '失敗'
+                          : '閒置'}
               </div>
             </div>
             {latestRun?.resultUrls?.[0] ? (
@@ -508,7 +524,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
               <div className="flex h-full w-full items-center justify-center text-stone-500">
                 <div className="flex items-center gap-3">
                   <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                  <div className="font-mono text-[12px] uppercase tracking-wider">生成中…</div>
+                  <div className="font-mono text-[12px] uppercase tracking-wider">提交中…</div>
                 </div>
               </div>
             ) : latestRun?.status === 'failed' ? (
@@ -516,6 +532,34 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
                 <div>
                   <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-rose-400">生成失敗</div>
                   <div className="font-mono text-[11px] text-stone-500">{latestRun.errorMessage ?? '未知錯誤'}</div>
+                </div>
+              </div>
+            ) : latestRun?.status === 'pending' || latestRun?.status === 'running' ? (
+              // Phase V (2026-05-28) — explicit async-progress state.
+              // For video, the POST returns in ~100ms with status='pending'
+              // but the worker takes 1-3 minutes to actually produce the
+              // mp4. Without this branch, the UI fell through to the
+              // 「尚未生成」 placeholder for the entire wait window, making
+              // the user think nothing was happening (it was — they just
+              // couldn't see it). usePlaygroundRuns auto-polls every 3s
+              // while pending/running rows exist, so this banner flips to
+              // the video automatically when the worker finishes.
+              <div className="flex h-full w-full items-center justify-center p-6 text-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500/30 border-t-amber-400" />
+                    <div className="font-mono text-[14px] uppercase tracking-wider text-amber-300">
+                      {latestRun.status === 'pending' ? '排隊中' : '生成中'}
+                    </div>
+                  </div>
+                  <div className="max-w-md font-serif-cn text-[12px] leading-relaxed text-stone-400">
+                    {latestRun.outputType === 'video'
+                      ? '影片生成大約需要 1-3 分鐘，可保持此頁面開啟。完成後會自動顯示，也會出現在下方歷史紀錄中。'
+                      : '處理中…'}
+                  </div>
+                  <div className="font-mono text-[10px] uppercase tracking-wider text-stone-600">
+                    Run ID · {latestRun.id.slice(0, 8)}…
+                  </div>
                 </div>
               </div>
             ) : latestRun?.resultUrls?.[0] ? (
@@ -721,10 +765,20 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
           <button
             type="button"
             onClick={() => handleRun()}
-            disabled={isBusy || !modelKey || !prompt.trim()}
+            disabled={
+              isBusy
+              || !modelKey
+              || !prompt.trim()
+              || latestRun?.status === 'pending'
+              || latestRun?.status === 'running'
+            }
             className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-2.5 font-mono text-[13px] font-semibold uppercase tracking-wider text-stone-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submit.isPending ? '生成中…' : '生成'}
+            {submit.isPending
+              ? '提交中…'
+              : latestRun?.status === 'pending' || latestRun?.status === 'running'
+                ? '生成中…'
+                : '生成'}
             <span className="rounded-sm border border-stone-950/30 px-1 font-mono text-[10px] opacity-70">⌘+↵</span>
           </button>
         </div>
