@@ -405,6 +405,12 @@ export async function runMultiShotAtlasCloudComposite(params: {
    *  Kling B-path and BobAPI seedance-path). When set, wins over
    *  project.visualStyleId in resolveProjectVisualStyle. */
   visualStyleId?: string
+  /** Per-call character appearance overrides ("swap costume" from the
+   *  bindings rail). characterId → appearanceId. Wins over the episode
+   *  binding so a user who switches William to 半裸 actually gets that
+   *  appearance's reference image. 2026-05-28 — was silently dropped on
+   *  this path (parity gap with seedance/ark/b paths). */
+  characterOverrides?: Array<{ characterId: string; appearanceId?: string }>
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -465,6 +471,15 @@ export async function runMultiShotAtlasCloudComposite(params: {
     if (sb?.referenceVideoUrl) {
       groupReferenceVideoUrl = toSignedUrlIfCos(sb.referenceVideoUrl, 3600)
     }
+  }
+
+  // Per-call character appearance overrides ("swap costume" from the
+  // bindings rail) win over the episode binding — same merge order as
+  // seedance-path. Without this the AtlasCloud path silently ignored the
+  // override and rendered the default appearance (2026-05-28 fix: user
+  // switched William to 半裸 but kept getting the full-suit default).
+  for (const o of params.characterOverrides ?? []) {
+    if (o.characterId && o.appearanceId) episodeBindings.set(o.characterId, o.appearanceId)
   }
 
   const projectData = await resolveNovelData(projectId)
