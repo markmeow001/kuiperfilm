@@ -198,6 +198,7 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
                     novelPromotionData: {
                       characters: novelData.characters || [],
                       locations: novelData.locations || [],
+                      openingPacing: novelData.openingPacing,
                     },
                     promptTemplates: {
                       phase1PlanTemplate,

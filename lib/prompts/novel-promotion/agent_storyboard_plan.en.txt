@@ -61,6 +61,7 @@ Panel-count rule (CRITICAL):
 - The orchestrator passes a `target_panel_count`. Treat it as a FLOOR, not a ceiling.
 - If your draft output is more than 2 panels short of the target, you have over-merged — go back and split.
 - Reference benchmark: industry short-drama platforms produce ~1 panel per dialogue beat and ~1 panel per visual verb in narration. We match that density.
+{opening_pacing_directive}
 
 Anti-collapse rules (HIGHEST PRIORITY — violating any of these wastes the entire output):
 

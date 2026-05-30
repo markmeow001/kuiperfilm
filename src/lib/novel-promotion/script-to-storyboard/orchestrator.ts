@@ -1,4 +1,5 @@
 import { buildCharactersIntroduction } from '@/lib/constants'
+import { openingPacingDirective } from '@/lib/novel-promotion/generation-mode'
 import { normalizeAnyError } from '@/lib/errors/normalize'
 import { createScopedLogger } from '@/lib/logging/core'
 import {
@@ -57,6 +58,8 @@ export type ScriptToStoryboardOrchestratorInput = {
   novelPromotionData: {
     characters: CharacterAsset[]
     locations: LocationAsset[]
+    /** Opening-pacing setting (hook | cinematic) → {opening_pacing_directive}. */
+    openingPacing?: string | null
   }
   promptTemplates: ScriptToStoryboardPromptTemplates
   runStep: (
@@ -385,6 +388,7 @@ export async function runScriptToStoryboardOrchestrator(
         .replace('{clip_json}', clipJson)
         .replace('{target_duration}', String(targetDuration))
         .replace('{target_panel_count}', String(clipTargetPanels[i]))
+        .replace('{opening_pacing_directive}', openingPacingDirective(novelPromotionData.openingPacing))
 
       const screenplay = parseScreenplay(clip.screenplay)
       if (screenplay) {

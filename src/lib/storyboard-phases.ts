@@ -9,6 +9,7 @@
 import { executeAiTextStep } from '@/lib/ai-runtime'
 import { logAIAnalysis } from '@/lib/logging/semantic'
 import { buildCharactersIntroduction } from '@/lib/constants'
+import { openingPacingDirective } from '@/lib/novel-promotion/generation-mode'
 import type { Locale } from '@/i18n/routing'
 import { getPromptTemplate, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { pickStoryboardDetailPromptId } from '@/lib/novel-promotion/storyboard-prompt-router'
@@ -70,6 +71,9 @@ type NovelPromotionAssetData = {
      * Kling-tuned variant.
      */
     videoModel?: string | null
+    /** Project opening-pacing setting (hook | cinematic). Drives the
+     *  {opening_pacing_directive} placeholder in the Phase 1 plan prompt. */
+    openingPacing?: string | null
 }
 
 export type StoryboardPanel = JsonRecord & {
@@ -346,6 +350,7 @@ export async function executePhase1(
         .replace('{target_panel_count}', String(effectivePanelCount))
         .replace(/\{target_panel_count\}/g, String(effectivePanelCount))
         .replace('{target_duration}', String(effectiveDuration))
+        .replace('{opening_pacing_directive}', openingPacingDirective(novelPromotionData.openingPacing))
 
     if (screenplay) {
         planPrompt = planPrompt.replace('{clip_content}', `【剧本格式】\n${JSON.stringify(screenplay, null, 2)}`)

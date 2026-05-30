@@ -68,3 +68,16 @@ export function normalizeGenerationMode(value: string | null | undefined): Gener
 export function normalizeOpeningPacing(value: string | null | undefined): OpeningPacing {
   return value === 'cinematic' ? 'cinematic' : 'hook'
 }
+
+/**
+ * The directive injected into the storyboard PLAN prompt's
+ * `{opening_pacing_directive}` placeholder. Controls whether the opening of
+ * each scene gets its own atmospheric establishing group (cinematic) or rushes
+ * into the conflict (hook — the short-drama default). Normalizes unknown input.
+ */
+export function openingPacingDirective(pacing: string | null | undefined): string {
+  if (normalizeOpeningPacing(pacing) === 'cinematic') {
+    return '【開場節奏：電影氛圍】每個場景開頭，establishing 環境鏡頭要獨立成一個分鏡組（整組鋪環境氛圍 + 主體慢揭示，讓畫面呼吸），不與後續動作高潮同組。寧可開場慢，先建立場所感與氛圍。'
+  }
+  return '【開場節奏：短劇快鉤子】開場走冷開場節奏，3 秒內進入衝突或鉤子抓住觀眾，環境鋪陳精簡，不要慢吞吞。'
+}

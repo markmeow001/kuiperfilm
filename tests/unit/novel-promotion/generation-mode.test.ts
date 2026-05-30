@@ -3,6 +3,7 @@ import {
   resolveGenerationModeBehavior,
   GENERATION_MODES,
   OPENING_PACINGS,
+  openingPacingDirective,
 } from '@/lib/novel-promotion/generation-mode'
 
 describe('resolveGenerationModeBehavior', () => {
@@ -33,5 +34,20 @@ describe('resolveGenerationModeBehavior', () => {
   it('暴露合法值常數', () => {
     expect(GENERATION_MODES).toEqual(['r2v-narrative', 't2i-storyboard'])
     expect(OPENING_PACINGS).toEqual(['hook', 'cinematic'])
+  })
+})
+
+describe('openingPacingDirective', () => {
+  it('cinematic → 開場獨立成組鋪氛圍', () => {
+    const d = openingPacingDirective('cinematic')
+    expect(d).toContain('電影氛圍')
+    expect(d).toContain('獨立成一個分鏡組')
+  })
+  it('hook (含 null/未知) → 冷開場快節奏', () => {
+    for (const v of ['hook', null, undefined, 'garbage']) {
+      const d = openingPacingDirective(v as never)
+      expect(d).toContain('快鉤子')
+      expect(d).toContain('3 秒內')
+    }
   })
 })
