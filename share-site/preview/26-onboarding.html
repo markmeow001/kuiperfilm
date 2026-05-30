@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 欢迎</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(124, 92, 255, 0.06), transparent 60%),
+        radial-gradient(ellipse 50% 40% at 80% 70%, rgba(245, 194, 74, 0.06), transparent 60%),
+        var(--surface-canvas);
+      min-height: 100vh;
+    }
+    .top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 32px;
+    }
+    .brand-mini { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+    .brand-mark { width: 26px; height: 26px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 13px; }
+
+    .ob-progress {
+      display: flex; align-items: center; gap: 8px;
+      padding: 3px 6px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+    }
+    .ob-step {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      border-radius: var(--r-pill);
+    }
+    .ob-step.done::before { content: '✓'; color: var(--success); }
+    .ob-step.active { background: var(--primary-500); color: var(--neutral-950); font-weight: 600; }
+    .ob-step .n { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+    .container {
+      max-width: 880px; margin: 0 auto;
+      padding: 32px 32px 80px;
+      text-align: center;
+    }
+    .container h1 {
+      font-size: 44px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .container .sub {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 48px;
+      line-height: 1.6;
+    }
+
+    .who-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .who-card {
+      padding: 32px 28px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      cursor: pointer;
+      transition: all var(--d-hover) var(--ease-out);
+      text-align: left;
+    }
+    .who-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(245, 194, 74, 0.4);
+    }
+    .who-card.selected {
+      border-color: var(--primary-500);
+      background: rgba(245, 194, 74, 0.04);
+    }
+    .who-card .icon {
+      width: 48px; height: 48px;
+      background: rgba(245, 194, 74, 0.12);
+      color: var(--primary-400);
+      border-radius: 12px;
+      display: grid; place-items: center;
+      margin-bottom: 16px;
+      font-size: 22px;
+    }
+    .who-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+    .who-card p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+    .who-card .features {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .who-card .feature {
+      padding: 3px 10px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 10px;
+      color: var(--text-tertiary);
+    }
+
+    .footer-actions {
+      display: flex; justify-content: space-between; align-items: center;
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+    .skip-link {
+      color: var(--text-tertiary);
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .skip-link:hover { color: var(--text-primary); }
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+
+    <div class="ob-progress">
+      <div class="ob-step active"><span class="n">1</span> <span data-i18n="o.step.who">你是谁</span></div>
+      <div class="ob-step"><span class="n">2</span> <span data-i18n="o.step.try">试做第一集</span></div>
+      <div class="ob-step"><span class="n">3</span> <span data-i18n="o.step.tour">功能导览</span></div>
+      <div class="ob-step"><span class="n">4</span> <span data-i18n="o.step.start">开始创作</span></div>
+    </div>
+
+    <div class="lang-switcher">
+      <button type="button" data-lang="zh" class="active">中</button>
+      <button type="button" data-lang="en">EN</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1 data-i18n="o.title">欢迎来到 KuiperAI</h1>
+    <p class="sub" data-i18n="o.sub">4 步开始你的第一部短剧</p>
+
+    <div class="who-grid">
+      <div class="who-card selected">
+        <div class="icon">✎</div>
+        <h3 data-i18n="o.who.creator">个人创作者</h3>
+        <p>独立创作者、短视频博主、说书 UP 主</p>
+        <div class="features">
+          <span class="feature">免费 100 点/天</span>
+          <span class="feature">1 视讯模型</span>
+          <span class="feature">公开 showcase</span>
+        </div>
+      </div>
+      <div class="who-card">
+        <div class="icon">🎬</div>
+        <h3 data-i18n="o.who.studio">小型工作室</h3>
+        <p>2-10 人的影视/动画/广告团队</p>
+        <div class="features">
+          <span class="feature">5,000 点/月</span>
+          <span class="feature">全 5 视讯模型</span>
+          <span class="feature">协作</span>
+          <span class="feature">无浮水印</span>
+        </div>
+      </div>
+      <div class="who-card">
+        <div class="icon">💼</div>
+        <h3 data-i18n="o.who.brand">品牌方</h3>
+        <p>电商、消费品牌、社群行销团队</p>
+        <div class="features">
+          <span class="feature">大量素材</span>
+          <span class="feature">API 接入</span>
+          <span class="feature">企业管理</span>
+        </div>
+      </div>
+      <div class="who-card">
+        <div class="icon">📚</div>
+        <h3 data-i18n="o.who.education">教育用户</h3>
+        <p>影视科系学生、培训机构</p>
+        <div class="features">
+          <span class="feature">学生优惠</span>
+          <span class="feature">教学协作</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-actions">
+    <a href="02-home.html" class="skip-link" data-i18n="o.cta.skip">跳过</a>
+    <a href="27-empty-states.html" class="btn btn-primary btn-lg" data-i18n="o.cta.next">继续 →</a>
+  </div>
+</body>
+</html>

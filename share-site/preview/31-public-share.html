@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 霧城獵人 · EP1</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background: var(--surface-canvas);
+      min-height: 100vh;
+    }
+    .top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .brand-mini { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+
+    .container {
+      max-width: 1280px; margin: 0 auto;
+      padding: 32px;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 32px;
+      align-items: start;
+    }
+
+    .video-side {
+      display: flex; flex-direction: column;
+      gap: 18px;
+    }
+    .video-frame {
+      aspect-ratio: 9/16;
+      max-height: 80vh;
+      width: auto;
+      margin: 0 auto;
+      border-radius: var(--r-card);
+      border: 1px solid var(--surface-hairline);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--elev-3);
+    }
+    .video-frame .scene {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 30% 40%, rgba(120, 80, 50, 0.5), transparent 70%),
+        linear-gradient(180deg, #2a1815 0%, #0a0807 80%);
+    }
+    .video-frame .figure {
+      position: absolute; bottom: 18%; left: 50%;
+      transform: translateX(-50%); width: 30%; height: 50%;
+      background: radial-gradient(ellipse at top, rgba(245, 194, 74, 0.4), transparent 50%),
+                  linear-gradient(180deg, rgba(60, 40, 30, 0.9), rgba(20, 10, 5, 0.95));
+      border-radius: 50% 50% 30% 30%; filter: blur(1px);
+    }
+    .video-frame .vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6));
+    }
+    .video-frame .subtitle {
+      position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%);
+      padding: 8px 18px;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border-radius: var(--r-input);
+      font-size: 14px; color: white;
+    }
+    .video-frame .timeline {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 4px;
+      background: rgba(255,255,255,0.1);
+    }
+    .video-frame .timeline .fill { height: 100%; width: 38%; background: var(--primary-500); }
+    .video-frame .play {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 72px; height: 72px;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(16px);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      cursor: pointer;
+    }
+    .video-frame .play::after {
+      content: ''; width: 0; height: 0;
+      border-left: 22px solid white;
+      border-top: 14px solid transparent;
+      border-bottom: 14px solid transparent;
+      margin-left: 6px;
+    }
+
+    .video-actions {
+      display: flex; gap: 8px; justify-content: center;
+    }
+    .action-btn {
+      padding: 8px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: var(--r-pill);
+      font-size: 12px; font-weight: 500;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .action-btn:hover { color: var(--text-primary); }
+    .action-btn.active { background: rgba(245, 194, 74, 0.12); border-color: rgba(245, 194, 74, 0.4); color: var(--primary-400); }
+    .action-btn .count { color: var(--text-tertiary); }
+
+    .info-side {
+      position: sticky; top: 32px;
+    }
+
+    .creator-card {
+      padding: 20px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 16px;
+    }
+    .creator-card .head {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 14px;
+    }
+    .creator-card .av {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, #7C5CFF, #4A3AAF);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 18px; font-weight: 600; color: white;
+    }
+    .creator-card .info { flex: 1; }
+    .creator-card .name { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+    .creator-card .handle { font-size: 12px; color: var(--text-tertiary); }
+    .creator-card .stats {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--surface-hairline);
+    }
+    .creator-card .stat .v { font-size: 14px; font-weight: 600; }
+    .creator-card .stat .k { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+
+    .meta-card {
+      padding: 18px 20px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 16px;
+    }
+    .meta-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .meta-card .badges {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .meta-card .badge {
+      padding: 3px 9px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .meta-card p { font-size: 13px; line-height: 1.7; color: var(--text-secondary); }
+    .meta-card .stats {
+      display: flex; gap: 16px;
+      padding-top: 12px; margin-top: 14px;
+      border-top: 1px solid var(--surface-hairline);
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    .cta-card {
+      padding: 22px;
+      background:
+        radial-gradient(ellipse at center, rgba(245, 194, 74, 0.08), transparent 70%),
+        var(--surface-raised);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      border-radius: var(--r-card);
+    }
+    .cta-card h3 {
+      font-size: 16px; font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--primary-400);
+    }
+    .cta-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 14px; }
+    .cta-card .actions { display: flex; flex-direction: column; gap: 6px; }
+    .cta-card .actions .btn { width: 100%; justify-content: center; }
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <a href="32-discover.html" class="btn btn-ghost">← 回广场</a>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="19-auth.html" class="btn btn-ghost">登入</a>
+      <a href="02-home.html" class="btn btn-primary">开始创作 →</a>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="video-side">
+      <div class="video-frame">
+        <div class="scene"></div>
+        <div class="figure"></div>
+        <div class="vignette"></div>
+        <div class="play"></div>
+        <div class="subtitle">"出来吧。我知道你在这里。"</div>
+        <div class="timeline"><div class="fill"></div></div>
+      </div>
+
+      <div class="video-actions">
+        <button class="action-btn active">♡ <span class="count">12,343</span></button>
+        <button class="action-btn">💬 <span class="count">218</span></button>
+        <button class="action-btn">↗ 分享</button>
+        <button class="action-btn">⬇ 下载</button>
+        <button class="action-btn">⋯</button>
+      </div>
+    </div>
+
+    <div class="info-side">
+
+      <div class="creator-card">
+        <div class="head">
+          <div class="av">林</div>
+          <div class="info">
+            <div class="name">林夕</div>
+            <div class="handle">@林夕 · 小红书 8.2 万粉</div>
+          </div>
+          <button class="btn btn-primary" data-i18n="sh.cta.follow">关注创作者</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="v">23</div><div class="k">作品</div></div>
+          <div class="stat"><div class="v">82.3k</div><div class="k">粉丝</div></div>
+          <div class="stat"><div class="v">245k</div><div class="k">总观看</div></div>
+        </div>
+      </div>
+
+      <div class="meta-card">
+        <h2>霧城獵人 · EP1</h2>
+        <div class="badges">
+          <span class="badge">悬疑</span>
+          <span class="badge">短劇</span>
+          <span class="badge">夜景</span>
+          <span class="badge">SEEDANCE 2.0</span>
+        </div>
+        <p>夜雾中的城市，獵人林夜手持油灯走进无人巷弄。远处低吼声渐近，黑影一闪而过 — 第七个目标终于出现。这是一場猎人与黑雾的对峙，也是城市灵异事件的开端。</p>
+        <div class="stats">
+          <span>58 秒</span>
+          <span>·</span>
+          <span>2 天前</span>
+          <span>·</span>
+          <span>9:16</span>
+          <span>·</span>
+          <span>45.1k 观看</span>
+        </div>
+      </div>
+
+      <div class="cta-card">
+        <h3 data-i18n="sh.cta.clone">克隆此模板</h3>
+        <p>用同样的角色 / 场景 / 模型设置，拍出你自己的故事 — 不需要从零开始。</p>
+        <div class="actions">
+          <a href="19-auth.html" class="btn btn-primary" data-i18n="sh.cta.signup">注册并克隆</a>
+          <a href="19-auth.html" class="btn btn-ghost">仅注册</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

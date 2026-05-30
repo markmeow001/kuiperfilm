@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 叙事编辑 R2V</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* Top app bar */
+    .ws-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--surface-hairline);
+      flex-shrink: 0;
+    }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+    .brand-mini { display: flex; align-items: center; gap: 12px; }
+    .breadcrumb { font-size: 13px; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
+    .breadcrumb .current { color: var(--text-primary); font-weight: 500; }
+    .breadcrumb .sep { color: var(--neutral-700); }
+    .stepper { display: flex; align-items: center; gap: 4px; padding: 4px; background: var(--surface-raised); border-radius: var(--r-pill); }
+    .stepper .step { padding: 6px 14px; font-size: 12px; font-weight: 500; color: var(--text-tertiary); border-radius: var(--r-pill); white-space: nowrap; }
+    .stepper .step.done { color: var(--text-secondary); }
+    .stepper .step.done::before { content: '✓ '; color: var(--success); }
+    .stepper .step.active { background: var(--primary-500); color: var(--neutral-950); font-weight: 600; }
+
+    /* ep-tabs-bar / ep-add / ep-tab / ep-status defined in tokens.css for cross-page consistency */
+
+    /* Sub-toolbar */
+    .sub-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 24px;
+      border-bottom: 1px solid var(--surface-hairline);
+      flex-shrink: 0;
+      gap: 16px;
+    }
+    .sub-toolbar .ep-info {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 13px;
+    }
+    .sub-toolbar .ep-info .title { font-weight: 600; font-size: 15px; }
+    .sub-toolbar .ep-info .meta {
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .sub-toolbar .ep-info .model-badge {
+      padding: 3px 9px;
+      background: rgba(245, 194, 74, 0.12);
+      color: var(--primary-400);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+    /* view-switch styles defined in tokens.css for cross-page consistency */
+    .toolbar-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+    .tb-toggle {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .tb-toggle:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.16); }
+    .tb-toggle .sw {
+      width: 22px; height: 12px;
+      background: var(--neutral-700);
+      border-radius: var(--r-pill);
+      position: relative;
+    }
+    .tb-toggle .sw::after {
+      content: ''; position: absolute; top: 1px; left: 1px;
+      width: 10px; height: 10px;
+      background: var(--text-primary);
+      border-radius: 50%;
+      transition: left var(--d-hover) var(--ease-out);
+    }
+    .tb-toggle.on .sw { background: var(--primary-500); }
+    .tb-toggle.on .sw::after { left: 11px; background: var(--neutral-950); }
+
+    /* Body 3-col */
+    .ws-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 260px 1fr 380px;
+      min-height: 0;
+    }
+
+    /* LEFT: Cast / Scenes / Props rosters */
+    .ws-rosters {
+      border-right: 1px solid var(--surface-hairline);
+      overflow-y: auto;
+      padding: 18px 14px;
+    }
+    .roster-section { margin-bottom: 22px; }
+    .roster-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 6px 10px;
+    }
+    .roster-head .title {
+      font-size: 11px; color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      font-weight: 500;
+    }
+    .roster-head .count {
+      font-size: 11px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .roster-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 8px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 4px;
+      cursor: grab;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .roster-item:hover { border-color: rgba(255,255,255,0.16); }
+    .roster-item:active { cursor: grabbing; }
+    .ri-thumb { width: 24px; height: 24px; border-radius: 5px; flex-shrink: 0; }
+    /* Character colors — matches the user's screenshots */
+    .rt-linye   { background: linear-gradient(135deg, #F5C24A, #C99A2E); }   /* gold */
+    .rt-guai    { background: linear-gradient(135deg, #7C5CFF, #4A3AAF); }   /* purple */
+    .rt-guxing  { background: linear-gradient(135deg, #4A8FE5, #2A5FB5); }   /* blue */
+    .rt-zerog   { background: linear-gradient(135deg, #22C55E, #16803D); }   /* green */
+    .rt-loc-1   { background: linear-gradient(135deg, #2D2A4A, #1A1530); }
+    .rt-loc-2   { background: linear-gradient(135deg, #4A3A2A, #2A1F15); }
+    .rt-loc-3   { background: linear-gradient(135deg, #2A4A3A, #152A25); }
+    .rt-prop-1  { background: linear-gradient(135deg, #C99A2E, #6F5418); }
+    .rt-prop-2  { background: linear-gradient(135deg, #525252, #262626); }
+    .ri-info { flex: 1; min-width: 0; }
+    .ri-name {
+      font-size: 13px; font-weight: 500;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .ri-name .at { color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+    .ri-meta {
+      font-size: 10px; color: var(--text-tertiary);
+      margin-top: 1px;
+    }
+    .ri-app {
+      font-size: 10px;
+      color: var(--text-secondary);
+      padding: 2px 6px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 4px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .ri-app::after { content: ' ⌄'; opacity: 0.5; }
+    .roster-add {
+      padding: 8px;
+      background: transparent;
+      border: 1px dashed var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-tertiary);
+      font-size: 11px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .roster-add:hover { border-color: var(--primary-500); color: var(--primary-400); }
+
+    .helper-tip {
+      margin-top: 8px;
+      padding: 10px 12px;
+      background: rgba(124, 92, 255, 0.04);
+      border: 1px solid rgba(124, 92, 255, 0.16);
+      border-radius: var(--r-input);
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .helper-tip strong { color: var(--accent-400); }
+
+    /* CENTER: Narrative editor */
+    .ws-editor {
+      background: var(--surface-canvas);
+      display: flex; flex-direction: column;
+      overflow: auto;
+      min-height: 0;
+    }
+
+    /* Collapsible global constraints */
+    .global-constraints {
+      border-bottom: 1px solid var(--surface-hairline);
+      background: rgba(245, 194, 74, 0.02);
+      padding: 14px 28px 16px;
+    }
+    .gc-head {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+    .gc-head .lh {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 500;
+    }
+    .gc-head .chev { color: var(--text-tertiary); font-size: 14px; }
+    .gc-rows {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .gc-row {
+      padding: 10px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+    }
+    .gc-row .k {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    .gc-row .v {
+      font-size: 12px;
+      color: var(--text-primary);
+      line-height: 1.5;
+      max-height: 60px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+    }
+    .gc-row.mono .v { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); }
+
+    /* 5-element directing helper */
+    .helper-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 28px;
+      background: rgba(124, 92, 255, 0.04);
+      border-bottom: 1px solid var(--surface-hairline);
+      font-size: 12px;
+    }
+    .helper-bar .icon {
+      width: 24px; height: 24px;
+      background: rgba(124, 92, 255, 0.16);
+      color: var(--accent-400);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .helper-bar .text { flex: 1; color: var(--text-secondary); }
+    .helper-bar .text strong { color: var(--accent-400); }
+    .helper-bar .arr { color: var(--text-tertiary); }
+
+    /* Narrative text */
+    .narrative {
+      padding: 24px 28px 40px;
+      max-width: 900px;
+      width: 100%;
+      font-size: 15px;
+      line-height: 1.95;
+      color: var(--text-primary);
+      letter-spacing: -0.005em;
+    }
+    .narrative p { margin-bottom: 14px; }
+    .narrative .stage-tag {
+      display: inline-block;
+      padding: 1px 8px;
+      background: rgba(124, 92, 255, 0.12);
+      color: var(--accent-400);
+      border-radius: var(--r-chip);
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      margin-right: 6px;
+      letter-spacing: 0;
+    }
+
+    /* INLINE chips — the key new element matching screenshot #3 */
+    .chip-inline {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 1px 7px 2px;
+      border-radius: var(--r-chip);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0;
+      vertical-align: baseline;
+      margin: 0 1px;
+      border: 1px solid;
+      cursor: pointer;
+      transition: opacity var(--d-hover) var(--ease-out);
+    }
+    .chip-inline:hover { opacity: 0.85; }
+    .chip-inline::before {
+      content: '@';
+      opacity: 0.5;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .chip-char-linye {
+      background: rgba(245, 194, 74, 0.18);
+      border-color: rgba(245, 194, 74, 0.45);
+      color: #FFD96E;
+    }
+    .chip-char-guai {
+      background: rgba(124, 92, 255, 0.18);
+      border-color: rgba(124, 92, 255, 0.45);
+      color: #9B82FF;
+    }
+    .chip-char-guxing {
+      background: rgba(74, 143, 229, 0.18);
+      border-color: rgba(74, 143, 229, 0.45);
+      color: #6FA8E5;
+    }
+    .chip-loc {
+      background: rgba(108, 95, 184, 0.18);
+      border-color: rgba(108, 95, 184, 0.4);
+      color: #A89BD8;
+    }
+    .chip-loc::before { content: '📍'; opacity: 0.8; font-size: 10px; }
+    .chip-prop {
+      background: rgba(201, 154, 46, 0.18);
+      border-color: rgba(201, 154, 46, 0.4);
+      color: #E6BF5E;
+    }
+    .chip-prop::before { content: '◆'; opacity: 0.6; font-size: 10px; }
+
+    .narrative .dialogue {
+      display: block;
+      margin: 6px 0 6px 24px;
+      padding: 8px 14px;
+      background: var(--surface-raised);
+      border-left: 2px solid var(--primary-500);
+      border-radius: 0 var(--r-input) var(--r-input) 0;
+      font-style: normal;
+      color: var(--text-primary);
+    }
+    .narrative .dialogue::before {
+      content: '"';
+      color: var(--primary-400);
+      font-weight: 600;
+      margin-right: 2px;
+    }
+    .narrative .dialogue::after { content: '"'; color: var(--primary-400); font-weight: 600; }
+    .narrative .action {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-style: italic;
+    }
+
+    /* Segment divider in narrative */
+    .seg-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 28px 0 18px;
+      padding: 0;
+    }
+    .seg-divider .line { flex: 1; height: 1px; background: var(--surface-hairline); }
+    .seg-divider .tag {
+      padding: 4px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .seg-divider .tag.active {
+      background: rgba(245, 194, 74, 0.08);
+      border-color: rgba(245, 194, 74, 0.3);
+      color: var(--primary-400);
+    }
+    .seg-divider .tag .st-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .seg-divider .tag .st-dot.done { background: var(--success); }
+    .seg-divider .tag .st-dot.gen { background: var(--accent-500); animation: pulse-soft 1.5s ease-in-out infinite; }
+    .seg-divider .tag .st-dot.err { background: var(--error); }
+    .seg-divider .tag .st-dot.idle { background: var(--neutral-700); }
+
+    /* Segment status strip at bottom */
+    .segments {
+      border-top: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      padding: 18px 28px 18px;
+      flex-shrink: 0;
+    }
+    .seg-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .seg-head h3 { font-size: 14px; font-weight: 600; }
+    .seg-head .actions { display: flex; gap: 6px; }
+
+    .seg-list {
+      display: flex; flex-direction: column;
+      gap: 6px;
+    }
+    .seg-row {
+      display: grid;
+      grid-template-columns: 50px 90px 100px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      font-size: 12px;
+    }
+    .seg-row.active {
+      border-color: rgba(245, 194, 74, 0.4);
+      background: rgba(245, 194, 74, 0.04);
+    }
+    .seg-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-weight: 500;
+    }
+    .seg-num strong { color: var(--text-primary); }
+    .seg-time {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex; align-items: center; gap: 4px;
+    }
+    .seg-time::before { content: '🕐'; opacity: 0.5; font-size: 11px; }
+    .seg-status-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 10px;
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .seg-status-chip.done { background: rgba(34, 197, 94, 0.12); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.3); }
+    .seg-status-chip.done::before { content: '✓'; }
+    .seg-status-chip.gen { background: rgba(124, 92, 255, 0.12); color: var(--accent-400); border: 1px solid rgba(124, 92, 255, 0.3); }
+    .seg-status-chip.gen::before { content: '●'; animation: pulse-soft 1.5s ease-in-out infinite; }
+    .seg-status-chip.err { background: rgba(239, 68, 68, 0.12); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .seg-status-chip.err::before { content: '✕'; }
+    .seg-status-chip.idle { background: var(--surface-canvas); color: var(--text-tertiary); border: 1px solid var(--surface-hairline); }
+    .seg-status-chip.idle::before { content: '○'; }
+    .seg-refs {
+      color: var(--text-tertiary);
+      font-size: 11px;
+      display: flex; align-items: center; gap: 6px;
+      overflow: hidden;
+    }
+    .seg-refs .mref {
+      padding: 2px 7px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-chip);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .seg-refs .mref-char { color: #FFD96E; border-color: rgba(245, 194, 74, 0.3); }
+    .seg-refs .mref-loc { color: #A89BD8; border-color: rgba(108, 95, 184, 0.3); }
+    .seg-refs .mref-prop { color: #E6BF5E; border-color: rgba(201, 154, 46, 0.3); }
+    .seg-actions {
+      display: flex; gap: 5px;
+      justify-content: flex-end;
+    }
+    .seg-btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 5px 10px;
+      background: transparent;
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: var(--r-input);
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .seg-btn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.16); }
+    .seg-btn.regen-ark { color: var(--primary-400); border-color: rgba(245, 194, 74, 0.3); }
+    .seg-btn.regen-fal { color: #6FA8E5; border-color: rgba(74, 143, 229, 0.3); }
+    .seg-btn.regen-bob { color: #4ADE80; border-color: rgba(34, 197, 94, 0.3); }
+    .seg-btn .cost {
+      color: var(--text-tertiary);
+      font-weight: 400;
+    }
+    .seg-btn-icon {
+      width: 26px; height: 26px;
+      background: transparent;
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: var(--r-input);
+      display: grid; place-items: center;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .seg-btn-icon:hover { color: var(--text-primary); }
+
+    .seg-add {
+      margin-top: 10px;
+      padding: 12px;
+      background: transparent;
+      border: 1px dashed var(--surface-hairline);
+      border-radius: var(--r-card);
+      color: var(--text-tertiary);
+      font-size: 13px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .seg-add:hover { border-color: var(--primary-500); color: var(--primary-400); }
+
+    /* RIGHT: Inspector */
+    .ws-inspector {
+      border-left: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      overflow-y: auto;
+      padding: 18px 20px 40px;
+    }
+    .ihead {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .ihead h3 { font-size: 14px; font-weight: 600; }
+    .ihead .ptag {
+      padding: 3px 9px;
+      background: rgba(245, 194, 74, 0.12);
+      color: var(--primary-400);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .isection { margin-bottom: 22px; }
+    .ilabel { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; margin-bottom: 10px; }
+
+    .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .mode-opt { padding: 10px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); cursor: pointer; }
+    .mode-opt.active { border-color: rgba(245, 194, 74, 0.4); background: rgba(245, 194, 74, 0.04); }
+    .mode-opt .mname { font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace; margin-bottom: 2px; }
+    .mode-opt.active .mname { color: var(--primary-400); }
+    .mode-opt .mdesc { font-size: 10px; color: var(--text-tertiary); line-height: 1.4; }
+
+    .field-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .field-row .k { color: var(--text-tertiary); }
+    .field-row .v { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+    .field-row.edit::after { content: ' ✎'; opacity: 0.4; font-size: 11px; margin-left: 4px; }
+
+    .seg-refs-inline {
+      display: flex; flex-wrap: wrap; gap: 5px;
+    }
+    .seg-refs-inline .mref {
+      padding: 3px 8px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .preview-mini {
+      margin-top: 8px;
+      padding: 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      display: flex; gap: 10px;
+      align-items: center;
+    }
+    .preview-mini .pm-thumb {
+      width: 56px; height: 86px;
+      border-radius: var(--r-input);
+      background: linear-gradient(135deg, #4A3A2A, #2A1F15);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .preview-mini .pm-thumb::after {
+      content: '▶'; position: absolute;
+      top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 22px; height: 22px;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      border-radius: 50%; display: grid; place-items: center;
+      font-size: 9px; color: white;
+    }
+    .preview-mini .pm-info { flex: 1; font-size: 11px; }
+    .preview-mini .pm-title { font-weight: 500; font-size: 12px; margin-bottom: 3px; }
+    .preview-mini .pm-meta { color: var(--text-tertiary); }
+
+    .pills { display: flex; flex-wrap: wrap; gap: 5px; }
+    .pill { padding: 4px 9px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-pill); font-size: 10px; color: var(--text-secondary); cursor: pointer; }
+    .pill.active { background: rgba(245, 194, 74, 0.12); border-color: rgba(245, 194, 74, 0.4); color: var(--primary-400); }
+
+    .istop {
+      position: sticky; bottom: 0; background: var(--surface-canvas);
+      padding-top: 12px; margin-top: 12px;
+      border-top: 1px solid var(--surface-hairline);
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    }
+    .istop .btn { width: 100%; justify-content: center; }
+
+    .btn-text-action {
+      background: rgba(124, 92, 255, 0.06);
+      color: var(--accent-400);
+      border: 1px solid rgba(124, 92, 255, 0.3);
+      padding: 5px 10px;
+      font-size: 11px;
+      border-radius: var(--r-input);
+      cursor: pointer;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top app bar -->
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html" data-i18n="ws.crumb.projects">项目</a>
+        <span class="sep">›</span>
+        <a href="07-pre-generation.html">霧城獵人</a>
+        <span class="sep">›</span>
+        <span class="current">EP 01 · 黑霧降臨</span>
+      </div>
+    </div>
+    <div class="stepper">
+      <div class="step done" data-i18n="ws.step.script">剧本</div>
+      <div class="step done" data-i18n="ws.step.analyze">分析</div>
+      <div class="step active" data-i18n="ws.step.storyboard">分镜</div>
+      <div class="step" data-i18n="ws.step.voice">配音</div>
+      <div class="step" data-i18n="ws.step.render">渲染</div>
+      <div class="step" data-i18n="ws.step.final">成片</div>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <span class="chip chip-success">● <span data-i18n="ws.autosave">自动保存</span></span>
+      <!-- Language switcher -->
+      <div class="lang-switcher" role="group" aria-label="Language">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="04-generation.html" class="btn btn-primary" data-i18n="ws.cta.next-voice">下一步 → 配音</a>
+    </div>
+  </header>
+
+  <!-- Episode tabs -->
+  <div class="ep-tabs-bar">
+    <button class="ep-add" data-i18n="ep.new">+ 新建集</button>
+    <button class="ep-tab active">
+      <div class="ep-status gen"></div>
+      第 1 集 · 黑霧降臨
+    </button>
+    <button class="ep-tab">
+      <div class="ep-status done"></div>
+      第 2 集 · 符文線索
+    </button>
+    <button class="ep-tab">
+      <div class="ep-status draft"></div>
+      第 3 集 · 城西獵場
+    </button>
+    <button class="ep-tab">
+      <div class="ep-status error"></div>
+      第 4 集 · 雙刃對峙
+    </button>
+    <button class="ep-tab">
+      <div class="ep-status draft"></div>
+      第 5 集
+    </button>
+  </div>
+
+  <!-- Sub-toolbar -->
+  <div class="sub-toolbar">
+    <div class="ep-info">
+      <span class="title">第 1 集 · 黑霧降臨</span>
+      <span class="meta" data-i18n="n13.meta">8 段 · 107s · 9:16 · SEEDANCE 2.0</span>
+    </div>
+
+    <div class="toolbar-actions">
+      <button class="btn btn-ghost" style="height: 34px; padding: 0 10px; font-size: 14px;" title="More">⋯</button>
+
+      <!-- View switcher (dual-view) — identical to 08 -->
+      <div class="view-switch">
+        <a class="active" data-i18n="view.narrative">✎ 叙事编辑</a>
+        <a href="08-storyboard-v2.html" data-i18n="view.cards">▣ 分镜卡</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="ws-body">
+
+    <!-- LEFT: Cast / Scenes / Props -->
+    <aside class="ws-rosters">
+
+      <!-- Master link to 剧集设定 -->
+      <a href="15-character-edit.html" style="display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; background: rgba(245, 194, 74, 0.06); border: 1px solid rgba(245, 194, 74, 0.25); border-radius: var(--r-card); margin-bottom: 18px; text-decoration: none; color: var(--text-primary);">
+        <div>
+          <div style="font-size: 13px; font-weight: 600; color: var(--primary-400);"><span data-i18n="castsets.entry">剧集设定</span> →</div>
+          <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 2px;" data-i18n="castsets.entry-desc">编辑角色 / 场景 / 道具</div>
+        </div>
+        <span style="color: var(--primary-400); font-size: 16px;">⌥</span>
+      </a>
+
+      <!-- Cast -->
+      <div class="roster-section">
+        <div class="roster-head">
+          <a href="15-character-edit.html" style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; text-decoration: none;"><span data-i18n="castsets.cast">出场角色</span> <span style="color: var(--primary-400);">→</span></a>
+          <div class="count">3</div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-linye"></div>
+          <div class="ri-info">
+            <div class="ri-name">林夜 <span class="at">@林夜</span></div>
+            <div class="ri-meta">主角 · 出现 6 段</div>
+          </div>
+          <div class="ri-app">v3 造型</div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-guai"></div>
+          <div class="ri-info">
+            <div class="ri-name">怪物 <span class="at">@怪物</span></div>
+            <div class="ri-meta">2 段</div>
+          </div>
+          <div class="ri-app">黑霧形</div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-guxing"></div>
+          <div class="ri-info">
+            <div class="ri-name">古星圖 <span class="at">@古星圖</span></div>
+            <div class="ri-meta">配角 · 1 段</div>
+          </div>
+          <div class="ri-app">默認</div>
+        </div>
+        <button class="roster-add">+ 新增角色</button>
+      </div>
+
+      <!-- Scenes -->
+      <div class="roster-section">
+        <div class="roster-head">
+          <a href="16-location-edit.html" style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; text-decoration: none;"><span data-i18n="castsets.locations">场景</span> <span style="color: var(--primary-400);">→</span></a>
+          <div class="count">3</div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-loc-1"></div>
+          <div class="ri-info">
+            <div class="ri-name">巷弄 <span class="at">@巷弄</span></div>
+            <div class="ri-meta">夜 · 4 段</div>
+          </div>
+          <div class="ri-app">默認</div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-loc-2"></div>
+          <div class="ri-info">
+            <div class="ri-name">巷盡頭 <span class="at">@巷盡頭</span></div>
+            <div class="ri-meta">夜 · 3 段</div>
+          </div>
+          <div class="ri-app">默認</div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-loc-3"></div>
+          <div class="ri-info">
+            <div class="ri-name">符文地 <span class="at">@符文地</span></div>
+            <div class="ri-meta">夜 · 1 段</div>
+          </div>
+          <div class="ri-app">默認</div>
+        </div>
+        <button class="roster-add">+ 新增場景</button>
+      </div>
+
+      <!-- Props -->
+      <div class="roster-section">
+        <div class="roster-head">
+          <a href="17-prop-edit.html" style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; text-decoration: none;"><span data-i18n="castsets.props">道具</span> <span style="color: var(--primary-400);">→</span></a>
+          <div class="count">2</div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-prop-1"></div>
+          <div class="ri-info">
+            <div class="ri-name">油燈 <span class="at">@油燈</span></div>
+            <div class="ri-meta">5 段</div>
+          </div>
+        </div>
+        <div class="roster-item">
+          <div class="ri-thumb rt-prop-2"></div>
+          <div class="ri-info">
+            <div class="ri-name">手槍 <span class="at">@手槍</span></div>
+            <div class="ri-meta">2 段</div>
+          </div>
+        </div>
+        <button class="roster-add">+ 新增道具</button>
+      </div>
+
+      <div class="helper-tip">
+        <strong>💡 用法</strong><br/>
+        在敘事文本裡打 <code>@</code> 出現選單。或從左邊拖到文字裡。chip 會自動觸發 R2V 參考。
+      </div>
+    </aside>
+
+    <!-- CENTER: Narrative editor -->
+    <main class="ws-editor">
+
+      <!-- Global constraints (collapsed by default — one-line summary) -->
+      <div style="padding: 10px 28px; border-bottom: 1px solid var(--surface-hairline); display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-tertiary);">
+        <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500;">🌐 全局</span>
+        <span style="color: var(--text-secondary);">寫實電影 · Negative ✓ · 禁 BGM ✓ · 9:16 / 30fps</span>
+        <span style="margin-left: auto; cursor: pointer; color: var(--text-tertiary); font-size: 11px;">▾ 展開編輯</span>
+      </div>
+
+      <!-- Narrative text -->
+      <div class="narrative">
+
+        <!-- Segment 1 -->
+        <div class="seg-divider">
+          <div class="line"></div>
+          <span class="tag"><span class="st-dot done"></span>段落 1 / 8 · 0:00–0:14</span>
+          <div class="line"></div>
+        </div>
+
+        <p>
+          <span class="stage-tag">開場 · 廣角全景</span>
+          夜，<span class="chip-inline chip-loc">巷弄</span>霧氣升起，路燈忽明忽暗。<span class="chip-inline chip-char-linye">林夜</span>持<span class="chip-inline chip-prop">油燈</span>步入，腳步謹慎。鏡頭低角度跟拍。
+        </p>
+        <p class="action">（環境音：霧氣低鳴、腳步聲、油燈搖晃聲）</p>
+        <div class="dialogue"><span class="chip-inline chip-char-linye">林夜</span>：這霧不對勁⋯⋯</div>
+
+        <!-- Segment 2 -->
+        <div class="seg-divider">
+          <div class="line"></div>
+          <span class="tag active"><span class="st-dot gen"></span>段落 2 / 8 · 0:14–0:23 · 渲染中</span>
+          <div class="line"></div>
+        </div>
+
+        <p>
+          <span class="stage-tag">轉場 · 中景跟拍</span>
+          <span class="chip-inline chip-char-linye">林夜</span>抬頭凝視夜空，<span class="chip-inline chip-prop">油燈</span>光在臉上微微搖晃。氣氛肅穆。鏡頭緩慢仰起。
+        </p>
+        <p class="action">（環境音：風聲漸強）</p>
+
+        <!-- Segment 3 -->
+        <div class="seg-divider">
+          <div class="line"></div>
+          <span class="tag"><span class="st-dot err"></span>段落 3 / 8 · 0:23–0:30 · 失敗（可重生）</span>
+          <div class="line"></div>
+        </div>
+
+        <p>
+          <span class="stage-tag">空鏡 · 純場景</span>
+          遠處<span class="chip-inline chip-loc">巷盡頭</span>傳來低吼聲，黑影一閃而過。鏡頭定格，霧氣緩慢蠕動。
+        </p>
+
+        <!-- Segment 4 -->
+        <div class="seg-divider">
+          <div class="line"></div>
+          <span class="tag"><span class="st-dot idle"></span>段落 4 / 8 · 0:30–0:38 · 未生成</span>
+          <div class="line"></div>
+        </div>
+
+        <p>
+          <span class="stage-tag">對峙 · 主角特寫</span>
+          <span class="chip-inline chip-char-linye">林夜</span>停步，鏡頭推近至面部，眉頭緊鎖。
+        </p>
+        <div class="dialogue"><span class="chip-inline chip-char-linye">林夜</span>：出來吧。我知道你在這裡。</div>
+
+        <!-- Segment 5 -->
+        <div class="seg-divider">
+          <div class="line"></div>
+          <span class="tag"><span class="st-dot idle"></span>段落 5 / 8 · 0:38–0:50 · 未生成</span>
+          <div class="line"></div>
+        </div>
+
+        <p>
+          <span class="stage-tag">高潮 · 怪物現身</span>
+          <span class="chip-inline chip-loc">巷盡頭</span>黑霧聚成<span class="chip-inline chip-char-guai">怪物</span>形狀，緩緩靠近<span class="chip-inline chip-char-linye">林夜</span>。
+        </p>
+        <div class="dialogue"><span class="chip-inline chip-char-guai">怪物</span>（嘶吼）：獵人⋯⋯又見面了⋯⋯</div>
+
+      </div>
+
+      <!-- Segment status strip at bottom -->
+      <div class="segments">
+        <div class="seg-head">
+          <h3>段落隊列 · 8 段共 107 秒</h3>
+          <div class="actions">
+            <button class="btn btn-ghost" style="padding: 5px 10px; font-size: 11px;">📋 複製本集劇本</button>
+            <button class="btn btn-ghost" style="padding: 5px 10px; font-size: 11px;">⬇ 下載全部</button>
+            <button class="btn btn-primary" style="padding: 5px 12px; font-size: 11px;">▶ 批量生成本集</button>
+          </div>
+        </div>
+
+        <div class="seg-list">
+
+          <!-- Segment 1: done -->
+          <div class="seg-row">
+            <div class="seg-num"><strong>#1</strong>/8</div>
+            <div class="seg-time">0:00–0:14</div>
+            <span class="seg-status-chip done">已完成</span>
+            <div class="seg-refs">
+              <span class="mref mref-loc">@巷弄</span>
+              <span class="mref mref-char">@林夜</span>
+              <span class="mref mref-prop">@油燈</span>
+            </div>
+            <div class="seg-actions">
+              <button class="seg-btn regen-ark">↺ ARK <span class="cost">-28</span></button>
+              <button class="seg-btn regen-fal">↺ fal <span class="cost">-32</span></button>
+              <button class="seg-btn-icon" title="歷史記錄">⌛</button>
+              <button class="seg-btn-icon" title="查看請求">👁</button>
+              <button class="seg-btn-icon" title="刪除">🗑</button>
+            </div>
+          </div>
+
+          <!-- Segment 2: generating -->
+          <div class="seg-row active">
+            <div class="seg-num"><strong>#2</strong>/8</div>
+            <div class="seg-time">0:14–0:23</div>
+            <span class="seg-status-chip gen">渲染中 22s</span>
+            <div class="seg-refs">
+              <span class="mref mref-char">@林夜</span>
+              <span class="mref mref-prop">@油燈</span>
+            </div>
+            <div class="seg-actions">
+              <button class="seg-btn" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">⏹ 取消</button>
+              <button class="seg-btn-icon" title="查看請求">👁</button>
+            </div>
+          </div>
+
+          <!-- Segment 3: failed -->
+          <div class="seg-row">
+            <div class="seg-num"><strong>#3</strong>/8</div>
+            <div class="seg-time">0:23–0:30</div>
+            <span class="seg-status-chip err">失敗（不扣點）</span>
+            <div class="seg-refs">
+              <span class="mref mref-loc">@巷盡頭</span>
+            </div>
+            <div class="seg-actions">
+              <button class="seg-btn regen-ark">↺ ARK <span class="cost">-22</span></button>
+              <button class="seg-btn regen-fal">↺ fal <span class="cost">-26</span></button>
+              <button class="seg-btn regen-bob">↺ BobAPI <span class="cost">-19</span></button>
+              <button class="seg-btn-icon" title="查看錯誤">⚠</button>
+            </div>
+          </div>
+
+          <!-- Segment 4: idle -->
+          <div class="seg-row">
+            <div class="seg-num"><strong>#4</strong>/8</div>
+            <div class="seg-time">0:30–0:38</div>
+            <span class="seg-status-chip idle">未生成</span>
+            <div class="seg-refs">
+              <span class="mref mref-char">@林夜</span>
+            </div>
+            <div class="seg-actions">
+              <button class="seg-btn regen-ark">▶ 生成 <span class="cost">-28</span></button>
+              <button class="seg-btn-icon" title="編輯">✎</button>
+              <button class="seg-btn-icon" title="刪除">🗑</button>
+            </div>
+          </div>
+
+          <!-- Segment 5: idle -->
+          <div class="seg-row">
+            <div class="seg-num"><strong>#5</strong>/8</div>
+            <div class="seg-time">0:38–0:50</div>
+            <span class="seg-status-chip idle">未生成</span>
+            <div class="seg-refs">
+              <span class="mref mref-loc">@巷盡頭</span>
+              <span class="mref mref-char">@怪物</span>
+              <span class="mref mref-char">@林夜</span>
+            </div>
+            <div class="seg-actions">
+              <button class="seg-btn regen-ark">▶ 生成 <span class="cost">-36</span></button>
+              <button class="seg-btn-icon">✎</button>
+              <button class="seg-btn-icon">🗑</button>
+            </div>
+          </div>
+
+        </div>
+
+        <button class="seg-add">+ 在後面添加段落</button>
+      </div>
+    </main>
+
+    <!-- RIGHT: Inspector for the active segment -->
+    <aside class="ws-inspector">
+      <div class="ihead">
+        <h3>段落 #2 設定</h3>
+        <span class="ptag">渲染中</span>
+      </div>
+
+      <div class="isection">
+        <div class="ilabel">生成模式 · GENERATION MODE</div>
+        <div class="mode-grid">
+          <div class="mode-opt"><div class="mname">T2V</div><div class="mdesc">純文字<br/>無主體</div></div>
+          <div class="mode-opt active">
+            <div class="mname">R2V ★</div>
+            <div class="mdesc">@chip 自動帶<br/>多段一致</div>
+          </div>
+          <div class="mode-opt"><div class="mname">T2I→I2V</div><div class="mdesc">先生圖<br/>選定 animate</div></div>
+          <div class="mode-opt"><div class="mname">R2V + 運鏡</div><div class="mdesc">+ 參考片<br/>難動作</div></div>
+        </div>
+      </div>
+
+      <div class="isection">
+        <div class="ilabel">本段引用的 @chip（自動）</div>
+        <div class="seg-refs-inline">
+          <span class="mref" style="color: #FFD96E; border-color: rgba(245, 194, 74, 0.3);">@林夜</span>
+          <span class="mref" style="color: #E6BF5E; border-color: rgba(201, 154, 46, 0.3);">@油燈</span>
+        </div>
+        <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 6px; padding: 0 4px;">
+          系統從段落文字自動偵測，可在文字裡增刪改
+        </div>
+      </div>
+
+      <div class="isection">
+        <div class="ilabel">時長 / 解析度</div>
+        <div class="field-row edit"><span class="k">時長</span><span class="v">9.0s</span></div>
+        <div class="field-row edit"><span class="k">解析度</span><span class="v">1080×1920</span></div>
+        <div class="field-row edit"><span class="k">幀率</span><span class="v">30 fps</span></div>
+      </div>
+
+      <div class="isection">
+        <div class="ilabel">影片 Provider</div>
+        <div class="field-row edit"><span class="k">主用</span><span class="v">ARK Seedance 2.0</span></div>
+        <div style="font-size: 10px; color: var(--text-tertiary); padding: 0 4px; margin-top: 4px;">
+          失敗時自動 fallback：AtlasCloud → fal → BobAPI
+        </div>
+      </div>
+
+      <div class="isection">
+        <div class="ilabel">運鏡 · Cinema Studio</div>
+        <div class="pills">
+          <span class="pill active">Slow Tilt Up</span>
+          <span class="pill active">Medium Shot</span>
+          <span class="pill">Push In</span>
+          <span class="pill">Tracking</span>
+          <span class="pill">+ 加</span>
+        </div>
+      </div>
+
+      <div class="isection">
+        <div class="ilabel">生成預覽（完成後）</div>
+        <div class="preview-mini">
+          <div class="pm-thumb"></div>
+          <div class="pm-info">
+            <div class="pm-title">渲染中⋯⋯</div>
+            <div class="pm-meta">22 秒 / 預估 1m 25s</div>
+            <button class="btn-text-action" style="margin-top: 6px;">👁 查看請求</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="istop">
+        <button class="btn btn-ghost">✎ 編輯文字</button>
+        <button class="btn btn-primary">⏹ 取消</button>
+      </div>
+    </aside>
+
+  </div>
+</body>
+</html>

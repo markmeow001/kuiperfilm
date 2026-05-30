@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 公開上線重設計</title>
+  <meta name="description" content="KuiperAI 公開上線重設計 — 33 個 mockup + 7 份實作前規劃文件">
+  <link rel="stylesheet" href="preview/tokens.css">
+  <style>
+    body {
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(245, 194, 74, 0.06), transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(124, 92, 255, 0.06), transparent 60%),
+        var(--surface-canvas);
+      min-height: 100vh;
+    }
+
+    .nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 32px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 600; font-size: 17px; }
+    .brand-mark {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 7px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 15px;
+    }
+    .nav .meta {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Hero */
+    .hero {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 80px 32px 40px;
+      text-align: center;
+    }
+    .hero .eyebrow {
+      display: inline-block;
+      padding: 5px 14px;
+      background: rgba(245, 194, 74, 0.12);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      color: var(--primary-400);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+      margin-bottom: 22px;
+    }
+    .hero h1 {
+      font-size: 56px;
+      line-height: 1.05;
+      letter-spacing: -0.025em;
+      font-weight: 600;
+      margin-bottom: 18px;
+    }
+    .hero h1 .accent {
+      background: linear-gradient(120deg, var(--primary-400), var(--primary-600));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 17px;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* Stats strip */
+    .stats {
+      max-width: 1080px;
+      margin: 32px auto;
+      padding: 0 32px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .stat {
+      padding: 20px 24px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      text-align: center;
+    }
+    .stat .v {
+      font-size: 32px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+      color: var(--primary-400);
+    }
+    .stat .k {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Track cards */
+    .tracks {
+      max-width: 1080px;
+      margin: 56px auto;
+      padding: 0 32px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .track {
+      padding: 36px 32px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-hero);
+      text-decoration: none;
+      color: inherit;
+      transition: all var(--d-hover) var(--ease-out);
+      display: flex; flex-direction: column;
+      min-height: 360px;
+    }
+    .track:hover {
+      transform: translateY(-4px);
+      border-color: rgba(245, 194, 74, 0.4);
+    }
+    .track .icon {
+      width: 56px; height: 56px;
+      border-radius: var(--r-card);
+      display: grid; place-items: center;
+      margin-bottom: 22px;
+      font-size: 26px;
+      font-weight: 200;
+    }
+    .track.mockup .icon {
+      background: rgba(245, 194, 74, 0.1);
+      color: var(--primary-400);
+    }
+    .track.docs .icon {
+      background: rgba(124, 92, 255, 0.1);
+      color: var(--accent-400);
+    }
+    .track .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: var(--r-pill);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      margin-bottom: 10px;
+      width: fit-content;
+    }
+    .track.mockup .badge { background: rgba(245, 194, 74, 0.12); color: var(--primary-400); }
+    .track.docs .badge { background: rgba(124, 92, 255, 0.12); color: var(--accent-400); }
+    .track h2 {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      margin-bottom: 8px;
+    }
+    .track p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+    .track .features {
+      list-style: none;
+      flex: 1;
+    }
+    .track .features li {
+      display: flex; align-items: start; gap: 10px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 4px 0;
+    }
+    .track .features li::before {
+      content: '✓';
+      color: var(--success);
+      font-weight: 700;
+      font-size: 11px;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+    .track .cta {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--surface-hairline);
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 13px; font-weight: 600;
+    }
+    .track.mockup .cta { color: var(--primary-400); }
+    .track.docs .cta { color: var(--accent-400); }
+
+    /* Bottom */
+    .info-strip {
+      max-width: 1080px;
+      margin: 48px auto 80px;
+      padding: 28px 32px;
+      background: rgba(124, 92, 255, 0.04);
+      border: 1px solid rgba(124, 92, 255, 0.2);
+      border-radius: var(--r-card);
+    }
+    .info-strip h3 {
+      font-size: 13px;
+      color: var(--accent-400);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .info-strip p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+    .info-strip p strong { color: var(--text-primary); }
+    .info-strip ul {
+      margin-top: 12px;
+      padding-left: 20px;
+    }
+    .info-strip li {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .footer {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      border-top: 1px solid var(--surface-hairline);
+    }
+
+    @media (max-width: 800px) {
+      .hero h1 { font-size: 36px; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .tracks { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <div class="brand">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+    <div class="meta">公開上線重設計 · 2026-05</div>
+  </nav>
+
+  <section class="hero">
+    <span class="eyebrow">DESIGN PREVIEW + IMPL_PREP</span>
+    <h1>KuiperAI <span class="accent">公開上線</span><br/>重設計藍圖</h1>
+    <p>從內部 invite-only 升級到對外可賣的 premium 短劇平台 — 33 個 mockup（雙語）+ 7 份實作前規劃文件，完整可分享給投資人 / 合夥人 / 工程團隊。</p>
+  </section>
+
+  <div class="stats">
+    <div class="stat"><div class="v">33</div><div class="k">Mockup</div></div>
+    <div class="stat"><div class="v">4,233</div><div class="k">行藍圖</div></div>
+    <div class="stat"><div class="v">121</div><div class="k">API endpoint</div></div>
+    <div class="stat"><div class="v">中/EN</div><div class="k">雙語 i18n</div></div>
+  </div>
+
+  <div class="tracks">
+    <a href="preview/index.html" class="track mockup">
+      <div class="icon">▣</div>
+      <span class="badge">UI / UX</span>
+      <h2>Design Preview</h2>
+      <p>33 個關鍵畫面，從 landing → 創作流 → 劇集設定 → 公開分享。所有右上有「中 / EN」切換。</p>
+      <ul class="features">
+        <li>創作主流程 7 步（劇本 → 分析 → 分鏡 → 配音 → 渲染 → 成片）</li>
+        <li>R2V 為預設的 4 mode 切換（含 T2I→I2V）</li>
+        <li>劇集設定（角色 / 場景 / 道具）三類獨立介面</li>
+        <li>Admin / Workspace / Auth / 公開廣場</li>
+        <li>Cinematic Immersive 視覺語言（暗色 + 金 accent）</li>
+      </ul>
+      <div class="cta">看 33 個 mockup <span>→</span></div>
+    </a>
+
+    <a href="docs/index.html" class="track docs">
+      <div class="icon">⊟</div>
+      <span class="badge">IMPL_PREP</span>
+      <h2>實作前規劃文件</h2>
+      <p>實作 React 前的 7 份「想清楚」文件 — 從 schema 到法律全範圍 cover，避免邊做邊踩坑。</p>
+      <ul class="features">
+        <li>A · Schema Migration（7 新表 + 25 欄位 + 風險分析）</li>
+        <li>B · API 端點（121 個 endpoint 對應每個 mockup）</li>
+        <li>C · RBAC 權限（8 Role × 30 Action 完整矩陣）</li>
+        <li>D · Pricing 反推（4 階梯數字 + 5 拍板鎖好）</li>
+        <li>E · 第三方整合（5 OAuth + Stripe + Email + Sentry）</li>
+        <li>F · 觀測（Funnel + KPI + 事件 schema）</li>
+        <li>G · 法律（ToS + Privacy + GDPR + 兒少 + DMCA）</li>
+        <li>H · Marketing（Brand positioning + Launch 30 天）</li>
+        <li>I · 創作者 Onboarding（6 樣板 + 教學 + Badge 系統）</li>
+        <li>J · 品牌 + Pitch Deck（Logo brief + 投資人 / BD deck）</li>
+      </ul>
+      <div class="cta">讀 10 份文件 <span>→</span></div>
+    </a>
+  </div>
+
+  <div class="info-strip">
+    <h3>📊 月度成本估算（10,000 用戶上線後）</h3>
+    <p>
+      <strong>月收入 $52,100</strong> · 訂閱主力（Studio tier $47/月）+ 加購點數
+    </p>
+    <p style="margin-top: 8px;">
+      <strong>月成本 $8,580</strong> · 5 家 AI provider $6k + Stripe 3% + Email/Push/Sentry/CDN $1k + 合規 $0.8k
+    </p>
+    <p style="margin-top: 8px; color: var(--success);">
+      <strong>淨毛利 $43,520（~84%）</strong> · 對標 Krea / Higgsfield 健康區間
+    </p>
+  </div>
+
+  <footer class="footer">
+    © 2026 KuiperAI · 短剧生成平台 · 內部分享文件，請勿外流
+  </footer>
+</body>
+</html>

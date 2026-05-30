@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 道具編輯 · 油燈</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .ws-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--surface-hairline); flex-shrink: 0; }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+    .brand-mini { display: flex; align-items: center; gap: 12px; }
+    .breadcrumb { font-size: 13px; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
+    .breadcrumb .current { color: var(--text-primary); font-weight: 500; }
+    .breadcrumb .sep { color: var(--neutral-700); }
+
+    .ws-body { flex: 1; display: grid; grid-template-columns: 260px 1fr 320px; min-height: 0; }
+
+    .ws-cast { border-right: 1px solid var(--surface-hairline); overflow-y: auto; padding: 18px 14px; }
+    .cast-head { display: flex; justify-content: space-between; align-items: center; padding: 0 6px 12px; }
+    .cast-head h3 { font-size: 13px; font-weight: 600; }
+    .cast-head .count { font-size: 11px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+    .cast-search { width: 100%; padding: 7px 12px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); color: var(--text-primary); font-size: 12px; margin-bottom: 12px; }
+    .cast-search:focus { outline: none; border-color: var(--primary-500); }
+    .cast-tabs { display: flex; gap: 4px; margin-bottom: 12px; padding: 3px; background: var(--surface-canvas); border: 1px solid var(--surface-hairline); border-radius: var(--r-pill); }
+    .cast-tab { flex: 1; padding: 5px; font-size: 11px; background: transparent; border: none; color: var(--text-tertiary); border-radius: var(--r-pill); cursor: pointer; font-weight: 500; }
+    .cast-tab a { color: inherit; text-decoration: none; }
+    .cast-tab.active { background: var(--primary-500); color: var(--neutral-950); font-weight: 600; }
+    .cast-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-input); cursor: pointer; margin-bottom: 3px; border: 1px solid transparent; }
+    .cast-row:hover { background: var(--surface-raised); }
+    .cast-row.active { background: var(--surface-raised); border-color: rgba(201, 154, 46, 0.4); }
+    .cast-thumb { width: 36px; height: 48px; border-radius: 5px; flex-shrink: 0; }
+    .ct-prop-1 { background: linear-gradient(135deg, #C99A2E, #6F5418); }
+    .ct-prop-2 { background: linear-gradient(135deg, #525252, #262626); }
+    .cast-info { flex: 1; min-width: 0; }
+    .cast-name { font-size: 13px; font-weight: 500; }
+    .cast-usage { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    .cast-add { padding: 10px 12px; margin-top: 8px; background: transparent; border: 1px dashed var(--surface-hairline); border-radius: var(--r-input); color: var(--text-tertiary); font-size: 12px; cursor: pointer; text-align: center; }
+    .cast-add:hover { border-color: rgba(201, 154, 46, 0.6); color: #E6BF5E; }
+
+    .ws-editor { overflow-y: auto; padding: 0; background: var(--surface-canvas); }
+    .editor-head { padding: 24px 32px 18px; border-bottom: 1px solid var(--surface-hairline); display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+    .prop-hero { display: flex; gap: 18px; flex: 1; }
+    .hero-portrait { width: 96px; height: 96px; background: radial-gradient(ellipse at center, #FFD96E 0%, #C99A2E 50%, #6F5418 100%); border-radius: var(--r-card); box-shadow: var(--elev-2), 0 0 32px rgba(245, 194, 74, 0.3); cursor: pointer; flex-shrink: 0; position: relative; }
+    .hero-portrait::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at top, rgba(255, 240, 200, 0.4), transparent 50%); border-radius: var(--r-card); }
+    .hero-meta { flex: 1; }
+    .name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .name-input { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; background: transparent; border: none; color: var(--text-primary); padding: 4px 8px; margin-left: -8px; border-radius: var(--r-input); outline: none; }
+    .name-input:hover, .name-input:focus { background: var(--surface-raised); }
+    .at-tag { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #E6BF5E; padding: 4px 10px; background: rgba(201, 154, 46, 0.18); border: 1px solid rgba(201, 154, 46, 0.4); border-radius: var(--r-pill); }
+    .at-tag::before { content: '◆'; margin-right: 4px; opacity: 0.7; }
+    .hero-sub { display: flex; gap: 16px; font-size: 13px; color: var(--text-tertiary); }
+    .hero-sub .dot::before { content: '·'; margin: 0 4px; }
+    .hero-actions { display: flex; gap: 8px; }
+
+    .ed-section { padding: 24px 32px; border-bottom: 1px solid var(--surface-hairline); }
+    .ed-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .ed-section-head h3 { font-size: 15px; font-weight: 600; }
+    .ed-section-head .info { font-size: 11px; color: var(--text-tertiary); }
+
+    .field-input { padding: 10px 14px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); color: var(--text-primary); font-size: 13px; outline: none; font-family: inherit; width: 100%; }
+    .field-input:focus { border-color: rgba(201, 154, 46, 0.6); box-shadow: 0 0 0 3px rgba(201, 154, 46, 0.15); }
+    .field-textarea { min-height: 80px; resize: vertical; line-height: 1.6; }
+    .field-label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; display: block; margin-bottom: 6px; }
+
+    /* Tag picker */
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag-pill {
+      padding: 6px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .tag-pill:hover { border-color: rgba(255,255,255,0.16); }
+    .tag-pill.active {
+      background: rgba(201, 154, 46, 0.12);
+      border-color: rgba(201, 154, 46, 0.4);
+      color: #E6BF5E;
+    }
+
+    /* Holder picker */
+    .holder-card {
+      padding: 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .holder-card .av { width: 36px; height: 48px; background: linear-gradient(135deg, #6A4A2A, #3A2515); border-radius: 6px; flex-shrink: 0; }
+    .holder-card .info { flex: 1; }
+    .holder-card .name { font-size: 13px; font-weight: 500; }
+    .holder-card .meta { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+    .ws-usage { border-left: 1px solid var(--surface-hairline); background: var(--surface-canvas); overflow-y: auto; padding: 22px 20px; }
+    .uhead { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--surface-hairline); }
+    .uhead h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .uhead p { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
+    .test-card { padding: 14px; background: rgba(201, 154, 46, 0.04); border: 1px solid rgba(201, 154, 46, 0.2); border-radius: var(--r-card); margin-bottom: 20px; }
+    .test-card h4 { font-size: 11px; color: #E6BF5E; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 10px; }
+    .test-result { aspect-ratio: 1; background: radial-gradient(ellipse at center, #FFD96E 0%, #C99A2E 50%, #6F5418 100%); border-radius: var(--r-input); margin-bottom: 10px; }
+    .usage-section { margin-bottom: 20px; }
+    .usage-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .usage-head .lbl { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+    .usage-head .total { font-size: 11px; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+    .usage-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); margin-bottom: 4px; cursor: pointer; }
+    .usage-row .ut { width: 28px; height: 42px; background: linear-gradient(135deg, #6A4A2A, #3A2515); border-radius: 4px; flex-shrink: 0; }
+    .usage-row .uname { flex: 1; font-size: 12px; }
+    .usage-row .uloc { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    .usage-row .ustatus.done { color: var(--success); font-size: 10px; }
+
+    .save-bar { padding: 14px 20px; background: rgba(245, 194, 74, 0.06); border-top: 1px solid rgba(245, 194, 74, 0.25); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .save-bar .info { font-size: 12px; color: var(--text-secondary); }
+    .save-bar .info strong { color: var(--primary-400); }
+  </style>
+</head>
+<body>
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html">專案</a>
+        <span class="sep">›</span>
+        <a href="13-narrative-editor.html">霧城獵人</a>
+        <span class="sep">›</span>
+        <a href="15-character-edit.html">劇集設定</a>
+        <span class="sep">›</span>
+        <span class="current">油燈</span>
+      </div>
+    </div>
+    <div class="stepper">
+      <a class="step done" href="06-script-input.html" data-i18n="ws.step.script">剧本</a>
+      <a class="step done" href="07-pre-generation.html" data-i18n="ws.step.analyze">分析</a>
+      <a class="step active" href="13-narrative-editor.html" data-i18n="ws.step.storyboard">分镜</a>
+      <a class="step" href="23-voice.html" data-i18n="ws.step.voice">配音</a>
+      <a class="step" href="24-render.html" data-i18n="ws.step.render">渲染</a>
+      <a class="step" href="25-final.html" data-i18n="ws.step.final">成片</a>
+    </div>
+    <div class="ws-top-right">
+      <span class="chip chip-success">● <span data-i18n="ws.autosave">自动保存</span></span>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn-primary" href="13-narrative-editor.html" data-i18n="ws.cta.done">完成 →</a>
+    </div>
+  </header>
+
+  <div class="ws-body">
+
+    <aside class="ws-cast">
+      <div class="cast-head"><h3>劇集設定</h3><span class="count">7</span></div>
+      <input class="cast-search" data-i18n-placeholder="e.search" placeholder="搜寻..." />
+      <div class="cast-tabs">
+        <button class="cast-tab"><a href="15-character-edit.html">角色 3</a></button>
+        <button class="cast-tab"><a href="16-location-edit.html">場景 3</a></button>
+        <button class="cast-tab active">道具 2</button>
+      </div>
+
+      <div class="cast-row active">
+        <div class="cast-thumb ct-prop-1"></div>
+        <div class="cast-info">
+          <div class="cast-name">油燈</div>
+          <div class="cast-usage">林夜持有 · 5 panel</div>
+        </div>
+      </div>
+      <div class="cast-row">
+        <div class="cast-thumb ct-prop-2"></div>
+        <div class="cast-info">
+          <div class="cast-name">手槍</div>
+          <div class="cast-usage">林夜持有 · 2 panel</div>
+        </div>
+      </div>
+
+      <button class="cast-add">+ 新增道具</button>
+    </aside>
+
+    <main class="ws-editor">
+
+      <div class="editor-head">
+        <div class="prop-hero">
+          <div class="hero-portrait"></div>
+          <div class="hero-meta">
+            <div class="name-row">
+              <input class="name-input" value="油燈" />
+              <span class="at-tag">油燈</span>
+            </div>
+            <div class="hero-sub">
+              <span>常駐道具</span>
+              <span class="dot">林夜持有</span>
+              <span class="dot">5 panel</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="btn btn-ghost" data-i18n="e.copy">📋 复制</button>
+          <button class="btn btn-ghost" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);" data-i18n="e.delete">🗑 删除</button>
+        </div>
+      </div>
+
+      <!-- Basic -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3>基本資料</h3>
+          <span class="info">R2V 道具 reference</span>
+        </div>
+
+        <span class="field-label">描述</span>
+        <textarea class="field-input field-textarea" style="margin-bottom: 16px;">維多利亞風格青銅油燈，鏤空菱形紋燈罩，內燃黃橙色火焰。手柄為彎曲鐵把，可懸掛或手提。燃燒時火光跳動，能照亮約 3 步範圍。整體做工帶古樸磨損感。</textarea>
+
+        <span class="field-label">分類 Tag</span>
+        <div class="tag-row" style="margin-bottom: 16px;">
+          <span class="tag-pill">消耗品</span>
+          <span class="tag-pill active">常駐</span>
+          <span class="tag-pill">symbolic</span>
+          <span class="tag-pill">武器</span>
+          <span class="tag-pill">工具</span>
+          <span class="tag-pill">交通</span>
+          <span class="tag-pill" style="color: var(--text-tertiary);">+ 新標</span>
+        </div>
+
+        <span class="field-label">尺寸 / 比例參考</span>
+        <input class="field-input" value="高度 30cm · 一隻手可握" />
+      </div>
+
+      <!-- Holder -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3>持有人 <span style="font-weight: 400; font-size: 12px; color: var(--text-tertiary);">（可選）</span></h3>
+          <span class="info">連到 character，敘事自動帶</span>
+        </div>
+        <div class="holder-card">
+          <div class="av"></div>
+          <div class="info">
+            <div class="name">@林夜</div>
+            <div class="meta">主角 · 全集持有</div>
+          </div>
+          <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 12px;">✎ 換</button>
+          <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 12px; color: var(--text-tertiary);">解綁</button>
+        </div>
+        <div style="margin-top: 10px; font-size: 11px; color: var(--text-tertiary); line-height: 1.6;">
+          💡 綁定持有人後，當文字提到 <span style="color: #FFD96E;">@林夜</span> 時不寫 <span style="color: #E6BF5E;">@油燈</span> 也會自動帶入。
+        </div>
+      </div>
+
+      <div class="save-bar">
+        <div class="info">
+          📌 改名 / 改外觀影響 <strong>5 panel</strong>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-ghost" data-i18n="e.undo">↺ 复原</button>
+          <button class="btn btn-primary" data-i18n="e.save-changes">保存变更</button>
+        </div>
+      </div>
+    </main>
+
+    <aside class="ws-usage">
+      <div class="uhead">
+        <h3>⚡ 測試 & 使用追蹤</h3>
+        <p>道具是 R2V 第三 reference，測試確認外觀</p>
+      </div>
+
+      <div class="test-card">
+        <h4>一鍵測試</h4>
+        <div class="test-result"></div>
+        <button class="btn btn-accent" style="width: 100%; justify-content: center; padding: 8px; font-size: 12px;">⚡ 生成測試圖（2 點）</button>
+        <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 6px; text-align: center;">
+          道具點數比角色便宜
+        </div>
+      </div>
+
+      <div class="usage-section">
+        <div class="usage-head">
+          <span class="lbl">使用於</span>
+          <span class="total">5 panel</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 1</div>
+            <div class="uloc">街口霧氣升起</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 2</div>
+            <div class="uloc">林夜抬頭</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 6</div>
+            <div class="uloc">獵人持燈進巷</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+      </div>
+
+      <div style="padding: 12px; background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--r-card); font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
+        💡 <strong style="color: var(--success);">提示</strong>：道具圖建議純色背景，幫助 R2V 模型分離主體。
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

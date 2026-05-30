@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 配音编辑</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; height: 100vh; overflow: hidden; }
+
+    .sub-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 11px 24px;
+      border-bottom: 1px solid var(--surface-hairline);
+      flex-shrink: 0;
+    }
+    .sub-bar .meta {
+      display: flex; align-items: center; gap: 14px;
+      font-size: 13px;
+    }
+    .sub-bar .meta .title { font-weight: 600; }
+    .sub-bar .meta .info {
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+    }
+    .sub-bar .right { display: flex; gap: 8px; align-items: center; }
+
+    .body {
+      flex: 1; display: grid;
+      grid-template-columns: 380px 1fr 360px;
+      min-height: 0;
+    }
+
+    /* LEFT: dialogue list */
+    .lines-panel {
+      border-right: 1px solid var(--surface-hairline);
+      overflow-y: auto;
+      padding: 16px 14px;
+      background: var(--surface-canvas);
+    }
+    .lines-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 6px 10px;
+    }
+    .lines-head h3 { font-size: 13px; font-weight: 600; }
+    .lines-head .count {
+      font-size: 11px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .line {
+      padding: 12px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: border-color var(--d-hover) var(--ease-out);
+    }
+    .line:hover { border-color: rgba(255,255,255,0.16); }
+    .line.active {
+      border-color: rgba(245, 194, 74, 0.4);
+      background: rgba(245, 194, 74, 0.03);
+    }
+    .line-head {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+    .line-head .char {
+      padding: 2px 8px;
+      background: rgba(245, 194, 74, 0.18);
+      border: 1px solid rgba(245, 194, 74, 0.4);
+      color: #FFD96E;
+      border-radius: var(--r-chip);
+      font-weight: 500;
+    }
+    .line-head .time {
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      margin-left: auto;
+    }
+    .line-head .status {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+    .line-head .status.ready { background: var(--success); }
+    .line-head .status.gen { background: var(--accent-500); animation: pulse-soft 1.5s ease-in-out infinite; }
+    .line-head .status.idle { background: var(--neutral-700); }
+    .line-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .line-foot {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .line-foot .voice-pill {
+      padding: 2px 8px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* CENTER: editor */
+    .editor-panel {
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 30%, rgba(124, 92, 255, 0.04), transparent),
+        var(--surface-canvas);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .editor-top {
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .editor-top .who {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 6px;
+    }
+    .editor-top .who .av {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #6A4A2A, #3A2515);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .editor-top .who .name { font-size: 16px; font-weight: 600; }
+    .editor-top .who .meta { font-size: 12px; color: var(--text-tertiary); }
+    .editor-top .text {
+      padding: 12px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      font-family: inherit;
+      width: 100%;
+      outline: none;
+      resize: vertical;
+      min-height: 60px;
+    }
+    .editor-top .text:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(245,194,74,0.15); }
+
+    .waveform-area {
+      flex: 1;
+      padding: 32px;
+      display: flex; flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+    .waveform {
+      width: 100%;
+      max-width: 700px;
+      height: 140px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      position: relative;
+      overflow: hidden;
+      display: flex; align-items: center;
+      padding: 0 16px;
+      gap: 2px;
+    }
+    .wave-bar {
+      flex: 1;
+      background: linear-gradient(180deg, var(--primary-500), var(--primary-600));
+      border-radius: 1px;
+      opacity: 0.8;
+    }
+    .wave-bar.played { opacity: 0.4; background: var(--neutral-700); }
+    .waveform .playhead {
+      position: absolute;
+      top: 8px; bottom: 8px;
+      width: 2px;
+      background: var(--primary-400);
+      box-shadow: 0 0 8px rgba(245, 194, 74, 0.6);
+    }
+    .waveform .time-l, .waveform .time-r {
+      position: absolute; bottom: -22px;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .waveform .time-l { left: 0; }
+    .waveform .time-r { right: 0; }
+
+    .play-controls {
+      display: flex; gap: 12px;
+    }
+    .play-btn {
+      width: 56px; height: 56px;
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      cursor: pointer;
+      border: none;
+      box-shadow: var(--elev-2);
+    }
+    .play-btn::after {
+      content: ''; width: 0; height: 0;
+      border-left: 16px solid currentColor;
+      border-top: 11px solid transparent;
+      border-bottom: 11px solid transparent;
+      margin-left: 4px;
+    }
+    .skip-btn {
+      width: 44px; height: 44px;
+      align-self: center;
+      background: transparent;
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .editor-actions {
+      display: flex; gap: 10px; justify-content: center;
+      padding: 0 28px 28px;
+      flex-shrink: 0;
+    }
+    .editor-actions .btn { padding: 9px 16px; font-size: 13px; }
+
+    /* RIGHT: voice controls */
+    .voice-panel {
+      border-left: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      overflow-y: auto;
+      padding: 18px 20px 28px;
+    }
+    .vp-head {
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .vp-head h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .vp-head p { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
+
+    .vp-sec { margin-bottom: 22px; }
+    .vp-label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; margin-bottom: 10px; }
+
+    .voice-card {
+      padding: 14px;
+      background: var(--surface-raised);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      border-radius: var(--r-card);
+    }
+    .voice-card .top {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px;
+    }
+    .voice-card .vplay {
+      width: 32px; height: 32px;
+      background: rgba(245, 194, 74, 0.16);
+      color: var(--primary-400);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .voice-card .vinfo { flex: 1; min-width: 0; }
+    .voice-card .vname { font-size: 13px; font-weight: 600; }
+    .voice-card .vmeta { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    .voice-card .bound-note {
+      padding: 8px 10px;
+      background: rgba(34, 197, 94, 0.06);
+      border-radius: var(--r-input);
+      font-size: 10px;
+      color: var(--success);
+      line-height: 1.5;
+    }
+
+    .pills { display: flex; flex-wrap: wrap; gap: 5px; }
+    .pill { padding: 5px 10px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-pill); font-size: 11px; color: var(--text-secondary); cursor: pointer; }
+    .pill.active { background: rgba(245, 194, 74, 0.12); border-color: rgba(245, 194, 74, 0.4); color: var(--primary-400); }
+
+    .slider-row {
+      padding: 10px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 5px;
+    }
+    .slider-row .top {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    .slider-row .top .k { color: var(--text-tertiary); }
+    .slider-row .top .v { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+    .slider-track { height: 4px; background: var(--neutral-800); border-radius: 2px; position: relative; }
+    .slider-track .fill { position: absolute; top: 0; left: 0; height: 100%; background: var(--primary-500); border-radius: 2px; }
+    .slider-track .thumb { position: absolute; top: 50%; width: 14px; height: 14px; background: var(--text-primary); border-radius: 50%; transform: translate(-50%, -50%); }
+
+    .field-select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-family: inherit;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%);
+      background-position: right 14px center;
+      background-size: 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 32px;
+      cursor: pointer;
+    }
+
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+    }
+    .toggle-row .k { font-size: 12px; }
+    .toggle-row .sw {
+      width: 32px; height: 18px;
+      background: var(--primary-500);
+      border-radius: var(--r-pill);
+      position: relative;
+    }
+    .toggle-row .sw::after {
+      content: ''; position: absolute; top: 2px; right: 2px;
+      width: 14px; height: 14px;
+      background: var(--neutral-950);
+      border-radius: 50%;
+    }
+
+    .vp-bottom {
+      position: sticky; bottom: -28px;
+      margin: 16px -20px -28px;
+      padding: 14px 20px;
+      background: linear-gradient(180deg, transparent, var(--surface-canvas) 30%);
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .vp-bottom .btn { width: 100%; justify-content: center; padding: 9px; font-size: 12px; }
+  </style>
+</head>
+<body>
+
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html" data-i18n="ws.crumb.projects">项目</a>
+        <span class="sep">›</span>
+        <a href="13-narrative-editor.html">霧城獵人</a>
+        <span class="sep">›</span>
+        <span class="current">EP 01 · <span data-i18n="v.title">配音编辑</span></span>
+      </div>
+    </div>
+    <div class="stepper">
+      <a class="step done" href="06-script-input.html" data-i18n="ws.step.script">剧本</a>
+      <a class="step done" href="07-pre-generation.html" data-i18n="ws.step.analyze">分析</a>
+      <a class="step done" href="13-narrative-editor.html" data-i18n="ws.step.storyboard">分镜</a>
+      <a class="step active" data-i18n="ws.step.voice">配音</a>
+      <a class="step" data-i18n="ws.step.render">渲染</a>
+      <a class="step" data-i18n="ws.step.final">成片</a>
+    </div>
+    <div class="ws-top-right">
+      <span class="chip chip-success">● <span data-i18n="ws.autosave">自动保存</span></span>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="24-render.html" class="btn btn-primary" data-i18n="v.next-render">下一步 → 渲染</a>
+    </div>
+  </header>
+
+  <!-- Sub-bar -->
+  <div class="sub-bar">
+    <div class="meta">
+      <span class="title">第 1 集 · 黑霧降臨</span>
+      <span class="info">5 句对白 · 32 秒 · <span data-i18n="v.lang.zh-cn">简中（中文 TTS）</span></span>
+    </div>
+    <div class="right">
+      <button class="btn btn-ghost" style="height: 34px; padding: 0 12px; font-size: 12px;" data-i18n="v.batch-gen">▶ 批量合成本集</button>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- LEFT: dialogue list -->
+    <aside class="lines-panel">
+      <div class="lines-head">
+        <h3 data-i18n="v.dialogue-list">对白列表</h3>
+        <span class="count">5</span>
+      </div>
+
+      <div class="line">
+        <div class="line-head">
+          <span class="char">@林夜</span>
+          <span class="time">0:12 · 2.4s</span>
+          <span class="status ready"></span>
+        </div>
+        <div class="line-text">这雾不对劲⋯⋯</div>
+        <div class="line-foot">
+          <span class="voice-pill">M-Hunter-03</span>
+          <span data-i18n="v.tone.calm">平静</span>
+        </div>
+      </div>
+
+      <div class="line active">
+        <div class="line-head">
+          <span class="char">@林夜</span>
+          <span class="time">0:17 · 3.1s</span>
+          <span class="status ready"></span>
+        </div>
+        <div class="line-text">出来吧。我知道你在这里。</div>
+        <div class="line-foot">
+          <span class="voice-pill">M-Hunter-03</span>
+          <span data-i18n="v.tone.angry">愤怒</span>
+        </div>
+      </div>
+
+      <div class="line">
+        <div class="line-head">
+          <span class="char">@怪物</span>
+          <span class="time">0:39 · 2.8s</span>
+          <span class="status gen"></span>
+        </div>
+        <div class="line-text">猎人⋯⋯又见面了⋯⋯</div>
+        <div class="line-foot">
+          <span class="voice-pill">F-Beast-01</span>
+          <span data-i18n="v.tone.fearful">恐惧</span>
+        </div>
+      </div>
+
+      <div class="line">
+        <div class="line-head">
+          <span class="char">@林夜</span>
+          <span class="time">0:44 · 1.6s</span>
+          <span class="status idle"></span>
+        </div>
+        <div class="line-text">这次别想跑。</div>
+        <div class="line-foot">
+          <span class="voice-pill">M-Hunter-03</span>
+          <span data-i18n="v.tone.angry">愤怒</span>
+        </div>
+      </div>
+
+      <div class="line">
+        <div class="line-head">
+          <span class="char">@林夜</span>
+          <span class="time">0:54 · 1.4s</span>
+          <span class="status idle"></span>
+        </div>
+        <div class="line-text">⋯⋯第七个了。</div>
+        <div class="line-foot">
+          <span class="voice-pill">M-Hunter-03</span>
+          <span data-i18n="v.tone.sad">悲伤</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER: editor -->
+    <main class="editor-panel">
+      <div class="editor-top">
+        <div class="who">
+          <div class="av"></div>
+          <div>
+            <div class="name">林夜</div>
+            <div class="meta">0:17 · 3.1s · M-Hunter-03 · <span data-i18n="v.tone.angry">愤怒</span></div>
+          </div>
+        </div>
+        <textarea class="text">出来吧。我知道你在这里。</textarea>
+      </div>
+
+      <div class="waveform-area">
+        <div class="waveform">
+          <div class="time-l">0:00</div>
+          <div class="time-r">3.1s</div>
+          <div class="playhead" style="left: 42%;"></div>
+          <!-- waveform bars -->
+          <div class="wave-bar played" style="height: 30%;"></div>
+          <div class="wave-bar played" style="height: 65%;"></div>
+          <div class="wave-bar played" style="height: 45%;"></div>
+          <div class="wave-bar played" style="height: 80%;"></div>
+          <div class="wave-bar played" style="height: 70%;"></div>
+          <div class="wave-bar played" style="height: 35%;"></div>
+          <div class="wave-bar played" style="height: 60%;"></div>
+          <div class="wave-bar played" style="height: 88%;"></div>
+          <div class="wave-bar played" style="height: 50%;"></div>
+          <div class="wave-bar played" style="height: 25%;"></div>
+          <div class="wave-bar" style="height: 75%;"></div>
+          <div class="wave-bar" style="height: 90%;"></div>
+          <div class="wave-bar" style="height: 60%;"></div>
+          <div class="wave-bar" style="height: 78%;"></div>
+          <div class="wave-bar" style="height: 95%;"></div>
+          <div class="wave-bar" style="height: 70%;"></div>
+          <div class="wave-bar" style="height: 55%;"></div>
+          <div class="wave-bar" style="height: 30%;"></div>
+          <div class="wave-bar" style="height: 65%;"></div>
+          <div class="wave-bar" style="height: 80%;"></div>
+          <div class="wave-bar" style="height: 45%;"></div>
+          <div class="wave-bar" style="height: 70%;"></div>
+          <div class="wave-bar" style="height: 50%;"></div>
+          <div class="wave-bar" style="height: 35%;"></div>
+        </div>
+
+        <div class="play-controls">
+          <button class="skip-btn">⏮</button>
+          <button class="play-btn"></button>
+          <button class="skip-btn">⏭</button>
+        </div>
+      </div>
+
+      <div class="editor-actions">
+        <button class="btn btn-ghost"><span data-i18n="v.preview">▶ 试听</span></button>
+        <button class="btn btn-ghost">✎ <span data-i18n="ws.cta.done">完成 →</span></button>
+        <button class="btn btn-primary" data-i18n="v.regenerate">↺ 重新合成</button>
+      </div>
+    </main>
+
+    <!-- RIGHT: voice controls -->
+    <aside class="voice-panel">
+      <div class="vp-head">
+        <h3 data-i18n="v.voice-picker">音色</h3>
+        <p>调整音色、情绪、语速 — 重新合成才生效</p>
+      </div>
+
+      <div class="vp-sec">
+        <div class="voice-card">
+          <div class="top">
+            <div class="vplay">▶</div>
+            <div class="vinfo">
+              <div class="vname">深沉男声 · M-Hunter-03</div>
+              <div class="vmeta">中文 · 男 · 28-35 · 中低音 · 略沙哑</div>
+            </div>
+          </div>
+          <div class="bound-note" data-i18n="v.label.voice-bound">已绑定角色音色</div>
+        </div>
+      </div>
+
+      <div class="vp-sec">
+        <div class="vp-label" data-i18n="v.label.tone">情绪 / 语调</div>
+        <div class="pills">
+          <span class="pill" data-i18n="v.tone.calm">平静</span>
+          <span class="pill active" data-i18n="v.tone.angry">愤怒</span>
+          <span class="pill" data-i18n="v.tone.surprised">惊讶</span>
+          <span class="pill" data-i18n="v.tone.fearful">恐惧</span>
+          <span class="pill" data-i18n="v.tone.sad">悲伤</span>
+        </div>
+      </div>
+
+      <div class="vp-sec">
+        <div class="vp-label" data-i18n="v.label.speed">语速</div>
+        <div class="slider-row">
+          <div class="top"><span class="k">×</span><span class="v">1.0</span></div>
+          <div class="slider-track"><div class="fill" style="width: 50%;"></div><div class="thumb" style="left: 50%;"></div></div>
+        </div>
+      </div>
+
+      <div class="vp-sec">
+        <div class="vp-label" data-i18n="v.label.pitch">音调</div>
+        <div class="slider-row">
+          <div class="top"><span class="k">±</span><span class="v">-2</span></div>
+          <div class="slider-track"><div class="fill" style="width: 35%;"></div><div class="thumb" style="left: 35%;"></div></div>
+        </div>
+      </div>
+
+      <div class="vp-sec">
+        <div class="vp-label" data-i18n="v.label.lang">语言</div>
+        <select class="field-select">
+          <option data-i18n="v.lang.zh-cn">简中（中文 TTS）</option>
+          <option data-i18n="v.lang.en">英文</option>
+          <option data-i18n="v.lang.ja">日文</option>
+          <option data-i18n="v.lang.ko">韩文</option>
+          <option data-i18n="v.lang.es">西班牙文</option>
+        </select>
+      </div>
+
+      <div class="vp-sec">
+        <div class="vp-label" data-i18n="v.label.alignment">对齐</div>
+        <div class="toggle-row">
+          <span class="k" data-i18n="v.label.auto-align">自动对齐到分镜</span>
+          <div class="sw"></div>
+        </div>
+      </div>
+
+      <div class="vp-bottom">
+        <button class="btn btn-ghost" data-i18n="v.preview">▶ 试听</button>
+        <button class="btn btn-primary" data-i18n="v.regenerate">↺ 重生</button>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

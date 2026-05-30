@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · Workspace 管理</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { background: #0A0A0B; display: flex; min-height: 100vh; }
+
+    /* Sidebar mini */
+    .side {
+      width: 240px; flex-shrink: 0;
+      background: #0A0A0B;
+      border-right: 1px solid var(--surface-hairline);
+      padding: 16px 12px;
+      display: flex; flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; font-size: 13px; font-weight: 600; }
+    .brand .mark { width: 22px; height: 22px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 11px; }
+
+    /* Workspace switcher */
+    .ws-switch {
+      padding: 10px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 18px;
+      cursor: pointer;
+    }
+    .ws-switch .label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; font-weight: 500; }
+    .ws-switch .name {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600;
+    }
+    .ws-switch .name::after { content: '⌄'; margin-left: auto; color: var(--text-tertiary); }
+    .ws-switch .wmark {
+      width: 18px; height: 18px;
+      background: linear-gradient(135deg, #7C5CFF, #4A3AAF);
+      border-radius: 4px;
+      display: grid; place-items: center;
+      font-size: 10px; font-weight: 700;
+      color: white;
+    }
+
+    .nav-group { margin-bottom: 14px; }
+    .nav-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.1em; padding: 0 8px 6px; font-weight: 500; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--r-input); color: var(--text-secondary); text-decoration: none; font-size: 13px; margin-bottom: 1px; }
+    .nav-item:hover { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item.active { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item .icon { width: 16px; color: var(--text-tertiary); }
+    .nav-item.active .icon { color: var(--primary-400); }
+    .nav-item .badge { margin-left: auto; padding: 1px 6px; background: var(--surface-overlay); border-radius: var(--r-pill); font-size: 10px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+
+    /* Main */
+    .main { flex: 1; overflow-y: auto; }
+
+    .main-top {
+      display: flex; justify-content: space-between; align-items: end;
+      padding: 32px 40px 22px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .main-top .ti { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 4px; }
+    .main-top .sb { font-size: 13px; color: var(--text-secondary); }
+
+    /* Settings tabs */
+    .settings-tabs {
+      display: flex; padding: 0 40px;
+      gap: 4px;
+      border-bottom: 1px solid var(--surface-hairline);
+      overflow-x: auto;
+    }
+    .settings-tab {
+      padding: 12px 16px 14px;
+      background: transparent; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-tertiary);
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      margin-bottom: -1px;
+      transition: color var(--d-hover) var(--ease-out);
+    }
+    .settings-tab:hover { color: var(--text-primary); }
+    .settings-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--primary-500);
+      font-weight: 600;
+    }
+    .settings-tab .count {
+      padding: 1px 6px; margin-left: 4px;
+      background: var(--surface-raised); border-radius: var(--r-pill);
+      font-size: 10px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 400;
+    }
+
+    /* Tab content */
+    .tab-content { padding: 32px 40px 60px; max-width: 980px; }
+
+    /* Members section */
+    .members-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px;
+    }
+    .members-head h2 { font-size: 17px; font-weight: 600; }
+    .members-head p { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+    /* Invite form */
+    .invite-form {
+      padding: 20px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 28px;
+    }
+    .invite-form h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+    .invite-row {
+      display: grid; grid-template-columns: 1fr 140px auto;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .invite-input {
+      padding: 10px 14px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color var(--d-state) var(--ease-out);
+    }
+    .invite-input:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(245,194,74,0.15); }
+    .role-select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%); background-position: right 12px center; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 28px; cursor: pointer; }
+    .invite-remove {
+      width: 40px;
+      background: transparent;
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-tertiary);
+      border-radius: var(--r-input);
+      cursor: pointer;
+    }
+    .invite-add {
+      margin-top: 6px;
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px dashed var(--surface-hairline);
+      color: var(--text-tertiary);
+      border-radius: var(--r-input);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .invite-add:hover { border-color: var(--primary-500); color: var(--primary-400); }
+    .invite-actions {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--surface-hairline);
+    }
+    .invite-actions .info {
+      font-size: 11px; color: var(--text-tertiary);
+    }
+
+    /* Members list */
+    .members-list {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+    }
+    .member-row {
+      display: grid;
+      grid-template-columns: 36px 1fr 100px 130px 60px;
+      gap: 14px; align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--surface-hairline);
+      transition: background var(--d-hover) var(--ease-out);
+    }
+    .member-row:last-child { border-bottom: none; }
+    .member-row:hover { background: var(--surface-overlay); }
+    .member-row .av {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 13px; font-weight: 600;
+      color: white;
+    }
+    .av-1 { background: linear-gradient(135deg, #4A3AAF, #7C5CFF); }
+    .av-2 { background: linear-gradient(135deg, #C99A2E, #6F5418); }
+    .av-3 { background: linear-gradient(135deg, #22C55E, #16803D); }
+    .av-4 { background: linear-gradient(135deg, #EF4444, #B22020); }
+    .av-5 { background: linear-gradient(135deg, #4A8FE5, #2A5FB5); }
+    .av-p { background: var(--neutral-700); color: var(--text-tertiary); }
+    .member-row .info .name { font-size: 13px; font-weight: 500; }
+    .member-row .info .email { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+    .member-row .joined { font-size: 11px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+    .member-row .role-pill {
+      padding: 4px 10px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: center;
+    }
+    .member-row .role-pill::after { content: ' ⌄'; color: var(--text-tertiary); }
+    .member-row .role-pill.owner { color: var(--primary-400); background: rgba(245, 194, 74, 0.04); border-color: rgba(245, 194, 74, 0.3); }
+    .member-row .role-pill.admin { color: #A89BD8; background: rgba(124, 92, 255, 0.04); border-color: rgba(124, 92, 255, 0.3); }
+    .member-row .menu {
+      width: 28px; height: 28px;
+      background: transparent; border: 1px solid var(--surface-hairline);
+      color: var(--text-tertiary);
+      border-radius: var(--r-input);
+      cursor: pointer;
+      display: grid; place-items: center;
+    }
+    .member-row.pending .info .name { color: var(--text-tertiary); }
+    .pending-tag {
+      display: inline-block;
+      padding: 1px 7px;
+      background: rgba(245, 194, 74, 0.12);
+      color: var(--primary-400);
+      border-radius: var(--r-chip);
+      font-size: 10px;
+      font-weight: 500;
+      margin-left: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Inherit hint */
+    .inherit-strip {
+      margin-top: 28px;
+      padding: 14px 18px;
+      background: rgba(124, 92, 255, 0.04);
+      border: 1px solid rgba(124, 92, 255, 0.2);
+      border-radius: var(--r-card);
+      display: flex; align-items: center; gap: 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .inherit-strip .ic {
+      width: 28px; height: 28px;
+      background: rgba(124, 92, 255, 0.16);
+      color: var(--accent-400);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+    .inherit-strip strong { color: var(--accent-400); }
+
+    /* Mini billing snapshot widget */
+    .billing-mini {
+      margin-top: 32px;
+      padding: 20px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+    }
+    .billing-mini h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+    .credit-progress {
+      height: 6px;
+      background: var(--neutral-800);
+      border-radius: 3px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .credit-progress .fill {
+      width: 38%; height: 100%;
+      background: linear-gradient(90deg, var(--primary-500), var(--primary-400));
+      border-radius: 3px;
+    }
+    .credit-info {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--text-tertiary);
+    }
+    .credit-info .v {
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+
+    <div class="ws-switch">
+      <div class="label">Workspace</div>
+      <div class="name">
+        <div class="wmark">F</div>
+        Filmstar Studio
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Workspace</div>
+      <a class="nav-item" href="#"><span class="icon">▣</span> Projects <span class="badge">12</span></a>
+      <a class="nav-item active" href="#"><span class="icon">◐</span> Members <span class="badge">7</span></a>
+      <a class="nav-item" href="#"><span class="icon">$</span> Billing</a>
+      <a class="nav-item" href="#"><span class="icon">⚙</span> Settings</a>
+      <a class="nav-item" href="#"><span class="icon">⌥</span> Models</a>
+      <a class="nav-item" href="#"><span class="icon">↩</span> Audit Log</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Organization</div>
+      <a class="nav-item" href="18-admin.html"><span class="icon">⊡</span> Org Console</a>
+      <a class="nav-item" href="#"><span class="icon">⊕</span> Switch workspace…</a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="main-top">
+      <div>
+        <div class="ti">Filmstar Studio</div>
+        <div class="sb">7 members · 12 projects · Studio plan</div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <div class="lang-switcher">
+          <button type="button" data-lang="zh" class="active">中</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+        <button class="btn btn-ghost" data-i18n="w.copy-invite">📋 Copy invite link</button>
+        <button class="btn btn-primary" data-i18n="w.cta.invite">+ Invite member</button>
+      </div>
+    </div>
+
+    <div class="settings-tabs">
+      <button class="settings-tab" data-i18n="w.tab.general">General</button>
+      <button class="settings-tab active"><span data-i18n="w.tab.members">Members</span> <span class="count">7</span></button>
+      <button class="settings-tab" data-i18n="w.tab.billing">Billing</button>
+      <button class="settings-tab"><span data-i18n="w.tab.models">Models</span> <span class="count">5</span></button>
+      <button class="settings-tab" data-i18n="w.tab.integrations">Integrations</button>
+      <button class="settings-tab" data-i18n="w.tab.audit">Audit Log</button>
+    </div>
+
+    <div class="tab-content">
+
+      <div class="members-head">
+        <div>
+          <h2>Members</h2>
+          <p>邀請新成員、調整權限。pending invite 7 天過期。</p>
+        </div>
+      </div>
+
+      <!-- Invite form -->
+      <div class="invite-form">
+        <h3>邀請新成員</h3>
+        <div class="invite-row">
+          <input class="invite-input" placeholder="email@studio.com" />
+          <select class="invite-input role-select">
+            <option>Editor</option>
+            <option>Admin</option>
+            <option>Owner</option>
+            <option>Viewer</option>
+          </select>
+          <button class="invite-remove">×</button>
+        </div>
+        <div class="invite-row">
+          <input class="invite-input" placeholder="email@studio.com" />
+          <select class="invite-input role-select">
+            <option>Viewer</option>
+            <option>Editor</option>
+            <option>Admin</option>
+          </select>
+          <button class="invite-remove">×</button>
+        </div>
+        <button class="invite-add">+ Add another</button>
+
+        <div class="invite-actions">
+          <div class="info">📧 Invite email 會立即寄出，包含 7 天有效 magic link</div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-ghost">取消</button>
+            <button class="btn btn-primary">寄送邀請</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Members list -->
+      <div class="members-list">
+        <div class="member-row">
+          <div class="av av-1">J</div>
+          <div class="info">
+            <div class="name">Josh Hung</div>
+            <div class="email">holykinds@gmail.com</div>
+          </div>
+          <span class="joined">2 月前</span>
+          <span class="role-pill owner">Owner</span>
+          <button class="menu">⋯</button>
+        </div>
+        <div class="member-row">
+          <div class="av av-2">L</div>
+          <div class="info">
+            <div class="name">林夕</div>
+            <div class="email">linxi@filmstar.cc</div>
+          </div>
+          <span class="joined">2 月前</span>
+          <span class="role-pill admin">Admin</span>
+          <button class="menu">⋯</button>
+        </div>
+        <div class="member-row">
+          <div class="av av-3">古</div>
+          <div class="info">
+            <div class="name">古星圖</div>
+            <div class="email">guxing@filmstar.cc</div>
+          </div>
+          <span class="joined">6 週前</span>
+          <span class="role-pill">Editor</span>
+          <button class="menu">⋯</button>
+        </div>
+        <div class="member-row">
+          <div class="av av-4">夜</div>
+          <div class="info">
+            <div class="name">夜歸人</div>
+            <div class="email">yenight@gmail.com</div>
+          </div>
+          <span class="joined">3 週前</span>
+          <span class="role-pill">Editor</span>
+          <button class="menu">⋯</button>
+        </div>
+        <div class="member-row">
+          <div class="av av-5">海</div>
+          <div class="info">
+            <div class="name">小海</div>
+            <div class="email">xiaohai@filmstar.cc</div>
+          </div>
+          <span class="joined">12 天前</span>
+          <span class="role-pill">Editor</span>
+          <button class="menu">⋯</button>
+        </div>
+        <div class="member-row pending">
+          <div class="av av-p">M</div>
+          <div class="info">
+            <div class="name">Marketing <span class="pending-tag">PENDING</span></div>
+            <div class="email">mkt@filmstar.cc · 5 天後過期</div>
+          </div>
+          <span class="joined">2 天前</span>
+          <span class="role-pill">Viewer</span>
+          <button class="menu">⋯</button>
+        </div>
+        <div class="member-row pending">
+          <div class="av av-p">+</div>
+          <div class="info">
+            <div class="name">新人類 <span class="pending-tag">PENDING</span></div>
+            <div class="email">newbie@studio.com · 7 天後過期</div>
+          </div>
+          <span class="joined">今天</span>
+          <span class="role-pill">Editor</span>
+          <button class="menu">⋯</button>
+        </div>
+      </div>
+
+      <!-- Inherit strip -->
+      <div class="inherit-strip">
+        <div class="ic">⊡</div>
+        <div>
+          <strong>從 Org 繼承的設定</strong>：模型 keys / quota 來自 Filmstar 組織。
+          <a href="18-admin.html" style="color: var(--accent-400);">查看 Org 設定 →</a> ·
+          Owner 可以選擇覆寫
+        </div>
+      </div>
+
+      <!-- Billing mini snapshot -->
+      <div class="billing-mini">
+        <h3>本月點數使用</h3>
+        <div class="credit-progress"><div class="fill"></div></div>
+        <div class="credit-info">
+          <span><span class="v">1,847</span> / 5,000 點 · Studio plan</span>
+          <span>下次重置：6 月 1 日</span>
+        </div>
+        <div style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 12px; color: var(--text-tertiary);">使用率比上月 ↑ 18% · 預估月底 4,200 / 5,000</span>
+          <a href="05-pricing.html" class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;">看方案 →</a>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 历史版本</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { background: var(--surface-canvas); min-height: 100vh; }
+    .top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .brand-mini { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+
+    .container { max-width: 1280px; margin: 0 auto; padding: 32px 32px 80px; }
+    .head { margin-bottom: 24px; }
+    .head h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px; }
+    .head p { font-size: 13px; color: var(--text-secondary); }
+    .head .crumb {
+      font-size: 12px; color: var(--text-tertiary);
+      margin-bottom: 14px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .compare-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .version-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+    }
+    .version-card.featured {
+      border-color: var(--primary-500);
+      box-shadow: 0 0 0 2px rgba(245, 194, 74, 0.2);
+    }
+    .version-thumb {
+      aspect-ratio: 9/16;
+      position: relative;
+      overflow: hidden;
+    }
+    .version-thumb .scene {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 30% 40%, rgba(120, 80, 50, 0.5), transparent 70%),
+                  linear-gradient(180deg, #2a1815 0%, #0a0807 80%);
+    }
+    .version-thumb.v2 .scene { background: radial-gradient(ellipse 70% 50% at 50% 30%, rgba(120, 90, 70, 0.5), transparent 70%), linear-gradient(180deg, #2d1c1a 0%, #0c0a08 80%); }
+    .version-thumb.v3 .scene { background: radial-gradient(ellipse 80% 55% at 40% 35%, rgba(140, 95, 60, 0.55), transparent 70%), linear-gradient(180deg, #2a1810 0%, #0a0805 80%); }
+    .version-thumb .figure {
+      position: absolute; bottom: 18%; left: 50%;
+      transform: translateX(-50%); width: 30%; height: 50%;
+      background: radial-gradient(ellipse at top, rgba(245, 194, 74, 0.4), transparent 50%),
+                  linear-gradient(180deg, rgba(60, 40, 30, 0.9), rgba(20, 10, 5, 0.95));
+      border-radius: 50% 50% 30% 30%; filter: blur(1px);
+    }
+    .version-thumb .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6)); }
+    .version-thumb .star {
+      position: absolute; top: 8px; right: 8px;
+      width: 28px; height: 28px;
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 14px; font-weight: 700;
+    }
+    .version-thumb .play {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px; height: 48px;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(12px);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      opacity: 0;
+      transition: opacity var(--d-hover) var(--ease-out);
+    }
+    .version-thumb:hover .play { opacity: 1; }
+    .version-thumb .play::after {
+      content: ''; width: 0; height: 0;
+      border-left: 14px solid white;
+      border-top: 9px solid transparent;
+      border-bottom: 9px solid transparent;
+      margin-left: 4px;
+    }
+
+    .version-body { padding: 14px 16px; }
+    .version-body .vlabel {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; color: var(--text-tertiary);
+      margin-bottom: 6px;
+    }
+    .version-body .vlabel .num {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--primary-400);
+      font-weight: 600;
+    }
+    .version-body .vlabel .now {
+      padding: 2px 8px;
+      background: rgba(245, 194, 74, 0.12);
+      color: var(--primary-400);
+      border-radius: var(--r-chip);
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .version-body .vmeta {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 12px;
+    }
+    .version-body .actions { display: flex; gap: 6px; }
+    .version-body .actions .btn { flex: 1; justify-content: center; font-size: 11px; padding: 6px; }
+
+    .timeline-head { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+    .timeline {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      padding: 8px;
+    }
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 100px 60px 1fr 100px 100px 80px;
+      gap: 14px;
+      align-items: center;
+      padding: 12px 14px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .timeline-row:last-child { border-bottom: none; }
+    .timeline-row.featured { background: rgba(245, 194, 74, 0.04); }
+    .timeline-row .time {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-tertiary);
+    }
+    .timeline-row .vchip {
+      padding: 2px 8px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--primary-400);
+      text-align: center;
+    }
+    .timeline-row .who {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .timeline-row .who .av {
+      width: 22px; height: 22px;
+      background: linear-gradient(135deg, #7C5CFF, #4A3AAF);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 10px; font-weight: 600;
+      color: white;
+    }
+    .timeline-row .cost {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+    }
+    .timeline-row .star-btn {
+      width: 26px; height: 26px;
+      background: transparent;
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-tertiary);
+      border-radius: var(--r-input);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .timeline-row.featured .star-btn { color: var(--primary-400); border-color: rgba(245, 194, 74, 0.3); }
+    .timeline-row .icons { display: flex; gap: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <a href="08-storyboard-v2.html" class="btn btn-ghost">← 回分镜</a>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <div class="head">
+      <div class="crumb">霧城獵人 › EP 01 › G2 · P3 · 獵人持燈走進巷弄</div>
+      <h1 data-i18n="h.title">历史版本</h1>
+      <p>同一面板的 8 个重生版本 — 选当前版本或回滚到任一旧版</p>
+    </div>
+
+    <!-- Compare top 3 -->
+    <div class="compare-row">
+      <div class="version-card">
+        <div class="version-thumb">
+          <div class="scene"></div>
+          <div class="figure"></div>
+          <div class="vignette"></div>
+          <div class="play"></div>
+        </div>
+        <div class="version-body">
+          <div class="vlabel"><span class="num">V1</span><span style="color: var(--text-tertiary);">最早</span></div>
+          <div class="vmeta">5 月 26 · 22 点</div>
+          <div class="actions">
+            <button class="btn btn-ghost" data-i18n="h.restore">↺ 恢复</button>
+            <button class="btn btn-ghost" data-i18n="h.compare">比对</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="version-card featured">
+        <div class="version-thumb v3">
+          <div class="scene"></div>
+          <div class="figure"></div>
+          <div class="vignette"></div>
+          <div class="star">★</div>
+          <div class="play"></div>
+        </div>
+        <div class="version-body">
+          <div class="vlabel"><span class="num">V7</span><span class="now">当前</span></div>
+          <div class="vmeta">5 月 28 · 28 点 · ARK</div>
+          <div class="actions">
+            <button class="btn btn-primary" data-i18n="h.favorite">★ 收藏</button>
+            <button class="btn btn-ghost">⬇ 下载</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="version-card">
+        <div class="version-thumb v2">
+          <div class="scene"></div>
+          <div class="figure"></div>
+          <div class="vignette"></div>
+          <div class="play"></div>
+        </div>
+        <div class="version-body">
+          <div class="vlabel"><span class="num">V8</span><span style="color: var(--text-tertiary);">最新</span></div>
+          <div class="vmeta">5 月 28 · 32 点 · fal</div>
+          <div class="actions">
+            <button class="btn btn-ghost" data-i18n="h.restore">↺ 恢复</button>
+            <button class="btn btn-ghost" data-i18n="h.compare">比对</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline-head">全部版本</div>
+    <div class="timeline">
+      <div class="timeline-row featured">
+        <span class="time">5 月 28 · 16:42</span>
+        <span class="vchip">V7</span>
+        <span class="who"><div class="av">J</div>你重生了此版</span>
+        <span>R2V · ARK · seed 8273645</span>
+        <span class="cost">28 pt</span>
+        <button class="star-btn">★</button>
+      </div>
+      <div class="timeline-row">
+        <span class="time">5 月 28 · 16:38</span>
+        <span class="vchip">V8</span>
+        <span class="who"><div class="av">J</div>你重生了此版</span>
+        <span>R2V · fal · seed 5821093</span>
+        <span class="cost">32 pt</span>
+        <button class="star-btn">☆</button>
+      </div>
+      <div class="timeline-row">
+        <span class="time">5 月 28 · 15:21</span>
+        <span class="vchip">V6</span>
+        <span class="who"><div class="av">J</div>你重生了此版</span>
+        <span>R2V · AC · seed 3829274</span>
+        <span class="cost">26 pt</span>
+        <button class="star-btn">☆</button>
+      </div>
+      <div class="timeline-row">
+        <span class="time">5 月 28 · 14:55</span>
+        <span class="vchip">V5</span>
+        <span class="who"><div class="av" style="background: linear-gradient(135deg, #C99A2E, #6F5418);">林</div>林夕重生了此版</span>
+        <span>R2V · ARK · seed 7263412</span>
+        <span class="cost">28 pt</span>
+        <button class="star-btn">☆</button>
+      </div>
+      <div class="timeline-row">
+        <span class="time">5 月 27 · 19:32</span>
+        <span class="vchip">V4</span>
+        <span class="who"><div class="av">J</div>调整 motion line</span>
+        <span>R2V · ARK · 改 prompt</span>
+        <span class="cost">28 pt</span>
+        <button class="star-btn">☆</button>
+      </div>
+      <div class="timeline-row">
+        <span class="time">5 月 27 · 14:18</span>
+        <span class="vchip">V3</span>
+        <span class="who"><div class="av">J</div>切换 mode</span>
+        <span>切到 T2I→I2V</span>
+        <span class="cost">42 pt</span>
+        <button class="star-btn">☆</button>
+      </div>
+      <div class="timeline-row">
+        <span class="time">5 月 27 · 10:15</span>
+        <span class="vchip">V2</span>
+        <span class="who"><div class="av">J</div>调整解析度</span>
+        <span>1080×1920 → 改回</span>
+        <span class="cost">28 pt</span>
+        <button class="star-btn">☆</button>
+      </div>
+      <div class="timeline-row">
+        <span class="time">5 月 26 · 22:42</span>
+        <span class="vchip">V1</span>
+        <span class="who"><div class="av">J</div>首次生成</span>
+        <span>R2V · ARK · seed 1029384</span>
+        <span class="cost">28 pt</span>
+        <button class="star-btn">☆</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

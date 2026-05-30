@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI Redesign Preview — Cinematic Immersive</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    .hero {
+      padding: 80px 32px 48px;
+      text-align: center;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .hero .label { display: inline-block; margin-bottom: 16px; }
+    .hero h1 { margin-bottom: 16px; }
+    .hero p { color: var(--text-secondary); max-width: 600px; margin: 0 auto; font-size: 18px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      padding: 0 32px 32px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .section-head {
+      max-width: 1280px;
+      margin: 32px auto 16px;
+      padding: 0 32px;
+    }
+    .section-head .label { display: inline-block; margin-bottom: 6px; }
+    .section-head h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+    .section-head p { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+    .preview {
+      display: block;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      text-decoration: none;
+      transition: transform var(--d-hover) var(--ease-out), border-color var(--d-hover) var(--ease-out);
+    }
+    .preview:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.2); }
+    .preview-thumb {
+      aspect-ratio: 16/10;
+      background: var(--neutral-900);
+      position: relative;
+      overflow: hidden;
+      display: grid; place-items: center;
+    }
+    .preview-body { padding: 20px 24px; }
+    .preview-body .label { display: block; margin-bottom: 6px; }
+    .preview-body h3 { color: var(--text-primary); font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+    .preview-body p { color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+    /* Mini-mockup thumbnail styling per page */
+    .thumb-landing {
+      background:
+        radial-gradient(ellipse 60% 50% at 30% 40%, rgba(245, 194, 74, 0.18), transparent),
+        radial-gradient(ellipse 50% 40% at 80% 70%, rgba(124, 92, 255, 0.15), transparent),
+        var(--neutral-950);
+    }
+    .thumb-landing::after {
+      content: '短劇 · 開始於此';
+      color: var(--primary-400);
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .thumb-home {
+      background: linear-gradient(180deg, var(--neutral-900) 0%, var(--neutral-950) 100%);
+      display: flex; gap: 8px; padding: 16px;
+    }
+    .thumb-home > div:first-child { width: 60px; background: var(--neutral-800); border-radius: 6px; }
+    .thumb-home > div:last-child {
+      flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+    }
+    .thumb-home > div:last-child > div {
+      aspect-ratio: 16/10;
+      background: linear-gradient(135deg, var(--neutral-700), var(--neutral-800));
+      border-radius: 6px;
+    }
+    .thumb-storyboard {
+      background: var(--neutral-950);
+      display: grid; grid-template-columns: 50px 1fr 60px; gap: 6px; padding: 10px;
+    }
+    .thumb-storyboard > div { background: var(--neutral-800); border-radius: 4px; }
+    .thumb-storyboard > div:nth-child(2) {
+      background: linear-gradient(135deg, rgba(245, 194, 74, 0.2), var(--neutral-800));
+      display: grid; place-items: center; color: var(--text-tertiary); font-size: 11px;
+    }
+    .thumb-generation {
+      background: var(--neutral-950);
+      display: grid; place-items: center;
+    }
+    .thumb-generation > .frame {
+      width: 100px; height: 160px;
+      background: var(--neutral-800);
+      border-radius: 8px;
+      box-shadow: 0 0 60px rgba(124, 92, 255, 0.5);
+      animation: pulse-soft 2s ease-in-out infinite;
+    }
+    .thumb-pricing {
+      background: var(--neutral-950);
+      display: flex; gap: 8px; padding: 24px; align-items: center;
+    }
+    .thumb-pricing > div {
+      flex: 1; height: 100px; background: var(--neutral-900);
+      border-radius: 8px; border: 1px solid var(--surface-hairline);
+    }
+    .thumb-pricing > div:nth-child(3) { border-color: var(--primary-500); transform: scale(1.05); }
+    .thumb-script {
+      background: linear-gradient(135deg, var(--neutral-900), var(--neutral-950));
+      display: flex; padding: 18px; gap: 12px;
+    }
+    .thumb-script > div:first-child {
+      flex: 1.5; background: var(--neutral-800); border-radius: 6px;
+      display: grid; place-items: center; color: var(--text-tertiary); font-size: 11px;
+    }
+    .thumb-script > div:last-child {
+      flex: 1; display: flex; flex-direction: column; gap: 6px;
+    }
+    .thumb-script > div:last-child > div {
+      background: var(--neutral-800); border-radius: 4px; height: 16px;
+    }
+    .thumb-script > div:last-child > div:last-child {
+      background: rgba(245, 194, 74, 0.4); height: 24px;
+    }
+    .thumb-prep {
+      background: var(--neutral-950);
+      display: flex; padding: 16px; gap: 12px; flex-direction: column;
+    }
+    .thumb-prep .row1 { display: flex; gap: 8px; }
+    .thumb-prep .row1 > div {
+      flex: 1; height: 32px; background: var(--neutral-800); border-radius: 4px;
+      display: grid; place-items: center;
+      color: var(--primary-400); font-size: 14px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .thumb-prep .row2 {
+      flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px;
+    }
+    .thumb-prep .row2 > div {
+      background: linear-gradient(135deg, var(--neutral-700), var(--neutral-800));
+      border-radius: 4px;
+    }
+    .thumb-sb-v2 {
+      background: var(--neutral-950);
+      display: grid; grid-template-columns: 40px 1fr 1fr 60px; gap: 6px; padding: 10px;
+    }
+    .thumb-sb-v2 > div { background: var(--neutral-800); border-radius: 4px; }
+    .thumb-sb-v2 > div:nth-child(2) {
+      background: linear-gradient(135deg, rgba(245, 194, 74, 0.2), var(--neutral-800));
+      display: grid; place-items: center; color: var(--text-tertiary); font-size: 9px;
+    }
+    .thumb-sb-v2 > div:nth-child(3) {
+      background: linear-gradient(135deg, rgba(124, 92, 255, 0.2), var(--neutral-800));
+      display: grid; place-items: center; color: var(--text-tertiary); font-size: 9px;
+      position: relative;
+    }
+    .thumb-sb-v2 > div:nth-child(3)::after {
+      content: '⊕'; position: absolute; top: 2px; right: 2px;
+      width: 12px; height: 12px;
+      background: var(--accent-500); color: white;
+      border-radius: 50%; font-size: 8px;
+      display: grid; place-items: center;
+    }
+    .thumb-motion-ref {
+      background: var(--neutral-950);
+      display: flex; padding: 16px; gap: 8px; align-items: center;
+    }
+    .thumb-motion-ref > div:first-child {
+      flex: 1; height: 100px;
+      background: linear-gradient(135deg, rgba(124, 92, 255, 0.3), #1A1530);
+      border: 1px solid rgba(124, 92, 255, 0.4);
+      border-radius: 6px;
+      display: grid; place-items: center;
+      color: var(--accent-400); font-size: 11px;
+    }
+    .thumb-motion-ref .arrow {
+      color: var(--accent-400); font-size: 16px;
+    }
+    .thumb-motion-ref > div:last-child {
+      flex: 1; height: 100px;
+      background: linear-gradient(135deg, rgba(245, 194, 74, 0.2), #2A1F15);
+      border-radius: 6px;
+    }
+    .thumb-r2v-single {
+      background: var(--neutral-950);
+      display: grid; grid-template-columns: 40px 1fr; gap: 8px; padding: 14px;
+    }
+    .thumb-r2v-single .refs {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .thumb-r2v-single .refs > div {
+      flex: 1; background: linear-gradient(135deg, var(--neutral-700), var(--neutral-800));
+      border-radius: 4px; border: 1px solid rgba(245, 194, 74, 0.2);
+    }
+    .thumb-r2v-single .frame {
+      background: linear-gradient(135deg, rgba(245, 194, 74, 0.15), #2A1F15);
+      border-radius: 6px;
+      display: grid; place-items: center;
+      color: var(--primary-400); font-size: 13px; font-weight: 600;
+    }
+    .thumb-mobile {
+      background: linear-gradient(180deg, var(--neutral-900), var(--neutral-950));
+      display: grid; place-items: center;
+    }
+    .thumb-mobile .phone {
+      width: 80px; height: 140px;
+      background: var(--neutral-800);
+      border: 2px solid var(--neutral-700);
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+    .thumb-mobile .phone::before {
+      content: ''; position: absolute; top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 24px; height: 5px;
+      background: var(--neutral-950);
+      border-radius: 0 0 6px 6px;
+    }
+    .thumb-mobile .phone .content {
+      position: absolute; inset: 8px 4px 4px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .thumb-mobile .phone .content > div {
+      background: var(--neutral-700); border-radius: 2px;
+    }
+    .thumb-mobile .phone .content > div:nth-child(1) { height: 8px; }
+    .thumb-mobile .phone .content > div:nth-child(2) {
+      flex: 1; background: linear-gradient(135deg, #6A4A2A, #3A2515);
+    }
+    .thumb-mobile .phone .content > div:nth-child(3) { height: 8px; }
+    .thumb-mobile-review .phone .content > div:nth-child(2) {
+      flex: 1; background: linear-gradient(135deg, #2D2A4A, #1A1530);
+      position: relative;
+    }
+    .thumb-mobile-review .phone .content > div:nth-child(2)::after {
+      content: ''; position: absolute; right: 4px; top: 50%;
+      transform: translateY(-50%);
+      width: 6px; height: 30px;
+      background: linear-gradient(180deg, var(--primary-500), transparent);
+      border-radius: 3px;
+    }
+    .nav-bar {
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-bar .brand-mark {
+      display: inline-flex; align-items: center; gap: 10px;
+      font-weight: 600; font-size: 15px;
+    }
+    .nav-bar .brand-mark span:first-child {
+      width: 24px; height: 24px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px; display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-bar">
+    <div class="brand-mark"><span>K</span><span>KuiperAI — Redesign Preview</span></div>
+    <div class="body-sm">Cinematic Immersive · Dark · 2026-05-28</div>
+  </div>
+
+  <section class="hero">
+    <span class="label chip chip-gold">DESIGN PREVIEW v1</span>
+    <h1 class="display-2">公開上線重設計示意稿</h1>
+    <p>對標 Artcraft 的工藝感、Krea 的 router UX、Higgsfield 的導演語言、Linear 的介面紀律。下面 5 個關鍵畫面展示整套設計語言落到產品上會是什麼樣子。</p>
+  </section>
+
+  <!-- Section: Public + Logged In -->
+  <div class="section-head">
+    <span class="label chip">入口 / 公開層</span>
+    <h2>使用者第一段旅程</h2>
+    <p>從不認識 KuiperAI 到登入後看到自己的專案</p>
+  </div>
+  <div class="grid">
+    <a href="01-landing.html" class="preview">
+      <div class="preview-thumb thumb-landing"></div>
+      <div class="preview-body">
+        <span class="label">01 · PUBLIC SURFACE</span>
+        <h3>Landing 公開首頁</h3>
+        <p>冷訪客第一秒看到的畫面 — 一行 headline + 開始創作 CTA + cinematic 背景</p>
+      </div>
+    </a>
+    <a href="02-home.html" class="preview">
+      <div class="preview-thumb thumb-home"><div></div><div><div></div><div></div><div></div></div></div>
+      <div class="preview-body">
+        <span class="label">02 · LOGGED IN</span>
+        <h3>Home 專案儀表</h3>
+        <p>Media-first 專案卡（16:9 第一集 thumbnail）+ Sidebar 主導覽 + 月度數據</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Creation flow -->
+  <div class="section-head">
+    <span class="label chip chip-gold">創作主旅程 — R2V 為標準</span>
+    <h2>劇本 → 文本分析 → 分鏡 → 生成（4 步）</h2>
+    <p>新增 06/07/08 三畫面：劇本輸入、文本分析確認、升級版 storyboard（含 R2V / T2I→I2V mode 切換、Elements 綁定、prompt 分裂）</p>
+  </div>
+  <div class="grid">
+    <a href="06-script-input.html" class="preview">
+      <div class="preview-thumb thumb-script"><div>劇本</div><div><div></div><div></div><div></div><div></div></div></div>
+      <div class="preview-body">
+        <span class="label">06 · STEP 1 — INPUT</span>
+        <h3>劇本輸入 + 設定 wizard</h3>
+        <p>左：劇本編輯器（場景標記、角色色標）／右：R2V 預設、Auto/Custom、provider 偏好、預估點數</p>
+      </div>
+    </a>
+    <a href="07-pre-generation.html" class="preview">
+      <div class="preview-thumb thumb-prep">
+        <div class="row1"><div>3</div><div>12</div><div>336</div></div>
+        <div class="row2"><div></div><div></div><div></div><div></div></div>
+      </div>
+      <div class="preview-body">
+        <span class="label">07 · STEP 2 — PRE-FLIGHT</span>
+        <h3>文本分析確認（最重要）</h3>
+        <p>偷 LTX Studio 的「生成前看 Elements + scene/shot 數 + 點數」— 還沒燒 GPU 就能改分鏡密度、補圖、改模式</p>
+      </div>
+    </a>
+    <a href="08-storyboard-v2.html" class="preview">
+      <div class="preview-thumb thumb-sb-v2"><div></div><div>圖</div><div>片</div><div></div></div>
+      <div class="preview-body">
+        <span class="label">08 · STEP 3 — STORYBOARD V2</span>
+        <h3>升級版分鏡（R2V + T2I→I2V）</h3>
+        <p>4 mode 切換、Elements 綁定 R2V reference、prompt 分裂（scene 鎖 / motion 編輯）、雙縮圖 lineage、per-shot model picker</p>
+      </div>
+    </a>
+    <a href="04-generation.html" class="preview">
+      <div class="preview-thumb thumb-generation"><div class="frame"></div></div>
+      <div class="preview-body">
+        <span class="label">04 · STEP 4 — GENERATION</span>
+        <h3>生成中 signature moment</h3>
+        <p>沒 spinner、沒百分比。紫色 accent-glow + ghost-typing + queue rail</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Narrative-driven (matches user's actual workflow) -->
+  <div class="section-head">
+    <span class="label chip chip-gold">⭐ 整合既有 R2V 文本流（user 截圖反推）</span>
+    <h2>13 · 敘事編輯器 — R2V 真實工作流</h2>
+    <p>user 給的截圖揭出真實 R2V 流：inline @chip 嵌進文字、每集 tab + 新建集、每段獨立 regen 多 provider 按鈕。這版整合既有 UI 優點 + 視覺工藝升級 + 4-mode Inspector 並存。</p>
+  </div>
+  <div class="grid">
+    <a href="13-narrative-editor.html" class="preview" style="grid-column: span 2;">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; grid-template-columns: 60px 1fr 80px; padding: 14px; gap: 10px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="height: 16px; background: linear-gradient(135deg, #F5C24A, #C99A2E); border-radius: 4px;"></div>
+          <div style="height: 16px; background: linear-gradient(135deg, #7C5CFF, #4A3AAF); border-radius: 4px;"></div>
+          <div style="height: 16px; background: linear-gradient(135deg, #4A8FE5, #2A5FB5); border-radius: 4px;"></div>
+        </div>
+        <div style="background: var(--neutral-900); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; gap: 4px; margin-bottom: 4px;">
+            <span style="background: rgba(245, 194, 74, 0.18); border: 1px solid rgba(245, 194, 74, 0.4); color: #FFD96E; padding: 1px 6px; border-radius: 3px; font-size: 9px;">@林夜</span>
+            <span style="background: rgba(108, 95, 184, 0.18); border: 1px solid rgba(108, 95, 184, 0.4); color: #A89BD8; padding: 1px 6px; border-radius: 3px; font-size: 9px;">@巷弄</span>
+            <span style="background: rgba(201, 154, 46, 0.18); border: 1px solid rgba(201, 154, 46, 0.4); color: #E6BF5E; padding: 1px 6px; border-radius: 3px; font-size: 9px;">@油燈</span>
+          </div>
+          <div style="height: 4px; background: var(--neutral-800); border-radius: 2px; width: 85%;"></div>
+          <div style="height: 4px; background: var(--neutral-800); border-radius: 2px; width: 75%;"></div>
+          <div style="height: 4px; background: var(--neutral-800); border-radius: 2px; width: 90%;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="height: 16px; background: var(--neutral-800); border-radius: 4px;"></div>
+          <div style="height: 16px; background: var(--neutral-800); border-radius: 4px;"></div>
+          <div style="height: 16px; background: linear-gradient(135deg, rgba(245, 194, 74, 0.4), rgba(245, 194, 74, 0.1)); border-radius: 4px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">13 · NARRATIVE EDITOR ★（最重要）</span>
+        <h3>R2V 敘事編輯器（整合現有功能）</h3>
+        <p>每集 tab + 新建集 + inline @角色/@場景/@道具 chip + 全局約束摺疊 + 五要素導演法 helper + 每段 regen 多 provider 按鈕（豆包/即夢/fal 透明點數）+ 4-mode Inspector + 失敗免扣明示</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Storyboard mode variants -->
+  <div class="section-head">
+    <span class="label chip chip-accent">2026-05-28 追加 — 分鏡 4 mode 變體</span>
+    <h2>R2V 為標準 · T2I→I2V / 運鏡 ref 為進階</h2>
+    <p>看完 08 的 T2I→I2V 雙縮圖，再對比 09（R2V + 運鏡 ref）跟 10（R2V 單畫面預設）。Inspector 上面的 mode picker 4 格切換的就是這 4 個模式。</p>
+  </div>
+  <div class="grid">
+    <a href="10-r2v-single.html" class="preview">
+      <div class="preview-thumb thumb-r2v-single">
+        <div class="refs"><div></div><div></div><div></div></div>
+        <div class="frame">9:16</div>
+      </div>
+      <div class="preview-body">
+        <span class="label">10 · R2V mode（預設）</span>
+        <h3>R2V 單畫面預設變體</h3>
+        <p>左側完整 Element reference strip（角色/場景/道具 3 張 64×84 縮圖）+ 中央單一影片 frame + scene/motion prompt 分裂。多數鏡頭走這個</p>
+      </div>
+    </a>
+    <a href="09-r2v-motion-ref.html" class="preview">
+      <div class="preview-thumb thumb-motion-ref">
+        <div>🎬 ref</div>
+        <span class="arrow">→</span>
+        <div></div>
+      </div>
+      <div class="preview-body">
+        <span class="label">09 · R2V + 運鏡 REF</span>
+        <h3>運鏡參考片進階模式</h3>
+        <p>給一段 motion ref clip，運鏡 transfer 過去但主體仍由 R2V 綁定 — 撲擊/戰鬥/追逐這類難用文字描述的鏡頭專用</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Mobile -->
+  <div class="section-head">
+    <span class="label chip chip-accent">手機版（審閱優先）</span>
+    <h2>手機定位：審閱 + 分享，重度編輯跳桌面</h2>
+    <p>符合既有 /m/* 路線 + middleware UA auto-redirect + revert banner。390×844 iPhone viewport。</p>
+  </div>
+  <div class="grid">
+    <a href="11-mobile-home.html" class="preview">
+      <div class="preview-thumb thumb-mobile">
+        <div class="phone">
+          <div class="content"><div></div><div></div><div></div></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">11 · MOBILE HOME</span>
+        <h3>手機版專案儀表</h3>
+        <p>media-first 卡 + credit pill + 3 stat + FAB + bottom tab bar + revert-to-desktop banner</p>
+      </div>
+    </a>
+    <a href="12-mobile-review.html" class="preview">
+      <div class="preview-thumb thumb-mobile thumb-mobile-review">
+        <div class="phone">
+          <div class="content"><div></div><div></div><div></div></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">12 · MOBILE REVIEW</span>
+        <h3>分鏡審閱（TikTok-style）</h3>
+        <p>直式 9:16 + 右側 action rail（播/收藏/分享/下載/留言）+ 底部 panel strip 橫滑 + 對白/劇本 tab</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Creation flow continuation -->
+  <div class="section-head">
+    <span class="label chip chip-gold">⭐ 创作流后段（Phase 2 新做）</span>
+    <h2>配音 / 渲染 / 成片 — 创作流补完</h2>
+    <p>stepper 后 3 步全部到位。从分镜 → 配音 → 渲染 → 成片，整条主路径能跑完整 demo。</p>
+  </div>
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <a href="23-voice.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; grid-template-columns: 80px 1fr; padding: 12px; gap: 8px;">
+        <div style="background: var(--neutral-800); border-radius: 4px; display: flex; flex-direction: column; gap: 3px; padding: 6px;">
+          <div style="height: 10px; background: var(--neutral-700); border-radius: 2px;"></div>
+          <div style="height: 14px; background: rgba(245, 194, 74, 0.4); border-radius: 2px;"></div>
+          <div style="height: 10px; background: var(--neutral-700); border-radius: 2px;"></div>
+          <div style="height: 10px; background: var(--neutral-700); border-radius: 2px;"></div>
+        </div>
+        <div style="background: var(--neutral-900); border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 2px; padding: 0 16px;">
+          <div style="flex: 1; height: 30%; background: var(--neutral-700); border-radius: 1px;"></div>
+          <div style="flex: 1; height: 70%; background: var(--primary-500); border-radius: 1px;"></div>
+          <div style="flex: 1; height: 50%; background: var(--primary-500); border-radius: 1px;"></div>
+          <div style="flex: 1; height: 90%; background: var(--primary-500); border-radius: 1px;"></div>
+          <div style="flex: 1; height: 60%; background: var(--neutral-700); border-radius: 1px;"></div>
+          <div style="flex: 1; height: 80%; background: var(--neutral-700); border-radius: 1px;"></div>
+          <div style="flex: 1; height: 40%; background: var(--neutral-700); border-radius: 1px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">23 · VOICE</span>
+        <h3>配音编辑</h3>
+        <p>对白 list + 波形预览 + 音色 picker + 情绪/语速/音调 + 5 语言 TTS</p>
+      </div>
+    </a>
+    <a href="24-render.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); padding: 14px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-size: 18px; color: var(--primary-400); font-family: 'JetBrains Mono', monospace; font-weight: 600;">5/12</div>
+        <div style="height: 6px; background: var(--neutral-800); border-radius: 3px; overflow: hidden;"><div style="width: 42%; height: 100%; background: linear-gradient(90deg, var(--primary-500), var(--accent-500));"></div></div>
+        <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 6px;">
+          <div style="height: 8px; background: rgba(34, 197, 94, 0.3); border-radius: 2px;"></div>
+          <div style="height: 8px; background: rgba(124, 92, 255, 0.4); border-radius: 2px;"></div>
+          <div style="height: 8px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 8px; background: rgba(239, 68, 68, 0.3); border-radius: 2px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">24 · RENDER</span>
+        <h3>渲染队列</h3>
+        <p>全集进度 + 每段 row 状态 + 失败自动 fallback + 智能路由可视化</p>
+      </div>
+    </a>
+    <a href="25-final.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: flex; gap: 10px; padding: 14px; align-items: stretch;">
+        <div style="aspect-ratio: 9/16; height: 120px; background: linear-gradient(135deg, #4A3A2A, #2A1F15); border-radius: 6px; flex-shrink: 0; position: relative;"><div style="position: absolute; top: 6px; right: 6px; padding: 2px 6px; background: rgba(34, 197, 94, 0.16); color: var(--success); border-radius: 999px; font-size: 8px;">✓</div></div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; gap: 4px;"><div style="flex: 1; height: 18px; background: linear-gradient(135deg, #25F4EE, #FE2C55); border-radius: 4px;"></div></div>
+          <div style="display: flex; gap: 4px;"><div style="flex: 1; height: 18px; background: linear-gradient(135deg, #FF2442, #C7253E); border-radius: 4px;"></div></div>
+          <div style="display: flex; gap: 4px;"><div style="flex: 1; height: 18px; background: linear-gradient(135deg, #F58529, #DD2A7B, #8134AF); border-radius: 4px;"></div></div>
+          <div style="display: flex; gap: 4px;"><div style="flex: 1; height: 18px; background: #FF0000; border-radius: 4px;"></div></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">25 · FINAL</span>
+        <h3>成片预览 / 发布</h3>
+        <p>9:16/16:9/1:1 切换 + 下载（含字幕烧录） + 一键发抖音/小红书/IG/YT</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Phase 4-5 -->
+  <div class="section-head">
+    <span class="label chip chip-accent">launch 前必备（Phase 4-5）</span>
+    <h2>Onboarding / 空状态 / 设置 / 通知 / 历史 / 广场 / 分享 / 错误</h2>
+    <p>第一次使用、错误处理、社群分享 — 公开上线缺一不可的 8 个 mockup。</p>
+  </div>
+  <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
+    <a href="26-onboarding.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; grid-template-columns: 1fr 1fr; padding: 16px; gap: 8px;">
+        <div style="background: rgba(245, 194, 74, 0.08); border: 1px solid var(--primary-500); border-radius: 6px;"></div>
+        <div style="background: var(--neutral-800); border-radius: 6px;"></div>
+        <div style="background: var(--neutral-800); border-radius: 6px;"></div>
+        <div style="background: var(--neutral-800); border-radius: 6px;"></div>
+      </div>
+      <div class="preview-body">
+        <span class="label">26 · ONBOARDING</span>
+        <h3>首次使用引导</h3>
+        <p>4 步：你是谁/试做/导览/开始</p>
+      </div>
+    </a>
+    <a href="27-empty-states.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; place-items: center;">
+        <div style="font-size: 36px; color: var(--primary-400); opacity: 0.5;">◇</div>
+      </div>
+      <div class="preview-body">
+        <span class="label">27 · EMPTY STATES</span>
+        <h3>空状态合集</h3>
+        <p>无项目/无角色/无版本/错误 4 种</p>
+      </div>
+    </a>
+    <a href="28-settings.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; grid-template-columns: 80px 1fr; padding: 12px; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="height: 8px; background: rgba(245, 194, 74, 0.4); border-radius: 2px;"></div>
+          <div style="height: 8px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 8px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 8px; background: var(--neutral-800); border-radius: 2px;"></div>
+        </div>
+        <div style="background: var(--neutral-900); border-radius: 4px;"></div>
+      </div>
+      <div class="preview-body">
+        <span class="label">28 · SETTINGS</span>
+        <h3>个人设置</h3>
+        <p>资料/通知/快捷/语言/API</p>
+      </div>
+    </a>
+    <a href="29-notifications.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); padding: 14px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 6px; padding: 6px; background: rgba(245, 194, 74, 0.04); border: 1px solid rgba(245, 194, 74, 0.2); border-radius: 4px;">
+          <div style="width: 18px; height: 18px; background: rgba(34, 197, 94, 0.2); border-radius: 50%;"></div>
+          <div style="flex: 1; height: 8px; background: var(--neutral-700); border-radius: 2px;"></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--surface-raised); border-radius: 4px;">
+          <div style="width: 18px; height: 18px; background: rgba(239, 68, 68, 0.2); border-radius: 50%;"></div>
+          <div style="flex: 1; height: 8px; background: var(--neutral-700); border-radius: 2px;"></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 6px; background: var(--surface-raised); border-radius: 4px;">
+          <div style="width: 18px; height: 18px; background: rgba(124, 92, 255, 0.2); border-radius: 50%;"></div>
+          <div style="flex: 1; height: 8px; background: var(--neutral-700); border-radius: 2px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">29 · NOTIFICATIONS</span>
+        <h3>通知中心</h3>
+        <p>渲染/失败/邀请/系统</p>
+      </div>
+    </a>
+    <a href="30-history.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: flex; gap: 6px; padding: 12px;">
+        <div style="flex: 1; aspect-ratio: 9/16; background: linear-gradient(135deg, #4A3A2A, #2A1F15); border-radius: 4px;"></div>
+        <div style="flex: 1; aspect-ratio: 9/16; background: linear-gradient(135deg, #5A4530, #2F2010); border-radius: 4px; border: 1px solid var(--primary-500); position: relative;"><div style="position: absolute; top: 4px; right: 4px; width: 14px; height: 14px; background: var(--primary-500); border-radius: 50%; color: var(--neutral-950); font-size: 8px; display: grid; place-items: center; font-weight: 700;">★</div></div>
+        <div style="flex: 1; aspect-ratio: 9/16; background: linear-gradient(135deg, #7A5530, #45251A); border-radius: 4px;"></div>
+      </div>
+      <div class="preview-body">
+        <span class="label">30 · HISTORY</span>
+        <h3>历史版本比对</h3>
+        <p>多版本 grid + 时间线 + 收藏/回滚</p>
+      </div>
+    </a>
+    <a href="31-public-share.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; grid-template-columns: 1fr 100px; padding: 12px; gap: 8px;">
+        <div style="aspect-ratio: 9/16; background: linear-gradient(135deg, #4A3A2A, #2A1F15); border-radius: 6px; max-height: 130px;"></div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; align-items: center; gap: 4px; padding: 6px 4px;"><div style="width: 16px; height: 16px; background: linear-gradient(135deg, #7C5CFF, #4A3AAF); border-radius: 50%;"></div><div style="flex: 1; height: 6px; background: var(--neutral-700); border-radius: 2px;"></div></div>
+          <div style="height: 22px; background: rgba(245, 194, 74, 0.12); border: 1px solid rgba(245, 194, 74, 0.3); border-radius: 4px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">31 · PUBLIC SHARE</span>
+        <h3>公开分享页</h3>
+        <p>影片 + 创作者卡 + 克隆 / 关注</p>
+      </div>
+    </a>
+    <a href="32-discover.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 10px;">
+        <div style="aspect-ratio: 9/16; background: linear-gradient(135deg, #4A3A2A, #2A1F15); border-radius: 3px; position: relative;"><div style="position: absolute; top: 3px; right: 3px; padding: 1px 4px; background: var(--primary-500); border-radius: 999px; font-size: 7px; color: var(--neutral-950);">精</div></div>
+        <div style="aspect-ratio: 9/16; background: linear-gradient(135deg, #2D2A4A, #1A1530); border-radius: 3px;"></div>
+        <div style="aspect-ratio: 9/16; background: linear-gradient(135deg, #4A2A3A, #2A1525); border-radius: 3px;"></div>
+        <div style="aspect-ratio: 9/16; background: linear-gradient(135deg, #2A4A3A, #152A25); border-radius: 3px;"></div>
+      </div>
+      <div class="preview-body">
+        <span class="label">32 · DISCOVER</span>
+        <h3>广场</h3>
+        <p>Krea/Higgsfield 风 公开作品 grid</p>
+      </div>
+    </a>
+    <a href="33-errors.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; place-items: center;">
+        <div style="display: flex; gap: 14px; align-items: center;">
+          <div style="width: 40px; height: 40px; background: radial-gradient(ellipse at center, rgba(124, 92, 255, 0.2), transparent 70%); border-radius: 50%; display: grid; place-items: center; color: var(--accent-400); font-size: 18px;">⚠</div>
+          <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-tertiary); font-size: 11px;">404 · 500 · CREDITS</div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">33 · ERRORS</span>
+        <h3>错误状态合集</h3>
+        <p>404/500/点数不足/维护/Modal</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: i18n -->
+  <div class="section-head">
+    <span class="label chip chip-accent">🌐 i18n 双语支援</span>
+    <h2>简体中文 + English 即时切换</h2>
+    <p>所有 mockup 右上有「中 / EN」按钮 — 平台 UI 切换、项目内容（角色/剧集名）保留中文。localStorage 持久化选择。</p>
+  </div>
+  <div style="max-width: 1280px; margin: 0 auto 32px; padding: 0 32px;">
+    <div style="padding: 22px 28px; background: rgba(124, 92, 255, 0.04); border: 1px solid rgba(124, 92, 255, 0.2); border-radius: var(--r-card); display: flex; gap: 24px; align-items: center;">
+      <div style="display: flex; gap: 4px; padding: 4px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: 999px;">
+        <div style="padding: 8px 16px; background: var(--surface-overlay); color: var(--text-primary); border-radius: 999px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;">中</div>
+        <div style="padding: 8px 16px; color: var(--text-tertiary); border-radius: 999px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600;">EN</div>
+      </div>
+      <div style="flex: 1;">
+        <div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">这套切换在 13 / 01 / 23 / 24 / 25 / 26 / 28 / 29 / 31 / 32 / 33 都已 wire</div>
+        <div style="font-size: 12px; color: var(--text-secondary);">使用 <code style="font-family: 'JetBrains Mono', monospace; color: var(--accent-400);">data-i18n="key"</code> attribute + i18n.js 即时切换。新页面用 phase 2 之后的雙語出生策略。剩 02/03/04/05/06/07/08/09/10/11/12/15/16/17/19/20/21/22 旧页待批量补 i18n attr。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Command Palette -->
+  <div class="section-head">
+    <span class="label chip chip-accent">⌘K 全域捷徑</span>
+    <h2>22 · Command Palette — power user 最快路徑</h2>
+    <p>任何頁面 Cmd+K 跳出。搜「林」→ 一秒定位林夜角色編輯。除了 entity 搜尋還有動作（測試/重生/新增造型）跟頁面跳轉（G 字母快捷）。</p>
+  </div>
+  <div style="max-width: 1280px; margin: 0 auto 32px; padding: 0 32px;">
+    <a href="22-command-palette.html" style="display: block; padding: 28px 32px; background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(124, 92, 255, 0.04)); border: 1px solid rgba(124, 92, 255, 0.3); border-radius: var(--r-card); text-decoration: none; color: var(--text-primary); transition: all var(--d-hover) var(--ease-out);">
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <div style="display: flex; gap: 4px; flex-shrink: 0;">
+          <div style="padding: 8px 12px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600;">⌘</div>
+          <div style="padding: 8px 12px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600;">K</div>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-size: 12px; color: var(--accent-400); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; font-weight: 600;">22 · COMMAND PALETTE</div>
+          <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">全域捷徑 · 搜尋角色/動作/跳轉</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">第 7 條入口正式視覺化 — modal + cursor 閃爍 + 模糊 backdrop + ↑↓⏎ 鍵盤導向 + 4 大分類 + 結果 highlight</div>
+        </div>
+        <div style="color: var(--accent-400); font-size: 24px;">→</div>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Guided walkthrough -->
+  <div class="section-head">
+    <span class="label chip chip-gold">📍 怎麼進角色編輯（迷路救星）</span>
+    <h2>21 · Walkthrough — 4 個位置全找出</h2>
+    <p>專門做給「我在步驟中找不到劇集設定」的迷路情境。每個位置畫出來 + 金色 callout 標好。</p>
+  </div>
+  <div style="max-width: 1280px; margin: 0 auto 32px; padding: 0 32px;">
+    <a href="21-walkthrough.html" style="display: block; padding: 32px 36px; background: linear-gradient(135deg, rgba(245, 194, 74, 0.12), rgba(245, 194, 74, 0.04)); border: 1px solid rgba(245, 194, 74, 0.3); border-radius: var(--r-card); text-decoration: none; color: var(--text-primary); transition: all var(--d-hover) var(--ease-out);">
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <div style="width: 56px; height: 56px; background: var(--primary-500); color: var(--neutral-950); border-radius: 50%; display: grid; place-items: center; font-size: 24px; font-weight: 700;">📍</div>
+        <div style="flex: 1;">
+          <div style="font-size: 12px; color: var(--primary-400); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; font-weight: 600;">21 · GUIDED WALKTHROUGH</div>
+          <div style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">怎麼在創作流程中找到「劇集設定」</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">4 個位置：02 sidebar / 07 卡片 / 13 toolbar 金色按鈕 / 15-17 之間 tab 切換 — 每個都畫出來 + 標 callout</div>
+        </div>
+        <div style="color: var(--primary-400); font-size: 24px;">→</div>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: User flow diagram -->
+  <div class="section-head">
+    <span class="label chip chip-accent">🗺 整體使用流程</span>
+    <h2>從訪客 → 拿到成片的完整路徑</h2>
+    <p>包含「劇集設定」的 7 條入口（cmd+K 之外都已 wire 進 mockup）</p>
+  </div>
+  <div style="max-width: 1280px; margin: 0 auto 40px; padding: 0 32px;">
+    <div style="background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-card); padding: 28px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.8; color: var(--text-secondary); overflow-x: auto;"><pre style="margin: 0; white-space: pre; color: inherit;">
+   <span style="color: var(--text-tertiary);">┌──────────────┐</span>
+   <span style="color: var(--text-tertiary);">│</span> <a href="01-landing.html" style="color: var(--primary-400); text-decoration: none;">01 Landing</a>   <span style="color: var(--text-tertiary);">│  公開首頁（冷訪客）</span>
+   <span style="color: var(--text-tertiary);">└──────┬───────┘</span>
+          <span style="color: var(--text-tertiary);">↓ 點「開始創作」</span>
+   <span style="color: var(--text-tertiary);">┌──────────────┐</span>
+   <span style="color: var(--text-tertiary);">│</span> <a href="19-auth.html" style="color: var(--primary-400); text-decoration: none;">19 Auth</a>      <span style="color: var(--text-tertiary);">│  Magic link / Google / GitHub</span>
+   <span style="color: var(--text-tertiary);">└──────┬───────┘</span>
+   <span style="color: var(--text-tertiary);">┌──────────────┐</span>
+   <span style="color: var(--text-tertiary);">│</span> <a href="02-home.html" style="color: var(--primary-400); text-decoration: none;">02 Home</a>      <span style="color: var(--text-tertiary);">│  專案儀表（sidebar 創作群組有「劇集設定」入口）</span>
+   <span style="color: var(--text-tertiary);">└──────┬───────┘</span>
+          <span style="color: var(--text-tertiary);">↓ 點「+ 新專案」</span>
+   <span style="color: var(--text-tertiary);">┌──────────────┐</span>
+   <span style="color: var(--text-tertiary);">│</span> <a href="06-script-input.html" style="color: var(--primary-400); text-decoration: none;">06 劇本輸入</a>   <span style="color: var(--text-tertiary);">│  貼劇本 + R2V 預設 + provider</span>
+   <span style="color: var(--text-tertiary);">└──────┬───────┘</span>
+          <span style="color: var(--text-tertiary);">↓ 點「分析劇本」</span>
+   <span style="color: var(--text-tertiary);">┌──────────────────┐</span>
+   <span style="color: var(--text-tertiary);">│</span> <a href="07-pre-generation.html" style="color: var(--primary-400); text-decoration: none;">07 文本分析確認</a>   <span style="color: var(--text-tertiary);">│  自動抽 角色/場景/道具 → 點任一 chip 跳劇集設定編輯</span>
+   <span style="color: var(--text-tertiary);">└──────┬───────────┘</span>
+          <span style="color: var(--text-tertiary);">↓ ▶ 開始生成</span>
+   <span style="color: var(--text-tertiary);">╔═════════════════════════════════════════════════════╗</span>
+   <span style="color: var(--text-tertiary);">║</span> <a href="13-narrative-editor.html" style="color: var(--primary-400); text-decoration: none; font-weight: 600;">13 敘事編輯 ★（主路徑 R2V）</a>                        <span style="color: var(--text-tertiary);">║</span>
+   <span style="color: var(--text-tertiary);">║   • inline @chip 嵌進文字                            ║
+   ║   • 每段 row 多 provider regen（豆包/即夢/fal）       ║
+   ║                                                     ║
+   ║   → 劇集設定 3 條入口：                              ║
+   ║     1. 左 roster 頂部「劇集設定 →」總入口             ║
+   ║     2. roster section 標題「出場角色/場景/道具 →」    ║
+   ║     3. 中央 @chip 點擊（Inspector 浮層）              ║</span>
+   <span style="color: var(--text-tertiary);">║                                                     ║</span>
+   <span style="color: var(--text-tertiary);">║   ┌─────────────────────────────────────────┐       ║</span>
+   <span style="color: var(--text-tertiary);">║   │</span> <a href="15-character-edit.html" style="color: var(--primary-400); text-decoration: none;">15 角色</a> │ <a href="16-location-edit.html" style="color: var(--primary-400); text-decoration: none;">16 場景</a> │ <a href="17-prop-edit.html" style="color: var(--primary-400); text-decoration: none;">17 道具</a>            <span style="color: var(--text-tertiary);">│       ║</span>
+   <span style="color: var(--text-tertiary);">║   │  + Inspector + 造型 grid + 一致性 slider │       ║</span>
+   <span style="color: var(--text-tertiary);">║   │  + ⚡ 一鍵測試 + 使用追蹤              │       ║</span>
+   <span style="color: var(--text-tertiary);">║   └─────────────────────────────────────────┘       ║</span>
+   <span style="color: var(--text-tertiary);">║</span>     改完按「完成」回 13                              <span style="color: var(--text-tertiary);">║</span>
+   <span style="color: var(--text-tertiary);">║                                                     ║</span>
+   <span style="color: var(--text-tertiary);">║   或切換到分鏡卡 →</span> <a href="08-storyboard-v2.html" style="color: var(--primary-400); text-decoration: none;">08 分鏡卡 view</a>                  <span style="color: var(--text-tertiary);">║</span>
+   <span style="color: var(--text-tertiary);">╚════════════════╤════════════════════════════════════╝</span>
+                    <span style="color: var(--text-tertiary);">↓ 完成「下一步 → 配音」</span>
+   <span style="color: var(--text-tertiary);">┌──────────────┐</span>
+   <span style="color: var(--text-tertiary);">│</span> <a href="04-generation.html" style="color: var(--primary-400); text-decoration: none;">04 生成中</a>     <span style="color: var(--text-tertiary);">│  紫色 glow + queue rail</span>
+   <span style="color: var(--text-tertiary);">└──────┬───────┘</span>
+          <span style="color: var(--text-tertiary);">↓</span>
+   <span style="color: var(--text-tertiary);">[ 配音 → 渲染 → 成片下載/分享 ]（後續流程未做 mockup）</span></pre></div>
+
+    <!-- Entry points table -->
+    <div style="margin-top: 24px; padding: 20px 24px; background: rgba(245, 194, 74, 0.04); border: 1px solid rgba(245, 194, 74, 0.2); border-radius: var(--r-card);">
+      <h3 style="font-size: 13px; color: var(--primary-400); margin-bottom: 12px; font-weight: 600;">📍「劇集設定」7 條入口（已 wire 進 mockup）</h3>
+      <ol style="font-size: 13px; line-height: 1.8; color: var(--text-secondary); padding-left: 20px;">
+        <li><strong>02 Home sidebar</strong> → 創作 > 劇集設定（新加）</li>
+        <li><strong>06 劇本輸入</strong> → wizard 第 1 步 ✎ 先建立角色（optional）</li>
+        <li><strong>07 文本分析確認</strong> → Element 卡片直接點跳轉 / 「→ 進劇集設定」link</li>
+        <li><strong>13 敘事編輯</strong> → 左 sidebar 頂部金色「劇集設定 →」總入口 banner</li>
+        <li><strong>13 敘事編輯</strong> → 各 roster section 標題（出場角色 → / 場景 → / 道具 →）</li>
+        <li><strong>13 敘事編輯</strong> → 中央 @chip 點擊（→ Inspector 浮層 → ✎ 編輯）</li>
+        <li><strong>Cmd+K 命令面板</strong> → 「跳 林夜 編輯」（mockup 未做動態互動）</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Section: Element edit -->
+  <div class="section-head">
+    <span class="label chip chip-gold">⭐ 劇集設定 — 角色 / 場景 / 道具</span>
+    <h2>每個 @chip 點下去長什麼樣</h2>
+    <p>對標 LTX Studio Elements + Krea consistency slider + Higgsfield Soul ID。Character 結構化、Location 空間屬性+時段變體、Prop 輕量+持有人。三個都有 ⚡ 一鍵測試 + usage tracking（業界缺）。</p>
+  </div>
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <a href="15-character-edit.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: flex; padding: 16px; gap: 12px;">
+        <div style="width: 50px; height: 80px; background: linear-gradient(135deg, #6A4A2A, #3A2515); border-radius: 6px;"></div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <div style="height: 12px; background: var(--neutral-800); border-radius: 2px; width: 60%;"></div>
+          <div style="height: 6px; background: var(--neutral-800); border-radius: 2px; width: 80%;"></div>
+          <div style="height: 6px; background: var(--neutral-800); border-radius: 2px; width: 50%;"></div>
+          <div style="margin-top: 4px; display: flex; gap: 3px;">
+            <div style="flex: 1; aspect-ratio: 3/4; background: linear-gradient(135deg, #6A4A2A, #3A2515); border-radius: 3px; border: 1px solid var(--primary-500);"></div>
+            <div style="flex: 1; aspect-ratio: 3/4; background: linear-gradient(135deg, #5A4530, #2F2010); border-radius: 3px;"></div>
+            <div style="flex: 1; aspect-ratio: 3/4; background: linear-gradient(135deg, #7A5530, #45251A); border-radius: 3px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">15 · CHARACTER EDIT</span>
+        <h3>角色編輯</h3>
+        <p>LTX 結構化（Essence/Appearance/Clothing/Voice）+ 造型 grid + Krea consistency slider + 使用追蹤</p>
+      </div>
+    </a>
+    <a href="16-location-edit.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: flex; padding: 16px; gap: 12px; flex-direction: column;">
+        <div style="display: flex; gap: 6px;">
+          <div style="width: 80px; height: 50px; background: linear-gradient(135deg, #2D2A4A, #1A1530); border-radius: 4px;"></div>
+          <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+            <div style="background: var(--neutral-800); border-radius: 2px;"></div>
+            <div style="background: var(--neutral-800); border-radius: 2px;"></div>
+            <div style="background: var(--neutral-800); border-radius: 2px;"></div>
+            <div style="background: var(--neutral-800); border-radius: 2px;"></div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;">
+          <div style="aspect-ratio: 1; background: linear-gradient(135deg, #2D2A4A, #1A1530); border-radius: 3px; border: 1px solid var(--primary-500);"></div>
+          <div style="aspect-ratio: 1; background: linear-gradient(135deg, #5A8FBA, #2D4A6A); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1; background: linear-gradient(135deg, #C09060, #6A4530); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1; background: linear-gradient(135deg, #4A6A8A, #2A3F50); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1; background: linear-gradient(135deg, #B0C0D0, #5A6A7A); border-radius: 3px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">16 · LOCATION EDIT</span>
+        <h3>場景編輯</h3>
+        <p>4 欄空間屬性 + Wide/Medium/Close 3 視角槽 + 時段變體（白天/黃昏/夜/雨/雪）</p>
+      </div>
+    </a>
+    <a href="17-prop-edit.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: flex; padding: 16px; gap: 12px; align-items: start;">
+        <div style="width: 50px; height: 50px; background: radial-gradient(ellipse at center, #FFD96E 0%, #C99A2E 50%, #6F5418 100%); border-radius: 8px; box-shadow: 0 0 24px rgba(245, 194, 74, 0.3);"></div>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+          <div style="height: 12px; background: var(--neutral-800); border-radius: 2px; width: 50%;"></div>
+          <div style="height: 6px; background: var(--neutral-800); border-radius: 2px; width: 75%;"></div>
+          <div style="display: flex; gap: 4px; margin-top: 4px;">
+            <span style="padding: 2px 8px; background: rgba(201, 154, 46, 0.18); border: 1px solid rgba(201, 154, 46, 0.4); color: #E6BF5E; border-radius: 999px; font-size: 9px;">常駐</span>
+            <span style="padding: 2px 8px; background: rgba(245, 194, 74, 0.12); border: 1px solid rgba(245, 194, 74, 0.3); color: var(--primary-400); border-radius: 999px; font-size: 9px;">@林夜</span>
+          </div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">17 · PROP EDIT</span>
+        <h3>道具編輯</h3>
+        <p>輕量版（名/描述/tag/尺寸）+ optional 持有人連到 character + 自動帶入</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: admin / auth / workspace -->
+  <div class="section-head">
+    <span class="label chip">launch 前必備 — Studio Dark</span>
+    <h2>Admin / Auth / Workspace</h2>
+    <p>對標 Linear Dashboards + Vercel Observability + Stripe + Notion org console。次要頁面用 Studio Dark 路線（密度高、單 accent、生產力工具感）跟主創作流的 Cinematic Immersive 區隔。</p>
+  </div>
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <a href="18-admin.html" class="preview">
+      <div class="preview-thumb" style="background: #0A0A0B; display: grid; grid-template-columns: 40px 1fr; padding: 10px; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="height: 8px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 24px; background: rgba(34, 197, 94, 0.16); border-radius: 3px;"></div>
+          <div style="height: 6px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 6px; background: var(--neutral-800); border-radius: 2px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px;">
+            <div style="aspect-ratio: 2/1; background: var(--neutral-800); border-radius: 3px; padding: 3px;"><div style="height: 100%; background: linear-gradient(to top, transparent, rgba(245, 194, 74, 0.4));"></div></div>
+            <div style="aspect-ratio: 2/1; background: var(--neutral-800); border-radius: 3px;"></div>
+            <div style="aspect-ratio: 2/1; background: var(--neutral-800); border-radius: 3px;"></div>
+            <div style="aspect-ratio: 2/1; background: var(--neutral-800); border-radius: 3px;"></div>
+          </div>
+          <div style="flex: 1; background: var(--neutral-800); border-radius: 3px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">18 · ADMIN（Studio Dark）</span>
+        <h3>內部 Admin 儀表板</h3>
+        <p>KPI cards + sparkline + Provider routing + Credit breakdown + Run triage split view（左失敗清單、右錯誤詳情）</p>
+      </div>
+    </a>
+    <a href="19-auth.html" class="preview">
+      <div class="preview-thumb" style="background: var(--neutral-950); display: grid; grid-template-columns: 1fr 1fr; padding: 16px; gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; justify-content: center;">
+          <div style="height: 12px; background: var(--neutral-800); border-radius: 2px; width: 70%;"></div>
+          <div style="height: 6px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="display: flex; gap: 3px; margin-top: 4px;">
+            <div style="flex: 1; height: 14px; background: var(--neutral-800); border-radius: 3px;"></div>
+            <div style="flex: 1; height: 14px; background: var(--neutral-800); border-radius: 3px;"></div>
+            <div style="flex: 1; height: 14px; background: var(--neutral-800); border-radius: 3px;"></div>
+          </div>
+          <div style="height: 14px; background: var(--neutral-800); border-radius: 3px; margin-top: 6px;"></div>
+          <div style="height: 14px; background: var(--primary-500); border-radius: 3px;"></div>
+        </div>
+        <div style="background: radial-gradient(ellipse at 30% 40%, rgba(245, 194, 74, 0.15), transparent 70%), var(--neutral-900); border-radius: 6px; position: relative;">
+          <div style="position: absolute; top: 8px; right: 8px; width: 28px; aspect-ratio: 9/16; background: linear-gradient(135deg, #4A3A2A, #2A1F15); border-radius: 3px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">19 · AUTH</span>
+        <h3>登入 / 註冊（split layout）</h3>
+        <p>左表單（magic link 為主、3 OAuth、邀請制 hint） + 右 brand canvas（demo 影片 + 創作者 quote）</p>
+      </div>
+    </a>
+    <a href="20-workspace.html" class="preview">
+      <div class="preview-thumb" style="background: #0A0A0B; display: grid; grid-template-columns: 40px 1fr; padding: 10px; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="height: 14px; background: var(--surface-raised); border-radius: 3px;"></div>
+          <div style="height: 5px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 5px; background: rgba(245, 194, 74, 0.4); border-radius: 2px;"></div>
+          <div style="height: 5px; background: var(--neutral-800); border-radius: 2px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="display: flex; gap: 4px;">
+            <div style="height: 8px; background: var(--neutral-800); border-radius: 2px; width: 40%;"></div>
+            <div style="height: 8px; background: rgba(245, 194, 74, 0.4); border-radius: 2px; width: 30%;"></div>
+            <div style="height: 8px; background: var(--neutral-800); border-radius: 2px; width: 30%;"></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px; flex: 1;">
+            <div style="height: 12px; background: var(--neutral-800); border-radius: 2px;"></div>
+            <div style="height: 12px; background: var(--neutral-800); border-radius: 2px;"></div>
+            <div style="height: 12px; background: var(--neutral-800); border-radius: 2px;"></div>
+            <div style="height: 12px; background: rgba(245, 194, 74, 0.16); border-radius: 2px;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">20 · WORKSPACE</span>
+        <h3>Workspace 管理</h3>
+        <p>Settings tabs（General/Members/Billing/Models/Integrations/Audit）+ 多人 invite + role picker + Org cascade hint</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: Workspace 補洞 + V2 好設計 wire 進 -->
+  <div class="section-head">
+    <span class="label chip chip-gold">⚠ 補洞 — 漏掉的 workspace 管理</span>
+    <h2>36 / 37 / 38 — 補完 mockup 20 留的洞</h2>
+    <p>V2 audit 揭出 mockup 20 漏：workspace 一般設定 / 訂閱計費 / 模型偏好 / 整合 / 審計日誌 / EditRequest 審核。這 3 個新 mockup 補完整。</p>
+  </div>
+  <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <a href="36-workspace-general-billing.html" class="preview">
+      <div class="preview-thumb" style="background: #0A0A0B; display: grid; grid-template-columns: 40px 1fr; padding: 10px; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="height: 14px; background: var(--surface-raised); border-radius: 3px;"></div>
+          <div style="height: 5px; background: rgba(245, 194, 74, 0.4); border-radius: 2px;"></div>
+          <div style="height: 5px; background: var(--neutral-800); border-radius: 2px;"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="height: 18px; background: rgba(245, 194, 74, 0.12); border: 1px solid rgba(245, 194, 74, 0.3); border-radius: 4px; padding: 0 6px; display: flex; align-items: center; gap: 4px;">
+            <div style="font-size: 10px; color: var(--primary-400); font-weight: 600;">Studio</div>
+            <div style="margin-left: auto; font-size: 10px; color: var(--primary-400); font-family: 'JetBrains Mono', monospace;">$47/月</div>
+          </div>
+          <div style="height: 6px; background: var(--neutral-800); border-radius: 3px; overflow: hidden;"><div style="width: 63%; height: 100%; background: var(--primary-500);"></div></div>
+          <div style="height: 4px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 4px; background: var(--neutral-800); border-radius: 2px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">36 · GENERAL + BILLING</span>
+        <h3>Workspace 設定 + 計費</h3>
+        <p>workspace 名稱/slug/icon + 訂閱方案 + 月度使用進度 + 加購包記錄 + 發票歷史 + 危險區</p>
+      </div>
+    </a>
+    <a href="37-workspace-models-audit.html" class="preview">
+      <div class="preview-thumb" style="background: #0A0A0B; display: grid; grid-template-columns: 40px 1fr; padding: 10px; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="height: 5px; background: var(--neutral-800); border-radius: 2px;"></div>
+          <div style="height: 5px; background: rgba(245, 194, 74, 0.4); border-radius: 2px;"></div>
+          <div style="height: 5px; background: var(--neutral-800); border-radius: 2px;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;">
+          <div style="aspect-ratio: 1.4; background: rgba(245, 194, 74, 0.08); border: 1px solid rgba(245, 194, 74, 0.3); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1.4; background: rgba(124, 92, 255, 0.08); border: 1px solid rgba(124, 92, 255, 0.3); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1.4; background: rgba(74, 143, 229, 0.08); border: 1px solid rgba(74, 143, 229, 0.3); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1.4; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1.4; background: var(--neutral-800); border-radius: 3px;"></div>
+          <div style="aspect-ratio: 1.4; background: transparent; border: 1px dashed var(--surface-hairline); border-radius: 3px;"></div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">37 · MODELS + AUDIT</span>
+        <h3>模型偏好 + 整合 + 審計日誌</h3>
+        <p>5 provider 開關 / 智能路由視覺化 / Stripe-Slack-Webhook-SSO-API key 整合 / workspace+project audit 全分類</p>
+      </div>
+    </a>
+    <a href="38-edit-requests.html" class="preview">
+      <div class="preview-thumb" style="background: #0A0A0B; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="padding: 6px 8px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 4px; display: flex; gap: 6px; align-items: center;">
+          <div style="width: 14px; height: 14px; background: linear-gradient(135deg, #7C5CFF, #4A3AAF); border-radius: 50%;"></div>
+          <div style="flex: 1; height: 5px; background: var(--neutral-700); border-radius: 2px;"></div>
+          <div style="font-size: 9px; color: var(--warning); font-weight: 600;">12h</div>
+        </div>
+        <div style="padding: 6px 8px; background: var(--surface-raised); border-radius: 4px; display: flex; gap: 6px; align-items: center;">
+          <div style="width: 14px; height: 14px; background: linear-gradient(135deg, #4A8FE5, #2A5FB5); border-radius: 50%;"></div>
+          <div style="flex: 1; height: 5px; background: var(--neutral-700); border-radius: 2px;"></div>
+          <div style="font-size: 9px; color: var(--text-tertiary);">5d</div>
+        </div>
+        <div style="padding: 6px 8px; background: var(--surface-raised); border-radius: 4px; display: flex; gap: 6px; align-items: center;">
+          <div style="width: 14px; height: 14px; background: linear-gradient(135deg, #22C55E, #16803D); border-radius: 50%;"></div>
+          <div style="flex: 1; height: 5px; background: var(--neutral-700); border-radius: 2px;"></div>
+          <div style="font-size: 9px; color: var(--text-tertiary);">6d</div>
+        </div>
+      </div>
+      <div class="preview-body">
+        <span class="label">38 · EDIT REQUESTS</span>
+        <h3>編輯申請審核</h3>
+        <p>Viewer 申請編輯權限 → Owner 看到 pending list + 申請範圍 + 理由 + 影響評估 + 批准/拒絕 + duration 選擇</p>
+      </div>
+    </a>
+  </div>
+
+  <!-- Section: V2 既有好設計 -->
+  <div class="section-head">
+    <span class="label chip chip-accent">🔄 V2 既有好設計 wire 進新 mockup</span>
+    <h2>不要遷移時把好東西丟掉</h2>
+    <p>V2 audit 找出 3 個 V2 已有但 mockup 沒對到的好設計：autoGroup（08 加）/ mediaDisplayOverride（08 加）/ cross-browser task recovery（24 加）。已 inline 補進對應 mockup。</p>
+  </div>
+  <div style="max-width: 1280px; margin: 0 auto 32px; padding: 0 32px;">
+    <div style="padding: 22px 28px; background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--r-card); display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+      <div>
+        <div style="font-size: 11px; color: var(--success); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 6px;">✨ 自動分組（autoGroup）</div>
+        <div style="font-size: 13px; color: var(--text-primary); margin-bottom: 4px;">一鍵把連續鏡頭聚合成多鏡頭組</div>
+        <div style="font-size: 11px; color: var(--text-secondary);">已 wire 進 <a href="08-storyboard-v2.html" style="color: var(--accent-400);">08 storyboard timeline</a> 頂部</div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--success); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 6px;">📷 ↔ 🎬 媒體切換</div>
+        <div style="font-size: 13px; color: var(--text-primary); margin-bottom: 4px;">同 panel 切 image ↔ video，偏好記住</div>
+        <div style="font-size: 11px; color: var(--text-secondary);">已 wire 進 <a href="08-storyboard-v2.html" style="color: var(--accent-400);">08 stage mode banner</a> 右側</div>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--success); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 6px;">🔄 多裝置同步</div>
+        <div style="font-size: 13px; color: var(--text-primary); margin-bottom: 4px;">localStorage + server sync 隊友同 project 進度</div>
+        <div style="font-size: 11px; color: var(--text-secondary);">已 wire 進 <a href="24-render.html" style="color: var(--accent-400);">24 render queue progress hero</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: legacy + commercial -->
+  <div class="section-head">
+    <span class="label chip">舊版對照 + 商業</span>
+    <h2>對照組 + 訂閱方案</h2>
+  </div>
+  <div class="grid">
+    <a href="03-storyboard.html" class="preview">
+      <div class="preview-thumb thumb-storyboard"><div></div><div>9:16 panel</div><div></div></div>
+      <div class="preview-body">
+        <span class="label">03 · STORYBOARD v1</span>
+        <h3>Storyboard 3 欄工作區（基礎版）</h3>
+        <p>初版分鏡 — 跟 08 比較看 R2V/T2I→I2V mode 加上去的差別</p>
+      </div>
+    </a>
+    <a href="05-pricing.html" class="preview">
+      <div class="preview-thumb thumb-pricing"><div></div><div></div><div></div><div></div></div>
+      <div class="preview-body">
+        <span class="label">05 · COMMERCIAL</span>
+        <h3>Pricing 訂閱階梯</h3>
+        <p>Free / Creator / Studio / Team + 失敗免扣承諾</p>
+      </div>
+    </a>
+  </div>
+
+  <div class="footer">
+    <div class="container">
+      <span>KuiperAI Design Preview · token spec 出自 <span class="mono">REDESIGN_PLAN.md §3</span></span>
+      <span>open in browser → 滾動瀏覽每頁</span>
+    </div>
+  </div>
+</body>
+</html>

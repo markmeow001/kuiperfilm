@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · AI 短剧生成平台</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    /* Background: cinematic ambient */
+    body {
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 0%, rgba(124, 92, 255, 0.10), transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(245, 194, 74, 0.06), transparent 50%),
+        var(--surface-canvas);
+      min-height: 100vh;
+    }
+
+    /* Hero */
+    .hero {
+      padding: 120px 32px 80px;
+      max-width: 1100px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .hero .eyebrow {
+      display: inline-block;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: 84px;
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      font-weight: 600;
+      margin-bottom: 28px;
+    }
+    .hero h1 .accent {
+      background: linear-gradient(120deg, var(--primary-400), var(--primary-600));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .sub {
+      font-size: 20px;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin: 0 auto 40px;
+      line-height: 1.6;
+    }
+    .hero .cta-row { display: flex; gap: 14px; justify-content: center; }
+    .hero .trust {
+      margin-top: 56px;
+      font-size: 13px;
+      color: var(--text-tertiary);
+      display: flex; justify-content: center; gap: 32px;
+      flex-wrap: wrap;
+    }
+    .hero .trust span::before { content: '✓'; color: var(--success); margin-right: 6px; }
+
+    /* Hero video frame */
+    .hero-frame {
+      max-width: 980px;
+      margin: 64px auto 0;
+      aspect-ratio: 16/9;
+      background:
+        linear-gradient(135deg, rgba(124, 92, 255, 0.12), transparent 40%),
+        linear-gradient(225deg, rgba(245, 194, 74, 0.08), transparent 40%),
+        var(--neutral-900);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-hero);
+      box-shadow: var(--elev-3);
+      position: relative;
+      overflow: hidden;
+      display: grid; place-items: center;
+    }
+    .hero-frame::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 38px, rgba(255,255,255,0.02) 38px 39px),
+        repeating-linear-gradient(90deg, transparent 0 38px, rgba(255,255,255,0.02) 38px 39px);
+    }
+    .hero-frame .play {
+      width: 80px; height: 80px;
+      background: var(--primary-500);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      box-shadow: var(--accent-glow), 0 8px 32px rgba(245, 194, 74, 0.35);
+      cursor: pointer;
+      z-index: 1;
+    }
+    .hero-frame .play::after {
+      content: ''; width: 0; height: 0;
+      border-left: 22px solid var(--neutral-950);
+      border-top: 14px solid transparent;
+      border-bottom: 14px solid transparent;
+      margin-left: 6px;
+    }
+
+    /* Pipeline */
+    .pipeline {
+      padding: 120px 32px 80px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .pipeline-head { text-align: center; margin-bottom: 64px; }
+    .pipeline-head h2 { margin-bottom: 12px; }
+    .pipeline-head p { color: var(--text-secondary); font-size: 17px; }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .step {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      padding: 28px;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .step:hover { border-color: rgba(255,255,255,0.16); transform: translateY(-2px); }
+    .step .num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--primary-400);
+      letter-spacing: 0.1em;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .step h3 { font-size: 19px; margin-bottom: 8px; font-weight: 600; }
+    .step p { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+
+    /* Showcase */
+    .showcase {
+      padding: 80px 32px 120px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .showcase-head { display: flex; justify-content: space-between; align-items: end; margin-bottom: 32px; }
+    .showcase-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .showcase-item {
+      aspect-ratio: 9/16;
+      border-radius: var(--r-card);
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      transition: transform var(--d-state) var(--ease-out);
+    }
+    .showcase-item:hover { transform: scale(1.02); }
+    .showcase-item .bg {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+    }
+    .si-1 .bg { background: linear-gradient(135deg, #3a2a4a, #1a0d22); }
+    .si-2 .bg { background: linear-gradient(135deg, #2d2a3e, #0d0d1c); }
+    .si-3 .bg { background: linear-gradient(135deg, #4a3a2a, #221c0d); }
+    .si-4 .bg { background: linear-gradient(135deg, #2a3a4a, #0d1a22); }
+    .showcase-item .overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.85), transparent 50%);
+      padding: 20px;
+      display: flex; flex-direction: column; justify-content: end;
+    }
+    .showcase-item .title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .showcase-item .meta { font-size: 12px; color: var(--text-tertiary); }
+    .showcase-item .play-mini {
+      position: absolute; top: 16px; right: 16px;
+      width: 32px; height: 32px;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 10px;
+    }
+    .showcase-item .play-mini::after {
+      content: ''; width: 0; height: 0;
+      border-left: 8px solid var(--text-primary);
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      margin-left: 2px;
+    }
+
+    /* CTA strip */
+    .cta-strip {
+      max-width: 1100px; margin: 0 auto 80px;
+      padding: 64px;
+      background:
+        radial-gradient(ellipse at center, rgba(245, 194, 74, 0.10), transparent 70%),
+        var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-hero);
+      text-align: center;
+    }
+    .cta-strip h2 { margin-bottom: 12px; }
+    .cta-strip p { color: var(--text-secondary); margin-bottom: 28px; }
+    .cta-strip .cta-row { display: flex; gap: 14px; justify-content: center; }
+  </style>
+</head>
+<body>
+  <!-- Top nav -->
+  <header class="topnav">
+    <div class="brand">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+    <nav>
+      <a href="#" data-i18n="l.nav.product">产品</a>
+      <a href="#" data-i18n="l.nav.examples">范例</a>
+      <a href="05-pricing.html" data-i18n="l.nav.pricing">定价</a>
+      <a href="#" data-i18n="l.nav.docs">文档</a>
+    </nav>
+    <div class="actions">
+      <div class="lang-switcher" role="group" aria-label="Language">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="19-auth.html" class="btn btn-ghost" data-i18n="l.nav.login">登入</a>
+      <a href="02-home.html" class="btn btn-primary" data-i18n="l.nav.signup">开始创作 →</a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <span class="eyebrow chip chip-accent" data-i18n="l.eyebrow">⚡ 全新 Cinema 2.0 上线 — 多镜头 1 分钟出片</span>
+    <h1>
+      <span data-i18n="l.hero-1">把</span> <span class="accent" data-i18n="l.hero-2">剧本</span> <span data-i18n="l.hero-3">变成</span><br/>
+      <span data-i18n="l.hero-4">值得发在小红书的短剧</span>
+    </h1>
+    <p class="sub" data-i18n="l.sub">
+      上传剧本，AI 接力做：拆镜、选角、配音、出片。多家视讯模型在后面跑，你只看到一个画布跟结果。
+    </p>
+    <div class="cta-row">
+      <a href="02-home.html" class="btn btn-primary btn-lg" data-i18n="l.cta-try">免费试做第一集 →</a>
+      <a href="#" class="btn btn-ghost btn-lg" data-i18n="l.cta-demo">▶ 看 2 分钟 Demo</a>
+    </div>
+    <div class="trust">
+      <span data-i18n="l.trust.no-card">无需信用卡</span>
+      <span data-i18n="l.trust.no-charge">失败不扣点数</span>
+      <span data-i18n="l.trust.providers">支持 5 家视讯模型</span>
+    </div>
+
+    <!-- Hero video showcase -->
+    <div class="hero-frame">
+      <div class="play"></div>
+    </div>
+  </section>
+
+  <!-- Pipeline -->
+  <section class="pipeline">
+    <div class="pipeline-head">
+      <span class="label" data-i18n="l.pipeline.label">创作流程</span>
+      <h2 class="display-3" data-i18n="l.pipeline.title">六步从剧本到成片</h2>
+      <p data-i18n="l.pipeline.sub">每一步都看得到、改得动 — 不是 prompt 一键生成的黑盒</p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <span class="num">STEP 01</span>
+        <h3 data-i18n="l.pipeline.s1-t">剧本上传</h3>
+        <p data-i18n="l.pipeline.s1-d">贴剧本、丢 .docx、或让 AI 从一句概念展开。自动拆集、分场。</p>
+      </div>
+      <div class="step">
+        <span class="num">STEP 02</span>
+        <h3 data-i18n="l.pipeline.s2-t">主体建立</h3>
+        <p data-i18n="l.pipeline.s2-d">角色、场景、道具自动抽取，每个都是可重用的 first-class 物件。一次定义，全片风格锁定。</p>
+      </div>
+      <div class="step">
+        <span class="num">STEP 03</span>
+        <h3 data-i18n="l.pipeline.s3-t">分镜编辑</h3>
+        <p data-i18n="l.pipeline.s3-d">每镜可改、可换模型、可指定镜头运动 — 70+ 导演级运镜 preset 可叠三层。</p>
+      </div>
+      <div class="step">
+        <span class="num">STEP 04</span>
+        <h3 data-i18n="l.pipeline.s4-t">配音生成</h3>
+        <p data-i18n="l.pipeline.s4-d">多语 TTS 自动配对白，可选音色、改情绪、调语速。中英日韩西全支援。</p>
+      </div>
+      <div class="step">
+        <span class="num">STEP 05</span>
+        <h3 data-i18n="l.pipeline.s5-t">视讯渲染</h3>
+        <p data-i18n="l.pipeline.s5-d">多家模型同步跑：火山 ARK / Tencent / BobAPI / AtlasCloud / fal — 你看到的只有「点数」。</p>
+      </div>
+      <div class="step">
+        <span class="num">STEP 06</span>
+        <h3 data-i18n="l.pipeline.s6-t">剪辑出片</h3>
+        <p data-i18n="l.pipeline.s6-d">合成、加 BGM、烧字幕、输出竖屏 / 横屏。一键发 IG、抖音、小红书。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Showcase -->
+  <section class="showcase">
+    <div class="showcase-head">
+      <div>
+        <span class="label" data-i18n="l.showcase.eyebrow">本周精选</span>
+        <h2 class="display-3" style="margin-top: 8px;" data-i18n="l.showcase.title">创作者用 KuiperAI 拍的</h2>
+      </div>
+      <a href="#" class="btn btn-ghost" data-i18n="l.showcase.all">看全部 →</a>
+    </div>
+    <div class="showcase-grid">
+      <div class="showcase-item si-1">
+        <div class="bg"></div>
+        <div class="play-mini"></div>
+        <div class="overlay">
+          <div class="title">霧城獵人 · EP1</div>
+          <div class="meta">@林夕 · 1.2 萬贊</div>
+        </div>
+      </div>
+      <div class="showcase-item si-2">
+        <div class="bg"></div>
+        <div class="play-mini"></div>
+        <div class="overlay">
+          <div class="title">時光寄信人</div>
+          <div class="meta">@夜歸人 · 8,420 贊</div>
+        </div>
+      </div>
+      <div class="showcase-item si-3">
+        <div class="bg"></div>
+        <div class="play-mini"></div>
+        <div class="overlay">
+          <div class="title">沙漠遺骨</div>
+          <div class="meta">@古星圖 · 6,103 贊</div>
+        </div>
+      </div>
+      <div class="showcase-item si-4">
+        <div class="bg"></div>
+        <div class="play-mini"></div>
+        <div class="overlay">
+          <div class="title">深海訪客</div>
+          <div class="meta">@小海 · 4,872 贊</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA strip -->
+  <section class="cta-strip">
+    <h2 class="display-3" data-i18n="l.cta-strip.title">免费试做第一集</h2>
+    <p class="body-lg" data-i18n="l.cta-strip.sub">100 点数每天送，不卡信用卡 · 失败不扣点 · 三分钟出片</p>
+    <div class="cta-row">
+      <a href="02-home.html" class="btn btn-primary btn-lg" data-i18n="l.cta-strip.start">立即开始 →</a>
+      <a href="05-pricing.html" class="btn btn-ghost btn-lg" data-i18n="l.cta-strip.pricing">看订阅方案</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <span data-i18n="l.footer">© 2026 KuiperAI · 短剧生成平台</span>
+      <span><a href="index.html" style="color: inherit;">← 回 Preview Hub</a></span>
+    </div>
+  </footer>
+</body>
+</html>

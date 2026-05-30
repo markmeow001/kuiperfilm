@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 生成中</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background:
+        radial-gradient(ellipse 90% 70% at 50% 40%, rgba(124, 92, 255, 0.06), transparent 60%),
+        var(--surface-canvas);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    /* Minimal top */
+    .min-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .min-top .brand { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+    .min-top .brand-mark {
+      width: 22px; height: 22px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 12px;
+    }
+
+    /* Stage */
+    .stage {
+      flex: 1;
+      display: grid; place-items: center;
+      padding: 80px 32px 120px;
+      position: relative;
+    }
+
+    /* The frame */
+    .gen-frame-wrap {
+      position: relative;
+      padding: 24px;
+    }
+    .gen-frame {
+      aspect-ratio: 9/16;
+      height: 540px;
+      border-radius: var(--r-card);
+      background: var(--neutral-900);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--surface-hairline);
+      box-shadow:
+        0 0 120px rgba(124, 92, 255, 0.35),
+        0 0 60px rgba(124, 92, 255, 0.25),
+        var(--elev-3);
+    }
+    /* Pulsing accent ring */
+    .gen-frame::before {
+      content: '';
+      position: absolute; inset: -2px;
+      border-radius: var(--r-card);
+      background: linear-gradient(135deg, var(--accent-500), transparent 30%, var(--accent-400) 70%, transparent);
+      z-index: -1;
+      filter: blur(12px);
+      opacity: 0.7;
+      animation: ring-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes ring-pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 0.9; transform: scale(1.02); }
+    }
+    /* Scanning shimmer band */
+    .gen-frame::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, transparent, rgba(155, 130, 255, 0.18) 50%, transparent);
+      animation: scan 3s ease-in-out infinite;
+    }
+    @keyframes scan {
+      0% { transform: translateY(-100%); }
+      100% { transform: translateY(100%); }
+    }
+    .gen-frame .latent {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 30% 40%, rgba(80, 60, 120, 0.4), transparent 50%),
+        radial-gradient(ellipse at 70% 70%, rgba(40, 30, 80, 0.5), transparent 60%),
+        linear-gradient(180deg, #1a1830 0%, #0a0a1c 100%);
+      filter: blur(2px);
+    }
+    .gen-frame .grid {
+      position: absolute; inset: 0;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 40px, rgba(255,255,255,0.02) 40px 41px),
+        repeating-linear-gradient(90deg, transparent 0 40px, rgba(255,255,255,0.02) 40px 41px);
+    }
+
+    /* Ghost-typing description */
+    .gen-meta {
+      max-width: 540px;
+      margin: 48px auto 0;
+      text-align: center;
+    }
+    .gen-status {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px;
+      background: rgba(124, 92, 255, 0.12);
+      border: 1px solid rgba(124, 92, 255, 0.3);
+      color: var(--accent-400);
+      border-radius: var(--r-pill);
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 20px;
+    }
+    .gen-status .dot {
+      width: 6px; height: 6px;
+      background: var(--accent-400);
+      border-radius: 50%;
+      animation: pulse-soft 1s ease-in-out infinite;
+    }
+    .gen-ghost {
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      line-height: 1.4;
+      margin-bottom: 16px;
+    }
+    .gen-ghost .typing {
+      display: inline-block;
+      color: var(--text-tertiary);
+      border-right: 2px solid var(--accent-400);
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { border-color: transparent; } }
+    .gen-eta {
+      font-size: 13px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Side context (rail) */
+    .gen-side {
+      position: absolute;
+      right: 32px; top: 50%;
+      transform: translateY(-50%);
+      width: 280px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .rail-title {
+      font-size: 11px; color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-bottom: 12px;
+      padding: 0 4px;
+      font-weight: 500;
+    }
+    .rail-card {
+      padding: 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .rail-card .rthumb {
+      width: 42px; height: 64px;
+      background: linear-gradient(135deg, #2D2A4A, #1A1530);
+      border-radius: 4px;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .rail-card .rthumb.ready { background: linear-gradient(135deg, #6A4A2A, #3A2515); }
+    .rail-card .rthumb.queued { background: var(--neutral-800); }
+    .rail-card .info { flex: 1; min-width: 0; }
+    .rail-card .rtitle {
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .rail-card .rmeta {
+      font-size: 11px; color: var(--text-tertiary);
+      margin-top: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rail-card .rmeta .pdot {
+      width: 5px; height: 5px; border-radius: 50%;
+    }
+    .rail-card .rmeta .pdot.gen { background: var(--accent-400); animation: pulse-soft 1.2s ease-in-out infinite; }
+    .rail-card .rmeta .pdot.done { background: var(--success); }
+    .rail-card .rmeta .pdot.wait { background: var(--text-tertiary); }
+    .rail-card.active {
+      border-color: rgba(124, 92, 255, 0.4);
+      background: rgba(124, 92, 255, 0.06);
+    }
+
+    /* Left rail: actions */
+    .gen-actions {
+      position: absolute;
+      left: 32px; top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .gen-actions .iconbtn {
+      width: 44px; height: 44px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: var(--r-input);
+      display: grid; place-items: center;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .gen-actions .iconbtn:hover {
+      color: var(--text-primary);
+      border-color: rgba(255,255,255,0.16);
+      background: var(--surface-overlay);
+    }
+
+    /* Bottom escape strip */
+    .escape {
+      position: fixed;
+      bottom: 24px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; gap: 8px;
+      padding: 6px;
+      background: rgba(15, 15, 15, 0.7);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+    }
+    .escape .ebtn {
+      padding: 8px 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      background: transparent;
+      border: none;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .escape .ebtn:hover { color: var(--text-primary); background: var(--surface-raised); }
+    .escape .ebtn.primary { color: var(--primary-400); }
+  </style>
+</head>
+<body>
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html">專案</a>
+        <span class="sep">›</span>
+        <a href="13-narrative-editor.html">霧城獵人</a>
+        <span class="sep">›</span>
+        <span class="current">EP 03 · 渲染中</span>
+      </div>
+    </div>
+    <div class="stepper">
+      <a class="step done" href="06-script-input.html" data-i18n="ws.step.script">剧本</a>
+      <a class="step done" href="07-pre-generation.html" data-i18n="ws.step.analyze">分析</a>
+      <a class="step done" href="13-narrative-editor.html" data-i18n="ws.step.storyboard">分镜</a>
+      <a class="step done" href="23-voice.html" data-i18n="ws.step.voice">配音</a>
+      <a class="step active" data-i18n="ws.step.render">渲染</a>
+      <a class="step" href="25-final.html" data-i18n="ws.step.final">成片</a>
+    </div>
+    <div class="ws-top-right">
+      <span class="chip chip-accent">● <span data-i18n="r.status.running">渲染中</span></span>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn-ghost" href="13-narrative-editor.html" data-i18n="g.background">背景执行 ↗</a>
+    </div>
+  </header>
+
+  <div class="stage">
+
+    <!-- Left action rail -->
+    <div class="gen-actions">
+      <button class="iconbtn" title="上一鏡">↑</button>
+      <button class="iconbtn" title="下一鏡">↓</button>
+      <div style="height: 1px; background: var(--surface-hairline); margin: 4px 0;"></div>
+      <button class="iconbtn" title="鎖定">🔒</button>
+      <button class="iconbtn" title="收藏">★</button>
+    </div>
+
+    <!-- Center frame + meta -->
+    <div style="text-align: center;">
+      <div class="gen-frame-wrap">
+        <div class="gen-frame">
+          <div class="latent"></div>
+          <div class="grid"></div>
+        </div>
+      </div>
+
+      <div class="gen-meta">
+        <div class="gen-status">
+          <div class="dot"></div>
+          <span>ARK SEEDANCE 2.0 · I2V · 高品質</span>
+        </div>
+        <div class="gen-ghost">
+          夜色濃稠，獵人手持油燈步入無人巷弄。<span class="typing">燈光勉強照亮三步之內，遠處黑霧如活物般</span>
+        </div>
+        <div class="gen-eta">預估 1 分 23 秒 · 已執行 22 秒 · 失敗不扣點數</div>
+      </div>
+    </div>
+
+    <!-- Right queue rail -->
+    <div class="gen-side">
+      <div class="rail-title" data-i18n="g.queue.title">本次任务隊列</div>
+
+      <div class="rail-card">
+        <div class="rthumb ready"></div>
+        <div class="info">
+          <div class="rtitle">街口霧氣升起</div>
+          <div class="rmeta"><div class="pdot done"></div> 完成 · ARK · 18s</div>
+        </div>
+      </div>
+
+      <div class="rail-card">
+        <div class="rthumb ready"></div>
+        <div class="info">
+          <div class="rtitle">主角抬頭看天</div>
+          <div class="rmeta"><div class="pdot done"></div> 完成 · ARK · 14s</div>
+        </div>
+      </div>
+
+      <div class="rail-card active">
+        <div class="rthumb"></div>
+        <div class="info">
+          <div class="rtitle">獵人持燈走進巷弄</div>
+          <div class="rmeta"><div class="pdot gen"></div> 生成中 · 22s</div>
+        </div>
+      </div>
+
+      <div class="rail-card">
+        <div class="rthumb queued"></div>
+        <div class="info">
+          <div class="rtitle">霧中浮現黑影</div>
+          <div class="rmeta"><div class="pdot wait"></div> 排隊 · BobAPI</div>
+        </div>
+      </div>
+
+      <div class="rail-card">
+        <div class="rthumb queued"></div>
+        <div class="info">
+          <div class="rtitle">獵人持槍對峙</div>
+          <div class="rmeta"><div class="pdot wait"></div> 排隊 · ARK</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="escape">
+    <a class="ebtn" href="13-narrative-editor.html" data-i18n="g.return">← 回分镜</a>
+    <a class="ebtn" href="13-narrative-editor.html" data-i18n="g.background">背景执行</a>
+    <a class="ebtn primary" href="13-narrative-editor.html" data-i18n="g.notify">完成后通知我</a>
+  </div>
+</body>
+</html>

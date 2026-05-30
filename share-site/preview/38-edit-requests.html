@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 编辑申请审核</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { background: #0A0A0B; display: flex; min-height: 100vh; }
+
+    .side { width: 240px; flex-shrink: 0; background: #0A0A0B; border-right: 1px solid var(--surface-hairline); padding: 16px 12px; display: flex; flex-direction: column; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; font-size: 13px; font-weight: 600; }
+    .brand .mark { width: 22px; height: 22px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 11px; }
+    .ws-switch { padding: 10px 12px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); margin-bottom: 18px; }
+    .ws-switch .label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; font-weight: 500; }
+    .ws-switch .name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+    .ws-switch .name::after { content: '⌄'; margin-left: auto; color: var(--text-tertiary); }
+    .ws-switch .wmark { width: 18px; height: 18px; background: linear-gradient(135deg, #7C5CFF, #4A3AAF); border-radius: 4px; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: white; }
+    .nav-group { margin-bottom: 14px; }
+    .nav-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.1em; padding: 0 8px 6px; font-weight: 500; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--r-input); color: var(--text-secondary); text-decoration: none; font-size: 13px; margin-bottom: 1px; }
+    .nav-item:hover { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item.active { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item .icon { width: 16px; color: var(--text-tertiary); }
+    .nav-item.active .icon { color: var(--primary-400); }
+    .nav-item .badge { margin-left: auto; padding: 1px 6px; background: var(--surface-overlay); border-radius: var(--r-pill); font-size: 10px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+
+    .main { flex: 1; overflow-y: auto; }
+    .main-top { display: flex; justify-content: space-between; align-items: end; padding: 32px 40px 22px; border-bottom: 1px solid var(--surface-hairline); }
+    .main-top .ti { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 4px; }
+    .main-top .sb { font-size: 13px; color: var(--text-secondary); }
+
+    /* Status tabs */
+    .status-tabs {
+      display: flex; padding: 0 40px;
+      gap: 4px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .status-tab {
+      padding: 12px 16px 14px;
+      background: transparent; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-tertiary);
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      margin-bottom: -1px;
+    }
+    .status-tab:hover { color: var(--text-primary); }
+    .status-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--warning);
+      font-weight: 600;
+    }
+    .status-tab .count {
+      padding: 1px 6px; margin-left: 4px;
+      background: rgba(245, 158, 11, 0.16);
+      color: var(--warning);
+      border-radius: var(--r-pill);
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+    .status-tab.approved .count { background: rgba(34, 197, 94, 0.16); color: var(--success); }
+    .status-tab.denied .count { background: rgba(239, 68, 68, 0.16); color: var(--error); }
+
+    /* Content */
+    .content { padding: 32px 40px 80px; max-width: 1080px; }
+
+    .request-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      margin-bottom: 14px;
+      transition: border-color var(--d-hover) var(--ease-out);
+    }
+    .request-card.pending { border-color: rgba(245, 158, 11, 0.3); }
+    .request-card.expiring-soon { border-color: rgba(239, 68, 68, 0.3); }
+
+    .card-head {
+      display: flex; align-items: center; gap: 16px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--surface-hairline);
+      background: rgba(10, 10, 10, 0.3);
+    }
+    .card-head .av {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, #7C5CFF, #4A3AAF);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 17px; font-weight: 700; color: white;
+      flex-shrink: 0;
+    }
+    .card-head .av.green { background: linear-gradient(135deg, #22C55E, #16803D); }
+    .card-head .av.blue { background: linear-gradient(135deg, #4A8FE5, #2A5FB5); }
+    .card-head .info { flex: 1; }
+    .card-head .who {
+      font-size: 14px; font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 4px;
+    }
+    .card-head .who .role-pill {
+      padding: 2px 8px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 10px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .card-head .submitted {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .card-head .expires {
+      text-align: right;
+    }
+    .card-head .expires .label {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .card-head .expires .v {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--warning);
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 2px;
+    }
+    .card-head .expires .v.soon { color: var(--error); }
+
+    .card-body { padding: 18px 22px 20px; }
+
+    .request-detail {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 12px 18px;
+      margin-bottom: 18px;
+      font-size: 13px;
+    }
+    .request-detail .label {
+      color: var(--text-tertiary);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+      padding-top: 2px;
+    }
+    .request-detail .value {
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+    .request-detail .value .scope-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .request-detail .value .scope-chip {
+      padding: 3px 10px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .request-detail .value .scope-chip.episode { color: var(--primary-400); border-color: rgba(245, 194, 74, 0.3); }
+    .request-detail .value .scope-chip.element { color: var(--accent-400); border-color: rgba(124, 92, 255, 0.3); }
+    .request-detail .reason-text {
+      padding: 12px 14px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      font-style: italic;
+    }
+    .request-detail .reason-text::before { content: '" '; color: var(--text-tertiary); }
+    .request-detail .reason-text::after { content: ' "'; color: var(--text-tertiary); }
+
+    /* Actions */
+    .card-actions {
+      display: flex; gap: 8px; align-items: center;
+      padding-top: 16px;
+      border-top: 1px solid var(--surface-hairline);
+    }
+    .duration-select {
+      padding: 7px 12px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-primary);
+      font-size: 12px;
+      cursor: pointer;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%);
+      background-position: right 12px center;
+      background-size: 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 28px;
+      margin-right: auto;
+    }
+
+    .btn-approve {
+      background: rgba(34, 197, 94, 0.16);
+      color: var(--success);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: var(--r-input);
+      cursor: pointer;
+    }
+    .btn-deny {
+      background: rgba(239, 68, 68, 0.08);
+      color: var(--error);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 8px 16px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: var(--r-input);
+      cursor: pointer;
+    }
+
+    /* Empty state */
+    .empty-state {
+      padding: 80px 40px;
+      text-align: center;
+    }
+    .empty-state .icon {
+      font-size: 56px;
+      color: var(--text-tertiary);
+      opacity: 0.5;
+      margin-bottom: 16px;
+    }
+    .empty-state h3 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    .empty-state p { font-size: 13px; color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+
+    <div class="ws-switch">
+      <div class="label">Workspace</div>
+      <div class="name">
+        <div class="wmark">F</div>
+        Filmstar Studio
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Workspace</div>
+      <a class="nav-item" href="#"><span class="icon">▣</span> <span data-i18n="h.sidebar.projects">项目</span> <span class="badge">12</span></a>
+      <a class="nav-item" href="20-workspace.html"><span class="icon">◐</span> <span data-i18n="w.tab.members">Members</span> <span class="badge">7</span></a>
+      <a class="nav-item" href="36-workspace-general-billing.html"><span class="icon">⚙</span> <span data-i18n="wgb.general">基本资料</span></a>
+      <a class="nav-item" href="37-workspace-models-audit.html"><span class="icon">⌥</span> <span data-i18n="wmi.models">模型</span></a>
+      <a class="nav-item" href="37-workspace-models-audit.html"><span class="icon">↩</span> <span data-i18n="wmi.audit">审计日志</span></a>
+      <a class="nav-item active" href="#"><span class="icon">⏳</span> <span data-i18n="er.title">编辑申请</span> <span class="badge" style="color: var(--warning); background: rgba(245, 158, 11, 0.16);">3</span></a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Organization</div>
+      <a class="nav-item" href="18-admin.html"><span class="icon">⊡</span> Org Console</a>
+      <a class="nav-item" href="#"><span class="icon">⊕</span> Switch workspace…</a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="main-top">
+      <div>
+        <div class="ti" data-i18n="er.title">编辑申请审核</div>
+        <div class="sb">查看者申请暂时编辑权限。批准后会自动通知申请人 + audit log 记录</div>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <div class="lang-switcher">
+          <button type="button" data-lang="zh" class="active">中</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-tabs">
+      <button class="status-tab active"><span data-i18n="er.pending">待审核</span> <span class="count">3</span></button>
+      <button class="status-tab approved"><span data-i18n="er.approved">已批准</span> <span class="count">12</span></button>
+      <button class="status-tab denied"><span data-i18n="er.denied">已拒绝</span> <span class="count">2</span></button>
+      <button class="status-tab"><span data-i18n="er.expired">已过期</span> <span class="count">5</span></button>
+    </div>
+
+    <div class="content">
+
+      <!-- Request 1: 最紧急 (12h to expire) -->
+      <div class="request-card pending expiring-soon">
+        <div class="card-head">
+          <div class="av">夜</div>
+          <div class="info">
+            <div class="who">
+              夜歸人 <span class="role-pill">Viewer</span>
+            </div>
+            <div class="submitted">2026-05-28 22:31 · 16 小时前</div>
+          </div>
+          <div class="expires">
+            <div class="label" data-i18n="er.expires-in">将过期</div>
+            <div class="v soon">12 小时</div>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="request-detail">
+            <div class="label" data-i18n="er.scope">编辑范围</div>
+            <div class="value">
+              <div class="scope-chips">
+                <span class="scope-chip episode">EP 3 · 时光寄信人</span>
+                <span class="scope-chip element">@阿信</span>
+                <span class="scope-chip element">@老婆婆</span>
+                <span class="scope-chip">配音对白</span>
+              </div>
+            </div>
+
+            <div class="label" data-i18n="er.reason">申请理由</div>
+            <div class="value">
+              <div class="reason-text">导演要求 EP3 配音重新录制，对白时长不对齐。我可以处理但需要编辑权限。先试 24 小时，处理完会主动退出。</div>
+            </div>
+
+            <div class="label">范围影响</div>
+            <div class="value" style="font-size: 12px; color: var(--text-tertiary);">
+              ✓ 不能改 workspace 设置 · ✓ 不能改 billing · ✓ 不能删除项目 · 可改 EP3 内对白与 Element
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <select class="duration-select">
+              <option>临时 24 小时</option>
+              <option>临时 7 天</option>
+              <option>临时 30 天</option>
+              <option>永久编辑权限</option>
+            </select>
+            <button class="btn-deny" data-i18n="er.deny">✕ 拒绝</button>
+            <button class="btn-approve" data-i18n="er.approve">✓ 批准</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Request 2 -->
+      <div class="request-card pending">
+        <div class="card-head">
+          <div class="av blue">古</div>
+          <div class="info">
+            <div class="who">
+              古星圖 <span class="role-pill">Editor</span>
+            </div>
+            <div class="submitted">2026-05-29 12:18 · 3 小时前</div>
+          </div>
+          <div class="expires">
+            <div class="label" data-i18n="er.expires-in">将过期</div>
+            <div class="v">5 天</div>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="request-detail">
+            <div class="label" data-i18n="er.scope">编辑范围</div>
+            <div class="value">
+              <div class="scope-chips">
+                <span class="scope-chip">workspace settings · 模型偏好</span>
+              </div>
+            </div>
+
+            <div class="label" data-i18n="er.reason">申请理由</div>
+            <div class="value">
+              <div class="reason-text">我想测试加入 BobAPI Seedance 看在我们这种暗景场景的效果。需要 workspace 模型设置的暂时编辑权限。</div>
+            </div>
+
+            <div class="label">范围影响</div>
+            <div class="value" style="font-size: 12px; color: var(--text-tertiary);">
+              ⚠ 改 workspace 模型偏好会影响所有 project 的智能路由
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <select class="duration-select">
+              <option>临时 7 天</option>
+              <option>临时 24 小时</option>
+              <option>临时 30 天</option>
+              <option>永久</option>
+            </select>
+            <button class="btn-deny" data-i18n="er.deny">✕ 拒绝</button>
+            <button class="btn-approve" data-i18n="er.approve">✓ 批准</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Request 3 -->
+      <div class="request-card pending">
+        <div class="card-head">
+          <div class="av green">小</div>
+          <div class="info">
+            <div class="who">
+              小海 <span class="role-pill">Editor</span>
+            </div>
+            <div class="submitted">2026-05-29 10:15 · 5 小时前</div>
+          </div>
+          <div class="expires">
+            <div class="label" data-i18n="er.expires-in">将过期</div>
+            <div class="v">6 天</div>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="request-detail">
+            <div class="label" data-i18n="er.scope">编辑范围</div>
+            <div class="value">
+              <div class="scope-chips">
+                <span class="scope-chip element">@林夜 · 跨专案编辑</span>
+              </div>
+            </div>
+
+            <div class="label" data-i18n="er.reason">申请理由</div>
+            <div class="value">
+              <div class="reason-text">霧城獵人系列 4 个 spinoff 都用同一个 @林夜 角色。想统一调整 v3 造型的细节（鬍渣淡一点）。需要跨这 4 个项目的 element 编辑权限。</div>
+            </div>
+
+            <div class="label">范围影响</div>
+            <div class="value" style="font-size: 12px; color: var(--text-tertiary);">
+              ⚠ 改 @林夜 v3 会影响 4 个 spinoff 已生成的 27 个 panel · 建议先 fork 新版本
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <select class="duration-select">
+              <option>临时 7 天</option>
+              <option>临时 24 小时</option>
+              <option>临时 30 天</option>
+              <option>永久</option>
+            </select>
+            <button class="btn-deny" data-i18n="er.deny">✕ 拒绝</button>
+            <button class="btn-approve" data-i18n="er.approve">✓ 批准</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</body>
+</html>

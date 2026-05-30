@@ -1,0 +1,1789 @@
+openapi: 3.1.0
+info:
+  title: KuiperAI Public API
+  version: 1.0.0
+  description: |
+    短劇 AI 生成平台的 REST API。讀法參考 K-openapi-spec.md。
+    - 25 個高槓桿 endpoint 寫完整 request/response
+    - 其餘 96 個用 summary（method + path + operationId + tag），實作時參考同 tag 範本
+  contact: { name: KuiperAI Team, email: api@kuiperfilmailab.com }
+
+servers:
+  - url: https://api.kuiperfilmailab.com
+    description: Production
+  - url: https://staging-api.kuiperfilmailab.com
+    description: Staging
+  - url: http://localhost:4010
+    description: Local mock (prism)
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Workspaces
+  - name: Projects
+  - name: Episodes
+  - name: Panels
+  - name: Subjects
+    description: Character / Location / Prop
+  - name: Runs
+  - name: Voice
+  - name: Render
+  - name: Share
+  - name: Discover
+  - name: Notifications
+  - name: Versions
+  - name: Admin
+  - name: Onboarding
+  - name: Webhooks
+  - name: EditRequests
+
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+
+  # ════════════════════════════════════════════════════════
+  # 1. PANELS — 25 個高槓桿之 1-5
+  # ════════════════════════════════════════════════════════
+
+  /panels/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PanelId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: getPanel
+      tags: [Panels]
+      summary: 取得 panel 完整資料含版本歷史
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Panel' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/InsufficientPermission' }
+        '404': { $ref: '#/components/responses/ResourceNotFound' }
+    patch:
+      operationId: updatePanel
+      tags: [Panels]
+      summary: 更新 panel 欄位（含 optimistic lock）
+      parameters:
+        - name: If-Match
+          in: header
+          description: 必帶 panel.version，避免覆蓋他人改動
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string, maxLength: 5000 }
+                sceneContext: { type: string, maxLength: 2000 }
+                motionLine: { type: string, maxLength: 500 }
+                generationMode: { $ref: '#/components/schemas/GenerationMode' }
+                perShotProvider: { type: string, nullable: true }
+                targetDuration: { type: number, minimum: 2, maximum: 15 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Panel' } }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleViolation' }
+    delete:
+      operationId: deletePanel
+      tags: [Panels]
+      responses:
+        '204': { description: Deleted }
+
+  /panels/{id}:regenerate:
+    parameters:
+      - $ref: '#/components/parameters/PanelId'
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: regeneratePanel
+      tags: [Panels, Runs]
+      summary: 重新生成 panel，回傳啟動的 Run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, mode]
+              properties:
+                provider: { $ref: '#/components/schemas/ProviderModelKey' }
+                mode: { $ref: '#/components/schemas/GenerationMode' }
+                asNewVersion:
+                  type: boolean
+                  default: true
+                  description: false → 直接覆蓋當前 version
+      responses:
+        '202':
+          description: Accepted, run created
+          headers:
+            Location:
+              schema: { type: string }
+              description: /runs/{id}
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Run' } }
+        '402':
+          description: Insufficient credits
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /panels:bulk-regenerate:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: bulkRegeneratePanels
+      tags: [Panels, Runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [panelIds, provider, mode]
+              properties:
+                panelIds:
+                  type: array
+                  items: { type: string }
+                  minItems: 1
+                  maxItems: 50
+                provider: { type: string }
+                mode: { $ref: '#/components/schemas/GenerationMode' }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          runs:
+                            type: array
+                            items: { $ref: '#/components/schemas/Run' }
+                          totalCreditsEstimated: { type: integer }
+
+  /episodes/{id}/panels:
+    parameters:
+      - $ref: '#/components/parameters/EpisodeId'
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+    get:
+      operationId: listEpisodePanels
+      tags: [Panels, Episodes]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Panel' }
+
+  # ════════════════════════════════════════════════════════
+  # 2. EPISODES & SCRIPT — 高槓桿 6-8
+  # ════════════════════════════════════════════════════════
+
+  /projects/{id}/episodes:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: listProjectEpisodes
+      tags: [Episodes]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Episode' }
+    post:
+      operationId: createEpisode
+      tags: [Episodes]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200 }
+                scriptText: { type: string, maxLength: 100000 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Episode' } }
+
+  /projects/{id}/script:upload:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: uploadScript
+      tags: [Episodes]
+      summary: 上傳 .docx/.txt/.md 自動拆集
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                mode:
+                  type: string
+                  enum: [TABLE, MARKERS, PROSE]
+                  default: PROSE
+                  description: 解析模式
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          episodes:
+                            type: array
+                            items: { $ref: '#/components/schemas/Episode' }
+                          scriptRunId: { type: string }
+        '413':
+          description: File too large (max 10MB)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '415':
+          description: Unsupported file type
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /scripts:analyze:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: analyzeScript
+      tags: [Episodes]
+      summary: 用 LLM 分析劇本拆鏡 + 推測角色/場景/道具
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scriptText, projectId]
+              properties:
+                scriptText: { type: string, maxLength: 50000 }
+                projectId: { type: string }
+                language: { $ref: '#/components/schemas/Language' }
+                pace:
+                  type: string
+                  enum: [AMBIENT, FAST_HOOK]
+                  default: FAST_HOOK
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Run' } }
+
+  # ════════════════════════════════════════════════════════
+  # 3. RUNS — 高槓桿 9-11
+  # ════════════════════════════════════════════════════════
+
+  /runs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, pattern: '^run_[0-9a-zA-Z]{26}$' }
+    get:
+      operationId: getRun
+      tags: [Runs]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Run' } }
+
+  /runs/{id}:cancel:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: cancelRun
+      tags: [Runs]
+      summary: 取消，已扣點仍會退（失敗不扣點原則）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Run' } }
+        '409':
+          description: Run already in terminal state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /runs/{id}/events:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - name: Last-Event-ID
+        in: header
+        schema: { type: string }
+        description: SSE 重連用，從此 seq 後繼續
+    get:
+      operationId: streamRunEvents
+      tags: [Runs]
+      summary: SSE 串流 run 進度
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  event types:
+                  - run.update    { status, progress }
+                  - run.step      RunStep
+                  - run.complete  { status, creditsActual }
+                  - run.error     { code, retriable }
+
+  # ════════════════════════════════════════════════════════
+  # 4. SUBJECTS — 高槓桿 12-14
+  # ════════════════════════════════════════════════════════
+
+  /projects/{id}/characters:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      operationId: listCharacters
+      tags: [Subjects]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Character' }
+    post:
+      operationId: createCharacter
+      tags: [Subjects]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 100 }
+                essence: { type: string, maxLength: 500 }
+                appearance: { type: string, maxLength: 2000 }
+                clothing: { type: string, maxLength: 2000 }
+                voiceId: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Character' } }
+
+  /characters/{id}/appearances:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, pattern: '^char_[0-9a-zA-Z]{26}$' }
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      operationId: uploadCharacterAppearance
+      tags: [Subjects]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                description: { type: string, maxLength: 500 }
+                tags:
+                  type: array
+                  items: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/CharacterAppearance' } }
+
+  # ════════════════════════════════════════════════════════
+  # 5. WORKSPACES — 高槓桿 15-17
+  # ════════════════════════════════════════════════════════
+
+  /workspaces/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, pattern: '^ws_[0-9a-zA-Z]{26}$' }
+    get:
+      operationId: getWorkspace
+      tags: [Workspaces]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/Workspace' } }
+
+  /workspaces/{id}/invites:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: inviteToWorkspace
+      tags: [Workspaces]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invites]
+              properties:
+                invites:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [email, role]
+                    properties:
+                      email: { type: string, format: email }
+                      role: { $ref: '#/components/schemas/UserRole' }
+                      message: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/WorkspaceInvite' }
+        '422':
+          description: Plan seat limit exceeded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /workspaces/{id}/audit-log:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      - name: scope
+        in: query
+        schema:
+          type: string
+          enum: [WORKSPACE, PROJECT, BILLING, API]
+      - name: actorId
+        in: query
+        schema: { type: string }
+    get:
+      operationId: listAuditLog
+      tags: [Workspaces]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuditLog' }
+
+  # ════════════════════════════════════════════════════════
+  # 6. EDIT REQUESTS — 高槓桿 18-19
+  # ════════════════════════════════════════════════════════
+
+  /workspaces/{id}/edit-requests:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: createEditRequest
+      tags: [EditRequests]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope, reason]
+              properties:
+                scope:
+                  type: object
+                  properties:
+                    episodeIds: { type: array, items: { type: string } }
+                    characterIds: { type: array, items: { type: string } }
+                    locationIds: { type: array, items: { type: string } }
+                    propIds: { type: array, items: { type: string } }
+                    workspaceSettings: { type: boolean, default: false }
+                reason: { type: string, minLength: 20, maxLength: 500 }
+                requestedDuration:
+                  type: string
+                  enum: [TEMP_24H, TEMP_7D, TEMP_30D, PERMANENT]
+                  default: TEMP_7D
+      responses:
+        '201':
+          description: Created, owners notified
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/EditRequest' } }
+
+  /edit-requests/{id}:approve:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, pattern: '^er_[0-9a-zA-Z]{26}$' }
+    post:
+      operationId: approveEditRequest
+      tags: [EditRequests]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                grantedDuration:
+                  type: string
+                  enum: [TEMP_24H, TEMP_7D, TEMP_30D, PERMANENT]
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/EditRequest' } }
+
+  # ════════════════════════════════════════════════════════
+  # 7. SHARE / PUBLIC — 高槓桿 20-22
+  # ════════════════════════════════════════════════════════
+
+  /projects/{id}:publish:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: publishProject
+      tags: [Share]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility: { $ref: '#/components/schemas/ProjectVisibility' }
+                password: { type: string, minLength: 6 }
+                expiresAt: { type: string, format: date-time }
+                allowClone: { type: boolean, default: false }
+                allowComment: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Published
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties: { data: { $ref: '#/components/schemas/PublicShare' } }
+
+  /v/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getPublicShare
+      tags: [Share]
+      security: []
+      summary: 公開頁，SSR + 不需登入
+      responses:
+        '200':
+          description: OK
+          content:
+            text/html: { schema: { type: string } }
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicShareView' }
+        '401':
+          description: Password required
+        '410':
+          description: Gone (expired)
+
+  /share/{slug}:clone:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      operationId: clonePublicShare
+      tags: [Share]
+      responses:
+        '201':
+          description: Cloned to current user's workspace
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data:
+                        type: object
+                        properties:
+                          newProjectId: { type: string }
+                          workspaceId: { type: string }
+
+  # ════════════════════════════════════════════════════════
+  # 8. AUTH — 高槓桿 23
+  # ════════════════════════════════════════════════════════
+
+  /auth/magic-link:
+    post:
+      operationId: magicLinkRequest
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                redirectTo: { type: string }
+      responses:
+        '200':
+          description: Email sent (always 200 to avoid email enumeration)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      sentAt: { type: string, format: date-time }
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  # ════════════════════════════════════════════════════════
+  # 9. WEBHOOKS — 高槓桿 24-25
+  # ════════════════════════════════════════════════════════
+
+  /webhook/stripe:
+    post:
+      operationId: stripeWebhook
+      tags: [Webhooks]
+      security: []
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Acknowledged }
+        '400':
+          description: Signature invalid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  /webhook/provider/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/ProviderName' }
+    post:
+      operationId: providerCallback
+      tags: [Webhooks]
+      security:
+        - providerHmac: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [taskId, status]
+              properties:
+                taskId: { type: string }
+                status: { type: string }
+                outputUrl: { type: string }
+                error: { type: object }
+      responses:
+        '200': { description: Acknowledged }
+
+  # ════════════════════════════════════════════════════════
+  # 10. 剩餘 96 個 endpoint — summary-only
+  # 實作時參考同 tag 的高槓桿範本
+  # ════════════════════════════════════════════════════════
+
+  /panels/{id}:delete-soft:
+    post:
+      operationId: softDeletePanel
+      tags: [Panels]
+      responses: { '200': { description: OK } }
+
+  /panels/{id}/insert-after:
+    post:
+      operationId: insertPanelAfter
+      tags: [Panels]
+      responses: { '201': { description: Created } }
+
+  /episodes/{id}:
+    patch:
+      operationId: updateEpisode
+      tags: [Episodes]
+      responses: { '200': { description: OK } }
+
+  /episodes/{id}/reorder:
+    post:
+      operationId: reorderEpisodePanels
+      tags: [Episodes]
+      responses: { '200': { description: OK } }
+
+  /episodes/{id}/render-queue:
+    get:
+      operationId: getRenderQueue
+      tags: [Render]
+      responses: { '200': { description: OK } }
+
+  /episodes/{id}:start-render:
+    post:
+      operationId: startEpisodeRender
+      tags: [Render]
+      responses: { '202': { description: Accepted } }
+
+  /episodes/{id}:pause-render:
+    post:
+      operationId: pauseEpisodeRender
+      tags: [Render]
+      responses: { '200': { description: OK } }
+
+  /episodes/{id}:retry-failed:
+    post:
+      operationId: retryFailedRenders
+      tags: [Render]
+      responses: { '202': { description: Accepted } }
+
+  /episodes/{id}/dialogue-lines:
+    get:
+      operationId: listDialogueLines
+      tags: [Voice]
+      responses: { '200': { description: OK } }
+
+  /dialogue-lines/{id}:
+    patch:
+      operationId: updateDialogueLine
+      tags: [Voice]
+      responses: { '200': { description: OK } }
+
+  /dialogue-lines/{id}:synthesize:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: synthesizeDialogueLine
+      tags: [Voice]
+      responses: { '202': { description: Accepted } }
+
+  /episodes/{id}:batch-synthesize:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: batchSynthesizeEpisode
+      tags: [Voice]
+      responses: { '202': { description: Accepted } }
+
+  /voices:
+    get:
+      operationId: listVoices
+      tags: [Voice]
+      responses: { '200': { description: OK } }
+
+  /voices/{id}:preview:
+    post:
+      operationId: previewVoice
+      tags: [Voice]
+      responses: { '200': { description: OK } }
+
+  /episodes/{id}:compose:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: composeEpisodeVideo
+      tags: [Render]
+      responses: { '202': { description: Accepted } }
+
+  /episodes/{id}/final:
+    get:
+      operationId: getEpisodeFinal
+      tags: [Render]
+      responses: { '200': { description: OK } }
+
+  /episodes/{id}/download:
+    get:
+      operationId: downloadEpisode
+      tags: [Render]
+      responses: { '200': { description: Binary stream } }
+
+  /episodes/{id}:external-publish:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: publishToExternalPlatform
+      tags: [Render]
+      responses: { '202': { description: Accepted } }
+
+  /characters/{id}:
+    patch:
+      operationId: updateCharacter
+      tags: [Subjects]
+      responses: { '200': { description: OK } }
+    delete:
+      operationId: deleteCharacter
+      tags: [Subjects]
+      responses: { '204': { description: Deleted } }
+
+  /characters/{id}:test-generate:
+    post:
+      operationId: testGenerateCharacter
+      tags: [Subjects]
+      responses: { '200': { description: OK } }
+
+  /characters/{id}/usage:
+    get:
+      operationId: getCharacterUsage
+      tags: [Subjects]
+      responses: { '200': { description: OK } }
+
+  /characters/{id}:import:
+    post:
+      operationId: importCharacterFromProject
+      tags: [Subjects]
+      responses: { '201': { description: Imported } }
+
+  /projects/{id}/locations:
+    get: { operationId: listLocations, tags: [Subjects], responses: { '200': { description: OK } } }
+    post: { operationId: createLocation, tags: [Subjects], responses: { '201': { description: Created } } }
+
+  /locations/{id}:
+    patch: { operationId: updateLocation, tags: [Subjects], responses: { '200': { description: OK } } }
+    delete: { operationId: deleteLocation, tags: [Subjects], responses: { '204': { description: Deleted } } }
+
+  /locations/{id}/views:
+    post: { operationId: addLocationView, tags: [Subjects], responses: { '201': { description: Created } } }
+
+  /locations/{id}/variants:
+    post: { operationId: addLocationVariant, tags: [Subjects], responses: { '201': { description: Created } } }
+
+  /projects/{id}/props:
+    get: { operationId: listProps, tags: [Subjects], responses: { '200': { description: OK } } }
+    post: { operationId: createProp, tags: [Subjects], responses: { '201': { description: Created } } }
+
+  /props/{id}:
+    patch: { operationId: updateProp, tags: [Subjects], responses: { '200': { description: OK } } }
+    delete: { operationId: deleteProp, tags: [Subjects], responses: { '204': { description: Deleted } } }
+
+  /props/{id}:bind-holder:
+    post: { operationId: bindPropHolder, tags: [Subjects], responses: { '200': { description: OK } } }
+
+  /share/{slug}:like:
+    post: { operationId: likePublicShare, tags: [Share], responses: { '200': { description: OK } } }
+
+  /share/{slug}/comments:
+    get: { operationId: listComments, tags: [Share], responses: { '200': { description: OK } } }
+    post: { operationId: createComment, tags: [Share], responses: { '201': { description: Created } } }
+
+  /discover/works:
+    get: { operationId: discoverWorks, tags: [Discover], security: [], responses: { '200': { description: OK } } }
+
+  /discover/featured:
+    get: { operationId: discoverFeatured, tags: [Discover], security: [], responses: { '200': { description: OK } } }
+
+  /discover/creators:
+    get: { operationId: discoverCreators, tags: [Discover], security: [], responses: { '200': { description: OK } } }
+
+  /creators/{handle}:
+    get: { operationId: getCreatorProfile, tags: [Discover], security: [], responses: { '200': { description: OK } } }
+
+  /creators/{handle}:follow:
+    post: { operationId: followCreator, tags: [Discover], responses: { '200': { description: OK } } }
+
+  /creators/{handle}:unfollow:
+    post: { operationId: unfollowCreator, tags: [Discover], responses: { '200': { description: OK } } }
+
+  /notifications:
+    get: { operationId: listNotifications, tags: [Notifications], responses: { '200': { description: OK } } }
+
+  /notifications/unread-count:
+    get: { operationId: getUnreadCount, tags: [Notifications], responses: { '200': { description: OK } } }
+
+  /notifications/{id}:read:
+    post: { operationId: markNotificationRead, tags: [Notifications], responses: { '200': { description: OK } } }
+
+  /notifications:mark-all-read:
+    post: { operationId: markAllNotificationsRead, tags: [Notifications], responses: { '200': { description: OK } } }
+
+  /notifications/{id}:
+    delete: { operationId: deleteNotification, tags: [Notifications], responses: { '204': { description: Deleted } } }
+
+  /users/me/notification-prefs:
+    get: { operationId: getNotificationPrefs, tags: [Notifications], responses: { '200': { description: OK } } }
+    patch: { operationId: updateNotificationPrefs, tags: [Notifications], responses: { '200': { description: OK } } }
+
+  /push-subscriptions:
+    post: { operationId: subscribeToPush, tags: [Notifications], responses: { '200': { description: OK } } }
+    delete: { operationId: unsubscribeFromPush, tags: [Notifications], responses: { '204': { description: Deleted } } }
+
+  /panels/{id}/versions:
+    get: { operationId: listPanelVersions, tags: [Versions], responses: { '200': { description: OK } } }
+
+  /panels/{id}/versions/{vid}:restore:
+    post: { operationId: restorePanelVersion, tags: [Versions], responses: { '200': { description: OK } } }
+
+  /panels/{id}/versions/{vid}:favorite:
+    post: { operationId: favoritePanelVersion, tags: [Versions], responses: { '200': { description: OK } } }
+
+  /panels/{id}/versions:compare:
+    get: { operationId: comparePanelVersions, tags: [Versions], responses: { '200': { description: OK } } }
+
+  /users/me:
+    get: { operationId: getCurrentUser, tags: [Users], responses: { '200': { description: OK } } }
+    patch: { operationId: updateCurrentUser, tags: [Users], responses: { '200': { description: OK } } }
+
+  /users/me/avatar:
+    post: { operationId: uploadAvatar, tags: [Users], responses: { '200': { description: OK } } }
+
+  /users/me/language:
+    patch: { operationId: updateUserLanguage, tags: [Users], responses: { '200': { description: OK } } }
+
+  /users/me/password:
+    patch: { operationId: changePassword, tags: [Users], responses: { '200': { description: OK } } }
+
+  /users/me/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    get: { operationId: listUserAPIKeys, tags: [Users], responses: { '200': { description: OK } } }
+    post: { operationId: createUserAPIKey, tags: [Users], responses: { '201': { description: Created } } }
+
+  /users/me/api-keys/{id}:
+    delete: { operationId: revokeUserAPIKey, tags: [Users], responses: { '204': { description: Deleted } } }
+
+  /users/me:delete:
+    post: { operationId: deleteCurrentUser, tags: [Users], responses: { '200': { description: Soft deleted with grace period } } }
+
+  /auth/magic-callback:
+    get: { operationId: magicLinkCallback, tags: [Auth], security: [], responses: { '302': { description: Redirect } } }
+
+  /auth/oauth/{provider}:
+    get: { operationId: oauthStart, tags: [Auth], security: [], responses: { '302': { description: Redirect } } }
+
+  /auth/oauth/{provider}/callback:
+    get: { operationId: oauthCallback, tags: [Auth], security: [], responses: { '302': { description: Redirect } } }
+
+  /auth/password-login:
+    post: { operationId: passwordLogin, tags: [Auth], security: [], responses: { '200': { description: OK } } }
+
+  /auth/signup:
+    post: { operationId: signup, tags: [Auth], security: [], responses: { '201': { description: Created } } }
+
+  /auth/invite-request:
+    post: { operationId: requestInvite, tags: [Auth], security: [], responses: { '200': { description: OK } } }
+
+  /auth/logout:
+    post: { operationId: logout, tags: [Auth], security: [{ cookieAuth: [] }, { bearerAuth: [] }], responses: { '200': { description: OK } } }
+
+  /workspaces/{id}/members:
+    get: { operationId: listWorkspaceMembers, tags: [Workspaces], responses: { '200': { description: OK } } }
+
+  /workspaces/{id}/members/{userId}:
+    patch: { operationId: updateMemberRole, tags: [Workspaces], responses: { '200': { description: OK } } }
+    delete: { operationId: removeMember, tags: [Workspaces], responses: { '204': { description: Deleted } } }
+
+  /workspaces/{id}/billing:
+    get: { operationId: getWorkspaceBilling, tags: [Workspaces], responses: { '200': { description: OK } } }
+
+  /workspaces/{id}:upgrade:
+    post: { operationId: upgradeWorkspacePlan, tags: [Workspaces], responses: { '200': { description: Stripe checkout session } } }
+
+  /workspaces/{id}/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+    get: { operationId: listWorkspaceAPIKeys, tags: [Workspaces], responses: { '200': { description: OK } } }
+    post: { operationId: createWorkspaceAPIKey, tags: [Workspaces], responses: { '201': { description: Created } } }
+
+  /workspaces/{id}/api-keys/{kid}:
+    delete: { operationId: revokeWorkspaceAPIKey, tags: [Workspaces], responses: { '204': { description: Deleted } } }
+
+  /workspaces/{id}/edit-requests:
+    get: { operationId: listEditRequests, tags: [EditRequests], responses: { '200': { description: OK } } }
+
+  /edit-requests/{id}:deny:
+    post: { operationId: denyEditRequest, tags: [EditRequests], responses: { '200': { description: OK } } }
+
+  /edit-requests/{id}:revoke:
+    post: { operationId: revokeEditRequest, tags: [EditRequests], responses: { '200': { description: OK } } }
+
+  /admin/kpi:
+    get: { operationId: getAdminKPI, tags: [Admin], responses: { '200': { description: OK } } }
+
+  /admin/runs:
+    get: { operationId: listAdminRuns, tags: [Admin], responses: { '200': { description: OK } } }
+
+  /admin/runs/{id}:
+    get: { operationId: getAdminRunDetail, tags: [Admin], responses: { '200': { description: OK } } }
+
+  /admin/runs/{id}:retry:
+    post: { operationId: adminRetryRun, tags: [Admin], responses: { '202': { description: Accepted } } }
+
+  /admin/providers:
+    get: { operationId: listAdminProviders, tags: [Admin], responses: { '200': { description: OK } } }
+
+  /admin/queue-health:
+    get: { operationId: getQueueHealth, tags: [Admin], responses: { '200': { description: OK } } }
+
+  /admin/credit-breakdown:
+    get: { operationId: getCreditBreakdown, tags: [Admin], responses: { '200': { description: OK } } }
+
+  /onboarding/state:
+    get: { operationId: getOnboardingState, tags: [Onboarding], responses: { '200': { description: OK } } }
+
+  /onboarding/steps/{n}:
+    post: { operationId: completeOnboardingStep, tags: [Onboarding], responses: { '200': { description: OK } } }
+
+  /onboarding:skip:
+    post: { operationId: skipOnboarding, tags: [Onboarding], responses: { '200': { description: OK } } }
+
+  /onboarding:complete:
+    post: { operationId: completeOnboarding, tags: [Onboarding], responses: { '200': { description: OK } } }
+
+  /webhook/email/bounce:
+    post: { operationId: emailBounceWebhook, tags: [Webhooks], security: [], responses: { '200': { description: OK } } }
+
+# ════════════════════════════════════════════════════════════════
+# COMPONENTS
+# ════════════════════════════════════════════════════════════════
+
+components:
+
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: kp_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    providerHmac:
+      type: apiKey
+      in: header
+      name: X-Provider-Signature
+      description: HMAC-SHA256(provider_secret, body)
+
+  parameters:
+    WorkspaceId:
+      name: X-Workspace-Id
+      in: header
+      required: true
+      schema: { type: string, pattern: '^ws_[0-9a-zA-Z]{26}$' }
+      description: 標識操作所在 workspace
+    PanelId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^pnl_[0-9a-zA-Z]{26}$' }
+    EpisodeId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^ep_[0-9a-zA-Z]{26}$' }
+    ProjectId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^prj_[0-9a-zA-Z]{26}$' }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: 上一頁回傳的 pagination.cursor
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      schema: { type: string, maxLength: 100 }
+      description: 24h 內同 key 重送回原結果
+
+  responses:
+    Unauthenticated:
+      description: 沒登入
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InsufficientPermission:
+      description: RBAC 擋下
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ResourceNotFound:
+      description: 找不到
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: optimistic lock fail
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    BusinessRuleViolation:
+      description: 業務規則擋下
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    RateLimited:
+      description: 429
+      headers:
+        Retry-After:
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+
+    SuccessEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: {}
+        meta:
+          type: object
+          properties:
+            requestId: { type: string }
+
+    PaginatedEnvelope:
+      type: object
+      required: [data, pagination]
+      properties:
+        data: { type: array }
+        pagination:
+          type: object
+          properties:
+            cursor: { type: string, nullable: true }
+            hasMore: { type: boolean }
+            total: { type: integer, nullable: true }
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            userMessage: { type: string }
+            details: { type: object }
+            traceId: { type: string }
+
+    GenerationMode:
+      type: string
+      enum: [DIRECT_T2V, R2V_WITH_SUBJECTS, T2I_THEN_I2V, R2V_WITH_MOTION_REF]
+
+    ProviderModelKey:
+      type: string
+      description: |
+        Provider + model combo used for video generation (body field).
+        Format: UPPER_SNAKE. Different from ProviderName which is the URL slug for webhook callbacks.
+      enum: [ARK_SEEDANCE_2, ATLASCLOUD_SEEDANCE_2, FAL_SEEDANCE_PRO, BOBAPI_SEEDANCE_2, KLING_OMNI_30, TENCENT_HUNYUAN]
+
+    ProviderName:
+      type: string
+      description: |
+        Provider company slug used in webhook callback URLs `/webhook/provider/{name}`.
+        Lower-snake. Tencent covers Hunyuan + VOD/COS routes; Kling callbacks come via Tencent VOD.
+      enum: [ark, atlascloud, fal, bobapi, tencent]
+
+    ProjectVisibility:
+      type: string
+      enum: [PRIVATE, WORKSPACE, UNLISTED, PUBLIC]
+
+    PanelStatus:
+      type: string
+      enum: [DRAFT, GENERATING, COMPLETED, FAILED, OUTDATED]
+
+    RunStatus:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELED, RETRYING]
+
+    UserRole:
+      type: string
+      enum: [OWNER, ADMIN, EDITOR, COMMENTER, VIEWER, BILLING, GUEST]
+
+    Plan:
+      type: string
+      enum: [FREE, CREATOR, STUDIO, TEAM]
+
+    Language:
+      type: string
+      enum: [zh-CN, en, ja, ko, es]
+
+    User:
+      type: object
+      required: [id, email, name, plan, createdAt]
+      properties:
+        id: { type: string, pattern: '^usr_[0-9a-zA-Z]{26}$' }
+        email: { type: string, format: email }
+        name: { type: string }
+        publicHandle: { type: string, nullable: true }
+        publicBio: { type: string, nullable: true }
+        avatarUrl: { type: string, format: uri, nullable: true }
+        plan: { $ref: '#/components/schemas/Plan' }
+        language: { $ref: '#/components/schemas/Language' }
+        emailVerifiedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    Workspace:
+      type: object
+      required: [id, name, slug, plan, ownerId, createdAt]
+      properties:
+        id: { type: string, pattern: '^ws_[0-9a-zA-Z]{26}$' }
+        name: { type: string }
+        slug: { type: string }
+        iconUrl: { type: string, format: uri, nullable: true }
+        plan: { $ref: '#/components/schemas/Plan' }
+        annualBilling: { type: boolean }
+        seatCount: { type: integer }
+        seatLimit: { type: integer }
+        creditsRemaining: { type: integer }
+        creditsLimit: { type: integer }
+        ownerId: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    WorkspaceMember:
+      type: object
+      properties:
+        userId: { type: string }
+        workspaceId: { type: string }
+        role: { $ref: '#/components/schemas/UserRole' }
+        invitedBy: { type: string }
+        joinedAt: { type: string, format: date-time }
+        user: { $ref: '#/components/schemas/User' }
+
+    WorkspaceInvite:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/UserRole' }
+        invitedBy: { type: string }
+        status: { type: string, enum: [PENDING, ACCEPTED, DECLINED, EXPIRED] }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    Project:
+      type: object
+      required: [id, workspaceId, title, visibility, createdAt]
+      properties:
+        id: { type: string, pattern: '^prj_[0-9a-zA-Z]{26}$' }
+        workspaceId: { type: string }
+        title: { type: string }
+        synopsis: { type: string, nullable: true }
+        genre: { type: string, nullable: true }
+        coverUrl: { type: string, format: uri, nullable: true }
+        visibility: { $ref: '#/components/schemas/ProjectVisibility' }
+        generationMode: { $ref: '#/components/schemas/GenerationMode' }
+        defaultProvider: { type: string, nullable: true }
+        stylePresetKey: { type: string, nullable: true }
+        episodeCount: { type: integer }
+        ownerId: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Episode:
+      type: object
+      required: [id, projectId, sequence, title, status]
+      properties:
+        id: { type: string, pattern: '^ep_[0-9a-zA-Z]{26}$' }
+        projectId: { type: string }
+        sequence: { type: integer }
+        title: { type: string }
+        synopsis: { type: string, nullable: true }
+        scriptText: { type: string, nullable: true }
+        targetDuration: { type: integer, description: 秒 }
+        status:
+          type: string
+          enum: [DRAFT, SCRIPT_READY, STORYBOARD_READY, RENDERING, DONE]
+        panelCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Panel:
+      type: object
+      required: [id, episodeId, sequence, description, status, generationMode, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, pattern: '^pnl_[0-9a-zA-Z]{26}$' }
+        episodeId: { type: string }
+        sequence: { type: integer, minimum: 1 }
+        description: { type: string, maxLength: 5000 }
+        sceneContext: { type: string, nullable: true }
+        motionLine: { type: string, nullable: true }
+        srtSegment: { type: string, nullable: true }
+        generationMode: { $ref: '#/components/schemas/GenerationMode' }
+        perShotProvider: { type: string, nullable: true }
+        targetDuration: { type: number, minimum: 2, maximum: 15 }
+        status: { $ref: '#/components/schemas/PanelStatus' }
+        version: { type: integer, description: optimistic lock 版本 }
+        currentVersionId: { type: string, nullable: true }
+        thumbnailUrl: { type: string, format: uri, nullable: true }
+        videoUrl: { type: string, format: uri, nullable: true }
+        characters:
+          type: array
+          items:
+            type: object
+            properties:
+              characterId: { type: string }
+              appearanceId: { type: string, nullable: true }
+              asAnchor: { type: boolean }
+        locations:
+          type: array
+          items:
+            type: object
+            properties:
+              locationId: { type: string }
+              variantId: { type: string, nullable: true }
+        props:
+          type: array
+          items:
+            type: object
+            properties:
+              propId: { type: string }
+              holderId: { type: string, nullable: true }
+        versions:
+          type: array
+          items: { $ref: '#/components/schemas/PanelVersion' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    PanelVersion:
+      type: object
+      properties:
+        id: { type: string }
+        panelId: { type: string }
+        version: { type: integer }
+        provider: { type: string }
+        generationMode: { $ref: '#/components/schemas/GenerationMode' }
+        thumbnailUrl: { type: string, format: uri, nullable: true }
+        videoUrl: { type: string, format: uri, nullable: true }
+        creditsUsed: { type: integer }
+        isFavorite: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
+
+    Character:
+      type: object
+      required: [id, projectId, name]
+      properties:
+        id: { type: string, pattern: '^char_[0-9a-zA-Z]{26}$' }
+        projectId: { type: string }
+        name: { type: string, maxLength: 100 }
+        essence: { type: string, nullable: true }
+        appearance: { type: string, nullable: true }
+        clothing: { type: string, nullable: true }
+        voiceId: { type: string, nullable: true }
+        consistency: { type: number, minimum: 0, maximum: 1 }
+        currentAppearanceId: { type: string, nullable: true }
+        appearances:
+          type: array
+          items: { $ref: '#/components/schemas/CharacterAppearance' }
+        sourceCharacterId: { type: string, nullable: true, description: 跨專案 link 來源 }
+        usageCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    CharacterAppearance:
+      type: object
+      properties:
+        id: { type: string }
+        characterId: { type: string }
+        label: { type: string, description: e.g. v1 / v2 / 雨夜版 }
+        imageUrl: { type: string, format: uri }
+        description: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Location:
+      type: object
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        coverUrl: { type: string, format: uri, nullable: true }
+        views:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              kind: { type: string, enum: [WIDE, MEDIUM, CLOSE] }
+              imageUrl: { type: string, format: uri }
+        variants:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string, description: e.g. 雨夜 / 雪天 }
+              imageUrl: { type: string, format: uri }
+
+    Prop:
+      type: object
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        imageUrl: { type: string, format: uri, nullable: true }
+        holderId: { type: string, nullable: true, description: 主要角色綁定 }
+
+    Run:
+      type: object
+      required: [id, kind, status, createdAt]
+      properties:
+        id: { type: string, pattern: '^run_[0-9a-zA-Z]{26}$' }
+        kind:
+          type: string
+          enum: [SCRIPT_ANALYZE, GENERATE_PANEL, BATCH_REGENERATE, BATCH_SYNTHESIZE, COMPOSE_VIDEO, RENDER_QUEUE]
+        status: { $ref: '#/components/schemas/RunStatus' }
+        provider: { type: string, nullable: true }
+        creditsEstimated: { type: integer }
+        creditsActual: { type: integer, nullable: true }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        panelId: { type: string, nullable: true }
+        episodeId: { type: string, nullable: true }
+        error:
+          type: object
+          nullable: true
+          properties:
+            code: { type: string }
+            message: { type: string }
+            providerCode: { type: string, nullable: true }
+            retriable: { type: boolean }
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/RunStep' }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    RunStep:
+      type: object
+      properties:
+        id: { type: string }
+        runId: { type: string }
+        seq: { type: integer }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/RunStatus' }
+        output: { type: object, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    DialogueLine:
+      type: object
+      properties:
+        id: { type: string }
+        episodeId: { type: string }
+        panelId: { type: string, nullable: true }
+        characterId: { type: string, nullable: true }
+        text: { type: string }
+        voiceId: { type: string, nullable: true }
+        tone: { type: string, nullable: true }
+        speed: { type: number, minimum: 0.5, maximum: 2 }
+        pitch: { type: number, minimum: -12, maximum: 12 }
+        language: { $ref: '#/components/schemas/Language' }
+        audioUrl: { type: string, format: uri, nullable: true }
+        duration: { type: number, nullable: true }
+
+    Voice:
+      type: object
+      properties:
+        id: { type: string }
+        provider: { type: string }
+        name: { type: string }
+        language: { $ref: '#/components/schemas/Language' }
+        gender: { type: string, enum: [MALE, FEMALE, NEUTRAL] }
+        age: { type: string, enum: [CHILD, YOUTH, ADULT, ELDERLY] }
+        previewUrl: { type: string, format: uri }
+        styles:
+          type: array
+          items: { type: string }
+
+    Notification:
+      type: object
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        kind:
+          type: string
+          enum:
+            - RENDER_DONE
+            - RENDER_FAILED
+            - INVITE_RECEIVED
+            - EDIT_REQUEST_RECEIVED
+            - EDIT_REQUEST_APPROVED
+            - EDIT_REQUEST_DENIED
+            - PAYMENT_SUCCEEDED
+            - PAYMENT_FAILED
+            - WEEKLY_DIGEST
+            - QUOTA_WARNING
+            - SHARE_LIKED
+            - SHARE_COMMENTED
+        title: { type: string }
+        body: { type: string }
+        actionUrl: { type: string, nullable: true }
+        readAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    PublicShare:
+      type: object
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        slug: { type: string }
+        visibility: { $ref: '#/components/schemas/ProjectVisibility' }
+        passwordHash: { type: string, nullable: true, writeOnly: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        allowClone: { type: boolean }
+        allowComment: { type: boolean }
+        viewCount: { type: integer }
+        likeCount: { type: integer }
+        publishedAt: { type: string, format: date-time }
+
+    PublicShareView:
+      type: object
+      description: 公開頁可見的 project 資料（不含敏感欄位）
+      properties:
+        title: { type: string }
+        synopsis: { type: string, nullable: true }
+        coverUrl: { type: string, format: uri, nullable: true }
+        creator:
+          type: object
+          properties:
+            handle: { type: string }
+            name: { type: string }
+            avatarUrl: { type: string, nullable: true }
+        episodes:
+          type: array
+          items:
+            type: object
+            properties:
+              title: { type: string }
+              videoUrl: { type: string, format: uri }
+              duration: { type: number }
+        likeCount: { type: integer }
+        viewCount: { type: integer }
+        publishedAt: { type: string, format: date-time }
+        allowComment: { type: boolean }
+        allowClone: { type: boolean }
+
+    Comment:
+      type: object
+      properties:
+        id: { type: string }
+        publicShareId: { type: string }
+        userId: { type: string }
+        body: { type: string, maxLength: 2000 }
+        parentId: { type: string, nullable: true }
+        author:
+          type: object
+          properties:
+            handle: { type: string }
+            name: { type: string }
+            avatarUrl: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    EditRequest:
+      type: object
+      properties:
+        id: { type: string, pattern: '^er_[0-9a-zA-Z]{26}$' }
+        workspaceId: { type: string }
+        requesterId: { type: string }
+        scope:
+          type: object
+          properties:
+            episodeIds: { type: array, items: { type: string } }
+            characterIds: { type: array, items: { type: string } }
+            locationIds: { type: array, items: { type: string } }
+            propIds: { type: array, items: { type: string } }
+            workspaceSettings: { type: boolean }
+        reason: { type: string }
+        status:
+          type: string
+          enum: [PENDING, APPROVED, DENIED, EXPIRED, REVOKED]
+        requestedDuration: { type: string, enum: [TEMP_24H, TEMP_7D, TEMP_30D, PERMANENT] }
+        grantedDuration: { type: string, nullable: true }
+        approvedBy: { type: string, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string }
+        workspaceId: { type: string }
+        actorId: { type: string }
+        actorName: { type: string }
+        action: { type: string, description: e.g. INVITED, APPROVED, MODIFIED }
+        target:
+          type: object
+          properties:
+            kind: { type: string }
+            id: { type: string }
+            label: { type: string }
+        scope:
+          type: string
+          enum: [WORKSPACE, PROJECT, BILLING, API]
+        ipAddress: { type: string, nullable: true }
+        userAgent: { type: string, nullable: true }
+        diff: { type: object, nullable: true }
+        createdAt: { type: string, format: date-time }

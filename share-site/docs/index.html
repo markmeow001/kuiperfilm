@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 實作前規劃文件 (IMPL_PREP)</title>
+  <link rel="stylesheet" href="../preview/tokens.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body {
+      background: var(--surface-canvas);
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: var(--surface-canvas);
+      border-right: 1px solid var(--surface-hairline);
+      padding: 24px 16px;
+      position: sticky; top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 4px 8px 24px;
+      font-weight: 600;
+    }
+    .brand-mark {
+      width: 24px; height: 24px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 12px;
+    }
+    .nav-label {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 16px 8px 8px;
+      font-weight: 500;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px;
+      border-radius: var(--r-input);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: all var(--d-hover) var(--ease-out);
+      margin-bottom: 2px;
+    }
+    .nav-item:hover { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item.active { background: var(--surface-raised); color: var(--primary-400); }
+    .nav-item .icon {
+      width: 24px; height: 24px;
+      background: var(--surface-raised);
+      border-radius: 5px;
+      display: grid; place-items: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-weight: 600;
+    }
+    .nav-item.active .icon { background: var(--primary-500); color: var(--neutral-950); }
+    .nav-item .meta { font-size: 10px; color: var(--text-tertiary); margin-left: auto; font-family: 'JetBrains Mono', monospace; }
+
+    /* Reading column */
+    .reader {
+      padding: 48px 64px 120px;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .reader .doc-meta {
+      display: flex; gap: 12px; align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--surface-hairline);
+      margin-bottom: 36px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .reader .doc-meta .badge {
+      padding: 3px 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .reader .doc-meta .badge.p0 { background: rgba(245, 194, 74, 0.12); color: var(--primary-400); border-color: rgba(245, 194, 74, 0.3); }
+    .reader .doc-meta .badge.p1 { background: rgba(124, 92, 255, 0.12); color: var(--accent-400); border-color: rgba(124, 92, 255, 0.3); }
+
+    .reader h1 { font-size: 36px; font-weight: 600; letter-spacing: -0.025em; margin: 32px 0 18px; line-height: 1.2; }
+    .reader h2 { font-size: 24px; font-weight: 600; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--surface-hairline); }
+    .reader h3 { font-size: 19px; font-weight: 600; margin: 28px 0 12px; color: var(--text-primary); }
+    .reader h4 { font-size: 15px; font-weight: 600; margin: 22px 0 10px; color: var(--text-primary); }
+    .reader p { font-size: 15px; line-height: 1.75; color: var(--text-secondary); margin-bottom: 16px; }
+    .reader p strong { color: var(--text-primary); }
+    .reader p em { color: var(--text-primary); font-style: normal; padding: 1px 6px; background: var(--surface-raised); border-radius: 4px; font-size: 13px; }
+    .reader a { color: var(--primary-400); text-decoration: none; border-bottom: 1px solid rgba(245, 194, 74, 0.3); }
+    .reader a:hover { color: var(--primary-500); border-bottom-color: var(--primary-500); }
+    .reader blockquote {
+      margin: 18px 0;
+      padding: 14px 18px;
+      background: rgba(124, 92, 255, 0.04);
+      border-left: 3px solid var(--accent-500);
+      border-radius: 0 var(--r-input) var(--r-input) 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .reader blockquote p:last-child { margin-bottom: 0; }
+    .reader code {
+      font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+      font-size: 13px;
+      background: var(--surface-raised);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent-400);
+    }
+    .reader pre {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 18px 0;
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+    .reader pre code {
+      background: transparent;
+      padding: 0;
+      color: var(--text-primary);
+      font-size: inherit;
+    }
+    .reader ul, .reader ol { padding-left: 24px; margin-bottom: 18px; }
+    .reader li { font-size: 15px; line-height: 1.75; color: var(--text-secondary); margin-bottom: 6px; }
+    .reader li strong { color: var(--text-primary); }
+    .reader hr { border: none; height: 1px; background: var(--surface-hairline); margin: 40px 0; }
+    .reader table {
+      width: 100%; border-collapse: collapse;
+      margin: 18px 0; font-size: 13px;
+      background: var(--surface-raised);
+      border-radius: var(--r-card); overflow: hidden;
+      border: 1px solid var(--surface-hairline);
+    }
+    .reader table thead { background: var(--surface-overlay); }
+    .reader table th {
+      text-align: left; padding: 10px 14px;
+      font-size: 12px; font-weight: 600;
+      color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .reader table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      vertical-align: top;
+    }
+    .reader table tr:last-child td { border-bottom: none; }
+    .reader table code { font-size: 11px; }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 32px;
+    }
+    .empty-state h1 { font-size: 32px; margin-bottom: 12px; }
+    .empty-state p { color: var(--text-secondary); }
+
+    /* Loading state */
+    .skeleton {
+      height: 22px;
+      background: linear-gradient(90deg, var(--surface-raised) 0%, var(--surface-overlay) 50%, var(--surface-raised) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s ease-in-out infinite;
+      border-radius: 4px;
+      margin-bottom: 12px;
+    }
+    .skeleton.sm { width: 30%; }
+    .skeleton.md { width: 60%; }
+
+    @media (max-width: 900px) {
+      body { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; }
+      .reader { padding: 32px 24px 80px; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">K</div>
+      <div>
+        <div>KuiperAI</div>
+        <div style="font-size: 10px; color: var(--text-tertiary); font-weight: 400; margin-top: 2px;">IMPL_PREP</div>
+      </div>
+    </div>
+
+    <a href="../" class="nav-item" style="margin-bottom: 14px;">
+      <span class="icon" style="background: transparent; border: 1px solid var(--surface-hairline);">←</span>
+      <span>回首頁</span>
+    </a>
+
+    <div class="nav-label">P0 · 實作前必鎖</div>
+    <a class="nav-item" data-doc="A-schema-migration"><span class="icon">A</span> <span>Schema Migration</span><span class="meta">574L</span></a>
+    <a class="nav-item" data-doc="B-api-endpoints"><span class="icon">B</span> <span>API 端點清單</span><span class="meta">265L</span></a>
+    <a class="nav-item" data-doc="C-rbac-matrix"><span class="icon">C</span> <span>RBAC 權限矩陣</span><span class="meta">304L</span></a>
+    <a class="nav-item" data-doc="D-pricing-reverse-math"><span class="icon">D</span> <span>Pricing 反推</span><span class="meta">340L</span></a>
+
+    <div class="nav-label">P1 · launch 前 1-2 個月</div>
+    <a class="nav-item" data-doc="E-third-party-integrations"><span class="icon">E</span> <span>第三方整合</span><span class="meta">440L</span></a>
+    <a class="nav-item" data-doc="F-observability-events"><span class="icon">F</span> <span>觀測 / 事件</span><span class="meta">400L</span></a>
+    <a class="nav-item" data-doc="G-legal-compliance"><span class="icon">G</span> <span>法律 / 合規</span><span class="meta">480L</span></a>
+
+    <div class="nav-label">P2 · launch 內容飽滿</div>
+    <a class="nav-item" data-doc="H-marketing-launch-strategy"><span class="icon">H</span> <span>Marketing 策略</span><span class="meta">460L</span></a>
+    <a class="nav-item" data-doc="I-creator-onboarding-templates"><span class="icon">I</span> <span>創作者 Onboarding</span><span class="meta">440L</span></a>
+    <a class="nav-item" data-doc="J-brand-pitchdeck"><span class="icon">J</span> <span>品牌 + Pitch Deck</span><span class="meta">440L</span></a>
+
+    <div class="nav-label">總覽</div>
+    <a class="nav-item" data-doc="README"><span class="icon">★</span> <span>README · 實作順序</span></a>
+
+    <div style="margin-top: 36px; padding: 14px; background: rgba(245, 194, 74, 0.04); border: 1px solid rgba(245, 194, 74, 0.2); border-radius: var(--r-card); font-size: 11px; line-height: 1.6; color: var(--text-secondary);">
+      <strong style="color: var(--primary-400);">💡 用途</strong><br/>
+      這 7 份文件是 KuiperAI 公開上線重設計實作前的「想清楚」階段。包含 schema / API / 權限 / pricing / 第三方 / 觀測 / 法律 7 個面向。
+    </div>
+  </aside>
+
+  <main class="reader">
+    <div id="content">
+      <div class="empty-state">
+        <h1>選一份文件開始</h1>
+        <p>左側 sidebar 點 A-G 任一份。建議從 <strong>README</strong> 開始。</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const docMeta = {
+      'README': { tag: '導讀', class: '' },
+      'A-schema-migration': { tag: 'P0', class: 'p0' },
+      'B-api-endpoints': { tag: 'P0', class: 'p0' },
+      'C-rbac-matrix': { tag: 'P0', class: 'p0' },
+      'D-pricing-reverse-math': { tag: 'P0', class: 'p0' },
+      'E-third-party-integrations': { tag: 'P1', class: 'p1' },
+      'F-observability-events': { tag: 'P1', class: 'p1' },
+      'G-legal-compliance': { tag: 'P1', class: 'p1' },
+      'H-marketing-launch-strategy': { tag: 'P2', class: 'p1' },
+      'I-creator-onboarding-templates': { tag: 'P2', class: 'p1' },
+      'J-brand-pitchdeck': { tag: 'P2', class: 'p1' },
+    };
+
+    async function loadDoc(docName) {
+      const content = document.getElementById('content');
+      content.innerHTML = '<div class="skeleton md"></div><div class="skeleton sm"></div><div class="skeleton md"></div>';
+
+      try {
+        const res = await fetch(docName + '.md');
+        if (!res.ok) throw new Error('404');
+        const md = await res.text();
+
+        const meta = docMeta[docName] || { tag: '', class: '' };
+        const html = marked.parse(md);
+        content.innerHTML = `
+          <div class="doc-meta">
+            ${meta.tag ? `<span class="badge ${meta.class}">${meta.tag}</span>` : ''}
+            <span>${docName}.md</span>
+            <span style="margin-left: auto;">KuiperAI · IMPL_PREP</span>
+          </div>
+          ${html}
+        `;
+
+        // Active state
+        document.querySelectorAll('.nav-item[data-doc]').forEach(el => {
+          el.classList.toggle('active', el.dataset.doc === docName);
+        });
+
+        // Scroll to top
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Update URL hash
+        if (history.pushState) history.pushState(null, '', '#' + docName);
+      } catch (err) {
+        content.innerHTML = `<div class="empty-state"><h1>找不到文件</h1><p>${docName}.md 不存在</p></div>`;
+      }
+    }
+
+    // Click handler
+    document.querySelectorAll('.nav-item[data-doc]').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        loadDoc(el.dataset.doc);
+      });
+    });
+
+    // Hash routing on load
+    const initial = location.hash.slice(1) || 'README';
+    if (docMeta[initial]) loadDoc(initial);
+  </script>
+</body>
+</html>

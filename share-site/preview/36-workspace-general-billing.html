@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · Workspace · General + Billing</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { background: #0A0A0B; display: flex; min-height: 100vh; }
+
+    /* Sidebar 同 20-workspace */
+    .side {
+      width: 240px; flex-shrink: 0;
+      background: #0A0A0B;
+      border-right: 1px solid var(--surface-hairline);
+      padding: 16px 12px;
+      display: flex; flex-direction: column;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; font-size: 13px; font-weight: 600; }
+    .brand .mark { width: 22px; height: 22px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 11px; }
+
+    .ws-switch {
+      padding: 10px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 18px;
+      cursor: pointer;
+    }
+    .ws-switch .label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; font-weight: 500; }
+    .ws-switch .name { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+    .ws-switch .name::after { content: '⌄'; margin-left: auto; color: var(--text-tertiary); }
+    .ws-switch .wmark { width: 18px; height: 18px; background: linear-gradient(135deg, #7C5CFF, #4A3AAF); border-radius: 4px; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: white; }
+
+    .nav-group { margin-bottom: 14px; }
+    .nav-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.1em; padding: 0 8px 6px; font-weight: 500; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--r-input); color: var(--text-secondary); text-decoration: none; font-size: 13px; margin-bottom: 1px; }
+    .nav-item:hover { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item.active { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item .icon { width: 16px; color: var(--text-tertiary); }
+    .nav-item.active .icon { color: var(--primary-400); }
+    .nav-item .badge { margin-left: auto; padding: 1px 6px; background: var(--surface-overlay); border-radius: var(--r-pill); font-size: 10px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+
+    .main { flex: 1; overflow-y: auto; }
+
+    .main-top {
+      display: flex; justify-content: space-between; align-items: end;
+      padding: 32px 40px 22px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .main-top .ti { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 4px; }
+    .main-top .sb { font-size: 13px; color: var(--text-secondary); }
+
+    /* Settings tabs */
+    .settings-tabs {
+      display: flex; padding: 0 40px;
+      gap: 4px;
+      border-bottom: 1px solid var(--surface-hairline);
+      overflow-x: auto;
+    }
+    .settings-tab {
+      padding: 12px 16px 14px;
+      background: transparent; border: none; border-bottom: 2px solid transparent;
+      color: var(--text-tertiary);
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      margin-bottom: -1px;
+      text-decoration: none;
+    }
+    .settings-tab:hover { color: var(--text-primary); }
+    .settings-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--primary-500);
+      font-weight: 600;
+    }
+    .settings-tab .count {
+      padding: 1px 6px; margin-left: 4px;
+      background: var(--surface-raised); border-radius: var(--r-pill);
+      font-size: 10px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 400;
+    }
+
+    /* Tab content */
+    .tab-content { padding: 32px 40px 60px; max-width: 960px; }
+    .sec {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      padding: 28px 32px;
+      margin-bottom: 18px;
+    }
+    .sec h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+    .sec .sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 22px; }
+
+    .field-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; max-width: 480px; }
+    .field-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+    .field-input {
+      padding: 10px 14px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+    }
+    .field-input:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(245,194,74,0.15); }
+    .field-prefix {
+      display: flex; align-items: center;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      max-width: 480px;
+    }
+    .field-prefix .prefix {
+      padding: 10px 14px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      border-right: 1px solid var(--surface-hairline);
+    }
+    .field-prefix input {
+      flex: 1; padding: 10px 14px;
+      background: transparent; border: none; color: var(--text-primary); font-size: 13px; outline: none;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .field-helper { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+
+    .ws-icon-edit {
+      display: flex; align-items: center; gap: 16px;
+      margin-bottom: 16px;
+    }
+    .ws-icon-edit .preview {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, #7C5CFF, #4A3AAF);
+      border-radius: 16px;
+      display: grid; place-items: center;
+      font-size: 28px; font-weight: 700;
+      color: white;
+    }
+
+    /* Billing visualization */
+    .plan-card {
+      padding: 22px 26px;
+      background: rgba(245, 194, 74, 0.04);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      border-radius: var(--r-card);
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 22px;
+    }
+    .plan-card .left .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      background: rgba(245, 194, 74, 0.16);
+      color: var(--primary-400);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .plan-card .left h3 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+    .plan-card .left p { font-size: 12px; color: var(--text-secondary); }
+    .plan-card .right { text-align: right; }
+    .plan-card .right .price {
+      font-size: 28px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--primary-400);
+    }
+    .plan-card .right .cycle { font-size: 11px; color: var(--text-tertiary); }
+
+    /* Usage progress */
+    .usage-card { margin-bottom: 22px; }
+    .usage-row {
+      display: flex; justify-content: space-between; align-items: end;
+      margin-bottom: 8px;
+    }
+    .usage-row .info .label {
+      font-size: 11px; color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .usage-row .info .v {
+      font-size: 24px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .usage-row .info .v .unit { font-size: 13px; color: var(--text-tertiary); font-weight: 400; }
+    .usage-row .pct { font-size: 12px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
+    .progress-bar {
+      height: 8px; background: var(--neutral-800);
+      border-radius: 4px; overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .progress-bar .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary-500), var(--primary-400));
+      border-radius: 4px;
+    }
+    .progress-meta {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--text-tertiary);
+    }
+
+    /* Tables */
+    .table {
+      width: 100%; border-collapse: collapse;
+      font-size: 12px;
+    }
+    .table th {
+      text-align: left; padding: 10px 14px;
+      font-size: 11px; color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      font-weight: 500;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+    }
+    .table td.mono { font-family: 'JetBrains Mono', monospace; }
+    .table tr:hover td { background: var(--surface-overlay); }
+    .table tr:last-child td { border-bottom: none; }
+    .table .status {
+      padding: 2px 8px; border-radius: var(--r-pill);
+      font-size: 10px; font-weight: 500;
+    }
+    .table .status.paid { background: rgba(34, 197, 94, 0.12); color: var(--success); }
+    .table .status.refund { background: rgba(245, 158, 11, 0.12); color: var(--warning); }
+
+    .table-actions { color: var(--primary-400); text-decoration: none; cursor: pointer; }
+
+    /* Payment method */
+    .payment-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 20px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+    }
+    .payment-card .card-icon {
+      width: 44px; height: 28px;
+      background: linear-gradient(135deg, #1A1F71, #0E1444);
+      border-radius: 5px;
+      display: grid; place-items: center;
+      font-size: 10px; font-weight: 700; color: white;
+      letter-spacing: 0.1em;
+    }
+    .payment-card .info { flex: 1; }
+    .payment-card .name { font-size: 13px; font-weight: 500; }
+    .payment-card .meta { font-size: 11px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+
+    /* Danger zone */
+    .danger-sec {
+      border-color: rgba(239, 68, 68, 0.25);
+      background: rgba(239, 68, 68, 0.02);
+    }
+    .danger-sec h2 { color: var(--error); }
+    .danger-action {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px;
+      background: rgba(239, 68, 68, 0.04);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: var(--r-card);
+    }
+    .danger-action .info .ti { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .danger-action .info .desc { font-size: 12px; color: var(--text-secondary); }
+
+    .save-bar {
+      position: sticky; bottom: 0;
+      padding: 16px 40px;
+      border-top: 1px solid var(--surface-hairline);
+      background: rgba(245, 194, 74, 0.04);
+      display: flex; justify-content: end; gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+
+    <div class="ws-switch">
+      <div class="label">Workspace</div>
+      <div class="name">
+        <div class="wmark">F</div>
+        Filmstar Studio
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Workspace</div>
+      <a class="nav-item" href="#"><span class="icon">▣</span> <span data-i18n="h.sidebar.projects">项目</span> <span class="badge">12</span></a>
+      <a class="nav-item" href="20-workspace.html"><span class="icon">◐</span> <span data-i18n="w.tab.members">Members</span> <span class="badge">7</span></a>
+      <a class="nav-item active" href="#"><span class="icon">⚙</span> <span data-i18n="wgb.general">基本资料</span></a>
+      <a class="nav-item" href="37-workspace-models-audit.html"><span class="icon">⌥</span> <span data-i18n="wmi.models">模型</span></a>
+      <a class="nav-item" href="37-workspace-models-audit.html"><span class="icon">↩</span> <span data-i18n="wmi.audit">审计日志</span></a>
+      <a class="nav-item" href="38-edit-requests.html"><span class="icon">⏳</span> <span data-i18n="er.title">编辑申请</span> <span class="badge" style="color: var(--warning);">3</span></a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Organization</div>
+      <a class="nav-item" href="18-admin.html"><span class="icon">⊡</span> Org Console</a>
+      <a class="nav-item" href="#"><span class="icon">⊕</span> Switch workspace…</a>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <div class="main-top">
+      <div>
+        <div class="ti">Filmstar Studio</div>
+        <div class="sb">基本资料 + 订阅与计费</div>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <div class="lang-switcher">
+          <button type="button" data-lang="zh" class="active">中</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-tabs">
+      <a class="settings-tab active" data-i18n="wgb.general">基本资料</a>
+      <a class="settings-tab" href="20-workspace.html"><span data-i18n="w.tab.members">Members</span> <span class="count">7</span></a>
+      <a class="settings-tab" data-i18n="wgb.billing">订阅与计费</a>
+      <a class="settings-tab" href="37-workspace-models-audit.html"><span data-i18n="wmi.models">模型</span> <span class="count">5</span></a>
+      <a class="settings-tab" href="37-workspace-models-audit.html" data-i18n="wmi.integrations">整合</a>
+      <a class="settings-tab" href="37-workspace-models-audit.html" data-i18n="wmi.audit">审计日志</a>
+    </div>
+
+    <div class="tab-content">
+
+      <!-- GENERAL -->
+      <div class="sec">
+        <h2 data-i18n="wgb.general">基本资料</h2>
+        <p class="sub">影响工作区显示名称、URL 和成员看到的图示</p>
+
+        <div class="ws-icon-edit">
+          <div class="preview">F</div>
+          <div>
+            <button class="btn btn-ghost" style="margin-right: 6px;">上传图示</button>
+            <button class="btn btn-ghost" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);">移除</button>
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 6px;">建议 512×512 PNG · 最大 2MB</div>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" data-i18n="wgb.ws-name">工作区名称</label>
+          <input class="field-input" value="Filmstar Studio" />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" data-i18n="wgb.ws-slug">工作区 slug</label>
+          <div class="field-prefix">
+            <span class="prefix">kuiperai.com/w/</span>
+            <input value="filmstar-studio" />
+          </div>
+          <div class="field-helper">URL 字尾。改了之后旧连结失效</div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">工作区描述</label>
+          <input class="field-input" value="独立短剧工作室，主攻悬疑 / 都市奇幻题材" />
+        </div>
+      </div>
+
+      <!-- BILLING -->
+      <div class="sec">
+        <h2 data-i18n="wgb.billing">订阅与计费</h2>
+        <p class="sub">点数使用、订阅方案、发票历史</p>
+
+        <!-- Current plan -->
+        <div class="plan-card">
+          <div class="left">
+            <span class="badge" data-i18n="wgb.current-plan">当前方案</span>
+            <h3>Studio · 年付</h3>
+            <p>下次扣款 2026-08-15 · 5 并发任务 · 5 家 provider</p>
+          </div>
+          <div class="right">
+            <div class="price">$47<span style="font-size: 14px; color: var(--text-tertiary); font-family: inherit; font-weight: 400;">/月</span></div>
+            <div class="cycle">年付 $564 · 比月付省 $144</div>
+            <button class="btn btn-ghost" style="margin-top: 8px;" data-i18n="wgb.upgrade">升级 Team →</button>
+          </div>
+        </div>
+
+        <!-- Monthly usage -->
+        <div class="usage-card">
+          <div class="usage-row">
+            <div class="info">
+              <div class="label" data-i18n="wgb.usage">本月使用</div>
+              <div class="v">3,153 <span class="unit">/ 5,000 点</span></div>
+            </div>
+            <div class="pct">63% used · 1,847 剩余</div>
+          </div>
+          <div class="progress-bar"><div class="fill" style="width: 63%;"></div></div>
+          <div class="progress-meta">
+            <span>本月开始：2026-05-01</span>
+            <span>预估月底使用：4,400 / 5,000（线性外推）</span>
+          </div>
+        </div>
+
+        <!-- Payment method -->
+        <h3 style="font-size: 14px; font-weight: 600; margin: 22px 0 12px;" data-i18n="wgb.payment-method">付款方式</h3>
+        <div class="payment-card">
+          <div class="card-icon">VISA</div>
+          <div class="info">
+            <div class="name">Visa · • • • • 4242</div>
+            <div class="meta">expires 12/27 · holder: Josh Hung</div>
+          </div>
+          <button class="btn btn-ghost" style="font-size: 12px; padding: 6px 12px;">更换</button>
+        </div>
+
+        <!-- Top-up history -->
+        <h3 style="font-size: 14px; font-weight: 600; margin: 28px 0 12px;" data-i18n="wgb.topup-history">加购包记录</h3>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>包装</th>
+              <th>金额</th>
+              <th>已用 / 剩余</th>
+              <th>过期</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">2026-05-12</td>
+              <td>5,000 点</td>
+              <td class="mono">$6.50</td>
+              <td class="mono">1,820 / 3,180</td>
+              <td>永不</td>
+              <td><a class="table-actions">查看发票</a></td>
+            </tr>
+            <tr>
+              <td class="mono">2026-03-28</td>
+              <td>1,000 点</td>
+              <td class="mono">$1.50</td>
+              <td class="mono">1,000 / 0</td>
+              <td>—</td>
+              <td><a class="table-actions">查看发票</a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Invoice history -->
+        <h3 style="font-size: 14px; font-weight: 600; margin: 28px 0 12px;" data-i18n="wgb.invoices">发票历史</h3>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>项目</th>
+              <th>金额</th>
+              <th>状态</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono">2026-05-15</td>
+              <td>Studio plan · 月付</td>
+              <td class="mono">$59.00</td>
+              <td><span class="status paid">已付款</span></td>
+              <td><a class="table-actions">⬇ PDF</a></td>
+            </tr>
+            <tr>
+              <td class="mono">2026-05-12</td>
+              <td>Top-up · 5,000 点</td>
+              <td class="mono">$6.50</td>
+              <td><span class="status paid">已付款</span></td>
+              <td><a class="table-actions">⬇ PDF</a></td>
+            </tr>
+            <tr>
+              <td class="mono">2026-04-15</td>
+              <td>Studio plan · 月付</td>
+              <td class="mono">$59.00</td>
+              <td><span class="status paid">已付款</span></td>
+              <td><a class="table-actions">⬇ PDF</a></td>
+            </tr>
+            <tr>
+              <td class="mono">2026-04-02</td>
+              <td>失败渲染退款</td>
+              <td class="mono" style="color: var(--success);">−$0.18</td>
+              <td><span class="status refund">退款</span></td>
+              <td><a class="table-actions">详情</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="sec danger-sec">
+        <h2>危险区</h2>
+        <p class="sub">不可恢复的操作。删除前请汇出所有项目</p>
+
+        <div class="danger-action">
+          <div class="info">
+            <div class="ti" data-i18n="wgb.delete-ws">删除工作区</div>
+            <div class="desc" data-i18n="wgb.delete-warn">此操作不可恢复。所有项目、剧集、协作者都会一并删除。</div>
+          </div>
+          <button class="btn btn-ghost" style="color: var(--error); border-color: var(--error);">删除工作区</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="save-bar">
+      <button class="btn btn-ghost">取消</button>
+      <button class="btn btn-primary" data-i18n="s.cta.save">保存</button>
+    </div>
+  </main>
+</body>
+</html>
