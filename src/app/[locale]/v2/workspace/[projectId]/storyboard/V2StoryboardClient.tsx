@@ -22,6 +22,7 @@ import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
 import { VideoModelPickerInline } from './VideoModelPickerInline'
 import { getVideoModelVariant, isMultiShotCapable } from '@/lib/video-models/variants'
 import { videoModelToleratesTextOnlyPanels } from '@/lib/video-models/multi-shot-text-only'
+import { resolveGenerationModeBehavior } from '@/lib/novel-promotion/generation-mode'
 import {
   useStoryboards,
   useUpdatePanelText,
@@ -94,6 +95,10 @@ interface ProjectLikeFull {
     // group count. Exposed via VideoModelPickerInline so user can edit
     // inline from STEP 03.
     targetDuration?: number | null
+    // 2026-05-29 — per-project generation mode. r2v-narrative enables the
+    // auto-chain (analyze → auto-group) + Seedance-only picker filter.
+    generationMode?: string | null
+    openingPacing?: string | null
   } | null
 }
 
@@ -189,6 +194,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   const projectVideoResolution = (project?.novelPromotionData?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
   const aspectClass = aspectClassFromRatio(projectVideoRatio)
   const projectVideoModel = project?.novelPromotionData?.videoModel ?? ''
+  // 2026-05-29 — per-project generation mode behavior (auto-chain, picker filter).
+  const modeBehavior = resolveGenerationModeBehavior(project?.novelPromotionData?.generationMode)
   // 2026-05-17 — Derived from variant registry. Drives multi-shot button
   // disable + tooltip; null/unknown ids fail closed.
   const canMultiShot = isMultiShotCapable(projectVideoModel)
@@ -470,6 +477,16 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   useEffect(() => {
     if (previousAnalyzeStatus.current !== 'completed' && analyzeStatus === 'completed' && currentEpisodeId) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.storyboards.all(currentEpisodeId) })
+      // 2026-05-29 — R2V auto-chain: after analyze regenerates panels, auto-run
+      // grouping so the user doesn't have to manually click 自動切組 then
+      // 重生敘事. Server-side autoGroup reads the already-persisted DB panels.
+      // Only for r2v-narrative projects; t2i-storyboard keeps the manual flow.
+      // Guarded against re-fire by the previousAnalyzeStatus !== 'completed' check.
+      if (modeBehavior.autoChainAfterAnalyze && canEdit && !autoGroup.isPending) {
+        void autoGroup.mutateAsync({ episodeId: currentEpisodeId }).catch(() => {
+          // surfaced via autoGroup.error; manual 自動切組 button remains available
+        })
+      }
     }
     // Once the server confirms the new task has actually surfaced in the
     // snapshot (active or terminal), drop the local 'submitted' flag so
@@ -483,7 +500,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       setAnalyzeState({ status: 'idle' })
     }
     previousAnalyzeStatus.current = analyzeStatus
-  }, [analyzeStatus, currentEpisodeId, queryClient, analyzeState.status])
+  }, [analyzeStatus, currentEpisodeId, queryClient, analyzeState.status, modeBehavior.autoChainAfterAnalyze, canEdit, autoGroup])
 
   const allPanels = useMemo<PanelLike[]>(() => {
     const sb = storyboardsData?.storyboards ?? []
