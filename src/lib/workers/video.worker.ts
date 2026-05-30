@@ -94,7 +94,10 @@ async function generateVideoForPanel(
   const firstLastCustomPrompt = typeof firstLastFramePayload?.customPrompt === 'string' ? firstLastFramePayload.customPrompt : null
   const persistedFirstLastPrompt = firstLastFramePayload ? panel.firstLastFramePrompt : null
   const customPrompt = typeof payload.customPrompt === 'string' ? payload.customPrompt : null
-  let prompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.videoPrompt || panel.description
+  // 2026-05-30 — panel field tail flipped to description-first (was videoPrompt
+  // ||description) for consistency with the R2V composite paths; description now
+  // carries the rich five-element narrative. Custom/first-last prompt chain kept first.
+  let prompt = firstLastCustomPrompt || persistedFirstLastPrompt || customPrompt || panel.description || panel.videoPrompt
   if (!prompt) {
     throw new Error(`Panel ${panel.id} has no video prompt`)
   }

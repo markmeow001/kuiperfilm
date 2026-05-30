@@ -552,7 +552,9 @@ export async function runMultiShotSeedanceComposite(params: {
 
   const projectData = await resolveNovelData(projectId)
   const usedPanels = validPanels.slice(0, MAX_REFERENCE_IMAGES)
-  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
+  // Mine hand-edited rawPrompt for @names so they bind to reference images
+  // (parity with atlascloud/ark; seedance wrapper 4th arg = extraMiningText). (2026-05-30)
+  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings, params.rawPrompt)
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
 
   const { firstFrameUrl, referenceUrls } = planReferenceBudget({

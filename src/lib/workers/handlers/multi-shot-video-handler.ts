@@ -448,7 +448,9 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   // 3. 構建 multi_prompt
   const multiPrompt: MultiShotPromptItem[] = validPanels.map((panel) => {
-    const rawPrompt = panel.videoPrompt || panel.description || ''
+    // 2026-05-30 — description-first (was videoPrompt||description) for consistency
+    // with R2V composite paths; description now carries the rich five elements.
+    const rawPrompt = panel.description || panel.videoPrompt || ''
     const prompt = klingElements.length > 0
       ? buildPromptWithElementRefs(rawPrompt, klingElements)
       : rawPrompt

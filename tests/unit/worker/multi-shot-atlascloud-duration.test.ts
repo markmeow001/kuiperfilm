@@ -107,7 +107,7 @@ describe('AtlasCloud composite duration priority (Phase M)', () => {
     // it into buildDialogueDrivenDurations.
     expect(src).toMatch(/import \{[\s\S]*?estimateSilentActionSeconds/)
     expect(src).toMatch(/const actionSecondsByPanelId = new Map/)
-    expect(src).toMatch(/estimateSilentActionSeconds\(panel\.videoPrompt/)
+    expect(src).toMatch(/estimateSilentActionSeconds\(panel\.description \|\| panel\.videoPrompt/)
     expect(src).toMatch(/actionSecondsByPanelId,/)
   })
 

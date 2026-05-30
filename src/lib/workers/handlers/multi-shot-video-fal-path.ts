@@ -226,7 +226,12 @@ function buildFalPrompt(
   for (let i = 0; i < panels.length; i++) {
     const panel = panels[i]
     const shotNum = i + 1
-    const desc = (panel.videoPrompt || panel.description || '').trim()
+    // 2026-05-30 — description FIRST (was videoPrompt||description), aligns with
+    // atlascloud/seedance/b-path. description now carries the rich five-element
+    // narrative + names; videoPrompt is the legacy name-stripped field. This was
+    // the one R2V path the 2026-05-29 field-flip (a38f346) missed → fal users
+    // were silently still getting the un-upgraded videoPrompt.
+    const desc = (panel.description || panel.videoPrompt || '').trim()
     const dialogue = (panel.srtSegment || '').trim()
     if (dialogue) dialogueBeatCount += 1
     const parts: string[] = []
@@ -343,7 +348,10 @@ export async function runMultiShotFalComposite(params: {
   for (const o of params.locationOverrides ?? []) {
     if (o.locationId && o.viewName) locOverrideById.set(o.locationId, o.viewName)
   }
-  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings)
+  // Pass hand-edited rawPrompt as extra mining text so @names written only in
+  // the narrative still bind to reference images (parity with atlascloud/ark).
+  // Shared 5-arg collector: 4th=maxRefs(undefined), 5th=extraMiningText. (2026-05-30)
+  const characterRefs = collectCharacterRefs(usedPanels, projectData, episodeBindings, undefined, params.rawPrompt)
   const sceneRefs = collectSceneRefs(usedPanels, projectData, locOverrideById)
   const propRefs = collectPropRefs(usedPanels, projectData)
 
