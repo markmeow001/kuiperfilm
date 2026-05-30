@@ -52,6 +52,9 @@ interface VideoModelPickerInlineProps {
    *  picker only renders when current model is an ARK Seedance 2.0 variant
    *  (the only route where resolution isn't baked into the model id). */
   videoResolution: '480p' | '720p' | '1080p' | null | undefined
+  /** 2026-05-29 — when true (r2v-narrative projects), hide the Kling family
+   *  (Kling needs per-shot first-frame images / T2I which R2V mode drops). */
+  seedanceOnly?: boolean
 }
 
 // 2026-05-22 — keep in sync with V2ProjectSettingsPanel + ark.ts
@@ -70,6 +73,7 @@ export function VideoModelPickerInline({
   videoRatio,
   targetDuration,
   videoResolution,
+  seedanceOnly = false,
 }: VideoModelPickerInlineProps) {
   const updateConfig = useUpdateProjectConfig(projectId)
   const userModelsQuery = useUserModels()
@@ -140,16 +144,18 @@ export function VideoModelPickerInline({
         >
           Seedance
         </button>
-        <button
-          type="button"
-          onClick={() => setFamily('kling')}
-          disabled={updateConfig.isPending}
-          className={`border-l border-stone-800 ${chipClass(currentFamily === 'kling')} ${
-            updateConfig.isPending ? 'cursor-not-allowed opacity-50' : ''
-          }`}
-        >
-          Kling
-        </button>
+        {!seedanceOnly && (
+          <button
+            type="button"
+            onClick={() => setFamily('kling')}
+            disabled={updateConfig.isPending}
+            className={`border-l border-stone-800 ${chipClass(currentFamily === 'kling')} ${
+              updateConfig.isPending ? 'cursor-not-allowed opacity-50' : ''
+            }`}
+          >
+            Kling
+          </button>
+        )}
       </div>
 
       {/* Variant dropdown — filtered by current family. If no family is
@@ -166,7 +172,7 @@ export function VideoModelPickerInline({
             選擇模型…
           </option>
         )}
-        {(currentFamily === 'seedance' || currentFamily === null
+        {(seedanceOnly || currentFamily === 'seedance' || currentFamily === null
           ? seedanceVariants
           : []
         ).map((v) => (
@@ -174,7 +180,7 @@ export function VideoModelPickerInline({
             {v.label}
           </option>
         ))}
-        {(currentFamily === 'kling' || currentFamily === null
+        {(!seedanceOnly && (currentFamily === 'kling' || currentFamily === null)
           ? klingVariants
           : []
         ).map((v) => (

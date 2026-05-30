@@ -1383,6 +1383,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       videoRatio={projectVideoRatio || '9:16'}
       targetDuration={project?.novelPromotionData?.targetDuration ?? null}
       videoResolution={projectVideoResolution}
+      seedanceOnly={modeBehavior.videoModelFilter === 'seedance-only'}
     />
   )
 
