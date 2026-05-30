@@ -369,6 +369,11 @@ export function MultiShotBindingsRail({
           || (/sensitive|敏感|moderation|prohibited|nsfw|违规|不当/i.test(rawMsg)
               && !/case[- ]?sensitive/i.test(rawMsg))
         const isAudioSensitive = isSensitive && /audio|音[訊频]/i.test(rawMsg)
+        // R2V needs ≥1 reference image (character/scene/prop). When the
+        // project's subjects have no generated images yet, the worker throws
+        // *_R2V_NO_REFERENCES. The default scrub turns this into the useless
+        // "系统内部错误"; surface the actionable cause instead. (2026-05-30)
+        const isMissingRefs = /NO_REFERENCES|R2V_NO_REF|NO_REFERENCE\b/i.test(rawMsg)
         // Friendly fallback for anything else — route through the central
         // resolver so users never see raw provider JSON. Raw stays in the
         // title tooltip for ops debugging.
@@ -418,6 +423,16 @@ export function MultiShotBindingsRail({
                 <div className="mt-0.5 text-[14px] text-rose-300/80">
                   這次生成被 AtlasCloud / Seedance 內容審核判定可能含敏感資訊。
                   請調整敘事 / 角色 / 場景內容後重新生成。
+                </div>
+              </>
+            ) : isMissingRefs ? (
+              <>
+                <strong className="text-rose-200">缺少角色 / 場景參考圖</strong>
+                <div className="mt-0.5 text-[14px] text-rose-300/80">
+                  R2V（參考圖生視頻）需要角色與場景的參考圖當身份依據，但本組的
+                  角色 / 場景目前還沒有生成圖片。請先到「劇集設定」幫出場角色與
+                  場景生成參考圖，再回來「重新生成」。
+                  <span className="text-stone-500"> （R2V 省掉的是每鏡分鏡圖，不是角色 / 場景參考圖。）</span>
                 </div>
               </>
             ) : (
