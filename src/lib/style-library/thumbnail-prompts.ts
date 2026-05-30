@@ -1,4 +1,7 @@
-// Phase D — Kling Image O1 prompts for the 29-style thumbnail set.
+// Phase D — Thumbnail prompts for the 30 visual styles + 8 lighting presets.
+// Originally targeted Kling Image O1 (5/16 blocked by no credits);
+// 2026-05-30 補：also drives the AtlasCloud Gemini-3-Pro-Image flow used by
+// design-preview mockups. See scripts/design-preview/gen-style-thumbs.mjs.
 // One prompt per visualStyles[].id, drawn from
 // docs/runbooks/style-library-thumbnails.md. Shared shape: 1:1 square,
 // negative bakes "no text, no watermark, no logo" so a single negative
@@ -82,4 +85,32 @@ export const STYLE_THUMBNAIL_PROMPTS: Record<string, string> = {
     'Synthwave 1980s retro-futurism scene, vintage sports car driving toward sunset, magenta-cyan gradient sky, chrome wireframe grid landscape, palm tree silhouettes, scan line overlay, lens flare halos, Miami Vice atmosphere, Outrun / Drive (2011) aesthetic, 1:1 square',
   steampunk:
     'Victorian steampunk portrait, character with mechanical brass goggles and gear-adorned outfit, brass + copper + dark iron materials, visible gears and steam pipes background, gas lamp amber warmth, leather and wood textures, Victorian cast-iron architecture, sepia-tinged photography feel, BioShock Infinite aesthetic, 1:1 square',
+  atomic_punk_apocalypse:
+    'Atomic-punk post-apocalyptic portrait, weathered survivor in patchwork leather armor with retro-futurist gas mask, rust + bleached khaki + radioactive green palette, ruined 1950s atomic-age city in background with crashed flying car, dust storm haze, harsh sun glare, vintage Fallout / Mad Max aesthetic, gritty atmospheric film grain, 1:1 square',
 }
+
+// ─────────────────────────────────────────────────────────────
+// Lighting preset thumbnails (8) — 2026-05-30 added
+// 每張統一風格：anonymous figure / silhouette + 同樣 cinematic 寫實基底，
+// 只變光影；用「相同主體在不同光下」最能讓 user 一眼看懂差別。
+// ─────────────────────────────────────────────────────────────
+
+export const LIGHTING_THUMBNAIL_PROMPTS: Record<string, string> = {
+  golden_hour:
+    'Cinematic portrait, anonymous silhouetted figure on hillside facing camera, golden hour sunset lighting, warm amber and rose tones, long soft shadows stretching behind, rim light through hair, hazy atmospheric warmth, sun flares filtered by leaves, photorealistic film still, 1:1 square',
+  blue_hour:
+    'Cinematic portrait, anonymous figure looking out across cityscape at pre-dawn, deep blue sky with subtle warm horizon line, cool ambient blue tone everywhere, mysterious soft glow, mist hanging in air, single distant warm window light, photorealistic film still, 1:1 square',
+  dramatic_high_contrast:
+    'Cinematic portrait, anonymous figure half in deep shadow half in razor-sharp keylight, dramatic Rembrandt chiaroscuro, high contrast deep blacks against bright highlights, single focused spotlight from above-side, theatrical noir mood, photorealistic film still, 1:1 square',
+  rainy_neon_night:
+    'Cinematic portrait, anonymous figure under glowing umbrella on wet city street at night, neon pink + cyan + magenta reflections on rain-soaked asphalt, blade-runner atmosphere, blurred bokeh neon signs in background, wet camera lens, photorealistic film still, 1:1 square',
+  soft_window_light:
+    'Cinematic portrait, anonymous figure seated by large window, soft natural diffused daylight wrapping the subject, gentle shadows, neutral peaceful palette, dust particles drifting in light beam, intimate domestic mood, Vermeer-inspired, photorealistic film still, 1:1 square',
+  moonlight_cool:
+    'Cinematic portrait, anonymous figure standing in moonlit forest clearing, cool silver-blue moonlight from above, deep navy shadows, atmospheric mist, subtle backlit edge glow, mysterious dreamlike night mood, photorealistic film still, 1:1 square',
+  fluorescent_cold:
+    'Cinematic portrait, anonymous figure under harsh overhead fluorescent tube lighting in clinical hallway, cool sterile blue-white tone, unflattering top-down shadows, institutional liminal-space atmosphere, slight green color cast typical of old fluorescents, photorealistic film still, 1:1 square',
+  candlelight_warm:
+    'Cinematic portrait, anonymous figure illuminated only by single warm candle flame held nearby, deep warm amber glow falling on face and hands, surrounding darkness, flickering soft shadows, intimate Caravaggio-inspired chiaroscuro, photorealistic film still, 1:1 square',
+}
+
