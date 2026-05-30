@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 我的项目</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 256px;
+      background: var(--surface-canvas);
+      border-right: 1px solid var(--surface-hairline);
+      padding: 24px 16px;
+      display: flex; flex-direction: column;
+      flex-shrink: 0;
+    }
+    .sidebar .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 8px 24px;
+      font-weight: 600; font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+    .sidebar .brand-mark {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 6px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 14px;
+    }
+    .nav-section { margin-bottom: 24px; }
+    .nav-section .nav-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0 8px 8px;
+      font-weight: 500;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--r-input);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all var(--d-hover) var(--ease-out);
+      margin-bottom: 2px;
+    }
+    .nav-item:hover { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item.active { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item.disabled { opacity: 0.45; cursor: not-allowed; }
+    .nav-item.disabled:hover { background: transparent; color: var(--text-secondary); }
+    .nav-item .badge.soon { background: rgba(115, 115, 115, 0.18); color: var(--text-tertiary); font-size: 9px; padding: 1px 6px; }
+    .nav-item .icon {
+      width: 18px; height: 18px;
+      display: grid; place-items: center;
+      color: var(--text-tertiary);
+    }
+    .nav-item.active .icon { color: var(--primary-500); }
+    .nav-item .badge {
+      margin-left: auto;
+      font-size: 11px;
+      background: var(--surface-overlay);
+      padding: 2px 8px;
+      border-radius: var(--r-pill);
+      color: var(--text-tertiary);
+    }
+
+    .credit-card {
+      margin-top: auto;
+      padding: 16px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+    }
+    .credit-card .label { display: block; margin-bottom: 6px; }
+    .credit-card .amount {
+      font-size: 22px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 12px;
+    }
+    .credit-card .amount span { color: var(--text-tertiary); font-size: 13px; font-weight: 400; }
+    .credit-bar {
+      height: 4px; background: var(--neutral-800); border-radius: 4px;
+      overflow: hidden; margin-bottom: 12px;
+    }
+    .credit-bar .fill {
+      height: 100%;
+      width: 38%;
+      background: linear-gradient(90deg, var(--primary-500), var(--primary-400));
+      border-radius: 4px;
+    }
+    .credit-card .upgrade {
+      display: block; text-align: center;
+      padding: 8px;
+      background: rgba(124, 92, 255, 0.12);
+      color: var(--accent-400);
+      border-radius: var(--r-input);
+      font-size: 13px; font-weight: 500;
+      text-decoration: none;
+    }
+    .profile {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 8px;
+      margin-top: 12px;
+      border-radius: var(--r-input);
+      cursor: pointer;
+    }
+    .profile:hover { background: var(--surface-raised); }
+    .profile .avatar {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #4A3AAF, #7C5CFF);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 13px; font-weight: 600;
+    }
+    .profile .info { flex: 1; }
+    .profile .name { font-size: 13px; font-weight: 500; }
+    .profile .email { font-size: 11px; color: var(--text-tertiary); }
+
+    /* Main */
+    .main {
+      flex: 1;
+      overflow: auto;
+    }
+    .main-header {
+      padding: 32px 40px 24px;
+      display: flex; justify-content: space-between; align-items: end;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .greeting .eyebrow {
+      font-size: 13px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .greeting h1 {
+      font-size: 32px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .main-header-actions { display: flex; gap: 12px; }
+
+    /* Stats */
+    .stats {
+      padding: 28px 40px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .stat {
+      padding: 20px 24px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+    }
+    .stat .label { display: block; margin-bottom: 12px; }
+    .stat .value {
+      font-size: 28px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.02em;
+    }
+    .stat .delta { font-size: 12px; margin-top: 4px; }
+    .stat .delta.up { color: var(--success); }
+    .stat .delta.flat { color: var(--text-tertiary); }
+
+    /* Projects */
+    .projects {
+      padding: 12px 40px 80px;
+    }
+    .projects-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 20px;
+    }
+    .projects-head h2 { font-size: 20px; font-weight: 600; }
+    .filters { display: flex; gap: 8px; }
+    .filter {
+      padding: 6px 12px;
+      font-size: 13px;
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      cursor: pointer;
+    }
+    .filter.active {
+      background: var(--surface-raised);
+      color: var(--text-primary);
+      border-color: rgba(255,255,255,0.16);
+    }
+
+    .project-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .project-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      cursor: pointer;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .project-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.16); }
+    .project-thumb {
+      aspect-ratio: 16/9;
+      position: relative;
+      overflow: hidden;
+    }
+    .project-thumb .bg {
+      position: absolute; inset: 0;
+      background-size: cover; background-position: center;
+    }
+    .pc-1 .bg { background-image: url('./images/cover-wucheng.png'); background-size: cover; background-position: center; }
+    .pc-2 .bg { background-image: url('./images/cover-shiguang.png'); background-size: cover; background-position: center; }
+    .pc-3 .bg { background-image: url('./images/cover-haidi.jpg'); background-size: cover; background-position: center; }
+    .pc-4 .bg { background-image: url('./images/cover-changan.jpg'); background-size: cover; background-position: center; }
+    .pc-5 .bg { background-image: url('./images/cover-yinxing.jpg'); background-size: cover; background-position: center; }
+    .pc-6 .bg { background: linear-gradient(135deg, #3A2A2A 0%, #251515 50%, #0d0d0d 100%); }
+    .project-thumb .overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; justify-content: space-between;
+      padding: 14px;
+    }
+    .project-thumb .badge-row { display: flex; gap: 6px; }
+    .badge {
+      padding: 3px 8px;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      color: var(--text-primary);
+      letter-spacing: 0.02em;
+    }
+    .badge.live { color: var(--success); }
+    .badge.live::before { content: '●'; margin-right: 4px; animation: pulse-soft 1.6s ease-in-out infinite; }
+    .project-thumb .play-mini {
+      align-self: end;
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 50%;
+      display: grid; place-items: center;
+    }
+    .project-thumb .play-mini::after {
+      content: ''; width: 0; height: 0;
+      border-left: 11px solid var(--neutral-950);
+      border-top: 7px solid transparent;
+      border-bottom: 7px solid transparent;
+      margin-left: 3px;
+    }
+    .project-body { padding: 16px 18px 18px; }
+    .project-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .project-meta {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 12px; color: var(--text-tertiary);
+    }
+    .project-meta > span { display: flex; align-items: center; gap: 4px; }
+
+    /* New project card (empty state hint) */
+    .new-project {
+      border: 1px dashed var(--surface-hairline);
+      background: transparent;
+      display: grid; place-items: center;
+      min-height: 260px;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .new-project:hover {
+      border-color: var(--primary-500);
+      background: rgba(245, 194, 74, 0.04);
+    }
+    .new-project .inner { text-align: center; padding: 24px; }
+    .new-project .icon {
+      width: 48px; height: 48px;
+      background: rgba(245, 194, 74, 0.12);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      margin: 0 auto 14px;
+      color: var(--primary-400);
+      font-size: 24px; font-weight: 300;
+    }
+    .new-project h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .new-project p { font-size: 12px; color: var(--text-tertiary); }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label" data-i18n="h.sidebar.create">创作</div>
+      <a class="nav-item active" href="#"><span class="icon">▣</span> <span data-i18n="h.sidebar.projects">项目</span><span class="badge">12</span></a>
+      <a class="nav-item" href="32-discover.html"><span class="icon">◎</span> <span data-i18n="h.sidebar.discover">广场</span></a>
+      <a class="nav-item" href="15-character-edit.html"><span class="icon">◇</span> <span data-i18n="h.sidebar.castsets">剧集设定</span><span class="badge">7</span></a>
+      <a class="nav-item disabled" href="#" title="即将开放 · Templates coming soon"><span class="icon">▸</span> <span data-i18n="h.sidebar.templates">范本</span><span class="badge soon" data-i18n="h.sidebar.soon">即将开放</span></a>
+      <a class="nav-item disabled" href="#" title="即将开放"><span class="icon">♪</span> <span data-i18n="h.sidebar.voices">音色</span><span class="badge soon" data-i18n="h.sidebar.soon">即将开放</span></a>
+      <a class="nav-item disabled" href="#" title="即将开放"><span class="icon">⊠</span> <span data-i18n="h.sidebar.assets">素材库</span><span class="badge soon" data-i18n="h.sidebar.soon">即将开放</span></a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label" data-i18n="h.sidebar.team">团队</div>
+      <a class="nav-item" href="20-workspace.html"><span class="icon">◔</span> <span data-i18n="h.sidebar.workspaces">工作区</span></a>
+      <a class="nav-item" href="20-workspace.html"><span class="icon">◐</span> <span data-i18n="h.sidebar.members">成员</span></a>
+      <a class="nav-item" href="38-edit-requests.html"><span class="icon">⏳</span> <span data-i18n="h.sidebar.edit-requests">编修申请</span><span class="badge" style="color: var(--warning); background: rgba(245, 158, 11, 0.16);">3</span></a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label" data-i18n="h.sidebar.system">系统</div>
+      <a class="nav-item" href="29-notifications.html"><span class="icon">⚑</span> <span data-i18n="h.sidebar.notifications">通知</span><span class="badge" style="color: var(--primary-400); background: rgba(245, 194, 74, 0.16);">5</span></a>
+      <a class="nav-item" href="30-history.html"><span class="icon">↻</span> <span data-i18n="h.sidebar.history">版本历史</span></a>
+      <a class="nav-item" href="28-settings.html"><span class="icon">⚙</span> <span data-i18n="h.sidebar.settings">设置</span></a>
+      <a class="nav-item disabled" href="#" title="即将开放"><span class="icon">?</span> <span data-i18n="h.sidebar.docs">文档</span><span class="badge soon" data-i18n="h.sidebar.soon">即将开放</span></a>
+    </div>
+
+    <div class="credit-card">
+      <span class="label" data-i18n="h.credit.left">本月剩余点数</span>
+      <div class="amount">1,847 <span>/ 5,000</span></div>
+      <div class="credit-bar"><div class="fill"></div></div>
+      <a href="05-pricing.html" class="upgrade" data-i18n="h.credit.upgrade">升级 Team →</a>
+    </div>
+    <div class="profile">
+      <div class="avatar">J</div>
+      <div class="info">
+        <div class="name">Josh Hung</div>
+        <div class="email">Studio 方案</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="main-header">
+      <div class="greeting">
+        <div class="eyebrow">星期五 · 5 月 29 日</div>
+        <h1><span data-i18n="h.greeting.evening">晚安</span>，Josh</h1>
+      </div>
+      <div class="main-header-actions">
+        <div class="lang-switcher">
+          <button type="button" data-lang="zh" class="active">中</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+        <a href="#" class="btn btn-ghost" data-i18n="h.cta.search">⌘ 搜寻</a>
+        <a href="06-script-input.html" class="btn btn-primary" data-i18n="h.cta.new-project">+ 新项目</a>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="label" data-i18n="h.stat.month-episodes">本月集数</span>
+        <div class="value">18</div>
+        <div class="delta up">↑ 比上月 +6 集</div>
+      </div>
+      <div class="stat">
+        <span class="label" data-i18n="h.stat.rendering">渲染中</span>
+        <div class="value">3</div>
+        <div class="delta flat">2 個排隊 · 1 個渲染</div>
+      </div>
+      <div class="stat">
+        <span class="label" data-i18n="h.stat.points-used">已用点数</span>
+        <div class="value">3,153</div>
+        <div class="delta flat">月初剩 5,000</div>
+      </div>
+      <div class="stat">
+        <span class="label" data-i18n="h.stat.time-saved">节省工时</span>
+        <div class="value">42<span style="font-size: 16px; color: var(--text-tertiary);">h</span></div>
+        <div class="delta up">↑ 比手動快 14×</div>
+      </div>
+    </div>
+
+    <div class="projects">
+      <div class="projects-head">
+        <h2 data-i18n="h.proj.title">我的项目</h2>
+        <div class="filters">
+          <button class="filter active" data-i18n="h.proj.filter.all">全部</button>
+          <button class="filter" data-i18n="h.proj.filter.active">进行中</button>
+          <button class="filter" data-i18n="h.proj.filter.done">已完成</button>
+          <button class="filter" data-i18n="h.proj.filter.shared">已分享</button>
+        </div>
+      </div>
+
+      <div class="project-grid">
+        <a href="06-script-input.html" class="project-card pc-1">
+          <div class="project-thumb">
+            <div class="bg"></div>
+            <div class="overlay">
+              <div class="badge-row"><span class="badge">EP 03 / 08</span><span class="badge live">渲染中</span></div>
+              <div class="play-mini"></div>
+            </div>
+          </div>
+          <div class="project-body">
+            <div class="project-title">霧城獵人</div>
+            <div class="project-meta">
+              <span>8 集 · 短劇</span>
+              <span>· 1 小時前</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="06-script-input.html" class="project-card pc-2">
+          <div class="project-thumb">
+            <div class="bg"></div>
+            <div class="overlay">
+              <div class="badge-row"><span class="badge">EP 12 / 12</span></div>
+              <div class="play-mini"></div>
+            </div>
+          </div>
+          <div class="project-body">
+            <div class="project-title">時光寄信人</div>
+            <div class="project-meta">
+              <span>12 集 · 都市奇幻</span>
+              <span>· 昨天</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="06-script-input.html" class="project-card pc-3">
+          <div class="project-thumb">
+            <div class="bg"></div>
+            <div class="overlay">
+              <div class="badge-row"><span class="badge">EP 01 / 06</span></div>
+              <div class="play-mini"></div>
+            </div>
+          </div>
+          <div class="project-body">
+            <div class="project-title">深海訪客</div>
+            <div class="project-meta">
+              <span>6 集 · 懸疑</span>
+              <span>· 3 天前</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="06-script-input.html" class="project-card pc-4">
+          <div class="project-thumb">
+            <div class="bg"></div>
+            <div class="overlay">
+              <div class="badge-row"><span class="badge">草稿</span></div>
+              <div class="play-mini"></div>
+            </div>
+          </div>
+          <div class="project-body">
+            <div class="project-title">沙漠遺骨</div>
+            <div class="project-meta">
+              <span>2 集 · 古裝</span>
+              <span>· 5 天前</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="06-script-input.html" class="project-card pc-5">
+          <div class="project-thumb">
+            <div class="bg"></div>
+            <div class="overlay">
+              <div class="badge-row"><span class="badge">EP 04 / 04</span></div>
+              <div class="play-mini"></div>
+            </div>
+          </div>
+          <div class="project-body">
+            <div class="project-title">星圖夜遊</div>
+            <div class="project-meta">
+              <span>4 集 · 科幻</span>
+              <span>· 上週</span>
+            </div>
+          </div>
+        </a>
+
+        <a href="06-script-input.html" class="project-card new-project">
+          <div class="inner">
+            <div class="icon">+</div>
+            <h3>開新项目</h3>
+            <p>上傳劇本或從範本開始</p>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="container">
+        <span>KuiperAI · 本頁 02-home Preview</span>
+        <span><a href="index.html" style="color: inherit;">← 回 Preview Hub</a></span>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

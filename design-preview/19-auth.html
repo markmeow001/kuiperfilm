@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 登入</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      display: grid;
+      grid-template-columns: 480px 1fr;
+      min-height: 100vh;
+    }
+
+    /* LEFT: form */
+    .auth-form {
+      padding: 40px 56px;
+      display: flex; flex-direction: column;
+      min-height: 100vh;
+    }
+    .auth-brand {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 56px;
+      font-size: 15px; font-weight: 600;
+    }
+    .auth-brand .mark {
+      width: 26px; height: 26px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 13px;
+    }
+
+    .form-content {
+      flex: 1;
+      display: flex; flex-direction: column;
+      justify-content: center;
+      max-width: 360px;
+      width: 100%;
+    }
+    .form-title {
+      font-size: 32px; font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .form-sub {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 36px;
+      line-height: 1.6;
+    }
+
+    /* Tab switch */
+    .tab-switch {
+      display: flex; padding: 3px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      margin-bottom: 28px;
+    }
+    .tab-switch button {
+      flex: 1; padding: 8px;
+      background: transparent; border: none;
+      color: var(--text-tertiary);
+      font-size: 13px; font-weight: 500;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+    }
+    .tab-switch button.active {
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      font-weight: 600;
+    }
+
+    /* OAuth buttons */
+    .oauth-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .oauth-btn {
+      padding: 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-primary);
+      border-radius: var(--r-input);
+      cursor: pointer;
+      font-size: 13px;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .oauth-btn:hover { border-color: rgba(255,255,255,0.16); }
+    .oauth-btn .gicon { font-size: 14px; }
+
+    /* Divider */
+    .divider {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 20px;
+      font-size: 11px; color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--surface-hairline);
+    }
+
+    /* Email input */
+    .field-group { margin-bottom: 16px; }
+    .field-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: block;
+      font-weight: 500;
+    }
+    .field-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color var(--d-state) var(--ease-out), box-shadow var(--d-state) var(--ease-out);
+    }
+    .field-input:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(245,194,74,0.15); }
+    .field-helper {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 4px;
+    }
+    .field-helper a { color: var(--primary-400); text-decoration: none; }
+
+    /* Primary button */
+    .submit-btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border: none;
+      border-radius: var(--r-input);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      margin-bottom: 16px;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .submit-btn:hover {
+      background: var(--primary-400);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(245,194,74,0.25);
+    }
+
+    /* Other methods */
+    .other-methods {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 24px;
+    }
+    .other-methods a { color: var(--text-secondary); text-decoration: none; }
+    .other-methods a:hover { color: var(--text-primary); }
+
+    /* Invite hint */
+    .invite-hint {
+      padding: 14px 16px;
+      background: rgba(245, 194, 74, 0.04);
+      border: 1px solid rgba(245, 194, 74, 0.2);
+      border-radius: var(--r-card);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      display: flex; gap: 10px;
+      align-items: start;
+    }
+    .invite-hint .ic {
+      width: 24px; height: 24px;
+      background: rgba(245, 194, 74, 0.16);
+      color: var(--primary-400);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+    .invite-hint strong { color: var(--primary-400); }
+
+    .form-foot {
+      margin-top: auto;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: center;
+      padding-top: 32px;
+      line-height: 1.6;
+    }
+    .form-foot a { color: var(--text-secondary); text-decoration: none; }
+    .form-foot a:hover { color: var(--text-primary); }
+
+    /* RIGHT: brand canvas */
+    .auth-brand-canvas {
+      position: relative;
+      background:
+        radial-gradient(ellipse 70% 50% at 30% 40%, rgba(245, 194, 74, 0.08), transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 70%, rgba(124, 92, 255, 0.08), transparent 60%),
+        var(--surface-canvas);
+      overflow: hidden;
+    }
+    .canvas-content {
+      position: absolute;
+      inset: 64px;
+      display: flex; flex-direction: column;
+      justify-content: end;
+    }
+    .canvas-quote {
+      max-width: 480px;
+    }
+    .quote-eyebrow {
+      display: inline-block;
+      padding: 4px 12px;
+      background: rgba(245, 194, 74, 0.12);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      color: var(--primary-400);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+      margin-bottom: 24px;
+    }
+    .quote-text {
+      font-size: 32px;
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+      font-weight: 500;
+      margin-bottom: 28px;
+    }
+    .quote-text strong { color: var(--primary-400); font-weight: 600; }
+    .quote-attribute {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .quote-attribute .av {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, #2D2A4A, #1A1530);
+      border-radius: 50%;
+    }
+    .quote-attribute .info { font-size: 13px; }
+    .quote-attribute .name { font-weight: 500; }
+    .quote-attribute .role { color: var(--text-tertiary); }
+
+    /* Looping demo video frame */
+    .demo-frame {
+      position: absolute;
+      top: 64px; right: 64px;
+      width: 280px; aspect-ratio: 9/16;
+      border-radius: var(--r-card);
+      background: linear-gradient(135deg, #4A3A2A 0%, #2A1F15 60%, #0A0807 100%);
+      box-shadow: var(--elev-3);
+      overflow: hidden;
+      border: 1px solid var(--surface-hairline);
+    }
+    .demo-frame::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 50% 40% at 50% 50%, rgba(245, 194, 74, 0.2), transparent 70%);
+    }
+    .demo-frame .play {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px; height: 48px;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(16px);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      z-index: 1;
+    }
+    .demo-frame .play::after {
+      content: ''; width: 0; height: 0;
+      border-left: 14px solid white;
+      border-top: 9px solid transparent;
+      border-bottom: 9px solid transparent;
+      margin-left: 4px;
+    }
+    .demo-frame .label {
+      position: absolute; bottom: 16px; left: 16px; right: 16px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(12px);
+      border-radius: var(--r-input);
+      font-size: 11px;
+      color: white;
+      z-index: 1;
+    }
+    .demo-frame .label .ti { font-weight: 500; margin-bottom: 2px; }
+    .demo-frame .label .me { color: rgba(255,255,255,0.6); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  </style>
+</head>
+<body>
+
+  <!-- LEFT: form -->
+  <div class="auth-form">
+    <div class="auth-brand">
+      <div class="mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+
+    <div class="form-content">
+      <h1 class="form-title" data-i18n="a.welcome">欢迎回来</h1>
+      <p class="form-sub" data-i18n="a.sub">输入 email，我们会寄一封登入连结给你。不需要记密码。</p>
+
+      <div style="display: flex; justify-content: flex-end; margin-bottom: 16px;">
+        <div class="lang-switcher">
+          <button type="button" data-lang="zh" class="active">中</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+      </div>
+
+      <div class="tab-switch">
+        <button class="active" data-i18n="a.tab.login">登入</button>
+        <button data-i18n="a.tab.invite">申请邀请</button>
+      </div>
+
+      <!-- OAuth -->
+      <div class="oauth-row">
+        <button class="oauth-btn"><span class="gicon">G</span> Google</button>
+        <button class="oauth-btn"><span class="gicon">⌥</span> GitHub</button>
+        <button class="oauth-btn"><span class="gicon">⬡</span> SSO</button>
+      </div>
+
+      <div class="divider">或</div>
+
+      <!-- Email field -->
+      <div class="field-group">
+        <label class="field-label">Email</label>
+        <input class="field-input" type="email" placeholder="you@studio.com" value="holykinds@gmail.com" />
+        <div class="field-helper">
+          我們會寄 magic link · <a href="#">換用密碼登入</a>
+        </div>
+      </div>
+
+      <button class="submit-btn" data-i18n="a.send-link">寄送登入连结 →</button>
+
+      <div class="other-methods">
+        遇到問題？<a href="#">用密碼登入</a> · <a href="#">忘記 email</a>
+      </div>
+
+      <div class="invite-hint">
+        <div class="ic">✦</div>
+        <div>
+          <strong data-i18n="a.invite-strong">邀请制平台</strong><span data-i18n="a.invite-text">：目前 KuiperAI 采邀请制，没有 invite code？</span>
+          <a href="#" style="color: var(--primary-400);">申請名單 →</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-foot">
+      <a href="01-landing.html" data-i18n="a.foot.back">← 回首页</a> ·
+      <a href="#">服務條款</a> ·
+      <a href="#">隱私權</a><br/>
+      © 2026 KuiperAI · 短劇生成平台
+    </div>
+  </div>
+
+  <!-- RIGHT: brand canvas -->
+  <div class="auth-brand-canvas">
+
+    <!-- Demo frame top-right -->
+    <div class="demo-frame">
+      <div class="play"></div>
+      <div class="label">
+        <div class="ti">霧城獵人 · EP3</div>
+        <div class="me">@林夕 · 1.2 萬贊 · KuiperAI 生成</div>
+      </div>
+    </div>
+
+    <!-- Quote -->
+    <div class="canvas-content">
+      <div class="canvas-quote">
+        <span class="quote-eyebrow">✦ 創作者實測</span>
+        <p class="quote-text">
+          以前一集要 <strong>剪三天</strong>，
+          現在 KuiperAI <strong>三分鐘</strong>就出第一版。
+          剩下時間我去寫下一集劇本。
+        </p>
+        <div class="quote-attribute">
+          <div class="av"></div>
+          <div class="info">
+            <div class="name">林夕</div>
+            <div class="role">短劇創作者 · 小紅書 8.2 萬粉</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

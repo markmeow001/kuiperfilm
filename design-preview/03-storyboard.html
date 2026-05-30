@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 霧城獵人 EP3 — 分鏡編輯</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* Workspace topbar */
+    .ws-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      flex-shrink: 0;
+    }
+    .ws-top .brand-mini { display: flex; align-items: center; gap: 12px; }
+    .ws-top .brand-mark {
+      width: 24px; height: 24px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 12px;
+    }
+    .breadcrumb {
+      font-size: 13px; color: var(--text-tertiary);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .breadcrumb .sep { color: var(--neutral-700); }
+    .breadcrumb .current { color: var(--text-primary); font-weight: 500; }
+
+    /* Stepper */
+    .stepper {
+      display: flex; align-items: center; gap: 4px;
+      padding: 4px;
+      background: var(--surface-raised);
+      border-radius: var(--r-pill);
+    }
+    .stepper .step {
+      padding: 6px 14px;
+      font-size: 12px; font-weight: 500;
+      color: var(--text-tertiary);
+      border-radius: var(--r-pill);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .stepper .step.done { color: var(--text-secondary); }
+    .stepper .step.done::before { content: '✓ '; color: var(--success); }
+    .stepper .step.active {
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      font-weight: 600;
+    }
+
+    /* Body — 3-col workspace */
+    .ws-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 280px 1fr 360px;
+      min-height: 0;
+    }
+
+    /* Left: groups list */
+    .ws-groups {
+      border-right: 1px solid var(--surface-hairline);
+      overflow-y: auto;
+      padding: 16px 12px;
+    }
+    .ws-groups .group-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 8px;
+      margin-bottom: 12px;
+    }
+    .ws-groups .group-head .title { font-size: 14px; font-weight: 600; }
+    .ws-groups .group-head .count {
+      font-size: 11px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .group {
+      margin-bottom: 16px;
+    }
+    .group-label {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 500;
+    }
+    .group-label .num {
+      width: 18px; height: 18px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 4px;
+      display: grid; place-items: center;
+      font-size: 10px;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .panel-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--r-input);
+      cursor: pointer;
+      transition: background var(--d-hover) var(--ease-out);
+    }
+    .panel-row:hover { background: var(--surface-raised); }
+    .panel-row.active {
+      background: var(--surface-raised);
+      border: 1px solid rgba(245, 194, 74, 0.4);
+      box-shadow: 0 0 0 2px rgba(245, 194, 74, 0.1);
+    }
+    .panel-row .pthumb {
+      width: 36px; height: 56px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .panel-row .pthumb::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.5));
+    }
+    .panel-row .pinfo { flex: 1; min-width: 0; }
+    .panel-row .ptitle {
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .panel-row .pmeta {
+      font-size: 11px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      margin-top: 2px;
+    }
+    .panel-row .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .panel-row .status-dot.ready { background: var(--success); }
+    .panel-row .status-dot.generating { background: var(--accent-500); animation: pulse-soft 1.5s ease-in-out infinite; }
+    .panel-row .status-dot.error { background: var(--error); }
+    .panel-row .status-dot.idle { background: var(--neutral-700); }
+
+    .pt-1 { background-image: url('./images/loc-alley-wide.jpg'); background-size: cover; background-position: center; }
+    .pt-2 { background-image: url('./images/char-linye.jpg'); background-size: cover; background-position: center; }
+    .pt-3 { background-image: url('./images/prop-lamp.jpg'); background-size: cover; background-position: center; }
+    .pt-4 { background-image: url('./images/loc-alley-end.jpg'); background-size: cover; background-position: center; }
+    .pt-5 { background-image: url('./images/char-monster.jpg'); background-size: cover; background-position: center; }
+    .pt-6 { background-image: url('./images/loc-rune-ground.png'); background-size: cover; background-position: center; }
+
+    /* Center: canvas */
+    .ws-canvas {
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 30%, rgba(245, 194, 74, 0.04), transparent),
+        var(--surface-canvas);
+      display: flex; flex-direction: column;
+      overflow: auto;
+    }
+    .canvas-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--surface-hairline);
+      background: rgba(10, 10, 10, 0.5);
+      backdrop-filter: blur(12px);
+    }
+    .canvas-toolbar .left { display: flex; align-items: center; gap: 16px; }
+    .canvas-toolbar .ptitle-big { font-size: 15px; font-weight: 600; }
+    .canvas-toolbar .ptag {
+      padding: 3px 10px;
+      background: rgba(245, 194, 74, 0.12);
+      color: var(--primary-400);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .canvas-toolbar .right { display: flex; gap: 8px; }
+
+    .preview-stage {
+      flex: 1;
+      display: grid; place-items: center;
+      padding: 40px;
+      min-height: 0;
+    }
+    .preview-frame {
+      aspect-ratio: 9/16;
+      max-height: 100%;
+      max-width: 100%;
+      width: auto;
+      height: 560px;
+      border-radius: var(--r-card);
+      border: 1px solid var(--surface-hairline);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--elev-3);
+    }
+    .preview-frame .scene {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 30% 40%, rgba(120, 80, 50, 0.5), transparent 70%),
+        radial-gradient(ellipse 50% 40% at 70% 80%, rgba(40, 20, 10, 0.8), transparent),
+        linear-gradient(180deg, #2a1815 0%, #0a0807 80%);
+    }
+    .preview-frame .figure {
+      position: absolute;
+      bottom: 18%;
+      left: 50%; transform: translateX(-50%);
+      width: 30%; height: 50%;
+      background:
+        radial-gradient(ellipse at center top, rgba(245, 194, 74, 0.4), transparent 50%),
+        linear-gradient(180deg, rgba(60, 40, 30, 0.9), rgba(20, 10, 5, 0.95));
+      border-radius: 50% 50% 30% 30%;
+      filter: blur(1px);
+    }
+    .preview-frame .vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6));
+      pointer-events: none;
+    }
+    .preview-frame .subtitle {
+      position: absolute;
+      bottom: 6%; left: 50%; transform: translateX(-50%);
+      padding: 8px 18px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      border-radius: var(--r-input);
+      font-size: 14px;
+      color: white;
+      white-space: nowrap;
+    }
+    .preview-frame .timeline {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+    }
+    .preview-frame .timeline .fill {
+      height: 100%; width: 38%;
+      background: var(--primary-500);
+    }
+    .preview-frame .play-overlay {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 64px; height: 64px;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(12px);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity var(--d-hover) var(--ease-out);
+    }
+    .preview-frame:hover .play-overlay { opacity: 1; }
+    .preview-frame .play-overlay::after {
+      content: ''; width: 0; height: 0;
+      border-left: 18px solid white;
+      border-top: 11px solid transparent;
+      border-bottom: 11px solid transparent;
+      margin-left: 5px;
+    }
+
+    .panel-description {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 24px 24px 40px;
+      text-align: center;
+    }
+    .panel-description .label { display: inline-block; margin-bottom: 10px; }
+    .panel-description p {
+      color: var(--text-secondary);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    /* Right: Inspector */
+    .ws-inspector {
+      border-left: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      overflow-y: auto;
+      padding: 20px 20px 40px;
+    }
+    .inspector-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .inspector-head h3 { font-size: 14px; font-weight: 600; }
+    .inspector-head .actions { display: flex; gap: 4px; }
+    .inspector-head .iconbtn {
+      width: 28px; height: 28px;
+      background: transparent; border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: var(--r-input);
+      display: grid; place-items: center;
+      cursor: pointer; font-size: 14px;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .inspector-head .iconbtn:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.16); }
+
+    .ins-section { margin-bottom: 24px; }
+    .ins-section .ins-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 500;
+      margin-bottom: 10px;
+    }
+    .ins-field {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .ins-field .k { color: var(--text-tertiary); }
+    .ins-field .v {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+      font-size: 12px;
+    }
+    .ins-field.editable { cursor: pointer; }
+    .ins-field.editable:hover { border-color: rgba(255,255,255,0.16); }
+    .ins-field.editable .v::after { content: ' ✎'; opacity: 0.4; }
+
+    .ins-slider {
+      padding: 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 6px;
+    }
+    .ins-slider .row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; }
+    .ins-slider .row .k { color: var(--text-tertiary); }
+    .ins-slider .row .v { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+    .slider-track {
+      height: 4px; background: var(--neutral-800); border-radius: 4px;
+      position: relative;
+    }
+    .slider-track .fill {
+      position: absolute; top: 0; left: 0; height: 100%;
+      background: var(--primary-500);
+      border-radius: 4px;
+    }
+    .slider-track .thumb {
+      position: absolute; top: 50%;
+      width: 14px; height: 14px;
+      background: var(--text-primary);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+
+    .ins-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ins-pill {
+      padding: 5px 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .ins-pill.active {
+      background: rgba(245, 194, 74, 0.12);
+      border-color: rgba(245, 194, 74, 0.4);
+      color: var(--primary-400);
+    }
+
+    .ins-binding {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 6px;
+    }
+    .ins-binding .av {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ins-binding .av-1 { background: linear-gradient(135deg, #6A4A2A, #3A2515); }
+    .ins-binding .av-2 { background: linear-gradient(135deg, #4A2A4A, #2A152A); }
+    .ins-binding .info { flex: 1; }
+    .ins-binding .name { font-size: 13px; font-weight: 500; }
+    .ins-binding .role { font-size: 11px; color: var(--text-tertiary); }
+
+    .ins-action-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin-top: 20px;
+    }
+    .ins-action-row .btn { width: 100%; justify-content: center; }
+  </style>
+</head>
+<body>
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html" style="color: inherit; text-decoration: none;">项目</a>
+        <span class="sep">›</span>
+        <span>霧城獵人</span>
+        <span class="sep">›</span>
+        <span class="current">EP 03 · 黑霧降臨</span>
+      </div>
+    </div>
+
+    <div class="stepper">
+      <div class="step done" data-i18n="ws.step.script">剧本</div>
+      <div class="step done" data-i18n="ws.step.analyze">分析</div>
+      <div class="step active" data-i18n="ws.step.storyboard">分镜</div>
+      <div class="step" data-i18n="ws.step.voice">配音</div>
+      <div class="step" data-i18n="ws.step.render">渲染</div>
+      <div class="step" data-i18n="ws.step.final">成片</div>
+    </div>
+
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <span class="chip chip-success">● <span data-i18n="ws.autosave">自动保存</span></span>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn-ghost" href="23-voice.html" data-i18n="ws.step.voice">配音</a>
+    </div>
+  </header>
+
+  <div class="ws-body">
+    <!-- Groups list -->
+    <aside class="ws-groups">
+      <div class="group-head">
+        <div class="title">分鏡列表</div>
+        <div class="count">14 鏡 / 5 組</div>
+      </div>
+
+      <div class="group">
+        <div class="group-label"><div class="num">1</div> 開場 · 街口</div>
+        <div class="panel-row">
+          <div class="pthumb pt-1"></div>
+          <div class="pinfo">
+            <div class="ptitle">街口霧氣升起</div>
+            <div class="pmeta">9:16 · 4s · ARK</div>
+          </div>
+          <div class="status-dot ready"></div>
+        </div>
+        <div class="panel-row">
+          <div class="pthumb pt-2"></div>
+          <div class="pinfo">
+            <div class="ptitle">主角抬頭看天</div>
+            <div class="pmeta">9:16 · 3s · ARK</div>
+          </div>
+          <div class="status-dot ready"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-label"><div class="num">2</div> 黑霧 · 對峙</div>
+        <div class="panel-row active">
+          <div class="pthumb pt-1"></div>
+          <div class="pinfo">
+            <div class="ptitle">獵人持燈走進巷弄</div>
+            <div class="pmeta">9:16 · 5s · ARK Seedance 2.0</div>
+          </div>
+          <div class="status-dot ready"></div>
+        </div>
+        <div class="panel-row">
+          <div class="pthumb pt-4"></div>
+          <div class="pinfo">
+            <div class="ptitle">霧中浮現黑影</div>
+            <div class="pmeta">9:16 · 6s · BobAPI</div>
+          </div>
+          <div class="status-dot generating"></div>
+        </div>
+        <div class="panel-row">
+          <div class="pthumb pt-3"></div>
+          <div class="pinfo">
+            <div class="ptitle">獵人持槍對峙</div>
+            <div class="pmeta">9:16 · 4s · ARK</div>
+          </div>
+          <div class="status-dot ready"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-label"><div class="num">3</div> 衝突 · 戰鬥</div>
+        <div class="panel-row">
+          <div class="pthumb pt-5"></div>
+          <div class="pinfo">
+            <div class="ptitle">槍火劃破黑霧</div>
+            <div class="pmeta">9:16 · 5s · fal</div>
+          </div>
+          <div class="status-dot idle"></div>
+        </div>
+        <div class="panel-row">
+          <div class="pthumb pt-2"></div>
+          <div class="pinfo">
+            <div class="ptitle">怪物倒地解體</div>
+            <div class="pmeta">9:16 · 7s · ARK</div>
+          </div>
+          <div class="status-dot idle"></div>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="group-label"><div class="num">4</div> 餘波 · 線索</div>
+        <div class="panel-row">
+          <div class="pthumb pt-6"></div>
+          <div class="pinfo">
+            <div class="ptitle">霧散後地上印記</div>
+            <div class="pmeta">9:16 · 4s · ARK</div>
+          </div>
+          <div class="status-dot error"></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Canvas -->
+    <main class="ws-canvas">
+      <div class="canvas-toolbar">
+        <div class="left">
+          <span class="ptag">G2 · P3</span>
+          <span class="ptitle-big">獵人持燈走進巷弄</span>
+        </div>
+        <div class="right">
+          <button class="btn btn-ghost">↺ 重新生成</button>
+          <button class="btn btn-ghost">🔒 鎖定</button>
+          <a class="btn btn-primary" href="04-generation.html">生成下一鏡 →</a>
+        </div>
+      </div>
+
+      <div class="preview-stage">
+        <div class="preview-frame">
+          <div class="scene"></div>
+          <div class="figure"></div>
+          <div class="vignette"></div>
+          <div class="play-overlay"></div>
+          <div class="subtitle">"這霧不對勁..."</div>
+          <div class="timeline"><div class="fill"></div></div>
+        </div>
+      </div>
+
+      <div class="panel-description">
+        <span class="label chip">場景描述</span>
+        <p>夜色濃稠，獵人手持油燈步入無人巷弄。燈光勉強照亮三步之內，遠處黑霧如活物般緩緩蠕動。鏡頭從低角度跟拍，緊張感隨腳步聲累積。</p>
+      </div>
+    </main>
+
+    <!-- Inspector -->
+    <aside class="ws-inspector">
+      <div class="inspector-head">
+        <h3>鏡頭設定</h3>
+        <div class="actions">
+          <button class="iconbtn">⤓</button>
+          <button class="iconbtn">⋯</button>
+        </div>
+      </div>
+
+      <div class="ins-section">
+        <div class="ins-label">基本</div>
+        <div class="ins-field editable"><span class="k">時長</span><span class="v">5.0s</span></div>
+        <div class="ins-field editable"><span class="k">解析度</span><span class="v">1080×1920</span></div>
+        <div class="ins-field editable"><span class="k">幀率</span><span class="v">30 fps</span></div>
+      </div>
+
+      <div class="ins-section">
+        <div class="ins-label">模型路由</div>
+        <div class="ins-field editable"><span class="k">Provider</span><span class="v">ARK Seedance 2.0</span></div>
+        <div class="ins-field editable"><span class="k">模式</span><span class="v">i2v · 高品質</span></div>
+        <div class="ins-field"><span class="k">點數消耗</span><span class="v" style="color: var(--primary-400);">28 點</span></div>
+      </div>
+
+      <div class="ins-section">
+        <div class="ins-label">參數</div>
+        <div class="ins-slider">
+          <div class="row"><span class="k">Seed</span><span class="v">8273645</span></div>
+          <div class="slider-track"><div class="fill" style="width: 42%;"></div><div class="thumb" style="left: 42%;"></div></div>
+        </div>
+        <div class="ins-slider">
+          <div class="row"><span class="k">Reference 強度</span><span class="v">0.78</span></div>
+          <div class="slider-track"><div class="fill" style="width: 78%;"></div><div class="thumb" style="left: 78%;"></div></div>
+        </div>
+        <div class="ins-slider">
+          <div class="row"><span class="k">運動幅度</span><span class="v">中</span></div>
+          <div class="slider-track"><div class="fill" style="width: 55%;"></div><div class="thumb" style="left: 55%;"></div></div>
+        </div>
+      </div>
+
+      <div class="ins-section">
+        <div class="ins-label">運鏡 · Cinema Studio</div>
+        <div class="ins-pills">
+          <span class="ins-pill active">Dolly In</span>
+          <span class="ins-pill active">Low Angle</span>
+          <span class="ins-pill">Tracking</span>
+          <span class="ins-pill">Pan Right</span>
+          <span class="ins-pill">+ 加運鏡</span>
+        </div>
+      </div>
+
+      <div class="ins-section">
+        <div class="ins-label">綁定角色</div>
+        <div class="ins-binding">
+          <div class="av av-1"></div>
+          <div class="info">
+            <div class="name">獵人 · 林夜</div>
+            <div class="role">主角 · v3 造型</div>
+          </div>
+          <button class="iconbtn">✎</button>
+        </div>
+        <div class="ins-binding">
+          <div class="av av-2"></div>
+          <div class="info">
+            <div class="name">巷弄場景</div>
+            <div class="role">霧 · 雨夜</div>
+          </div>
+          <button class="iconbtn">✎</button>
+        </div>
+      </div>
+
+      <div class="ins-action-row">
+        <button class="btn btn-ghost">↺ 重生</button>
+        <button class="btn btn-accent">⚡ 變化 ×4</button>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

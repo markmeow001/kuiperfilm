@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 視覺風格庫</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { background: var(--surface-canvas); min-height: 100vh; }
+    .top {
+      max-width: 1280px; margin: 0 auto;
+      padding: 40px 32px 24px;
+      display: flex; justify-content: space-between; align-items: end;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .top h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 6px; }
+    .top .sub { font-size: 14px; color: var(--text-secondary); }
+    .top .badge {
+      display: inline-block; padding: 4px 10px;
+      background: rgba(245, 194, 74, 0.16); color: var(--primary-400);
+      border-radius: var(--r-pill); font-size: 11px; font-weight: 500;
+      letter-spacing: 0.04em; margin-right: 8px;
+    }
+    .container { max-width: 1280px; margin: 0 auto; padding: 24px 32px 80px; }
+    .cat-section { margin-bottom: 40px; }
+    .cat-title {
+      font-size: 18px; font-weight: 600;
+      margin-bottom: 14px; color: var(--text-primary);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .cat-count {
+      font-size: 11px; color: var(--text-tertiary);
+      background: var(--surface-raised);
+      padding: 2px 8px; border-radius: var(--r-pill);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+    }
+    .style-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      cursor: pointer;
+      padding: 0;
+      text-align: left;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .style-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(245, 194, 74, 0.5);
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+    .style-card:focus-visible {
+      outline: 2px solid var(--primary-500);
+      outline-offset: 2px;
+    }
+    .style-card .thumb {
+      aspect-ratio: 1/1;
+      background-size: cover;
+      background-position: center;
+      background-color: var(--neutral-800);
+    }
+    .style-card .meta { padding: 10px 12px 12px; }
+    .style-card .name-zh { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+    .style-card .name-en { font-size: 11px; color: var(--text-tertiary); }
+    /* Lighting cards 用紫色框作區分 */
+    .style-card[data-kind="lighting"] {
+      border-color: rgba(124, 92, 255, 0.25);
+    }
+    .style-card[data-kind="lighting"]:hover {
+      border-color: rgba(124, 92, 255, 0.6);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="lang-switcher" style="position: fixed; top: 16px; right: 16px; z-index: 9999; display: inline-flex; gap: 2px; padding: 4px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: 999px; font-size: 11px;">
+    <button type="button" data-lang="zh" class="active" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">中</button>
+    <button type="button" data-lang="en" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">EN</button>
+  </div>
+
+  <div class="top">
+    <div>
+      <span class="badge">STYLE LIBRARY</span>
+      <h1>視覺風格庫</h1>
+      <div class="sub">30 視覺風格 + 8 光影預設 · 每個 thumbnail 由 Gemini 3 Pro Image 產出 · 共享 prompt 規範</div>
+    </div>
+    <div style="text-align: right; font-size: 11px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace;">
+      38 thumbnails<br/>
+      source: src/lib/style-library/thumbnail-prompts.ts
+    </div>
+  </div>
+
+  <div class="container">
+    <section class="cat-section">
+      <h2 class="cat-title">寫實影視 <span class="cat-count">5</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="american_vertical_drama" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/american_vertical_drama.png');"></div>
+            <div class="meta">
+              <div class="name-zh">北美短劇</div>
+              <div class="name-en">American Vertical Drama</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="cinematic_realism" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/cinematic_realism.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">院線寫實</div>
+              <div class="name-en">Cinematic Realism</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="documentary" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/documentary.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">紀錄片風</div>
+              <div class="name-en">Documentary</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="hk_cinema" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/hk_cinema.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">港片質感</div>
+              <div class="name-en">HK Cinema</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="kdrama_cinematic" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/kdrama_cinematic.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">韓劇電影感</div>
+              <div class="name-en">K-Drama Cinematic</div>
+            </div>
+          </button>
+      </div>
+    </section>
+    <section class="cat-section">
+      <h2 class="cat-title">日系動漫 <span class="cat-count">6</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="90s_cel_anime" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/90s_cel_anime.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">90s 賽璐璐</div>
+              <div class="name-en">90s Cel Anime</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="ghibli_fantasy" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/ghibli_fantasy.png');"></div>
+            <div class="meta">
+              <div class="name-zh">吉卜力奇幻</div>
+              <div class="name-en">Ghibli Fantasy</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="isekai_light_novel" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/isekai_light_novel.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">異世界輕小說</div>
+              <div class="name-en">Isekai Light Novel</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="kyoani_school" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/kyoani_school.png');"></div>
+            <div class="meta">
+              <div class="name-zh">京阿尼校園</div>
+              <div class="name-en">KyoAni Slice-of-Life</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="modern_painterly_anime" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/modern_painterly_anime.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">現代厚塗</div>
+              <div class="name-en">Modern Painterly Anime</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="shinkai_urban" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/shinkai_urban.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">新海誠都市</div>
+              <div class="name-en">Shinkai Urban</div>
+            </div>
+          </button>
+      </div>
+    </section>
+    <section class="cat-section">
+      <h2 class="cat-title">美漫 / 西方 <span class="cat-count">5</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="american_storybook" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/american_storybook.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">美式繪本</div>
+              <div class="name-en">American Storybook</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="arcane_painterly" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/arcane_painterly.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">Arcane 風</div>
+              <div class="name-en">Arcane Painterly</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="dc_dark_heroic" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/dc_dark_heroic.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">DC 黑暗英雄</div>
+              <div class="name-en">DC Dark Heroic</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="marvel_action_comic" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/marvel_action_comic.png');"></div>
+            <div class="meta">
+              <div class="name-zh">Marvel 動作</div>
+              <div class="name-en">Marvel Action Comic</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="spider_verse" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/spider_verse.png');"></div>
+            <div class="meta">
+              <div class="name-zh">Spider-Verse 風</div>
+              <div class="name-en">Multiverse Comic</div>
+            </div>
+          </button>
+      </div>
+    </section>
+    <section class="cat-section">
+      <h2 class="cat-title">韓系 <span class="cat-count">3</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="kdrama_romance" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/kdrama_romance.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">韓劇浪漫</div>
+              <div class="name-en">K-Drama Romance</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="webtoon_premium" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/webtoon_premium.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">極細韓漫</div>
+              <div class="name-en">Webtoon Premium</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="webtoon_urban" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/webtoon_urban.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">韓漫都市</div>
+              <div class="name-en">Webtoon Modern Urban</div>
+            </div>
+          </button>
+      </div>
+    </section>
+    <section class="cat-section">
+      <h2 class="cat-title">國風 <span class="cat-count">3</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="ink_wash_wuxia" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/ink_wash_wuxia.png');"></div>
+            <div class="meta">
+              <div class="name-zh">古風水墨</div>
+              <div class="name-en">Ink Wash Wuxia</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="modern_chinese_cg" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/modern_chinese_cg.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">國風 CG</div>
+              <div class="name-en">Modern Chinese CG</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="xianxia_animation" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/xianxia_animation.png');"></div>
+            <div class="meta">
+              <div class="name-zh">國漫仙俠</div>
+              <div class="name-en">Xianxia Animation</div>
+            </div>
+          </button>
+      </div>
+    </section>
+    <section class="cat-section">
+      <h2 class="cat-title">CG / 3D <span class="cat-count">4</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="game_cg" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/game_cg.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">遊戲 CG</div>
+              <div class="name-en">Game Cinematic</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="pixar_3d" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/pixar_3d.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">Pixar 3D</div>
+              <div class="name-en">Pixar 3D</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="plush_chibi" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/plush_chibi.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">Q 版毛絨英雄</div>
+              <div class="name-en">Plush Chibi Hero</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="ue5_cinematic" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/ue5_cinematic.png');"></div>
+            <div class="meta">
+              <div class="name-zh">UE5 史詩</div>
+              <div class="name-en">Unreal Cinematic</div>
+            </div>
+          </button>
+      </div>
+    </section>
+    <section class="cat-section">
+      <h2 class="cat-title">復古 / 概念 <span class="cat-count">4</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="atomic_punk_apocalypse" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/atomic_punk_apocalypse.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">原子朋克末日</div>
+              <div class="name-en">Atomic-Punk Apocalypse</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="cyberpunk" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/cyberpunk.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">賽博朋克</div>
+              <div class="name-en">Cyberpunk</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="steampunk" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/steampunk.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">蒸汽朋克</div>
+              <div class="name-en">Steampunk</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="synthwave_80s" data-kind="style">
+            <div class="thumb" style="background-image: url('./images/styles/synthwave_80s.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">80s 合成波</div>
+              <div class="name-en">Synthwave 80s</div>
+            </div>
+          </button>
+      </div>
+    </section>
+    <section class="cat-section">
+      <h2 class="cat-title">光影 <span class="cat-count">8</span></h2>
+      <div class="grid">
+        
+          <button class="style-card" data-id="blue_hour" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/blue_hour.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">藍調黎明</div>
+              <div class="name-en">Blue Hour Dawn</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="candlelight_warm" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/candlelight_warm.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">暖燭光</div>
+              <div class="name-en">Warm Candlelight</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="dramatic_high_contrast" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/dramatic_high_contrast.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">戲劇高對比</div>
+              <div class="name-en">Dramatic High Contrast</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="fluorescent_cold" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/fluorescent_cold.jpg');"></div>
+            <div class="meta">
+              <div class="name-zh">冷螢光</div>
+              <div class="name-en">Fluorescent Cold</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="golden_hour" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/golden_hour.png');"></div>
+            <div class="meta">
+              <div class="name-zh">黃金時刻</div>
+              <div class="name-en">Golden Hour</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="moonlight_cool" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/moonlight_cool.png');"></div>
+            <div class="meta">
+              <div class="name-zh">冷月光</div>
+              <div class="name-en">Cool Moonlight</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="rainy_neon_night" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/rainy_neon_night.png');"></div>
+            <div class="meta">
+              <div class="name-zh">雨夜霓虹</div>
+              <div class="name-en">Rainy Neon Night</div>
+            </div>
+          </button>
+          <button class="style-card" data-id="soft_window_light" data-kind="lighting">
+            <div class="thumb" style="background-image: url('./images/styles/soft_window_light.png');"></div>
+            <div class="meta">
+              <div class="name-zh">柔和窗光</div>
+              <div class="name-en">Soft Window Light</div>
+            </div>
+          </button>
+      </div>
+    </section>
+  </div>
+
+</body>
+</html>

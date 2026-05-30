@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 通知</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { background: var(--surface-canvas); min-height: 100vh; }
+    .top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .brand-mini { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+
+    .container { max-width: 760px; margin: 0 auto; padding: 40px 32px 80px; }
+    .head {
+      display: flex; justify-content: space-between; align-items: end;
+      margin-bottom: 24px;
+    }
+    .head h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+    .head .actions { display: flex; gap: 8px; }
+    .head .filters {
+      display: flex; padding: 3px; gap: 2px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      margin-bottom: 24px;
+    }
+    .head .filters button {
+      padding: 6px 14px;
+      background: transparent; border: none;
+      color: var(--text-tertiary);
+      font-size: 12px; font-weight: 500;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+    }
+    .head .filters button.active {
+      background: var(--surface-overlay);
+      color: var(--text-primary);
+    }
+    .head .filters .count {
+      margin-left: 4px;
+      padding: 1px 6px;
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-radius: var(--r-pill);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+    }
+
+    .group-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 500;
+      padding: 14px 4px 8px;
+    }
+    .noti {
+      display: flex; align-items: start; gap: 14px;
+      padding: 14px 18px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: border-color var(--d-hover) var(--ease-out);
+    }
+    .noti:hover { border-color: rgba(255,255,255,0.16); }
+    .noti.unread { background: rgba(245, 194, 74, 0.03); border-color: rgba(245, 194, 74, 0.2); }
+    .noti.unread::before {
+      content: ''; display: block;
+      width: 6px; height: 6px;
+      background: var(--primary-500);
+      border-radius: 50%;
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+    .noti.read::before {
+      content: ''; display: block;
+      width: 6px; height: 6px;
+      background: transparent;
+      flex-shrink: 0;
+    }
+    .noti .icon {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+      font-size: 14px;
+    }
+    .noti .icon.done { background: rgba(34, 197, 94, 0.16); color: var(--success); }
+    .noti .icon.err { background: rgba(239, 68, 68, 0.16); color: var(--error); }
+    .noti .icon.invite { background: rgba(124, 92, 255, 0.16); color: var(--accent-400); }
+    .noti .icon.system { background: rgba(74, 143, 229, 0.16); color: #6FA8E5; }
+    .noti .body { flex: 1; min-width: 0; }
+    .noti .title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+    .noti .desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 6px; }
+    .noti .meta {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .noti .meta a { color: var(--primary-400); text-decoration: none; }
+
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="02-home.html" class="btn btn-ghost">← 回项目</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="head">
+      <div>
+        <h1 data-i18n="no.title">通知</h1>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" data-i18n="no.mark-all">全部标为已读</button>
+      </div>
+    </div>
+
+    <div class="filters" style="display: inline-flex; margin-bottom: 24px;">
+      <button class="active" data-i18n="no.all">全部</button>
+      <button data-i18n="no.unread">未读 <span class="count">3</span></button>
+      <button>渲染</button>
+      <button>团队</button>
+      <button>系统</button>
+    </div>
+
+    <div class="group-label">今天</div>
+
+    <div class="noti unread">
+      <div class="icon done">✓</div>
+      <div class="body">
+        <div class="title">霧城獵人 · EP1 渲染完成</div>
+        <div class="desc">12 段全部成功渲染，已用 708 点数。预览成片 →</div>
+        <div class="meta">
+          <span>5 分钟前</span>
+          <a href="25-final.html">查看成片</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="noti unread">
+      <div class="icon err">⚠</div>
+      <div class="body">
+        <div class="title">霧城獵人 · EP1 · P6 重试成功</div>
+        <div class="desc">原 ARK face filter 失败已自动切到 AtlasCloud 完成。失败点数已退回。</div>
+        <div class="meta">
+          <span>18 分钟前</span>
+          <a href="24-render.html">查看详情</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="noti unread">
+      <div class="icon invite">◔</div>
+      <div class="body">
+        <div class="title">林夕 邀请你加入 Filmstar Studio</div>
+        <div class="desc">Owner role · 7 个项目 · Studio plan</div>
+        <div class="meta">
+          <span>1 小时前</span>
+          <a href="20-workspace.html">接受</a>
+          <a href="#" style="color: var(--text-tertiary);">拒绝</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="group-label">昨天</div>
+
+    <div class="noti read">
+      <div class="icon done">✓</div>
+      <div class="body">
+        <div class="title">深海訪客 · EP1 渲染完成</div>
+        <div class="desc">6 段全部成功，512 点数。</div>
+        <div class="meta">
+          <span>昨天 19:32</span>
+          <a href="#">查看</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="noti read">
+      <div class="icon system">ⓘ</div>
+      <div class="body">
+        <div class="title">系统更新 · Cinema Studio 3.5 上线</div>
+        <div class="desc">新增 50+ 镜头预设，更精确的运镜模拟。所有 Studio 方案立即可用。</div>
+        <div class="meta">
+          <span>昨天 14:18</span>
+          <a href="#">看更新内容</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="group-label">这週稍早</div>
+
+    <div class="noti read">
+      <div class="icon done">✓</div>
+      <div class="body">
+        <div class="title">月度点数已重置</div>
+        <div class="desc">本月 5,000 点 · Studio 方案。下次重置：6 月 28 日</div>
+        <div class="meta">
+          <span>5 月 28 日</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

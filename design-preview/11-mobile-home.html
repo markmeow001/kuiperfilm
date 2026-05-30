@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI 手機版 · 我的项目</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background: var(--surface-canvas);
+      max-width: 100%;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    /* mobile container — 390px iPhone 14 width */
+    .device {
+      max-width: 390px;
+      margin: 24px auto;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 32px;
+      overflow: hidden;
+      position: relative;
+      box-shadow: var(--elev-3);
+    }
+    .device-label {
+      max-width: 390px;
+      margin: 0 auto 8px;
+      font-size: 11px; color: var(--text-tertiary);
+      text-align: center;
+      letter-spacing: 0.06em;
+    }
+
+    /* Status bar (decorative) */
+    .status-bar {
+      height: 44px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 24px;
+      font-size: 14px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .status-bar .icons { display: flex; gap: 6px; font-size: 12px; }
+
+    /* App nav */
+    .m-top {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 20px 14px;
+    }
+    .m-top .brand-mini { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+    .m-top .brand-mark {
+      width: 24px; height: 24px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px; display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 11px;
+    }
+    .m-top .avatar {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, #4A3AAF, #7C5CFF);
+      border-radius: 50%; display: grid; place-items: center;
+      font-size: 12px; font-weight: 600;
+    }
+
+    /* Greeting */
+    .m-greeting {
+      padding: 4px 20px 18px;
+    }
+    .m-greeting .eye { font-size: 12px; color: var(--text-tertiary); margin-bottom: 4px; }
+    .m-greeting h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+
+    /* Credit pill */
+    .m-credit {
+      margin: 0 20px 18px;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, rgba(245, 194, 74, 0.08), rgba(245, 194, 74, 0.02));
+      border: 1px solid rgba(245, 194, 74, 0.2);
+      border-radius: var(--r-card);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .m-credit .icon {
+      width: 36px; height: 36px;
+      background: rgba(245, 194, 74, 0.16);
+      border-radius: 50%; display: grid; place-items: center;
+      font-size: 16px; color: var(--primary-400);
+    }
+    .m-credit .info { flex: 1; }
+    .m-credit .info .v {
+      font-size: 16px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .m-credit .info .v .unit { color: var(--text-tertiary); font-size: 12px; font-weight: 400; }
+    .m-credit .info .k { font-size: 11px; color: var(--text-tertiary); }
+    .m-credit .upgrade {
+      padding: 6px 10px;
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-radius: var(--r-pill);
+      font-size: 11px; font-weight: 600;
+      text-decoration: none;
+    }
+
+    /* Stats row */
+    .m-stats {
+      padding: 0 20px;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .m-stat {
+      padding: 12px 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      text-align: center;
+    }
+    .m-stat .v {
+      font-size: 18px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .m-stat .k { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+
+    /* Section title */
+    .m-section-head {
+      padding: 0 20px 12px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .m-section-head h2 { font-size: 17px; font-weight: 600; }
+    .m-section-head a { color: var(--text-tertiary); font-size: 13px; text-decoration: none; }
+
+    /* Project cards */
+    .m-projects { padding: 0 20px; display: flex; flex-direction: column; gap: 14px; }
+    .m-project {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+    }
+    .m-thumb {
+      aspect-ratio: 16/9;
+      position: relative;
+      overflow: hidden;
+    }
+    .m-thumb .bg { position: absolute; inset: 0; }
+    .mp-1 .bg { background: linear-gradient(135deg, #4A3A2A 0%, #2A1F15 50%, #0d0d0d 100%); }
+    .mp-2 .bg { background: linear-gradient(135deg, #2D2A4A 0%, #1A1530 50%, #0d0d0d 100%); }
+    .mp-3 .bg { background: linear-gradient(135deg, #4A2A3A 0%, #2A1525 50%, #0d0d0d 100%); }
+    .m-thumb .overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; justify-content: space-between;
+      padding: 12px;
+    }
+    .m-thumb .badge-row { display: flex; gap: 5px; }
+    .m-badge {
+      padding: 3px 8px;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      border-radius: var(--r-pill);
+      font-size: 10px; color: white;
+    }
+    .m-badge.live { color: var(--success); }
+    .m-badge.live::before { content: '●'; margin-right: 4px; animation: pulse-soft 1.6s ease-in-out infinite; }
+    .m-thumb .play-mini {
+      align-self: end;
+      width: 32px; height: 32px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 50%; display: grid; place-items: center;
+    }
+    .m-thumb .play-mini::after {
+      content: ''; width: 0; height: 0;
+      border-left: 10px solid var(--neutral-950);
+      border-top: 6px solid transparent;
+      border-bottom: 6px solid transparent;
+      margin-left: 3px;
+    }
+    .m-body { padding: 14px 16px 16px; }
+    .m-body .title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .m-body .meta { font-size: 11px; color: var(--text-tertiary); display: flex; gap: 10px; }
+
+    /* Mobile revert banner (per memory: mobile UA auto-redirect) */
+    .revert-banner {
+      margin: 18px 20px 0;
+      padding: 12px 14px;
+      background: rgba(124, 92, 255, 0.06);
+      border: 1px solid rgba(124, 92, 255, 0.2);
+      border-radius: var(--r-card);
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px;
+    }
+    .revert-banner .icon {
+      width: 28px; height: 28px;
+      background: rgba(124, 92, 255, 0.16);
+      border-radius: 6px; display: grid; place-items: center;
+      font-size: 13px; color: var(--accent-400);
+    }
+    .revert-banner .text {
+      flex: 1; color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .revert-banner .text strong { color: var(--text-primary); }
+    .revert-banner .switch {
+      padding: 5px 10px;
+      background: var(--accent-500);
+      color: white;
+      border-radius: var(--r-pill);
+      font-size: 11px; font-weight: 500;
+      text-decoration: none;
+    }
+
+    /* Bottom tab bar */
+    .m-tab-bar {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      padding: 12px 16px 28px;
+      background: var(--surface-canvas);
+      border-top: 1px solid var(--surface-hairline);
+      margin-top: 24px;
+      gap: 8px;
+    }
+    .m-tab {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 8px;
+      color: var(--text-tertiary);
+      text-decoration: none;
+      border-radius: var(--r-input);
+    }
+    .m-tab.active { color: var(--primary-400); }
+    .m-tab .icon { font-size: 20px; }
+    .m-tab .lbl { font-size: 10px; font-weight: 500; }
+
+    /* FAB */
+    .m-fab {
+      position: absolute;
+      right: 24px; bottom: 110px;
+      width: 56px; height: 56px;
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 28px; font-weight: 300;
+      box-shadow: 0 8px 24px rgba(245, 194, 74, 0.4), 0 4px 12px rgba(0,0,0,0.3);
+      text-decoration: none;
+      z-index: 5;
+    }
+
+    /* Side label */
+    .device-note {
+      max-width: 390px;
+      margin: 12px auto 0;
+      padding: 12px 16px;
+      background: rgba(124, 92, 255, 0.04);
+      border: 1px solid rgba(124, 92, 255, 0.16);
+      border-radius: var(--r-card);
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .device-note strong { color: var(--accent-400); }
+  </style>
+</head>
+<body>
+  <div class="lang-switcher" style="position: fixed; top: 16px; right: 16px; z-index: 9999; display: inline-flex; gap: 2px; padding: 4px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: 999px; font-size: 11px;">
+    <button type="button" data-lang="zh" class="active" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">中</button>
+    <button type="button" data-lang="en" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">EN</button>
+  </div>
+  <div class="device-label">📱 iPhone 14 · 390 × 844</div>
+  <div class="device">
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">📶 🔋</span>
+    </div>
+
+    <!-- Top app bar -->
+    <div class="m-top">
+      <div class="brand-mini">
+        <div class="brand-mark">K</div>
+        <span>KuiperAI</span>
+      </div>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <span style="font-size: 18px; color: var(--text-tertiary);">🔍</span>
+        <div class="avatar">J</div>
+      </div>
+    </div>
+
+    <!-- Greeting -->
+    <div class="m-greeting">
+      <div class="eye">星期四 · 5 月 28 日</div>
+      <h1>晚安，Josh</h1>
+    </div>
+
+    <!-- Credit -->
+    <div class="m-credit">
+      <div class="icon">⚡</div>
+      <div class="info">
+        <div class="v">1,847 <span class="unit">/ 5,000 點</span></div>
+        <div class="k">Studio 方案 · 本月剩餘</div>
+      </div>
+      <a href="05-pricing.html" class="upgrade">升級</a>
+    </div>
+
+    <!-- Stats -->
+    <div class="m-stats">
+      <div class="m-stat"><div class="v">18</div><div class="k" data-i18n="h.stat.month-episodes">本月集数</div></div>
+      <div class="m-stat"><div class="v">3</div><div class="k" data-i18n="h.stat.rendering">渲染中</div></div>
+      <div class="m-stat"><div class="v">42h</div><div class="k" data-i18n="h.stat.time-saved">省时</div></div>
+    </div>
+
+    <!-- Revert to desktop banner -->
+    <div class="revert-banner">
+      <div class="icon">🖥</div>
+      <div class="text">
+        <strong data-i18n="m.revert.title">想完整编辑？</strong><br/>
+        切到桌面版有 Inspector 跟分鏡 wizard
+      </div>
+      <a href="02-home.html" class="switch" data-i18n="m.revert.cta">切换</a>
+    </div>
+
+    <!-- Projects -->
+    <div class="m-section-head" style="margin-top: 20px;">
+      <h2>進行中</h2>
+      <a href="#">看全部 →</a>
+    </div>
+
+    <div class="m-projects">
+      <a href="12-mobile-review.html" class="m-project mp-1">
+        <div class="m-thumb">
+          <div class="bg"></div>
+          <div class="overlay">
+            <div class="badge-row">
+              <span class="m-badge">EP 03 / 08</span>
+              <span class="m-badge live">渲染中</span>
+            </div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="m-body">
+          <div class="title">霧城獵人</div>
+          <div class="meta">
+            <span>8 集 · 短劇</span>
+            <span>· 1 小時前</span>
+          </div>
+        </div>
+      </a>
+
+      <a href="12-mobile-review.html" class="m-project mp-2">
+        <div class="m-thumb">
+          <div class="bg"></div>
+          <div class="overlay">
+            <div class="badge-row">
+              <span class="m-badge">EP 12 / 12</span>
+            </div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="m-body">
+          <div class="title">時光寄信人</div>
+          <div class="meta">
+            <span>12 集 · 都市奇幻</span>
+            <span>· 昨天</span>
+          </div>
+        </div>
+      </a>
+
+      <a href="12-mobile-review.html" class="m-project mp-3">
+        <div class="m-thumb">
+          <div class="bg"></div>
+          <div class="overlay">
+            <div class="badge-row">
+              <span class="m-badge">EP 01 / 06</span>
+            </div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="m-body">
+          <div class="title">深海訪客</div>
+          <div class="meta">
+            <span>6 集 · 懸疑</span>
+            <span>· 3 天前</span>
+          </div>
+        </div>
+      </a>
+    </div>
+
+    <!-- FAB -->
+    <a href="06-script-input.html" class="m-fab">+</a>
+
+    <!-- Bottom tab -->
+    <nav class="m-tab-bar">
+      <a class="m-tab active" href="#"><span class="icon">▣</span><span class="lbl" data-i18n="m.tab.projects">项目</span></a>
+      <a class="m-tab" href="#"><span class="icon">◇</span><span class="lbl" data-i18n="m.tab.templates">范本</span></a>
+      <a class="m-tab" href="32-discover.html"><span class="icon">▶</span><span class="lbl" data-i18n="m.tab.discover">发现</span></a>
+      <a class="m-tab" href="28-settings.html"><span class="icon">⚙</span><span class="lbl" data-i18n="m.tab.settings">设置</span></a>
+    </nav>
+  </div>
+
+  <div class="device-note">
+    <strong>手機版定位</strong>：以「審閱 + 分享」為主，重度編輯（Inspector、分鏡 wizard）跳轉桌面。
+    符合記憶裡的 /m/* 既有 read-only 路線，加上 mobile-revert banner 反向跳轉機制。
+  </div>
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 場景編輯 · 霧城東區巷弄</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .ws-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--surface-hairline); flex-shrink: 0; }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+    .brand-mini { display: flex; align-items: center; gap: 12px; }
+    .breadcrumb { font-size: 13px; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
+    .breadcrumb .current { color: var(--text-primary); font-weight: 500; }
+    .breadcrumb .sep { color: var(--neutral-700); }
+
+    .ws-body { flex: 1; display: grid; grid-template-columns: 260px 1fr 320px; min-height: 0; }
+
+    .ws-cast { border-right: 1px solid var(--surface-hairline); overflow-y: auto; padding: 18px 14px; }
+    .cast-head { display: flex; justify-content: space-between; align-items: center; padding: 0 6px 12px; }
+    .cast-head h3 { font-size: 13px; font-weight: 600; }
+    .cast-head .count { font-size: 11px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+    .cast-search { width: 100%; padding: 7px 12px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); color: var(--text-primary); font-size: 12px; margin-bottom: 12px; }
+    .cast-search:focus { outline: none; border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(245,194,74,0.15); }
+    .cast-tabs { display: flex; gap: 4px; margin-bottom: 12px; padding: 3px; background: var(--surface-canvas); border: 1px solid var(--surface-hairline); border-radius: var(--r-pill); }
+    .cast-tab { flex: 1; padding: 5px; font-size: 11px; background: transparent; border: none; color: var(--text-tertiary); border-radius: var(--r-pill); cursor: pointer; font-weight: 500; }
+    .cast-tab.active { background: var(--primary-500); color: var(--neutral-950); font-weight: 600; }
+    .cast-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-input); cursor: pointer; margin-bottom: 3px; border: 1px solid transparent; }
+    .cast-row:hover { background: var(--surface-raised); }
+    .cast-row.active { background: var(--surface-raised); border-color: rgba(108, 95, 184, 0.4); }
+    .cast-thumb { width: 36px; height: 48px; border-radius: 5px; flex-shrink: 0; }
+    .ct-loc-1 { background-image: url('./images/loc-alley-wide.jpg'); background-size: cover; background-position: center; }
+    .ct-loc-2 { background-image: url('./images/loc-alley-end.jpg'); background-size: cover; background-position: center; }
+    .ct-loc-3 { background-image: url('./images/loc-rune-ground.png'); background-size: cover; background-position: center; }
+    .cast-info { flex: 1; min-width: 0; }
+    .cast-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+    .cast-tag { font-size: 10px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+    .cast-usage { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    .cast-add { padding: 10px 12px; margin-top: 8px; background: transparent; border: 1px dashed var(--surface-hairline); border-radius: var(--r-input); color: var(--text-tertiary); font-size: 12px; cursor: pointer; text-align: center; }
+    .cast-add:hover { border-color: rgba(108, 95, 184, 0.6); color: #A89BD8; }
+
+    /* CENTER: editor */
+    .ws-editor { overflow-y: auto; padding: 0; background: var(--surface-canvas); }
+    .editor-head {
+      padding: 24px 32px 18px;
+      border-bottom: 1px solid var(--surface-hairline);
+      display: flex; align-items: end; justify-content: space-between;
+      gap: 24px;
+    }
+    .loc-hero { display: flex; gap: 18px; flex: 1; }
+    .hero-portrait {
+      width: 144px; height: 96px;
+      background: linear-gradient(135deg, #2D2A4A 0%, #1A1530 60%, #0A0815 100%);
+      border-radius: var(--r-card);
+      box-shadow: var(--elev-2);
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .hero-portrait::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 30% 40%, rgba(108, 95, 184, 0.3), transparent 70%);
+    }
+    .hero-meta { flex: 1; min-width: 0; }
+    .name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .name-input { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; background: transparent; border: none; color: var(--text-primary); padding: 4px 8px; margin-left: -8px; border-radius: var(--r-input); outline: none; }
+    .name-input:hover { background: var(--surface-raised); }
+    .name-input:focus { background: var(--surface-raised); }
+    .at-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; color: #A89BD8;
+      padding: 4px 10px;
+      background: rgba(108, 95, 184, 0.18);
+      border: 1px solid rgba(108, 95, 184, 0.4);
+      border-radius: var(--r-pill);
+    }
+    .at-tag::before { content: '📍'; margin-right: 4px; }
+    .hero-sub { display: flex; gap: 16px; font-size: 13px; color: var(--text-tertiary); }
+    .hero-sub .dot::before { content: '·'; margin: 0 4px; }
+    .hero-actions { display: flex; gap: 8px; }
+
+    .ed-section { padding: 24px 32px; border-bottom: 1px solid var(--surface-hairline); }
+    .ed-section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .ed-section-head h3 { font-size: 15px; font-weight: 600; }
+    .ed-section-head .info { font-size: 11px; color: var(--text-tertiary); }
+
+    /* 4 attribute fields */
+    .attrs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .attr-card { padding: 14px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); }
+    .attr-card .ak { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; margin-bottom: 6px; }
+    .attr-card .av { font-size: 14px; font-weight: 500; }
+    .attr-card.editable .av { cursor: text; padding: 4px 0; }
+    .field-input { padding: 10px 14px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); color: var(--text-primary); font-size: 13px; outline: none; font-family: inherit; width: 100%; }
+    .field-input:focus { border-color: rgba(108, 95, 184, 0.6); box-shadow: 0 0 0 3px rgba(108, 95, 184, 0.15); }
+    .field-textarea { min-height: 80px; resize: vertical; line-height: 1.6; }
+
+    /* Angle reference 3-slot */
+    .angles {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .angle-card {
+      aspect-ratio: 16/9;
+      background: linear-gradient(135deg, #2D2A4A 0%, #1A1530 60%, #0A0815 100%);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .angle-card.ac-medium { background: linear-gradient(135deg, #2D2D4A, #15151F); }
+    .angle-card.ac-close { background: linear-gradient(135deg, #3A2A4A, #1F0F2A); }
+    .angle-card.empty {
+      background: transparent;
+      border-style: dashed;
+      display: grid; place-items: center;
+      color: var(--text-tertiary);
+      font-size: 12px;
+    }
+    .angle-card .ovr {
+      position: absolute; top: 8px; left: 8px;
+      padding: 3px 8px;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border-radius: var(--r-chip);
+      font-size: 10px;
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Time variants */
+    .variants {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .variant-card {
+      aspect-ratio: 1;
+      background: linear-gradient(135deg, #2D2A4A, #1A1530);
+      border-radius: var(--r-card);
+      border: 1px solid var(--surface-hairline);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .variant-card.daylight { background: linear-gradient(135deg, #5A8FBA 0%, #2D4A6A 100%); }
+    .variant-card.dusk    { background: linear-gradient(135deg, #C09060 0%, #6A4530 60%, #2A1F15 100%); }
+    .variant-card.night   { background: linear-gradient(135deg, #2D2A4A 0%, #1A1530 60%, #0A0815 100%); }
+    .variant-card.rain    { background: linear-gradient(135deg, #4A6A8A 0%, #2A3F50 60%, #15202A 100%); }
+    .variant-card.snow    { background: linear-gradient(135deg, #B0C0D0 0%, #5A6A7A 60%, #2A323A 100%); }
+    .variant-card:hover { transform: translateY(-2px); }
+    .variant-card.active { border-color: var(--primary-500); box-shadow: 0 0 0 2px rgba(245, 194, 74, 0.3); }
+    .variant-card .vlbl {
+      position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+      padding: 2px 8px;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+      border-radius: var(--r-chip);
+      font-size: 10px; color: white;
+      white-space: nowrap;
+    }
+    .variant-card.add {
+      background: transparent;
+      border-style: dashed;
+      display: grid; place-items: center;
+      color: var(--text-tertiary);
+      font-size: 20px;
+    }
+    .variant-card.active .vlbl { color: var(--primary-400); }
+    .variant-card.active::before {
+      content: '★'; position: absolute; top: 4px; right: 4px;
+      color: var(--primary-500); font-size: 12px;
+    }
+
+    /* Usage right */
+    .ws-usage { border-left: 1px solid var(--surface-hairline); background: var(--surface-canvas); overflow-y: auto; padding: 22px 20px; }
+    .uhead { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--surface-hairline); }
+    .uhead h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .uhead p { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
+    .test-card { padding: 14px; background: rgba(108, 95, 184, 0.04); border: 1px solid rgba(108, 95, 184, 0.2); border-radius: var(--r-card); margin-bottom: 20px; }
+    .test-card h4 { font-size: 11px; color: #A89BD8; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 10px; }
+    .test-result { aspect-ratio: 16/9; background: linear-gradient(135deg, #2D2A4A, #1A1530); border-radius: var(--r-input); margin-bottom: 10px; }
+    .usage-section { margin-bottom: 20px; }
+    .usage-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .usage-head .lbl { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+    .usage-head .total { font-size: 11px; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+    .usage-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: var(--r-input); margin-bottom: 4px; cursor: pointer; }
+    .usage-row .ut { width: 36px; height: 24px; background: linear-gradient(135deg, #2D2A4A, #1A1530); border-radius: 4px; flex-shrink: 0; }
+    .usage-row .uname { flex: 1; font-size: 12px; }
+    .usage-row .uloc { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    .usage-row .ustatus.done { color: var(--success); font-size: 10px; }
+
+    .save-bar { padding: 14px 20px; background: rgba(245, 194, 74, 0.06); border-top: 1px solid rgba(245, 194, 74, 0.25); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .save-bar .info { font-size: 12px; color: var(--text-secondary); }
+    .save-bar .info strong { color: var(--primary-400); }
+  </style>
+</head>
+<body>
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html">项目</a>
+        <span class="sep">›</span>
+        <a href="13-narrative-editor.html">霧城獵人</a>
+        <span class="sep">›</span>
+        <a href="15-character-edit.html">劇集設定</a>
+        <span class="sep">›</span>
+        <span class="current">霧城東區巷弄</span>
+      </div>
+    </div>
+    <div class="stepper">
+      <a class="step done" href="06-script-input.html" data-i18n="ws.step.script">剧本</a>
+      <a class="step done" href="07-pre-generation.html" data-i18n="ws.step.analyze">分析</a>
+      <a class="step" href="13-narrative-editor.html" data-i18n="ws.step.storyboard">分镜</a>
+      <a class="step" href="23-voice.html" data-i18n="ws.step.voice">配音</a>
+      <a class="step" href="24-render.html" data-i18n="ws.step.render">渲染</a>
+      <a class="step" href="25-final.html" data-i18n="ws.step.final">成片</a>
+    </div>
+    <div class="ws-top-right">
+      <span class="chip chip-success">● <span data-i18n="ws.autosave">自动保存</span></span>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn-primary" href="13-narrative-editor.html" data-i18n="ws.cta.done">完成 →</a>
+    </div>
+  </header>
+
+  <div class="ws-body">
+
+    <aside class="ws-cast">
+      <div class="cast-head"><h3>劇集設定</h3><span class="count">7</span></div>
+      <input class="cast-search" data-i18n-placeholder="e.search" placeholder="搜寻..." />
+      <div class="cast-tabs">
+        <button class="cast-tab"><a href="15-character-edit.html" style="color: inherit; text-decoration: none;">角色 3</a></button>
+        <button class="cast-tab active">場景 3</button>
+        <button class="cast-tab"><a href="17-prop-edit.html" style="color: inherit; text-decoration: none;">道具 2</a></button>
+      </div>
+
+      <div class="cast-row active">
+        <div class="cast-thumb ct-loc-1"></div>
+        <div class="cast-info">
+          <div class="cast-name">霧城東區巷弄</div>
+          <div class="cast-usage">夜 · 4 panel</div>
+        </div>
+      </div>
+      <div class="cast-row">
+        <div class="cast-thumb ct-loc-2"></div>
+        <div class="cast-info">
+          <div class="cast-name">巷盡頭</div>
+          <div class="cast-usage">夜 · 3 panel</div>
+        </div>
+      </div>
+      <div class="cast-row">
+        <div class="cast-thumb ct-loc-3"></div>
+        <div class="cast-info">
+          <div class="cast-name">符文地</div>
+          <div class="cast-usage">夜 · 1 panel</div>
+        </div>
+      </div>
+      <button class="cast-add">+ 新增場景</button>
+    </aside>
+
+    <main class="ws-editor">
+
+      <div class="editor-head">
+        <div class="loc-hero">
+          <div class="hero-portrait"></div>
+          <div class="hero-meta">
+            <div class="name-row">
+              <input class="name-input" value="霧城東區巷弄" />
+              <span class="at-tag">巷弄</span>
+            </div>
+            <div class="hero-sub">
+              <span>夜景</span>
+              <span class="dot">出現 4 panel</span>
+              <span class="dot">5 個時段變體</span>
+              <span class="dot">3 個視角</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="btn btn-ghost" data-i18n="e.copy">📋 复制</button>
+          <button class="btn btn-ghost" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);" data-i18n="e.delete">🗑 删除</button>
+        </div>
+      </div>
+
+      <!-- 4 空間屬性 -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3>空間屬性</h3>
+          <span class="info">R2V prompt 場景描述基底</span>
+        </div>
+        <div class="attrs-grid">
+          <div class="attr-card">
+            <div class="ak">場景類型</div>
+            <div class="av">城市巷弄 · 戶外</div>
+          </div>
+          <div class="attr-card">
+            <div class="ak">時段（默認）</div>
+            <div class="av">夜晚 · 23:00 後</div>
+          </div>
+          <div class="attr-card">
+            <div class="ak">天氣</div>
+            <div class="av">濃霧 · 微雨</div>
+          </div>
+          <div class="attr-card">
+            <div class="ak">氛圍</div>
+            <div class="av">壓抑 · 神秘 · 緊張</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 14px;">
+          <span style="font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; display: block; margin-bottom: 6px;">細節描述</span>
+          <textarea class="field-input field-textarea">維多利亞風格石板路，路燈忽明忽暗，霧氣積在腳邊不散。兩側是兩三層樓磚石建築，窗緊閉。地面濕滑反光，遠處可見模糊的招牌與雜物。色調以冷青藍 + 路燈暖橘為主，高對比。</textarea>
+        </div>
+      </div>
+
+      <!-- Angle references (3 slots) -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3>視角參考</h3>
+          <span class="info">Wide / Medium / Close 三槽，R2V 依鏡頭類型自動選</span>
+        </div>
+        <div class="angles">
+          <div class="angle-card">
+            <div class="ovr">WIDE</div>
+          </div>
+          <div class="angle-card ac-medium">
+            <div class="ovr">MEDIUM</div>
+          </div>
+          <div class="angle-card ac-close">
+            <div class="ovr">CLOSE</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time variants -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3>時段變體</h3>
+          <span class="info">敘事中 @巷弄(白天) 可指定，否則用默認</span>
+        </div>
+        <div class="variants">
+          <div class="variant-card night active">
+            <div class="vlbl">默認 · 夜</div>
+          </div>
+          <div class="variant-card daylight">
+            <div class="vlbl">白天</div>
+          </div>
+          <div class="variant-card dusk">
+            <div class="vlbl">黃昏</div>
+          </div>
+          <div class="variant-card rain">
+            <div class="vlbl">大雨</div>
+          </div>
+          <div class="variant-card snow">
+            <div class="vlbl">雪夜</div>
+          </div>
+        </div>
+        <div style="margin-top: 8px; text-align: center;">
+          <button class="btn btn-ghost" style="font-size: 11px; padding: 6px 12px;">+ 新增時段變體</button>
+        </div>
+      </div>
+
+      <div class="save-bar">
+        <div class="info">
+          📌 修改場景影響 <strong>已生成的 4 panel</strong>。改名 / 改氛圍會觸發 R2V 重生提示
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-ghost" data-i18n="e.undo">↺ 复原</button>
+          <button class="btn btn-primary" data-i18n="e.save-changes">保存变更</button>
+        </div>
+      </div>
+    </main>
+
+    <aside class="ws-usage">
+      <div class="uhead">
+        <h3>⚡ 測試 & 使用追蹤</h3>
+        <p>左側選的時段 + 視角會餵進 R2V test</p>
+      </div>
+
+      <div class="test-card">
+        <h4>一鍵測試</h4>
+        <div class="test-result"></div>
+        <button class="btn btn-accent test-btn" style="width: 100%; justify-content: center; padding: 8px; font-size: 12px;">⚡ 生成測試圖（4 點）</button>
+        <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 6px; text-align: center;">
+          測試當前選定：夜 · Wide
+        </div>
+      </div>
+
+      <div class="usage-section">
+        <div class="usage-head">
+          <span class="lbl">使用於</span>
+          <span class="total">4 panel · 1 集</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 1</div>
+            <div class="uloc">街口霧氣升起</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 3</div>
+            <div class="uloc">巷弄空鏡</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 4</div>
+            <div class="uloc">林夜對峙</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+      </div>
+
+      <div style="padding: 12px; background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--r-card); font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
+        💡 <strong style="color: var(--success);">提示</strong>：場景同視角 ref 越好，R2V 一致性越高。試試補滿 3 個角度。
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

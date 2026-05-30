@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · Cmd+K 命令面板</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background: var(--surface-canvas);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Background — fake 13 narrative editor as backdrop */
+    .bg-context {
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 50% 40% at 30% 30%, rgba(245, 194, 74, 0.04), transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 70%, rgba(124, 92, 255, 0.04), transparent 60%),
+        var(--surface-canvas);
+      filter: blur(2px);
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .bg-context .topbar {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 56px;
+      background: var(--surface-canvas);
+      border-bottom: 1px solid var(--surface-hairline);
+      padding: 12px 24px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .bg-context .stepper {
+      margin: 0 auto;
+      padding: 4px;
+      background: var(--surface-raised);
+      border-radius: 999px;
+      display: flex; gap: 4px;
+    }
+    .bg-context .stepper > div {
+      padding: 6px 14px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .bg-context .stepper > .a {
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .bg-context .body {
+      position: absolute; top: 56px; left: 0; right: 0; bottom: 0;
+      padding: 32px;
+      display: grid;
+      grid-template-columns: 260px 1fr 380px;
+      gap: 1px;
+    }
+    .bg-context .body > div {
+      background: var(--surface-canvas);
+    }
+
+    /* Modal backdrop */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(16px);
+      display: grid; place-items: start center;
+      padding-top: 100px;
+      z-index: 100;
+      animation: backdrop-in 200ms var(--ease-out);
+    }
+    @keyframes backdrop-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Command palette */
+    .palette {
+      width: 100%; max-width: 680px;
+      background: var(--surface-overlay);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--r-modal);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+      animation: modal-in 280ms var(--ease-spring);
+    }
+
+    /* Search input */
+    .palette-search {
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .palette-search .icon {
+      font-size: 18px;
+      color: var(--text-tertiary);
+    }
+    .palette-search input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 16px;
+      outline: none;
+      font-family: inherit;
+      letter-spacing: -0.01em;
+    }
+    .palette-search input::placeholder { color: var(--text-tertiary); }
+    .palette-search .cursor-line {
+      width: 1px;
+      height: 18px;
+      background: var(--primary-500);
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+    .palette-search .kbd {
+      padding: 3px 8px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-chip);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    /* Result list */
+    .palette-results {
+      max-height: 460px;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .palette-results::-webkit-scrollbar { width: 6px; }
+    .palette-results::-webkit-scrollbar-thumb { background: var(--surface-hairline); border-radius: 3px; }
+
+    .result-section { margin-bottom: 4px; }
+    .result-label {
+      padding: 8px 22px 6px;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .result-label .count {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-tertiary);
+      font-weight: 400;
+    }
+
+    .result-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 9px 22px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background var(--d-hover) var(--ease-out);
+      position: relative;
+    }
+    .result-row:hover { background: rgba(255, 255, 255, 0.04); color: var(--text-primary); }
+    .result-row.active {
+      background: rgba(245, 194, 74, 0.08);
+      color: var(--text-primary);
+    }
+    .result-row.active::before {
+      content: '';
+      position: absolute; left: 0; top: 4px; bottom: 4px;
+      width: 3px;
+      background: var(--primary-500);
+      border-radius: 0 2px 2px 0;
+    }
+
+    .result-icon {
+      width: 28px; height: 28px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 6px;
+      display: grid; place-items: center;
+      color: var(--text-secondary);
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .result-row.active .result-icon {
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-color: transparent;
+    }
+    /* Entity avatars (character/location/prop with color) */
+    .result-icon.char-linye { background: linear-gradient(135deg, #6A4A2A, #3A2515); border: none; color: white; }
+    .result-icon.char-guai { background: linear-gradient(135deg, #4A2A4A, #2A152A); border: none; color: white; }
+    .result-icon.char-guxing { background: linear-gradient(135deg, #2D2A4A, #1A1530); border: none; color: white; }
+    .result-icon.loc-1 { background: linear-gradient(135deg, #2D2A4A, #1A1530); border: none; color: white; }
+    .result-icon.loc-2 { background: linear-gradient(135deg, #4A3A2A, #2A1F15); border: none; color: white; }
+    .result-icon.loc-3 { background: linear-gradient(135deg, #2A4A3A, #152A25); border: none; color: white; }
+    .result-icon.prop-1 { background: linear-gradient(135deg, #C99A2E, #6F5418); border: none; color: white; }
+    .result-icon.prop-2 { background: linear-gradient(135deg, #525252, #262626); border: none; color: white; }
+
+    .result-content { flex: 1; min-width: 0; }
+    .result-title {
+      font-size: 13px; font-weight: 500;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .result-title .at {
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 400;
+    }
+    .result-row.active .result-title .at { color: var(--primary-400); }
+    .result-meta {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 1px;
+    }
+
+    .result-shortcut {
+      display: flex; gap: 4px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+    .result-shortcut .key {
+      padding: 2px 7px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .result-row.active .result-shortcut .key {
+      background: var(--surface-overlay);
+      border-color: rgba(255, 255, 255, 0.16);
+      color: var(--text-primary);
+    }
+    .result-arrow {
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
+    .result-row.active .result-arrow {
+      color: var(--primary-400);
+      transform: translateX(2px);
+      transition: transform var(--d-hover) var(--ease-out);
+    }
+
+    /* Highlighted match */
+    mark {
+      background: rgba(245, 194, 74, 0.25);
+      color: var(--primary-400);
+      padding: 0 2px;
+      border-radius: 2px;
+      font-weight: 600;
+    }
+
+    /* Footer */
+    .palette-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 22px;
+      border-top: 1px solid var(--surface-hairline);
+      background: rgba(0, 0, 0, 0.2);
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .palette-footer .hints {
+      display: flex; gap: 16px;
+    }
+    .palette-footer .hint {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .palette-footer .kbd {
+      padding: 2px 7px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
+    .palette-footer .brand {
+      display: flex; align-items: center; gap: 6px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .palette-footer .brand .mark {
+      width: 16px; height: 16px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 3px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 9px;
+    }
+
+    /* Side info on right */
+    .side-callout {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: 680px;
+      width: calc(100% - 64px);
+      padding: 16px 22px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      box-shadow: var(--elev-2);
+      z-index: 50;
+    }
+    .side-callout strong { color: var(--primary-400); }
+    .side-callout .row {
+      display: flex; align-items: start; gap: 12px;
+    }
+    .side-callout .ic {
+      width: 24px; height: 24px;
+      background: rgba(245, 194, 74, 0.12);
+      color: var(--primary-400);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="lang-switcher" style="position: fixed; top: 16px; right: 16px; z-index: 9999; display: inline-flex; gap: 2px; padding: 4px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: 999px; font-size: 11px;">
+    <button type="button" data-lang="zh" class="active" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">中</button>
+    <button type="button" data-lang="en" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">EN</button>
+  </div>
+
+  <!-- Backdrop: faked workspace behind -->
+  <div class="bg-context">
+    <div class="topbar">
+      <div style="width: 22px; height: 22px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px;"></div>
+      <div style="font-size: 13px; color: var(--text-tertiary);">霧城獵人 › EP 01</div>
+      <div class="stepper">
+        <div>✓ 劇本</div>
+        <div>✓ 分析</div>
+        <div class="a">分鏡</div>
+        <div>配音</div>
+        <div>渲染</div>
+        <div>成片</div>
+      </div>
+    </div>
+    <div class="body">
+      <div></div>
+      <div></div>
+      <div></div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-backdrop">
+    <div class="palette">
+
+      <!-- Search -->
+      <div class="palette-search">
+        <span class="icon">🔍</span>
+        <input value="林" data-i18n-placeholder="cp.placeholder" placeholder="搜寻角色 / 场景 / 道具 / 跳到页面 / 动作⋯" autofocus />
+        <div class="cursor-line"></div>
+        <span class="kbd">ESC</span>
+      </div>
+
+      <!-- Results -->
+      <div class="palette-results">
+
+        <!-- 劇集設定 (highest priority for "林" search) -->
+        <div class="result-section">
+          <div class="result-label">
+            <span data-i18n="cp.cast.title">剧集设定 · 角色</span>
+            <span class="count">2 個結果</span>
+          </div>
+
+          <a class="result-row active" href="15-character-edit.html">
+            <div class="result-icon char-linye">林</div>
+            <div class="result-content">
+              <div class="result-title"><mark>林</mark>夜 <span class="at">@林夜</span></div>
+              <div class="result-meta">主角 · 出現 12 panel · 3 個造型 · v3 默認</div>
+            </div>
+            <div class="result-shortcut">
+              <span class="key">⏎</span>
+            </div>
+            <span class="result-arrow">→</span>
+          </a>
+
+          <a class="result-row" href="15-character-edit.html">
+            <div class="result-icon char-guai">怪</div>
+            <div class="result-content">
+              <div class="result-title">怪物 <span class="at">@怪物</span> <span style="font-size: 10px; padding: 1px 6px; background: rgba(245, 194, 74, 0.12); color: var(--primary-400); border-radius: 3px; margin-left: 4px;">待補圖</span></div>
+              <div class="result-meta">配角 · 2 panel · 黑霧形</div>
+            </div>
+            <span class="result-arrow">→</span>
+          </a>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="result-section">
+          <div class="result-label">
+            <span data-i18n="cp.actions">动作</span>
+          </div>
+
+          <div class="result-row">
+            <div class="result-icon">✦</div>
+            <div class="result-content">
+              <div class="result-title">為「<mark>林</mark>夜」新增造型</div>
+              <div class="result-meta">直接進造型編輯 · 跳過清單頁</div>
+            </div>
+            <span class="result-arrow">→</span>
+          </div>
+
+          <div class="result-row">
+            <div class="result-icon">⚡</div>
+            <div class="result-content">
+              <div class="result-title">測試生成「<mark>林</mark>夜」</div>
+              <div class="result-meta">用當前設定生一張測試圖 · 3 點</div>
+            </div>
+            <span class="result-arrow">→</span>
+          </div>
+
+          <div class="result-row">
+            <div class="result-icon">↺</div>
+            <div class="result-content">
+              <div class="result-title">重生所有含「<mark>林</mark>夜」的 panel</div>
+              <div class="result-meta">5 個 panel · 估 140 點</div>
+            </div>
+            <span class="result-arrow">→</span>
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="result-section">
+          <div class="result-label">
+            <span data-i18n="cp.navigate">跳转</span>
+          </div>
+
+          <a class="result-row" href="13-narrative-editor.html">
+            <div class="result-icon">📝</div>
+            <div class="result-content">
+              <div class="result-title">敘事編輯（13）</div>
+              <div class="result-meta">R2V 主路徑 · 1625 字</div>
+            </div>
+            <div class="result-shortcut">
+              <span class="key">G</span>
+              <span class="key">N</span>
+            </div>
+          </a>
+
+          <a class="result-row" href="08-storyboard-v2.html">
+            <div class="result-icon">▣</div>
+            <div class="result-content">
+              <div class="result-title">分鏡卡（08）</div>
+              <div class="result-meta">每張 panel 細調</div>
+            </div>
+            <div class="result-shortcut">
+              <span class="key">G</span>
+              <span class="key">S</span>
+            </div>
+          </a>
+
+          <a class="result-row" href="04-generation.html">
+            <div class="result-icon">▶</div>
+            <div class="result-content">
+              <div class="result-title">生成中（04）</div>
+              <div class="result-meta">queue 3 · 渲染中 1</div>
+            </div>
+            <div class="result-shortcut">
+              <span class="key">G</span>
+              <span class="key">G</span>
+            </div>
+          </a>
+
+          <a class="result-row" href="02-home.html">
+            <div class="result-icon">▣</div>
+            <div class="result-content">
+              <div class="result-title">回项目儀表（02）</div>
+              <div class="result-meta">12 個项目</div>
+            </div>
+            <div class="result-shortcut">
+              <span class="key">G</span>
+              <span class="key">H</span>
+            </div>
+          </a>
+        </div>
+
+        <!-- Settings -->
+        <div class="result-section">
+          <div class="result-label">
+            <span data-i18n="cp.settings">设置</span>
+          </div>
+
+          <div class="result-row">
+            <div class="result-icon">⚙</div>
+            <div class="result-content">
+              <div class="result-title">本集設定 · 風格 / Negative prompt / BGM</div>
+              <div class="result-meta">展開全局約束</div>
+            </div>
+          </div>
+
+          <a class="result-row" href="20-workspace.html">
+            <div class="result-icon">◐</div>
+            <div class="result-content">
+              <div class="result-title">Workspace 成員 / 計費</div>
+              <div class="result-meta">7 成員 · Studio plan · 1,847 / 5,000 點</div>
+            </div>
+          </a>
+
+          <a class="result-row" href="05-pricing.html">
+            <div class="result-icon">$</div>
+            <div class="result-content">
+              <div class="result-title">查看 / 升級方案</div>
+              <div class="result-meta">Studio → Team · +10,000 點 / $60 月</div>
+            </div>
+          </a>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="palette-footer">
+        <div class="hints">
+          <div class="hint"><span class="kbd">↑</span><span class="kbd">↓</span> <span data-i18n="cp.hint.move">上下选</span></div>
+          <div class="hint"><span class="kbd">⏎</span> <span data-i18n="cp.hint.confirm">确认</span></div>
+          <div class="hint"><span class="kbd">⇥</span> <span data-i18n="cp.hint.tab">切类别</span></div>
+          <div class="hint"><span class="kbd">ESC</span> <span data-i18n="cp.hint.esc">关闭</span></div>
+        </div>
+        <div class="brand">
+          <div class="mark">K</div>
+          KuiperAI Command
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Side callout -->
+  <div class="side-callout">
+    <div class="row">
+      <div class="ic">⌘K</div>
+      <div>
+        <strong>命令面板（Cmd+K / Ctrl+K）— 全域捷徑</strong><br/>
+        任何頁面按下都跳這個。搜尋輸入「林」立刻定位到「林夜」角色編輯，按 ⏎ 直接跳。
+        除了角色/場景/道具，還能搜：頁面跳轉（G 開頭快捷）、動作（測試/重生/新增造型）、設定。
+        對 power user 是最快路徑，比 sidebar 點 3 次快得多。
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

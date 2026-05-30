@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 渲染队列</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; height: 100vh; overflow: hidden; }
+
+    .body {
+      flex: 1; display: grid;
+      grid-template-columns: 1fr 360px;
+      min-height: 0;
+    }
+
+    .main {
+      padding: 32px 40px 24px;
+      overflow-y: auto;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(124, 92, 255, 0.04), transparent 60%),
+        var(--surface-canvas);
+    }
+
+    /* Big progress card */
+    .progress-hero {
+      max-width: 920px;
+      margin: 0 auto 28px;
+      padding: 32px 36px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+    }
+    .progress-hero .ph-top {
+      display: flex; justify-content: space-between; align-items: end;
+      margin-bottom: 18px;
+    }
+    .progress-hero h2 {
+      font-size: 13px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .progress-hero .big {
+      font-size: 48px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .progress-hero .big .unit { color: var(--text-tertiary); font-size: 20px; font-weight: 400; }
+    .progress-hero .stat-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      text-align: right;
+    }
+    .progress-hero .st-card { font-size: 11px; color: var(--text-tertiary); }
+    .progress-hero .st-card .v {
+      font-size: 16px; font-weight: 600;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 2px;
+    }
+    .progress-hero .bar {
+      height: 8px;
+      background: var(--neutral-800);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .progress-hero .bar .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary-500), var(--accent-500));
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(245, 194, 74, 0.4);
+    }
+    .progress-hero .bar-meta {
+      display: flex; justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .progress-hero .actions {
+      display: flex; gap: 8px;
+      margin-top: 20px;
+    }
+
+    /* Run list */
+    .runs {
+      max-width: 920px;
+      margin: 0 auto;
+    }
+    .runs-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+      padding: 0 4px;
+    }
+    .runs-head h3 { font-size: 14px; font-weight: 600; }
+    .runs-head .filters {
+      display: flex; gap: 4px;
+      padding: 3px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+    }
+    .filter-btn {
+      padding: 5px 12px;
+      background: transparent;
+      border: none;
+      color: var(--text-tertiary);
+      font-size: 11px; font-weight: 500;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+    }
+    .filter-btn.active {
+      background: var(--surface-overlay);
+      color: var(--text-primary);
+    }
+    .filter-btn .count {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-tertiary);
+      margin-left: 4px;
+    }
+
+    .run-row {
+      display: grid;
+      grid-template-columns: 50px 1fr 110px 100px 140px 80px;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 18px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .run-row.active {
+      border-color: rgba(124, 92, 255, 0.4);
+      background: rgba(124, 92, 255, 0.04);
+    }
+    .run-row .num {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-tertiary);
+      font-size: 12px;
+    }
+    .run-row .num strong { color: var(--text-primary); }
+    .run-row .title { font-weight: 500; }
+    .run-row .title .desc {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+    .run-row .status-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--r-pill);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .run-row .status-chip.queued { background: var(--surface-canvas); border: 1px solid var(--surface-hairline); color: var(--text-tertiary); }
+    .run-row .status-chip.queued::before { content: '○'; }
+    .run-row .status-chip.running { background: rgba(124, 92, 255, 0.12); border: 1px solid rgba(124, 92, 255, 0.3); color: var(--accent-400); }
+    .run-row .status-chip.running::before { content: '●'; animation: pulse-soft 1.5s ease-in-out infinite; }
+    .run-row .status-chip.done { background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3); color: var(--success); }
+    .run-row .status-chip.done::before { content: '✓'; }
+    .run-row .status-chip.failed { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--error); }
+    .run-row .status-chip.failed::before { content: '✕'; }
+    .run-row .cost {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .run-row .progress-inline {
+      height: 4px;
+      background: var(--neutral-800);
+      border-radius: 2px;
+      margin-top: 4px;
+      overflow: hidden;
+    }
+    .run-row .progress-inline .pf {
+      height: 100%; background: var(--accent-500); border-radius: 2px;
+    }
+    .run-row .actions {
+      display: flex; gap: 4px;
+      justify-content: flex-end;
+    }
+    .icon-btn {
+      width: 28px; height: 28px;
+      background: transparent;
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: var(--r-input);
+      cursor: pointer;
+      display: grid; place-items: center;
+      font-size: 12px;
+    }
+
+    /* RIGHT: stats panel */
+    .stats-panel {
+      border-left: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      overflow-y: auto;
+      padding: 22px 22px 28px;
+    }
+    .sp-head { padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--surface-hairline); }
+    .sp-head h3 { font-size: 13px; font-weight: 600; }
+
+    .sp-sec { margin-bottom: 22px; }
+    .sp-label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; margin-bottom: 10px; }
+
+    .credit-card {
+      padding: 16px;
+      background: rgba(245, 194, 74, 0.04);
+      border: 1px solid rgba(245, 194, 74, 0.25);
+      border-radius: var(--r-card);
+    }
+    .credit-card .amount {
+      font-size: 26px; font-weight: 600;
+      color: var(--primary-400);
+      font-family: 'JetBrains Mono', monospace;
+      margin-bottom: 4px;
+      letter-spacing: -0.02em;
+    }
+    .credit-card .amount .unit { color: var(--text-tertiary); font-size: 13px; font-weight: 400; }
+    .credit-card .desc { font-size: 11px; color: var(--text-tertiary); line-height: 1.6; }
+
+    .provider-bar {
+      height: 8px; display: flex;
+      border-radius: var(--r-pill); overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .prov-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 4px;
+      font-size: 11px;
+    }
+    .prov-row .sw { width: 8px; height: 8px; border-radius: 2px; }
+    .prov-row .pname { flex: 1; font-weight: 500; }
+    .prov-row .num { font-family: 'JetBrains Mono', monospace; color: var(--text-tertiary); }
+  </style>
+</head>
+<body>
+
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html" data-i18n="ws.crumb.projects">项目</a>
+        <span class="sep">›</span>
+        <a href="13-narrative-editor.html">霧城獵人</a>
+        <span class="sep">›</span>
+        <span class="current">EP 01 · <span data-i18n="r.title">渲染队列</span></span>
+      </div>
+    </div>
+    <div class="stepper">
+      <a class="step done" href="06-script-input.html" data-i18n="ws.step.script">剧本</a>
+      <a class="step done" href="07-pre-generation.html" data-i18n="ws.step.analyze">分析</a>
+      <a class="step done" href="13-narrative-editor.html" data-i18n="ws.step.storyboard">分镜</a>
+      <a class="step done" href="23-voice.html" data-i18n="ws.step.voice">配音</a>
+      <a class="step active" data-i18n="ws.step.render">渲染</a>
+      <a class="step" data-i18n="ws.step.final">成片</a>
+    </div>
+    <div class="ws-top-right">
+      <span class="chip chip-accent">● <span data-i18n="r.status.running">渲染中</span></span>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="25-final.html" class="btn btn-primary" data-i18n="r.next-final">下一步 → 成片</a>
+    </div>
+  </header>
+
+  <div class="body">
+    <main class="main">
+
+      <!-- Progress hero -->
+      <div class="progress-hero">
+        <div class="ph-top">
+          <div>
+            <h2 data-i18n="r.total-progress">本集进度</h2>
+            <div class="big">5/12 <span class="unit">已完成</span></div>
+            <!-- V2 既有：cross-browser task recovery -->
+            <div style="display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 10px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); border-radius: var(--r-pill); font-size: 11px; color: var(--success);" title="V2 既有 — localStorage + server sync 讓多 tab / 隊友看到同 project 的進度">
+              <span style="width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: pulse-soft 1.5s ease-in-out infinite;"></span>
+              <span data-i18n="v2.cross-browser">多装置同步</span>
+              <span style="color: var(--text-tertiary); font-size: 10px; font-family: 'JetBrains Mono', monospace;">·</span>
+              <span style="color: var(--text-secondary); font-size: 11px;" data-i18n="v2.others-viewing">林夕也在看</span>
+            </div>
+          </div>
+          <div class="stat-grid">
+            <div class="st-card"><div class="v">3</div><span data-i18n="r.status.running">渲染中</span></div>
+            <div class="st-card"><div class="v">2</div><span data-i18n="r.status.queued">排队中</span></div>
+            <div class="st-card"><div class="v">2</div><span data-i18n="r.status.failed">失败</span></div>
+            <div class="st-card"><div class="v">~ 4m</div><span data-i18n="r.eta">预计完成</span></div>
+          </div>
+        </div>
+        <div class="bar"><div class="fill" style="width: 42%;"></div></div>
+        <div class="bar-meta">
+          <span>42% · 336 / 800 pt</span>
+          <span><span data-i18n="r.concurrency">并发</span> 5 · ARK·AC·fal·BobAPI·Kling</span>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" data-i18n="r.pause">⏸ 暂停</button>
+          <button class="btn btn-ghost" data-i18n="r.retry-failed">↺ 重试所有失败</button>
+          <button class="btn btn-primary" data-i18n="r.start-render">▶ 开始全集渲染</button>
+        </div>
+      </div>
+
+      <!-- Run list -->
+      <div class="runs">
+        <div class="runs-head">
+          <h3 data-i18n="r.title">渲染队列</h3>
+          <div class="filters">
+            <button class="filter-btn active">全部 <span class="count">12</span></button>
+            <button class="filter-btn" data-i18n="r.status.running">渲染中 <span class="count">3</span></button>
+            <button class="filter-btn" data-i18n="r.status.failed">失败 <span class="count">2</span></button>
+          </div>
+        </div>
+
+        <div class="run-row">
+          <div class="num"><strong>P1</strong></div>
+          <div class="title">街口霧氣升起<div class="desc">G1 · 4s · R2V · ARK</div></div>
+          <div><span class="status-chip done" data-i18n="r.status.done">完成</span></div>
+          <div class="cost">28 pt</div>
+          <div class="cost" style="text-align: right;">1m 12s</div>
+          <div class="actions"><button class="icon-btn">⌃</button><button class="icon-btn">⬇</button></div>
+        </div>
+        <div class="run-row">
+          <div class="num"><strong>P2</strong></div>
+          <div class="title">林夜抬頭看天<div class="desc">G1 · 5s · R2V · ARK</div></div>
+          <div><span class="status-chip done" data-i18n="r.status.done">完成</span></div>
+          <div class="cost">28 pt</div>
+          <div class="cost" style="text-align: right;">1m 18s</div>
+          <div class="actions"><button class="icon-btn">⌃</button><button class="icon-btn">⬇</button></div>
+        </div>
+        <div class="run-row active">
+          <div class="num"><strong>P3</strong></div>
+          <div class="title">巷弄空鏡<div class="desc">G1 · 3s · T2V · fal · 渲染 22s</div></div>
+          <div>
+            <span class="status-chip running" data-i18n="r.status.running">渲染中</span>
+            <div class="progress-inline"><div class="pf" style="width: 65%;"></div></div>
+          </div>
+          <div class="cost">22 pt</div>
+          <div class="cost" style="text-align: right;">~ 25s</div>
+          <div class="actions"><button class="icon-btn">⏹</button><button class="icon-btn">⌃</button></div>
+        </div>
+        <div class="run-row">
+          <div class="num"><strong>P4</strong></div>
+          <div class="title">林夜對峙<div class="desc">G1 · 4s · R2V · ARK</div></div>
+          <div><span class="status-chip running" data-i18n="r.status.running">渲染中</span></div>
+          <div class="cost">28 pt</div>
+          <div class="cost" style="text-align: right;">~ 1m</div>
+          <div class="actions"><button class="icon-btn">⏹</button><button class="icon-btn">⌃</button></div>
+        </div>
+        <div class="run-row">
+          <div class="num"><strong>P5</strong></div>
+          <div class="title">怪物現身<div class="desc">G2 · 5s · R2V · AtlasCloud</div></div>
+          <div><span class="status-chip queued" data-i18n="r.status.queued">排队中</span></div>
+          <div class="cost">32 pt</div>
+          <div class="cost" style="text-align: right;">—</div>
+          <div class="actions"><button class="icon-btn">↑</button><button class="icon-btn">⌃</button></div>
+        </div>
+        <div class="run-row">
+          <div class="num"><strong>P6</strong></div>
+          <div class="title">獵人持燈進巷<div class="desc">G2 · 6s · T2I→I2V · ARK</div></div>
+          <div><span class="status-chip failed" data-i18n="r.status.failed">失败</span></div>
+          <div class="cost" style="color: var(--text-tertiary); text-decoration: line-through;">36 pt</div>
+          <div class="cost" style="text-align: right; color: var(--success);">不扣点</div>
+          <div class="actions"><button class="icon-btn">↺</button><button class="icon-btn">⚠</button></div>
+        </div>
+        <div class="run-row">
+          <div class="num"><strong>P7</strong></div>
+          <div class="title">林夜拔槍<div class="desc">G2 · 4s · R2V · ARK</div></div>
+          <div><span class="status-chip running" data-i18n="r.status.running">渲染中</span></div>
+          <div class="cost">28 pt</div>
+          <div class="cost" style="text-align: right;">~ 50s</div>
+          <div class="actions"><button class="icon-btn">⏹</button><button class="icon-btn">⌃</button></div>
+        </div>
+        <div class="run-row">
+          <div class="num"><strong>P12</strong></div>
+          <div class="title">「第七個了」<div class="desc">G3 · 6s · R2V · ARK · face filter</div></div>
+          <div><span class="status-chip failed" data-i18n="r.status.failed">失败</span></div>
+          <div class="cost" style="color: var(--text-tertiary); text-decoration: line-through;">36 pt</div>
+          <div class="cost" style="text-align: right; color: var(--success);">不扣点</div>
+          <div class="actions"><button class="icon-btn">↺</button><button class="icon-btn">⚠</button></div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT: stats -->
+    <aside class="stats-panel">
+      <div class="sp-head"><h3 data-i18n="r.title">渲染队列</h3></div>
+
+      <div class="sp-sec">
+        <div class="sp-label" data-i18n="r.points-used">已用点数</div>
+        <div class="credit-card">
+          <div class="amount">336 <span class="unit">/ 800 pt</span></div>
+          <div class="desc">本集预估 ~ 800 pt · 失败已退点 72 pt</div>
+        </div>
+      </div>
+
+      <div class="sp-sec">
+        <div class="sp-label">智能路由策略</div>
+        <div class="provider-bar">
+          <div style="width: 42%; background: var(--primary-500);"></div>
+          <div style="width: 25%; background: var(--accent-500);"></div>
+          <div style="width: 17%; background: #4A8FE5;"></div>
+          <div style="width: 16%; background: #22C55E;"></div>
+        </div>
+        <div class="prov-row"><div class="sw" style="background: var(--primary-500);"></div><span class="pname">ARK Seedance 2.0</span><span class="num">5/12</span></div>
+        <div class="prov-row"><div class="sw" style="background: var(--accent-500);"></div><span class="pname">AtlasCloud r2v</span><span class="num">3/12</span></div>
+        <div class="prov-row"><div class="sw" style="background: #4A8FE5;"></div><span class="pname">fal Seedance</span><span class="num">2/12</span></div>
+        <div class="prov-row"><div class="sw" style="background: #22C55E;"></div><span class="pname">BobAPI</span><span class="num">2/12</span></div>
+      </div>
+
+      <div class="sp-sec">
+        <div class="sp-label">提示</div>
+        <div style="padding: 12px 14px; background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--r-card); font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
+          💡 <strong style="color: var(--success);">失败不扣点数</strong>。系统已自动尝试 fallback 至次优 provider。所有面板渲染完成后，可继续下一步合成成片。
+        </div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 訂閱方案</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245, 194, 74, 0.06), transparent 60%),
+        radial-gradient(ellipse 70% 40% at 50% 100%, rgba(124, 92, 255, 0.05), transparent 60%),
+        var(--surface-canvas);
+    }
+
+    /* Hero */
+    .pricing-hero {
+      padding: 100px 32px 48px;
+      text-align: center;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    .pricing-hero .eyebrow { display: inline-block; margin-bottom: 20px; }
+    .pricing-hero h1 {
+      font-size: 56px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      font-weight: 600;
+      margin-bottom: 18px;
+    }
+    .pricing-hero p {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 580px;
+      margin: 0 auto 32px;
+    }
+
+    /* Billing toggle */
+    .billing-toggle {
+      display: inline-flex;
+      padding: 4px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      gap: 4px;
+    }
+    .billing-toggle button {
+      padding: 8px 18px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 13px; font-weight: 500;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .billing-toggle button.active {
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      font-weight: 600;
+    }
+    .billing-toggle .save {
+      font-size: 11px;
+      color: var(--success);
+      margin-left: 6px;
+    }
+
+    /* Tier grid */
+    .tiers {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 48px 32px 60px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+    .tier {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      padding: 32px 28px;
+      display: flex; flex-direction: column;
+      position: relative;
+      transition: transform var(--d-hover) var(--ease-out);
+    }
+    .tier:hover { transform: translateY(-3px); }
+    .tier.featured {
+      background:
+        radial-gradient(ellipse 90% 50% at 50% 0%, rgba(245, 194, 74, 0.08), transparent 70%),
+        var(--surface-raised);
+      border-color: rgba(245, 194, 74, 0.4);
+      box-shadow: 0 0 60px rgba(245, 194, 74, 0.08), var(--elev-2);
+    }
+    .tier .ribbon {
+      position: absolute; top: -12px; right: 24px;
+      padding: 5px 12px;
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      border-radius: var(--r-pill);
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .tier-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+    .tier-headline {
+      font-size: 14px;
+      color: var(--text-tertiary);
+      margin-bottom: 24px;
+      min-height: 36px;
+    }
+    .tier-price {
+      display: flex; align-items: baseline; gap: 6px;
+      margin-bottom: 4px;
+    }
+    .tier-price .amount {
+      font-size: 44px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.02em;
+    }
+    .tier-price .unit { color: var(--text-tertiary); font-size: 14px; }
+    .tier-price-note {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-bottom: 24px;
+    }
+    .tier .cta {
+      width: 100%;
+      justify-content: center;
+      margin-bottom: 28px;
+    }
+    .tier-feats {
+      list-style: none;
+      display: flex; flex-direction: column;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .tier-feats li {
+      display: flex; align-items: start; gap: 10px;
+      line-height: 1.5;
+    }
+    .tier-feats li::before {
+      content: '✓';
+      color: var(--success);
+      flex-shrink: 0;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .tier-feats li.lead {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    .tier-feats li.lead::before {
+      content: '★';
+      color: var(--primary-400);
+    }
+
+    /* Trust strip */
+    .trust-strip {
+      max-width: 1280px;
+      margin: 40px auto;
+      padding: 32px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+    .trust-item .label { display: block; margin-bottom: 8px; }
+    .trust-item .title {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .trust-item .desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* FAQ */
+    .faq {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 60px 32px 120px;
+    }
+    .faq h2 { font-size: 32px; text-align: center; margin-bottom: 8px; font-weight: 600; letter-spacing: -0.02em; }
+    .faq .sub { text-align: center; color: var(--text-secondary); font-size: 16px; margin-bottom: 40px; }
+    .faq-item {
+      padding: 20px 24px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .faq-item .q {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 15px;
+      font-weight: 500;
+    }
+    .faq-item .q .icon {
+      color: var(--text-tertiary);
+      transition: transform var(--d-state) var(--ease-out);
+    }
+    .faq-item.open .q .icon { transform: rotate(45deg); color: var(--primary-400); }
+    .faq-item .a {
+      margin-top: 14px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.7;
+    }
+  </style>
+</head>
+<body>
+  <header class="topnav">
+    <div class="brand">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+    <nav>
+      <a href="01-landing.html" data-i18n="l.nav.product">产品</a>
+      <a href="#" data-i18n="l.nav.examples">范例</a>
+      <a href="#" style="color: var(--text-primary);" data-i18n="l.nav.pricing">定价</a>
+      <a href="#" data-i18n="l.nav.docs">文档</a>
+    </nav>
+    <div class="actions">
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="19-auth.html" class="btn btn-ghost" data-i18n="l.nav.login">登入</a>
+      <a href="02-home.html" class="btn btn-primary" data-i18n="l.nav.signup">开始创作 →</a>
+    </div>
+  </header>
+
+  <section class="pricing-hero">
+    <span class="eyebrow chip chip-gold" data-i18n="p.hero.eyebrow">✦ 失败不扣点数 · 业界首发</span>
+    <h1 data-i18n="p.hero.title">选你拍片的节奏</h1>
+    <p data-i18n="p.hero.sub">所有方案都可以用 5 家视讯模型（ARK / Tencent / BobAPI / AtlasCloud / fal）。点数透明、超量可加购、年付 8 折。</p>
+    <div class="billing-toggle">
+      <button data-i18n="p.toggle.monthly">月付</button>
+      <button class="active"><span data-i18n="p.toggle.annual">年付</span> <span class="save" data-i18n="p.toggle.save">省 20%</span></button>
+    </div>
+  </section>
+
+  <div class="tiers">
+
+    <!-- Free -->
+    <div class="tier">
+      <div class="tier-name">Free</div>
+      <div class="tier-headline">先試試 — 不卡信用卡</div>
+      <div class="tier-price">
+        <span class="amount">$0</span>
+        <span class="unit">永久免費</span>
+      </div>
+      <div class="tier-price-note">每日 100 點 · 月上限 600</div>
+      <a href="02-home.html" class="btn btn-ghost cta" data-i18n="p.cta.free">免费开始</a>
+      <ul class="tier-feats">
+        <li>每日 100 點數</li>
+        <li>1 家視訊模型（最便宜）</li>
+        <li>1 並發任務</li>
+        <li>輸出含浮水印</li>
+        <li>公開展示廊（自願）</li>
+      </ul>
+    </div>
+
+    <!-- Creator -->
+    <div class="tier">
+      <div class="tier-name">Creator</div>
+      <div class="tier-headline">個人創作者起手式</div>
+      <div class="tier-price">
+        <span class="amount">$15</span>
+        <span class="unit">/ 月（年付）</span>
+      </div>
+      <div class="tier-price-note">原 $19 · 年省 $48</div>
+      <a href="02-home.html" class="btn btn-ghost cta" data-i18n="p.cta.creator">选 Creator →</a>
+      <ul class="tier-feats">
+        <li class="lead">1,500 點數 / 月</li>
+        <li>3 家視訊模型</li>
+        <li>2 並發任務</li>
+        <li>無浮水印</li>
+        <li>導出 1080p 豎屏 / 橫屏</li>
+        <li>项目歷史保留 60 天</li>
+      </ul>
+    </div>
+
+    <!-- Studio (Featured) -->
+    <div class="tier featured">
+      <div class="ribbon">最熱門</div>
+      <div class="tier-name" style="color: var(--primary-400);">Studio</div>
+      <div class="tier-headline">小團隊 / 重度創作者</div>
+      <div class="tier-price">
+        <span class="amount">$47</span>
+        <span class="unit">/ 月（年付）</span>
+      </div>
+      <div class="tier-price-note">原 $59 · 年省 $144</div>
+      <a href="02-home.html" class="btn btn-primary cta" data-i18n="p.cta.studio">选 Studio →</a>
+      <ul class="tier-feats">
+        <li class="lead">5,000 點數 / 月</li>
+        <li class="lead">全部 5 家視訊模型</li>
+        <li>5 並發任務</li>
+        <li>無浮水印 · 4K 導出</li>
+        <li>進階運鏡 preset 100+</li>
+        <li>项目歷史無限期</li>
+        <li>優先客服</li>
+      </ul>
+    </div>
+
+    <!-- Team -->
+    <div class="tier">
+      <div class="tier-name">Team</div>
+      <div class="tier-headline">3+ 人協作 / 工作室</div>
+      <div class="tier-price">
+        <span class="amount">$119</span>
+        <span class="unit">/ 月（年付）</span>
+      </div>
+      <div class="tier-price-note">原 $149 · 年省 $360</div>
+      <a href="02-home.html" class="btn btn-ghost cta" data-i18n="p.cta.team">联络销售 →</a>
+      <ul class="tier-feats">
+        <li class="lead">15,000 點數 / 月</li>
+        <li class="lead">3 個團隊席位</li>
+        <li>10 並發任務</li>
+        <li>API 存取</li>
+        <li>SSO 單點登入</li>
+        <li>專屬客戶經理</li>
+        <li>SLA 保證</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Trust strip -->
+  <div class="trust-strip">
+    <div class="trust-item">
+      <span class="label">✦ 業界首發</span>
+      <div class="title">失敗不扣點數</div>
+      <div class="desc">AI 生成失敗（過審不過、品質瑕疵、provider 錯誤）一律不扣點。我們承擔成本，因為這應該是我們的問題不是你的。</div>
+    </div>
+    <div class="trust-item">
+      <span class="label">⚡ 多家路由</span>
+      <div class="title">5 家視訊模型同個畫布</div>
+      <div class="desc">後端自動切換火山 ARK / Tencent VOD / BobAPI / AtlasCloud / fal — 你只看到「點數」。一家排隊就走另一家，永遠最快出片。</div>
+    </div>
+    <div class="trust-item">
+      <span class="label">↩ 隨時取消</span>
+      <div class="title">無綁約、隨時退</div>
+      <div class="desc">不滿意 7 天內全額退款。已用點數不扣。年付可改月付不需要等下個週期。</div>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="faq">
+    <h2>常見問題</h2>
+    <p class="sub">沒答到你問題的話，<a href="#" style="color: var(--primary-400);">寫信給我們 →</a></p>
+
+    <div class="faq-item open">
+      <div class="q">點數怎麼算？1 集要多少？<span class="icon">+</span></div>
+      <div class="a">點數 = 統一的視訊生成計費單位。一集（多鏡頭複合，約 30-60 秒成片）大約 40-80 點數，依鏡頭數、模型選擇、解析度而定。Storyboard 編輯時每個鏡頭都會顯示預估點數，你能在生成前看到全部成本。</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">為什麼失敗不扣點數？這樣你們不會虧錢嗎？<span class="icon">+</span></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">後端到底是哪家模型？我能指定嗎？<span class="icon">+</span></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">超量加購點數多少錢？<span class="icon">+</span></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">支援哪些國家的金流？<span class="icon">+</span></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">Team 方案能加更多席位嗎？<span class="icon">+</span></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <span>KuiperAI · 訂閱方案 Preview</span>
+      <span><a href="index.html" style="color: inherit;">← 回 Preview Hub</a></span>
+    </div>
+  </footer>
+</body>
+</html>

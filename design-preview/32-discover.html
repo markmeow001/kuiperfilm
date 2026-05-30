@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>广场 · 发现 AI 短剧创作者 · KuiperAI</title>
+  <meta name="description" content="探索 KuiperAI 平台上的 AI 短剧作品。悬疑、爱情、奇幻、写实多类型；每天更新热门创作。">
+  <meta property="og:title" content="KuiperAI 广场 · 发现 AI 短剧创作者">
+  <meta property="og:description" content="探索 KuiperAI 平台上的 AI 短剧作品。悬疑、爱情、奇幻、写实多类型。">
+  <meta property="og:image" content="https://kuiperfilmailab.com/og/discover-1200x630.jpg">
+  <meta property="og:url" content="https://kuiperfilmailab.com/discover">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="KuiperAI 广场 · 发现 AI 短剧创作者">
+  <meta name="twitter:image" content="https://kuiperfilmailab.com/og/discover-1200x630.jpg">
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(124, 92, 255, 0.03), transparent 60%),
+        var(--surface-canvas);
+      min-height: 100vh;
+    }
+    .top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+      background: rgba(10, 10, 10, 0.7);
+      backdrop-filter: blur(16px);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .brand-mini { display: flex; align-items: center; gap: 12px; font-weight: 600; }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+
+    .container { max-width: 1440px; margin: 0 auto; padding: 32px 32px 80px; }
+    .hero {
+      text-align: center;
+      padding: 48px 0 32px;
+    }
+    .hero h1 { font-size: 44px; font-weight: 600; letter-spacing: -0.025em; margin-bottom: 12px; }
+    .hero p { color: var(--text-secondary); font-size: 16px; max-width: 600px; margin: 0 auto; }
+
+    .filter-bar {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+    .filter-pill {
+      display: inline-flex;
+      padding: 3px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      gap: 2px;
+    }
+    .filter-pill button {
+      padding: 7px 14px;
+      background: transparent; border: none;
+      color: var(--text-tertiary);
+      font-size: 12px; font-weight: 500;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+    }
+    .filter-pill button.active {
+      background: var(--surface-overlay);
+      color: var(--text-primary);
+    }
+    .search-input {
+      flex: 1; max-width: 320px;
+      padding: 8px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .work-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform var(--d-hover) var(--ease-out);
+      text-decoration: none;
+      color: inherit;
+    }
+    .work-card:hover { transform: translateY(-3px); }
+    .work-thumb {
+      aspect-ratio: 9/16;
+      position: relative;
+      overflow: hidden;
+    }
+    .work-thumb .bg { position: absolute; inset: 0; }
+    .wt-1 .bg { background: linear-gradient(135deg, #4A3A2A, #2A1F15, #0A0807); }
+    .wt-2 .bg { background: linear-gradient(135deg, #2D2A4A, #1A1530, #0A0815); }
+    .wt-3 .bg { background: linear-gradient(135deg, #4A2A3A, #2A1525, #0A050D); }
+    .wt-4 .bg { background: linear-gradient(135deg, #2A4A3A, #152A25, #050D0A); }
+    .wt-5 .bg { background: linear-gradient(135deg, #2A2A4A, #15152A, #05050A); }
+    .wt-6 .bg { background: linear-gradient(135deg, #3A2A2A, #251515, #0A0505); }
+    .wt-7 .bg { background: linear-gradient(135deg, #4A3A3A, #2A2525, #0A0808); }
+    .wt-8 .bg { background: linear-gradient(135deg, #2A3A4A, #1A2A35, #05101A); }
+    .work-thumb .overlay {
+      position: absolute; inset: 0;
+      padding: 12px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .work-thumb .badge-row { display: flex; gap: 5px; }
+    .work-badge {
+      padding: 3px 8px;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+      border-radius: var(--r-pill);
+      font-size: 10px; color: white;
+    }
+    .work-badge.featured { background: var(--primary-500); color: var(--neutral-950); font-weight: 600; }
+    .work-thumb .play-mini {
+      align-self: end;
+      width: 32px; height: 32px;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(12px);
+      border-radius: 50%;
+      display: grid; place-items: center;
+    }
+    .work-thumb .play-mini::after {
+      content: ''; width: 0; height: 0;
+      border-left: 10px solid white;
+      border-top: 7px solid transparent;
+      border-bottom: 7px solid transparent;
+      margin-left: 3px;
+    }
+    .work-body { padding: 12px 14px; }
+    .work-body .title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .work-body .meta {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text-tertiary);
+    }
+    .work-body .meta .av {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7C5CFF, #4A3AAF);
+    }
+    .work-body .stats {
+      display: flex; gap: 12px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--surface-hairline);
+      font-size: 11px; color: var(--text-tertiary);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <span>KuiperAI</span>
+    </div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a href="19-auth.html" class="btn btn-ghost">登入</a>
+      <a href="02-home.html" class="btn btn-primary">开始创作 →</a>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <section class="hero">
+      <h1 data-i18n="d.title">广场</h1>
+      <p>看看其他创作者用 KuiperAI 拍出来的短剧，从范本开始创作你自己的</p>
+    </section>
+
+    <div class="filter-bar">
+      <div class="filter-pill">
+        <button class="active" data-i18n="d.filter.trending">热门</button>
+        <button data-i18n="d.filter.latest">最新</button>
+        <button data-i18n="d.filter.featured">精选</button>
+      </div>
+      <div class="filter-pill">
+        <button class="active">全部类型</button>
+        <button>悬疑</button>
+        <button>都市</button>
+        <button>古装</button>
+        <button>科幻</button>
+        <button>奇幻</button>
+      </div>
+      <input class="search-input" placeholder="🔍 搜索作品 / 创作者..." />
+    </div>
+
+    <div class="grid">
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-1">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge featured">精选</span><span class="work-badge">悬疑</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">霧城獵人 · EP1</div>
+          <div class="meta"><div class="av"></div>@林夕</div>
+          <div class="stats"><span>♡ 12.3k</span><span>▶ 45.1k</span><span>↗ 2.1k</span></div>
+        </div>
+      </a>
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-2">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge">奇幻</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">時光寄信人</div>
+          <div class="meta"><div class="av"></div>@夜歸人</div>
+          <div class="stats"><span>♡ 8.4k</span><span>▶ 28.7k</span><span>↗ 1.2k</span></div>
+        </div>
+      </a>
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-3">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge featured">精选</span><span class="work-badge">古装</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">沙漠遺骨</div>
+          <div class="meta"><div class="av"></div>@古星圖</div>
+          <div class="stats"><span>♡ 6.1k</span><span>▶ 22.3k</span><span>↗ 980</span></div>
+        </div>
+      </a>
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-4">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge">科幻</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">深海訪客</div>
+          <div class="meta"><div class="av"></div>@小海</div>
+          <div class="stats"><span>♡ 4.8k</span><span>▶ 15.9k</span><span>↗ 720</span></div>
+        </div>
+      </a>
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-5">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge">科幻</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">星圖夜遊</div>
+          <div class="meta"><div class="av"></div>@aaron</div>
+          <div class="stats"><span>♡ 3.2k</span><span>▶ 11.4k</span><span>↗ 540</span></div>
+        </div>
+      </a>
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-6">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge">都市</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">便利店悸動</div>
+          <div class="meta"><div class="av"></div>@cici</div>
+          <div class="stats"><span>♡ 5.7k</span><span>▶ 18.2k</span><span>↗ 612</span></div>
+        </div>
+      </a>
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-7">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge">奇幻</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">山中故事</div>
+          <div class="meta"><div class="av"></div>@山人</div>
+          <div class="stats"><span>♡ 2.9k</span><span>▶ 9.6k</span><span>↗ 384</span></div>
+        </div>
+      </a>
+
+      <a class="work-card" href="31-public-share.html">
+        <div class="work-thumb wt-8">
+          <div class="overlay">
+            <div class="badge-row"><span class="work-badge">悬疑</span></div>
+            <div class="play-mini"></div>
+          </div>
+        </div>
+        <div class="work-body">
+          <div class="title">藍色房間</div>
+          <div class="meta"><div class="av"></div>@bluenoir</div>
+          <div class="stats"><span>♡ 4.1k</span><span>▶ 13.7k</span><span>↗ 502</span></div>
+        </div>
+      </a>
+
+    </div>
+  </div>
+</body>
+</html>

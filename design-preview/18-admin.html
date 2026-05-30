@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · Admin Dashboard</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    /* Studio Dark variant — pure black, higher density */
+    body {
+      background: #0A0A0B;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .admin-side {
+      width: 240px; flex-shrink: 0;
+      background: #0A0A0B;
+      border-right: 1px solid var(--surface-hairline);
+      padding: 16px 12px;
+      display: flex; flex-direction: column;
+    }
+    .admin-brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 4px 8px 18px;
+      font-size: 13px; font-weight: 600;
+    }
+    .admin-brand .mark {
+      width: 22px; height: 22px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 11px;
+    }
+    .admin-brand .tag {
+      font-size: 9px;
+      padding: 1px 6px;
+      background: rgba(239, 68, 68, 0.16);
+      color: var(--error);
+      border-radius: var(--r-chip);
+      letter-spacing: 0.04em;
+      margin-left: auto;
+      font-weight: 600;
+    }
+
+    /* Queue health pill (常駐) */
+    .qhealth {
+      margin: 0 4px 16px;
+      padding: 10px 12px;
+      background: rgba(34, 197, 94, 0.04);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      border-radius: var(--r-input);
+    }
+    .qhealth .qh-top {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: var(--success);
+      font-weight: 500;
+    }
+    .qhealth .qh-top .dot {
+      width: 6px; height: 6px; background: var(--success);
+      border-radius: 50%;
+      animation: pulse-soft 2s ease-in-out infinite;
+    }
+    .qhealth .qh-row {
+      display: flex; justify-content: space-between;
+      font-size: 11px;
+      padding: 2px 0;
+    }
+    .qhealth .qh-row .k { color: var(--text-tertiary); }
+    .qhealth .qh-row .v { color: var(--text-primary); font-family: 'JetBrains Mono', monospace; }
+
+    /* Nav */
+    .nav-group { margin-bottom: 16px; }
+    .nav-label {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 0 8px 6px;
+      font-weight: 500;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 10px;
+      border-radius: var(--r-input);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      margin-bottom: 1px;
+      transition: background var(--d-hover) var(--ease-out);
+    }
+    .nav-item:hover { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item.active { background: var(--surface-raised); color: var(--text-primary); }
+    .nav-item .icon { width: 16px; color: var(--text-tertiary); }
+    .nav-item.active .icon { color: var(--primary-400); }
+    .nav-item .live {
+      width: 6px; height: 6px;
+      border-radius: 50%; margin-left: auto;
+    }
+    .nav-item .live.healthy { background: var(--success); }
+    .nav-item .live.degraded { background: var(--warning); }
+    .nav-item .badge {
+      margin-left: auto;
+      padding: 1px 6px;
+      background: var(--surface-overlay);
+      border-radius: var(--r-pill);
+      font-size: 10px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Profile bottom */
+    .admin-profile {
+      margin-top: auto;
+      padding: 10px 8px;
+      display: flex; align-items: center; gap: 10px;
+      border-top: 1px solid var(--surface-hairline);
+    }
+    .admin-profile .av {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #4A3AAF, #7C5CFF);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 12px; font-weight: 600;
+    }
+    .admin-profile .info { flex: 1; }
+    .admin-profile .nm { font-size: 12px; font-weight: 500; }
+    .admin-profile .role { font-size: 10px; color: var(--text-tertiary); }
+
+    /* Main */
+    .admin-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    /* Top bar */
+    .admin-top {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+      background: rgba(10, 10, 11, 0.7);
+      backdrop-filter: blur(20px);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .admin-top h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+    .admin-top .top-actions { display: flex; gap: 8px; align-items: center; }
+    .time-range {
+      display: flex; padding: 3px; background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline); border-radius: var(--r-pill);
+    }
+    .time-range button {
+      padding: 5px 12px; font-size: 12px; background: transparent; border: none;
+      color: var(--text-tertiary); border-radius: var(--r-pill); cursor: pointer; font-weight: 500;
+    }
+    .time-range button.active {
+      background: var(--surface-overlay); color: var(--text-primary);
+    }
+
+    /* KPI grid */
+    .kpi-grid {
+      padding: 24px 32px 16px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .kpi-card {
+      padding: 16px 18px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      cursor: pointer;
+      transition: border-color var(--d-hover) var(--ease-out);
+    }
+    .kpi-card:hover { border-color: rgba(255,255,255,0.12); }
+    .kpi-card .kpi-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .kpi-card .kpi-value {
+      font-size: 24px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .kpi-card .kpi-delta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px;
+    }
+    .kpi-card .kpi-delta .delta { font-family: 'JetBrains Mono', monospace; }
+    .kpi-card .kpi-delta .delta.up { color: var(--success); }
+    .kpi-card .kpi-delta .delta.down { color: var(--error); }
+    .kpi-card .kpi-delta .desc { color: var(--text-tertiary); }
+    .kpi-card .sparkline {
+      margin-top: 10px;
+      height: 24px;
+      position: relative;
+    }
+    .sparkline svg { width: 100%; height: 100%; }
+
+    /* Widget rows */
+    .widget-grid {
+      padding: 0 32px 24px;
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .widget {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+    }
+    .widget-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .widget-head h3 { font-size: 13px; font-weight: 600; }
+    .widget-head .ws {
+      font-size: 11px; color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .widget-body { padding: 14px 18px; }
+
+    /* Provider routing */
+    .prov-bar {
+      height: 28px;
+      display: flex;
+      border-radius: var(--r-input);
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .prov-bar > div { position: relative; }
+    .prov-bar > div::after {
+      content: attr(data-pct);
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 11px;
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+    .prov-list { display: flex; flex-direction: column; gap: 6px; }
+    .prov-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+    .prov-row .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+    .prov-row .pname { flex: 1; font-weight: 500; }
+    .prov-row .meta { color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+    /* Triage split for runs */
+    .runs-section {
+      padding: 0 32px 40px;
+    }
+    .runs-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .runs-head h2 { font-size: 17px; font-weight: 600; }
+    .runs-filters { display: flex; gap: 6px; }
+    .rfilter {
+      padding: 5px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-secondary);
+      border-radius: var(--r-pill);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .rfilter.active { background: var(--surface-overlay); color: var(--text-primary); border-color: rgba(255,255,255,0.16); }
+    .rfilter .count { font-family: 'JetBrains Mono', monospace; color: var(--text-tertiary); margin-left: 4px; }
+    .rfilter.error .count { color: var(--error); }
+
+    .runs-split {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--surface-hairline);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      min-height: 480px;
+    }
+    .runs-list { background: var(--surface-canvas); overflow-y: auto; }
+    .run-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 80px 80px;
+      gap: 10px; align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--surface-hairline);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .run-row:hover { background: var(--surface-raised); }
+    .run-row.active { background: rgba(245, 194, 74, 0.04); border-left: 2px solid var(--primary-500); padding-left: 14px; }
+    .run-row .rid {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-tertiary);
+      font-size: 11px;
+    }
+    .run-row .rtitle { font-weight: 500; }
+    .run-row .rmeta { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    .run-row .rstatus {
+      padding: 2px 8px;
+      border-radius: var(--r-pill);
+      font-size: 10px;
+      text-align: center;
+      font-weight: 500;
+    }
+    .run-row .rstatus.done { background: rgba(34, 197, 94, 0.12); color: var(--success); }
+    .run-row .rstatus.run { background: rgba(124, 92, 255, 0.12); color: var(--accent-400); }
+    .run-row .rstatus.fail { background: rgba(239, 68, 68, 0.12); color: var(--error); }
+    .run-row .rcost { color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 11px; text-align: right; }
+
+    /* Run detail */
+    .run-detail { background: var(--surface-canvas); padding: 24px; overflow-y: auto; }
+    .rd-head { margin-bottom: 18px; }
+    .rd-id { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-tertiary); margin-bottom: 6px; }
+    .rd-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+    .rd-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; background: rgba(239, 68, 68, 0.12); color: var(--error); border-radius: var(--r-pill); font-size: 11px; font-weight: 500; }
+
+    .rd-meta {
+      padding: 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      margin-bottom: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .rd-meta .field { font-size: 11px; }
+    .rd-meta .field .k { color: var(--text-tertiary); margin-bottom: 3px; }
+    .rd-meta .field .v { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+
+    .rd-error {
+      padding: 12px;
+      background: rgba(239, 68, 68, 0.04);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: var(--r-card);
+      margin-bottom: 14px;
+    }
+    .rd-error h4 { font-size: 11px; color: var(--error); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; font-weight: 600; }
+    .rd-error pre {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .rd-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .rd-actions .btn { width: 100%; justify-content: center; font-size: 11px; padding: 8px; }
+
+    /* Bar widget */
+    .stack-bar {
+      display: flex;
+      height: 28px;
+      border-radius: var(--r-input);
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .stack-bar > div { font-size: 10px; }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="admin-side">
+    <div class="admin-brand">
+      <div class="mark">K</div>
+      <span>KuiperAI</span>
+      <span class="tag">ADMIN</span>
+    </div>
+
+    <!-- Queue health pill -->
+    <div class="qhealth">
+      <div class="qh-top"><div class="dot"></div> Queue healthy · 4m ago</div>
+      <div class="qh-row"><span class="k">depth</span><span class="v">3 / 50</span></div>
+      <div class="qh-row"><span class="k">throughput</span><span class="v">42 /h</span></div>
+      <div class="qh-row"><span class="k">p95 latency</span><span class="v">1m 24s</span></div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label" data-i18n="ad.nav.operations">运营</div>
+      <a class="nav-item active" href="#"><span class="icon">▣</span> <span data-i18n="ad.nav.dashboard">仪表板</span> <div class="live healthy"></div></a>
+      <a class="nav-item" href="#"><span class="icon">⚡</span> <span data-i18n="ad.nav.queue">队列</span> <span class="badge">3</span></a>
+      <a class="nav-item" href="#"><span class="icon">▶</span> <span data-i18n="ad.nav.runs">运行记录</span> <span class="badge">847</span></a>
+      <a class="nav-item" href="#"><span class="icon">⚠</span> <span data-i18n="ad.nav.incidents">事件</span> <span class="badge" style="color: var(--error);">2</span></a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label" data-i18n="ad.nav.resources">资源</div>
+      <a class="nav-item" href="#"><span class="icon">◯</span> <span data-i18n="ad.nav.providers">供应商</span> <div class="live healthy"></div></a>
+      <a class="nav-item" href="#"><span class="icon">▤</span> <span data-i18n="ad.nav.quotas">配额</span></a>
+      <a class="nav-item" href="#"><span class="icon">$</span> <span data-i18n="ad.nav.costs">成本</span></a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label" data-i18n="ad.nav.people">人员</div>
+      <a class="nav-item" href="20-workspace.html"><span class="icon">◔</span> <span data-i18n="ad.nav.workspaces">工作区</span> <span class="badge">7</span></a>
+      <a class="nav-item" href="#"><span class="icon">◐</span> <span data-i18n="ad.nav.users">用户</span> <span class="badge">23</span></a>
+      <a class="nav-item" href="#"><span class="icon">⬡</span> <span data-i18n="ad.nav.roles">角色</span></a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label" data-i18n="ad.nav.system">系统</div>
+      <a class="nav-item" href="28-settings.html"><span class="icon">⚙</span> <span data-i18n="ad.nav.settings">设置</span></a>
+      <a class="nav-item" href="#"><span class="icon">⌥</span> <span data-i18n="ad.nav.models">模型</span></a>
+      <a class="nav-item" href="#"><span class="icon">↩</span> <span data-i18n="ad.nav.audit">审计日志</span></a>
+    </div>
+
+    <div class="admin-profile">
+      <div class="av">J</div>
+      <div class="info">
+        <div class="nm">Josh Hung</div>
+        <div class="role">Org Admin</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="admin-main">
+
+    <div class="admin-top">
+      <h1 data-i18n="ad.nav.dashboard">仪表板</h1>
+      <div class="top-actions">
+        <div class="time-range">
+          <button>1h</button>
+          <button class="active">24h</button>
+          <button>7d</button>
+          <button>30d</button>
+        </div>
+        <div class="lang-switcher">
+          <button type="button" data-lang="zh" class="active">中</button>
+          <button type="button" data-lang="en">EN</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Runs (24h)</div>
+        <div class="kpi-value">847</div>
+        <div class="kpi-delta">
+          <span class="delta up">↑ 12%</span>
+          <span class="desc">vs yesterday</span>
+        </div>
+        <div class="sparkline">
+          <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,18 12,14 25,16 38,8 50,10 62,6 75,9 88,4 100,2" stroke="#F5C24A" stroke-width="1.5" fill="none" />
+            <polyline points="0,18 12,14 25,16 38,8 50,10 62,6 75,9 88,4 100,2 100,24 0,24" fill="rgba(245,194,74,0.1)" />
+          </svg>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">Success Rate</div>
+        <div class="kpi-value">97.2%</div>
+        <div class="kpi-delta">
+          <span class="delta up">↑ 0.4%</span>
+          <span class="desc">target 95%</span>
+        </div>
+        <div class="sparkline">
+          <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,8 12,10 25,7 38,9 50,6 62,4 75,8 88,5 100,4" stroke="#22C55E" stroke-width="1.5" fill="none" />
+          </svg>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">P95 Latency</div>
+        <div class="kpi-value">1m 24s</div>
+        <div class="kpi-delta">
+          <span class="delta down">↓ 8s</span>
+          <span class="desc">vs avg</span>
+        </div>
+        <div class="sparkline">
+          <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,14 12,18 25,12 38,16 50,10 62,14 75,8 88,12 100,10" stroke="#7C5CFF" stroke-width="1.5" fill="none" />
+          </svg>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-label">Credit Burn (24h)</div>
+        <div class="kpi-value">28,453</div>
+        <div class="kpi-delta">
+          <span class="delta up">↑ 18%</span>
+          <span class="desc">~ $42</span>
+        </div>
+        <div class="sparkline">
+          <svg viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,18 12,16 25,12 38,14 50,10 62,8 75,6 88,4 100,2" stroke="#F5C24A" stroke-width="1.5" fill="none" />
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Widget grid -->
+    <div class="widget-grid">
+
+      <!-- Provider routing -->
+      <div class="widget">
+        <div class="widget-head">
+          <h3>Provider Routing (24h)</h3>
+          <span class="ws">847 dispatches</span>
+        </div>
+        <div class="widget-body">
+          <div class="prov-bar">
+            <div style="background: var(--primary-500); width: 42%;" data-pct="42% ARK"></div>
+            <div style="background: var(--accent-500); width: 25%;" data-pct="25% AtlasCloud"></div>
+            <div style="background: #4A8FE5; width: 18%;" data-pct="18% fal"></div>
+            <div style="background: #22C55E; width: 11%;" data-pct="11% BobAPI"></div>
+            <div style="background: var(--neutral-600); width: 4%;" data-pct=""></div>
+          </div>
+          <div class="prov-list">
+            <div class="prov-row"><div class="swatch" style="background: var(--primary-500);"></div><span class="pname">ARK Seedance 2.0</span><span class="meta">356 · ✓ 97.5% · 1m 12s p95</span></div>
+            <div class="prov-row"><div class="swatch" style="background: var(--accent-500);"></div><span class="pname">AtlasCloud r2v</span><span class="meta">212 · ✓ 98.1% · 1m 30s p95</span></div>
+            <div class="prov-row"><div class="swatch" style="background: #4A8FE5;"></div><span class="pname">fal Seedance Pro</span><span class="meta">153 · ✓ 96.7% · 58s p95</span></div>
+            <div class="prov-row"><div class="swatch" style="background: #22C55E;"></div><span class="pname">BobAPI Seedance</span><span class="meta">93 · ✓ 95.7% · 1m 45s p95</span></div>
+            <div class="prov-row"><div class="swatch" style="background: var(--neutral-600);"></div><span class="pname">Kling Omni (fallback)</span><span class="meta">33 · ✓ 93.9% · 2m 10s p95</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Credit usage breakdown -->
+      <div class="widget">
+        <div class="widget-head">
+          <h3>Credit Breakdown (24h)</h3>
+          <span class="ws">28,453 pt</span>
+        </div>
+        <div class="widget-body">
+          <div class="stack-bar">
+            <div style="background: var(--primary-500); width: 58%; padding: 6px; color: white;">58% Video</div>
+            <div style="background: var(--accent-500); width: 22%; padding: 6px; color: white; font-size: 10px;">22% T2I</div>
+            <div style="background: #4A8FE5; width: 13%; padding: 6px; color: white; font-size: 10px;">13% TTS</div>
+            <div style="background: #22C55E; width: 7%; padding: 6px; color: white; font-size: 10px;">7% LLM</div>
+          </div>
+          <div class="prov-list">
+            <div class="prov-row"><div class="swatch" style="background: var(--primary-500);"></div><span class="pname">Video Generation</span><span class="meta">16,503 pt · $24.75</span></div>
+            <div class="prov-row"><div class="swatch" style="background: var(--accent-500);"></div><span class="pname">Image (T2I)</span><span class="meta">6,260 pt · $9.39</span></div>
+            <div class="prov-row"><div class="swatch" style="background: #4A8FE5;"></div><span class="pname">TTS / Voice</span><span class="meta">3,699 pt · $5.55</span></div>
+            <div class="prov-row"><div class="swatch" style="background: #22C55E;"></div><span class="pname">LLM (script/storyboard)</span><span class="meta">1,991 pt · $2.99</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Runs triage split -->
+    <div class="runs-section">
+      <div class="runs-head">
+        <h2>Recent Runs · Triage</h2>
+        <div class="runs-filters">
+          <button class="rfilter active">All <span class="count">847</span></button>
+          <button class="rfilter error">Failed <span class="count">23</span></button>
+          <button class="rfilter">Running <span class="count">3</span></button>
+          <button class="rfilter">Slow <span class="count">8</span></button>
+        </div>
+      </div>
+
+      <div class="runs-split">
+        <div class="runs-list">
+          <div class="run-row">
+            <div class="rid">#A8273F</div>
+            <div>
+              <div class="rtitle">霧城獵人 / EP2 / P5</div>
+              <div class="rmeta">ARK · R2V · 5s · 28pt</div>
+            </div>
+            <div class="rstatus done">DONE</div>
+            <div class="rcost">1m 12s</div>
+          </div>
+          <div class="run-row active">
+            <div class="rid">#A8275C</div>
+            <div>
+              <div class="rtitle">霧城獵人 / EP1 / P3</div>
+              <div class="rmeta">ARK · R2V · 4s · 22pt</div>
+            </div>
+            <div class="rstatus fail">FAIL</div>
+            <div class="rcost">42s</div>
+          </div>
+          <div class="run-row">
+            <div class="rid">#A82760</div>
+            <div>
+              <div class="rtitle">時光寄信人 / EP3 / P8</div>
+              <div class="rmeta">AtlasCloud · R2V · 6s</div>
+            </div>
+            <div class="rstatus run">RUN</div>
+            <div class="rcost">22s</div>
+          </div>
+          <div class="run-row">
+            <div class="rid">#A82758</div>
+            <div>
+              <div class="rtitle">深海訪客 / EP1 / P2</div>
+              <div class="rmeta">fal · T2I→I2V · 8s</div>
+            </div>
+            <div class="rstatus done">DONE</div>
+            <div class="rcost">1m 32s</div>
+          </div>
+          <div class="run-row">
+            <div class="rid">#A82754</div>
+            <div>
+              <div class="rtitle">霧城獵人 / EP2 / P4</div>
+              <div class="rmeta">ARK · R2V · 5s · 28pt</div>
+            </div>
+            <div class="rstatus fail">FAIL</div>
+            <div class="rcost">38s</div>
+          </div>
+          <div class="run-row">
+            <div class="rid">#A82750</div>
+            <div>
+              <div class="rtitle">沙漠遺骨 / EP1 / P6</div>
+              <div class="rmeta">BobAPI · R2V · 6s</div>
+            </div>
+            <div class="rstatus done">DONE</div>
+            <div class="rcost">1m 45s</div>
+          </div>
+          <div class="run-row">
+            <div class="rid">#A8274C</div>
+            <div>
+              <div class="rtitle">霧城獵人 / EP1 / P2</div>
+              <div class="rmeta">ARK · R2V · 5s · 28pt</div>
+            </div>
+            <div class="rstatus done">DONE</div>
+            <div class="rcost">1m 18s</div>
+          </div>
+          <div class="run-row">
+            <div class="rid">#A82748</div>
+            <div>
+              <div class="rtitle">星圖夜遊 / EP4 / P3</div>
+              <div class="rmeta">fal · T2V · 4s</div>
+            </div>
+            <div class="rstatus done">DONE</div>
+            <div class="rcost">52s</div>
+          </div>
+        </div>
+
+        <div class="run-detail">
+          <div class="rd-head">
+            <div class="rd-id">RUN #A8275C · 5 mins ago</div>
+            <div class="rd-title">霧城獵人 / EP1 / P3 / Panel 5</div>
+            <div class="rd-status">⊗ FAILED · Provider error</div>
+          </div>
+
+          <div class="rd-meta">
+            <div class="field"><div class="k">Project</div><div class="v">霧城獵人</div></div>
+            <div class="field"><div class="k">User</div><div class="v">@林夕 (Editor)</div></div>
+            <div class="field"><div class="k">Provider</div><div class="v">ARK Seedance 2.0</div></div>
+            <div class="field"><div class="k">Mode</div><div class="v">R2V · i2v</div></div>
+            <div class="field"><div class="k">Duration</div><div class="v">4s</div></div>
+            <div class="field"><div class="k">Cost (refunded)</div><div class="v">22 pt</div></div>
+          </div>
+
+          <div class="rd-error">
+            <h4>Provider Response</h4>
+            <pre>InputImageSensitiveContentDetected.PrivacyInformation
+Code: 50031
+Asset: asset-2026-05-22-xyz
+At: 2026-05-28T14:32:18Z
+
+ARK face filter blocked. User uploaded reference contains
+real human identity not registered.
+
+Suggestions:
+- Re-register character via ARK console
+- Switch to AtlasCloud r2v (no face filter)
+- Generate identity vector first</pre>
+          </div>
+
+          <div class="rd-actions">
+            <button class="btn btn-ghost">↺ Retry (free)</button>
+            <button class="btn btn-ghost">↳ Reroute</button>
+            <button class="btn btn-primary">→ User</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</body>
+</html>

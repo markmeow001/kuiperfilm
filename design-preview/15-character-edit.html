@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 角色編輯 · 林夜</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    .ws-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--surface-hairline); flex-shrink: 0; }
+    .brand-mark { width: 24px; height: 24px; background: linear-gradient(135deg, var(--primary-500), var(--primary-600)); border-radius: 5px; display: grid; place-items: center; color: var(--neutral-950); font-weight: 700; font-size: 12px; }
+    .brand-mini { display: flex; align-items: center; gap: 12px; }
+    .breadcrumb { font-size: 13px; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
+    .breadcrumb .current { color: var(--text-primary); font-weight: 500; }
+    .breadcrumb .sep { color: var(--neutral-700); }
+
+    .ws-body { flex: 1; display: grid; grid-template-columns: 260px 1fr 320px; min-height: 0; }
+
+    /* LEFT: cast list */
+    .ws-cast {
+      border-right: 1px solid var(--surface-hairline);
+      overflow-y: auto;
+      padding: 18px 14px;
+    }
+    .cast-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 6px 12px;
+    }
+    .cast-head h3 { font-size: 13px; font-weight: 600; }
+    .cast-head .count { font-size: 11px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+    .cast-search {
+      width: 100%; padding: 7px 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-primary); font-size: 12px;
+      margin-bottom: 12px;
+      transition: border-color var(--d-state) var(--ease-out), box-shadow var(--d-state) var(--ease-out);
+    }
+    .cast-search:focus { outline: none; border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(245,194,74,0.15); }
+    .cast-search::placeholder { color: var(--text-tertiary); }
+
+    .cast-tabs { display: flex; gap: 4px; margin-bottom: 12px; padding: 3px; background: var(--surface-canvas); border: 1px solid var(--surface-hairline); border-radius: var(--r-pill); }
+    .cast-tab { flex: 1; padding: 5px; font-size: 11px; background: transparent; border: none; color: var(--text-tertiary); border-radius: var(--r-pill); cursor: pointer; font-weight: 500; }
+    .cast-tab.active { background: var(--primary-500); color: var(--neutral-950); font-weight: 600; }
+
+    .cast-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--r-input);
+      cursor: pointer;
+      margin-bottom: 3px;
+      border: 1px solid transparent;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .cast-row:hover { background: var(--surface-raised); }
+    .cast-row.active { background: var(--surface-raised); border-color: rgba(245, 194, 74, 0.4); }
+    .cast-thumb { width: 36px; height: 48px; border-radius: 5px; flex-shrink: 0; position: relative; }
+    .ct-linye   { background-image: url('./images/char-linye.jpg'); background-size: cover; background-position: center; }
+    .ct-guai    { background-image: url('./images/char-monster.jpg'); background-size: cover; background-position: center; }
+    .ct-guxing  { background: linear-gradient(135deg, #2D2A4A, #1A1530); }
+    .ct-add     { background: transparent; border: 1px dashed var(--surface-hairline); }
+    .cast-info { flex: 1; min-width: 0; }
+    .cast-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cast-tag { font-size: 10px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+    .cast-usage { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+
+    .cast-add {
+      padding: 10px 12px; margin-top: 8px;
+      background: transparent; border: 1px dashed var(--surface-hairline);
+      border-radius: var(--r-input); color: var(--text-tertiary);
+      font-size: 12px; cursor: pointer; text-align: center;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .cast-add:hover { border-color: var(--primary-500); color: var(--primary-400); }
+
+    /* CENTER: editor */
+    .ws-editor {
+      overflow-y: auto;
+      padding: 0;
+      background: var(--surface-canvas);
+    }
+    .editor-head {
+      padding: 24px 32px 18px;
+      border-bottom: 1px solid var(--surface-hairline);
+      display: flex; align-items: end; justify-content: space-between;
+      gap: 24px;
+    }
+    .character-hero {
+      display: flex; gap: 18px; flex: 1;
+    }
+    .hero-portrait {
+      width: 96px; height: 132px;
+      background: linear-gradient(135deg, #6A4A2A 0%, #3A2515 60%, #1a0d05 100%);
+      border-radius: var(--r-card);
+      box-shadow: var(--elev-2);
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: transform var(--d-hover) var(--ease-out);
+    }
+    .hero-portrait:hover { transform: translateY(-2px); }
+    .hero-portrait::after {
+      content: '✎ 替換';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 6px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      color: white; font-size: 11px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity var(--d-hover) var(--ease-out);
+    }
+    .hero-portrait:hover::after { opacity: 1; }
+
+    .hero-meta { flex: 1; min-width: 0; }
+    .name-row {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 6px;
+    }
+    .name-input {
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      padding: 4px 8px;
+      margin-left: -8px;
+      border-radius: var(--r-input);
+      outline: none;
+      transition: background var(--d-hover) var(--ease-out);
+    }
+    .name-input:hover { background: var(--surface-raised); }
+    .name-input:focus { background: var(--surface-raised); }
+    .at-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--primary-400);
+      padding: 4px 10px;
+      background: rgba(245, 194, 74, 0.12);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      border-radius: var(--r-pill);
+    }
+    .hero-sub {
+      display: flex; gap: 16px; align-items: center;
+      font-size: 13px;
+      color: var(--text-tertiary);
+    }
+    .hero-sub .dot::before { content: '·'; margin: 0 4px; }
+    .hero-actions { display: flex; gap: 8px; }
+
+    /* Sections */
+    .ed-section { padding: 24px 32px; border-bottom: 1px solid var(--surface-hairline); }
+    .ed-section-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .ed-section-head h3 { font-size: 15px; font-weight: 600; }
+    .ed-section-head .info { font-size: 11px; color: var(--text-tertiary); }
+
+    .fields-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 6px; }
+    .field-group.full { grid-column: span 2; }
+    .field-label {
+      font-size: 11px; color: var(--text-tertiary);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      font-weight: 500;
+    }
+    .field-input {
+      padding: 10px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      color: var(--text-primary);
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color var(--d-state) var(--ease-out), box-shadow var(--d-state) var(--ease-out);
+    }
+    .field-input:hover { border-color: rgba(255,255,255,0.16); }
+    .field-input:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(245,194,74,0.15); }
+    .field-textarea { min-height: 80px; resize: vertical; line-height: 1.6; }
+    .field-select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-tertiary) 50%); background-position: right 14px center; background-size: 6px 6px; background-repeat: no-repeat; padding-right: 32px; }
+
+    /* Appearance gallery */
+    .app-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .app-card {
+      aspect-ratio: 3/4;
+      background-image: url('./images/char-linye.jpg'); background-size: cover; background-position: center;
+      border-radius: var(--r-card);
+      border: 1px solid var(--surface-hairline);
+      position: relative;
+      cursor: pointer;
+      overflow: hidden;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .app-card.alt-1 { background: linear-gradient(135deg, #5A4530 0%, #2F2010 60%, #15100A 100%); }
+    .app-card.alt-2 { background: linear-gradient(135deg, #7A5A35 0%, #45301A 60%, #20180A 100%); }
+    .app-card.alt-3 { background: linear-gradient(135deg, #3A2A1A 0%, #1A1005 60%, #0A0805 100%); }
+    .app-card.alt-4 { background: linear-gradient(135deg, #6A4A4A 0%, #3A2525 60%, #1A0D0D 100%); }
+    .app-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.2); }
+    .app-card.active {
+      border-color: var(--primary-500);
+      box-shadow: 0 0 0 2px rgba(245, 194, 74, 0.3);
+    }
+    .app-card .label {
+      position: absolute; bottom: 8px; left: 8px;
+      padding: 2px 8px;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border-radius: var(--r-chip);
+      font-size: 10px;
+      color: white;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .app-card .star {
+      position: absolute; top: 8px; right: 8px;
+      width: 22px; height: 22px;
+      background: var(--primary-500);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      color: var(--neutral-950);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .app-card.add {
+      background: transparent;
+      border: 1px dashed var(--surface-hairline);
+      display: grid; place-items: center;
+      color: var(--text-tertiary);
+      font-size: 24px; font-weight: 300;
+    }
+    .app-card.add:hover { border-color: var(--primary-500); color: var(--primary-400); }
+
+    /* Consistency slider */
+    .consist-row {
+      padding: 16px 18px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+    }
+    .consist-row .ch {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .consist-row .ch .ck { font-size: 13px; font-weight: 500; }
+    .consist-row .ch .cv {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      color: var(--primary-400);
+      font-weight: 600;
+    }
+    .slider-track {
+      height: 6px; background: var(--neutral-800); border-radius: 3px;
+      position: relative;
+      cursor: pointer;
+    }
+    .slider-track .fill {
+      position: absolute; top: 0; left: 0; height: 100%;
+      background: linear-gradient(90deg, var(--accent-500), var(--primary-500));
+      border-radius: 3px;
+    }
+    .slider-track .thumb {
+      position: absolute; top: 50%;
+      width: 18px; height: 18px;
+      background: var(--text-primary);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      cursor: grab;
+    }
+    .consist-row .scale-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--text-tertiary);
+    }
+
+    /* Voice picker */
+    .voice-row {
+      padding: 14px 16px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      display: flex; align-items: center; gap: 14px;
+      cursor: pointer;
+    }
+    .voice-row .vplay {
+      width: 36px; height: 36px;
+      background: rgba(124, 92, 255, 0.16);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      color: var(--accent-400);
+      font-size: 14px;
+    }
+    .voice-row .vinfo { flex: 1; }
+    .voice-row .vname { font-size: 13px; font-weight: 500; }
+    .voice-row .vmeta { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+    .voice-row .vchev { color: var(--text-tertiary); font-size: 14px; }
+
+    /* RIGHT: usage panel */
+    .ws-usage {
+      border-left: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      overflow-y: auto;
+      padding: 22px 20px;
+    }
+    .uhead {
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .uhead h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .uhead p { font-size: 11px; color: var(--text-tertiary); line-height: 1.5; }
+
+    /* Test panel */
+    .test-card {
+      padding: 14px;
+      background: rgba(124, 92, 255, 0.04);
+      border: 1px solid rgba(124, 92, 255, 0.2);
+      border-radius: var(--r-card);
+      margin-bottom: 20px;
+    }
+    .test-card h4 {
+      font-size: 11px;
+      color: var(--accent-400);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .test-result {
+      aspect-ratio: 1;
+      background: linear-gradient(135deg, #6A4A2A, #3A2515);
+      border-radius: var(--r-input);
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .test-card .test-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 8px;
+      font-size: 12px;
+    }
+
+    /* Usage list */
+    .usage-section { margin-bottom: 20px; }
+    .usage-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 10px;
+    }
+    .usage-head .lbl {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 500;
+    }
+    .usage-head .total {
+      font-size: 11px;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+    }
+    .usage-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: border-color var(--d-hover) var(--ease-out);
+    }
+    .usage-row:hover { border-color: rgba(255,255,255,0.16); }
+    .usage-row .ut {
+      width: 28px; height: 42px;
+      background: linear-gradient(135deg, #6A4A2A, #3A2515);
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .usage-row .uname { flex: 1; font-size: 12px; }
+    .usage-row .uloc { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    .usage-row .ustatus { font-size: 10px; }
+    .usage-row .ustatus.done { color: var(--success); }
+    .usage-row .ustatus.stale { color: var(--warning); }
+
+    /* Save bar */
+    .save-bar {
+      padding: 14px 20px;
+      background: rgba(245, 194, 74, 0.06);
+      border-top: 1px solid rgba(245, 194, 74, 0.25);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .save-bar .info {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .save-bar .info strong { color: var(--primary-400); }
+  </style>
+</head>
+<body>
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html">项目</a>
+        <span class="sep">›</span>
+        <a href="13-narrative-editor.html">霧城獵人</a>
+        <span class="sep">›</span>
+        <a href="13-narrative-editor.html">劇集設定</a>
+        <span class="sep">›</span>
+        <span class="current">林夜</span>
+      </div>
+    </div>
+    <div class="stepper">
+      <a class="step done" href="06-script-input.html" data-i18n="ws.step.script">剧本</a>
+      <a class="step done" href="07-pre-generation.html" data-i18n="ws.step.analyze">分析</a>
+      <a class="step" href="13-narrative-editor.html" data-i18n="ws.step.storyboard">分镜</a>
+      <a class="step" href="23-voice.html" data-i18n="ws.step.voice">配音</a>
+      <a class="step" href="24-render.html" data-i18n="ws.step.render">渲染</a>
+      <a class="step" href="25-final.html" data-i18n="ws.step.final">成片</a>
+    </div>
+    <div class="ws-top-right">
+      <span class="chip chip-success">● <span data-i18n="ws.autosave">自动保存</span></span>
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn-primary" href="13-narrative-editor.html" data-i18n="ws.cta.done">完成 →</a>
+    </div>
+  </header>
+
+  <div class="ws-body">
+
+    <!-- LEFT: cast list -->
+    <aside class="ws-cast">
+      <div class="cast-head">
+        <h3>劇集設定</h3>
+        <span class="count">7 個</span>
+      </div>
+      <input class="cast-search" data-i18n-placeholder="e.search" placeholder="搜寻角色 / 场景 / 道具" />
+      <div class="cast-tabs">
+        <button class="cast-tab active">角色 3</button>
+        <button class="cast-tab">場景 3</button>
+        <button class="cast-tab">道具 2</button>
+      </div>
+
+      <div class="cast-row active">
+        <div class="cast-thumb ct-linye"></div>
+        <div class="cast-info">
+          <div class="cast-name">林夜 <span class="cast-tag">@林夜</span></div>
+          <div class="cast-usage">主角 · 12 panel</div>
+        </div>
+      </div>
+      <div class="cast-row">
+        <div class="cast-thumb ct-guai"></div>
+        <div class="cast-info">
+          <div class="cast-name">怪物</div>
+          <div class="cast-usage">2 panel</div>
+        </div>
+      </div>
+      <div class="cast-row">
+        <div class="cast-thumb ct-guxing"></div>
+        <div class="cast-info">
+          <div class="cast-name">古星圖</div>
+          <div class="cast-usage">配角 · 1 panel</div>
+        </div>
+      </div>
+
+      <button class="cast-add">+ 新增角色</button>
+    </aside>
+
+    <!-- CENTER: editor -->
+    <main class="ws-editor">
+
+      <!-- Hero head -->
+      <div class="editor-head">
+        <div class="character-hero">
+          <div class="hero-portrait"></div>
+          <div class="hero-meta">
+            <div class="name-row">
+              <input class="name-input" value="林夜" />
+              <span class="at-tag">@林夜</span>
+            </div>
+            <div class="hero-sub">
+              <span>主角</span>
+              <span class="dot">男 · 28 歲</span>
+              <span class="dot">出現 12 panel</span>
+              <span class="dot">3 個造型</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="btn btn-ghost" data-i18n="e.copy">📋 复制</button>
+          <button class="btn btn-ghost" style="color: var(--error); border-color: rgba(239, 68, 68, 0.3);" data-i18n="e.delete">🗑 删除</button>
+        </div>
+      </div>
+
+      <!-- Basic info -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3 data-i18n="e.basic">基本资料</h3>
+          <span class="info">影響 R2V prompt 角色描述</span>
+        </div>
+        <div class="fields-grid">
+          <div class="field-group">
+            <span class="field-label">性別 / 年齡</span>
+            <select class="field-input field-select">
+              <option>男 · 28 歲</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <span class="field-label">職業 / 身份</span>
+            <input class="field-input" value="獵人 · 霧城雇傭兵" />
+          </div>
+          <div class="field-group full">
+            <span class="field-label">核心氣質 Essence</span>
+            <textarea class="field-input field-textarea">沉默寡言但行動果決，眼神警覺帶著疲憊。曾經受過重傷，左肩有一道舊疤。對黑霧懷有近乎執念的追緝心。</textarea>
+          </div>
+          <div class="field-group full">
+            <span class="field-label">外貌 Appearance</span>
+            <textarea class="field-input field-textarea">短黑髮微亂，棕眼，國字臉，鬍渣，皮膚帶風霜痕。身高 178cm 中等體型，動作精瘦。</textarea>
+          </div>
+          <div class="field-group full">
+            <span class="field-label">服裝 Clothing（默認造型用）</span>
+            <textarea class="field-input field-textarea" style="min-height: 60px;">深色獵人長外套，內襯灰色襯衫，胸前皮帶斜掛工具袋，雙手戴半指皮手套，腰間別油燈。</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Appearance gallery -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3 data-i18n="e.appearance.title">造型库</h3>
+          <span class="info">同一角色多個造型，敘事中 @林夜 可指定 v2/v3</span>
+        </div>
+        <div class="app-grid">
+          <div class="app-card active">
+            <div class="star">★</div>
+            <div class="label">默認 v3</div>
+          </div>
+          <div class="app-card alt-1">
+            <div class="label">v2 雨夜</div>
+          </div>
+          <div class="app-card alt-2">
+            <div class="label">v1 早期</div>
+          </div>
+          <div class="app-card alt-3">
+            <div class="label">受傷</div>
+          </div>
+          <div class="app-card add">+</div>
+        </div>
+      </div>
+
+      <!-- Consistency slider -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3 data-i18n="e.consistency.title">一致性锁 Consistency</h3>
+          <span class="info">偷 Krea — 控制 panel 間漂移範圍</span>
+        </div>
+        <div class="consist-row">
+          <div class="ch">
+            <span class="ck">面部 / 服裝固定強度</span>
+            <span class="cv">0.85 嚴格</span>
+          </div>
+          <div class="slider-track">
+            <div class="fill" style="width: 85%;"></div>
+            <div class="thumb" style="left: 85%;"></div>
+          </div>
+          <div class="scale-labels">
+            <span>0 · 自由詮釋</span>
+            <span>50 · 平衡</span>
+            <span>100 · 完全鎖定</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Voice -->
+      <div class="ed-section">
+        <div class="ed-section-head">
+          <h3 data-i18n="e.voice.title">配音音色</h3>
+          <span class="info">配音步驟自動套用</span>
+        </div>
+        <div class="voice-row">
+          <div class="vplay">▶</div>
+          <div class="vinfo">
+            <div class="vname">深沉男聲 · M-Hunter-03</div>
+            <div class="vmeta">中文 · 男 · 28-35 · 中低音 · 略沙啞</div>
+          </div>
+          <span class="vchev">⌄ 換音色</span>
+        </div>
+      </div>
+
+      <!-- Save bar -->
+      <div class="save-bar">
+        <div class="info">
+          📌 改名 / 改外貌會影響 <strong>已生成的 12 panel</strong>，建議：
+          <a href="#" style="color: var(--primary-400); text-decoration: none;">標記待重生</a> · 或 <a href="#" style="color: var(--text-tertiary);">立即批量重生（336 點）</a>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-ghost" data-i18n="e.undo">↺ 复原</button>
+          <button class="btn btn-primary" data-i18n="e.save-changes">保存变更</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT: usage panel -->
+    <aside class="ws-usage">
+      <div class="uhead">
+        <h3 data-i18n="e.test-track">⚡ 测试 & 使用追踪</h3>
+        <p>立刻看這個角色在當前設定下生成的樣子；下面列出他用在哪些 panel</p>
+      </div>
+
+      <!-- Test panel -->
+      <div class="test-card">
+        <h4>一鍵測試</h4>
+        <div class="test-result"></div>
+        <button class="btn btn-accent test-btn" data-i18n="e.gen-test-img">⚡ 生成测试图（3 点）</button>
+        <div style="font-size: 10px; color: var(--text-tertiary); margin-top: 6px; text-align: center;">
+          上次測試：2 分鐘前
+        </div>
+      </div>
+
+      <!-- Usage -->
+      <div class="usage-section">
+        <div class="usage-head">
+          <span class="lbl" data-i18n="e.usage">使用于</span>
+          <span class="total">12 panel · 3 集</span>
+        </div>
+
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 1</div>
+            <div class="uloc">街口霧氣升起</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 2</div>
+            <div class="uloc">林夜抬頭看天</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 1 集 · 段落 4</div>
+            <div class="uloc">林夜對峙</div>
+          </div>
+          <span class="ustatus stale">⚠ 待重生</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 2 集 · 段落 1</div>
+            <div class="uloc">符文現形</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+        <div class="usage-row">
+          <div class="ut"></div>
+          <div style="flex: 1;">
+            <div class="uname">第 2 集 · 段落 3</div>
+            <div class="uloc">林夜蹲下查看</div>
+          </div>
+          <span class="ustatus done">✓</span>
+        </div>
+
+        <div style="font-size: 11px; color: var(--text-tertiary); text-align: center; padding: 8px 0;">
+          + 7 個 panel 看全部 →
+        </div>
+      </div>
+
+      <!-- Cross-project import hint -->
+      <div style="padding: 12px; background: rgba(34, 197, 94, 0.04); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: var(--r-card); font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
+        💡 <strong style="color: var(--success);">提示</strong>：這個角色可以匯入到其他项目重複使用。
+        <a href="#" style="color: var(--success);">匯入到「霧城前傳」→</a>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

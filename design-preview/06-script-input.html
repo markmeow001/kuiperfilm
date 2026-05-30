@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI · 新项目 — 劇本輸入</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body {
+      background:
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(245, 194, 74, 0.04), transparent 60%),
+        var(--surface-canvas);
+      min-height: 100vh;
+    }
+
+    /* Wizard top */
+    .wizard-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--surface-hairline);
+      background: rgba(10, 10, 10, 0.7);
+      backdrop-filter: blur(20px);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .wizard-brand { display: flex; align-items: center; gap: 12px; }
+    .wizard-brand .brand-mark {
+      width: 26px; height: 26px;
+      background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+      border-radius: 5px;
+      display: grid; place-items: center;
+      color: var(--neutral-950); font-weight: 700; font-size: 12px;
+    }
+    .wizard-brand .title { font-size: 14px; font-weight: 600; }
+    .wizard-brand .sub { font-size: 12px; color: var(--text-tertiary); margin-left: 6px; }
+    .wizard-progress {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 13px;
+    }
+    .wp-step {
+      display: flex; align-items: center; gap: 8px;
+      color: var(--text-tertiary);
+    }
+    .wp-step.active { color: var(--text-primary); font-weight: 500; }
+    .wp-step.done { color: var(--text-secondary); }
+    .wp-step .num {
+      width: 22px; height: 22px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .wp-step.active .num { background: var(--primary-500); color: var(--neutral-950); border-color: transparent; }
+    .wp-step.done .num { background: rgba(34, 197, 94, 0.16); color: var(--success); border-color: rgba(34, 197, 94, 0.3); }
+    .wp-step.done .num::before { content: '✓'; font-size: 12px; }
+    .wp-step.done .num span { display: none; }
+    .wp-sep { width: 24px; height: 1px; background: var(--surface-hairline); }
+
+    /* Body */
+    .wizard-body {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 40px 32px 80px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 32px;
+      align-items: start;
+    }
+
+    /* Editor */
+    .editor-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      overflow: hidden;
+    }
+    .editor-head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .editor-head h2 { font-size: 16px; font-weight: 600; }
+    .editor-tabs { display: flex; gap: 4px; }
+    .etab {
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--text-tertiary);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: var(--r-input);
+      cursor: pointer;
+    }
+    .etab.active {
+      background: var(--surface-overlay);
+      color: var(--text-primary);
+      border-color: var(--surface-hairline);
+    }
+
+    .script-area {
+      padding: 24px;
+      min-height: 540px;
+      font-family: 'JetBrains Mono', 'PingFang SC', monospace;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text-primary);
+      background: transparent;
+      border: none;
+      resize: none;
+      width: 100%;
+      outline: none;
+    }
+    .script-area .scene-marker {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(245, 194, 74, 0.12);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      color: var(--primary-400);
+      border-radius: var(--r-chip);
+      font-size: 12px;
+      margin-right: 8px;
+    }
+    .script-area .character { color: var(--primary-400); font-weight: 600; }
+    .script-area .action { color: var(--text-secondary); font-style: italic; }
+    .script-area .dialogue { color: var(--text-primary); }
+
+    .editor-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 20px;
+      border-top: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .editor-footer .stats { display: flex; gap: 20px; }
+    .editor-footer .stats span strong {
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+
+    /* Right sidebar settings */
+    .settings-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-card);
+      padding: 22px 22px 24px;
+      margin-bottom: 16px;
+    }
+    .settings-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .settings-card h3 .info {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-weight: 400;
+    }
+
+    .setting-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-row .k {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .setting-row .v {
+      font-size: 13px;
+      color: var(--text-primary);
+      font-weight: 500;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .setting-row .v.editable::after { content: '✎'; opacity: 0.4; font-size: 11px; }
+    .setting-row .v.editable { cursor: pointer; }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex;
+      padding: 4px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      margin-bottom: 16px;
+    }
+    .mode-toggle button {
+      flex: 1;
+      padding: 10px 12px;
+      background: transparent;
+      border: none;
+      color: var(--text-tertiary);
+      font-size: 13px; font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .mode-toggle button.active {
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      font-weight: 600;
+    }
+    .mode-desc {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      line-height: 1.6;
+      padding: 0 4px;
+    }
+
+    /* Provider strip */
+    .providers {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .provider {
+      padding: 10px 8px;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-input);
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--d-hover) var(--ease-out);
+    }
+    .provider.active {
+      border-color: rgba(245, 194, 74, 0.4);
+      background: rgba(245, 194, 74, 0.06);
+    }
+    .provider .pname {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+    .provider .pmeta {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .provider.active .pmeta { color: var(--primary-400); }
+
+    /* CTA */
+    .cta-card {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245, 194, 74, 0.08), transparent 70%),
+        var(--surface-raised);
+      border: 1px solid rgba(245, 194, 74, 0.3);
+      border-radius: var(--r-card);
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+    .cta-card .cta-est {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--surface-hairline);
+      margin-bottom: 14px;
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+    .cta-card .cta-est .v {
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .cta-card .cta-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 13px;
+      font-size: 14px;
+    }
+    .cta-card .cta-note {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: center;
+    }
+
+    .helper-card {
+      padding: 16px 18px;
+      background: rgba(124, 92, 255, 0.04);
+      border: 1px solid rgba(124, 92, 255, 0.16);
+      border-radius: var(--r-card);
+      display: flex; gap: 12px;
+      align-items: start;
+    }
+    .helper-card .icon {
+      width: 28px; height: 28px;
+      background: rgba(124, 92, 255, 0.12);
+      border-radius: 6px;
+      display: grid; place-items: center;
+      flex-shrink: 0;
+      color: var(--accent-400);
+      font-size: 14px;
+    }
+    .helper-card .text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .helper-card .text strong { color: var(--accent-400); }
+
+    .upload-zone {
+      display: flex; gap: 10px;
+      padding: 14px 16px;
+      background: var(--surface-canvas);
+      border: 1px dashed var(--surface-hairline);
+      border-radius: var(--r-input);
+      cursor: pointer;
+      align-items: center;
+      transition: border-color var(--d-hover) var(--ease-out);
+    }
+    .upload-zone:hover { border-color: rgba(245, 194, 74, 0.4); }
+    .upload-zone .icon {
+      width: 32px; height: 32px;
+      background: rgba(245, 194, 74, 0.12);
+      border-radius: 6px;
+      color: var(--primary-400);
+      display: grid; place-items: center;
+      flex-shrink: 0;
+    }
+    .upload-zone .text .t { font-size: 13px; font-weight: 500; }
+    .upload-zone .text .s { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <header class="ws-top">
+    <div class="brand-mini">
+      <div class="brand-mark">K</div>
+      <div class="breadcrumb">
+        <a href="02-home.html">项目</a>
+        <span class="sep">›</span>
+        <span class="current">霧城獵人 · 新项目</span>
+      </div>
+    </div>
+    <div class="stepper">
+      <a class="step active" data-i18n="ws.step.script">剧本</a>
+      <a class="step" data-i18n="ws.step.analyze">分析</a>
+      <a class="step" data-i18n="ws.step.storyboard">分镜</a>
+      <a class="step" data-i18n="ws.step.voice">配音</a>
+      <a class="step" data-i18n="ws.step.render">渲染</a>
+      <a class="step" data-i18n="ws.step.final">成片</a>
+    </div>
+    <div class="ws-top-right">
+      <div class="lang-switcher">
+        <button type="button" data-lang="zh" class="active">中</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn-ghost" href="02-home.html" data-i18n="ws.cta.cancel">取消</a>
+      <a class="btn btn-primary" href="07-pre-generation.html" data-i18n="ws.cta.next-script">分析剧本 →</a>
+    </div>
+  </header>
+
+  <div class="wizard-body">
+    <!-- Left: editor -->
+    <div>
+      <div class="editor-card">
+        <div class="editor-head">
+          <h2 data-i18n="si.script">剧本</h2>
+          <div class="editor-tabs">
+            <button class="etab active" data-i18n="si.tab.edit">编辑</button>
+            <button class="etab" data-i18n="si.tab.preview">预览</button>
+            <button class="etab" data-i18n="si.tab.ai">AI 助写</button>
+          </div>
+        </div>
+
+        <div class="script-area" contenteditable="false" style="white-space: pre-wrap;"><div style="margin-bottom: 24px;">
+<span class="scene-marker">第 1 集 · 場 1</span>
+<span class="action">夜，霧城東區巷弄。濃霧瀰漫，路燈忽明忽暗。</span>
+
+<span class="character">林夜</span>
+<span class="action">（持油燈，腳步謹慎）</span>
+<span class="dialogue">這霧不對勁⋯⋯</span>
+
+<span class="action">遠處傳來低吼，黑影一閃而過。</span>
+
+<span class="character">林夜</span>
+<span class="dialogue">出來吧。我知道你在這裡。</span>
+</div>
+
+<div style="margin-bottom: 24px;">
+<span class="scene-marker">第 1 集 · 場 2</span>
+<span class="action">巷弄盡頭，黑霧聚成怪物形狀，緩緩靠近。</span>
+
+<span class="character">怪物</span>
+<span class="action">（嘶吼）</span>
+<span class="dialogue">獵人⋯⋯又見面了⋯⋯</span>
+
+<span class="character">林夜</span>
+<span class="action">（拔槍對準）</span>
+<span class="dialogue">這次別想跑。</span>
+
+<span class="action">槍火劃破黑霧。</span>
+</div>
+
+<div>
+<span class="scene-marker">第 1 集 · 場 3</span>
+<span class="action">霧散後地面留下符文印記，林夜蹲身查看。</span>
+
+<span class="character">林夜</span>
+<span class="dialogue">（喃喃）⋯⋯第七個了。</span>
+</div></div>
+
+        <div class="editor-footer">
+          <div class="stats">
+            <span>字數 <strong>2,840</strong></span>
+            <span>場數 <strong>3</strong></span>
+            <span>角色 <strong>2</strong></span>
+            <span>對白 <strong>5</strong></span>
+          </div>
+          <span>自動儲存於 14:32</span>
+        </div>
+      </div>
+
+      <div class="upload-zone" style="margin-top: 16px;">
+        <div class="icon">⬆</div>
+        <div class="text">
+          <div class="t">或上傳劇本檔（.docx / .txt / .md / .fountain）</div>
+          <div class="s">自動辨識場景標記、角色名、對白格式</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: settings -->
+    <aside>
+
+      <!-- Storyboard 模式 -->
+      <div class="settings-card">
+        <h3><span data-i18n="si.mode.title">分镜模式</span> <span class="info" data-i18n="si.mode.desc">影响每镜 anchor 方式</span></h3>
+        <div class="mode-toggle">
+          <button class="active">R2V（推薦）</button>
+          <button>T2V</button>
+          <button>混合</button>
+        </div>
+        <div class="mode-desc">
+          <strong style="color: var(--primary-400);">R2V</strong> 自動帶入抽出的<strong style="color: var(--text-primary);">角色</strong>、<strong style="color: var(--text-primary);">場景</strong>、<strong style="color: var(--text-primary);">道具</strong>作為 reference，
+          讓多鏡頭間角色一致。<br/>
+          T2V 不綁角色，適合純空鏡。
+        </div>
+      </div>
+
+      <!-- 分鏡密度 -->
+      <div class="settings-card">
+        <h3><span data-i18n="si.density.title">分镜密度</span> <span class="info">Auto vs Custom</span></h3>
+        <div class="mode-toggle" style="margin-bottom: 12px;">
+          <button class="active">Auto</button>
+          <button>Custom</button>
+        </div>
+        <div class="setting-row">
+          <span class="k">每集鏡頭數</span>
+          <span class="v editable">自動（8-14）</span>
+        </div>
+        <div class="setting-row">
+          <span class="k">每集目標時長</span>
+          <span class="v editable">45-60 秒</span>
+        </div>
+        <div class="setting-row">
+          <span class="k">單鏡時長範圍</span>
+          <span class="v editable">3-8 秒</span>
+        </div>
+      </div>
+
+      <!-- 視覺風格 -->
+      <div class="settings-card">
+        <h3 data-i18n="si.style.title">视觉风格</h3>
+        <div class="setting-row">
+          <span class="k">風格 preset</span>
+          <span class="v editable">電影寫實 · 黑色</span>
+        </div>
+        <div class="setting-row">
+          <span class="k">解析度</span>
+          <span class="v editable">1080×1920 (9:16)</span>
+        </div>
+        <div class="setting-row">
+          <span class="k">幀率</span>
+          <span class="v editable">30 fps</span>
+        </div>
+        <div class="setting-row">
+          <span class="k">語言</span>
+          <span class="v editable">繁中（中文 TTS）</span>
+        </div>
+      </div>
+
+      <!-- 模型路由 -->
+      <div class="settings-card">
+        <h3>視訊模型偏好 <span class="info">每鏡可改</span></h3>
+        <div class="setting-row" style="border: none; padding: 4px 0 10px;">
+          <span class="k">主要 provider</span>
+          <span class="v">智能路由</span>
+        </div>
+        <div class="providers">
+          <div class="provider active">
+            <div class="pname">ARK</div>
+            <div class="pmeta">Seedance 2.0</div>
+          </div>
+          <div class="provider active">
+            <div class="pname">fal</div>
+            <div class="pmeta">Seedance + Veo</div>
+          </div>
+          <div class="provider active">
+            <div class="pname">AtlasCloud</div>
+            <div class="pmeta">Seedance r2v</div>
+          </div>
+          <div class="provider">
+            <div class="pname">Tencent</div>
+            <div class="pmeta">Kling Omni</div>
+          </div>
+          <div class="provider">
+            <div class="pname">BobAPI</div>
+            <div class="pmeta">Seedance 2.0</div>
+          </div>
+          <div class="provider" style="opacity: 0.4;">
+            <div class="pname">+ 更多</div>
+            <div class="pmeta">設定</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTA -->
+      <div class="cta-card">
+        <div class="cta-est">
+          <span>估算分鏡數</span>
+          <span class="v">~ 12 鏡</span>
+        </div>
+        <div class="cta-est">
+          <span>估算點數</span>
+          <span class="v" style="color: var(--primary-400);">~ 360 點</span>
+        </div>
+        <a href="07-pre-generation.html" class="btn btn-primary cta-btn">分析劇本 →</a>
+        <div class="cta-note">分析免費 · 確認後才扣點 · 失敗不扣</div>
+      </div>
+
+      <!-- AI helper -->
+      <div class="helper-card">
+        <div class="icon">✦</div>
+        <div class="text">
+          <strong>小提示</strong>：劇本越具體（場景描述、角色動作、對白情緒）AI 拆鏡品質越好。
+          沒劇本？試試 <a href="#" style="color: var(--accent-400);">「一句話展開」</a>。
+        </div>
+      </div>
+
+    </aside>
+  </div>
+</body>
+</html>

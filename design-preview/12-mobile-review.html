@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KuiperAI 手機版 · 分鏡審閱</title>
+  <link rel="stylesheet" href="tokens.css">
+  <script src="i18n-dict.js"></script>
+  <script src="i18n.js" defer></script>
+  <style>
+    body { background: var(--surface-canvas); max-width: 100%; min-height: 100vh; overflow-x: hidden; }
+    .device-label {
+      max-width: 390px; margin: 24px auto 8px;
+      font-size: 11px; color: var(--text-tertiary);
+      text-align: center; letter-spacing: 0.06em;
+    }
+    .device {
+      max-width: 390px; margin: 0 auto;
+      background: var(--surface-canvas);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 32px;
+      overflow: hidden;
+      box-shadow: var(--elev-3);
+      position: relative;
+    }
+    .status-bar {
+      height: 44px;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 24px;
+      font-size: 14px; font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .status-bar .icons { display: flex; gap: 6px; font-size: 12px; }
+
+    /* Top nav */
+    .m-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px 14px;
+      border-bottom: 1px solid var(--surface-hairline);
+    }
+    .m-nav-back {
+      width: 36px; height: 36px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 16px;
+    }
+    .m-nav-title { text-align: center; flex: 1; }
+    .m-nav-title .t { font-size: 14px; font-weight: 600; }
+    .m-nav-title .s { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+    .m-nav .more {
+      width: 36px; height: 36px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 18px;
+    }
+
+    /* Episode tabs */
+    .ep-tabs {
+      display: flex; overflow-x: auto;
+      padding: 12px 16px 14px;
+      gap: 6px;
+      border-bottom: 1px solid var(--surface-hairline);
+      -webkit-overflow-scrolling: touch;
+    }
+    .ep-tabs::-webkit-scrollbar { display: none; }
+    .ep-tab {
+      padding: 8px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--surface-hairline);
+      border-radius: var(--r-pill);
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ep-tab.active {
+      background: var(--primary-500);
+      color: var(--neutral-950);
+      font-weight: 600;
+    }
+
+    /* Big video frame (TikTok-style) */
+    .video-stage {
+      padding: 16px 16px 18px;
+      position: relative;
+    }
+    .video-frame {
+      aspect-ratio: 9/16;
+      width: 100%;
+      border-radius: var(--r-modal);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--elev-3);
+    }
+    .video-frame .scene {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 30% 40%, rgba(120, 80, 50, 0.5), transparent 70%),
+        radial-gradient(ellipse 50% 40% at 70% 80%, rgba(40, 20, 10, 0.85), transparent),
+        linear-gradient(180deg, #2a1815 0%, #0a0807 80%);
+    }
+    .video-frame .figure {
+      position: absolute; bottom: 18%; left: 50%;
+      transform: translateX(-50%); width: 30%; height: 50%;
+      background: radial-gradient(ellipse at top, rgba(245, 194, 74, 0.4), transparent 50%),
+                  linear-gradient(180deg, rgba(60, 40, 30, 0.9), rgba(20, 10, 5, 0.95));
+      border-radius: 50% 50% 30% 30%; filter: blur(1px);
+    }
+    .video-frame .vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7));
+    }
+    .video-frame .subtitle {
+      position: absolute; bottom: 16%; left: 50%; transform: translateX(-50%);
+      padding: 8px 18px;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+      border-radius: var(--r-input);
+      font-size: 14px; color: white; white-space: nowrap; font-weight: 500;
+    }
+    .video-frame .timeline {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 4px; background: rgba(255,255,255,0.1);
+    }
+    .video-frame .timeline .fill { height: 100%; width: 38%; background: var(--primary-500); }
+
+    /* TikTok-style right action rail */
+    .action-rail {
+      position: absolute;
+      right: 26px; top: 50%;
+      transform: translateY(-50%);
+      display: flex; flex-direction: column; gap: 18px;
+      z-index: 2;
+    }
+    .ar-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      color: white;
+      text-decoration: none;
+    }
+    .ar-btn .icon {
+      width: 44px; height: 44px;
+      background: rgba(0,0,0,0.45);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 18px;
+    }
+    .ar-btn .lbl { font-size: 10px; font-weight: 500; text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+    .ar-btn.active .icon { background: var(--primary-500); border-color: transparent; color: var(--neutral-950); }
+
+    /* Bottom info card */
+    .info-card {
+      position: absolute;
+      bottom: 16px; left: 16px; right: 90px;
+      padding: 12px 14px;
+      background: rgba(0,0,0,0.5); backdrop-filter: blur(20px);
+      border-radius: var(--r-card);
+      border: 1px solid rgba(255,255,255,0.08);
+      z-index: 2;
+    }
+    .info-card .ep-title {
+      font-size: 14px; font-weight: 600;
+      color: white; margin-bottom: 4px;
+    }
+    .info-card .ep-meta {
+      font-size: 11px; color: rgba(255,255,255,0.7);
+    }
+
+    /* Panel scrubber */
+    .scrubber {
+      padding: 16px;
+      border-top: 1px solid var(--surface-hairline);
+      background: var(--surface-canvas);
+    }
+    .scrubber-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .scrubber-head h3 { font-size: 13px; font-weight: 600; }
+    .scrubber-head .count { font-size: 11px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
+    .panel-strip {
+      display: flex; gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .panel-strip::-webkit-scrollbar { display: none; }
+    .panel-mini {
+      width: 50px; height: 80px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      position: relative;
+      cursor: pointer;
+    }
+    .panel-mini.active { box-shadow: 0 0 0 2px var(--primary-500); }
+    .panel-mini::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.6));
+      border-radius: 6px;
+    }
+    .panel-mini .idx {
+      position: absolute; bottom: 4px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px; color: white;
+      font-family: 'JetBrains Mono', monospace;
+      z-index: 1;
+    }
+    .pt-1 { background-image: url('./images/loc-alley-wide.jpg'); background-size: cover; background-position: center; }
+    .pt-2 { background-image: url('./images/char-linye.jpg'); background-size: cover; background-position: center; }
+    .pt-3 { background-image: url('./images/prop-lamp.jpg'); background-size: cover; background-position: center; }
+    .pt-4 { background-image: url('./images/loc-alley-end.jpg'); background-size: cover; background-position: center; }
+    .pt-5 { background-image: url('./images/char-monster.jpg'); background-size: cover; background-position: center; }
+
+    /* Comments / dialogue */
+    .dialogue-section {
+      padding: 14px 16px 18px;
+      border-top: 1px solid var(--surface-hairline);
+    }
+    .dialogue-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .dialogue-head h3 { font-size: 13px; font-weight: 600; }
+    .dialogue-head .tabs { display: flex; gap: 4px; }
+    .d-tab {
+      padding: 4px 10px;
+      font-size: 11px;
+      background: transparent;
+      border: 1px solid var(--surface-hairline);
+      color: var(--text-tertiary);
+      border-radius: var(--r-pill);
+    }
+    .d-tab.active { background: var(--surface-raised); color: var(--text-primary); }
+
+    .dline {
+      display: flex; gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--surface-hairline);
+      font-size: 12px;
+    }
+    .dline:last-child { border-bottom: none; }
+    .dline .time {
+      color: var(--text-tertiary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      flex-shrink: 0;
+      width: 40px;
+    }
+    .dline .who {
+      color: var(--primary-400);
+      font-weight: 500;
+      flex-shrink: 0;
+      width: 40px;
+    }
+    .dline .what { color: var(--text-secondary); flex: 1; line-height: 1.4; }
+    .dline .action {
+      color: var(--text-tertiary);
+      font-style: italic;
+    }
+
+    /* Bottom action bar */
+    .m-bottom-bar {
+      padding: 12px 16px 28px;
+      background: var(--surface-canvas);
+      border-top: 1px solid var(--surface-hairline);
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .m-bottom-bar .btn { width: 100%; justify-content: center; padding: 12px; font-size: 13px; }
+
+    .device-note {
+      max-width: 390px;
+      margin: 12px auto 0;
+      padding: 12px 16px;
+      background: rgba(124, 92, 255, 0.04);
+      border: 1px solid rgba(124, 92, 255, 0.16);
+      border-radius: var(--r-card);
+      font-size: 11px; color: var(--text-secondary); line-height: 1.5;
+    }
+    .device-note strong { color: var(--accent-400); }
+  </style>
+</head>
+<body>
+  <div class="lang-switcher" style="position: fixed; top: 16px; right: 16px; z-index: 9999; display: inline-flex; gap: 2px; padding: 4px; background: var(--surface-raised); border: 1px solid var(--surface-hairline); border-radius: 999px; font-size: 11px;">
+    <button type="button" data-lang="zh" class="active" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">中</button>
+    <button type="button" data-lang="en" style="padding: 4px 10px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 999px; cursor: pointer;">EN</button>
+  </div>
+  <div class="device-label">📱 iPhone 14 · 390 × 844 · 分鏡審閱模式</div>
+  <div class="device">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="icons">📶 🔋</span>
+    </div>
+
+    <nav class="m-nav">
+      <a href="11-mobile-home.html" class="m-nav-back">←</a>
+      <div class="m-nav-title">
+        <div class="t">霧城獵人</div>
+        <div class="s">EP 01 · 黑霧降臨</div>
+      </div>
+      <a href="#" class="more">⋯</a>
+    </nav>
+
+    <div class="ep-tabs">
+      <div class="ep-tab active">EP 01</div>
+      <div class="ep-tab">EP 02</div>
+      <div class="ep-tab">EP 03 · 渲染中</div>
+      <div class="ep-tab">EP 04</div>
+      <div class="ep-tab">EP 05</div>
+      <div class="ep-tab">EP 06</div>
+    </div>
+
+    <!-- TikTok-style video preview -->
+    <div class="video-stage">
+      <div class="video-frame">
+        <div class="scene"></div>
+        <div class="figure"></div>
+        <div class="vignette"></div>
+        <div class="subtitle">"這霧不對勁..."</div>
+        <div class="timeline"><div class="fill"></div></div>
+
+        <div class="action-rail">
+          <a class="ar-btn" href="#">
+            <div class="icon">▶</div>
+            <span class="lbl">播放</span>
+          </a>
+          <a class="ar-btn active" href="#">
+            <div class="icon">★</div>
+            <span class="lbl">已收藏</span>
+          </a>
+          <a class="ar-btn" href="#">
+            <div class="icon">↗</div>
+            <span class="lbl">分享</span>
+          </a>
+          <a class="ar-btn" href="#">
+            <div class="icon">⬇</div>
+            <span class="lbl">下載</span>
+          </a>
+          <a class="ar-btn" href="#">
+            <div class="icon">💬</div>
+            <span class="lbl">3 則</span>
+          </a>
+        </div>
+
+        <div class="info-card">
+          <div class="ep-title">第 2 鏡 · 林夜抬頭看天</div>
+          <div class="ep-meta">5 秒 · R2V · ARK Seedance 2.0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel strip -->
+    <div class="scrubber">
+      <div class="scrubber-head">
+        <h3>本集分鏡 12 鏡</h3>
+        <span class="count">P2 / 12</span>
+      </div>
+      <div class="panel-strip">
+        <div class="panel-mini pt-1"><span class="idx">1</span></div>
+        <div class="panel-mini pt-2 active"><span class="idx">2</span></div>
+        <div class="panel-mini pt-3"><span class="idx">3</span></div>
+        <div class="panel-mini pt-1"><span class="idx">4</span></div>
+        <div class="panel-mini pt-4"><span class="idx">5</span></div>
+        <div class="panel-mini pt-1"><span class="idx">6</span></div>
+        <div class="panel-mini pt-3"><span class="idx">7</span></div>
+        <div class="panel-mini pt-2"><span class="idx">8</span></div>
+        <div class="panel-mini pt-4"><span class="idx">9</span></div>
+        <div class="panel-mini pt-5"><span class="idx">10</span></div>
+        <div class="panel-mini pt-1"><span class="idx">11</span></div>
+        <div class="panel-mini pt-2"><span class="idx">12</span></div>
+      </div>
+    </div>
+
+    <!-- Dialogue / script -->
+    <div class="dialogue-section">
+      <div class="dialogue-head">
+        <h3>對白 + 動作</h3>
+        <div class="tabs">
+          <button class="d-tab active" data-i18n="m.review.dialogue">对白</button>
+          <button class="d-tab" data-i18n="m.review.script">剧本</button>
+        </div>
+      </div>
+      <div class="dline">
+        <span class="time">0:12</span>
+        <span class="who">林夜</span>
+        <span class="what">這霧不對勁⋯⋯</span>
+      </div>
+      <div class="dline">
+        <span class="time">0:14</span>
+        <span class="who"></span>
+        <span class="what action">（持油燈，腳步謹慎）</span>
+      </div>
+      <div class="dline">
+        <span class="time">0:17</span>
+        <span class="who">林夜</span>
+        <span class="what">出來吧。我知道你在這裡。</span>
+      </div>
+    </div>
+
+    <!-- Bottom action bar -->
+    <div class="m-bottom-bar">
+      <a href="#" class="btn btn-ghost" data-i18n="m.review.comment">💬 留言</a>
+      <a href="03-storyboard.html" class="btn btn-ghost" data-i18n="m.review.edit">✎ 桌面编辑</a>
+      <a href="#" class="btn btn-primary" data-i18n="m.review.share">↗ 分享</a>
+    </div>
+  </div>
+
+  <div class="device-note">
+    <strong>手機版分鏡審閱定位</strong>：偷 TikTok 直式播放 + 右側 action rail（播/收藏/分享/下載/留言）。
+    panel strip 在底下橫滑切換鏡頭。重度編輯（Inspector）按「桌面編輯」跳走。對白/劇本兩 tab 對應 KuiperAI 既有 dual-path dialogue extractor。
+  </div>
+</body>
+</html>
