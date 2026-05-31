@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { UserRole } from '@/lib/auth/user-role'
 
 async function requireWorkspaceAccess(workspaceId: string, userId: string, mode: 'read' | 'write') {
   const [ws, requester] = await Promise.all([
@@ -32,7 +33,7 @@ async function requireWorkspaceAccess(workspaceId: string, userId: string, mode:
     where: { workspaceId_userId: { workspaceId, userId } },
   })
   if (!member) throw new ApiError('FORBIDDEN', { code: 'NOT_WORKSPACE_MEMBER' })
-  return { ws, requester, role: 'member' as const }
+  return { ws, requester, role: UserRole.MEMBER }
 }
 
 export const GET = apiHandler(async (

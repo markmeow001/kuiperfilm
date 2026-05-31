@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
+import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
 
 export function UserMenu() {
   const { data: session, status } = useSession()
@@ -62,7 +63,7 @@ export function UserMenu() {
   const name = session.user.name ?? session.user.email ?? '使用者'
   const role = (session.user as { role?: string } | undefined)?.role ?? null
   const initial = name.charAt(0).toUpperCase()
-  const isAdmin = role === 'admin'
+  const isAdmin = checkIsAdmin(role)
 
   return (
     <div ref={ref} className="relative">

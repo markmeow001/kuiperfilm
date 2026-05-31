@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { UserRole } from '@/lib/auth/user-role'
 import {
   composeModelKey,
   parseModelKeyStrict,
@@ -177,7 +178,7 @@ export const GET = apiHandler(async () => {
   let effectiveProviders = ownProviders
   if (ownModels.length === 0 && ownProviders.length === 0) {
     const admin = await prisma.user.findFirst({
-      where: { role: 'admin' },
+      where: { role: UserRole.ADMIN },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     })

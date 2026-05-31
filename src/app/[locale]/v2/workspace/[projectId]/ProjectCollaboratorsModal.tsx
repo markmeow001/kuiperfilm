@@ -35,6 +35,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocale, useTranslations } from 'next-intl'
+import { UserRole } from '@/lib/auth/user-role'
 
 type CollabRole = 'editor' | 'viewer'
 
@@ -441,7 +442,7 @@ export function ProjectCollaboratorsModal({
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    upsertMutation.mutate({ userId: m.userId, role: 'editor' })
+                                    upsertMutation.mutate({ userId: m.userId, role: UserRole.EDITOR })
                                   }
                                   disabled={upsertMutation.isPending}
                                   className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
@@ -451,7 +452,7 @@ export function ProjectCollaboratorsModal({
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    upsertMutation.mutate({ userId: m.userId, role: 'viewer' })
+                                    upsertMutation.mutate({ userId: m.userId, role: UserRole.VIEWER })
                                   }
                                   disabled={upsertMutation.isPending}
                                   className="rounded-sm border border-stone-700 px-2 py-0.5 font-mono text-[11px] tracking-wider text-stone-400 hover:border-stone-500 hover:text-stone-200 disabled:opacity-50"

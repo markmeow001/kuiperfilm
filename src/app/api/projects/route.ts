@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
-import { isAdmin } from '@/lib/auth/user-role'
+import { isAdmin, UserRole } from '@/lib/auth/user-role'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { toMoneyNumber } from '@/lib/billing/money'
 import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
@@ -290,7 +290,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const [userPreference, adminUser] = await Promise.all([
     prisma.userPreference.findUnique({ where: { userId: session.user.id } }),
     prisma.user.findFirst({
-      where: { role: 'admin' },
+      where: { role: UserRole.ADMIN },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     }),

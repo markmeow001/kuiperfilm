@@ -16,7 +16,7 @@ import { prisma } from '@/lib/prisma'
 import { UserRole } from '@/lib/auth/user-role'
 import type { Role } from '@/lib/api-auth'
 
-const VALID_ROLES: Role[] = ['admin', 'editor', 'member']
+const VALID_ROLES: Role[] = [UserRole.ADMIN, UserRole.EDITOR, UserRole.MEMBER]
 
 export function isValidRole(role: unknown): role is Role {
   return typeof role === 'string' && (VALID_ROLES as string[]).includes(role)
@@ -62,7 +62,7 @@ export interface CreateInviteInput {
 }
 
 export async function createInvite(input: CreateInviteInput) {
-  const role = input.role && isValidRole(input.role) ? input.role : 'member'
+  const role = input.role && isValidRole(input.role) ? input.role : UserRole.MEMBER
   const expiresAt =
     typeof input.expiresHours === 'number' && input.expiresHours > 0
       ? new Date(Date.now() + input.expiresHours * 60 * 60 * 1000)

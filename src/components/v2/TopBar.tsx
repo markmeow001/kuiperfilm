@@ -355,7 +355,7 @@ function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean, t: RoleBadgeT
       title: t('adminTitle'),
     }
   }
-  if (role === 'owner') {
+  if (role === UserRole.OWNER) {
     return {
       label: t('owner'),
       className: 'border-amber-500/60 bg-amber-500/15 text-amber-200',

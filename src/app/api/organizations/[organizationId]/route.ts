@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { UserRole } from '@/lib/auth/user-role'
 
 async function requireOrgAccess(orgId: string, userId: string, mode: 'read' | 'write') {
   const [org, requester] = await Promise.all([
@@ -34,7 +35,7 @@ async function requireOrgAccess(orgId: string, userId: string, mode: 'read' | 'w
     select: { workspaceId: true },
   })
   if (!member) throw new ApiError('FORBIDDEN', { code: 'NOT_ORG_MEMBER' })
-  return { org, requester, role: 'member' as const }
+  return { org, requester, role: UserRole.MEMBER }
 }
 
 export const GET = apiHandler(async (

@@ -9,6 +9,7 @@
 
 import { prisma } from './prisma'
 import { decryptApiKey } from './crypto-utils'
+import { UserRole } from './auth/user-role'
 import {
   composeModelKey,
   parseModelKeyStrict,
@@ -270,7 +271,7 @@ async function readAdminConfig(): Promise<{ userId: string; models: CustomModel[
     }
   }
   const admin = await prisma.user.findFirst({
-    where: { role: 'admin' },
+    where: { role: UserRole.ADMIN },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   })

@@ -37,6 +37,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/auth/user-role'
 
 /**
  * Fields on novel_promotion_projects that mirror UserPreference and
@@ -87,7 +88,7 @@ async function loadAdminPreferences(): Promise<{
     return cachedAdminPrefs
   }
   const adminUser = await prisma.user.findFirst({
-    where: { role: 'admin' },
+    where: { role: UserRole.ADMIN },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   })
