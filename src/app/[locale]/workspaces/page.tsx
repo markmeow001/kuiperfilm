@@ -79,7 +79,7 @@ function rolePill(role: string) {
 
 export default function WorkspacesPage() {
   const { data: session } = useSession()
-  const role = ((session?.user as { role?: string } | undefined)?.role || 'member') as Role
+  const role = ((session?.user as { role?: string } | undefined)?.role || UserRole.MEMBER) as Role
   const myUserId = (session?.user as { id?: string } | undefined)?.id || ''
   const params = useParams()
   const locale = (params?.locale as string) || 'zh'

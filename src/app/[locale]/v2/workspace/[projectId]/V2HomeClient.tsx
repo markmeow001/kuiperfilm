@@ -13,6 +13,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { UserRole } from '@/lib/auth/user-role'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
 import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
@@ -55,7 +56,7 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
   // Other roles (ws_owner / editor / viewer) can see the project but
   // can't reshape its grant tree.
   const { role: accessRole } = useProjectAccess(projectId)
-  const canManageCollaborators = accessRole === 'owner' || accessRole === 'admin'
+  const canManageCollaborators = accessRole === UserRole.OWNER || accessRole === UserRole.ADMIN
   const [collabModalOpen, setCollabModalOpen] = useState(false)
   const [auditModalOpen, setAuditModalOpen] = useState(false)
   const charsQuery = useProjectCharacters(projectId)

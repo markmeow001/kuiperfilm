@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isErrorResponse, requireAdminAuth } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { UserRole } from '@/lib/auth/user-role'
 import { prisma } from '@/lib/prisma'
 import { createInvite, isValidRole } from '@/lib/admin-service'
 
@@ -49,7 +50,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   }
 
   const invite = await createInvite({
-    role: role ?? 'member',
+    role: role ?? UserRole.MEMBER,
     expiresHours: typeof expires_hours === 'number' ? expires_hours : null,
     note: typeof note === 'string' ? note : null,
     createdBy: authResult.session.user.id,
