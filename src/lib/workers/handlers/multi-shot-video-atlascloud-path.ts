@@ -97,6 +97,75 @@ const MAX_DURATION_SEC = 15
  *  action density — keeps a hold shot from collapsing under 2s. */
 const MIN_PER_SHOT_SEC = 2
 
+/** Soft token budget for the composite prompt. Seedance has no published
+ *  hard cap, but empirically past ~2200 tokens the model starts dropping
+ *  late-shot narrative and ignoring the audio directive (multi-role review
+ *  2026-05-30). We don't truncate user content — we WARN so the "rich
+ *  description, tail swallowed" failure is observable in logs. */
+export const PROMPT_TOKEN_WARN_THRESHOLD = 2200
+
+/** Rough token estimate. CJK averages ~1 token/char; Latin/spaces ~0.3
+ *  token/char. Good enough to flag a runaway prompt without a tokenizer
+ *  dependency in the worker. */
+export function estimatePromptTokens(text: string): number {
+  let cjk = 0
+  let other = 0
+  for (const ch of text) {
+    if (/[㐀-鿿豈-﫿぀-ヿ]/.test(ch)) cjk += 1
+    else other += 1
+  }
+  return Math.round(cjk + other * 0.3)
+}
+
+/** True when the assembled prompt is long enough to risk tail-truncation. */
+export function isPromptLengthRisky(prompt: string): boolean {
+  return estimatePromptTokens(prompt) > PROMPT_TOKEN_WARN_THRESHOLD
+}
+
+/**
+ * Build the audio directive for the composite prompt.
+ *
+ * No-dialogue groups (dialogueBeatCount === 0) need a HARD ban on
+ * synthesized vocals: the five-element method makes "環境音效:<具體聲源>"
+ * mandatory in every shot, so a silent group's description is packed with
+ * sound-source nouns. Seedance has been observed treating such a noun
+ * (e.g. "低頻貝斯沉音") as a voice timbre and synthesizing a human-like
+ * hum (2026-05-29 incident). The old directive only said "請勿合成說話聲" —
+ * too weak. We now explicitly forbid 人聲 / 類人聲 / 哼唱 / 歌聲.
+ */
+export function buildAudioDirective(dialogueBeatCount: number): string {
+  if (dialogueBeatCount > 0) {
+    return (
+      '音頻：原生輸出雙聲道，按上述對白逐字配音（語氣、停頓、情緒與角色一致），'
+      + '唇形與配音嚴格同步；背景疊加場景對應的環境音；無字幕、無 logo、無屏幕信息。'
+    )
+  }
+  return (
+    '音頻：本組無對白，僅輸出場景對應的自然環境音（風聲、雨聲、機械聲等非語音物理聲源）'
+    + '與適配的無人聲背景音樂；嚴禁合成任何人聲、類人聲、哼唱、歌聲或說話聲——'
+    + '描述中提及的聲源（如低頻、貝斯、鳴響）一律僅作為環境音場處理，不得當作人聲音色合成；'
+    + '畫面無字幕、無 logo、無屏幕信息。'
+  )
+}
+
+/**
+ * Compose the hand-edited rawPrompt with its r2v scaffold (ref-map
+ * prepended, timing-guide appended) WITHOUT duplicating a section the
+ * user already hand-wrote. If the textarea already contains "參考圖對應"
+ * we skip the generated ref-map; same for "鏡頭時長分配" and the timing
+ * guide. Prevents double ref-maps / double timing tables (token waste +
+ * model confusion) reported by the multi-role review 2026-05-30.
+ */
+export function composeRawPromptScaffold(
+  raw: string,
+  refMap: string,
+  timingGuide: string,
+): string {
+  const prefix = refMap && !raw.includes('參考圖對應') ? refMap : ''
+  const suffix = timingGuide && !raw.includes('鏡頭時長分配') ? timingGuide : ''
+  return [prefix, raw, suffix].filter((s) => s.length > 0).join('\n\n')
+}
+
 type R2vRefEntry = { kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }
 
 /**
@@ -382,13 +451,7 @@ function buildAtlasCloudPrompt(
   sections.push(shotLines.join('\n'))
 
   // ── AUDIO DIRECTIVE ──
-  const audioDirective =
-    dialogueBeatCount > 0
-      ? '音頻：原生輸出雙聲道，按上述對白逐字配音（語氣、停頓、情緒與角色一致），'
-        + '唇形與配音嚴格同步；背景疊加場景對應的環境音；無字幕、無 logo、無屏幕信息。'
-      : '音頻：輸出場景對應的環境音與適配背景音樂，本組無對白請勿合成說話聲；'
-        + '畫面無字幕、無 logo、無屏幕信息。'
-  sections.push(audioDirective)
+  sections.push(buildAudioDirective(dialogueBeatCount))
 
   return { prompt: sections.join('\n\n'), dialogueBeatCount }
 }
@@ -699,7 +762,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
     dialogueBeatCount = (raw.match(/對白：|说「|: "/g) || []).length
     const refMap = mode === 'r2v' ? buildR2vRefMapSection(r2vRefOrder) : ''
     const timingGuide = buildPerShotDurationGuide(perShotDurations)
-    promptCore = [refMap, raw, timingGuide].filter((s) => s.length > 0).join('\n\n')
+    promptCore = composeRawPromptScaffold(raw, refMap, timingGuide)
   } else {
     const built = buildAtlasCloudPrompt(
       usedPanels,
@@ -736,6 +799,29 @@ export async function runMultiShotAtlasCloudComposite(params: {
     .filter((s) => s.length > 0)
     .join('\n\n')
 
+  const estimatedTokens = estimatePromptTokens(prompt)
+  if (estimatedTokens > PROMPT_TOKEN_WARN_THRESHOLD) {
+    // Observable root-cause for "rich description, tail shot swallowed":
+    // past this band Seedance starts dropping late-shot narrative and
+    // ignoring the audio directive. We don't truncate user content — we
+    // surface it so an over-rich group is diagnosable from logs.
+    logger.warn({
+      message: 'AtlasCloud composite prompt exceeds token warn threshold',
+      details: {
+        storyboardId: validPanels[0].storyboardId,
+        mode,
+        estimatedTokens,
+        threshold: PROMPT_TOKEN_WARN_THRESHOLD,
+        promptLength: prompt.length,
+        panelsUsed: usedPanels.length,
+        characterRefs: characterRefs.length,
+        sceneRefs: sceneRefs.length,
+        propRefs: propRefs.length,
+        hint: 'tail-shot narrative / audio directive may be dropped; reduce inline anchors or split the group',
+      },
+    })
+  }
+
   logger.info({
     message: 'AtlasCloud composite submit',
     details: {
@@ -760,6 +846,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
       visualStyleId: resolvedStyle?.style.id ?? null,
       negativeLength: styleNegative.length,
       cleanFrameDirective: true,
+      estimatedTokens,
     },
   })
 

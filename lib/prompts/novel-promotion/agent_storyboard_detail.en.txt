@@ -153,10 +153,16 @@ model has clear direction = complete, faithful output.
   5. NO vague collective nouns ("crowd", "everyone", "people", "all of
      them", "the group") — name specific characters or give a count.
   6. REQUIRED: every panel includes one "Ambient sound: …" line with a
-     concrete source (collar rustle / low bass drone / cold wind through metal
-     grating / countdown ticking…). This is part of the output quality and
-     must NOT be omitted (the old "optional, omit it" rule is retired). Only
-     EXTREME facial detail (pores / sweat reflection / micro-redness) stays
+     concrete PHYSICAL source (collar rustle / cold wind through metal
+     grating / countdown ticking / footsteps / rain…). This is part of the
+     output quality and must NOT be omitted (the old "optional, omit it" rule
+     is retired).
+     WARNING: for SILENT (no-dialogue) shots, avoid words like "bass drone",
+     "low bass", "hum", "droning" that Seedance tends to mistake for a VOICE
+     timbre and synthesize as a human-like hum (unexpected vocal artifact);
+     rewrite as pure physical sources (low wind / distant machinery rumble /
+     spatial reverb). No such limit when the shot has dialogue.
+     Only EXTREME facial detail (pores / sweat reflection / micro-redness) stays
      reserved for emotional-peak close-ups.
   7. Dialogue lines ≤ 30 words each — long lines destabilize TTS.
 
@@ -207,7 +213,7 @@ Reference structure (match this density):
    Develop: 【focus pull · clash of intent】
    Focus shifts from foreground @Kael to background @Arthur, then snaps back.
    @Kael's mouth curls into a taunting cold smile, right jaw twitching.
-   Ambient sound: low bass drone building tension.
+   Ambient sound: low wind reverberating dully through the space, building tension.
 
    Resolve: 【POV · countdown ignites】
    Cut to @Arthur's first-person view; a red holographic countdown flares
