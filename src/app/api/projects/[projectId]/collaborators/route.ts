@@ -24,6 +24,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/auth/user-role'
 import {
   requireUserAuth,
   isErrorResponse,
@@ -110,7 +111,7 @@ export const POST = apiHandler(async (
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
   const targetUserId = typeof body.userId === 'string' ? body.userId.trim() : ''
-  const role = body.role === 'viewer' ? 'viewer' : body.role === 'editor' ? 'editor' : null
+  const role = body.role === UserRole.VIEWER ? UserRole.VIEWER : body.role === UserRole.EDITOR ? UserRole.EDITOR : null
   if (!targetUserId) {
     throw new ApiError('INVALID_PARAMS', { code: 'FIELD_REQUIRED', field: 'userId' })
   }

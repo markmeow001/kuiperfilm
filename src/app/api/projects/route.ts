@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
+import { isAdmin } from '@/lib/auth/user-role'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { toMoneyNumber } from '@/lib/billing/money'
 import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
@@ -43,7 +44,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
         select: { id: true, ownerEditorId: true },
       }),
     ])
-    const isAdmin = requester?.role === 'admin'
+    const isAdminUser = isAdmin(requester?.role)
     const isWsOwner = workspace?.ownerEditorId === session.user.id
     if (!workspace) {
       return NextResponse.json({
@@ -51,7 +52,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
         pagination: { page: 1, pageSize, total: 0, totalPages: 0 },
       })
     }
-    if (!isAdmin && !isWsOwner) {
+    if (!isAdminUser && !isWsOwner) {
       const membership = await prisma.workspaceMember.findUnique({
         where: { workspaceId_userId: { workspaceId: wsParam, userId: session.user.id } },
         select: { workspaceId: true },
@@ -261,9 +262,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
         details: { reason: '工作區不存在' },
       })
     }
-    const isAdmin = roleAtLeast(requester?.role, 'admin')
+    const isAdminUser = roleAtLeast(requester?.role, 'admin')
     const isWsOwner = ws.ownerEditorId === session.user.id
-    if (!isAdmin && !isWsOwner) {
+    if (!isAdminUser && !isWsOwner) {
       const membership = await prisma.workspaceMember.findUnique({
         where: { workspaceId_userId: { workspaceId: candidate, userId: session.user.id } },
         select: { workspaceId: true },

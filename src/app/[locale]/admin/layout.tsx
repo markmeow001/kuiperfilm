@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isAdmin } from '@/lib/auth/user-role'
 
 /**
  * Server-side admin gate. Non-admin sessions get bounced before any
@@ -31,7 +32,7 @@ export default async function AdminLayout({
     where: { id: userId },
     select: { role: true, isActive: true },
   })
-  if (!user || user.isActive === false || user.role !== 'admin') {
+  if (!user || user.isActive === false || !isAdmin(user.role)) {
     redirect(`/${locale}`)
   }
 

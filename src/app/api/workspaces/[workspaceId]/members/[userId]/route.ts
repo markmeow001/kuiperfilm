@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
+import { UserRole } from '@/lib/auth/user-role'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { recordAudit } from '@/lib/audit-log'
 
@@ -37,7 +38,7 @@ export const PATCH = apiHandler(async (
   }
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>
-  const role = body.role === 'viewer' ? 'viewer' : body.role === 'editor' ? 'editor' : null
+  const role = body.role === UserRole.VIEWER ? UserRole.VIEWER : body.role === UserRole.EDITOR ? UserRole.EDITOR : null
   if (!role) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'INVALID_ROLE',

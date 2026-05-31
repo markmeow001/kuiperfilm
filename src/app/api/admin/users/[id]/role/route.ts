@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isErrorResponse, requireAdminAuth } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { UserRole } from '@/lib/auth/user-role'
 import { prisma } from '@/lib/prisma'
 import { assertNotLastActiveAdmin, isValidRole } from '@/lib/admin-service'
 
@@ -42,7 +43,7 @@ export const PATCH = apiHandler(
     }
 
     // If demoting away from admin, ensure another active admin remains.
-    if (target.role === 'admin' && role !== 'admin') {
+    if (target.role === UserRole.ADMIN && role !== UserRole.ADMIN) {
       await assertNotLastActiveAdmin(targetUserId)
     }
 
