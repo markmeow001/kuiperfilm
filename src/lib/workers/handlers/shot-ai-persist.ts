@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { composeModelKey, parseModelKeyStrict } from '@/lib/model-config-contract'
+import { UserRole } from '@/lib/auth/user-role'
 
 function normalizeModelKey(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -38,7 +39,7 @@ export async function resolveAnalysisModel(projectId: string, userId: string): P
   // "请先在项目设置中配置分析模型" even when admin has it configured.
   if (!analysisModel) {
     const admin = await prisma.user.findFirst({
-      where: { role: 'admin' },
+      where: { role: UserRole.ADMIN },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     })

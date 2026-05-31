@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Navbar from '@/components/Navbar'
+import { UserRole } from '@/lib/auth/user-role'
 
 type Role = 'admin' | 'editor' | 'member'
 
@@ -106,7 +107,7 @@ export default function AdminInvitesPage() {
       // role. To grant admin, demote/promote via /admin/users after the
       // invitee has signed up. This guards against state drift, devtools
       // tampering, and the original "admin invited admin" footgun.
-      const body: Record<string, unknown> = { role: 'member' }
+      const body: Record<string, unknown> = { role: UserRole.MEMBER }
       if (typeof formExpiresHours === 'number' && formExpiresHours > 0) {
         body.expires_hours = formExpiresHours
       }

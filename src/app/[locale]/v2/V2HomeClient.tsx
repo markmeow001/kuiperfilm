@@ -16,6 +16,7 @@ import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { NotificationBell } from '@/components/v2/NotificationBell'
 import { WorkspaceCollabIntroBanner } from './WorkspaceCollabIntroBanner'
+import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
 
 const STICKY_STEP_VALUES = ['script', 'subjects', 'storyboard', 'voice', 'final'] as const
 type CarryStep = (typeof STICKY_STEP_VALUES)[number]
@@ -70,7 +71,7 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
   // Role gate — admin sees 設定中心 + 管理後台, members see only the
   // logout button. Mirrors the Navbar contract.
   const role = (session?.user as { role?: string } | undefined)?.role
-  const isAdmin = role === 'admin'
+  const isAdmin = checkIsAdmin(role)
   const [projects, setProjects] = useState<ProjectRow[]>([])
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState<Pagination>({

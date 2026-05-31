@@ -12,6 +12,7 @@ import { useTranslations } from 'next-intl'
 import LanguageSwitcher from './LanguageSwitcher'
 import ThemeToggle from './ThemeToggle'
 import { AppIcon } from '@/components/ui/icons'
+import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
 
 export default function Navbar() {
   const { data: session } = useSession()
@@ -19,7 +20,7 @@ export default function Navbar() {
   const tc = useTranslations('common')
   // session.user is loosely typed by next-auth — narrow to read role.
   const role = (session?.user as { role?: string } | undefined)?.role
-  const isAdmin = role === 'admin'
+  const isAdmin = checkIsAdmin(role)
 
   return (
     <nav className="sticky top-0 z-50 border-b border-amber-900/20 bg-stone-950/95 backdrop-blur-sm">

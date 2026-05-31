@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { composeModelKey, parseModelKeyStrict } from '@/lib/model-config-contract'
+import { UserRole } from '@/lib/auth/user-role'
 
 type ResolveAnalysisModelInput = {
   userId: string
@@ -35,7 +36,7 @@ export async function resolveAnalysisModel(input: ResolveAnalysisModelInput): Pr
   // getProjectModelConfig (config-service.ts) so non-admin accounts
   // can run analyze without managing their own provider keys.
   const admin = await prisma.user.findFirst({
-    where: { role: 'admin' },
+    where: { role: UserRole.ADMIN },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   })

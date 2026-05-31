@@ -7,6 +7,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/auth/user-role'
 import {
   type CapabilitySelections,
   type CapabilityValue,
@@ -129,7 +130,7 @@ async function readAdminPreference() {
   const now = Date.now()
   if (cachedAdminPref && cachedAdminPref.expiresAt > now) return cachedAdminPref.row
   const admin = await prisma.user.findFirst({
-    where: { role: 'admin' },
+    where: { role: UserRole.ADMIN },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   })

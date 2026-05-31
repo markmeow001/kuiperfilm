@@ -390,7 +390,7 @@ function CreateWorkspaceModal({ orgs, role, onClose, onCreated }: {
 
   // Fetch user list for owner picker (admin only — endpoint enforces).
   useEffect(() => {
-    if (role !== 'admin') return
+    if (role !== UserRole.ADMIN) return
     setUsersLoading(true)
     fetch('/api/admin/users')
       .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))

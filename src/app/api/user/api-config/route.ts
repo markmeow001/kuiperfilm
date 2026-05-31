@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { encryptApiKey, decryptApiKey } from '@/lib/crypto-utils'
 import { requireAdminAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { UserRole } from '@/lib/auth/user-role'
 import {
   composeModelKey,
   parseModelKeyStrict,
@@ -1204,7 +1205,7 @@ export const GET = apiHandler(async () => {
   let pref = ownPref
   if (!ownHasAny) {
     const admin = await prisma.user.findFirst({
-      where: { role: 'admin' },
+      where: { role: UserRole.ADMIN },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     })

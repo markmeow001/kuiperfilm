@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/auth/user-role'
 
 export type AnyObj = Record<string, unknown>
 
@@ -61,7 +62,7 @@ export async function resolveProjectModel(projectId: string, userId?: string) {
   // admin has analysisModel configured globally.
   if (!project.novelPromotionData.analysisModel && userId) {
     const admin = await prisma.user.findFirst({
-      where: { role: 'admin' },
+      where: { role: UserRole.ADMIN },
       orderBy: { createdAt: 'asc' },
       select: { id: true },
     })

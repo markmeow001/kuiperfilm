@@ -18,6 +18,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse, roleAtLeast } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { recordAudit } from '@/lib/audit-log'
+import { UserRole } from '@/lib/auth/user-role'
 
 export const PATCH = apiHandler(async (
   request: NextRequest,
@@ -103,11 +104,11 @@ export const PATCH = apiHandler(async (
         create: {
           projectId: editRequest.projectId,
           userId: editRequest.requesterId,
-          role: 'editor',
+          role: UserRole.EDITOR,
           grantedBy: session.user.id,
         },
         update: {
-          role: 'editor',
+          role: UserRole.EDITOR,
           grantedBy: session.user.id,
         },
       })

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs"
 import { logAuthAction } from '@/lib/logging/semantic'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/auth/user-role'
 
 /**
  * 多人系统：注册改为「凭邀请码」模式。
@@ -79,7 +80,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
       data: {
         name,
         password: hashedPassword,
-        role: 'member',
+        role: UserRole.MEMBER,
         ...(typeof email === 'string' && email.length > 0 ? { email } : {}),
         ...(typeof displayName === 'string' && displayName.length > 0
           ? { displayName }

@@ -724,7 +724,10 @@ export function roleAtLeast(
 ): boolean {
     if (threshold === UserRole.ADMIN) return role === UserRole.ADMIN
     if (threshold === UserRole.EDITOR) return role === UserRole.ADMIN || role === UserRole.EDITOR
-    return role === UserRole.ADMIN || role === UserRole.EDITOR || role === UserRole.MEMBER || role === UserRole.VIEWER
+    // 'member' tier 等同 D-1 7-role 拍板前的 legacy 三角色。
+    // VIEWER 是 D-1 新加 role，是否視為「至少 member」是 D-1 設計題，
+    // 不在 Phase 4.0 refactor 範圍 — 保留原本三角色語義。
+    return role === UserRole.ADMIN || role === UserRole.EDITOR || role === UserRole.MEMBER
 }
 
 /**
