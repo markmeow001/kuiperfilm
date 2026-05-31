@@ -13,6 +13,7 @@
 import { randomBytes } from 'crypto'
 import { ApiError } from '@/lib/api-errors'
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/auth/user-role'
 import type { Role } from '@/lib/api-auth'
 
 const VALID_ROLES: Role[] = ['admin', 'editor', 'member']
@@ -35,12 +36,12 @@ export async function assertNotLastActiveAdmin(targetUserId: string): Promise<vo
     select: { role: true, isActive: true },
   })
   if (!targetUser) return // caller will surface NOT_FOUND
-  if (targetUser.role !== 'admin') return
+  if (targetUser.role !== UserRole.ADMIN) return
   if (targetUser.isActive === false) return // already inactive — irrelevant
 
   const otherActiveAdmins = await prisma.user.count({
     where: {
-      role: 'admin',
+      role: UserRole.ADMIN,
       isActive: true,
       id: { not: targetUserId },
     },

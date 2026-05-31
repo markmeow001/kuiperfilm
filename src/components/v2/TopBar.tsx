@@ -20,6 +20,7 @@ import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { UserRole } from '@/lib/auth/user-role'
 import { useProjectAccess, type ProjectAccessRole } from '@/lib/query/hooks/useProjectAccess'
 import { AppIcon } from '@/components/ui/icons'
 import { UserMenu } from './UserMenu'
@@ -310,7 +311,7 @@ function RoleBadgeWithRequest({
 
   if (access.isLoading || !access.allowed || !access.role) return null
 
-  const isViewer = access.role === 'viewer'
+  const isViewer = access.role === UserRole.VIEWER
 
   return (
     <>
@@ -347,7 +348,7 @@ function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean, t: RoleBadgeT
   className: string
   title: string
 } {
-  if (role === 'admin') {
+  if (role === UserRole.ADMIN) {
     return {
       label: t('admin'),
       className: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
@@ -368,7 +369,7 @@ function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean, t: RoleBadgeT
       title: t('wsOwnerTitle'),
     }
   }
-  if (role === 'editor' || canEdit) {
+  if (role === UserRole.EDITOR || canEdit) {
     return {
       label: t('editor'),
       className: 'border-amber-500/40 bg-amber-500/5 text-amber-300',

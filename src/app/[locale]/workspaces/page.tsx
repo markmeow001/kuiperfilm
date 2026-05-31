@@ -18,6 +18,7 @@ import { useSession } from 'next-auth/react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import Navbar from '@/components/Navbar'
+import { UserRole } from '@/lib/auth/user-role'
 
 interface Org {
   id: string
@@ -66,8 +67,8 @@ type Role = 'admin' | 'editor' | 'member'
 
 function rolePill(role: string) {
   const color =
-    role === 'admin' ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-    : role === 'editor' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+    role === UserRole.ADMIN ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+    : role === UserRole.EDITOR ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
     : 'bg-stone-500/15 text-stone-300 border-stone-500/30'
   return (
     <span className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 font-mono text-[14px] uppercase tracking-wider ${color}`}>
@@ -116,8 +117,8 @@ export default function WorkspacesPage() {
 
   useEffect(() => { reload() }, [])
 
-  const canCreateOrg = role === 'admin' || role === 'editor'
-  const canCreateWs = (role === 'admin' || role === 'editor') && orgs.length > 0
+  const canCreateOrg = role === UserRole.ADMIN || role === UserRole.EDITOR
+  const canCreateWs = (role === UserRole.ADMIN || role === UserRole.EDITOR) && orgs.length > 0
   const allWs = useMemo(() => {
     const seen = new Set<string>()
     const out: Workspace[] = []
@@ -140,8 +141,8 @@ export default function WorkspacesPage() {
             </div>
             <h1 className="font-fraunces text-3xl italic">工作區管理</h1>
             <p className="mt-1 font-serif-cn text-sm text-stone-400">
-              {role === 'admin' ? '管理員視圖：看見全平台所有 org / workspace。'
-                : role === 'editor' ? '編輯者視圖：管理你建立的工作區、加 / 踢成員、看組員專案。'
+              {role === UserRole.ADMIN ? '管理員視圖：看見全平台所有 org / workspace。'
+                : role === UserRole.EDITOR ? '編輯者視圖：管理你建立的工作區、加 / 踢成員、看組員專案。'
                 : '成員視圖：你被加入的工作區清單。'}
             </p>
           </div>
@@ -190,7 +191,7 @@ export default function WorkspacesPage() {
                     <span className="font-mono text-[14px] tracking-wider text-stone-500">
                       {o._count?.workspaces ?? 0} workspace{(o._count?.workspaces ?? 0) !== 1 ? 's' : ''}
                     </span>
-                    {(role === 'admin' || o.ownerUserId === myUserId) && (
+                    {(role === UserRole.ADMIN || o.ownerUserId === myUserId) && (
                       <span className="font-mono text-[14px] uppercase tracking-wider text-amber-500/80">owner</span>
                     )}
                   </div>
@@ -221,7 +222,7 @@ export default function WorkspacesPage() {
             <div className="rounded-sm border border-stone-800 bg-stone-900/50 px-4 py-6 font-serif-cn text-sm text-stone-400">
               {canCreateWs
                 ? '還沒有工作區。點上方「新增工作區」建一個。'
-                : role === 'editor' && orgs.length === 0
+                : role === UserRole.EDITOR && orgs.length === 0
                   ? '請先新增組織才能建工作區。'
                   : '你還沒被加入任何工作區。'}
             </div>
@@ -229,7 +230,7 @@ export default function WorkspacesPage() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {allWs.map((w) => {
                 const isOwner = w.ownerEditorId === myUserId
-                const canManage = role === 'admin' || isOwner
+                const canManage = role === UserRole.ADMIN || isOwner
                 return (
                   <button
                     key={w.id}
@@ -397,7 +398,7 @@ function CreateWorkspaceModal({ orgs, role, onClose, onCreated }: {
         const list: PickerUser[] = (j.users ?? []).map((u: PickerUser) => ({
           id: u.id, name: u.name, displayName: u.displayName, email: u.email, role: u.role,
         }))
-        setUsers(list.filter((u) => u.role !== 'admin')) // admin doesn't need to "assign to admin"
+        setUsers(list.filter((u) => u.role !== UserRole.ADMIN)) // admin doesn't need to "assign to admin"
       })
       .catch(() => setUsers([]))
       .finally(() => setUsersLoading(false))
@@ -417,7 +418,7 @@ function CreateWorkspaceModal({ orgs, role, onClose, onCreated }: {
           description: description.trim() || undefined,
           // Only admin's `ownerEditorId` is honoured server-side; the
           // server clears it for non-admin to be safe.
-          ...(role === 'admin' && ownerEditorId ? { ownerEditorId } : {}),
+          ...(role === UserRole.ADMIN && ownerEditorId ? { ownerEditorId } : {}),
         }),
       })
       if (!res.ok) {
@@ -468,7 +469,7 @@ function CreateWorkspaceModal({ orgs, role, onClose, onCreated }: {
               maxLength={2000}
             />
           </div>
-          {role === 'admin' && (
+          {role === UserRole.ADMIN && (
             <div>
               <label className="block font-mono text-[14px] uppercase tracking-wider text-stone-500">
                 指派組長 (workspace owner)
@@ -489,7 +490,7 @@ function CreateWorkspaceModal({ orgs, role, onClose, onCreated }: {
                     <option key={u.id} value={u.id}>
                       {u.displayName || u.name || u.email || u.id.slice(0, 8)}
                       {u.name ? ` (@${u.name})` : ''}
-                      {u.role && u.role !== 'member' ? ` · ${u.role}` : ''}
+                      {u.role && u.role !== UserRole.MEMBER ? ` · ${u.role}` : ''}
                     </option>
                   ))}
                 </select>
@@ -526,7 +527,7 @@ function WorkspaceDetailDrawer({
   onChanged: () => void
 }) {
   const isOwner = workspace.ownerEditorId === myUserId
-  const canManage = role === 'admin' || isOwner
+  const canManage = role === UserRole.ADMIN || isOwner
 
   const [members, setMembers] = useState<MemberRow[]>([])
   const [projects, setProjects] = useState<WorkspaceProject[]>([])
@@ -798,7 +799,7 @@ function WorkspaceDetailDrawer({
                                 <div className="mt-0.5 truncate font-mono text-[12px] tracking-wider text-stone-500">
                                   @{u.userName ?? '—'}
                                   {u.email ? ` · ${u.email}` : ''}
-                                  {u.role && u.role !== 'member' ? ` · ${u.role}` : ''}
+                                  {u.role && u.role !== UserRole.MEMBER ? ` · ${u.role}` : ''}
                                 </div>
                               </div>
                               <button

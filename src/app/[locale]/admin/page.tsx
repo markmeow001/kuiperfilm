@@ -10,6 +10,7 @@
  */
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { UserRole } from '@/lib/auth/user-role'
 import { useParams } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 
@@ -111,9 +112,9 @@ export default function AdminLandingPage() {
         setStats({
           totalUsers: users.length,
           activeUsers: users.filter((x) => x.isActive).length,
-          admins: users.filter((x) => x.role === 'admin').length,
-          editors: users.filter((x) => x.role === 'editor').length,
-          members: users.filter((x) => x.role === 'member').length,
+          admins: users.filter((x) => x.role === UserRole.ADMIN).length,
+          editors: users.filter((x) => x.role === UserRole.EDITOR).length,
+          members: users.filter((x) => x.role === UserRole.MEMBER).length,
           totalInvites: invites.length,
           usableInvites: invites.filter((x) => !x.usedBy && !x.revokedAt).length,
           usedInvites: invites.filter((x) => Boolean(x.usedBy)).length,

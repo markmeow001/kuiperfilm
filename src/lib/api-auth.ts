@@ -12,6 +12,7 @@ import { withPrismaRetry } from '@/lib/prisma-retry'
 import { extractModelKey } from '@/lib/config-service'
 import { getErrorSpec, type UnifiedErrorCode } from '@/lib/errors/codes'
 import { getLogContext, setLogContext } from '@/lib/logging/context'
+import { UserRole, isAdmin } from '@/lib/auth/user-role'
 
 // ============================================================
 // 类型定义
@@ -51,7 +52,7 @@ async function sessionUserIsAdmin(userId: string): Promise<boolean> {
     )
     if (!user) return false
     if ((user as { isActive?: boolean }).isActive === false) return false
-    return (user as { role?: string | null }).role === 'admin'
+    return isAdmin((user as { role?: string | null }).role)
 }
 
 /**
@@ -417,7 +418,7 @@ export async function requireAdminAuth(): Promise<{ session: AuthSession } | Nex
     const user = await withPrismaRetry(() =>
         prisma.user.findUnique({ where: { id: session.user.id }, select: { role: true } })
     )
-    if (!user || (user as any).role !== 'admin') {
+    if (!user || !isAdmin((user as { role?: string | null }).role)) {
         return forbidden('Admin access required')
     }
     return { session }
@@ -615,7 +616,7 @@ export async function requireProjectAccess(
         where: { id: requesterId },
         select: { role: true },
     })
-    if (requester?.role === 'admin') {
+    if (isAdmin(requester?.role)) {
         return { allowed: true, effectiveRole: 'admin' }
     }
 
@@ -647,9 +648,9 @@ export async function requireProjectAccess(
     })
     if (collab) {
         if (action === 'read') {
-            return { allowed: true, effectiveRole: collab.role === 'editor' ? 'editor' : 'viewer' }
+            return { allowed: true, effectiveRole: collab.role === UserRole.EDITOR ? UserRole.EDITOR : UserRole.VIEWER }
         }
-        if (collab.role === 'editor') {
+        if (collab.role === UserRole.EDITOR) {
             return { allowed: true, effectiveRole: 'editor' }
         }
         return { allowed: false, reason: 'VIEWER_CANNOT_WRITE' }
@@ -668,9 +669,9 @@ export async function requireProjectAccess(
         })
         if (wm) {
             if (action === 'read') {
-                return { allowed: true, effectiveRole: wm.role === 'editor' ? 'editor' : 'viewer' }
+                return { allowed: true, effectiveRole: wm.role === UserRole.EDITOR ? UserRole.EDITOR : UserRole.VIEWER }
             }
-            if (wm.role === 'editor') {
+            if (wm.role === UserRole.EDITOR) {
                 return { allowed: true, effectiveRole: 'editor' }
             }
             return { allowed: false, reason: 'VIEWER_CANNOT_WRITE' }
@@ -721,9 +722,9 @@ export function roleAtLeast(
     role: string | null | undefined,
     threshold: 'admin' | 'editor' | 'member',
 ): boolean {
-    if (threshold === 'admin') return role === 'admin'
-    if (threshold === 'editor') return role === 'admin' || role === 'editor'
-    return role === 'admin' || role === 'editor' || role === 'member'
+    if (threshold === UserRole.ADMIN) return role === UserRole.ADMIN
+    if (threshold === UserRole.EDITOR) return role === UserRole.ADMIN || role === UserRole.EDITOR
+    return role === UserRole.ADMIN || role === UserRole.EDITOR || role === UserRole.MEMBER || role === UserRole.VIEWER
 }
 
 /**
@@ -766,7 +767,7 @@ export async function requireRoleAuth(
     }
     const role = normalizeRole(user.role)
     // admin always passes; otherwise role must be in the allowed list.
-    if (role !== 'admin' && !allowed.includes(role)) {
+    if (role !== UserRole.ADMIN && !allowed.includes(role)) {
         return forbidden('Insufficient role')
     }
     return { session, role }

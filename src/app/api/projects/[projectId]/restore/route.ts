@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
+import { isAdmin as _isAdmin } from '@/lib/auth/user-role'
 import { logProjectAction } from '@/lib/logging/semantic'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
@@ -65,7 +66,7 @@ export const POST = apiHandler(async (
       where: { id: session.user.id },
       select: { role: true },
     })
-    isAdmin = requester?.role === 'admin'
+    isAdmin = _isAdmin(requester?.role)
   }
   if (!isOwner && !isAdmin) {
     throw new ApiError('FORBIDDEN', {
