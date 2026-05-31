@@ -68,7 +68,7 @@ export default function AdminInvitesPage() {
   // formRole intentionally never read: invites are hard-coded to send
   // 'member', but we keep the setter wired so a future role-on-invite
   // flow doesn't have to re-introduce the state. See line ~327 comment.
-  const [, setFormRole] = useState<Role>('member')
+  const [, setFormRole] = useState<Role>(UserRole.MEMBER)
   const [formExpiresHours, setFormExpiresHours] = useState<number | ''>(168)
   const [formNote, setFormNote] = useState('')
 
@@ -92,7 +92,7 @@ export default function AdminInvitesPage() {
   }, [load])
 
   function openCreate() {
-    setFormRole('member')
+    setFormRole(UserRole.MEMBER)
     setFormExpiresHours(168)
     setFormNote('')
     setError(null)

@@ -21,7 +21,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { AppIcon } from '@/components/ui/icons'
-import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
+import { isAdmin as checkIsAdmin, UserRole } from '@/lib/auth/user-role'
 
 export function UserMenu() {
   const { data: session, status } = useSession()
@@ -71,7 +71,7 @@ export function UserMenu() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-full border border-amber-900/30 bg-stone-900/50 py-1 pl-1 pr-3 transition-all hover:border-amber-500/40 hover:bg-stone-900"
-        title={`${name} · ${role ?? 'member'}`}
+        title={`${name} · ${role ?? UserRole.MEMBER}`}
         aria-haspopup="menu"
         aria-expanded={open}
       >

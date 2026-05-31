@@ -22,7 +22,7 @@ async function requireOrgAccess(orgId: string, userId: string, mode: 'read' | 'w
   if (!org) throw new ApiError('NOT_FOUND', { code: 'ORGANIZATION_NOT_FOUND' })
   const isAdmin = roleAtLeast(requester?.role, 'admin')
   const isOwner = org.ownerUserId === userId
-  if (isAdmin || isOwner) return { org, requester, role: isAdmin ? 'admin' : 'owner' as const }
+  if (isAdmin || isOwner) return { org, requester, role: (isAdmin ? UserRole.ADMIN : UserRole.OWNER) }
   if (mode === 'write') {
     throw new ApiError('FORBIDDEN', { code: 'NOT_ORG_OWNER' })
   }

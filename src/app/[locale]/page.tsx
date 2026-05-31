@@ -11,6 +11,7 @@
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
+import { UserRole } from '@/lib/auth/user-role'
 
 export default function Home() {
   const t = useTranslations('landing')
@@ -37,7 +38,7 @@ export default function Home() {
             {session ? (
               <>
                 <span className="text-stone-500">
-                  {userName} · {(userRole ?? 'member').toUpperCase()}
+                  {userName} · {(userRole ?? UserRole.MEMBER).toUpperCase()}
                 </span>
                 <Link
                   href="/zh/v2"

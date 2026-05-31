@@ -18,6 +18,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { UserRole } from '@/lib/auth/user-role'
 import {
   requireUserAuth,
   isErrorResponse,
@@ -48,7 +49,7 @@ export const POST = apiHandler(async (
 
   // Reject owner — they already own it. effectiveRole === 'owner' means
   // requireProjectAccess matched the project.userId === requesterId branch.
-  if (access.effectiveRole === 'owner') {
+  if (access.effectiveRole === UserRole.OWNER) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'OWNER_CANNOT_REQUEST',
       details: { reason: '你是專案擁有者，無需請求編輯權限' },

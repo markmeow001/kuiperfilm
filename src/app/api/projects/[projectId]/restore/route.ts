@@ -22,7 +22,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
-import { isAdmin as _isAdmin } from '@/lib/auth/user-role'
+import { isAdmin as _isAdmin, UserRole } from '@/lib/auth/user-role'
 import { logProjectAction } from '@/lib/logging/semantic'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
@@ -111,7 +111,7 @@ export const POST = apiHandler(async (
       previousDeletedAt: project.deletedAt.toISOString(),
       previousDeletedBy: project.deletedBy,
       restoredBy: session.user.id,
-      restoredByRole: isAdmin ? 'admin' : 'owner',
+      restoredByRole: isAdmin ? UserRole.ADMIN : UserRole.OWNER,
     }
   )
 

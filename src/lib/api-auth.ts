@@ -363,7 +363,7 @@ export async function requireProjectAuth<T extends ProjectAuthIncludes = Project
     }
     // Log cross-user access for audit (mirrors pre-existing behavior)
     if (project.userId !== session.user.id) {
-        if (access.effectiveRole === 'admin') {
+        if (access.effectiveRole === UserRole.ADMIN) {
             bindAdminCrossUserLog(session, projectId, project.userId)
         } else if (
             access.effectiveRole === 'ws_owner'
@@ -484,7 +484,7 @@ export async function requireProjectAuthLight(
         return forbidden()
     }
     if (project.userId !== session.user.id) {
-        if (access.effectiveRole === 'admin') {
+        if (access.effectiveRole === UserRole.ADMIN) {
             bindAdminCrossUserLog(session, projectId, project.userId)
         } else if (
             access.effectiveRole === 'ws_owner'
@@ -608,7 +608,7 @@ export async function requireProjectAccess(
 
     // Step 1: owner always wins.
     if (project.userId === requesterId) {
-        return { allowed: true, effectiveRole: 'owner' }
+        return { allowed: true, effectiveRole: UserRole.OWNER }
     }
 
     // Step 2: admin bypass.
@@ -617,7 +617,7 @@ export async function requireProjectAccess(
         select: { role: true },
     })
     if (isAdmin(requester?.role)) {
-        return { allowed: true, effectiveRole: 'admin' }
+        return { allowed: true, effectiveRole: UserRole.ADMIN }
     }
 
     // Step 3: workspace owner editor via explicit P.workspaceId.
@@ -651,7 +651,7 @@ export async function requireProjectAccess(
             return { allowed: true, effectiveRole: collab.role === UserRole.EDITOR ? UserRole.EDITOR : UserRole.VIEWER }
         }
         if (collab.role === UserRole.EDITOR) {
-            return { allowed: true, effectiveRole: 'editor' }
+            return { allowed: true, effectiveRole: UserRole.EDITOR }
         }
         return { allowed: false, reason: 'VIEWER_CANNOT_WRITE' }
     }
@@ -672,7 +672,7 @@ export async function requireProjectAccess(
                 return { allowed: true, effectiveRole: wm.role === UserRole.EDITOR ? UserRole.EDITOR : UserRole.VIEWER }
             }
             if (wm.role === UserRole.EDITOR) {
-                return { allowed: true, effectiveRole: 'editor' }
+                return { allowed: true, effectiveRole: UserRole.EDITOR }
             }
             return { allowed: false, reason: 'VIEWER_CANNOT_WRITE' }
         }
@@ -784,11 +784,11 @@ export async function requireRoleAuth(
  * `scripts/migrations/migrate-user-role-to-member.ts`
  */
 function normalizeRole(rawRole: string | null | undefined): Role {
-    if (rawRole === 'admin' || rawRole === 'editor' || rawRole === 'member') {
+    if (rawRole === UserRole.ADMIN || rawRole === UserRole.EDITOR || rawRole === UserRole.MEMBER) {
         return rawRole
     }
     // legacy 'user' 或未知值都归到最低权限。
-    return 'member'
+    return UserRole.MEMBER
 }
 
 /**
@@ -796,5 +796,5 @@ function normalizeRole(rawRole: string | null | undefined): Role {
  * 用于团队共享资产的写操作（GlobalCharacter / GlobalLocation 等）。
  */
 export async function requireEditorAuth(): Promise<{ session: AuthSession; role: Role } | NextResponse> {
-    return requireRoleAuth(['editor'])
+    return requireRoleAuth([UserRole.EDITOR])
 }

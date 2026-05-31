@@ -1,5 +1,6 @@
 'use client'
 import { logError as _ulogError } from '@/lib/logging/core'
+import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
@@ -181,7 +182,7 @@ export default function ProfilePage() {
 
   // 用户角色
   const userRole = (session?.user as any)?.role || 'user'
-  const isAdmin = userRole === 'admin'
+  const isAdmin = checkIsAdmin(userRole)
 
   // 主要分区：扣费记录 / API配置
   const [activeSection, setActiveSection] = useState<'billing' | 'apiConfig'>(isAdmin ? 'apiConfig' : 'billing')

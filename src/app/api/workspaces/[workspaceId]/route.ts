@@ -25,7 +25,7 @@ async function requireWorkspaceAccess(workspaceId: string, userId: string, mode:
   if (!ws) throw new ApiError('NOT_FOUND', { code: 'WORKSPACE_NOT_FOUND' })
   const isAdmin = roleAtLeast(requester?.role, 'admin')
   const isOwner = ws.ownerEditorId === userId
-  if (isAdmin || isOwner) return { ws, requester, role: isAdmin ? 'admin' : 'owner' as const }
+  if (isAdmin || isOwner) return { ws, requester, role: (isAdmin ? UserRole.ADMIN : UserRole.OWNER) }
   if (mode === 'write') {
     throw new ApiError('FORBIDDEN', { code: 'NOT_WORKSPACE_OWNER' })
   }

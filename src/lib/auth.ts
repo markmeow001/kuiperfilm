@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { logAuthAction } from './logging/semantic'
 import { prisma } from './prisma'
+import { UserRole } from './auth/user-role'
 
  
 export const authOptions: any = {
@@ -69,7 +70,7 @@ export const authOptions: any = {
         return {
           id: user.id,
           name: user.name,
-          role: (user as any).role || 'member',
+          role: (user as any).role || UserRole.MEMBER,
         }
       }
     })

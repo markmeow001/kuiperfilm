@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { UserRole } from '@/lib/auth/user-role'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
@@ -289,9 +290,9 @@ export default function AdminUsersPage() {
                           onChange={(e) => changeRole(u, e.target.value as Role)}
                           className="glass-input-base px-2 py-1 text-xs"
                         >
-                          <option value="admin">{t('role_admin')}</option>
-                          <option value="editor">{t('role_editor')}</option>
-                          <option value="member">{t('role_member')}</option>
+                          <option value={UserRole.ADMIN}>{t('role_admin')}</option>
+                          <option value={UserRole.EDITOR}>{t('role_editor')}</option>
+                          <option value={UserRole.MEMBER}>{t('role_member')}</option>
                         </select>
                       )}
                     </td>
