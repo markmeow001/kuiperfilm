@@ -1,4 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#1a1a2e"/>
-  <text x="32" y="42" text-anchor="middle" font-family="system-ui, sans-serif" font-weight="bold" font-size="20" fill="#ffffff">C</text>
+  <defs>
+    <linearGradient id="kuiperGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5C24A"/>
+      <stop offset="100%" stop-color="#D9A832"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="12" ry="12" fill="url(#kuiperGold)"/>
+  <path d="M 19 14 L 28 14 L 28 30 L 41 14 L 52 14 L 36 32 L 53 50 L 42 50 L 30 36 L 28 38 L 28 50 L 19 50 Z" fill="#0A0A0B"/>
 </svg>
