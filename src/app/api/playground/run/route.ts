@@ -30,6 +30,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { generateImage } from '@/lib/generator-api'
+import { pollAsyncTaskUntilResult } from '@/lib/async-poll'
 import { getSignedUrl } from '@/lib/cos'
 import { enqueuePlaygroundVideoJob } from '@/lib/playground/enqueue'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
@@ -229,9 +230,26 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
     // Result URL is whatever the generator returned (could be remote http url
     // OR a COS key — we store it raw and sign at read time if it's a key).
-    const resultUrl = (result as { url?: string; imageUrl?: string }).url
+    let resultUrl = (result as { url?: string; imageUrl?: string }).url
       ?? (result as { url?: string; imageUrl?: string }).imageUrl
       ?? null
+
+    // Async image providers (AtlasCloud nano-banana-pro, fal, KieAI) return
+    // { success, async: true, externalId } with NO url — they expect the
+    // caller to poll. The image worker does; this synchronous route did not,
+    // so it false-failed with GENERATION_NO_URL → "External service failed"
+    // (2026-06-02 — user hit this on atlascloud::nano-banana-pro). Poll the
+    // result URL inline. A real provider failure now throws here and gets
+    // recorded with its true message by the catch below.
+    if (!resultUrl) {
+      const asyncResult = result as { async?: boolean; externalId?: string }
+      if (asyncResult.async && asyncResult.externalId) {
+        _ulogInfo(`[playground.run] polling async result id=${run.id} externalId=${asyncResult.externalId}`)
+        const polled = await pollAsyncTaskUntilResult(asyncResult.externalId, userId)
+        resultUrl = polled.url
+      }
+    }
+
     if (!resultUrl) {
       throw new ApiError('EXTERNAL_ERROR', {
         code: 'GENERATION_NO_URL',

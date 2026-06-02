@@ -293,6 +293,55 @@ export async function pollAsyncTask(
     }
 }
 
+/**
+ * Job-less bounded poll for SYNCHRONOUS callers (e.g. the Playground image
+ * route) that submit an async generator task and must wait for the result
+ * URL inline — they have no BullMQ job, so they can't use the worker's
+ * waitExternalResult(). Loops pollAsyncTask until completed / failed /
+ * timeout.
+ *
+ * 2026-06-02 — async image providers (AtlasCloud nano-banana-pro, fal,
+ * KieAI) return { success, async: true, externalId } with NO url. The
+ * worker path polls; the synchronous Playground route did not, so it
+ * false-failed with GENERATION_NO_URL → "External service failed".
+ */
+export async function pollAsyncTaskUntilResult(
+    externalId: string,
+    userId: string,
+    opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<{ url: string; downloadHeaders?: Record<string, string> }> {
+    const timeoutMs = opts?.timeoutMs ?? 120_000
+    const intervalMs = opts?.intervalMs ?? 2_000
+    const startAt = Date.now()
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+    while (Date.now() - startAt <= timeoutMs) {
+        const status = await pollAsyncTask(externalId, userId)
+
+        if (status.status === 'completed') {
+            const url = status.resultUrl || status.imageUrl || status.videoUrl
+            if (!url) {
+                const err = new Error(`External task completed but no result URL: ${externalId}`)
+                ;(err as unknown as { code: string }).code = 'EXTERNAL_ERROR'
+                throw err
+            }
+            return { url, ...(status.downloadHeaders ? { downloadHeaders: status.downloadHeaders } : {}) }
+        }
+
+        if (status.status === 'failed') {
+            const err = new Error(status.error || `External task failed: ${externalId}`)
+            ;(err as unknown as { code: string }).code = status.errorCode || 'EXTERNAL_ERROR'
+            throw err
+        }
+
+        await sleep(intervalMs)
+    }
+
+    const err = new Error(`External task polling timeout (${Math.round(timeoutMs / 1000)}s): ${externalId}`)
+    ;(err as unknown as { code: string }).code = 'GENERATION_TIMEOUT'
+    throw err
+}
+
 // 🟢 騰訊雲 VOD AIGC 任務查詢
 async function pollTencentVODTask(
     taskId: string,
