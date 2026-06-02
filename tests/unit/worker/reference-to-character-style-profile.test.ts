@@ -84,6 +84,14 @@ const workersSharedMock = vi.hoisted(() => ({
 
 const workersUtilsMock = vi.hoisted(() => ({
   assertTaskActive: vi.fn(async () => {}),
+  // 2026-06-02 — these tests exercise the multi-view GENERATION path, so the
+  // model is treated as reference-capable (supportReferenceImage: true) and
+  // the handler does NOT take the new "use uploaded image directly" branch.
+  resolveModelStyleCapabilities: vi.fn(() => ({
+    supportReferenceImage: true,
+    supportNegativePrompt: true,
+  })),
+  uploadImageSourceToCos: vi.fn(async () => 'cos://uploaded-ref'),
 }))
 
 const promptI18nMock = vi.hoisted(() => ({
@@ -201,6 +209,37 @@ describe('worker reference-to-character styleProfile pass-through (P1-4)', () =>
     expect(firstCall?.prompt).not.toContain('STYLE_POS')
     expect(firstCall?.prompt).toContain(CHARACTER_PROMPT_SUFFIX)
     expect(firstCall?.options?.aspectRatio).toBe(CHARACTER_IMAGE_BANANA_RATIO)
+  })
+
+  it('model can NOT img2img + uploaded reference -> uses the upload directly (no multi-view gen)', async () => {
+    // 2026-06-02 — when the character model is text-only (AtlasCloud
+    // nano-banana drops reference_images), regenerating a multi-view would
+    // hallucinate a different character (user: 上傳自己的角色圖後變得跟原本
+    // 不一樣). The handler must persist the UPLOADED image instead of calling
+    // generateLabeledImageToCos.
+    workersUtilsMock.resolveModelStyleCapabilities.mockReturnValueOnce({
+      supportReferenceImage: false,
+      supportNegativePrompt: false,
+    })
+
+    const job = buildJob(
+      {
+        referenceImageUrls: ['https://example.com/my-character.png'],
+        characterName: 'Hero',
+      },
+      TASK_TYPE.REFERENCE_TO_CHARACTER,
+    )
+
+    await handleReferenceToCharacterTask(job)
+
+    // Multi-view generation must be skipped...
+    expect(sharedMock.generateLabeledImageToCos).not.toHaveBeenCalled()
+    // ...and the uploaded image persisted to COS as-is instead.
+    expect(workersUtilsMock.uploadImageSourceToCos).toHaveBeenCalledWith(
+      'https://example.com/my-character.png',
+      expect.any(String),
+      expect.any(String),
+    )
   })
 
   it('project styleProfile null (loader returns null) -> generateLabeledImageToCos receives styleProfile = null (pass-through unchanged)', async () => {

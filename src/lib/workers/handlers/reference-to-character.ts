@@ -10,7 +10,7 @@ import { encodeImageUrls } from '@/lib/contracts/image-urls-contract'
 import { getSignedUrl } from '@/lib/cos'
 import { initializeFonts } from '@/lib/fonts'
 import { reportTaskProgress } from '@/lib/workers/shared'
-import { assertTaskActive } from '@/lib/workers/utils'
+import { assertTaskActive, resolveModelStyleCapabilities, uploadImageSourceToCos } from '@/lib/workers/utils'
 import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { buildPrompt, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { generateLabeledImageToCos } from './image-task-handler-shared'
@@ -177,12 +177,39 @@ export async function handleReferenceToCharacterTask(job: Job<TaskJobData>) {
   // character edit modal now actually runs the 3-image-gen pipeline
   // for everyone with a configured characterModel, instead of silently
   // falling back to "store the original ref as the only result".
+  // 2026-06-02 — can the configured character model actually USE an uploaded
+  // reference image (img2img)? AtlasCloud nano-banana is text-only and drops
+  // reference_images; regenerating a "multi-view" from it would ignore the
+  // upload and hallucinate a different character (user: 上傳自己的角色圖後
+  //變得跟原本不一樣). When the user uploaded a reference and the model can't
+  // consume it, use the uploaded image directly instead of fabricating one.
+  const modelSupportsReferenceImage = resolveModelStyleCapabilities(imageModel, 'image').supportReferenceImage
+  const keyPrefix = isAssetHub ? 'ref-char' : `proj-ref-char-${job.data.projectId}`
+
   let successfulCosKeys: string[]
   let description: string | null = null
 
-  {
-    const keyPrefix = isAssetHub ? 'ref-char' : `proj-ref-char-${job.data.projectId}`
-
+  if (useReferenceImages && allReferenceImages.length > 0 && !modelSupportsReferenceImage) {
+    // Use the user's uploaded image(s) directly. Persist to COS so the
+    // appearance has a permanent image (the upload-temp URL would expire).
+    await reportTaskProgress(job, 50, {
+      stage: 'reference_to_character_keep_upload',
+      stageLabel: '使用上传的参考图',
+      displayMode: 'detail',
+    })
+    const persisted = await Promise.all(
+      allReferenceImages.slice(0, 3).map((url, index) =>
+        uploadImageSourceToCos(url, keyPrefix, `upload-${index}`).catch((err) => {
+          logError('[reference-to-character] failed to persist uploaded reference', err, { index })
+          return null
+        }),
+      ),
+    )
+    successfulCosKeys = persisted.filter((item): item is string => Boolean(item))
+    // If persistence failed entirely, fall back to the raw upload URLs so the
+    // appearance still shows the user's image rather than an empty row.
+    if (successfulCosKeys.length === 0) successfulCosKeys = allReferenceImages
+  } else {
     await reportTaskProgress(job, 35, {
       stage: 'reference_to_character_generate',
       stageLabel: '生成角色三视图',

@@ -220,7 +220,7 @@ export async function waitExternalResult(
   throw new Error(`External task polling timeout (${Math.round(timeoutMs / 1000)}s): ${externalId}`)
 }
 
-function resolveModelStyleCapabilities(
+export function resolveModelStyleCapabilities(
   modelKey: string,
   modelType: 'image' | 'video',
 ): ModelStyleCapabilities {
