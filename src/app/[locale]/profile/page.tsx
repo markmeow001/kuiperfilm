@@ -1,6 +1,6 @@
 'use client'
 import { logError as _ulogError } from '@/lib/logging/core'
-import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
+import { isAdmin as checkIsAdmin, UserRole } from '@/lib/auth/user-role'
 
 import { useCallback, useEffect, useState } from 'react'
 import { useSession, signOut } from 'next-auth/react'
@@ -181,7 +181,7 @@ export default function ProfilePage() {
   const [detailsLoading, setDetailsLoading] = useState(false)
 
   // 用户角色
-  const userRole = (session?.user as any)?.role || 'user'
+  const userRole = (session?.user as any)?.role || UserRole.MEMBER
   const isAdmin = checkIsAdmin(userRole)
 
   // 主要分区：扣费记录 / API配置
