@@ -12,8 +12,8 @@ KuiperAI 已接入騰訊雲 VOD AIGC（Kling、Vidu、Nano Banana 等 10+ 模型
 e623a13 fix(tencent-vod): 把 tencent-vod 加進 UI provider 白名單
 3e4c947 feat(tencent-vod): UI 多欄位憑證輸入
 045a90b feat(tencent-vod): 接入騰訊雲 VOD AIGC（Kling/Vidu/Nano Banana 等）
-38da730 refactor(brand): 完成 B+C 區徹底去 waoowaoo 化（DB/secrets/encryption）
-aa53aa5 refactor(brand): 完成 A 區去 waoowaoo 化（程式碼/字串/文件/腳本）
+38da730 refactor(brand): 完成 B+C 區品牌切換（DB/secrets/encryption）
+aa53aa5 refactor(brand): 完成 A 區品牌切換（程式碼/字串/文件/腳本）
 dd7c6f8 WIP: snapshot before KuiperAI rename
 ```
 
@@ -118,9 +118,9 @@ docker compose up -d --build  # 完整 build 大約 5-10 分鐘
 
 ### Volume
 
-- `kuiperai_mysql_data`（新，乾淨）
-- `kuiperai_redis_data`（新）
-- `waoowaoo_mysql_data` 跟 `waoowaoo_redis_data` 是舊的孤立 volume，可以 `docker volume rm` 清掉
+- `kuiperai_mysql_data`（current）
+- `kuiperai_redis_data`（current）
+- 若 droplet 上殘留舊版的 `*_mysql_data` / `*_redis_data` 孤立 volume，可以 `docker volume rm` 清掉
 
 ## 使用者使用流程（拿到憑證後）
 
