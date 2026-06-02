@@ -13,6 +13,11 @@ const allowedPromptTemplateReaders = new Set([
   'scripts/guards/prompt-semantic-regression.mjs',
   'scripts/guards/prompt-ab-regression.mjs',
   'scripts/guards/prompt-json-canary-guard.mjs',
+  // Guard that scans prompt templates for Seedance red-line tokens — must read them directly.
+  'scripts/guards/seedance-prompt-redline-guard.mjs',
+  // V2 zh-Hant→zh-Hans i18n migration tool; only *mentions* lib/prompts in a skip comment,
+  // its readFileSync targets V2 .tsx files (false positive on the readFileSync+path heuristic).
+  'scripts/migrate-traditional-to-simplified.mjs',
 ])
 const languageDirectiveAllowList = new Set([
   'scripts/guards/prompt-i18n-guard.mjs',
