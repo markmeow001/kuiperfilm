@@ -29,11 +29,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { generateImage } from '@/lib/generator-api'
-import { pollAsyncTaskUntilResult } from '@/lib/async-poll'
-import { processMediaResult } from '@/lib/media-process'
-import { getSignedUrl } from '@/lib/cos'
-import { enqueuePlaygroundVideoJob } from '@/lib/playground/enqueue'
+import { enqueuePlaygroundImageJob, enqueuePlaygroundVideoJob } from '@/lib/playground/enqueue'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 const MAX_REFERENCE_IMAGES = 9
@@ -132,15 +128,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
-  // Compose effective prompt: prompt + optional referenceText footer.
-  const effectivePrompt = refText
-    ? `${prompt.trim()}\n\n[參考文字 / Style hint] ${refText}`
-    : prompt.trim()
-
-  // Create row up front so failures still leave a record.
-  // Image: 'running' (starts immediately, synchronous).
-  // Video: 'pending' → worker picks up and flips to 'running'.
-  const initialStatus = outputType === 'video' ? 'pending' : 'running'
+  // Create row up front so failures still leave a record. Both image and
+  // video are async (2026-06-02): the row starts 'pending', the worker
+  // flips it to 'running' → 'succeeded'/'failed'. The client polls
+  // GET /api/playground/runs every 3s while a row is pending/running.
+  const initialStatus = 'pending'
   const run = await prisma.playgroundRun.create({
     data: {
       userId,
@@ -163,158 +155,43 @@ export const POST = apiHandler(async (request: NextRequest) => {
     `[playground.run] start id=${run.id} userId=${userId} outputType=${outputType} model=${modelKey} refs.images=${referenceImages.length} refs.videos=${referenceVideos.length}`,
   )
 
-  // Phase T-2 (2026-05-27) — video flow is async. Enqueue + return
-  // immediately; client polls via GET /api/playground/runs (auto-refetch
-  // every 3s when any row is pending/running). Worker writes back to
-  // PlaygroundRun row (status + resultUrls + errorMessage).
-  if (outputType === 'video') {
-    try {
-      await enqueuePlaygroundVideoJob({
-        playgroundRunId: run.id,
-        userId,
-      })
-    } catch (err) {
-      // Enqueue failure is fatal — flip row to failed so the UI doesn't
-      // show a stuck 'pending' state forever. Re-throw so the API call
-      // surfaces the problem to the user.
-      const errMsg = err instanceof Error ? err.message : 'enqueue_failed'
-      await prisma.playgroundRun.update({
-        where: { id: run.id },
-        data: { status: 'failed', errorMessage: errMsg, completedAt: new Date() },
-      }).catch(() => {})
-      _ulogError(`[playground.run] enqueue failed id=${run.id} err=${errMsg}`)
-      throw new ApiError('EXTERNAL_ERROR', {
-        code: 'PLAYGROUND_ENQUEUE_FAILED',
-        details: { runId: run.id, message: errMsg },
-      })
-    }
-    return NextResponse.json({
-      success: true,
-      run: {
-        id: run.id,
-        status: run.status,
-        resultUrl: null,
-        outputType: run.outputType,
-        modelKey: run.modelKey,
-        createdAt: run.createdAt,
-        completedAt: null,
-      },
-    })
-  }
-
-  // Image flow — synchronous (image gen ~5-15s).
-  const signedRefImages = referenceImages.map((k) => getSignedUrl(k, 3600))
-
+  // Async dispatch (2026-06-02) — both image and video go through their
+  // worker queue. The worker polls with a 15-min budget and persists the
+  // result to our COS/R2, so slow async providers (e.g. AtlasCloud
+  // nano-banana-pro, which polls `processing` well past 120s) complete
+  // instead of the route timing out and surfacing "External service
+  // failed". Client polls GET /api/playground/runs while pending/running.
   try {
-    const result = await generateImage(userId, modelKey, effectivePrompt, {
-      ...(signedRefImages.length > 0 ? { referenceImages: signedRefImages } : {}),
-      ...(typeof aspectRatio === 'string' ? { aspectRatio } : {}),
-      ...(typeof resolution === 'string' ? { resolution } : {}),
-    })
-
-    if (!result.success) {
-      const errMsg = result.error ?? 'image_generation_failed'
-      await prisma.playgroundRun.update({
-        where: { id: run.id },
-        data: {
-          status: 'failed',
-          errorMessage: errMsg,
-          completedAt: new Date(),
-        },
-      })
-      _ulogError(`[playground.run] failed id=${run.id} err=${errMsg}`)
-      throw new ApiError('EXTERNAL_ERROR', {
-        code: 'GENERATION_FAILED',
-        details: { runId: run.id, message: errMsg },
-      })
+    if (outputType === 'video') {
+      await enqueuePlaygroundVideoJob({ playgroundRunId: run.id, userId })
+    } else {
+      await enqueuePlaygroundImageJob({ playgroundRunId: run.id, userId })
     }
-
-    // Result URL is whatever the generator returned (could be remote http url
-    // OR a COS key — we store it raw and sign at read time if it's a key).
-    let resultUrl = (result as { url?: string; imageUrl?: string }).url
-      ?? (result as { url?: string; imageUrl?: string }).imageUrl
-      ?? null
-
-    // Async image providers (AtlasCloud nano-banana-pro, fal, KieAI) return
-    // { success, async: true, externalId } with NO url — they expect the
-    // caller to poll. The image worker does; this synchronous route did not,
-    // so it false-failed with GENERATION_NO_URL → "External service failed"
-    // (2026-06-02 — user hit this on atlascloud::nano-banana-pro). Poll the
-    // result URL inline. A real provider failure now throws here and gets
-    // recorded with its true message by the catch below.
-    if (!resultUrl) {
-      const asyncResult = result as { async?: boolean; externalId?: string }
-      if (asyncResult.async && asyncResult.externalId) {
-        _ulogInfo(`[playground.run] polling async result id=${run.id} externalId=${asyncResult.externalId}`)
-        const polled = await pollAsyncTaskUntilResult(asyncResult.externalId, userId)
-        // Persist the remote provider URL to our own COS/R2. The raw
-        // AtlasCloud CDN URL won't render in the client (app CSP img-src
-        // doesn't allow the provider domain, and the URL may need provider
-        // auth / expire) — the image worker persists too, so mirror it here.
-        // processMediaResult returns an `images/…` key the block below signs.
-        // (2026-06-02 — fixed "已完成 but broken image" after the poll fix.)
-        resultUrl = await processMediaResult({
-          source: polled.url,
-          type: 'image',
-          keyPrefix: 'playground',
-          targetId: run.id,
-        })
-      }
-    }
-
-    if (!resultUrl) {
-      throw new ApiError('EXTERNAL_ERROR', {
-        code: 'GENERATION_NO_URL',
-        details: { runId: run.id },
-      })
-    }
-
-    const updated = await prisma.playgroundRun.update({
-      where: { id: run.id },
-      data: {
-        status: 'succeeded',
-        resultUrls: JSON.stringify([resultUrl]),
-        completedAt: new Date(),
-      },
-    })
-
-    _ulogInfo(`[playground.run] success id=${run.id} url=${resultUrl.slice(0, 60)}…`)
-
-    // Sign the result if it's a COS key. Remote URLs pass through.
-    const signedResult = resultUrl.startsWith('images/') || resultUrl.startsWith('video/')
-      ? getSignedUrl(resultUrl, 3600)
-      : resultUrl
-
-    return NextResponse.json({
-      success: true,
-      run: {
-        id: updated.id,
-        status: updated.status,
-        resultUrl: signedResult,
-        outputType: updated.outputType,
-        modelKey: updated.modelKey,
-        createdAt: updated.createdAt,
-        completedAt: updated.completedAt,
-      },
-    })
   } catch (err) {
-    // generateImage throws on hard failure — record + rethrow as ApiError.
-    const errMsg = err instanceof Error ? err.message : 'unknown'
-    if (!(err instanceof ApiError)) {
-      await prisma.playgroundRun.update({
-        where: { id: run.id },
-        data: {
-          status: 'failed',
-          errorMessage: errMsg,
-          completedAt: new Date(),
-        },
-      }).catch(() => {})
-      _ulogError(`[playground.run] thrown id=${run.id} err=${errMsg}`)
-      throw new ApiError('EXTERNAL_ERROR', {
-        code: 'GENERATION_THREW',
-        details: { runId: run.id, message: errMsg },
-      })
-    }
-    throw err
+    // Enqueue failure is fatal — flip row to failed so the UI doesn't show
+    // a stuck 'pending' forever. Re-throw so the API surfaces the problem.
+    const errMsg = err instanceof Error ? err.message : 'enqueue_failed'
+    await prisma.playgroundRun.update({
+      where: { id: run.id },
+      data: { status: 'failed', errorMessage: errMsg, completedAt: new Date() },
+    }).catch(() => {})
+    _ulogError(`[playground.run] enqueue failed id=${run.id} err=${errMsg}`)
+    throw new ApiError('EXTERNAL_ERROR', {
+      code: 'PLAYGROUND_ENQUEUE_FAILED',
+      details: { runId: run.id, message: errMsg },
+    })
   }
+
+  return NextResponse.json({
+    success: true,
+    run: {
+      id: run.id,
+      status: run.status,
+      resultUrl: null,
+      outputType: run.outputType,
+      modelKey: run.modelKey,
+      createdAt: run.createdAt,
+      completedAt: null,
+    },
+  })
 })

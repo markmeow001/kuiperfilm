@@ -11,9 +11,10 @@
  * BullMQ provides retry/backoff infrastructure but no DB ownership.
  */
 
-import { videoQueue } from '@/lib/task/queues'
+import { imageQueue, videoQueue } from '@/lib/task/queues'
 import type { TaskJobData } from '@/lib/task/types'
 import type { PlaygroundVideoJobData } from '@/lib/workers/handlers/playground-video'
+import type { PlaygroundImageJobData } from '@/lib/workers/handlers/playground-image'
 
 /**
  * Enqueue a video generation job for an existing PlaygroundRun row.
@@ -49,4 +50,33 @@ export async function enqueuePlaygroundVideoJob(params: {
     attempts: 3,
   })
   return { jobId: job.id ?? `playground-video-${params.playgroundRunId}` }
+}
+
+/**
+ * Enqueue an image generation job for an existing PlaygroundRun row.
+ *
+ * 2026-06-02 — image generation moved off the synchronous route onto the
+ * image queue so slow async providers (AtlasCloud nano-banana-pro etc.)
+ * complete via the worker's 15-min poll instead of timing out at 120s.
+ *
+ * @param playgroundRunId  the row id (must already exist in 'pending')
+ * @param userId           owning user, for generator's model-config lookup
+ * @returns                the BullMQ job id
+ */
+export async function enqueuePlaygroundImageJob(params: {
+  playgroundRunId: string
+  userId: string
+}): Promise<{ jobId: string }> {
+  const data: PlaygroundImageJobData = {
+    type: 'playground_image',
+    playgroundRunId: params.playgroundRunId,
+    userId: params.userId,
+  }
+  // Same cast rationale as enqueuePlaygroundVideoJob: the image worker
+  // branches on `type === 'playground_image'` before normal Task routing.
+  const job = await imageQueue.add('playground_image', data as unknown as TaskJobData, {
+    jobId: `playground-image-${params.playgroundRunId}`,
+    attempts: 3,
+  })
+  return { jobId: job.id ?? `playground-image-${params.playgroundRunId}` }
 }

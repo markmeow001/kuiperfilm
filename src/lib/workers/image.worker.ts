@@ -13,6 +13,7 @@ import {
   handlePanelVariantTask,
   handlePropImageTask,
 } from './handlers/image-task-handlers'
+import { handlePlaygroundImageTask, type PlaygroundImageJobData } from './handlers/playground-image'
 
 type AnyObj = Record<string, unknown>
 
@@ -49,9 +50,18 @@ async function processImageTask(job: Job<TaskJobData>) {
 }
 
 export function createImageWorker() {
-  return new Worker<TaskJobData>(
+  // 2026-06-02 — Playground image jobs share the image queue but bypass
+  // withTaskLifecycle (no project-scoped Task row; PlaygroundRun IS the
+  // tracking unit). Route them to the dedicated handler before the regular
+  // pipeline, mirroring playground_video on the video queue.
+  return new Worker<TaskJobData | PlaygroundImageJobData>(
     QUEUE_NAME.IMAGE,
-    async (job) => await withTaskLifecycle(job, processImageTask),
+    async (job) => {
+      if ((job.data as { type?: string }).type === 'playground_image') {
+        return await handlePlaygroundImageTask(job as Job<PlaygroundImageJobData>)
+      }
+      return await withTaskLifecycle(job as Job<TaskJobData>, processImageTask)
+    },
     {
       connection: queueRedis,
       // Default 2 — Tencent VOD AIGC has a low concurrency quota per account
