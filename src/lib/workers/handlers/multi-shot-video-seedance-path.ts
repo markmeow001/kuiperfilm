@@ -245,7 +245,12 @@ export function wrapRawPromptWithAudioDirective(
   const dialogueBeatCount = countDialogueBeatsInRawPrompt(rawPrompt)
   const footer = dialogueBeatCount > 0
     ? '音频：原生输出双声道音频，按上述对白逐字配音（语气、停顿、情绪与角色一致），'
-      + '唇形与配音严格同步；背景叠加场景对应的环境音（脚步、风声、室内回响等），'
+      + '唇形与配音严格同步；背景叠加场景对应的环境音（脚步、风声、室内回响等）。'
+      // 2026-06-02 — keep dialogue + ambient, ban extra non-dialogue vocals.
+      // Provider audio moderation false-flags model-invented gasps/moans/
+      // heavy breathing and blocks the clip; forbid them to stop the false
+      // positive while keeping the real dialogue + ambient.
+      + '除上述对白台词外，请勿额外合成喘息、呻吟、哭喊、尖叫、急促呼吸或其他非对白人声；'
       + '避免任何机械合成感或字幕音。'
     : '音频：输出场景对应的环境音（脚步、风声、室内回响等），'
       + '本组无角色对白，请勿合成任何说话声。'
@@ -361,7 +366,10 @@ export function buildSeedancePrompt(
     sections.push(
       `音频：原生输出双声道音频，按上述对白逐字配音（` +
         `语气、停顿、情绪与角色一致），唇形与配音严格同步；` +
-        `背景叠加场景对应的环境音（脚步、风声、室内回响等），` +
+        `背景叠加场景对应的环境音（脚步、风声、室内回响等）。` +
+        // 2026-06-02 — keep dialogue + ambient, ban extra non-dialogue
+        // vocals that providers' audio moderation false-flags.
+        `除上述对白台词外，请勿额外合成喘息、呻吟、哭喊、尖叫、急促呼吸或其他非对白人声；` +
         `避免任何机械合成感或字幕音。`,
     )
   } else {

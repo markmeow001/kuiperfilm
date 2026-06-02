@@ -246,6 +246,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // left old panels in the DB. See StaleStoryboardCleanupModal.
   const [staleCleanupOpen, setStaleCleanupOpen] = useState(false)
 
+  // 2026-06-02 — native-audio on/off for multi-shot video. Default on.
+  // Lets the user turn audio off when a provider's audio moderation
+  // false-flags Seedance's native audio and blocks the whole clip.
+  const [soundEnabled, setSoundEnabled] = useState(true)
   const [multiShotState, setMultiShotState] = useState<MultiShotState>({ status: 'idle' })
   const [analyzeState, setAnalyzeState] = useState<AnalyzeState>({ status: 'idle' })
   // 2026-05-13 — Selected Shot 圖/視頻顯示切換。
@@ -1224,7 +1228,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
             videoModel,
             aspectRatio: projectVideoRatio,
             resolution: projectVideoResolution,
-            sound: true,
+            sound: soundEnabled,
             meta: { locale: 'zh-TW' },
             async: true,
           }),
@@ -1384,6 +1388,8 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       targetDuration={project?.novelPromotionData?.targetDuration ?? null}
       videoResolution={projectVideoResolution}
       seedanceOnly={modeBehavior.videoModelFilter === 'seedance-only'}
+      soundEnabled={soundEnabled}
+      onSoundToggle={() => setSoundEnabled((v) => !v)}
     />
   )
 
@@ -1592,7 +1598,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               videoModel: projectVideoModel,
               aspectRatio: projectVideoRatio,
               resolution: projectVideoResolution,
-              sound: true,
+              sound: soundEnabled,
               async: true,
               meta: { locale: 'zh-TW' },
             }

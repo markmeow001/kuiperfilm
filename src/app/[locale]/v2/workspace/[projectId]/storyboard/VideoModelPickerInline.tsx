@@ -55,6 +55,12 @@ interface VideoModelPickerInlineProps {
   /** 2026-05-29 — when true (r2v-narrative projects), hide the Kling family
    *  (Kling needs per-shot first-frame images / T2I which R2V mode drops). */
   seedanceOnly?: boolean
+  /** 2026-06-02 — native-audio on/off. Seedance 2.0 generates native audio
+   *  that providers' audio moderation occasionally false-flags (gasps / moans
+   *  invented from emotional cues), blocking the whole clip. Turning audio off
+   *  bypasses that. When provided, the 音頻 badge becomes a clickable toggle. */
+  soundEnabled?: boolean
+  onSoundToggle?: () => void
 }
 
 // 2026-05-22 — keep in sync with V2ProjectSettingsPanel + ark.ts
@@ -74,6 +80,8 @@ export function VideoModelPickerInline({
   targetDuration,
   videoResolution,
   seedanceOnly = false,
+  soundEnabled = true,
+  onSoundToggle,
 }: VideoModelPickerInlineProps) {
   const updateConfig = useUpdateProjectConfig(projectId)
   const userModelsQuery = useUserModels()
@@ -228,9 +236,28 @@ export function VideoModelPickerInline({
       {currentVariant && (
         <div className="flex items-center gap-1">
           {currentVariant.capabilities.audio && (
-            <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-400">
-              音頻
-            </span>
+            onSoundToggle ? (
+              <button
+                type="button"
+                onClick={onSoundToggle}
+                title={
+                  soundEnabled
+                    ? '原生音訊：開（對白 + 環境音）。若被供應商音訊審核誤擋，點此關閉再重新生成'
+                    : '原生音訊：關（這支不生成聲音，繞過音訊審核）。點此重新開啟'
+                }
+                className={`rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-wider transition ${
+                  soundEnabled
+                    ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400'
+                    : 'border-zinc-600/40 bg-zinc-700/20 text-zinc-500'
+                }`}
+              >
+                音頻 {soundEnabled ? '開' : '關'}
+              </button>
+            ) : (
+              <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-400">
+                音頻
+              </span>
+            )
           )}
           {currentVariant.capabilities.multiShot && (
             <span className="rounded-sm border border-sky-500/30 bg-sky-500/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-sky-400">

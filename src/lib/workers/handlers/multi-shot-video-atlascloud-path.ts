@@ -137,7 +137,14 @@ export function buildAudioDirective(dialogueBeatCount: number): string {
   if (dialogueBeatCount > 0) {
     return (
       '音頻：原生輸出雙聲道，按上述對白逐字配音（語氣、停頓、情緒與角色一致），'
-      + '唇形與配音嚴格同步；背景疊加場景對應的環境音；無字幕、無 logo、無屏幕信息。'
+      + '唇形與配音嚴格同步；背景疊加場景對應的環境音（風聲、腳步、室內回響等）。'
+      // 2026-06-02 — keep dialogue + ambient, but ban EXTRA non-dialogue
+      // vocalizations. AtlasCloud's audio moderation false-flags
+      // model-invented gasps / moans / heavy breathing (from emotional cues
+      // like 震慄/張嘴/呼吸) and blocks the whole clip. Forbidding them keeps
+      // the legit dialogue + ambient while killing the false-positive source.
+      + '除上述對白台詞外，請勿額外合成喘息、呻吟、哭喊、尖叫、急促呼吸或其他非對白人聲；'
+      + '無字幕、無 logo、無屏幕信息。'
     )
   }
   return (
