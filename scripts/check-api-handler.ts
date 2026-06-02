@@ -18,7 +18,9 @@ function main() {
 
   for (const file of files) {
     if (ALLOWLIST.has(file)) continue
-    const hasApiHandler = execSync(`rg -n \"apiHandler\" ${JSON.stringify(file)} || true`, { encoding: 'utf8' }).trim().length > 0
+    // Match the sanctioned handler family: apiHandler (session auth) and
+    // publicApiHandler (API-key auth, src/lib/api-keys/public-api-handler.ts).
+    const hasApiHandler = execSync(`rg -n \"(apiHandler|publicApiHandler)\" ${JSON.stringify(file)} || true`, { encoding: 'utf8' }).trim().length > 0
     if (!hasApiHandler) {
       missing.push(file)
     }

@@ -70,7 +70,7 @@
     "test:billing:integration": "cross-env BILLING_TEST_BOOTSTRAP=1 vitest run tests/integration/billing",
     "test:billing:concurrency": "cross-env BILLING_TEST_BOOTSTRAP=1 vitest run tests/concurrency/billing",
     "test:billing:coverage": "cross-env BILLING_TEST_BOOTSTRAP=1 vitest run --coverage tests/unit/billing tests/integration/billing tests/concurrency/billing",
-    "test:guards": "npm run check:api-handler && npm run check:no-api-direct-llm-call && npm run check:seedance-prompt-redline && npm run check:project-auth-action-coverage && npm run check:worker-startup-smoke && npm run check:test-coverage-guards",
+    "test:guards": "npm run check:api-handler && npm run check:no-api-direct-llm-call && npm run check:prompt-i18n && npm run check:seedance-prompt-redline && npm run check:project-auth-action-coverage && npm run check:worker-startup-smoke && npm run check:test-coverage-guards",
     "test:unit:all": "cross-env BILLING_TEST_BOOTSTRAP=0 vitest run tests/unit",
     "test:integration:api": "cross-env BILLING_TEST_BOOTSTRAP=1 vitest run tests/integration/api",
     "test:integration:chain": "cross-env BILLING_TEST_BOOTSTRAP=1 vitest run tests/integration/chain",
