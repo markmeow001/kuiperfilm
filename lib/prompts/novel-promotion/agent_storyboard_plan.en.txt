@@ -261,6 +261,23 @@ Soft guidance (judgment calls, not enforced):
   - Extreme facial detail (pores, sweat reflection): only in emotional
     climax close-ups; omit in medium / wide shots.
 
+Character motion naturalness (added 2026-06-02 — same source as storyboard_detail;
+set the tone here in the plan stage):
+
+  - Match manner-of-motion to the character: when writing the main action in a
+    description, don't just write "walks / turns / raises" — also note HOW they
+    move (slow and dignified / light and cautious / steady and powerful), so the
+    later detail stage has something to build on.
+    ❌ "the woman walks forward" → ✅ "the woman advances slowly with composed,
+    dignified steps, sleeves swaying with each footfall"
+  - Multiple characters in frame, written per role: if this shot genuinely keeps
+    2 people in frame per anti-collapse rule a (physical contact / confrontation
+    / struggle), the description separates initiator from responder and writes the
+    interaction chain (who moves first → how the other responds → what relation it
+    settles into) — don't just write "the two lock eyes".
+    (A plain "one speaks, one listens" still splits into 2 panels; see anti-
+    collapse rule a.)
+
 Self-check before output (every panel):
   □ No negative directives ("no X" / "strictly without X")?
   □ No camera/film-equipment terms (Arri / IMAX / 8K / film grain / 35mm / professional film)?

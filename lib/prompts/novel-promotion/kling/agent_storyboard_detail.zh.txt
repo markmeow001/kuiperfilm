@@ -53,6 +53,15 @@ multi_shot_group 同號代表「可被 Kling 3.0 multi_shot=intelligence 合併�
 - 兩段用逗號自然分隔，不要把運鏡塞進角色動作描述裡
 - 這樣下游若使用 Kling 2.6 Motion Control，能鎖定角色動作不被運鏡語言干擾
 
+【人物動作自然度（2026-06-02 新增）】
+
+寫 [Specific Action] 段時，別只寫動作名，補下面三點讓 Kling 出片更自然：
+- **動作方式配氣質**：別只 "walks forward"，寫 "walks slowly with composed, dignified steps"；潛行寫 "moves with light, cautious steps"。
+- **身體聯動**：一處動，他處跟著 —— "raises her head, gaze lifting with it, shoulders settling, hair swaying slightly"。
+- **發力型動作拆物理階段**（仍是 1 個主動作）：揮桿/出拳/拔劍寫「蓄力 → 發力 → 軌跡 → 收勢」 ——
+  "grips the pole and coils, weight dropping, then drives from waist and shoulders to sweep it in a wide arc from right to left, settling side-on with eyes fixed forward"，別只 "swings the pole"。
+- **多人同框**：分主動方 / 回應方，寫清互動順序（who acts → who responds → final relation），別只 "two people facing each other"。
+
 【video_prompt 撰寫格式】
 
 **結構**：[Subject + Age + Gender] + [Specific Action] + [Camera Movement + Speed] + [Style/Lighting]

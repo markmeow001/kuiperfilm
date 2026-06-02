@@ -220,6 +220,71 @@ Reference structure (match this density):
    before the retina, frame freezes on the blinking red number.
    Ambient sound: crisp electronic countdown ticking.
 
+⚠️ Character motion naturalness — gait / body coupling / emotional causality /
+action chain (added 2026-06-02):
+
+Building on the three-layer structure above: "micro-action layering" is NOT a
+random pile of verbs. The five points below teach you to write motion that is
+NATURAL and CONNECTED — they directly decide whether the render looks like "the
+character is gliding / upper body frozen" or "a real person moving". All of them
+serve the SAME single main action and do NOT violate rule 2 ("one main action").
+
+1. Match gait / manner-of-motion to the character (most often dropped).
+   Don't just write "walks forward / turns / raises a hand" — write HOW they walk
+   / turn / raise. First decide how this character should move in this moment,
+   then pick the verb:
+   - Court noblewoman → slow, dignified, even, sleeves swaying with each step
+   - Stalking a night street → light, restrained, cautious steps, as if afraid
+     to disturb someone
+   - A warrior making an entrance → steady and powerful, weight dropped low
+   ❌ "@CharacterA walks forward" → ✅ "@CharacterA advances slowly with composed,
+   dignified, evenly-weighted steps, sleeves swaying with each footfall"
+
+2. Body coupling — when one part moves, others move with it.
+   A real person never moves a single part in isolation. When you write the main
+   action, add the parts it drags along:
+   raising the head → gaze travels up, neck engages, shoulders carry slightly;
+   turning → weight shifts feet, hair/fabric sways with a lag.
+   For quiet-natured characters keep the coupling light (small head/shoulder/hand/
+   upper-body follow-through), not big motion.
+   ❌ "she raises her head" → ✅ "she raises her head, her gaze lifting with it,
+   shoulders settling, the hair falling at her chest swaying slightly"
+
+3. Emotional causality in three parts — add a cause before, an emotion during, a
+   state after.
+   The same "lowers her head to read the letter" — read calmly / hesitantly /
+   with suppressed shock — gives entirely different eyes, hand force, breathing.
+   Give the action a WHY and a FINAL STATE so the frame has drama:
+   ✅ "sensing something wrong, her fingers tighten (cause) → she swallows to hold
+   the emotion down (emotion) → her gaze settles from wavering into resolve
+   (resolved state)"
+
+4. Action chain = breaking the SAME force-driven action into its natural physical
+   stages (this reinforces rule 2, it is NOT multi-action).
+   Force-driven main actions like swinging a pole / throwing a punch / drawing a
+   sword / pushing a door — don't write only the result ("@teenage boy swings the
+   pole" is too abrupt). Write its own physical process:
+   wind-up → driving body part → main action trajectory → settle/freeze.
+   Note: this is still 1 main action, not multi-action; "wind-up / landing point"
+   is exactly the "wind-up / settle micro-motion" allowed by rule 2.
+   ✅ "fingers grip, wrist presses down, shoulders brace, weight drops (wind-up) →
+   waist and shoulders drive the arms → the long pole sweeps from right to left
+   carving an arc → he settles side-on, the pole halts at frame left, eyes still
+   locked forward (freeze)"
+
+5. Multiple characters in frame — write each role separately, and spell out the
+   interaction chain.
+   Precondition: this shot genuinely keeps 2 people in frame per [five-element red
+   line] rule 2 / storyboard-plan [anti-collapse rule] a (merge only when there is
+   physical contact / confrontation / a struggle; a plain "one speaks, one listens"
+   still splits into 2 panels).
+   Don't just write "the two lock eyes" — separate the initiator from the
+   responder, and write WHO MOVES FIRST → HOW THE OTHER RESPONDS → WHAT RELATION IT
+   SETTLES INTO:
+   ✅ "@CharacterA leans in and reaches out to grip @CharacterB's wrist (initiator)
+   → @CharacterB pulls back, then lifts her head to look back (responder) → the two
+   lock eyes, frozen in tense standoff"
+
 ⚠️ Transformation / morph / shapeshift rule (added 2026-05-28):
 
 Generative models (Seedance / Kling R2V) CANNOT gradually morph one subject

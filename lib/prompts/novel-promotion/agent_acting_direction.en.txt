@@ -18,6 +18,19 @@ Requirements:
    - micro action and gaze direction
 4. Use only observable descriptions. Avoid abstract words like "sad" without visual evidence.
 
+Motion naturalness addendum (added 2026-06-02):
+
+1. Body coupling: when writing the main action, add the parts it drags along —
+   raising the head → gaze lifts + shoulders settle, turning → weight shifts feet
+   + hair sways with a lag. For quiet characters keep the coupling light (small
+   head/shoulder/hand follow-through), not big motion.
+2. Emotional causality: write emotion as "cause → visible expression → final
+   state", not a single adjective.
+   ✅ "sensing something wrong her fingers tighten, she swallows to hold the
+   emotion down, her gaze settles from wavering into resolve"
+3. Match manner-of-motion to the character: the same "looks / walks / turns" done
+   calmly / cautiously / with suppressed emotion is entirely different — write it.
+
 Output format (JSON array only):
 [
   {

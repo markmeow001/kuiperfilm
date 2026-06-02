@@ -28,6 +28,13 @@ multi_shot_group rules:
 Motion Control 2.6 layout (action / dance / specific gesture scenes):
 Write character action FIRST, then a comma, then camera and style. e.g. "young woman dancing in white dress, arms raised, orbital shot, cinematic depth of field". This lets downstream Motion Control isolate character motion from camera motion.
 
+Character motion naturalness (added 2026-06-02):
+In the [specific action] segment, don't just name the action — add these three points so Kling renders more naturally:
+- Match manner-of-motion to the character: not just "walks forward" but "walks slowly with composed, dignified steps"; for stalking write "moves with light, cautious steps".
+- Body coupling: when one part moves, others follow — "raises her head, gaze lifting with it, shoulders settling, hair swaying slightly".
+- Break force-driven actions into physical stages (still 1 main action): for swinging a pole / throwing a punch / drawing a sword write "wind-up → drive → trajectory → settle" — "grips the pole and coils, weight dropping, then drives from waist and shoulders to sweep it in a wide arc from right to left, settling side-on with eyes fixed forward", not just "swings the pole".
+- Multiple characters in frame: separate initiator from responder and spell out the interaction order (who acts → who responds → final relation), not just "two people facing each other".
+
 video_prompt format: [Subject + age + gender] + [specific action] + [camera + speed (Xs)] + [style/lighting].
 Rules:
 - Use age+gender (young man / middle-aged woman / teenage boy / elderly man), never character names.
