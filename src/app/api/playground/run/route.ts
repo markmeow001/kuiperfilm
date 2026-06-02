@@ -31,6 +31,7 @@ import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { generateImage } from '@/lib/generator-api'
 import { pollAsyncTaskUntilResult } from '@/lib/async-poll'
+import { processMediaResult } from '@/lib/media-process'
 import { getSignedUrl } from '@/lib/cos'
 import { enqueuePlaygroundVideoJob } from '@/lib/playground/enqueue'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
@@ -246,7 +247,18 @@ export const POST = apiHandler(async (request: NextRequest) => {
       if (asyncResult.async && asyncResult.externalId) {
         _ulogInfo(`[playground.run] polling async result id=${run.id} externalId=${asyncResult.externalId}`)
         const polled = await pollAsyncTaskUntilResult(asyncResult.externalId, userId)
-        resultUrl = polled.url
+        // Persist the remote provider URL to our own COS/R2. The raw
+        // AtlasCloud CDN URL won't render in the client (app CSP img-src
+        // doesn't allow the provider domain, and the URL may need provider
+        // auth / expire) — the image worker persists too, so mirror it here.
+        // processMediaResult returns an `images/…` key the block below signs.
+        // (2026-06-02 — fixed "已完成 but broken image" after the poll fix.)
+        resultUrl = await processMediaResult({
+          source: polled.url,
+          type: 'image',
+          keyPrefix: 'playground',
+          targetId: run.id,
+        })
       }
     }
 
