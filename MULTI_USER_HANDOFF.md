@@ -10,7 +10,7 @@ re-reading the chat. **Read this end-to-end before touching code.**
 
 | Item | Value |
 |---|---|
-| Repository | `https://github.com/waoowaooAI/waoowaoo.git` |
+| Repository | `https://github.com/markmeow001/kuiperfilm.git` |
 | Main worktree (the **other** Claude is working here) | `/Users/joshhung/KuiperAI` on branch `main` |
 | **My** worktree (this work) | `/Users/joshhung/Documents/kuiperAI-multiuser` on branch `feature/multi-user` |
 | Branch base | `38da730` (main HEAD when worktree was created) |
