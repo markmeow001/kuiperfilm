@@ -118,7 +118,9 @@ describe('AtlasCloud composite duration priority (Phase M)', () => {
     // self-allocates the total and starves silent action shots.
     expect(src).toMatch(/let perShotDurations: number\[\]/)
     expect(src).toMatch(/buildPerShotDurationGuide/)
-    expect(src).toMatch(/perShotDurations,\s*\n\s*\)/) // passed into buildAtlasCloudPrompt
+    // passed into buildAtlasCloudPrompt (followed by the soundEnabled arg
+    // added 2026-06-03 for the silent-when-muted audio directive)
+    expect(src).toMatch(/perShotDurations,\s*\n\s*sound,\s*\n\s*\)/)
     // The 第N鏡 line must carry the （約Xs）hint.
     expect(src).toMatch(/（約\$\{perShotDurations\[i\]\}秒）/)
   })

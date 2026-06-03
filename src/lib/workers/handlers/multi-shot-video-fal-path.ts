@@ -47,6 +47,7 @@ import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { resolveNovelData } from './image-task-handler-shared'
+import { buildAudioDirective } from './multi-shot-audio-directive'
 import {
   collectCharacterRefs,
   collectSceneRefs,
@@ -185,6 +186,7 @@ function buildFalPrompt(
   propRefs: PropRef[],
   projectData: Awaited<ReturnType<typeof resolveNovelData>>,
   r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }>,
+  soundEnabled: boolean = true,
 ): { prompt: string; dialogueBeatCount: number } {
   const sections: string[] = []
 
@@ -241,12 +243,11 @@ function buildFalPrompt(
   }
   sections.push(shotLines.join('\n'))
 
-  // AUDIO DIRECTIVE
-  const audioDirective =
-    dialogueBeatCount > 0
-      ? '音頻：原生輸出雙聲道，按對白逐字配音，背景疊加環境音；無字幕、無 logo、無屏幕信息。'
-      : '音頻：輸出環境音與適配背景音樂，無對白；畫面無字幕、無 logo、無屏幕信息。'
-  sections.push(audioDirective)
+  // AUDIO DIRECTIVE — shared with all composite paths. fal's local copy
+  // previously lacked the 2026-06-02 non-dialogue-vocal ban, re-exposing
+  // AtlasCloud's audio-moderation false-positive on the fal vendor (audit
+  // 2026-06-03). soundEnabled=false → silent branch.
+  sections.push(buildAudioDirective(dialogueBeatCount, soundEnabled))
 
   return { prompt: sections.join('\n\n'), dialogueBeatCount }
 }
@@ -421,8 +422,12 @@ export async function runMultiShotFalComposite(params: {
   let promptCore: string
   let dialogueBeatCount: number
   if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
-    promptCore = params.rawPrompt.trim()
-    dialogueBeatCount = (promptCore.match(/對白：|说「|: "/g) || []).length
+    const raw = params.rawPrompt.trim()
+    dialogueBeatCount = (raw.match(/對白：|说「|: "/g) || []).length
+    // 2026-06-03 — raw branch previously shipped no audio directive (audit
+    // finding): append the shared one so fal's narrative-edit flow gets the
+    // same moderation-avoidance + silent-when-muted behavior as auto-build.
+    promptCore = [raw, buildAudioDirective(dialogueBeatCount, sound)].join('\n\n')
   } else {
     const built = buildFalPrompt(
       usedPanels,
@@ -432,6 +437,7 @@ export async function runMultiShotFalComposite(params: {
       propRefs,
       projectData,
       r2vRefOrder,
+      sound,
     )
     promptCore = built.prompt
     dialogueBeatCount = built.dialogueBeatCount

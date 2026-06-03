@@ -51,6 +51,7 @@ import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { resolveNovelData } from './image-task-handler-shared'
+import { buildAudioDirective } from './multi-shot-audio-directive'
 import {
   collectCharacterRefs,
   collectSceneRefs,
@@ -122,38 +123,11 @@ export function isPromptLengthRisky(prompt: string): boolean {
   return estimatePromptTokens(prompt) > PROMPT_TOKEN_WARN_THRESHOLD
 }
 
-/**
- * Build the audio directive for the composite prompt.
- *
- * No-dialogue groups (dialogueBeatCount === 0) need a HARD ban on
- * synthesized vocals: the five-element method makes "環境音效:<具體聲源>"
- * mandatory in every shot, so a silent group's description is packed with
- * sound-source nouns. Seedance has been observed treating such a noun
- * (e.g. "低頻貝斯沉音") as a voice timbre and synthesizing a human-like
- * hum (2026-05-29 incident). The old directive only said "請勿合成說話聲" —
- * too weak. We now explicitly forbid 人聲 / 類人聲 / 哼唱 / 歌聲.
- */
-export function buildAudioDirective(dialogueBeatCount: number): string {
-  if (dialogueBeatCount > 0) {
-    return (
-      '音頻：原生輸出雙聲道，按上述對白逐字配音（語氣、停頓、情緒與角色一致），'
-      + '唇形與配音嚴格同步；背景疊加場景對應的環境音（風聲、腳步、室內回響等）。'
-      // 2026-06-02 — keep dialogue + ambient, but ban EXTRA non-dialogue
-      // vocalizations. AtlasCloud's audio moderation false-flags
-      // model-invented gasps / moans / heavy breathing (from emotional cues
-      // like 震慄/張嘴/呼吸) and blocks the whole clip. Forbidding them keeps
-      // the legit dialogue + ambient while killing the false-positive source.
-      + '除上述對白台詞外，請勿額外合成喘息、呻吟、哭喊、尖叫、急促呼吸或其他非對白人聲；'
-      + '無字幕、無 logo、無屏幕信息。'
-    )
-  }
-  return (
-    '音頻：本組無對白，僅輸出場景對應的自然環境音（風聲、雨聲、機械聲等非語音物理聲源）'
-    + '與適配的無人聲背景音樂；嚴禁合成任何人聲、類人聲、哼唱、歌聲或說話聲——'
-    + '描述中提及的聲源（如低頻、貝斯、鳴響）一律僅作為環境音場處理，不得當作人聲音色合成；'
-    + '畫面無字幕、無 logo、無屏幕信息。'
-  )
-}
+// buildAudioDirective moved to the shared ./multi-shot-audio-directive module
+// (2026-06-03) so atlascloud / seedance / ark / fal can't drift. Imported
+// above; re-exported here for back-compat with callers/tests that import it
+// from this path.
+export { buildAudioDirective }
 
 /**
  * Compose the hand-edited rawPrompt with its r2v scaffold (ref-map
@@ -384,6 +358,11 @@ function buildAtlasCloudPrompt(
    *  provided, each 第N鏡 line is annotated "（約Xs）" so Seedance knows
    *  the time budget per shot and won't starve action-heavy shots. */
   perShotDurations?: number[],
+  /** Whether native audio is requested. When false the audio directive
+   *  switches to the silent branch — without this a dialogue group whose
+   *  audio is toggled off still tells the model "逐字配音 + 唇形同步" while
+   *  generateAudio is false (lost TTS + lip desync). */
+  soundEnabled: boolean = true,
 ): { prompt: string; dialogueBeatCount: number } {
   const sections: string[] = []
 
@@ -458,7 +437,7 @@ function buildAtlasCloudPrompt(
   sections.push(shotLines.join('\n'))
 
   // ── AUDIO DIRECTIVE ──
-  sections.push(buildAudioDirective(dialogueBeatCount))
+  sections.push(buildAudioDirective(dialogueBeatCount, soundEnabled))
 
   return { prompt: sections.join('\n\n'), dialogueBeatCount }
 }
@@ -769,7 +748,12 @@ export async function runMultiShotAtlasCloudComposite(params: {
     dialogueBeatCount = (raw.match(/對白：|说「|: "/g) || []).length
     const refMap = mode === 'r2v' ? buildR2vRefMapSection(r2vRefOrder) : ''
     const timingGuide = buildPerShotDurationGuide(perShotDurations)
-    promptCore = composeRawPromptScaffold(raw, refMap, timingGuide)
+    const scaffolded = composeRawPromptScaffold(raw, refMap, timingGuide)
+    // 2026-06-03 — the raw branch previously shipped NO audio directive, so
+    // the primary R2V narrative-edit flow re-exposed both the AtlasCloud
+    // audio-moderation false-positive and the "低頻貝斯 → fake hum" incident.
+    // Append it here too (gated on the raw-derived dialogue count + sound).
+    promptCore = [scaffolded, buildAudioDirective(dialogueBeatCount, sound)].join('\n\n')
   } else {
     const built = buildAtlasCloudPrompt(
       usedPanels,
@@ -780,6 +764,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
       projectData,
       r2vRefOrder,
       perShotDurations,
+      sound,
     )
     promptCore = built.prompt
     dialogueBeatCount = built.dialogueBeatCount

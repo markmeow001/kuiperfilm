@@ -51,6 +51,7 @@ import {
   waitExternalResult,
 } from '../utils'
 import { reportTaskProgress } from '../shared'
+import { buildAudioDirective } from './multi-shot-audio-directive'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
@@ -241,21 +242,16 @@ export function countDialogueBeatsInRawPrompt(raw: string): number {
  */
 export function wrapRawPromptWithAudioDirective(
   rawPrompt: string,
+  soundEnabled: boolean = true,
 ): { prompt: string; dialogueBeatCount: number } {
   const dialogueBeatCount = countDialogueBeatsInRawPrompt(rawPrompt)
-  const footer = dialogueBeatCount > 0
-    ? '音频：原生输出双声道音频，按上述对白逐字配音（语气、停顿、情绪与角色一致），'
-      + '唇形与配音严格同步；背景叠加场景对应的环境音（脚步、风声、室内回响等）。'
-      // 2026-06-02 — keep dialogue + ambient, ban extra non-dialogue vocals.
-      // Provider audio moderation false-flags model-invented gasps/moans/
-      // heavy breathing and blocks the clip; forbid them to stop the false
-      // positive while keeping the real dialogue + ambient.
-      + '除上述对白台词外，请勿额外合成喘息、呻吟、哭喊、尖叫、急促呼吸或其他非对白人声；'
-      + '避免任何机械合成感或字幕音。'
-    : '音频：输出场景对应的环境音（脚步、风声、室内回响等），'
-      + '本组无角色对白，请勿合成任何说话声。'
+  // 2026-06-03 — use the shared buildAudioDirective so seedance / atlascloud
+  // / ark / fal can't drift (audit found seedance's no-dialogue branch was
+  // weaker than atlascloud's). soundEnabled=false switches to the silent
+  // branch so a dialogue group with audio toggled off doesn't get a
+  // "逐字配音 + 唇形同步" footer it can't honor.
   return {
-    prompt: `${rawPrompt}\n\n${footer}`,
+    prompt: `${rawPrompt}\n\n${buildAudioDirective(dialogueBeatCount, soundEnabled)}`,
     dialogueBeatCount,
   }
 }
@@ -283,6 +279,7 @@ export function buildSeedancePrompt(
   characterRefs: CharacterRef[],
   sceneRefs: SceneRef[],
   panelHasFirstFrame: boolean,
+  soundEnabled: boolean = true,
 ): { prompt: string; dialogueBeatCount: number } {
   const sections: string[] = []
   let refIdx = 0
@@ -358,26 +355,10 @@ export function buildSeedancePrompt(
     )
   }
 
-  // Global audio directive — tells the model to produce real spoken
-  // audio (TTS) + ambient SFX, not the silent visual default. Only
-  // attached when at least one beat carries dialogue, otherwise we
-  // keep the audio track ambient-only to avoid fake mumbling.
-  if (dialogueBeatCount > 0) {
-    sections.push(
-      `音频：原生输出双声道音频，按上述对白逐字配音（` +
-        `语气、停顿、情绪与角色一致），唇形与配音严格同步；` +
-        `背景叠加场景对应的环境音（脚步、风声、室内回响等）。` +
-        // 2026-06-02 — keep dialogue + ambient, ban extra non-dialogue
-        // vocals that providers' audio moderation false-flags.
-        `除上述对白台词外，请勿额外合成喘息、呻吟、哭喊、尖叫、急促呼吸或其他非对白人声；` +
-        `避免任何机械合成感或字幕音。`,
-    )
-  } else {
-    sections.push(
-      `音频：输出场景对应的环境音（脚步、风声、室内回响等），` +
-        `本组无角色对白，请勿合成任何说话声。`,
-    )
-  }
+  // Global audio directive (shared with all other composite paths). When
+  // soundEnabled is false the silent branch is used so a dialogue group
+  // with audio toggled off isn't told to "逐字配音 + 唇形同步".
+  sections.push(buildAudioDirective(dialogueBeatCount, soundEnabled))
 
   return { prompt: sections.join('\n\n'), dialogueBeatCount }
 }
@@ -589,7 +570,7 @@ export async function runMultiShotSeedanceComposite(params: {
   let prompt: string
   let dialogueBeatCount: number
   if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
-    const built = wrapRawPromptWithAudioDirective(params.rawPrompt.trim())
+    const built = wrapRawPromptWithAudioDirective(params.rawPrompt.trim(), sound)
     prompt = built.prompt
     dialogueBeatCount = built.dialogueBeatCount
   } else {
@@ -598,6 +579,7 @@ export async function runMultiShotSeedanceComposite(params: {
       characterRefs,
       sceneRefs,
       Boolean(firstFrameUrl),
+      sound,
     )
     prompt = built.prompt
     dialogueBeatCount = built.dialogueBeatCount
