@@ -17,6 +17,7 @@ import {
   type LocationAsset,
   type PhotographyRule,
 } from '@/lib/storyboard-phases'
+import { buildPhotographyPlan } from '@/lib/novel-promotion/photography-plan'
 import { getProjectModelConfig } from '@/lib/config-service'
 import { reportTaskProgress, reportTaskStreamChunk, withTaskLifecycle } from './shared'
 import { assertTaskActive } from './utils'
@@ -295,17 +296,7 @@ async function runStoryboardPhasesForClip(params: {
 
     return {
       ...panel,
-      ...(rules
-        ? {
-          photographyPlan: {
-            composition: rules.composition,
-            lighting: rules.lighting,
-            colorPalette: rules.color_palette,
-            atmosphere: rules.atmosphere,
-            technicalNotes: rules.technical_notes,
-          },
-        }
-        : {}),
+      ...(rules ? { photographyPlan: buildPhotographyPlan(rules) } : {}),
       ...(acting?.characters ? { actingNotes: acting.characters } : {}),
     }
   })

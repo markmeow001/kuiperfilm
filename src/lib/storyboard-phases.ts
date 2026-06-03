@@ -10,6 +10,7 @@ import { executeAiTextStep } from '@/lib/ai-runtime'
 import { logAIAnalysis } from '@/lib/logging/semantic'
 import { buildCharactersIntroduction } from '@/lib/constants'
 import { openingPacingDirective } from '@/lib/novel-promotion/generation-mode'
+import type { PhotographyRule } from '@/lib/novel-promotion/photography-plan'
 import type { Locale } from '@/i18n/routing'
 import { getPromptTemplate, PROMPT_IDS } from '@/lib/prompt-i18n'
 import { pickStoryboardDetailPromptId } from '@/lib/novel-promotion/storyboard-prompt-router'
@@ -92,14 +93,9 @@ export type StoryboardPanel = JsonRecord & {
     actingNotes?: unknown
 }
 
-export type PhotographyRule = JsonRecord & {
-    panel_number?: number
-    composition?: string
-    lighting?: string
-    color_palette?: string
-    atmosphere?: string
-    technical_notes?: string
-}
+// PhotographyRule moved to ./novel-promotion/photography-plan (the UI schema
+// — 2026-06-03). Imported above; re-exported for back-compat with existing importers.
+export type { PhotographyRule }
 
 export type ActingDirection = JsonRecord & {
     panel_number?: number

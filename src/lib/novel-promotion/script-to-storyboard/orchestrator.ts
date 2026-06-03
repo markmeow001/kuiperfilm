@@ -2,6 +2,7 @@ import { buildCharactersIntroduction } from '@/lib/constants'
 import { openingPacingDirective } from '@/lib/novel-promotion/generation-mode'
 import { normalizeAnyError } from '@/lib/errors/normalize'
 import { createScopedLogger } from '@/lib/logging/core'
+import { buildPhotographyPlan } from '@/lib/novel-promotion/photography-plan'
 import {
   type ActingDirection,
   type CharacterAsset,
@@ -203,13 +204,7 @@ function mergePanelsWithRules(params: {
 
     return {
       ...panel,
-      photographyPlan: {
-        composition: rules.composition,
-        lighting: rules.lighting,
-        colorPalette: rules.color_palette,
-        atmosphere: rules.atmosphere,
-        technicalNotes: rules.technical_notes,
-      },
+      photographyPlan: buildPhotographyPlan(rules),
       actingNotes: acting.characters,
     }
   })
