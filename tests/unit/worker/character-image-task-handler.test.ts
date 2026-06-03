@@ -11,6 +11,11 @@ const utilsMock = vi.hoisted(() => ({
 
 const outboundMock = vi.hoisted(() => ({
   normalizeReferenceImagesForGeneration: vi.fn(async () => ['normalized-primary-ref']),
+  // 2026-06-03 — handler began gating on modelRequiresUrlReferences (f7c9e27,
+  // Tencent-VOD URL-ref fix); mock fell behind. Default false → keeps the
+  // existing normalizeReferenceImagesForGeneration path.
+  modelRequiresUrlReferences: vi.fn(() => false),
+  normalizeReferenceImagesAsUrls: vi.fn(() => ['url-primary-ref']),
 }))
 
 const prismaMock = vi.hoisted(() => ({

@@ -48,6 +48,11 @@ const txMock = vi.hoisted(() => ({
   novelPromotionPanel: {
     create: vi.fn(),
   },
+  // 2026-06-03 — helper added a projectCharacterRoster findMany (12b89e1);
+  // mock fell behind, crashing before the bridge assertions could run.
+  novelPromotionCharacter: {
+    findMany: vi.fn(async () => []),
+  },
 }))
 
 const prismaMock = vi.hoisted(() => ({

@@ -38,8 +38,15 @@ const promptMock = vi.hoisted(() => ({
 
 const loggerWarnMock = vi.hoisted(() => vi.fn())
 const loggingMock = vi.hoisted(() => ({
+  // 2026-06-03 — cos.ts (transitively imported) calls .info/.error at module
+  // load; the partial mock (warn-only) threw "cosLogger.info is not a function"
+  // and killed the whole file at collection. Provide the full logger shape.
   createScopedLogger: vi.fn(() => ({
+    info: vi.fn(),
     warn: loggerWarnMock,
+    error: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn(),
   })),
 }))
 
