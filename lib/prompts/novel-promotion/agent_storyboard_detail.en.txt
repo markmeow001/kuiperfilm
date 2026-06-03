@@ -255,8 +255,8 @@ serve the SAME single main action and do NOT violate rule 2 ("one main action").
    The same "lowers her head to read the letter" — read calmly / hesitantly /
    with suppressed shock — gives entirely different eyes, hand force, breathing.
    Give the action a WHY and a FINAL STATE so the frame has drama:
-   ✅ "sensing something wrong, her fingers tighten (cause) → she swallows to hold
-   the emotion down (emotion) → her gaze settles from wavering into resolve
+   ✅ "sensing something wrong, her fingers tighten (cause), she swallows to hold
+   the emotion down (emotion), her gaze settles from wavering into resolve
    (resolved state)"
 
 4. Action chain = breaking the SAME force-driven action into its natural physical
@@ -264,12 +264,14 @@ serve the SAME single main action and do NOT violate rule 2 ("one main action").
    Force-driven main actions like swinging a pole / throwing a punch / drawing a
    sword / pushing a door — don't write only the result ("@teenage boy swings the
    pole" is too abrupt). Write its own physical process:
-   wind-up → driving body part → main action trajectory → settle/freeze.
+   wind-up, driving body part, main-action trajectory, settle/freeze (these four are
+   physical stages of the SAME action — comma-link them, do NOT use "→" arrows, which
+   mark separate action beats in this doc and would be miscounted as multi-action).
    Note: this is still 1 main action, not multi-action; "wind-up / landing point"
    is exactly the "wind-up / settle micro-motion" allowed by rule 2.
-   ✅ "fingers grip, wrist presses down, shoulders brace, weight drops (wind-up) →
-   waist and shoulders drive the arms → the long pole sweeps from right to left
-   carving an arc → he settles side-on, the pole halts at frame left, eyes still
+   ✅ "fingers grip, wrist presses down, shoulders brace, weight drops (wind-up),
+   waist and shoulders drive the arms, the long pole sweeps from right to left
+   carving an arc, he settles side-on, the pole halts at frame left, eyes still
    locked forward (freeze)"
 
 5. Multiple characters in frame — write each role separately, and spell out the
