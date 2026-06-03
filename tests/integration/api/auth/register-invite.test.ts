@@ -65,12 +65,17 @@ function mountUsableInvite(role = 'member') {
 }
 
 describe('POST /api/auth/register (invite-only flow)', () => {
-  it('creates user + balance + consumes invite when all inputs are valid', async () => {
+  it('creates user + balance + consumes invite, hard-capping role to member even for an editor invite', async () => {
+    // 2026-06-03 — registration now hard-caps the new account to `member`
+    // regardless of the invite's role (route.ts:67-83 security hardening:
+    // invites previously generated with role=admin/editor must NOT grant
+    // elevated access; an admin promotes via UI instead). The invite here
+    // carries 'editor' specifically to prove the cap downgrades it.
     mountUsableInvite('editor')
     prismaMock.tx.user.create.mockResolvedValueOnce({
       id: 'new-1',
       name: 'alice',
-      role: 'editor',
+      role: 'member',
     })
     prismaMock.tx.userBalance.create.mockResolvedValueOnce({})
     prismaMock.tx.inviteCode.update.mockResolvedValueOnce({})
@@ -93,14 +98,15 @@ describe('POST /api/auth/register (invite-only flow)', () => {
     expect(body.user).toMatchObject({
       id: 'new-1',
       name: 'alice',
-      role: 'editor',
+      role: 'member',
     })
 
-    // user.create receives the invite-derived role + email + displayName.
+    // user.create is called with the hard-capped `member` role (NOT the
+    // invite's 'editor'), plus email + displayName.
     const createCall = prismaMock.tx.user.create.mock.calls[0][0]
     expect(createCall.data).toMatchObject({
       name: 'alice',
-      role: 'editor',
+      role: 'member',
       email: 'alice@example.com',
       displayName: 'Alice',
     })
