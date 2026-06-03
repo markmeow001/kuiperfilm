@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "../styles/ui-tokens-glass.css";
 @import "../styles/ui-semantic-glass.css";
+@import "../styles/tokens-v2.css"; /* Phase 0 redesign — additive, see REDESIGN_PLAN §3 */
 
 :root {
   --background: var(--glass-bg-canvas);
@@ -36,6 +37,52 @@
   /* UI/UX Pro Max typography */
   --font-heading: var(--font-heading);
   --font-body: var(--font-body);
+
+  /* Phase 0 redesign — Tailwind utility mapping for tokens-v2.css.
+   * Enables `bg-canvas`, `bg-raised`, `bg-overlay`, `text-primary`,
+   * `text-secondary`, `text-tertiary`, `border-soft`, `border-strong`,
+   * `rounded-chip`, `rounded-input`, `rounded-card`, `rounded-modal`,
+   * `rounded-hero`, `rounded-pill`, `ease-out`, `ease-in-out`,
+   * `ease-spring`, `duration-hover`, `duration-state`, `duration-panel`,
+   * `duration-page`, `duration-reveal`, `shadow-elev-1/2/3`,
+   * `text-display-XX` size utilities (12-72px scale). */
+  --color-canvas: var(--surface-canvas);
+  --color-raised: var(--surface-raised);
+  --color-overlay: var(--surface-overlay);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-border-soft: var(--border-soft);
+  --color-border-strong: var(--border-strong);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-accent-500: var(--accent-500);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
+
+  --radius-chip:  var(--r-chip);
+  --radius-input: var(--r-input);
+  --radius-card:  var(--r-card);
+  --radius-modal: var(--r-modal);
+  --radius-hero:  var(--r-hero);
+  --radius-pill:  var(--r-pill);
+
+  --ease-out:    var(--ease-out);
+  --ease-in-out: var(--ease-in-out);
+  --ease-spring: var(--ease-spring);
+
+  --animate-duration-hover:  var(--d-hover);
+  --animate-duration-state:  var(--d-state);
+  --animate-duration-panel:  var(--d-panel);
+  --animate-duration-page:   var(--d-page);
+  --animate-duration-reveal: var(--d-reveal);
+
+  --shadow-elev-1: var(--elev-1);
+  --shadow-elev-2: var(--elev-2);
+  --shadow-elev-3: var(--elev-3);
 }
 
 body {
