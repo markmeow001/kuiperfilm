@@ -275,8 +275,10 @@ Soft guidance (judgment calls, not enforced):
   - Material / environment detail: encouraged (metal sheen, gear wear,
     drifting dust, red light outlining contours) — Seedance responds
     well to texture.
-  - Ambient sound tag: prefer writing `[ambient sound: xxx]` (Seedance
-    native dialogue + ambient channels both consume it; Kling no-op).
+  - Ambient sound tag: OPTIONAL at the plan stage (prefer writing
+    `[ambient sound: xxx]`); MANDATORY per-panel at the detail stage (see
+    storyboard_detail five-element red line #6). Seedance native dialogue +
+    ambient channels both consume it; Kling no-op.
   - Extreme facial detail (pores, sweat reflection): only in emotional
     climax close-ups; omit in medium / wide shots.
 
