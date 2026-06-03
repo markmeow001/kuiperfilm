@@ -1,4 +1,4 @@
-# **🚀 探索 AI 影视的下一代创作流 | [立即加入 KuiperAI 在线网页版内测候补](https://www.kuiperai.com/)**
+# **🚀 探索 AI 影视的下一代创作流**
 
 <p align="center">
   <a href="#-quick-start">English</a> | <a href="#-快速开始">中文</a>
