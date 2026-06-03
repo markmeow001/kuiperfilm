@@ -116,6 +116,54 @@ function collectLegacyPromptFiles() {
     .filter((relPath) => relPath.endsWith('.txt') && !relPath.endsWith('.zh.txt') && !relPath.endsWith('.en.txt'))
 }
 
+// Mirror the runtime interpolator (src/lib/prompt-i18n/build-prompt.ts):
+// buildPrompt substitutes both {key} and {{key}} where key matches [A-Za-z0-9_]+.
+// Anything else inside braces (JSON examples like {"name": ...}, {start,end},
+// {name: "x"}) is NOT a placeholder and must be ignored — it never gets substituted.
+const SINGLE_PLACEHOLDER_PATTERN = /\{([A-Za-z0-9_]+)\}/g
+const DOUBLE_PLACEHOLDER_PATTERN = /\{\{([A-Za-z0-9_]+)\}\}/g
+
+function extractPlaceholders(template) {
+  const keys = new Set()
+  for (const match of template.matchAll(SINGLE_PLACEHOLDER_PATTERN)) {
+    if (match[1]) keys.add(match[1])
+  }
+  for (const match of template.matchAll(DOUBLE_PLACEHOLDER_PATTERN)) {
+    if (match[1]) keys.add(match[1])
+  }
+  return keys
+}
+
+// Diff the {placeholder} token sets between each zh/en pair. A zh template
+// that injects {target_panel_count} while its en counterpart lacks it (the
+// 2026-06-03 bug) means the en-locale .replace() binds nothing — the LLM
+// sees a missing rule. The catalog-coverage check only verifies BOTH files
+// EXIST; this verifies they declare the SAME substitution slots.
+function collectPlaceholderAsymmetries() {
+  const violations = []
+  const zhFiles = walk(path.join(root, 'lib', 'prompts')).filter((fullPath) =>
+    fullPath.endsWith('.zh.txt'),
+  )
+  for (const zhPath of zhFiles) {
+    const enPath = zhPath.replace(/\.zh\.txt$/, '.en.txt')
+    // Missing-pair is enforced by verifyPromptCatalogCoverage; skip here to
+    // avoid double-reporting. Only diff when both exist.
+    if (!fs.existsSync(enPath)) continue
+    const zhKeys = extractPlaceholders(fs.readFileSync(zhPath, 'utf8'))
+    const enKeys = extractPlaceholders(fs.readFileSync(enPath, 'utf8'))
+    const zhOnly = [...zhKeys].filter((key) => !enKeys.has(key)).sort()
+    const enOnly = [...enKeys].filter((key) => !zhKeys.has(key)).sort()
+    if (zhOnly.length > 0 || enOnly.length > 0) {
+      const stem = toRel(zhPath).replace(/\.zh\.txt$/, '')
+      const parts = []
+      if (zhOnly.length > 0) parts.push(`zh-only: ${zhOnly.join(', ')}`)
+      if (enOnly.length > 0) parts.push(`en-only: ${enOnly.join(', ')}`)
+      violations.push(`${stem}: ${parts.join(' | ')}`)
+    }
+  }
+  return violations
+}
+
 function verifyPromptCatalogCoverage() {
   const catalogPath = path.join(root, 'src', 'lib', 'prompt-i18n', 'catalog.ts')
   if (!fs.existsSync(catalogPath)) {
@@ -151,6 +199,11 @@ if (legacyPromptFiles.length > 0) {
 }
 
 verifyPromptCatalogCoverage()
+
+const placeholderAsymmetries = collectPlaceholderAsymmetries()
+if (placeholderAsymmetries.length > 0) {
+  fail('Prompt placeholder sets differ between zh/en templates', placeholderAsymmetries)
+}
 
 const promptReadViolations = collectDirectPromptReadViolations()
 if (promptReadViolations.length > 0) {
