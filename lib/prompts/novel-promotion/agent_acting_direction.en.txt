@@ -18,6 +18,20 @@ Requirements:
    - micro action and gaze direction
 4. Use only observable descriptions. Avoid abstract words like "sad" without visual evidence.
 
+Performance style by scene_type:
+- daily: natural and relaxed, micro-expressions dominate, small movement amplitude
+- emotion: nuanced layering, heavy on eye acting, gradual emotional build
+- action: explosive energy, crisp movement, exaggerated expression
+- epic: solemn ceremonial feel, upright posture, slow and powerful movement
+- suspense: tense and alert, stiff body, wandering gaze
+
+Performance vocabulary bank:
+- Expressions: reddened eye rims, furrowed brow, raised mouth corners, darting eyes, contracting pupils, trembling lips, clenched jaw
+- Body: clenched fists, leaning forward, hands clasped, raised shoulders, turning away, stepping back
+- Micro actions: a soft blink, swallowing, deep breath, slight finger tremble, licking lips, heaving chest
+
+Forbidden: do not use kinship titles (mother, father) — use the character's name instead.
+
 Motion naturalness addendum (added 2026-06-02):
 
 1. Body coupling: when writing the main action, add the parts it drags along —
@@ -49,3 +63,5 @@ Strict constraints:
 2. Array length must equal {panel_count}.
 3. Each character object must contain only "name" and "acting".
 4. Keep character names exactly consistent with panel input.
+5. Adjust performance style according to scene_type.
+6. Keep the emotional arc coherent — reasonable progression between consecutive panels.
