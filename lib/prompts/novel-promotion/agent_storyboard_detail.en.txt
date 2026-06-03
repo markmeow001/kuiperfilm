@@ -175,12 +175,27 @@ Self-check before output (every panel):
   □ Has an "Ambient sound:" line?
   □ Any "transform / morph / shapeshift"? If so, split into two panels?
 
-⚠️ Write every panel in three layers — Setup / Develop / Resolve (added
-2026-05-29, the core source of quality):
+⚠️ Write every panel in three layers — [START]/[MID]/[END] timeline anchors
+(three-layer structure added 2026-05-29; upgraded to explicit timeline anchors
+2026-06-03):
 
-Write BOTH description AND video_prompt as a "Setup → Develop → Resolve"
-tension arc of THE SAME main beat (NOT 3 sequential actions — still bound by
-rule 2 "one main action").
+Write BOTH description AND video_prompt as a "[START] → [MID] → [END]" tension
+arc of THE SAME main beat, using these three EXPLICIT segment markers. The
+bracketed markers are "segment boundaries on the timeline" — the same technique
+peer platforms use (Veo timestamp prompting / Seedance timeline prompting):
+split the shot's runtime into a start / middle / end window and describe the
+frame's state inside each window.
+⚠️ Why [START]/[MID]/[END] and NOT [0s][3s][6s]: this stage (detail refinement)
+   does NOT know each panel's target seconds — the real seconds are computed by
+   the worker from dialogue/action density LATER and injected separately as a
+   "shot N ≈ X seconds" guide. Hard-coding seconds here would be a guess and
+   would clash with that downstream guide, so use RELATIVE segment markers.
+(Note: the three segments are the setup-build-resolve of ONE instant's tension
+arc, NOT 3 sequential actions — still bound by rule 2 "one main action". The
+brackets [START]/[MID]/[END] are TIME-SEGMENT markers, NOT action beats, so the
+rule-2 self-check that counts "→ / then / period" will NOT miscount them as
+multi-action. Each segment still holds only 1 main action; the three segments
+merely spread that single action's wind-up / drive / settle across the timeline.)
 
 ⚠️ CRITICAL — description is the R2V narrative main text (the frontend preview
 AND the string fed to the video model both read `description`). It must be
@@ -204,21 +219,32 @@ is fine):
    camera vocabulary above (focus pull / over-the-shoulder / low-angle…).
 4. One "Ambient sound:" line (REQUIRED): see rule 6.
 
-Reference structure (match this density):
-   Setup: 【CU · sensing the gaze】
+Reference structure (match this density; note all three segments are time
+slices of the SAME "sensing → standoff → countdown ignites" tension arc, NOT
+three separate actions):
+   [START] Setup · 【CU · sensing the gaze】
    [Spatial anchor] @Kael (frame right, foreground) faces left; @Arthur (frame
    left, background) faces right. Neck muscles contract, head turns smoothly.
    Ambient sound: faint collar rustle.
 
-   Develop: 【focus pull · clash of intent】
+   [MID] Develop · 【focus pull · clash of intent】
    Focus shifts from foreground @Kael to background @Arthur, then snaps back.
    @Kael's mouth curls into a taunting cold smile, right jaw twitching.
    Ambient sound: low wind reverberating dully through the space, building tension.
 
-   Resolve: 【POV · countdown ignites】
+   [END] Resolve · 【POV · countdown ignites】
    Cut to @Arthur's first-person view; a red holographic countdown flares
    before the retina, frame freezes on the blinking red number.
    Ambient sound: crisp electronic countdown ticking.
+
+⚠️ Duration-adaptive (localized from Seedance's timeline-prompting guidance):
+   - Short shot (high action density / ~3–5s): collapse to TWO segments —
+     [START] wind-up + [END] drive-and-settle; do not force a [MID], so the
+     model isn't overstuffed and won't render only the start before cutting.
+   - Long shot (continuous dialogue / ~10–15s): keep all three [START]/[MID]/
+     [END]; [MID] may carry one extra tonal or shot-size turn, but the WHOLE
+     panel still has only 1 main action (the extras are "visual points", not
+     "action beats").
 
 ⚠️ Character motion naturalness — gait / body coupling / emotional causality /
 action chain (added 2026-06-02):
