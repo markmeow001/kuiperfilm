@@ -386,8 +386,10 @@ export async function runScriptToStoryboardOrchestrator(
         .replace('{characters_appearance_list}', filteredAppearanceList)
         .replace('{characters_full_description}', filteredFullDescription)
         .replace('{clip_json}', clipJson)
-        .replace('{target_duration}', String(targetDuration))
-        .replace('{target_panel_count}', String(clipTargetPanels[i]))
+        // Global replace so a template using either placeholder more than
+        // once (e.g. the EN plan, 2026-06-03) never ships a literal token.
+        .replace(/\{target_duration\}/g, String(targetDuration))
+        .replace(/\{target_panel_count\}/g, String(clipTargetPanels[i]))
         .replace('{opening_pacing_directive}', openingPacingDirective(novelPromotionData.openingPacing))
 
       const screenplay = parseScreenplay(clip.screenplay)

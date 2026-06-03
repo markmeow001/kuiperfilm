@@ -347,9 +347,10 @@ export async function executePhase1(
         .replace('{characters_appearance_list}', filteredAppearanceList)
         .replace('{characters_full_description}', filteredFullDescription)
         .replace('{clip_json}', clipJson)
-        .replace('{target_panel_count}', String(effectivePanelCount))
+        // Global replace so a template using either placeholder more than
+        // once (e.g. the EN plan, 2026-06-03) never ships a literal token.
         .replace(/\{target_panel_count\}/g, String(effectivePanelCount))
-        .replace('{target_duration}', String(effectiveDuration))
+        .replace(/\{target_duration\}/g, String(effectiveDuration))
         .replace('{opening_pacing_directive}', openingPacingDirective(novelPromotionData.openingPacing))
 
     if (screenplay) {

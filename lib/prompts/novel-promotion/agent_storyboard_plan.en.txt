@@ -58,8 +58,13 @@ Planning rules:
    one. Do not weaken this to "one establishing shot is enough".
 
 Panel-count rule (CRITICAL):
-- The orchestrator passes a `target_panel_count`. Treat it as a FLOOR, not a ceiling.
-- If your draft output is more than 2 panels short of the target, you have over-merged — go back and split.
+- Target total video duration for this clip: {target_duration} seconds.
+- This clip needs about {target_panel_count} panels (each panel 5-12s of video;
+  as short as 3s when action-dense, up to 15s for continuous dialogue).
+- Keep close to {target_panel_count} panels (±2 tolerance). Treat {target_panel_count}
+  as a FLOOR, not a ceiling.
+- If your draft output is more than 2 panels short of {target_panel_count}, you have
+  over-merged — go back and split per the anti-collapse rules.
 - Reference benchmark: industry short-drama platforms produce ~1 panel per dialogue beat and ~1 panel per visual verb in narration. We match that density.
 {opening_pacing_directive}
 
@@ -101,7 +106,7 @@ Dialogue panel rule (the merge-friendly rule is GONE):
 - Small actions with emotional weight (frown, fist clench, turn away, look down) get their own close-up panel. Only neutral motor noise (blinks, breathing) merges into the main shot.
 
 Self-check (run before output):
-  □ target_panel_count is N — did I output at least N-2 panels? If not, re-check rules a)~e) for over-merging.
+  □ target_panel_count is {target_panel_count} — did I output at least {target_panel_count} minus 2 panels? If not, re-check rules a)~e) for over-merging.
   □ Does every dialogue line (including VO/OS) have at least 1 dedicated panel?
   □ Does every dialogue line have a corresponding listener reaction panel (unless this panel IS the reverse-shot listener)?
   □ For every descriptive narration paragraph, did every visual verb get its own panel?
