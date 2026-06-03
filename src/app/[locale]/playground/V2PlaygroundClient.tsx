@@ -30,6 +30,7 @@
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import { resolveErrorDisplay } from '@/lib/errors/display'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   useUploadPlaygroundReference,
@@ -531,7 +532,17 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
               <div className="flex h-full w-full items-center justify-center p-8 text-center">
                 <div>
                   <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-rose-400">生成失敗</div>
-                  <div className="font-mono text-[11px] text-stone-500">{latestRun.errorMessage ?? '未知錯誤'}</div>
+                  {/* Normalize provider errors (e.g. AtlasCloud 402 → "余额不足，请先充值")
+                      instead of dumping raw "提交失败 (402): {...}". Raw stays in the
+                      title tooltip for ops. (2026-06-03 audit) */}
+                  <div
+                    className="font-mono text-[11px] text-stone-500"
+                    title={latestRun.errorMessage ?? undefined}
+                  >
+                    {resolveErrorDisplay({ message: latestRun.errorMessage })?.message
+                      ?? latestRun.errorMessage
+                      ?? '未知錯誤'}
+                  </div>
                 </div>
               </div>
             ) : latestRun?.status === 'pending' || latestRun?.status === 'running' ? (
