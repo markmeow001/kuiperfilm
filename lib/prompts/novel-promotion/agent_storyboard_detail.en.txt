@@ -102,6 +102,29 @@ Upgraded examples:
   in the lower-left third foreground, wet mud reflections in midground,
   silhouetted cliffs in background, camera pulls back slowly"
 
+⚠️ 9:16 VERTICAL composition rules (short-drama aspect ratio — applies to
+EVERY shot, overrides the horizontal-by-default intuition above):
+
+Every final video is 9:16 vertical. The composition cues above default to
+horizontal thinking (spreading subjects left-to-right), which in vertical
+shrinks faces and flattens depth. Vertical works through DEPTH, not width:
+
+1. Two-person shots use depth-stacking — front/back staging, shot/reverse-
+   shot, or over-the-shoulder. Do NOT place two people side-by-side across
+   the frame width.
+   Wrong (side-by-side): "@A on the left, @B on the right, standing abreast"
+   Right (depth): "Over-the-shoulder of @A, @B faces camera in the
+   background" / "Shot-reverse-shot: CU on @A, then cut to CU on @B"
+2. Group shots keep ≤ 2-3 people per frame. With more people, use depth-of-
+   field blur or cut between subjects — never cram a row of people into one frame.
+3. Use corridors / staircases / receding passages for depth; stage the
+   subject along the depth axis (far→near), not across the width.
+4. Face close-ups / mediums fill ≈ 50%+ of frame height — in vertical the
+   face must be large and legible; emotion is carried by the face.
+5. Angle = power relation: low-angle = dominant / imposing / in control;
+   high-angle = weak / diminutive / subordinate. Pick tilt by the
+   character's power position in this shot; do not default to eye-level.
+
 Character-anchor rule for dialogue scenes:
 - Always reference characters by @image-N (not by name).
 - After the reference, write only CURRENT action / emotion / expression.

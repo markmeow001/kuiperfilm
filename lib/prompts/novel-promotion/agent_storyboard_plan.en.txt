@@ -68,6 +68,20 @@ Panel-count rule (CRITICAL):
 - Reference benchmark: industry short-drama platforms produce ~1 panel per dialogue beat and ~1 panel per visual verb in narration. We match that density.
 {opening_pacing_directive}
 
+Sequence-level mid-roll pacing — prevent a saggy middle (HIGHEST PRIORITY,
+peer to opening pacing):
+⚠️ Opening pacing only governs the start; the WHOLE sequence's middle needs
+rhythm too. Industry rule: every ~15 seconds (or every 2-3 panels) there
+MUST be a visible change — in at least ONE of emotion / shot-size / scene.
+Do NOT run several consecutive panels at the same shot-size AND same emotion
+(e.g. four eye-level medium dialogue shots in a row).
+- Self-check: sum the durations across the {target_panel_count} panels; every
+  ~15s mark, look back — did shot-size change in that stretch? Did emotion
+  rise or fall? If not, insert a close-up / reaction / atmosphere / shot-size-
+  contrast panel.
+- This is NOT about splitting more action beats (that's the anti-collapse
+  rules' job) — it's about VISUAL CONTRAST between adjacent panels.
+
 Anti-collapse rules (HIGHEST PRIORITY — violating any of these wastes the entire output):
 
 The following five merge patterns are historical bugs. They are FORBIDDEN:
@@ -282,6 +296,18 @@ set the tone here in the plan stage):
     settles into) — don't just write "the two lock eyes".
     (A plain "one speaks, one listens" still splits into 2 panels; see anti-
     collapse rule a.)
+
+⚠️ 9:16 VERTICAL staging (short-drama aspect ratio — set the tone in the
+plan stage; the detail stage refines it):
+
+Final video is 9:16 vertical, so plan staging uses DEPTH, not width:
+- Two-/multi-person in frame: stage front/back (who is foreground, who is
+  in the background depth) — never "A on the left, B on the right, abreast".
+  Shot/reverse-shot and over-the-shoulder already split into separate panels
+  (see anti-collapse rule a); vertical makes splitting even more necessary.
+- Keep ≤ 2-3 people per frame; with more, cut across multiple panels.
+- Use corridors / staircases / receding passages for depth; give the
+  dominant character a low-angle, the weaker character a high-angle.
 
 Self-check before output (every panel):
   □ No negative directives ("no X" / "strictly without X")?
