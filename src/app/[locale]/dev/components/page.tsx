@@ -27,6 +27,10 @@ import { Input } from '@/components/v2/Input'
 import { Card } from '@/components/v2/Card'
 import { Field } from '@/components/v2/Field'
 import { Modal } from '@/components/v2/Modal'
+import { Inspector } from '@/components/v2/Inspector'
+import { EmptyState } from '@/components/v2/EmptyState'
+import { GenerationProgress } from '@/components/v2/GenerationProgress'
+import { MediaReveal } from '@/components/v2/MediaReveal'
 
 export default function ComponentsPreview() {
   return (
@@ -339,6 +343,81 @@ export default function ComponentsPreview() {
 
           <ModalDemo />
         </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">Inspector v2</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            Collapsible 360px side panel. Per <strong>REDESIGN_PLAN §3.4</strong>{' '}
+            workspace layout: Sidebar 256 + Canvas fluid + Inspector 360
+            (collapsible). Demo here mounts inside a fixed 480px-tall mock
+            workspace so the collapse animation is observable.
+          </p>
+
+          <InspectorDemo />
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">EmptyState v2 — §3.7.3</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            Signature cold-start moment. Spec: ONE illustration + ONE
+            display heading + ONE primary CTA. <strong>Forbidden</strong>:
+            tips lists, three example cards, stock 3D, AI mascot.
+            Confidence comes from restraint.
+          </p>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Card variant="raised" padding="none">
+              <EmptyState
+                size="md"
+                heading="尚未建立任何專案"
+                description="從一個劇本或想法開始你的第一部短劇。"
+                ctaLabel="建立新專案"
+                onCta={() => undefined}
+              />
+            </Card>
+            <Card variant="hero" padding="none" elevation={2}>
+              <EmptyState
+                size="lg"
+                heading="你的第一部短劇從這裡開始"
+                description="Your first drama starts here."
+                ctaLabel="從一個故事開始"
+                onCta={() => undefined}
+              />
+            </Card>
+          </div>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">GenerationProgress v2 — §3.7.1</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            Signature in-progress moment. Spec: 9:16 frame +{' '}
+            <strong>accent-500 violet glow breathing 2s loop</strong> +
+            ghost-typing scene description + silent tertiary ETA.{' '}
+            <strong>Forbidden</strong>: spinner, percentage. Watch the
+            caret blink and the description erase + retype on loop.
+          </p>
+
+          <Card variant="raised" padding="none">
+            <GenerationProgress
+              description="鏡頭 1：CATHERINE 走進廚房，端著生日蛋糕，鏡頭由低角度緩慢推近。"
+              eta="約 90 秒"
+            />
+          </Card>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">MediaReveal v2 — §3.7.2</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            Signature result-reveal moment. Spec: 600ms fade from black +
+            scale 0.96→1.0 spring + 400ms hold + muted autoplay + 2s chrome
+            dim to 40% opacity. Click 「重播」 to re-trigger the reveal
+            sequence. Real consumers swap from <code>GenerationProgress</code>{' '}
+            to <code>MediaReveal</code> in the same slot when the run
+            completes.
+          </p>
+
+          <MediaRevealDemo />
+        </section>
       </div>
     </main>
   )
@@ -504,6 +583,111 @@ function ModalDemo() {
           </Button>
         </Modal.Footer>
       </Modal>
+    </>
+  )
+}
+
+function InspectorDemo() {
+  const [open, setOpen] = useState(true)
+  const [position, setPosition] = useState<'left' | 'right'>('right')
+
+  return (
+    <>
+      <div className="mb-3 flex gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
+          {open ? '收合' : '展開'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setPosition((p) => (p === 'right' ? 'left' : 'right'))}
+        >
+          {position === 'right' ? '改靠左' : '改靠右'}
+        </Button>
+      </div>
+
+      <div className="flex h-[480px] overflow-hidden rounded-card border border-border-soft bg-canvas">
+        {position === 'left' ? (
+          <Inspector open={open} onCollapseChange={setOpen} position="left">
+            <Inspector.Header
+              heading="檢視器"
+              subtitle="第一鏡 · CATHERINE"
+              onCollapseChange={setOpen}
+              position="left"
+            />
+            <Inspector.Body>
+              <div className="space-y-3">
+                <Field label="鏡頭時長"><Input size="sm" defaultValue="3.2s" /></Field>
+                <Field label="運鏡"><Input size="sm" defaultValue="dolly forward" /></Field>
+                <Field label="人物動作">
+                  <Input size="sm" defaultValue="緩慢將蛋糕放下" />
+                </Field>
+              </div>
+            </Inspector.Body>
+            <Inspector.Footer>
+              <Button variant="ghost" size="sm">重設</Button>
+              <Button variant="primary" size="sm">套用</Button>
+            </Inspector.Footer>
+          </Inspector>
+        ) : null}
+
+        <div className="flex flex-1 items-center justify-center">
+          <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-text-tertiary">
+            canvas (fluid)
+          </span>
+        </div>
+
+        {position === 'right' ? (
+          <Inspector open={open} onCollapseChange={setOpen} position="right">
+            <Inspector.Header
+              heading="檢視器"
+              subtitle="第一鏡 · CATHERINE"
+              onCollapseChange={setOpen}
+              position="right"
+            />
+            <Inspector.Body>
+              <div className="space-y-3">
+                <Field label="鏡頭時長"><Input size="sm" defaultValue="3.2s" /></Field>
+                <Field label="運鏡"><Input size="sm" defaultValue="dolly forward" /></Field>
+                <Field label="人物動作">
+                  <Input size="sm" defaultValue="緩慢將蛋糕放下" />
+                </Field>
+              </div>
+            </Inspector.Body>
+            <Inspector.Footer>
+              <Button variant="ghost" size="sm">重設</Button>
+              <Button variant="primary" size="sm">套用</Button>
+            </Inspector.Footer>
+          </Inspector>
+        ) : null}
+      </div>
+    </>
+  )
+}
+
+function MediaRevealDemo() {
+  // Stable demo video — Google's public sample (Big Buck Bunny 16:9).
+  // Real consumers feed an mp4 / m3u8 from their own COS / R2 bucket.
+  const SAMPLE_VIDEO =
+    'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+
+  const [revealKey, setRevealKey] = useState(0)
+
+  return (
+    <>
+      <div className="mb-3 flex gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setRevealKey((k) => k + 1)}>
+          重播 reveal
+        </Button>
+      </div>
+      <Card variant="raised" padding="none">
+        <MediaReveal
+          key={revealKey}
+          src={SAMPLE_VIDEO}
+          aspectRatio="16:9"
+          dimChromeOnReveal={false}
+        />
+      </Card>
     </>
   )
 }
