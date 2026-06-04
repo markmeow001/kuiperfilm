@@ -18,6 +18,8 @@
  */
 
 import { Button } from '@/components/v2/Button'
+import { Input } from '@/components/v2/Input'
+import { Card } from '@/components/v2/Card'
 
 export default function ComponentsPreview() {
   return (
@@ -128,6 +130,134 @@ export default function ComponentsPreview() {
                 elev-3
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">Input v2</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            3 sizes × 5 states (idle / hover / focus / error / disabled).
+            Container owns border + ring + bg; input itself is
+            transparent so focus ring lives on a single layer.
+          </p>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="space-y-4">
+              <Input size="sm" label="Small" placeholder="Type something…" />
+              <Input size="md" label="Medium" placeholder="Type something…" />
+              <Input size="lg" label="Large" placeholder="Type something…" />
+              <Input size="md" label="Disabled" placeholder="Cannot edit" disabled />
+            </div>
+
+            <div className="space-y-4">
+              <Input
+                size="md"
+                label="With error"
+                defaultValue="invalid value"
+                error="此欄位必填且不可包含空白"
+              />
+              <Input
+                size="md"
+                label="With helper"
+                placeholder="ep01_final.mp4"
+                helper="檔名為自動生成，可手動覆蓋"
+              />
+              <Input
+                size="md"
+                label="Addons (start + end)"
+                placeholder="0.96"
+                addonStart="$"
+                addonEnd="USD"
+              />
+              <Input
+                size="md"
+                label="With icons"
+                placeholder="Search subjects…"
+                leftIcon={<span className="font-mono text-[14px]">⌕</span>}
+                rightIcon={<span className="font-mono text-[12px]">⌘K</span>}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">Card v2</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            3 variants (raised / overlay / hero) × 4 padding scales × 4
+            elevation levels. Sub-components: <code>Card.Header</code>,{' '}
+            <code>Card.Body</code>, <code>Card.Footer</code>.
+          </p>
+
+          <div className="mb-6 grid grid-cols-3 gap-4">
+            <Card variant="raised" padding="md">
+              <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary mb-1">
+                raised
+              </div>
+              <div className="text-[14px] text-text-secondary">
+                Default content surface
+              </div>
+            </Card>
+            <Card variant="overlay" padding="md">
+              <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary mb-1">
+                overlay
+              </div>
+              <div className="text-[14px] text-text-secondary">
+                Popover / dropdown
+              </div>
+            </Card>
+            <Card variant="hero" padding="lg" elevation={2}>
+              <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary mb-1">
+                hero · elev-2
+              </div>
+              <div className="text-[18px] font-medium text-text-primary">
+                Feature surface
+              </div>
+            </Card>
+          </div>
+
+          <Card variant="raised" padding="none" className="mb-4">
+            <div className="p-4">
+              <Card.Header>
+                <div>
+                  <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary">
+                    Composed
+                  </div>
+                  <div className="text-[16px] font-medium text-text-primary">
+                    專案：第一集 · ep01
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm">更多</Button>
+              </Card.Header>
+              <Card.Body>
+                <div className="text-[14px] text-text-secondary">
+                  Header + Body + Footer composition. 適合 modal 內 form、
+                  project detail panel、settings group。
+                </div>
+              </Card.Body>
+              <Card.Footer>
+                <Button variant="ghost" size="sm">取消</Button>
+                <Button variant="primary" size="sm">儲存</Button>
+              </Card.Footer>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Card variant="raised" padding="md" interactive>
+              <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary mb-1">
+                interactive
+              </div>
+              <div className="text-[14px] text-text-secondary">
+                Hover lifts to overlay surface. Useful for clickable list rows.
+              </div>
+            </Card>
+            <Card variant="raised" padding="md" borderless>
+              <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary mb-1">
+                borderless
+              </div>
+              <div className="text-[14px] text-text-secondary">
+                For full-bleed media tiles or chip-rail items.
+              </div>
+            </Card>
           </div>
         </section>
       </div>
