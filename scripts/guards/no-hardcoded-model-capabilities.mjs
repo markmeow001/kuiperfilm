@@ -55,8 +55,28 @@ for (const fullPath of files) {
   if (allowConstantDefinitionsIn.has(relPath)) continue
 
   const lines = fs.readFileSync(fullPath, 'utf8').split('\n')
+  let inBlockComment = false
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]
+    // Strip comments before scanning: a prose mention of these constants
+    // (e.g. a docstring explaining why a file is separate from constants.ts's
+    // VIDEO_MODELS) is documentation, not hardcoded usage. Only real code is
+    // checked — actual imports/usages in code are still caught.
+    let line = lines[index]
+    if (inBlockComment) {
+      const end = line.indexOf('*/')
+      if (end === -1) continue
+      line = line.slice(end + 2)
+      inBlockComment = false
+    }
+    line = line.replace(/\/\*.*?\*\//g, ' ')
+    const blockOpen = line.indexOf('/*')
+    if (blockOpen !== -1) {
+      inBlockComment = true
+      line = line.slice(0, blockOpen)
+    }
+    const lineComment = line.indexOf('//')
+    if (lineComment !== -1) line = line.slice(0, lineComment)
+
     for (const token of forbiddenCapabilityConstants) {
       const tokenPattern = new RegExp(`\\b${token}\\b`)
       if (tokenPattern.test(line)) {
