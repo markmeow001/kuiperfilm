@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Phase 0 redesign — Component Library v2 preview.
  *
@@ -12,14 +14,19 @@
  * This page never ships to public traffic — Next.js doesn't block it,
  * but it's not linked from any nav. Internal users browse directly.
  *
- * Future tasks (Phase 0 remaining): add Input, Field, Card, Modal,
- * Inspector, EmptyState, GenerationProgress, MediaReveal. Each new
- * component appends a section here.
+ * Future tasks (Phase 0 remaining): Inspector, EmptyState,
+ * GenerationProgress, MediaReveal. Each new component appends a
+ * section here. 5/9 done as of 2026-06-04.
+ *
+ * Marked 'use client' so the Modal demo can hold open/close state.
  */
 
+import { useState } from 'react'
 import { Button } from '@/components/v2/Button'
 import { Input } from '@/components/v2/Input'
 import { Card } from '@/components/v2/Card'
+import { Field } from '@/components/v2/Field'
+import { Modal } from '@/components/v2/Modal'
 
 export default function ComponentsPreview() {
   return (
@@ -260,6 +267,78 @@ export default function ComponentsPreview() {
             </Card>
           </div>
         </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">Field v2</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            Generic form-field wrapper. Use for non-Input controls
+            (textarea, select, checkbox group, custom widgets). For
+            single-line text, prefer <code>{'<Input label="…" />'}</code> directly.
+          </p>
+
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <Field label="Project name" required helper="顯示在側邊欄 + 分享連結預覽">
+              <Input size="md" placeholder="《迁徙》第一季" />
+            </Field>
+
+            <Field
+              label="Description"
+              description="可選；用於 SEO 跟團隊內部溝通。"
+              helper="60-160 字之間最理想。"
+            >
+              <textarea
+                rows={3}
+                placeholder="一句話描述劇情主題…"
+                className="w-full rounded-input border border-border-soft bg-raised px-3 py-2 text-[14px] text-text-primary placeholder:text-text-tertiary outline-none transition-colors duration-[120ms] ease-out hover:border-border-strong focus:border-accent-500/60 focus:ring-2 focus:ring-accent-500/40"
+              />
+            </Field>
+
+            <Field
+              label="Genre"
+              required
+              error="請至少選一個類型"
+            >
+              <div className="flex flex-wrap gap-2">
+                {['短劇', '紀錄片', 'MV', '產品廣告'].map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    className="rounded-pill border border-border-soft bg-raised px-3 py-1 text-[12px] text-text-secondary hover:bg-overlay"
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field
+              label="Aspect ratio"
+              description="後續可在分鏡頁覆蓋"
+            >
+              <select
+                className="w-full rounded-input border border-border-soft bg-raised px-3 py-2 text-[14px] text-text-primary outline-none transition-colors duration-[120ms] ease-out hover:border-border-strong focus:border-accent-500/60 focus:ring-2 focus:ring-accent-500/40"
+              >
+                <option>9:16 — 直式（短劇預設）</option>
+                <option>16:9 — 橫式</option>
+                <option>1:1 — 方形</option>
+              </select>
+            </Field>
+          </div>
+        </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">Modal v2</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            Controlled overlay with portal, focus trap, Escape close,
+            backdrop click dismiss, scroll lock. 4 sizes
+            (sm / md / lg / xl). Compose with{' '}
+            <code>Modal.Header</code> / <code>Modal.Body</code> /{' '}
+            <code>Modal.Footer</code>. Animation: 200ms fade backdrop +
+            320ms scale-spring body (respects prefers-reduced-motion).
+          </p>
+
+          <ModalDemo />
+        </section>
       </div>
     </main>
   )
@@ -300,5 +379,131 @@ function RadiusSwatch({ label, cls, px }: { label: string; cls: string; px: stri
         <span className="text-text-secondary">{px}px</span>
       </div>
     </div>
+  )
+}
+
+function ModalDemo() {
+  const [openSm, setOpenSm] = useState(false)
+  const [openMd, setOpenMd] = useState(false)
+  const [openLg, setOpenLg] = useState(false)
+  const [openComposed, setOpenComposed] = useState(false)
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-3">
+        <Button variant="primary" onClick={() => setOpenSm(true)}>
+          Open sm (confirm)
+        </Button>
+        <Button variant="primary" onClick={() => setOpenMd(true)}>
+          Open md (form)
+        </Button>
+        <Button variant="primary" onClick={() => setOpenLg(true)}>
+          Open lg (content)
+        </Button>
+        <Button variant="secondary" onClick={() => setOpenComposed(true)}>
+          Open composed (header + body + footer)
+        </Button>
+      </div>
+
+      <Modal open={openSm} onClose={() => setOpenSm(false)} size="sm">
+        <Modal.Header
+          heading="確定刪除？"
+          subtitle="此動作不可復原。"
+          onClose={() => setOpenSm(false)}
+        />
+        <Modal.Body>
+          專案「《迁徙》第一季」將被永久刪除。所有分鏡、生成檔、配音紀錄
+          都會一起刪除。
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="ghost" size="sm" onClick={() => setOpenSm(false)}>
+            取消
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => setOpenSm(false)}>
+            確定刪除
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal open={openMd} onClose={() => setOpenMd(false)} size="md">
+        <Modal.Header heading="新增專案" onClose={() => setOpenMd(false)} />
+        <Modal.Body>
+          <Field label="專案名" required>
+            <Input size="md" placeholder="《迁徙》第二季" autoFocus />
+          </Field>
+          <div className="mt-4">
+            <Field label="目標時長" description="後續可在分鏡頁覆蓋">
+              <select className="w-full rounded-input border border-border-soft bg-raised px-3 py-2 text-[14px] text-text-primary outline-none">
+                <option>90 秒</option>
+                <option>120 秒</option>
+                <option>180 秒</option>
+              </select>
+            </Field>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="ghost" size="sm" onClick={() => setOpenMd(false)}>
+            取消
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => setOpenMd(false)}>
+            建立專案
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal open={openLg} onClose={() => setOpenLg(false)} size="lg">
+        <Modal.Header
+          heading="預覽：第一集 · ep01"
+          subtitle="生成 9 段中 7 段已完成"
+          onClose={() => setOpenLg(false)}
+        />
+        <Modal.Body>
+          <div className="aspect-video rounded-card border border-border-soft bg-canvas grid place-items-center text-text-tertiary text-[12px] uppercase tracking-[0.04em]">
+            video preview placeholder
+          </div>
+          <p className="mt-3 text-[13px] text-text-tertiary">
+            內容 modal — 大型預覽、分享連結、asset 詳情。lg = 720px max。
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="ghost" size="sm" onClick={() => setOpenLg(false)}>
+            關閉
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => setOpenLg(false)}>
+            分享
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal open={openComposed} onClose={() => setOpenComposed(false)} size="md">
+        <Modal.Header
+          heading="設定 · 一般"
+          subtitle="這些設定僅影響你個人帳號的偏好。"
+          onClose={() => setOpenComposed(false)}
+        />
+        <Modal.Body>
+          <Field label="語言" description="影響介面與 AI 對話語言">
+            <select className="w-full rounded-input border border-border-soft bg-raised px-3 py-2 text-[14px] text-text-primary outline-none">
+              <option>繁體中文</option>
+              <option>简体中文</option>
+              <option>English</option>
+            </select>
+          </Field>
+          <div className="mt-4">
+            <Field label="鍵盤快捷鍵" helper="按 ? 可隨時呼叫快捷鍵列表">
+              <Input size="md" defaultValue="?" />
+            </Field>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="ghost" size="sm" onClick={() => setOpenComposed(false)}>
+            取消
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => setOpenComposed(false)}>
+            儲存
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </>
   )
 }

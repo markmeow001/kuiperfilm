@@ -7,6 +7,21 @@ export async function register() {
     return
   }
 
+  // Phase 0 redesign (2026-06-04) — design-only dev escape hatch.
+  // When SKIP_INSTRUMENTATION=1, skip the Prisma + BullMQ + Redis
+  // startup work. The instrumentation hook still resolves, but no
+  // DB / Redis calls fire. Used for component-library work where
+  // local infra (MySQL / Redis) isn't running and you don't need
+  // task queues — e.g. previewing /dev/components or any pure-UI
+  // route. Production deploy never sets this; if it accidentally
+  // shipped to prod, queues would silently stop reconciling, which
+  // is loud enough that you'd notice in 15 minutes.
+  if (process.env.SKIP_INSTRUMENTATION === '1') {
+    // eslint-disable-next-line no-console
+    console.log('[Instrumentation] SKIP_INSTRUMENTATION=1 — skipping DB/Redis startup work')
+    return
+  }
+
   // 只在 Node.js 服务端运行
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { prisma } = await import('@/lib/prisma')
