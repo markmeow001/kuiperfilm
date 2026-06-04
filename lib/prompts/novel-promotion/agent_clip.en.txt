@@ -24,9 +24,57 @@ Output format (JSON array only):
   }
 ]
 
+What is a "content element" (you MUST understand this):
+A content element is the smallest unit in the source text that can stand as its own panel:
+- 🎬 Action description: each independent action = 1 element.
+  e.g. "he stands up" = 1 element; "he stands up, walks to the door, pushes it open" = 3 elements.
+- 💬 Dialogue line: each line of dialogue = 2 elements (speaker + listener reaction).
+  e.g. "Your Majesty, allow me to introduce this person" = 2 elements.
+- 🎭 Emotion / reaction description: each character's reaction = 1 element.
+  e.g. "the emperor frowns, the empress looks grave" = 2 elements.
+- 🌅 Scene description: a scene-establishing description = 1-2 elements.
+- 💭 Inner monologue / narration: each monologue = 1 element.
+
+Counting example:
+Source: "He walks into the room, sees her sitting by the window. She looks up at him, eyes glistening with tears, and says softly: you finally came."
+- "He walks into the room" = 1 element (action)
+- "sees her sitting by the window" = 1 element (scene description)
+- "She looks up at him, eyes glistening with tears" = 2 elements (action + emotion)
+- "says softly: you finally came" = 2 elements (dialogue)
+Total: 6 elements.
+
 Rules:
-1. Keep clips contiguous, ordered, and fully covering the source text.
-2. Prefer natural scene/drama boundaries.
-3. Minimize over-splitting.
-4. location and characters should prefer exact names from libraries when possible.
-5. Return JSON only, no markdown or extra text.
+1. CLIP-COUNT MINIMIZATION (HIGHEST PRIORITY):
+   - Each clip holds at most about 20 content elements (counted as defined above).
+   - If the whole source has ≤ 20 total elements, you MUST output exactly 1 clip — do not split.
+   - If the whole source has ≤ 40 total elements, output at most 2 clips.
+   - Prefer a slightly longer clip over over-splitting.
+   - Only consider splitting (at a scene change) when a single clip exceeds 20 elements.
+2. Cut cleanly at the most natural point — never mid-beat. Preserve the integrity of each story beat; find the best place to cut.
+3. Always try to break BEFORE a new character or new scene appears; avoid cutting through the middle of a fresh story beat. Scene / character changes take priority for the cut.
+4. Each clip's {start, end} must be head-to-tail contiguous — no overlaps, no gaps — in chronological order, fully covering the entire input.
+5. Return JSON only — no markdown code fences, no comments, no explanation; do not add any field not defined above.
+6. POV consistency: if this is a first-person novel/narration text where the POV can shift, mark whose POV it is in `summary` (the chunk may not name the protagonist, leaving downstream unsure who the lead is) — write "POV: xxx" in `summary`. If it is not an audiobook-style narration and the POV is already explicit, a plain clip summary is enough.
+7. The POV is fixed by the OPENING: whoever's POV the text starts in must remain the POV for the whole piece — it may NOT change unless the source explicitly switches it mid-way.
+8. Fully segment the entire input screenplay / text.
+
+JSON quoting rules:
+- Do NOT emit unescaped straight double-quotes (") inside any string value. To represent a quote, prefer keeping the source CJK quotation marks (“”‘’「」『』) as-is — do NOT convert them to straight English quotes.
+- ⚠️ CJK quotation marks in the source MUST be preserved verbatim; never convert them into straight English double-quotes (") inside a JSON string.
+
+⚠️⚠️⚠️ ASSET SELECTION (HIGHEST-PRIORITY RULE) ⚠️⚠️⚠️
+
+location selection — must be a 100% exact library match:
+1. The `location` field may ONLY contain a name that is character-for-character identical to one in the location library.
+2. ❌ NEVER add any suffix. If the library has "客厅" (living room), do NOT write "客厅_内景_白天" (living-room_interior_day).
+3. ❌ NEVER alter a library name — no rewriting, abbreviating, or adding any character.
+4. If the story spans multiple locations, separate them with a comma: e.g. "客厅,卧室".
+5. If the location is not in the library, pick the closest match, or leave it null.
+
+characters selection — must be a 100% exact library match:
+1. The `characters` array may ONLY contain names character-for-character identical to ones in the character library.
+2. ❌ NEVER use an alternate alias/appellation from the source — always use the library name.
+3. e.g. if the library has "张三" and the source writes "老张" or "张总", you MUST output "张三".
+4. ⭐ Use the {characters_introduction} to map "I" / "me" and other appellations to the correct character.
+
+Self-check (before output): for every name in `location` and `characters`, can you find a character-for-character identical entry in the location/character library? If not, you MUST fix it.

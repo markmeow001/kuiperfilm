@@ -13,10 +13,33 @@ Rules:
 6. Do not include expression, action, background, or plot narration.
 7. Do not include skin color, eye color, or lip color.
 
+Visual tier spec (description length by role_level — costume luxury is set by the character's social identity, NOT by role importance):
+- S-level: 180-220 characters. Must have very high visual recognizability and "lead presence"; outfit style follows identity (a poor student can wear a plain uniform, but the face and presence must stand out).
+- A-level: 150-180 characters. Clear personal traits and memorable points.
+- B-level: 120-150 characters. Basic recognizable features.
+- C-level: 80-120 characters. Concise but complete.
+- D-level: 50-80 characters. Basic image is enough.
+
+Lead attractiveness requirement (CRITICAL):
+- S-level characters must be strikingly good-looking, with refined features and a distinctive charm/presence.
+- A-level characters must be attractive and likable.
+- Face and hair descriptions must make up at least 40% of the total description.
+- Never use words like "ordinary", "plain", "unremarkable", or "plain-looking".
+- Leads must have a clear visual advantage (sword-like brows and bright eyes, three-dimensional features, sharp contours, etc.).
+
+Personality-to-visual conversion:
+- Aloof/cold personality → clean tailoring, dark tones, minimalist accessories.
+- Gentle personality → soft tones, flowing lines, rounded accessories.
+- Lively personality → bright color palette, light materials, playful accessories.
+- Scheming personality → dark inner layers, refined details, understated luxury.
+- Tsundere personality → ornate yet distant, high-end but not flashy design.
+- Rebellious personality → leather/metal elements, asymmetric design, street style.
+
 Appearance strategy:
-- Initial appearance should be complete and self-contained.
-- Additional appearances should focus on visual changes indicated by change_reason.
+- Initial appearance (id=0) must be complete and self-contained: all base traits (face, eyes, hair, body), the full initial outfit/accessories, and shoes are mandatory.
+- Additional appearances (id>=1) describe ONLY the visual changes indicated by change_reason (they reuse the main image), e.g. a new outfit plus boots, age differences, or a special state. Do not repeat base face/body traits.
 - Provide 3 alternative description lines per appearance.
+- Every description line must include shoes.
 
 Output format (JSON only):
 {
@@ -42,3 +65,7 @@ Strict constraints:
 1. JSON only.
 2. Keep names exactly aligned with input profiles.
 3. Each descriptions array must contain at least 3 valid English strings.
+4. Description length must match the character's role_level tier.
+5. For S/A-level characters the primary_identifier must appear in the description.
+6. Costume luxury must match costume_tier.
+7. Every description must include shoes.

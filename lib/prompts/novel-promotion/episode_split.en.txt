@@ -4,12 +4,46 @@ Analyze the full text and split it into balanced episodes.
 Input text:
 {CONTENT}
 
-Core rules:
-1. Keep episode lengths as balanced as possible.
-2. Prefer natural breakpoints (chapter boundary, scene shift, time jump).
-3. Keep chronology and full coverage (no overlap, no missing text).
-4. Provide reliable startMarker and endMarker copied from source text.
+Core rule — episode lengths MUST be balanced (most important):
+All episode word counts must be as balanced as possible. Deviation must NOT exceed ±20%.
+
+Step 1 — precise calculation (mandatory):
+1. Count total words: totalWords = count(text).
+2. Target episode count: N = round(totalWords ÷ 650).
+3. Target per episode: target = totalWords ÷ N.
+4. Allowed range: [target × 0.8, target × 1.2].
+   Example: 6500 words → 10 episodes → target 650 → range 520–780.
+
+Step 2 — balanced split (mandatory):
+❌ ABSOLUTELY FORBIDDEN:
+- Any episode exceeding target × 1.3 (e.g. target 650 → must not exceed 845).
+- Any episode below target × 0.6 (e.g. target 650 → must not be below 390).
+- Front episodes long and later ones short (or vice versa).
+✅ MUST GUARANTEE:
+- All episode word counts fall within target ±20%.
+- The longest episode minus the shortest episode is no more than 300 words.
+- Word counts are evenly distributed — not front-heavy or back-heavy.
+
+Step 3 — finding split points:
+1. Prefer natural breakpoints first: chapter markers ("第X集" / "Chapter X" / "Episode X"), scene numbers (a change in X within `X-Y【scene】` starts a new episode), time jumps ("the next day", "three months later").
+2. Fine-tune near a natural breakpoint: if a natural breakpoint makes counts unbalanced, adjust at a nearby paragraph boundary; prefer to split at the end of a dialogue or a scene transition. It is better to sacrifice a little narrative continuity than to break the word-count balance.
+
+Other rules:
+1. Keep chronology and full coverage (no overlap, no missing text).
+2. Provide reliable startMarker and endMarker copied from source text.
+3. The previous episode's endMarker must be immediately adjacent to the next episode's startMarker — no content gap.
+4. The endMarker must NOT contain any content belonging to the next episode.
 5. Return JSON only.
+
+⚠️ Final validation checklist (you MUST verify all of these before output):
+1. ☐ episodes.length ≈ totalWords ÷ 650 (within ±1 episode).
+2. ☐ Every estimatedWords is within allowedRange.
+3. ☐ maxWords − minWords ≤ 300.
+4. ☐ No episode exceeds 850 words.
+5. ☐ No episode is below 400 words.
+6. ☐ Each episode's endMarker is immediately adjacent to the next episode's startMarker, with no missing content.
+7. ☐ No endMarker contains any of the next episode's content.
+If validation fails, you MUST re-adjust the split points until it passes.
 
 Output format:
 {

@@ -344,3 +344,136 @@ Self-check rules for single-char names:
 
 Better to miss a real character than to falsely add one — a falsely-added
 single-char character poisons downstream image/video reference binding.
+
+Asset-library usage (exact-match enforcement):
+
+1. Character selection:
+   - characters: [{ name: "Character Name", appearance: "appearance name" }]
+   - `name` MUST be character-for-character identical to the character library.
+   - Pick the `appearance` best suited to the panel's situation.
+   - Every character visible in frame must be selected.
+   - ❌ NEVER use an alternate alias from the source — if the library has "张三"
+     and the source writes "老张" or "张总", you MUST output "张三".
+   - ⭐ Use the character introduction mapping to resolve "I"/"me" and other
+     appellations to the correct library character.
+
+2. Location selection:
+   - `location` MUST be chosen from the location library, character-for-character
+     identical.
+   - ❌ NEVER add a suffix. If the library has "客厅", do NOT write
+     "客厅_内景_白天".
+   - ❌ NEVER rewrite, abbreviate, or add any character to a library name.
+
+Self-check (before output): for every name in `location` and `characters`, can
+you find a character-for-character identical entry in the location/character
+library? If not, you MUST fix it.
+
+Visual-description format rules:
+
+1. ⚠️ NO identity titles / kinship terms:
+   ❌ Wrong: "the mother grips her son's hand", "the father stands at the door"
+   ✅ Right: use the concrete character name from the asset library.
+
+2. ⚠️ NO subjective emotion words:
+   ❌ Wrong: "looks out of place", "the mood turns awkward", "full of hostility"
+   ✅ Right: describe only VISIBLE elements ("frowns", "clenches fists",
+      "eyes widen") — convert emotions into visible behavior.
+
+3. Spatial relations must be clear:
+   - Explicit facing: who faces whom, who has their back to whom.
+   - Explicit blocking: who stands in front of whom.
+   - Explicit position: front/back, left/right, near/far, high/low.
+   ✅ Right: "the bodyguard faces Zhang San head-on, his back to the old man
+      behind him, arms spread to block Zhang San's advance".
+
+4. Keep character description concise:
+   - Just use the character name; no need to add clothing/age description.
+   ❌ Wrong: "the boy Zhang San in a white T-shirt stands at the door"
+   ✅ Right: "Zhang San stands at the door"
+
+Shot continuity & spatial anchoring rules (CORE):
+
+⚠️ This is a key rule for keeping frames coherent!
+
+1. Core principle:
+   - Decide whether to describe other characters based on what the shot can
+     PHYSICALLY capture.
+   - Shot plausibility first: close-ups, reverse shots, partial framings etc.
+     that CANNOT see other people do NOT need to force-describe them.
+   - Only when the shot CAN actually see another character do you account for
+     their position.
+
+2. Per shot-type handling:
+   - Wide / long shot: account for all present characters — the frame is large,
+     everyone should be visible.
+   - Medium shot: account for other characters — usually both parties or
+     several people are visible.
+   - Close shot: case by case — if the angle can see the other party, account
+     for them; if not, omit.
+   - Reverse shot: do NOT account for the other party — a reverse shot films one
+     side; the other side is behind the camera.
+   - Close-up / extreme close-up: do NOT account for others — only a partial
+     framing is shown.
+   - Over-the-shoulder: the foreground shoulder being visible is enough; no need
+     to detail it.
+
+3. Plausibility principle:
+   ✅ Right (shot can capture it):
+   "Medium shot: Li Si frowns and speaks, Zhang San listening quietly across
+   from him" ← a medium shot can see both.
+   ✅ Right (reverse shot needs no other party):
+   "Reverse close shot: Li Si frowns and speaks" ← a reverse shot films one side
+   only; the other is behind the camera.
+   ✅ Right (close-up needs only the focus):
+   "Facial close-up: Li Si's brow knits tight" ← a close-up needs no others.
+   ❌ Wrong (medium shot dropping a visible character):
+   "Medium shot: Li Si speaks" ← a medium shot should see the other party — why
+   isn't it written?
+
+4. Continuity check (before each panel):
+   □ Which characters can the current shot-type/angle physically capture?
+   □ Are all the capturable characters described?
+   □ Characters that can't be captured (close-up, reverse shot, etc.) may be
+     omitted.
+
+Character continuity & scene completeness rules:
+
+1. Character tracking:
+   - Once a character enters a scene they must persist until they explicitly
+     leave.
+   - No character may "vanish into thin air".
+   - A character leaving must have an explicit exit action.
+
+2. Frame layering (every panel must include):
+   - Focus layer: the main character currently speaking/acting (described in
+     detail).
+   - Presence layer: the state of other characters present (briefly note
+     position and reaction).
+   - Environment layer: scene atmosphere and environmental detail.
+
+3. Shot-size and character presentation:
+   - Wide / medium: all present characters must appear.
+   - Close shot: subject + characters visible at the frame edges.
+   - Close-up: only the partial framing is needed; no others required.
+
+4. Character-persistence logic:
+   - A character present in the previous panel must, in the next (non-close-up)
+     panel, have their whereabouts accounted for.
+   - They can only "disappear" via: an explicit exit action, a cut to close-up,
+     or a scene change.
+
+Strict requirements:
+1. You MUST output the required number of valid panels — no empty panels.
+2. Character and location names MUST be chosen from the asset libraries.
+3. `characters` MUST be an array of objects: [{ name: "Character Name", appearance: "appearance name" }].
+4. Return the JSON array only — no other text.
+5. ⚠️ `source_text` is required; it must not be empty or null.
+6. Spatial relations must be clear (facing, blocking, position).
+7. Shot continuity: adjacent panels must carry the action forward.
+8. NO identity titles: always use the concrete name from the asset library.
+9. NO subjective emotion words: describe only visible actions and states.
+10. NO long single-panel sentences: a long sentence with comma-separated multiple actions/dialogue MUST be split.
+11. Dialogue must be split: each dialogue exchange gets at least 2 panels (speaker + listener reaction).
+12. ⚠️ Shot plausibility: describe only the characters the current shot can PHYSICALLY capture; close-up / reverse-shot etc. may omit those it can't.
+13. ⚠️ Every voiceover / OS / VO / off-screen call / inner monologue / narration MUST have a corresponding reaction panel whose `source_text` contains the voiceover line VERBATIM (see the voiceover handling section above). Dropping VO content is a historical bug and is never allowed.
+14. ⚠️ A voiceover panel's visual focus is the LISTENER (the reactor in frame), not the off-screen speaker. The speaker does NOT go into the `characters` array.

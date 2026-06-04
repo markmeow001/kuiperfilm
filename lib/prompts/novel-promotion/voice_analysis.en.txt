@@ -41,10 +41,59 @@ Rules:
         `王玄（闭眼皱眉，OS）：这是...` → speaker="王玄", content="这是..."
         `柳如烟：殿下身份尊贵` → speaker="柳如烟", content="殿下身份尊贵"
 2. Skip pure narration, action lines (prefixed with △ ▲ ◇ etc.), and screenplay metadata lines such as `字幕:`, `场景:`, `画面:`, `人物:`, `镜头:`, scene-number slug lines.
-3. emotionStrength must be between 0.1 and 0.5.
+3. emotionStrength — emotion intensity calibration:
+   Output a value between 0.1 and 0.5 based on how intense the line is (⚠️ never exceed 0.5, so the synthesized voice stays natural and steady). Use this graded table:
+
+   | Emotion type        | Intensity range | Example                         |
+   |---------------------|-----------------|---------------------------------|
+   | Calm / stating fact | 0.1–0.15        | "Okay, I understand."           |
+   | Ordinary dialogue   | 0.15–0.2        | "Why did you come today?"       |
+   | Puzzled / curious   | 0.2–0.25        | "What is going on here?"        |
+   | Surprised / startled| 0.25–0.3        | "What?! Are you serious?"       |
+   | Angry / furious     | 0.3–0.35        | "Get out of here!"              |
+   | Sad / crying        | 0.25–0.35       | "Why are you doing this to me..."|
+   | Ecstatic / excited  | 0.35–0.4        | "Yes! We did it!"               |
+   | Roaring / screaming | 0.4–0.5         | "I'll kill you!!!"              |
+
 4. Speaker-panel validation:
    - On-screen dialogue: speaker must appear in the matched panel's `characters` field.
    - Voiceover/OS/VO/narration: speaker is by definition off-screen — do NOT require speaker to be in the panel's `characters` field. Match by narrative relevance instead. Speaker should still match a name in the character library when available.
-5. If no reliable panel match exists, set "matchedPanel": null.
-6. Use canonical names from character library when possible.
-7. Return strict JSON only, no markdown.
+5. Panel matching — STRICT rules (this is the critical step; follow exactly):
+   a. **Ordering / sequence constraint**:
+      - The order in which lines appear in the source text must roughly correspond to the storyboard panel order.
+      - The Nth line should match a panel near the Nth panel — do not jump too far.
+      - No out-of-order matching (e.g. the 5th line must NOT match the 1st panel).
+   b. **Speaker check** (see rule 4): on-screen speaker must be in the panel's `characters`; voiceover/OS/VO speaker need not be.
+   c. **Content matching**:
+      - Prefer panels whose `text_segment` fully contains the line content.
+      - Otherwise match panels whose `text_segment` is semantically close to the line.
+   d. **Matching strategy**:
+      1. First match line content precisely against `text_segment`.
+      2. Verify the panel's characters include the line's speaker (except for voiceover/OS/VO).
+      3. Verify the order is reasonable (within a sequence window of about ±3 panels).
+      4. If none of the above can be satisfied, set "matchedPanel": null.
+   e. **Example**:
+      - Source order: 柳如烟 says "殿下身份尊贵" → 玄离 says "胆子挺大".
+      - Panel order: panel 15 (柳如烟 close-up) → panel 16 (玄离 close-up).
+      - Correct: 柳如烟 line → panel 15, 玄离 line → panel 16.
+      - Wrong: 柳如烟 line → panel 16 (speaker mismatch).
+6. If no reliable panel match exists, set "matchedPanel": null.
+7. Use canonical names from character library when possible.
+8. Heteronym handling (IMPORTANT — for correct TTS pronunciation):
+   To ensure the TTS engine pronounces text correctly, replace easily-mispronounced Chinese heteronyms (多音字) with a single-pronunciation character that is **read exactly the same way, including tone**.
+   Process:
+   a. **Identify heteronyms**: find heteronym characters in the line (e.g. 还, 行, 了, 乐, 朝, 重, 都, etc.).
+   b. **Determine the correct reading**: decide the intended pronunciation from the surrounding context.
+   c. **Pick a replacement**: choose a common single-pronunciation character whose reading (initial, final, and tone) is identical.
+   d. **Validate**: confirm the replacement's reading exactly matches the intended reading.
+   Replacement guidance:
+   - "还(huán)给我" → replace with "环", because "环" is only read huán.
+   - "银行(háng)" → replace with "航", because "航" is only read háng.
+   - "重(zhòng)量" → replace with "众", because "众" is only read zhòng.
+   - "快乐(lè)" → keep "乐" as-is, because TTS usually reads common words correctly.
+   Cautions:
+   - The replacement's reading must be EXACTLY identical to the target reading — never use a character that only sounds similar.
+   - Example: "勒" reads lè or lēi, so it must NOT be used to replace a character read le.
+   - Common compounds (e.g. "了解", "快乐", "音乐") are usually read correctly by TTS — keep the original character.
+   - Only replace a heteronym when it is genuinely likely to be mis-read by TTS in this specific context.
+9. Return strict JSON only, no markdown.

@@ -32,7 +32,8 @@
 用户的修改指令：{user_input}
 
 结果发送json格式给我，只返回以下json格式，禁止返回一切除json以外的多余内容，注释，文字等等，只返回无任何markdown标识符的纯净json格式，json格式如下
+image_prompt 专注于静态画面构图；video_prompt 必须同步更新并填满，专注于运动 / 表演 / 镜头运动（人物动作、镜头运镜、节奏），不要留空。
 {
   "image_prompt": "修改后的图片提示词（静态画面描述）",
-  "video_prompt": ""
+  "video_prompt": "修改后的视频提示词（运动/表演/镜头运动描述）"
 }

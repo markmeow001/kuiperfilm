@@ -38,31 +38,11 @@ Field rules:
   - `mixed` — both on-screen and has OS/VO in this episode
   voice_only characters do not require a visual_description (downstream UI will let the user opt in to portrait generation).
 
-Output format (JSON only):
+Output format (JSON only).
+The output contains exactly two arrays:
+- new_characters: newly discovered characters
+- updated_characters: existing characters whose intro/aliases need updating (e.g. a newly found address, relationship, or real name)
 {
-  "characters": [
-    {
-      "name": "Canonical Name",
-      "aliases": ["alias 1", "alias 2"],
-      "introduction": "Role, perspective mapping, relationships, and naming aliases",
-      "visual_description": "An 80-150 word English visual prompt for the initial appearance, ready to feed into a text-to-image model. MUST stay strictly grounded in the source text era_period, social_class, occupation, costume_tier, suggested_colors, visual_keywords, and primary_identifier. Cover age, hairstyle/color, facial features, expression, upper-body wear, lower-body wear, accessories/footwear, overall mood. Never drift outside the era: a modern drama must NOT mention armor/robes/period costumes; a historical piece must NOT mention suits/wristwatches; sci-fi must NOT mention period-court attire. If era_period is modern/contemporary/urban, only contemporary clothing (shirts/suits/jeans/hoodies/dresses) is allowed.",
-      "gender": "male/female/other",
-      "age_range": "young adult",
-      "role_level": "S",
-      "archetype": "character archetype",
-      "personality_tags": ["tag1", "tag2"],
-      "era_period": "modern/fantasy/historical/sci-fi",
-      "social_class": "elite/middle/common",
-      "occupation": "occupation or none",
-      "costume_tier": 3,
-      "suggested_colors": ["color1", "color2"],
-      "primary_identifier": "signature visual marker",
-      "visual_keywords": ["keyword1", "keyword2"],
-      "expected_appearances": [
-        { "id": 1, "change_reason": "initial appearance" }
-      ]
-    }
-  ],
   "new_characters": [
     {
       "name": "Canonical Name",
@@ -82,7 +62,7 @@ Output format (JSON only):
       "primary_identifier": "signature visual marker",
       "visual_keywords": ["keyword1", "keyword2"],
       "expected_appearances": [
-        { "id": 1, "change_reason": "initial appearance" }
+        { "id": 0, "change_reason": "initial appearance" }
       ]
     }
   ],

@@ -17,7 +17,7 @@ Characters:
 {characters_info}
 
 Task:
-Generate at least 3 shot variants while preserving narrative continuity, character identity, and location consistency.
+Generate 5-8 shot variants while preserving narrative continuity, character identity, and location consistency.
 
 Output format (JSON array only):
 [
@@ -28,12 +28,12 @@ Output format (JSON array only):
     "shot_type": "target shot type",
     "camera_move": "target camera move",
     "video_prompt": "short motion-focused prompt",
-    "creative_score": 8.5
+    "creative_score": 5
   }
 ]
 
 Rules:
-1. Provide at least 3 variants.
+1. Provide 5-8 variants.
 2. Keep each variant practically producible.
-3. creative_score range: 0-10.
+3. creative_score range: 1-5 (5 = most creative).
 4. Keep JSON strict and valid.

@@ -16,10 +16,11 @@ Story context:
 Requirements:
 1. Produce 3 clearly different variants while preserving core identity.
 2. Each variant must be a full standalone appearance description.
-3. Output in English.
-4. Do not include expression, action, background, or story narration.
-5. Do not include skin color, eye color, or lip color.
-6. Keep each description concise and image-generation friendly.
+3. Give a concrete age range (e.g. "around twenty-five", "forty to forty-five", "about fifty"), not a vague life stage.
+4. Output in English.
+5. Do not include expression, action, background, or story narration.
+6. Do not include skin color, eye color, or lip color.
+7. Keep each description concise and image-generation friendly.
 
 Output format:
 Return JSON only:

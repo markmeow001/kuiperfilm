@@ -16,7 +16,7 @@ Kling vocabulary:
 - Shot types: extreme close-up, close-up, medium close-up, medium shot, full body shot, wide shot, establishing wide shot. Composition: centered, rule of thirds, off-center, over-the-shoulder.
 - Movements: pan, tilt, dolly forward/back, push-in, pull-back, tracking shot, orbital shot, crane shot, handheld documentary, Steadicam, drone-like aerial. Compound with "while".
 - Speed: ultra-slow (2-3s), slow and deliberate (5-8s), moderate (3-5s), quick snap (1-2s). Always include the (Xs) hint.
-- Style picks (max 1-2 per shot): cinematic depth of field, handheld documentary, steady Steadicam movement, drone-like aerial viewpoint, film noir lighting, 35mm film aesthetic, professional broadcast quality.
+- Style picks (max 1-2 per shot): cinematic depth of field, handheld documentary, steady Steadicam movement, drone-like aerial viewpoint, film noir lighting. (⚠️ Only lighting / lens-behaviour descriptors — NO equipment model names or marketing-quality claims; see red line #4 below.)
 
 multi_shot_group rules:
 - Tag 2-4 consecutive panels in the same scene with the same integer when ALL three hold:
@@ -32,7 +32,7 @@ Character motion naturalness (added 2026-06-02):
 In the [specific action] segment, don't just name the action — add these three points so Kling renders more naturally:
 - Match manner-of-motion to the character: not just "walks forward" but "walks slowly with composed, dignified steps"; for stalking write "moves with light, cautious steps".
 - Body coupling: when one part moves, others follow — "raises her head, gaze lifting with it, shoulders settling, hair swaying slightly".
-- Break force-driven actions into physical stages (still 1 main action): for swinging a pole / throwing a punch / drawing a sword write "wind-up → drive → trajectory → settle" — "grips the pole and coils, weight dropping, then drives from waist and shoulders to sweep it in a wide arc from right to left, settling side-on with eyes fixed forward", not just "swings the pole".
+- Break force-driven actions into physical stages (still 1 main action): for swinging a pole / throwing a punch / drawing a sword write its physical process as "wind-up, driving body part, main-action trajectory, settle/freeze" — these four are physical stages of the SAME action, comma-linked; do NOT use "→" arrows (→ marks separate action beats in this doc and would be miscounted as multi-action). e.g. "grips the pole and coils, weight dropping, then drives from waist and shoulders to sweep it in a wide arc from right to left, settling side-on with eyes fixed forward", not just "swings the pole".
 - Multiple characters in frame: separate initiator from responder and spell out the interaction order (who acts → who responds → final relation), not just "two people facing each other".
 
 video_prompt format: [Subject + age + gender] + [specific action] + [camera + speed (Xs)] + [style/lighting].
@@ -57,14 +57,83 @@ Required fields per panel (keep all original fields, then add):
 - video_prompt (Kling-tuned)
 - multi_shot_group (optional integer)
 
+Five-element red lines (CRITICAL — applies to both description AND video_prompt):
+
+Core balance: KEEP ACTIONS LEAN (1 main beat per panel) BUT WRITE THE PICTURE RICH.
+The only "overstuffing" to avoid is: (1) stacked sequential actions (rule 2),
+(2) repeating appearance already in the refs (rule 1). Everything else — spatial
+anchors, ambient sound, micro-action layering, composition layers — must be written
+FULLY and concretely, not omitted. A thin one-sentence prose line = the model
+improvises = sparse, content-dropping output; dense description focused on ONE main
+beat = clear direction = complete, faithful output.
+
+Pass these 7 before emitting each panel's description + video_prompt:
+1. NO appearance details already in @image-N references (body, skin, hair, clothing) —
+   the backend reference carries them. Write only current action / emotion / expression.
+   Wrong: "@WangXuan's chest heaves, skin flushes, pores and sweat visible" (all appearance)
+   Right: "@WangXuan's aura bursts forth, chest heaves, vortex forms" (action + result)
+2. One MAIN action per panel (+ optional wind-up / settle micro-motion); composition
+   visual points are unlimited. "Visual points" = elements coexisting in the same instant
+   (fore/mid/background layers, expression, gesture, light) → as many as you like, cost no
+   time. "Action beats" = sequential events (cat leaps → lands → morphs → walks) → one per
+   panel. One period / one "→" / one "then" = one action beat; more than one → split to the
+   next panel. Wrong: "@woman stands, walks to the door, opens it, smiles" (4 beats → only
+   "stands" renders).
+3. NO negative directives ("no X", "no subtitles", "no on-screen text") — the worker's
+   negative_prompt handles them; naming them in the positive prompt triggers the artifact.
+4. NO camera / equipment terms ("Arri Alexa", "IMAX", "35mm lens", "film grain", "8K",
+   "professional film production quality", "cinematic lighting") — handled by project
+   visualStyleId + styleAnchor. Write only what the human eye sees in frame.
+5. NO vague collective nouns ("crowd", "everyone", "people", "the group") — name specific
+   characters or give a count.
+6. REQUIRED: every panel includes one "Ambient sound: …" line with a concrete PHYSICAL
+   source (collar rustle / cold wind through metal grating / countdown ticking / footsteps
+   / rain). Never omit it. ⚠️ For SILENT (no-dialogue) shots, avoid "bass drone" / "low
+   bass" / "hum" that Seedance mistakes for a voice timbre; use pure physical sources (low
+   wind / distant machinery rumble / spatial reverb).
+7. Dialogue lines ≤ 30 words each — long lines destabilize Kling Omni TTS.
+
+Self-check (every panel): □ No appearance already in @image-N? □ ≤ 1 main action beat?
+□ No negative directives? □ No camera/equipment terms? □ No vague collective nouns?
+□ Dialogue ≤ 30 words each? □ Has a spatial anchor (who is where, facing which way)?
+□ Has an "Ambient sound:" line? □ Any morph/transform → split into two panels?
+
+description must be written FULL — five elements + three layers, NOT a thin one-liner:
+
+⚠️ description is the R2V narrative main text (the frontend preview AND the string fed to
+the video model both read `description`). It must be written JUST AS RICH as video_prompt:
+full spatial anchors + ambient sound + micro-action layering + [START]/[MID]/[END] three
+timeline-segment markers (the same main beat's tension arc, NOT 3 sequential actions).
+description is NOT passive prose — a thin one-liner makes the R2V narrative look sparse.
+The ONLY difference: description keeps full character names (@Name), video_prompt swaps to
+age+gender.
+Three-layer writing ([START] wind-up → [MID] develop → [END] settle, all time slices of the
+SAME main action): short shots (~3–5s) collapse to TWO segments ([START] wind-up + [END]
+drive-and-settle); long shots (~10–15s) keep all three, [MID] may carry one tonal/shot-size
+turn but the whole panel still has only 1 main action.
+
+Transformation / morph / shapeshift rule:
+Generative models (Kling R2V / Seedance) CANNOT gradually morph one subject into a different
+reference image in a single clip (e.g. "black cat lands and morphs into @Vera"). Reference
+images are identity anchors; the model renders only one state, the morph is always lost and
+following actions often dropped with it. When the source has "X morphs / transforms / takes
+the form of / reveals true form as Y": split into TWO panels, express the change via the cut,
+NEVER ask a single clip to fully replace the subject.
+  Wrong (single-clip morph + multi-action): "black cat leaps, lands and morphs into @Vera,
+    she walks to @William"
+  Right (two panels): Panel 1 "a black cat leaps from the pillar shadow and lands lightly"
+    (cat only); Panel 2 "@Vera now stands in place, steps toward @William" (human from the
+    first frame, 1 main action)
+Same for appear / vanish / summon / teleport — split into "before" + "after" panels.
+
 Example:
 [
   {
     "panel_number": 1,
     "shot_type": "establishing wide shot, rule of thirds",
     "camera_move": "slow dolly forward (5s)",
-    "description": "Cafe interior, young woman seated by the window stirring her coffee",
-    "video_prompt": "Wide establishing shot of warm-lit cafe interior, young woman in beige sweater seated by the window stirring her coffee, slow dolly forward 5 seconds, cinematic depth of field, golden hour lighting",
+    "description": "[START] @Character A (lower-right third, foreground) faces the window, alone at the wooden table, fingertips slowly turning the coffee spoon as it clinks against the cup; a half-empty sugar jar in foreground, her profile in midground, blurred bar-counter bokeh and street view in background. Ambient sound: crisp clink of spoon on cup, faint traffic outside. [END] Her stirring hand gradually stills, gaze drifting to the street, shoulders settling, the hair at her chest swaying slightly, a faint wistfulness rising in her brow. Ambient sound: soft creak of the wooden chair, low hum of a heater.",
+    "video_prompt": "Wide establishing shot of warm-lit cafe interior, young woman in beige sweater seated by the window slowly stirring her coffee then pausing as her gaze drifts to the street, shoulders settling, slow dolly forward 5 seconds, cinematic depth of field, golden hour lighting",
     "multi_shot_group": 1,
     "characters": [{"name": "Character A", "appearance": "initial look"}],
     "location": "cafe",
@@ -81,4 +150,6 @@ Strict rules:
 5. Close-up shots force "static close-up, no camera motion".
 6. Dialogue panels must include "speaking with subtle gestures" or equivalent explicit speech wording.
 7. Preserve panel_number, characters, location, scene_type, source_text exactly as in input.
-8. Return JSON array only — no markdown, no comments, no extra fields.
+8. ⚠️ description MUST be written full with the five elements + three layers (spatial anchor + one "Ambient sound:" line + micro-action layering + [START]/[MID]/[END]), keeping full character names — never a thin one-liner (see "description must be written FULL").
+9. Pass the five-element red-line self-check (no equipment terms / no negative directives / no vague collective nouns / 1 main action per panel / has Ambient sound); split any morph/transform into two panels.
+10. Return JSON array only — no markdown, no comments, no extra fields.

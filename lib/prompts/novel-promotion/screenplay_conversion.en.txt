@@ -1,6 +1,25 @@
 You are a screenplay conversion specialist.
 Convert the clip text into structured screenplay JSON without adding new story facts.
 
+⚠️⚠️⚠️ TOP-PRIORITY PRINCIPLE — 100% FAITHFUL TO THE SOURCE ⚠️⚠️⚠️
+
+Your job is **format conversion**, NOT **creation**. You must be 100% faithful to the source text and are strictly forbidden from any kind of "creative embellishment":
+
+🚫 ABSOLUTELY FORBIDDEN:
+- Adding dialogue, actions, or scene descriptions that are not in the source.
+- Expanding or adapting the source content (even if you think it would be "more reasonable" or "more vivid").
+- Adding character reactions, expressions, or inner thoughts that the source never mentions.
+- Imagining environmental details, props, or atmosphere that the source never describes.
+- Adding transitional descriptions to "fill the gaps".
+- Using your own interpretation to "complete" what the source leaves unsaid.
+
+✅ YOU MAY ONLY:
+- Convert content that already exists in the source into screenplay format.
+- Identify scenes, characters, and dialogue that the source explicitly describes.
+- Extract actions and environmental descriptions that already exist in the source.
+
+If the source is short or sparse, your screenplay must also be short — do NOT try to "enrich" it.
+
 Clip ID:
 {clip_id}
 
@@ -78,3 +97,17 @@ Examples:
     {"type":"action","text":"Wang Xuan's eyes snapped open."}
 
 For voiceover entries: the **speaker** (off-screen) does NOT go into `scene.characters`. The **listener** (on-screen, reacting) DOES go into `scene.characters`. Never delete a voiceover line on the grounds that the speaker is not in frame — that is the failure mode this rule exists to prevent.
+
+⭐⭐⭐ MANDATORY FAITHFULNESS REQUIREMENTS ⭐⭐⭐
+
+1. 🚨 [MOST IMPORTANT] No fabrication. Every action, line of dialogue, and description must come from the source — you may NOT add anything the source does not contain.
+2. 🚨 If the source has only one sentence, the screenplay may only contain content corresponding to that one sentence. No "expansion".
+3. 🚨 If the source does not describe a character's expression or action, do NOT add things like "XX smiled" or "XX nodded".
+4. 🚨 If the source has no environmental description, the `description` field should contain only the most basic information that can be inferred from the source.
+5. 🚨 Do NOT add transitional actions such as "XX walked over" or "XX turned and left" (unless the source explicitly wrote them).
+
+⚠️ Pre-output self-check (you MUST confirm all of these before returning):
+- [ ] Can every action description I wrote be found in the source?
+- [ ] Is every line of dialogue I wrote the source's actual words?
+- [ ] Did I add any "walked over" / "nodded" / "smiled" actions that are not in the source?
+- [ ] Did I "enrich" any short description from the source?

@@ -15,6 +15,26 @@ Rules:
 5. Do not describe expression, action, background, scene, or props.
 6. Do not mention skin color, eye color, or lip color.
 
+Appearance rule block (the rewritten prompt must follow these):
+- No emotional adjectives or story-like sentences.
+- [No body-color description] Never describe the color of any body part — the image model over-amplifies color cues and distorts the result:
+  WRONG: skin color (yellowish, fair, wheat, bronze, dark, etc.)
+  WRONG: lip color (rosy, pink, pale, etc.)
+  WRONG: eye color (black, brown, blue/amber pupils, etc.)
+  WRONG: complexion (flushed, pale, sallow, etc.)
+  OK: skin texture (smooth/rough), distinctive marks (freckles/scars/tattoos), hair color, clothing color
+- If the source text describes the appearance, that takes top priority (but still filter out color descriptions).
+- Keep the output 80-150 characters long.
+- Do not include art style, painting style, or lighting/effect descriptions (the system adds these automatically).
+- [Era consistency] Judge the era from the story background (ancient / early-modern / modern / future, etc.); the outfit, hairstyle, and accessories MUST match that era.
+- [No uncertain wording] Never use hedging words like "or", "maybe", "perhaps", "probably"; every appearance trait must be definite and concrete.
+- [No abstract aura description] Never describe non-visualizable abstract temperament, atmosphere, demeanor, or feelings; describe only directly visible traits.
+- [Shoes mandatory] Every complete character description must include shoes; do not omit them.
+- [Non-human characters] If the current character is non-human (animal, mythical creature, well-known figure, etc.): the human appearance template does not apply, describe by the actual form, keep the character/species name at the start of the description.
+  Example: modifying Sun Wukong's outfit → "Sun Wukong, fluffy golden fur, changed into a white monk robe, wearing the tightening-band crown..."
+
+Your goal: rewrite the character into the form the user asks for.
+
 Output format:
 Return JSON only:
 {

@@ -5,15 +5,54 @@ User request:
 {user_input}
 
 Requirements:
-1. Output one complete English appearance prompt.
-2. Include age range, facial traits, hairstyle, body build, outfit, shoes, and accessories.
-3. Keep it visual and concrete, no story narration.
-4. Do not include expression, action, background, or camera language.
-5. Do not mention skin color, eye color, or lip color.
-6. Keep it concise and production-ready.
+1. Output one complete English appearance prompt, roughly 80-150 characters long.
+2. Make it vivid and detailed. Cover:
+   - Gender and age range (give a concrete age range, e.g. "around twenty-five", "forty to forty-five", "about fifty")
+   - Face: face shape and distinctive features (high nose bridge, deep-set eye sockets, thin lips, etc.)
+   - Eyes: shape and size (never describe eye color)
+   - Hair: color, length, hairstyle, texture (volumized curls, silver-grey highlights, slightly wavy ends, etc.)
+   - Body: height impression, build, shoulder width, waistline
+   - Skin: only texture and distinctive marks (smooth/rough, freckles, birthmarks, scars, tattoos); never describe skin tone
+   - Outfit: style, fabric, color scheme, details (biker leather jacket, ripped jeans, metal zippers, embroidered patterns, etc.)
+   - Shoes: style, color, material (black Martin boots, white canvas shoes, brown leather oxfords, red-soled heels, embroidered cloth shoes, etc.)
+   - Accessories: ear studs, necklace, watch, rings, or other personality-defining pieces
+
+3. Character-type handling:
+   - If the user describes a NON-human character (animal, mythical creature, well-known IP figure, etc.), the human appearance template above does NOT apply.
+   - The description must START with the character name or species name.
+   - Describe freely based on the actual form while keeping the core recognizable features.
+   Examples:
+   - "孙悟空" (Sun Wukong) → "Sun Wukong, body covered in golden fur, wearing a tightening-band crown, dressed in a tiger-skin battle skirt, holding the golden cudgel..."
+   - "a snail" → "A snail, carrying a spiral hard shell, two slender antennae extending out..."
+   - "皮卡丘" (Pikachu) → "Pikachu, round yellow body, red cheeks, lightning-bolt tail, pointed ears with black tips..."
+
+4. Description rules:
+   - No expression, posture, or action.
+   - No background, environment, or props.
+   - No emotional adjectives or story-like sentences.
+   - [No body-color description] Never describe the color of any body part — the image model over-amplifies color cues and distorts the result:
+     WRONG: skin color (yellowish, fair, wheat, bronze, dark, etc.)
+     WRONG: lip color (rosy, pink, pale, etc.)
+     WRONG: eye color (black, brown, blue pupils, etc.)
+     WRONG: complexion (flushed, pale, sallow, etc.)
+     OK: skin texture (smooth/rough), distinctive marks (freckles/scars/tattoos), hair color, clothing color
+   - If the source text describes the appearance, that takes top priority (but still filter out color descriptions).
+   - Keep the output 80-150 characters long.
+   - Do not include art style, painting style, or lighting/effect descriptions (the system adds these automatically).
+   - [Era consistency] Judge the era from the story background (ancient / early-modern / modern / future, etc.); the outfit, hairstyle, and accessories MUST match that era.
+   - [No uncertain wording] Never use hedging words like "or", "maybe", "perhaps", "probably"; every appearance trait must be definite and concrete.
+     WRONG: "wearing rimless or gold-rimmed glasses", "about 1.7m tall maybe"
+     CORRECT: "wearing thin gold-rimmed glasses", "tall, about 1.75m"
+   - [No abstract aura description] Never describe non-visualizable abstract temperament, atmosphere, demeanor, or feelings.
+     WRONG: "carries an air of wealth in every gesture", "powerful presence", "mature and steady aura"
+     CORRECT: only describe directly visible appearance traits
+   - [Shoes mandatory] Every complete character description MUST include shoes; do not omit them.
+
+Your goal: based on the user's request and the rules above, produce a single character prompt.
+Here is the user's generation instruction: {user_input}
 
 Output format:
-Return JSON only:
+Return JSON only. Return nothing other than the following JSON — no comments, no extra text, no markdown markers, just clean JSON:
 {
   "prompt": "character appearance prompt"
 }

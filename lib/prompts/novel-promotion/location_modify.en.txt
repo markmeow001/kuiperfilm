@@ -16,9 +16,16 @@ Rules:
 3. Output in English only.
 4. Start with scene name: "[{location_name}] ..."
 5. No protagonist actions, dialogue, or narrative plot.
+6. Use concrete nouns, not abstract adjectives:
+   - GOOD: "wooden desk" / "gray fabric sofa" / "white curtains"
+   - BAD: "elegant furniture" / "cozy atmosphere" / "warm vibe"
+7. Crowd handling: if the user asks for a crowd, or the scene itself implies one (banquet, market, etc.), you may add a blurred, unnamed crowd ("guests", "passersby", "pedestrians"), e.g. "a few guests chatting in the far end of the hall". Otherwise keep it an empty plate. Never name a specific character.
+8. Era consistency: infer the period from the scene, and keep architecture, decor, and props consistent with that era. Time consistency: if the scene name implies day/night/dusk, the lighting must match.
+9. Do not include art-style or visual-style wording (e.g. "American comic style", "watercolor", "dramatic lighting"); style is applied automatically by the system.
+10. Keep the description in the 40-80 word band (the equivalent of 60-120 CJK characters) so density stays consistent across create, modify, update, and regenerate.
 
 Output format:
-Return JSON only:
+Return JSON only. No markdown fences, comments, or extra text. Inside JSON strings, any literal double quote must be escaped as \".
 {
   "prompt": "modified location description"
 }

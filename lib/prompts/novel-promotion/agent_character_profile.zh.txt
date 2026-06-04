@@ -173,8 +173,8 @@ D级（群众演员）：
    - 只有持续性的、需要重新制作人物形象图的外观变化才需要记录
 
 📋 expected_appearances 格式：
-   - 每个角色必须至少有一个 id=1 的"初始形象"
-   - 如有换装/年龄变化等，添加 id=2, 3... 的子形象
+   - 每个角色必须至少有一个 id=0 的"初始形象"
+   - 如有换装/年龄变化等，添加 id=1, 2... 的子形象
    - change_reason 简要说明变化原因（如"出浴状态"、"战斗装束"、"年老回忆"）
 
 【种族 / Ethnicity 设定 ⭐重要】
@@ -235,8 +235,8 @@ D级（群众演员）：
       "primary_identifier": "眼角泪痣（仅S/A级需要）",
       "visual_keywords": ["精英气质", "禁欲系"],
       "expected_appearances": [
-        {"id": 1, "change_reason": "初始形象"},
-        {"id": 2, "change_reason": "换装/特殊状态的原因（如有）"}
+        {"id": 0, "change_reason": "初始形象"},
+        {"id": 1, "change_reason": "换装/特殊状态的原因（如有）"}
       ]
     }
   ],
@@ -279,7 +279,7 @@ D级（群众演员）：
 7. introduction 必填，描述角色身份、关系、称呼映射
 8. 如果发现已有角色的新信息，放入 updated_characters 而不是创建新角色
 9. updated_characters 中的 name 必须与已有资产库中的名字完全一致
-10. expected_appearances 必填，至少包含 id=1 的初始形象
+10. expected_appearances 必填，至少包含 id=0 的初始形象
 11. 只有持续性视觉变化才添加子形象，临时特效/情绪/动作不添加
 12. visual_description 必填，必须与 era_period 一致（时装剧禁用古装/盔甲/战场装/法袍等）
 13. 输出必须是**严格合法的JSON**：字符串中不能出现原始换行/回车/制表符

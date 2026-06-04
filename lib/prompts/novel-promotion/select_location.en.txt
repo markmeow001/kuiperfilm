@@ -10,22 +10,50 @@ Existing location library:
 Selection rules:
 1. Include locations where meaningful story actions happen.
 2. Exclude abstract/metaphorical spaces and one-off passing mentions.
-3. Deduplicate aliases of the same location.
-4. Prefer exact library names when a location already exists.
+3. Deduplicate aliases of the same location (e.g. "study" and "Mr. Zhang's study" are the same location). When a location already exists in the library, return its exact existing name unchanged.
+4. Judgment test: does this place need its own dedicated background image, and does a character actually have real screen time there? If it is only a one-line mention, or rhetoric describing a "range of a fight" (e.g. "fought from heaven down to hell"), do not extract it.
 
 For each selected location, generate 3 wide-angle environment descriptions.
 Each description should:
 - start with location name in brackets: "[Location Name] ..."
-- describe spatial layout, depth layers, major objects, and lighting direction
-- remain environment-only (no named protagonist actions)
-- use concise, production-ready English
+- use a wide-angle / long-shot view that shows the full extent of the space (for interiors, 2-3 walls plus floor and part of the ceiling; for exteriors, an open vista or distant horizon)
+- build depth with foreground / midground / background layers and explicit position words (left / right / center / corner / near the window / in the distance)
+- describe spatial layout, major objects (about 5-8, each with a position), and lighting direction
+- stay strictly grounded in the source text; the original description takes priority and only the remaining details may be invented
+- remain environment-only
+
+CRITICAL RULE — the scene plate must contain NO named characters:
+A scene image is a pure "background plate". The protagonist and key characters are composited onto it later by AI. Therefore the description must NEVER contain any named or identifiable character.
+WRONG (contains characters):
+- "two monkey kings face off with staffs" -> WRONG, the monkey kings are characters
+- "Zhang San stands at the door greeting" -> WRONG, Zhang San is a character
+- "Sun Wukong and the Six-Eared Macaque fight in the street" -> WRONG, protagonists must not appear
+RIGHT (pure background):
+- "[Ancient Road] a wide-angle view of a winding loess road through jagged stone forests, a few withered pines in the foreground, the road broad and flat with drifting dust in the midground, rolling mountains in the background."
+- "[Banquet Hall] a few guests chatting in the far end of the hall" -> OK, this is an anonymous background crowd
+- "[Market] pedestrians coming and going along the street" -> OK, this is a blurred passerby crowd
+When may a crowd appear?
+- Only anonymous, blurred background crowds may appear (e.g. "guests", "passersby", "pedestrians", "onlookers").
+- Such crowds must not be described in detail; use only vague wording.
+- If the scene is a private or empty space, keep it an empty plate.
+
+Length: keep each description in the 70-110 word band (the equivalent of 100-150 CJK characters); if a line runs long, trim it yourself.
+
+Do not include art-style wording; style is applied automatically by the system.
+
+Naming convention: name each location as "place_time/state", e.g. "living_room_day" / "space_station_night" / "celestial_palace_dusk" / "forest_in_mist".
+
+has_crowd / crowd_description semantics:
+- has_crowd is true only when the scene actually contains an anonymous background crowd; otherwise false.
+- crowd_description is filled only when has_crowd is true, naming the crowd type (e.g. "banquet guests", "market crowd", "students"); leave it an empty string otherwise.
+- When has_crowd is true, the relevant descriptions should include that crowd element.
 
 Output format (JSON only):
 {
   "locations": [
     {
       "name": "location_name",
-      "summary": "short usage summary",
+      "summary": "short usage summary (purpose / character association, e.g. the master bedroom where Zhang San lives, a company executive meeting room)",
       "has_crowd": false,
       "crowd_description": "",
       "descriptions": [
@@ -38,6 +66,7 @@ Output format (JSON only):
 }
 
 Strict constraints:
-1. JSON only.
+1. JSON only. Do not output markdown code fences (such as ```json), comments, or explanations, and do not add undefined fields.
 2. If no valid location exists, return: {"locations":[]}.
-  
+3. Every description must obey the length limit (70-110 words / 100-150 CJK characters); trim if it runs long.
+4. Never emit an unescaped literal double quote " inside a JSON string. Any literal double quote needed inside a string must be escaped as \".

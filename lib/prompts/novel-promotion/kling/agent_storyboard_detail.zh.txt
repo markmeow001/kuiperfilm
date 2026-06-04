@@ -31,8 +31,7 @@
 - steady Steadicam movement — 平穩專業
 - drone-like aerial viewpoint — 史詩感、宏大場景
 - film noir lighting — 懸疑、陰影
-- 35mm film aesthetic — 質感
-- professional broadcast quality — 商業級
+（⚠️ 只挑「燈光 / 鏡頭行為」類描述詞，禁止寫器材型號或行銷品質詞 —— 詳見下方【五要素紅線】第 4 條。）
 
 【multi_shot_group — Kling 3.0 智能分鏡標記】
 
@@ -58,7 +57,8 @@ multi_shot_group 同號代表「可被 Kling 3.0 multi_shot=intelligence 合併�
 寫 [Specific Action] 段時，別只寫動作名，補下面三點讓 Kling 出片更自然：
 - **動作方式配氣質**：別只 "walks forward"，寫 "walks slowly with composed, dignified steps"；潛行寫 "moves with light, cautious steps"。
 - **身體聯動**：一處動，他處跟著 —— "raises her head, gaze lifting with it, shoulders settling, hair swaying slightly"。
-- **發力型動作拆物理階段**（仍是 1 個主動作）：揮桿/出拳/拔劍寫「蓄力 → 發力 → 軌跡 → 收勢」 ——
+- **發力型動作拆物理階段**（仍是 1 個主動作）：揮桿/出拳/拔劍按其物理過程寫「蓄力，發力部位，主動作軌跡，收勢定格」 ——
+  這四個階段是**同一動作**的物理階段，用逗號／頓號連寫，**不要用 → 箭頭**（→ 在本文件代表「動作節拍」，會被自檢誤判成多個動作）——
   "grips the pole and coils, weight dropping, then drives from waist and shoulders to sweep it in a wide arc from right to left, settling side-on with eyes fixed forward"，別只 "swings the pole"。
 - **多人同框**：分主動方 / 回應方，寫清互動順序（who acts → who responds → final relation），別只 "two people facing each other"。
 
@@ -95,6 +95,59 @@ multi_shot_group 同號代表「可被 Kling 3.0 multi_shot=intelligence 合併�
 - **epic（史詩/宏大）**：establishing wide shot；crane up / drone-like aerial；slow and deliberate
 - **suspense（懸疑/緊張）**：medium close-up + Dutch angle；slow dolly with held breath；film noir lighting
 
+【五要素紅線 — description / video_prompt 共通鐵則】
+
+核心平衡：**動作要精簡（每鏡 1 主動作），但畫面描述要寫滿**。
+要避免的「塞太滿」只針對兩件事 —— ① 連續動作堆疊（第 2 條）② 重複參考圖已有的外貌（第 1 條）。
+除此之外，**空間錨點、環境音效、微動作層次、構圖層次都要寫足寫具體**，不要省。
+單薄的一句話散文 = 模型自己腦補 = 出片簡陋且容易漏內容；密集而聚焦在「同一主拍」的描述 = 模型有明確依據 = 出片完整。
+
+每寫完一鏡的 description + video_prompt 前必過下列 7 條：
+
+1. ❌ 禁止重複 @圖片N 已涵蓋的外貌（身體部位 / 皮膚 / 髮型 / 服裝）。後端引用會自動帶，
+   只寫「當下動作 / 情緒 / 表情」。
+   ❌ 錯：「@王玄 胸腔起伏，皮膚泛紅出現毛孔汗珠」（全外貌）
+   ✅ 對：「@王玄 靈氣噴薄，胸腔起伏，氣旋成形」（動作 + 結果）
+2. ❌ 每鏡只演 1 個主動作（+ 可選的起勢／落點微動作）；構圖視覺點不限。
+   「視覺點」= 同一瞬間並存的畫面元素（前景/中景/背景層次、表情、手勢、光影）→ 多多益善，不佔時間。
+   「動作節拍」= 先後發生的連續事件（猫躍下 → 落地 → 變身 → 走向）→ 每鏡只演 1 個。
+   一個句點／一個「→」／一個「，然後」= 一個動作節拍；超過 1 個 → 必須拆到下一鏡。
+   ❌ 錯：「女子起身，走向門口，推開門，回頭一笑」（4 連續動作 → 只演起身）
+3. ❌ 禁止否定句指令（「不要 X」「no subtitles」「no on-screen text」）。生成模型會 attend 到否定的名詞反而觸發，由後端 negativePrompt 處理。
+4. ❌ 禁止剪輯／器材術語（「Arri Alexa」「IMAX」「35mm 鏡頭」「film grain」「8K」「電影級光影」「professional film production quality」）。由專案 visualStyleId + styleAnchor 處理。video_prompt 只寫「人眼看得到的畫面元素」。
+5. ❌ 禁止模糊集合詞（「眾人」「大家」「人們」「群眾」）。必寫具體角色名 / 數量。
+6. ✅ 每鏡必填「環境音效：……」一行，寫具體**物理聲源**（衣領摩擦聲 / 金屬冷風呼嘯 / 倒計時滴答 / 腳步聲 / 雨聲），不可省略。
+   ⚠️ **無對白鏡頭**避免「低頻貝斯 / 貝斯沉音 / 嗡鳴」這類易被誤當人聲合成的詞，改純物理聲源（低頻風聲 / 遠處機械轟鳴 / 空間回響）。
+7. ✅ video_prompt 對白若含引號內容，每條 ≤ 30 字（Kling Omni TTS 對長句不穩）。
+
+自檢（寫每鏡前必跑）：
+□ 沒重寫 @圖片N 外貌？ □ 連續動作節拍 ≤ 1 個主動作？ □ 沒否定句？
+□ 沒剪輯/器材詞？ □ 沒模糊集合詞？ □ 對白每條 ≤ 30 字？
+□ 有「空間錨點」（誰在畫面哪、朝向哪）？ □ 有「環境音效」一行？
+□ 這鏡有沒有「變身/幻化/形態轉換」？有的話拆成了前後兩鏡嗎？
+
+【description 必須寫滿 — 五要素 + 三層結構，不是一句散文】
+
+⚠️ description 是 R2V 敘事的主文本（前端預覽 + 直接餵給視頻模型都讀這一欄），
+**必須和 video_prompt 一樣寫滿**：空間錨點（誰在畫面哪、朝向哪）+ 環境音效（具體聲源）+
+微動作層次 + [開頭]/[中段]/[收尾] 三段時間錨點（同一主拍的張力弧，不是 3 個連續動作）。
+description 不是被動散文，單薄一句話會讓 R2V 敘事看不到豐富度。
+**唯一差別：description 保留角色全名（@角色名 / 真名），video_prompt 才換成年齡段+性別。**
+
+三層寫法（[開頭] 蓄勢 → [中段] 展開 → [收尾] 收束，都是同一主動作的時間切片）：
+- 鏡頭偏短（動作密度高，約 3–5 秒）：壓成兩段 [開頭] 蓄勢 + [收尾] 發力收束。
+- 鏡頭偏長（連續對白，約 10–15 秒）：保持三段，中段可細分語氣／景別轉折，但整鏡仍只有 1 個主動作。
+
+【變身 / 幻化 / 形態轉換鏡頭規則】
+
+生成模型（Kling R2V / Seedance）無法在單一 clip 內把一個主體「漸變」成另一張參考圖
+（例「黑貓落地幻化成 @Vera」）。參考圖是身份錨點，模型只會呈現其中一個狀態，中間的轉換過程必然丟失，常連後續動作一起被跳過。
+
+遇到原文「X 幻化/變身/化為/顯形/現出真身 成 Y」：**必須拆成前後兩鏡，靠剪接表達轉換，絕不在單鏡內要求主體完全替換。**
+  ❌ 錯（單鏡 morph + 多動作）：「黑貓躍下，落地瞬間幻化成 @Vera，她走向 @William」
+  ✅ 對（拆兩鏡）：鏡1「一隻黑貓從石柱陰影躍下、輕盈落地」（只演貓）；鏡2「@Vera 已立於原地，緩步走向 @William」（開場即人形，1 主動作）
+同理：出現 / 消失 / 召喚 / 傳送 等「主體憑空替換」的轉場，都拆成「轉換前」+「轉換後」兩鏡。
+
 【輸出格式】
 
 只返回 JSON 陣列，禁止 markdown 標記、註解、未定義字段。在輸入 panels 基礎上補充：
@@ -109,8 +162,8 @@ multi_shot_group 同號代表「可被 Kling 3.0 multi_shot=intelligence 合併�
     "panel_number": 1,
     "shot_type": "establishing wide shot, rule of thirds",
     "camera_move": "slow dolly forward (5s)",
-    "description": "咖啡廳內景，年輕女子坐在窗邊攪動咖啡",
-    "video_prompt": "Wide establishing shot of warm-lit cafe interior, young woman in beige sweater seated by the window stirring her coffee, slow dolly forward 5 seconds, cinematic depth of field, golden hour lighting",
+    "description": "[開頭] @角色A（畫面右下 1/3，前景）面朝窗外，獨坐窗邊的木桌前，指尖緩緩攪動咖啡匙，匙身輕碰杯壁；前景是半空的糖罐，中景是她的側影，背景是模糊的吧台光斑與街景。環境音效：咖啡匙碰杯壁的清脆叮聲、窗外隱約車流聲。 [收尾] 她攪動的手漸漸停下，視線隨之飄向窗外街道，肩膀順勢微沉，垂在胸前的髮絲輕晃，眉宇間浮起一絲悵然。環境音效：木椅輕微吱呀、暖風機低鳴。",
+    "video_prompt": "Wide establishing shot of warm-lit cafe interior, young woman in beige sweater seated by the window slowly stirring her coffee then pausing as her gaze drifts to the street, shoulders settling, slow dolly forward 5 seconds, cinematic depth of field, golden hour lighting",
     "multi_shot_group": 1,
     "characters": [{"name": "角色A", "appearance": "初始形象"}],
     "location": "咖啡廳",
@@ -121,8 +174,8 @@ multi_shot_group 同號代表「可被 Kling 3.0 multi_shot=intelligence 合併�
     "panel_number": 2,
     "shot_type": "medium close-up, off-center",
     "camera_move": "static (3s)",
-    "description": "年輕女子抬頭望向走進門的男子",
-    "video_prompt": "Medium close-up of young woman looking up from her cup toward the cafe door, soft side light on her face, static close-up, cinematic depth of field",
+    "description": "[開頭] @角色A（畫面右，前景）面朝鏡頭側方，正低頭看著杯中咖啡，睫毛低垂；背景的咖啡廳門口（畫面左後方，景深虛化）傳來門鈴聲。環境音效：門上銅鈴叮噹、門軸輕響。 [收尾] 她聞聲緩緩抬頭，視線隨之上移投向門口走進的身影，眼神由平靜泛起一絲波動，嘴唇微微抿緊，握杯的手指不自覺收緊。環境音效：腳步聲由遠及近、衣料摩擦聲。",
+    "video_prompt": "Medium close-up of young woman looking up from her cup toward the cafe door, gaze lifting with it, fingers tightening on the cup, soft side light on her face, static close-up, cinematic depth of field",
     "multi_shot_group": 1,
     "characters": [{"name": "角色A", "appearance": "初始形象"}],
     "location": "咖啡廳",
@@ -151,4 +204,6 @@ multi_shot_group 同號代表「可被 Kling 3.0 multi_shot=intelligence 合併�
 6. 對話場景必須包含 "speaking with subtle gestures" 或類似明確 speech 描述
 7. 同 scene 連續且鏡頭呼應的 panel → 標 multi_shot_group
 8. panel_number、characters、location、scene_type、source_text 保持不變
-9. 只返回 JSON 陣列，無 markdown、無註解
+9. ⚠️ description 必須寫滿五要素三層結構（空間錨點 + 環境音效一行 + 微動作層次 + [開頭]/[中段]/[收尾]），保留角色全名，不可寫成單薄一句散文（見【description 必須寫滿】）
+10. 過五要素紅線自檢（無器材術語 / 無否定句 / 無模糊集合詞 / 每鏡 1 主動作 / 有環境音效），變身/幻化必拆兩鏡
+11. 只返回 JSON 陣列，無 markdown、無註解

@@ -8,14 +8,16 @@ Current descriptions (reference):
 {current_descriptions}
 
 Requirements:
-1. Generate 3 clearly different but same-location variants.
+1. Generate 3 clearly different but same-location variants (vary mood / layout / detail) while keeping the scene's core identity.
 2. Keep the scene name prefix in each line: "[{location_name}] ..."
 3. Output in English only.
-4. Keep environment-only description (no protagonist actions).
-5. Keep each variant concise and image-generation friendly.
+4. Keep environment-only description (no protagonist actions). Never name a specific character. If the current description contains a crowd, keep a crowd in the new variants too — you may adjust its position, density, or state, but use only blurred, unnamed terms ("crowd", "guests", "passersby").
+5. Era consistency: infer the period from the scene and keep architecture, decor, and props consistent with that era. Time consistency: if the scene name implies day/night/dusk, the lighting must match.
+6. Do not include art-style or visual-style wording; style is applied automatically by the system.
+7. Keep each variant in the 40-80 word band (the equivalent of 60-120 CJK characters), concise and image-generation friendly, so density stays consistent across create, modify, update, and regenerate.
 
 Output format:
-Return JSON only:
+Return JSON only. No markdown fences, comments, or extra text. Inside JSON strings, any literal double quote must be escaped as \".
 {
   "descriptions": [
     "[{location_name}] variant 1",

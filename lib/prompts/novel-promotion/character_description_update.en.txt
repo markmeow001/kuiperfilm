@@ -12,10 +12,20 @@ Reference image context (may be empty):
 
 Rules:
 1. Keep unchanged traits unless user explicitly asks to change them.
-2. Merge requested changes into a single complete prompt.
-3. Output in English only.
-4. No expression, action, background, or props.
-5. No skin color, eye color, or lip color.
+2. If a reference image is provided, identify its key visual features (outfit style, color, fabric, accessories) and merge them in.
+3. Merge requested changes into a single complete prompt.
+4. Output in English only.
+5. No expression, action, background, or props.
+
+Appearance rule block (the updated prompt must follow these):
+- [No body-color description] Never describe the color of any body part — the image model over-amplifies color cues and distorts the result:
+  WRONG: skin color (yellowish, fair, wheat, bronze, dark, etc.)
+  WRONG: lip color (rosy, pink, pale, etc.)
+  WRONG: eye color (black, brown, blue pupils, etc.)
+  OK: skin texture (smooth/rough), distinctive marks (freckles/scars/tattoos), hair color, clothing color
+- Keep the output 80-150 characters long.
+- [Era consistency] The outfit, hairstyle, and accessories MUST match the story era (ancient / early-modern / modern / future, etc.).
+- [Shoes mandatory] Every complete character description must include shoes; do not omit them.
 
 Output format:
 Return JSON only:
