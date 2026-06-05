@@ -1,11 +1,38 @@
 'use client'
 
+/**
+ * Phase 1 redesign — sign-in page migrated to v2 component library.
+ *
+ * Reference: REDESIGN_PLAN.md §5 Phase 2 (公開 funnel) — auth modal,
+ * Google OAuth, password show/hide, clear errors. This first
+ * migration covers the basic credentials form; Google OAuth +
+ * password show/hide are follow-ups.
+ *
+ * Behavior is byte-for-byte unchanged from the legacy version:
+ *   - same signIn('credentials', { username, password, redirect: false })
+ *   - same routing.push('/') + router.refresh() on success
+ *   - same error tone for credential failure vs unexpected exception
+ *   - same Navbar at top
+ *
+ * The only deltas are visual:
+ *   - bg-canvas / bg-raised / text-text-* token utilities replace the
+ *     legacy `--glass-*` CSS variables
+ *   - <Input /> v2 replaces hand-rolled <label>+<input>
+ *   - <Button /> v2 replaces <button className="glass-btn-*">
+ *   - <Card variant="raised" /> replaces glass-surface-modal
+ *   - Error message rendered via Input's error prop or a dedicated
+ *     inline pattern using semantic --error token
+ */
+
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useTranslations } from 'next-intl'
 import Navbar from "@/components/Navbar"
+import { Button } from "@/components/v2/Button"
+import { Input } from "@/components/v2/Input"
+import { Card } from "@/components/v2/Card"
 
 export default function SignIn() {
   const [username, setUsername] = useState("")
@@ -41,79 +68,77 @@ export default function SignIn() {
   }
 
   return (
-    <div className="glass-page min-h-screen">
+    <div className="min-h-screen bg-canvas text-text-primary">
       <Navbar />
       <div className="flex items-center justify-center px-4 py-12">
-        <div className="max-w-md w-full">
-          <div className="glass-surface-modal p-8">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-[var(--glass-text-primary)] mb-2">
+        <div className="w-full max-w-md">
+          <Card variant="raised" padding="lg" elevation={2}>
+            <div className="mb-8 text-center">
+              <h1 className="mb-2 text-[28px] font-medium leading-[1.2] tracking-[-0.02em] text-text-primary">
                 {t('welcomeBack')}
               </h1>
-              <p className="text-[var(--glass-text-secondary)]">{t('loginTo')}</p>
+              <p className="text-[14px] text-text-secondary">{t('loginTo')}</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="username" className="glass-field-label block mb-2">
-                  {t('phoneNumber')}
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  className="glass-input-base w-full px-4 py-3"
-                  placeholder={t('phoneNumberPlaceholder')}
-                />
-              </div>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <Input
+                id="username"
+                type="text"
+                label={t('phoneNumber')}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                placeholder={t('phoneNumberPlaceholder')}
+                size="lg"
+                autoComplete="username"
+              />
 
-              <div>
-                <label htmlFor="password" className="glass-field-label block mb-2">
-                  {t('password')}
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="glass-input-base w-full px-4 py-3"
-                  placeholder={t('passwordPlaceholder')}
-                />
-              </div>
+              <Input
+                id="password"
+                type="password"
+                label={t('password')}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder={t('passwordPlaceholder')}
+                size="lg"
+                autoComplete="current-password"
+                error={error || undefined}
+              />
 
-              {error && (
-                <div className="bg-[var(--glass-tone-danger-bg)] border border-[color:color-mix(in_srgb,var(--glass-tone-danger-fg)_22%,transparent)] text-[var(--glass-tone-danger-fg)] px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-
-              <button
+              <Button
                 type="submit"
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={loading}
                 disabled={loading}
-                className="glass-btn-base glass-btn-primary w-full py-3 px-4 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? t('loginButtonLoading') : t('loginButton')}
-              </button>
+              </Button>
             </form>
 
             <div className="mt-6 text-center">
-              <p className="text-[var(--glass-text-secondary)]">
+              <p className="text-[14px] text-text-secondary">
                 {t('noAccount')}{" "}
-                <Link href="/auth/signup" className="text-[var(--glass-tone-info-fg)] hover:underline font-medium">
+                <Link
+                  href="/auth/signup"
+                  className="font-medium text-accent-500 transition-colors duration-[120ms] ease-out hover:text-primary-500"
+                >
                   {t('signupNow')}
                 </Link>
               </p>
             </div>
 
-            <div className="mt-6 text-center">
-              <Link href="/" className="text-[var(--glass-text-tertiary)] hover:text-[var(--glass-text-secondary)] text-sm">
+            <div className="mt-4 text-center">
+              <Link
+                href="/"
+                className="text-[13px] text-text-tertiary transition-colors duration-[120ms] ease-out hover:text-text-secondary"
+              >
                 {t('backToHome')}
               </Link>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>
