@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { ApiError } from '@/lib/api-errors'
 import { hunyuanChatCompletion, parseHunyuanCredentials } from '@/lib/llm/hunyuan-client'
+import { ensureOpenAiV1Path } from '@/lib/llm/openai-base-url'
 
 type SupportedProvider =
   | 'openrouter'
@@ -158,7 +159,10 @@ export async function testLlmConnection(payload: TestConnectionPayload): Promise
     case 'custom': {
       const tested = await testOpenAICompatibleConnection({
         apiKey,
-        baseURL: requireBaseUrl(payload),
+        // Normalize to /v1 like the runtime provider config does, so the
+        // test hits the same path the real LLM call uses (2026-06-07 — was
+        // testing https://host/models, runtime uses https://host/v1/...).
+        baseURL: ensureOpenAiV1Path(requireBaseUrl(payload)),
         model: requestedModel || undefined,
       })
       return { provider, message: 'custom 连接成功', ...tested }

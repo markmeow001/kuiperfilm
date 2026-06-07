@@ -9,6 +9,7 @@
 
 import { prisma } from './prisma'
 import { decryptApiKey } from './crypto-utils'
+import { ensureOpenAiV1Path } from './llm/openai-base-url'
 import { UserRole } from './auth/user-role'
 import {
   composeModelKey,
@@ -59,20 +60,9 @@ function normalizeProviderBaseUrl(providerId: string, rawBaseUrl?: string): stri
   const baseUrl = readTrimmedString(rawBaseUrl)
   if (!baseUrl) return undefined
   if (getProviderKey(providerId) !== 'openai-compatible') return baseUrl
-
-  try {
-    const parsed = new URL(baseUrl)
-    const pathSegments = parsed.pathname.split('/').filter(Boolean)
-    const hasV1 = pathSegments.includes('v1')
-    if (hasV1) return baseUrl
-
-    const trimmedPath = parsed.pathname.replace(/\/+$/, '')
-    parsed.pathname = `${trimmedPath === '' || trimmedPath === '/' ? '' : trimmedPath}/v1`
-    return parsed.toString()
-  } catch {
-    // Keep original value to avoid hiding invalid-config errors.
-    return baseUrl
-  }
+  // Shared with the ⚡ test-connection so the test hits the same /v1 path
+  // the runtime call uses (2026-06-07).
+  return ensureOpenAiV1Path(baseUrl)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
