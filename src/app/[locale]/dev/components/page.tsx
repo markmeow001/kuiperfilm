@@ -31,6 +31,12 @@ import { Inspector } from '@/components/v2/Inspector'
 import { EmptyState } from '@/components/v2/EmptyState'
 import { GenerationProgress } from '@/components/v2/GenerationProgress'
 import { MediaReveal } from '@/components/v2/MediaReveal'
+import {
+  useSkills,
+  useInstallSkill,
+  useUpdateSkillInstallation,
+  type SkillRow,
+} from '@/lib/query/hooks/useSkills'
 
 export default function ComponentsPreview() {
   return (
@@ -705,118 +711,71 @@ function MediaRevealDemo() {
   )
 }
 
-// ─── Skill picker demo (Phase 2.5 prototype) ───
+// ─── Skill picker demo (Phase 2.5 — real API) ───
 //
-// Mock data mirrors the structure of `prisma.skill.findMany()` so the
-// real wiring is a 1:1 swap when the DB seed runs.
-
-interface SkillRowMock {
-  id: string
-  slug: string
-  name: string
-  authorDisplay: string
-  authorType: 'official' | 'community'
-  description: string
-  isFeatured: boolean
-  installed: boolean
-  enabled: boolean
-}
-
-const SKILL_DEMO_DATA: SkillRowMock[] = [
-  {
-    id: 's-1',
-    slug: 'drama-short-seedance-voice',
-    name: '劇情短片視頻',
-    authorDisplay: '@KuiperAI',
-    authorType: 'official',
-    description:
-      '角色語音錨定 + Seedance 2.0 驅動。每個角色在元素階段就綁定參考音頻，整集對白音色不漂。適合對白密度高的短劇。',
-    isFeatured: true,
-    installed: true,
-    enabled: true,
-  },
-  {
-    id: 's-2',
-    slug: 'script-driven-cinematic',
-    name: '劇本驅動型視頻',
-    authorDisplay: '@KuiperAI',
-    authorType: 'official',
-    description:
-      '上傳劇本 (PDF/圖/文字)，自動拆鏡頭、視覺語言、節奏，生成新故事影片。Nano Banana + Seedance 2.0。',
-    isFeatured: true,
-    installed: true,
-    enabled: true,
-  },
-  {
-    id: 's-3',
-    slug: 'product-promo-commercial',
-    name: '商品宣傳短片',
-    authorDisplay: '@KuiperAI',
-    authorType: 'official',
-    description:
-      '上傳產品圖，AI 生成商業級的廣告短片。預設 16:9 / 8s × 4 鏡頭。',
-    isFeatured: false,
-    installed: true,
-    enabled: true,
-  },
-  {
-    id: 's-4',
-    slug: 'music-mv-omnihuman',
-    name: '音樂 MV',
-    authorDisplay: '@KuiperAI',
-    authorType: 'official',
-    description:
-      '上傳音樂 → Omnihuman 對口型 → 主角演唱。專為音樂 MV 製作的工作流。',
-    isFeatured: false,
-    installed: false,
-    enabled: false,
-  },
-  {
-    id: 's-5',
-    slug: 'previs-action-storyboard',
-    name: '動作預演分鏡視頻',
-    authorDisplay: '@KuiperAI',
-    authorType: 'official',
-    description:
-      '動作導演 PREVIS 場景：火柴人 2×4 分鏡 → Seedance 2.0 全能參考 → 每板 ≤15s 動作視頻。',
-    isFeatured: false,
-    installed: false,
-    enabled: false,
-  },
-  {
-    id: 's-6',
-    slug: 'reference-recreation',
-    name: '視頻拉片複刻',
-    authorDisplay: '@KuiperAI',
-    authorType: 'official',
-    description:
-      '上傳參考影片，AI 學它的鏡頭語言/節奏，套到你的新主題。Nano Banana + Seedance 2.0。',
-    isFeatured: false,
-    installed: false,
-    enabled: false,
-  },
-]
+// Wired to the real /api/skills + /api/skill-installations endpoints
+// via the hooks in src/lib/query/hooks/useSkills.ts. Requires the
+// Skill tables to exist in DB (`npx prisma db push`) + at least one
+// Skill seeded (`npx tsx --env-file=.env scripts/seed-official-skills.ts`).
+//
+// When DB is empty, the picker renders the EmptyState cold-start
+// (the spec-mandated 「尚未啟用任何 Skill」 affordance).
+//
+// `npm run dev:next` without DB → calls 500. To preview UI without
+// DB, set SKIP_INSTRUMENTATION=1 and skip this section (the rest of
+// /dev/components still works since it's pure UI components).
 
 function SkillPickerDemo() {
-  const [skills, setSkills] = useState<SkillRowMock[]>(SKILL_DEMO_DATA)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [activeSkillId, setActiveSkillId] = useState<string>(skills[0]?.id ?? '')
+  const skillsQuery = useSkills()
+  const installMutation = useInstallSkill()
+  const updateMutation = useUpdateSkillInstallation()
 
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [activeSkillId, setActiveSkillId] = useState<string | null>(null)
+
+  const skills = skillsQuery.data?.skills ?? []
   const installed = skills.filter((s) => s.installed)
   const browse = skills.filter((s) => !s.installed)
-  const active = skills.find((s) => s.id === activeSkillId) ?? null
 
-  function toggleEnabled(id: string) {
-    setSkills((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)),
+  // First installed Skill becomes active by default; user can swap.
+  const effectiveActiveId = activeSkillId ?? installed[0]?.id ?? null
+  const active = skills.find((s) => s.id === effectiveActiveId) ?? null
+
+  function toggleEnabled(s: SkillRow) {
+    if (!s.installationId) return
+    updateMutation.mutate({
+      installationId: s.installationId,
+      enabled: !s.enabled,
+    })
+  }
+
+  function install(s: SkillRow) {
+    installMutation.mutate(s.id, {
+      onSuccess: () => setActiveSkillId(s.id),
+    })
+  }
+
+  if (skillsQuery.isLoading) {
+    return (
+      <Card variant="raised" padding="lg">
+        <div className="text-center text-[13px] text-text-tertiary">
+          載入 Skill 庫…
+        </div>
+      </Card>
     )
   }
 
-  function install(id: string) {
-    setSkills((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, installed: true, enabled: true } : s,
-      ),
+  if (skillsQuery.isError) {
+    return (
+      <Card variant="raised" padding="lg">
+        <div className="space-y-2 text-center">
+          <div className="text-[14px] text-error">無法載入 Skill 庫</div>
+          <div className="text-[12px] text-text-tertiary">
+            確認已執行 <code>npx prisma db push</code> + seeder，
+            或本地有 MySQL 可連線。
+          </div>
+        </div>
+      </Card>
     )
   }
 
@@ -896,8 +855,9 @@ function SkillPickerDemo() {
                     <input
                       type="checkbox"
                       checked={s.enabled}
-                      onChange={() => toggleEnabled(s.id)}
-                      className="h-4 w-4 cursor-pointer accent-primary-500"
+                      onChange={() => toggleEnabled(s)}
+                      disabled={updateMutation.isPending}
+                      className="h-4 w-4 cursor-pointer accent-primary-500 disabled:cursor-not-allowed"
                     />
                     <span className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary">
                       {s.enabled ? '啟用' : '停用'}
@@ -945,10 +905,9 @@ function SkillPickerDemo() {
                     <Button
                       variant="primary"
                       size="sm"
-                      onClick={() => {
-                        install(s.id)
-                        setActiveSkillId(s.id)
-                      }}
+                      onClick={() => install(s)}
+                      loading={installMutation.isPending}
+                      disabled={installMutation.isPending}
                     >
                       + 新增
                     </Button>

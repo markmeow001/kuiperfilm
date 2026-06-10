@@ -45,6 +45,14 @@ export const queryKeys = {
             ['voice-lines', projectId, episodeId, 'matched'] as const,
     },
 
+    // ============ Skill primitive (Phase 2.5) ============
+    skills: {
+        all: () => ['skills'] as const,
+        list: (filters: { installed?: boolean; featured?: boolean; workspaceId?: string | null } = {}) =>
+            ['skills', 'list', filters] as const,
+        detail: (slug: string) => ['skills', 'detail', slug] as const,
+    },
+
     // ============ 用户模型 ============
     userModels: {
         all: () => ['user-models'] as const,
