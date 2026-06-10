@@ -26,6 +26,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
+import { useSkills } from '@/lib/query/hooks/useSkills'
 
 interface V2NewProjectClientProps {
   locale: string
@@ -79,6 +80,9 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
   // 2026-05-29 — per-project generation mode + opening pacing.
   const [generationMode, setGenerationMode] = useState<'r2v-narrative' | 't2i-storyboard'>('r2v-narrative')
   const [openingPacing, setOpeningPacing] = useState<'hook' | 'cinematic'>('hook')
+  // 2026-06-10 (Phase 2.5) — optional Skill anchor. null = 自由創作 (status
+  // quo). Set = project pipeline driven by Skill.config at submit time.
+  const [originSkillId, setOriginSkillId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Phase 12.5+ — pick the target workspace at create time.
@@ -195,6 +199,8 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
           workspaceId: workspaceId || null,
           generationMode,
           openingPacing,
+          // Phase 2.5 — optional Skill anchor. null = 自由創作 generic flow.
+          originSkillId: originSkillId,
         }),
       })
       if (!res.ok) {
@@ -396,6 +402,16 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
             </div>
           </div>
 
+          {/* 2026-06-10 (Phase 2.5) — optional Skill anchor.
+              First button is 自由創作 (no Skill = generic flow, status quo).
+              Rest are user's installed Skills. List source = useSkills({ installed: true }).
+              Empty Skill library → only the 自由創作 option shows + a hint
+              linking to /skills (browse marketplace later). */}
+          <SkillAnchorPicker
+            originSkillId={originSkillId}
+            onChange={setOriginSkillId}
+          />
+
           {/* Bulk-upload picker */}
           <div>
             <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
@@ -566,6 +582,94 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
           </div>
         </form>
       </main>
+    </div>
+  )
+}
+
+// ─── Phase 2.5 — Skill anchor picker (sub-component) ───
+//
+// Renders the optional Skill selector inside the new-project form.
+// First option is always 自由創作 (no Skill = generic flow, status quo).
+// Remaining options come from the user's installed Skills.
+//
+// Empty Skill library: only 自由創作 renders + a small hint nudging
+// users to /skills to install one (Phase 3.5 marketplace).
+//
+// Style matches the surrounding form (Session A's stone/amber theme).
+
+interface SkillAnchorPickerProps {
+  originSkillId: string | null
+  onChange: (id: string | null) => void
+}
+
+function SkillAnchorPicker({ originSkillId, onChange }: SkillAnchorPickerProps) {
+  // i18n: hardcoded strings for the Phase 2.5 ship. Session A's i18n
+  // migration adds proper messages/{locale}/v2New.json keys in a
+  // follow-up; for now the labels are Traditional Chinese only since
+  // that's KuiperAI's primary locale.
+  const skillsQuery = useSkills({ installed: true })
+  const skills = skillsQuery.data?.skills ?? []
+  const installed = skills.filter((s) => s.enabled)
+
+  // Build option list — 自由創作 first, then installed Skills.
+  const options: Array<{ id: string | null; name: string; desc: string }> = [
+    {
+      id: null,
+      name: '自由創作',
+      desc: '不綁定 Skill — 預設多鏡 + 視覺風格手動設定。',
+    },
+    ...installed.map((s) => ({
+      id: s.id,
+      name: s.name,
+      desc:
+        s.description.length > 60
+          ? `${s.description.slice(0, 58)}…`
+          : s.description,
+    })),
+  ]
+
+  return (
+    <div>
+      <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
+        創作模式 / Skill
+      </label>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {options.map((opt) => (
+          <button
+            key={opt.id ?? 'free'}
+            type="button"
+            onClick={() => onChange(opt.id)}
+            className={`rounded-sm border px-3 py-2.5 text-left transition-colors ${
+              originSkillId === opt.id
+                ? 'border-amber-500/60 bg-amber-500/10'
+                : 'border-stone-800 bg-stone-900/40 hover:border-stone-700'
+            }`}
+          >
+            <div
+              className={`font-mono text-[13px] tracking-wider ${
+                originSkillId === opt.id ? 'text-amber-300' : 'text-stone-300'
+              }`}
+            >
+              {opt.name}
+            </div>
+            <div className="mt-0.5 font-fraunces text-[11px] italic text-stone-500">
+              {opt.desc}
+            </div>
+          </button>
+        ))}
+      </div>
+      {installed.length === 0 && !skillsQuery.isLoading ? (
+        <p className="mt-2 font-fraunces text-[11px] italic text-stone-500">
+          尚未啟用任何 Skill。前往{' '}
+          <Link
+            href="/skills"
+            className="text-amber-400/80 underline-offset-4 hover:underline"
+          >
+            Skill 庫
+          </Link>
+          {' '}啟用想用的工作流。
+        </p>
+      ) : null}
     </div>
   )
 }

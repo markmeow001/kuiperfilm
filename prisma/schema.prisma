@@ -544,6 +544,12 @@ model Project {
   // POST /api/projects/:id/restore within the grace window.
   deletedAt          DateTime?
   deletedBy          String?
+  // Phase 2.5 (2026-06-10) — Skill primitive. NULL = generic 自由創作.
+  // Set = project was created via a Skill picker selection; workers
+  // read the Skill's config to drive pipeline + defaults + prompts.
+  // SetNull on delete so retiring a Skill doesn't orphan its projects.
+  originSkillId      String?
+  originSkill        Skill?                 @relation("SkillOriginatedProjects", fields: [originSkillId], references: [id], onDelete: SetNull)
   novelPromotionData NovelPromotionProject?
   user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace          Workspace?             @relation("WorkspaceProjects", fields: [workspaceId], references: [id], onDelete: SetNull)
@@ -558,6 +564,7 @@ model Project {
   @@index([userId])
   @@index([workspaceId])
   @@index([deletedAt])
+  @@index([originSkillId])
   @@map("projects")
 }
 
@@ -1782,6 +1789,10 @@ model Skill {
   updatedAt     DateTime @default(now()) @updatedAt
 
   installations SkillInstallation[]
+  /// Phase 2.5 (2026-06-10) — projects created via this Skill. Set via
+  /// V2NewProjectClient picker; workers read this at submit time to
+  /// resolve the active Skill config.
+  originatedProjects Project[] @relation("SkillOriginatedProjects")
 
   @@index([authorType, status, isFeatured, popularityScore])
   @@index([slug])

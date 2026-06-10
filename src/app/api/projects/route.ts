@@ -219,6 +219,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     workspaceId: rawWorkspaceId,
     generationMode: rawGenerationMode,
     openingPacing: rawOpeningPacing,
+    originSkillId: rawOriginSkillId,
   } = await request.json()
   // New projects default to R2V-narrative (no T2I). normalize* falls back to
   // 'r2v-narrative' / 'hook' for any missing/invalid value, so even non-UI
@@ -279,6 +280,49 @@ export const POST = apiHandler(async (request: NextRequest) => {
     workspaceId = candidate
   }
 
+  // Phase 2.5 (2026-06-10) — Skill primitive selection at create time.
+  // null / undefined / "" → 個人創作 (generic, status quo). Real Skill
+  // id → must exist + be published + accessible to user (global, or
+  // workspace-private with caller as member). Worker reads project.
+  // originSkill.config at submit time to drive pipeline + defaults +
+  // prompts. See IMPL_PREP/R-skill-primitive.md §5-6.
+  let originSkillId: string | null = null
+  if (rawOriginSkillId && typeof rawOriginSkillId === 'string' && rawOriginSkillId.trim()) {
+    const skillCandidate = rawOriginSkillId.trim()
+    const skill = await prisma.skill.findUnique({
+      where: { id: skillCandidate },
+      select: { id: true, status: true, workspaceId: true },
+    })
+    if (!skill) {
+      throw new ApiError('NOT_FOUND', {
+        code: 'SKILL_NOT_FOUND',
+        details: { reason: 'Skill 不存在或已下架' },
+      })
+    }
+    if (skill.status !== 'published') {
+      throw new ApiError('FORBIDDEN', {
+        code: 'SKILL_NOT_PUBLISHED',
+        details: { reason: '此 Skill 尚未發佈，無法用於建立專案' },
+      })
+    }
+    if (skill.workspaceId && skill.workspaceId !== workspaceId) {
+      // Workspace-private Skill being used in a different (or no)
+      // workspace context — reject. The user might be admin elsewhere
+      // but the Skill is scoped to its owning workspace by design.
+      const membership = await prisma.workspaceMember.findUnique({
+        where: { workspaceId_userId: { workspaceId: skill.workspaceId, userId: session.user.id } },
+        select: { workspaceId: true },
+      }).catch(() => null)
+      if (!membership) {
+        throw new ApiError('FORBIDDEN', {
+          code: 'SKILL_WORKSPACE_PRIVATE',
+          details: { reason: '此 Skill 屬於另一個工作區的私有設定' },
+        })
+      }
+    }
+    originSkillId = skill.id
+  }
+
   // 获取用户偏好配置 + admin 偏好（multi-user 繼承用）。
   // 新建專案時複製預設模型欄位:
   //   1. 優先用 user 自己 preference 的值
@@ -314,8 +358,22 @@ export const POST = apiHandler(async (request: NextRequest) => {
       mode: 'novel-promotion',
       userId: session.user.id,
       workspaceId, // null = personal; validated above when set
+      originSkillId, // Phase 2.5; null = 自由創作; validated above when set
     }
   })
+
+  // Phase 2.5 — bump Skill.lastUsedAt installation timestamp when this
+  // project was created via a Skill. Surfaces a "recently used" sort
+  // signal in the picker. Best-effort: failure here doesn't block the
+  // project creation since the row already committed above.
+  if (originSkillId) {
+    await prisma.skillInstallation
+      .updateMany({
+        where: { userId: session.user.id, skillId: originSkillId },
+        data: { lastUsedAt: new Date() },
+      })
+      .catch(() => {})
+  }
 
   // 创建 novel-promotion 数据表，使用用户偏好作为默认值
   // 注意：不再自动创建默认剧集，由用户在选择界面决定：
