@@ -418,6 +418,19 @@ export default function ComponentsPreview() {
 
           <MediaRevealDemo />
         </section>
+
+        <section className="mb-12">
+          <h2 className="mb-4 text-[20px] font-medium">Skill picker — Phase 2.5</h2>
+          <p className="mb-6 text-[13px] text-text-tertiary">
+            Skill primitive prototype. Spec: <code>IMPL_PREP/R-skill-primitive.md</code>.
+            Mirrors flova&apos;s 「我的 Skill」 list + picker affordance. Mock
+            data only — production version reads from the Skill +
+            SkillInstallation Prisma tables shipping in this branch&apos;s
+            schema migration.
+          </p>
+
+          <SkillPickerDemo />
+        </section>
       </div>
     </main>
   )
@@ -689,5 +702,268 @@ function MediaRevealDemo() {
         />
       </Card>
     </>
+  )
+}
+
+// ─── Skill picker demo (Phase 2.5 prototype) ───
+//
+// Mock data mirrors the structure of `prisma.skill.findMany()` so the
+// real wiring is a 1:1 swap when the DB seed runs.
+
+interface SkillRowMock {
+  id: string
+  slug: string
+  name: string
+  authorDisplay: string
+  authorType: 'official' | 'community'
+  description: string
+  isFeatured: boolean
+  installed: boolean
+  enabled: boolean
+}
+
+const SKILL_DEMO_DATA: SkillRowMock[] = [
+  {
+    id: 's-1',
+    slug: 'drama-short-seedance-voice',
+    name: '劇情短片視頻',
+    authorDisplay: '@KuiperAI',
+    authorType: 'official',
+    description:
+      '角色語音錨定 + Seedance 2.0 驅動。每個角色在元素階段就綁定參考音頻，整集對白音色不漂。適合對白密度高的短劇。',
+    isFeatured: true,
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 's-2',
+    slug: 'script-driven-cinematic',
+    name: '劇本驅動型視頻',
+    authorDisplay: '@KuiperAI',
+    authorType: 'official',
+    description:
+      '上傳劇本 (PDF/圖/文字)，自動拆鏡頭、視覺語言、節奏，生成新故事影片。Nano Banana + Seedance 2.0。',
+    isFeatured: true,
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 's-3',
+    slug: 'product-promo-commercial',
+    name: '商品宣傳短片',
+    authorDisplay: '@KuiperAI',
+    authorType: 'official',
+    description:
+      '上傳產品圖，AI 生成商業級的廣告短片。預設 16:9 / 8s × 4 鏡頭。',
+    isFeatured: false,
+    installed: true,
+    enabled: true,
+  },
+  {
+    id: 's-4',
+    slug: 'music-mv-omnihuman',
+    name: '音樂 MV',
+    authorDisplay: '@KuiperAI',
+    authorType: 'official',
+    description:
+      '上傳音樂 → Omnihuman 對口型 → 主角演唱。專為音樂 MV 製作的工作流。',
+    isFeatured: false,
+    installed: false,
+    enabled: false,
+  },
+  {
+    id: 's-5',
+    slug: 'previs-action-storyboard',
+    name: '動作預演分鏡視頻',
+    authorDisplay: '@KuiperAI',
+    authorType: 'official',
+    description:
+      '動作導演 PREVIS 場景：火柴人 2×4 分鏡 → Seedance 2.0 全能參考 → 每板 ≤15s 動作視頻。',
+    isFeatured: false,
+    installed: false,
+    enabled: false,
+  },
+  {
+    id: 's-6',
+    slug: 'reference-recreation',
+    name: '視頻拉片複刻',
+    authorDisplay: '@KuiperAI',
+    authorType: 'official',
+    description:
+      '上傳參考影片，AI 學它的鏡頭語言/節奏，套到你的新主題。Nano Banana + Seedance 2.0。',
+    isFeatured: false,
+    installed: false,
+    enabled: false,
+  },
+]
+
+function SkillPickerDemo() {
+  const [skills, setSkills] = useState<SkillRowMock[]>(SKILL_DEMO_DATA)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [activeSkillId, setActiveSkillId] = useState<string>(skills[0]?.id ?? '')
+
+  const installed = skills.filter((s) => s.installed)
+  const browse = skills.filter((s) => !s.installed)
+  const active = skills.find((s) => s.id === activeSkillId) ?? null
+
+  function toggleEnabled(id: string) {
+    setSkills((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)),
+    )
+  }
+
+  function install(id: string) {
+    setSkills((prev) =>
+      prev.map((s) =>
+        s.id === id ? { ...s, installed: true, enabled: true } : s,
+      ),
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* ─── Picker chip — what appears inline in a creation flow ─── */}
+      <div>
+        <div className="mb-2 text-[12px] uppercase tracking-[0.04em] text-text-tertiary">
+          Picker chip (inline in narrative editor / new-project flow)
+        </div>
+        <Card variant="raised" padding="md">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <div className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary">
+                Active Skill
+              </div>
+              <div className="mt-1 text-[16px] font-medium text-text-primary">
+                🎬 {active?.name ?? '尚未選擇'}
+              </div>
+              {active ? (
+                <div className="mt-0.5 text-[12px] text-text-secondary">
+                  by {active.authorDisplay}
+                </div>
+              ) : null}
+            </div>
+            <Button variant="secondary" size="md" onClick={() => setPickerOpen(true)}>
+              更換 Skill
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* ─── Library page — 「我的 Skill」 ─── */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-[14px] font-medium text-text-primary">
+            我的 Skill <span className="text-text-tertiary">· {installed.length}</span>
+          </h3>
+          <Button variant="ghost" size="sm" onClick={() => setPickerOpen(true)}>
+            + 新增 Skill
+          </Button>
+        </div>
+        {installed.length === 0 ? (
+          <Card variant="raised" padding="none">
+            <EmptyState
+              size="md"
+              heading="尚未啟用任何 Skill"
+              description="從精選列表挑一個開始。"
+              ctaLabel="瀏覽 Skill 庫"
+              onCta={() => setPickerOpen(true)}
+            />
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {installed.map((s) => (
+              <Card key={s.id} variant="raised" padding="md" interactive>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14px] font-medium text-text-primary">
+                        {s.name}
+                      </span>
+                      {s.isFeatured ? (
+                        <span className="rounded-pill bg-primary-500/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] text-primary-500">
+                          熱門
+                        </span>
+                      ) : null}
+                      <span className="text-[12px] text-text-tertiary">
+                        {s.authorDisplay}
+                      </span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-[13px] leading-[1.5] text-text-secondary">
+                      {s.description}
+                    </p>
+                  </div>
+                  <label className="inline-flex shrink-0 cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={s.enabled}
+                      onChange={() => toggleEnabled(s.id)}
+                      className="h-4 w-4 cursor-pointer accent-primary-500"
+                    />
+                    <span className="text-[12px] uppercase tracking-[0.04em] text-text-tertiary">
+                      {s.enabled ? '啟用' : '停用'}
+                    </span>
+                  </label>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Browse Modal — 精選 / marketplace（Phase 3.5 預告） ─── */}
+      <Modal open={pickerOpen} onClose={() => setPickerOpen(false)} size="lg">
+        <Modal.Header
+          heading="瀏覽 Skill 庫"
+          subtitle="精選 Skill — 由 KuiperAI 與簽約創作者打造（Phase 3.5 開放社區提交）"
+          onClose={() => setPickerOpen(false)}
+        />
+        <Modal.Body>
+          {browse.length === 0 ? (
+            <EmptyState
+              size="md"
+              heading="已啟用全部精選 Skill"
+              description="社區 Skill 即將開放。"
+            />
+          ) : (
+            <div className="space-y-3">
+              {browse.map((s) => (
+                <Card key={s.id} variant="raised" padding="md">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-medium text-text-primary">
+                          {s.name}
+                        </span>
+                        <span className="text-[12px] text-text-tertiary">
+                          {s.authorDisplay}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[13px] leading-[1.5] text-text-secondary">
+                        {s.description}
+                      </p>
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        install(s.id)
+                        setActiveSkillId(s.id)
+                      }}
+                    >
+                      + 新增
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="ghost" size="sm" onClick={() => setPickerOpen(false)}>
+            關閉
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </div>
   )
 }
