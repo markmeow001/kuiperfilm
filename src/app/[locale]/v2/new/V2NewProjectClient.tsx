@@ -603,20 +603,17 @@ interface SkillAnchorPickerProps {
 }
 
 function SkillAnchorPicker({ originSkillId, onChange }: SkillAnchorPickerProps) {
-  // i18n: hardcoded strings for the Phase 2.5 ship. Session A's i18n
-  // migration adds proper messages/{locale}/v2New.json keys in a
-  // follow-up; for now the labels are Traditional Chinese only since
-  // that's KuiperAI's primary locale.
+  const t = useTranslations('v2New.form')
   const skillsQuery = useSkills({ installed: true })
   const skills = skillsQuery.data?.skills ?? []
   const installed = skills.filter((s) => s.enabled)
 
-  // Build option list — 自由創作 first, then installed Skills.
+  // Build option list — free creation first, then installed Skills.
   const options: Array<{ id: string | null; name: string; desc: string }> = [
     {
       id: null,
-      name: '自由創作',
-      desc: '不綁定 Skill — 預設多鏡 + 視覺風格手動設定。',
+      name: t('skillFreeTitle'),
+      desc: t('skillFreeDesc'),
     },
     ...installed.map((s) => ({
       id: s.id,
@@ -631,7 +628,7 @@ function SkillAnchorPicker({ originSkillId, onChange }: SkillAnchorPickerProps) 
   return (
     <div>
       <label className="mb-2 block font-mono text-[14px] tracking-wider text-stone-500">
-        創作模式 / Skill
+        {t('skillLabel')}
       </label>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {options.map((opt) => (
@@ -660,14 +657,14 @@ function SkillAnchorPicker({ originSkillId, onChange }: SkillAnchorPickerProps) 
       </div>
       {installed.length === 0 && !skillsQuery.isLoading ? (
         <p className="mt-2 font-fraunces text-[11px] italic text-stone-500">
-          尚未啟用任何 Skill。前往{' '}
+          {t('skillEmptyHint')}
           <Link
             href="/skills"
             className="text-amber-400/80 underline-offset-4 hover:underline"
           >
-            Skill 庫
+            {t('skillEmptyHintLink')}
           </Link>
-          {' '}啟用想用的工作流。
+          {t('skillEmptyHintTail')}
         </p>
       ) : null}
     </div>
