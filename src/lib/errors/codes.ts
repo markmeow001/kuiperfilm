@@ -195,6 +195,21 @@ export const ERROR_CATALOG = {
     userMessageKey: 'errors.INTERNAL_ERROR',
     defaultMessage: 'Internal server error',
   },
+  // 2026-06-11 — Phase 2.5 Skill primitive precondition violation. Fires
+  // when a Skill's `constraints` block requires project state the user
+  // hasn't set up yet — e.g. drama-short-seedance-voice with
+  // `enforceAudioRefPerCharacter: true` and one or more characters in
+  // the episode lacks any of customVoiceUrl / customVoiceMediaId /
+  // voiceId. 412 because it's a precondition, not bad input. Details
+  // include `constraint` name + per-character list so the front-end
+  // can deep-link to the right setup surface.
+  SKILL_PRECONDITION_FAILED: {
+    httpStatus: 412,
+    retryable: false,
+    category: ERROR_CATEGORY.VALIDATION,
+    userMessageKey: 'errors.SKILL_PRECONDITION_FAILED',
+    defaultMessage: 'Skill precondition not met',
+  },
 } as const
 
 export type UnifiedErrorCode = keyof typeof ERROR_CATALOG
