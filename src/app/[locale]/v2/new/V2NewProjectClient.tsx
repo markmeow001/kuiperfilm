@@ -82,7 +82,11 @@ export function V2NewProjectClient({ locale }: V2NewProjectClientProps) {
   const [openingPacing, setOpeningPacing] = useState<'hook' | 'cinematic'>('hook')
   // 2026-06-10 (Phase 2.5) — optional Skill anchor. null = 自由創作 (status
   // quo). Set = project pipeline driven by Skill.config at submit time.
-  const [originSkillId, setOriginSkillId] = useState<string | null>(null)
+  // Pre-fills from `?skill=<id>` query param (e.g. user clicked
+  // 「用此 Skill 建立專案」 from /skills/[slug] detail page CTA).
+  const [originSkillId, setOriginSkillId] = useState<string | null>(
+    searchParams?.get('skill') ?? null,
+  )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Phase 12.5+ — pick the target workspace at create time.

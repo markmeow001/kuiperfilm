@@ -163,6 +163,26 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
             </div>
           </div>
         </Link>
+
+        {/* Phase 2.5 (2026-06-10) — Skill library entry. Sits next to
+            Playground in the "工具" section since both are project-
+            independent surfaces. Violet matches the AI-accent token
+            used elsewhere for Skill chips. */}
+        <Link
+          href={`/${locale}/skills`}
+          className="group mt-1 flex w-full items-center gap-2 rounded-md border border-transparent px-2.5 py-2 text-left transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
+        >
+          <div className="w-5 font-mono text-[13px] tracking-wider text-violet-400">◆</div>
+          <AppIcon name="sparklesAlt" className="h-4 w-4 flex-shrink-0 text-violet-400" />
+          <div className="min-w-0 flex-1">
+            <div className="whitespace-nowrap font-serif-cn text-sm leading-none text-stone-300">
+              Skill 庫
+            </div>
+            <div className="mt-0.5 truncate font-fraunces text-[13px] italic text-stone-600">
+              Workflow Bundles
+            </div>
+          </div>
+        </Link>
       </div>
 
       {/* 2026-05-02: User block moved to TopBar UserMenu — frees up the

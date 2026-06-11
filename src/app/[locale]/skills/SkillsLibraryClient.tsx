@@ -37,6 +37,10 @@ export function SkillsLibraryClient({ locale }: SkillsLibraryClientProps) {
   const [activeTab, setActiveTab] = useState<'mine' | 'browse'>('mine')
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  // Read locale from props (passed by server component) so detail
+  // links inside card rows can build /[locale]/skills/[slug] paths.
+  const detailHref = (slug: string) => `/${locale}/skills/${slug}`
+
   const all = skillsQuery.data?.skills ?? []
   const installed = all.filter((s) => s.installed)
   const browsable = all.filter((s) => !s.installed)
@@ -161,6 +165,7 @@ export function SkillsLibraryClient({ locale }: SkillsLibraryClientProps) {
                   busy={busyId === s.id}
                   onToggle={() => handleToggle(s)}
                   onUninstall={() => handleUninstall(s)}
+                  detailHref={detailHref(s.slug)}
                   variant="installed"
                 />
               ))}
@@ -187,6 +192,7 @@ export function SkillsLibraryClient({ locale }: SkillsLibraryClientProps) {
                   skill={s}
                   busy={busyId === s.id}
                   onInstall={() => handleInstall(s)}
+                  detailHref={detailHref(s.slug)}
                   variant="browse"
                 />
               ))}
@@ -227,6 +233,7 @@ interface SkillRowCardProps {
   skill: SkillRow
   busy: boolean
   variant: 'installed' | 'browse'
+  detailHref: string
   onToggle?: () => void
   onInstall?: () => void
   onUninstall?: () => void
@@ -236,6 +243,7 @@ function SkillRowCard({
   skill,
   busy,
   variant,
+  detailHref,
   onToggle,
   onInstall,
   onUninstall,
@@ -245,9 +253,12 @@ function SkillRowCard({
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-serif-cn text-base font-medium text-stone-100">
+            <Link
+              href={detailHref}
+              className="font-serif-cn text-base font-medium text-stone-100 transition-colors hover:text-amber-300"
+            >
               {skill.name}
-            </h3>
+            </Link>
             {skill.isFeatured ? (
               <span className="rounded-sm bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-amber-400">
                 精選
