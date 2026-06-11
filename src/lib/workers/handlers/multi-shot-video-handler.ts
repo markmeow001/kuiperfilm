@@ -8,6 +8,16 @@ import { runMultiShotSeedanceComposite, shouldUseSeedanceComposite } from './mul
 import { runMultiShotArkComposite, shouldUseArkComposite } from './multi-shot-video-ark-path'
 import { runMultiShotAtlasCloudComposite, shouldUseAtlasCloudComposite } from './multi-shot-video-atlascloud-path'
 import { runMultiShotFalComposite, shouldUseFalComposite } from './multi-shot-video-fal-path'
+// Phase 2.5 Step 4-B (2026-06-11) — Skill primitive worker integration.
+// When the parent submitTask resolved an anchored Skill, the skillId
+// rides on TaskJobData. The worker re-reads the config here for
+// observability + future prompt-overlay sub-handler injection.
+// videoModel is NOT re-resolved (it's already pinned by submit so
+// billing freezes on the correct model). Soft-fallback on read errors.
+import { loadSkillConfigById } from '@/lib/skills/server'
+import { resolveStageModelWithFallback } from '@/lib/skills/resolve-stage-model'
+import { getRelevantStagesForTask } from '@/lib/skills/stage-mapper'
+import { TASK_TYPE } from '@/lib/task/types'
 import {
   parsePanelCharacterReferences,
   findCharacterByName,
@@ -80,6 +90,53 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     module: 'worker.multi-shot-video',
     action: 'multi_shot_video_generate',
   })
+
+  // Phase 2.5 Step 4-B — re-load the anchored Skill config from the
+  // DB so prompts / constraints can be overlaid by sub-handlers in
+  // future commits. Model resolution already happened at submitTask
+  // (so billing freezes correctly); we don't override payload.videoModel
+  // here. Soft-fallback on read failures — a bad Skill row must not
+  // brick a billable in-flight job.
+  const skillId = job.data.skillId ?? null
+  let skillConfig: Awaited<ReturnType<typeof loadSkillConfigById>> = null
+  if (skillId) {
+    try {
+      skillConfig = await loadSkillConfigById(skillId)
+    } catch (skillErr) {
+      logger.warn({
+        action: 'skill_config_load_failed',
+        message: 'Skill config invalid in worker, falling back to payload defaults',
+        details: {
+          skillId,
+          error: skillErr instanceof Error ? skillErr.message : String(skillErr),
+        },
+      })
+      skillConfig = null
+    }
+    if (skillConfig) {
+      // Observability — record which Skill drove this run + what model
+      // it would have pinned. Lets ops verify in prod that Skills are
+      // actually in effect end-to-end after deploy, without needing to
+      // re-derive from payload + projectId.
+      const skillStageModel = resolveStageModelWithFallback(
+        skillConfig.config,
+        getRelevantStagesForTask(TASK_TYPE.VIDEO_MULTI_SHOT),
+      )
+      logger.info({
+        action: 'skill_config_resolved',
+        message: 'multi-shot video job is Skill-driven',
+        details: {
+          skillId: skillConfig.id,
+          skillSlug: skillConfig.slug,
+          skillStageModel,
+          payloadVideoModel: payload.videoModel,
+          override: skillStageModel && skillStageModel !== payload.videoModel
+            ? 'skill-stage-model differs from payload — payload wins (pinned at submit)'
+            : null,
+        },
+      })
+    }
+  }
 
   const panelIds = payload.panelIds as string[]
   const videoModel = payload.videoModel as string
