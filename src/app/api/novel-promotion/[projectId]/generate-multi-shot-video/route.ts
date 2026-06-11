@@ -7,6 +7,18 @@ import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { videoModelToleratesTextOnlyPanels } from '@/lib/video-models/multi-shot-text-only'
+// Phase 2.5 Step 4-A — Skill primitive integration. The project may be
+// anchored to a Skill that pins the video model + supplies defaults
+// (aspectRatio / resolution / duration). When present, the picker on
+// the front-end may opt to defer to the Skill model by sending
+// `videoModelSource: 'skill-default'`. When absent or 'user-explicit'
+// the payload's videoModel wins (current behavior). Loader returns
+// null when the project has no anchored Skill — zero behavior change
+// for legacy projects.
+import { loadSkillConfigForProject } from '@/lib/skills/server'
+import { applySkillDefaultsToPayload } from '@/lib/skills/apply-defaults'
+import { resolveStageModel } from '@/lib/skills/resolve-stage-model'
+import { createScopedLogger } from '@/lib/logging/core'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -353,6 +365,83 @@ export const POST = apiHandler(async (
     })
   }
 
+  // Phase 2.5 Step 4-A — resolve anchored Skill (if any).
+  //
+  // Loader returns null when the project has no originSkillId or the
+  // Skill is archived. We swallow shape errors here as a soft fallback
+  // (legacy generic flow) so a corrupted Skill row doesn't make every
+  // submit explode. The loader's own throw paths are noisy enough for
+  // ops via logger.warn — users still get their video.
+  const skillLogger = createScopedLogger({
+    module: 'api.multi-shot-video',
+    action: 'skill.resolve',
+    projectId,
+    userId: session.user.id,
+  })
+  let resolvedSkill: Awaited<ReturnType<typeof loadSkillConfigForProject>> = null
+  try {
+    resolvedSkill = await loadSkillConfigForProject(projectId)
+  } catch (skillErr) {
+    skillLogger.warn({
+      action: 'skill_config_invalid',
+      message: 'Skill config invalid, falling back to generic flow',
+      details: {
+        error: skillErr instanceof Error ? skillErr.message : String(skillErr),
+      },
+    })
+    resolvedSkill = null
+  }
+
+  // Build the user-supplied payload first so apply-defaults can fill
+  // gaps only where the user didn't explicitly set a value.
+  const userPayload: Record<string, unknown> = {
+    panelIds,
+    videoModel,
+    mode: typeof body.mode === 'string' ? body.mode : undefined,
+    sound: typeof body.sound === 'boolean' ? body.sound : undefined,
+    aspectRatio: typeof body.aspectRatio === 'string' ? body.aspectRatio : undefined,
+    ...(multiShotMode ? { multiShotMode } : {}),
+    ...(panelDurations ? { panelDurations } : {}),
+    ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
+    ...(rawPrompt ? { rawPrompt } : {}),
+    ...(promptStyle ? { promptStyle } : {}),
+    ...(characterOverrides ? { characterOverrides } : {}),
+    ...(locationOverrides ? { locationOverrides } : {}),
+    ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
+    ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
+    ...(visualStyleId ? { visualStyleId } : {}),
+    ...(lightingPresetId ? { lightingPresetId } : {}),
+  }
+
+  // Resolve videoModel at submit time so billing freezes on the
+  // correct model. Three sources, in priority order:
+  //   1. user-explicit (front-end picker sent videoModelSource='user-explicit'
+  //      or omitted the flag — current behavior; payload videoModel wins)
+  //   2. skill-default (front-end sent videoModelSource='skill-default'
+  //      because the locked picker wasn't overridden — use Skill's
+  //      pinned generate_panel_video model)
+  //   3. payload (final fallback)
+  //
+  // The picker UI lock affordance ships in a follow-up commit (Phase
+  // 2.6). For now, the flag is accepted but defaults to user-explicit
+  // so existing front-end calls keep their semantics.
+  const videoModelSource =
+    body.videoModelSource === 'skill-default' || body.videoModelSource === 'user-explicit'
+      ? body.videoModelSource
+      : 'user-explicit'
+  let resolvedVideoModel = videoModel
+  if (resolvedSkill && videoModelSource === 'skill-default') {
+    const skillVideoModel = resolveStageModel(resolvedSkill.config, 'generate_panel_video')
+    if (skillVideoModel) {
+      resolvedVideoModel = skillVideoModel
+    }
+  }
+
+  // Apply Skill defaults to gaps the user didn't explicitly set.
+  const payloadWithSkillDefaults = resolvedSkill
+    ? applySkillDefaultsToPayload({ ...userPayload, videoModel: resolvedVideoModel }, resolvedSkill.config)
+    : { ...userPayload, videoModel: resolvedVideoModel }
+
   const result = await submitTask({
     userId: session.user.id,
     locale,
@@ -362,24 +451,8 @@ export const POST = apiHandler(async (
     type: TASK_TYPE.VIDEO_MULTI_SHOT,
     targetType: 'NovelPromotionStoryboard',
     targetId: storyboard.id,
-    payload: {
-      panelIds,
-      videoModel,
-      mode: typeof body.mode === 'string' ? body.mode : undefined,
-      sound: typeof body.sound === 'boolean' ? body.sound : undefined,
-      aspectRatio: typeof body.aspectRatio === 'string' ? body.aspectRatio : undefined,
-      ...(multiShotMode ? { multiShotMode } : {}),
-      ...(panelDurations ? { panelDurations } : {}),
-      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
-      ...(rawPrompt ? { rawPrompt } : {}),
-      ...(promptStyle ? { promptStyle } : {}),
-      ...(characterOverrides ? { characterOverrides } : {}),
-      ...(locationOverrides ? { locationOverrides } : {}),
-      ...(firstFrameImageUrl ? { firstFrameImageUrl } : {}),
-      ...(lastFrameImageUrl ? { lastFrameImageUrl } : {}),
-      ...(visualStyleId ? { visualStyleId } : {}),
-      ...(lightingPresetId ? { lightingPresetId } : {}),
-    },
+    skillId: resolvedSkill?.id ?? null,
+    payload: payloadWithSkillDefaults,
     // 2026-05-01: include the panel set in the dedupe key. Without
     // this, every group on the same storyboard shared the same key
     // (`video_multi_shot:<storyboardId>`) and submitTask collapsed

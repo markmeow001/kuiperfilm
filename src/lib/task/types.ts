@@ -130,6 +130,11 @@ export type TaskJobData = {
   trace?: {
     requestId?: string | null
   } | null
+  // Phase 2.5 (2026-06-11) — when set, worker loads Skill.config and
+  // uses it for prompt overlays + constraint context. videoModel is
+  // already pinned in payload by submitTask (so billing freezes on
+  // the resolved model). null/undefined = legacy / 自由創作 flows.
+  skillId?: string | null
 }
 
 export type SSEEvent = {

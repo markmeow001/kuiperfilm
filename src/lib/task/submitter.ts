@@ -99,6 +99,13 @@ export async function submitTask(params: {
   maxAttempts?: number
   billingInfo?: TaskBillingInfo | null
   requestId?: string | null
+  // Phase 2.5 (2026-06-11) — when the project has an originSkillId
+  // and the caller has already resolved the Skill, pass its id here
+  // so the worker can re-load config for prompts/constraints. The
+  // videoModel (or other model fields) MUST already be pinned in
+  // `payload` by the caller before getting here, so billing freezes
+  // on the resolved model. See loadSkillConfigForProject.
+  skillId?: string | null
 }) {
   const logger = createScopedLogger({
     module: 'task.submitter',
@@ -279,6 +286,7 @@ export async function submitTask(params: {
           : normalizedPayload,
         billingInfo: preparedBillingInfo || null,
         userId: params.userId,
+        skillId: params.skillId ?? null,
         trace: {
           requestId: params.requestId || null,
         },
