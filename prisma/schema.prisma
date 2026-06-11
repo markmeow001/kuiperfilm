@@ -544,6 +544,12 @@ model Project {
   // POST /api/projects/:id/restore within the grace window.
   deletedAt          DateTime?
   deletedBy          String?
+  // Phase 2.5 (2026-06-10) — Skill primitive. NULL = generic 自由創作.
+  // Set = project was created via a Skill picker selection; workers
+  // read the Skill's config to drive pipeline + defaults + prompts.
+  // SetNull on delete so retiring a Skill doesn't orphan its projects.
+  originSkillId      String?
+  originSkill        Skill?                 @relation("SkillOriginatedProjects", fields: [originSkillId], references: [id], onDelete: SetNull)
   novelPromotionData NovelPromotionProject?
   user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace          Workspace?             @relation("WorkspaceProjects", fields: [workspaceId], references: [id], onDelete: SetNull)
@@ -558,6 +564,7 @@ model Project {
   @@index([userId])
   @@index([workspaceId])
   @@index([deletedAt])
+  @@index([originSkillId])
   @@map("projects")
 }
 
@@ -660,6 +667,12 @@ model User {
 
   // Phase T (2026-05-27) — Playground / Freedom Mode runs owned by this user.
   playgroundRuns PlaygroundRun[] @relation("PlaygroundRunUser")
+
+  // Phase 2.5 (2026-06-10) — Skill primitive. Community-authored Skills
+  // owned by this user + per-user installed Skill records (我的 Skill).
+  // See IMPL_PREP/R-skill-primitive.md for the full spec.
+  authoredSkills      Skill[]             @relation("SkillAuthor")
+  skillInstallations  SkillInstallation[]
 
   @@map("user")
 }
@@ -1696,4 +1709,113 @@ model LightingPreset {
   @@index([displayOrder])
   @@index([isActive])
   @@map("lighting_presets")
+}
+
+// ──────────── Phase 2.5 (2026-06-10) — Skill primitive ────────────
+//
+// Skill = (workflow + model chain + prompt template + workflow
+// constraints) named, attributable, shareable bundle. Mirror of flova's
+// 我的 Skill (official) + 精選 Skill (community) two-tier marketplace.
+//
+// See IMPL_PREP/R-skill-primitive.md for full spec including:
+//   §4: schema rationale
+//   §5: SkillConfig JSON shape
+//   §6: 6 official Skills mapping existing KuiperAI workers
+//   §7: UI surfaces (picker chip, library page, marketplace)
+//   §8: permissions reuse the 8-tier project access cascade
+//
+// Workspace-scoped Skills (workspaceId set) are internal-only to that
+// workspace; global Skills (workspaceId null) are visible to everyone.
+
+enum SkillAuthorType {
+  official  // 我的 Skill default set, attribution = @Flova / @KuiperAI
+  community // 精選 + user-created, attribution = creator username
+}
+
+enum SkillStatus {
+  draft     // author still editing
+  published // visible in marketplace + installable
+  archived  // hidden but existing installations keep working
+}
+
+model Skill {
+  id           String @id @default(uuid())
+  /// url-safe — e.g. "drama-short-seedance-voice".
+  slug         String @unique @db.VarChar(128)
+  /// Display name, primary language. e.g. "劇情短片視頻".
+  name         String @db.VarChar(128)
+  /// Optional bilingual name for the EN locale.
+  nameEn       String? @db.VarChar(128)
+  /// Multi-paragraph spec — what the Skill does, what pipeline it runs,
+  /// what user must supply. Markdown allowed.
+  description     String  @db.Text
+  descriptionEn   String? @db.Text
+  /// Hero image. Optional. Auto-rendered preview placeholder when null.
+  thumbnailUrl    String? @db.Text
+
+  // ── Attribution ─────────────────────────────────────────
+  authorType    SkillAuthorType
+  /// Null for official Skills. Set for community-authored.
+  authorUserId  String?
+  /// Display name shown in UI. e.g. "@Flova" or "@阿娴".
+  authorDisplay String          @db.VarChar(64)
+  author        User?           @relation("SkillAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  // ── Marketplace state ──────────────────────────────────
+  status          SkillStatus @default(draft)
+  /// 精選 ribbon — official Skills are featured by default; community
+  /// Skills get featured via admin review.
+  isFeatured      Boolean     @default(false)
+  /// For 熱門 sorting. Updated periodically via batch job — not on
+  /// every install/run to avoid hot-row contention.
+  popularityScore Int         @default(0)
+  /// How many users currently have this Skill installed (enabled or not).
+  installCount    Int         @default(0)
+
+  // ── Runtime config ──────────────────────────────────────
+  /// JSON shape — see IMPL_PREP/R-skill-primitive.md §5.
+  /// Contains: input requirements, pipeline stages + model chain,
+  /// default settings, optional prompt templates, optional
+  /// constraints/guardrails. Versioned via top-level `version: 1`.
+  config        Json
+
+  // ── Multi-tenant scope ──────────────────────────────────
+  /// Null = global. Set = workspace-scoped (only visible to that
+  /// workspace's members). Workspace-private Skills don't appear in
+  /// the public marketplace.
+  workspaceId   String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  installations SkillInstallation[]
+  /// Phase 2.5 (2026-06-10) — projects created via this Skill. Set via
+  /// V2NewProjectClient picker; workers read this at submit time to
+  /// resolve the active Skill config.
+  originatedProjects Project[] @relation("SkillOriginatedProjects")
+
+  @@index([authorType, status, isFeatured, popularityScore])
+  @@index([slug])
+  @@index([workspaceId, status])
+  @@map("skills")
+}
+
+model SkillInstallation {
+  id          String  @id @default(uuid())
+  userId      String
+  skillId     String
+  /// User can toggle a Skill off without uninstalling — keeps it in
+  /// "我的 Skill" list but hides it from picker dropdowns.
+  enabled     Boolean @default(true)
+  installedAt DateTime  @default(now())
+  /// Last time the Skill was used to start a project. Drives "recently
+  /// used" sort in the picker.
+  lastUsedAt  DateTime?
+
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill  Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+  @@index([userId, enabled])
+  @@map("skill_installations")
 }

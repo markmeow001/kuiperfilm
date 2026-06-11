@@ -41,6 +41,17 @@ interface ProjectShape {
   // Phase 12.5 — workspace assignment + optional eager-loaded workspace data
   workspaceId?: string | null
   workspace?: { id: string; name: string | null } | null
+  // Phase 2.5 (2026-06-10) — Skill anchor when present
+  originSkillId?: string | null
+  originSkill?: {
+    id: string
+    slug: string
+    name: string
+    nameEn?: string | null
+    authorDisplay: string
+    authorType: 'official' | 'community'
+    isFeatured: boolean
+  } | null
 }
 
 interface PanelLike {
@@ -100,6 +111,33 @@ export function V2HomeClient({ projectId, locale }: V2HomeClientProps) {
         <h2 className="font-serif-cn text-3xl font-medium tracking-wide text-stone-100">
           《{projectName}》
         </h2>
+
+        {/* Phase 2.5 (2026-06-10) — Skill anchor chip. Shows when the
+            project was created via a Skill picker selection. Worker
+            reads project.originSkill.config at submit time. */}
+        {project?.originSkill ? (
+          <Link
+            href={`/${locale}/skills`}
+            className="mt-3 inline-flex items-center gap-2 rounded-sm border border-violet-500/40 bg-violet-500/5 px-3 py-1.5 font-mono text-[11px] tracking-wider text-violet-200 transition-colors hover:bg-violet-500/10"
+            title="此專案由此 Skill 驅動 — 點擊管理 Skill 庫"
+          >
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-violet-400/80">
+              SKILL
+            </span>
+            <span className="font-serif-cn text-[13px] text-violet-100">
+              {project.originSkill.name}
+            </span>
+            {project.originSkill.isFeatured ? (
+              <span className="rounded-sm bg-amber-500/15 px-1.5 font-mono text-[9px] uppercase tracking-wider text-amber-400">
+                精選
+              </span>
+            ) : null}
+            <span className="text-[10px] text-violet-400/60">
+              {project.originSkill.authorDisplay}
+            </span>
+          </Link>
+        ) : null}
+
         <div className="mt-2 flex items-center gap-3 font-mono text-[11px] tracking-wider text-stone-500">
           <span>{t('projectIdLabel')} · {projectId}</span>
           {canManageCollaborators ? (

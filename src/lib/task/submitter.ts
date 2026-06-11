@@ -19,6 +19,12 @@ import { attachTaskToRun, createRun } from '@/lib/run-runtime/service'
 import { isAiTaskType, workflowTypeFromTaskType } from '@/lib/run-runtime/workflow'
 import { enforceRateLimit } from './rate-limit'
 import { assertNoEpisodeConflict } from './episode-conflict-guard'
+// Phase 2.5 Step 4-C — Skill constraint enforcement runs at submitTask
+// BEFORE billing freezes credits. Cheap (1-2 indexed reads, only when
+// project has anchored Skill with constraints). Throws SKILL_PRECONDITION_FAILED
+// (412) on violation so front-end can deep-link to setup.
+import { loadSkillConfigById } from '@/lib/skills/server'
+import { enforceConstraints } from '@/lib/skills/constraints'
 
 export function toObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
@@ -99,6 +105,13 @@ export async function submitTask(params: {
   maxAttempts?: number
   billingInfo?: TaskBillingInfo | null
   requestId?: string | null
+  // Phase 2.5 (2026-06-11) — when the project has an originSkillId
+  // and the caller has already resolved the Skill, pass its id here
+  // so the worker can re-load config for prompts/constraints. The
+  // videoModel (or other model fields) MUST already be pinned in
+  // `payload` by the caller before getting here, so billing freezes
+  // on the resolved model. See loadSkillConfigForProject.
+  skillId?: string | null
 }) {
   const logger = createScopedLogger({
     module: 'task.submitter',
@@ -128,6 +141,23 @@ export async function submitTask(params: {
       episodeId: params.episodeId,
       type: params.type,
     })
+  }
+
+  // Phase 2.5 Step 4-C — Skill constraint gate. Submit-time so the
+  // user gets fast feedback (no billing rollback, no queue churn).
+  // Only fires when the caller passed skillId AND the loaded config
+  // has a `constraints` block. Loader returns null if the row is
+  // archived between create and submit — we treat that as "skill no
+  // longer applies" and skip the check (matches the route's own
+  // soft-fallback). Constraint failures throw SKILL_PRECONDITION_FAILED
+  // (412) which `apiHandler` surfaces as a friendly toast.
+  if (params.skillId) {
+    const resolvedSkill = await loadSkillConfigById(params.skillId)
+    if (resolvedSkill) {
+      await enforceConstraints(params.projectId, resolvedSkill.config, {
+        episodeId: params.episodeId ?? null,
+      })
+    }
   }
 
   const normalizedPayloadBase = normalizeTaskPayload(params.type, params.payload || null)
@@ -279,6 +309,7 @@ export async function submitTask(params: {
           : normalizedPayload,
         billingInfo: preparedBillingInfo || null,
         userId: params.userId,
+        skillId: params.skillId ?? null,
         trace: {
           requestId: params.requestId || null,
         },

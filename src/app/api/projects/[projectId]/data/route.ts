@@ -44,7 +44,23 @@ export const GET = apiHandler(async (
   // 获取基础项目信息
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    include: { user: { select: PUBLIC_USER_SELECT } }
+    include: {
+      user: { select: PUBLIC_USER_SELECT },
+      // Phase 2.5 (2026-06-10) — Skill anchor. Workspace home shows
+      // the active Skill chip; the storyboard workers will read this
+      // at submit time to drive the pipeline.
+      originSkill: {
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          nameEn: true,
+          authorDisplay: true,
+          authorType: true,
+          isFeatured: true,
+        },
+      },
+    },
   })
 
   if (!project) {

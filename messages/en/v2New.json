@@ -21,7 +21,13 @@
     "pacingHookTitle": "Short-drama hook",
     "pacingHookDesc": "Cold open, hit the conflict within 3s",
     "pacingCinematicTitle": "Cinematic mood",
-    "pacingCinematicDesc": "Opening as its own group, establish atmosphere first"
+    "pacingCinematicDesc": "Opening as its own group, establish atmosphere first",
+    "skillLabel": "Workflow / Skill · WORKFLOW",
+    "skillFreeTitle": "Free creation",
+    "skillFreeDesc": "No Skill anchor — default multi-shot + manual style.",
+    "skillEmptyHint": "No Skills enabled yet. Visit ",
+    "skillEmptyHintLink": "the Skill library",
+    "skillEmptyHintTail": " to enable workflows."
   },
   "upload": {
     "label": "Script file · SCRIPT FILE (optional)",

@@ -21,7 +21,13 @@
     "pacingHookTitle": "短剧快钩子",
     "pacingHookDesc": "冷开场，3 秒内进冲突抓眼球",
     "pacingCinematicTitle": "电影氛围",
-    "pacingCinematicDesc": "开场独立成组，先铺环境氛围慢揭示"
+    "pacingCinematicDesc": "开场独立成组，先铺环境氛围慢揭示",
+    "skillLabel": "创作模式 / Skill · WORKFLOW",
+    "skillFreeTitle": "自由创作",
+    "skillFreeDesc": "不绑定 Skill — 默认多镜 + 视觉风格手动设定。",
+    "skillEmptyHint": "尚未启用任何 Skill。前往 ",
+    "skillEmptyHintLink": "Skill 库",
+    "skillEmptyHintTail": " 启用想用的工作流。"
   },
   "upload": {
     "label": "剧本档案 · SCRIPT FILE（选填）",
