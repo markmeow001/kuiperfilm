@@ -780,6 +780,14 @@ model PlaygroundRun {
   externalTaskId  String?
   costEstimate    Float?
   costActual      Float?
+  // 2026-06-12 PR-A2 — Playground 接 billing freeze/capture/refund 三段。
+  // freezeId: BalanceFreeze.id written at submit; null = no freeze (mode=OFF
+  // or quotedCost=0). Worker uses this to confirm/rollback on terminal state.
+  // pricingVersion: snapshot of catalog version at submit, defensive against
+  // mid-run catalog rewrites. Phase 9.1 will replace this whole sidecar with
+  // proper Task-bound billing via prepareTaskBilling/settleTaskBilling.
+  freezeId        String?
+  pricingVersion  String?
   errorMessage    String?   @db.Text
   createdAt       DateTime  @default(now())
   completedAt     DateTime?
@@ -790,6 +798,7 @@ model PlaygroundRun {
   @@index([userId, createdAt(sort: Desc)])
   @@index([workspaceId, createdAt(sort: Desc)])
   @@index([status])
+  @@index([freezeId])
   @@map("playground_runs")
 }
 

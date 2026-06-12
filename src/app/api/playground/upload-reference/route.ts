@@ -20,7 +20,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { uploadToCOS, generateUniqueKey, getSignedUrl } from '@/lib/cos'
-import { logInfo as _ulogInfo } from '@/lib/logging/core'
+import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -60,8 +60,14 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const { session } = authResult
   const userId = session.user.id
 
-  const formData = await request.formData().catch(() => null)
-  if (!formData) {
+  // Per CLAUDE.md §3 (不靜默吞錯) — log parse failure with context before
+  // surfacing INVALID_PARAMS so ops can correlate with the client's request.
+  let formData: FormData
+  try {
+    formData = await request.formData()
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    _ulogError(`[playground.upload-reference] formData parse failed userId=${userId} err=${errMsg}`)
     throw new ApiError('INVALID_PARAMS', {
       code: 'FORMDATA_PARSE_FAILED',
       details: { message: 'Expected multipart/form-data' },

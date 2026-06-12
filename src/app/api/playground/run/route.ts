@@ -30,6 +30,12 @@ import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { enqueuePlaygroundImageJob, enqueuePlaygroundVideoJob } from '@/lib/playground/enqueue'
+import { resolveModelSelection } from '@/lib/api-config'
+import {
+  freezeForPlayground,
+  quotePlaygroundCost,
+  refundForPlayground,
+} from '@/lib/playground/billing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 const MAX_REFERENCE_IMAGES = 9
@@ -67,7 +73,21 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const { session } = authResult
   const userId = session.user.id
 
-  const body = await request.json().catch(() => ({}))
+  // Per CLAUDE.md §3 (不靜默吞錯): a malformed JSON body is a contract
+  // violation, not "an empty object" — return INVALID_PARAMS explicitly
+  // so the caller can fix the request, instead of silently coercing into
+  // the missing-field path which surfaces a misleading "PROMPT_REQUIRED".
+  let body: Record<string, unknown>
+  try {
+    body = (await request.json()) as Record<string, unknown>
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    _ulogError(`[playground.run] invalid JSON body userId=${userId} err=${errMsg}`)
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'INVALID_JSON_BODY',
+      details: { message: 'request body must be valid JSON' },
+    })
+  }
   const {
     prompt,
     referenceImages: rawImages,
@@ -108,6 +128,31 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (typeof modelKey !== 'string' || !modelKey.trim()) {
     throw new ApiError('INVALID_PARAMS', { code: 'MODEL_KEY_REQUIRED' })
   }
+  const trimmedModelKey = modelKey.trim()
+
+  // Verify the model is in the user's enabled catalog AND matches outputType.
+  // Without this, any string passes through to the worker which then either:
+  //   - falls back to admin's keys (silent cross-account billing), or
+  //   - errors deep in the generator with a confusing provider message.
+  // resolveModelSelection threads the admin-inheritance fallback (per
+  // getUserModels) and validates type — so a video modelKey + outputType=image
+  // (or vice-versa) is rejected at the boundary with a clear code.
+  // Mirrors the picker-side filter (feedback_picker_filter_enabled_models).
+  let resolvedModelId: string
+  try {
+    const selection = await resolveModelSelection(userId, trimmedModelKey, outputType)
+    resolvedModelId = selection.modelId
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    _ulogError(
+      `[playground.run] model rejected userId=${userId} modelKey=${trimmedModelKey} outputType=${outputType} err=${errMsg}`,
+    )
+    throw new ApiError('FORBIDDEN', {
+      code: 'MODEL_NOT_ENABLED',
+      details: { modelKey: trimmedModelKey, outputType, message: errMsg },
+    })
+  }
+
   const referenceImages = parseStringArray(rawImages, 'referenceImages', MAX_REFERENCE_IMAGES)
   const referenceVideos = parseStringArray(rawVideos, 'referenceVideos', MAX_REFERENCE_VIDEOS)
   const refText = typeof referenceText === 'string' ? referenceText.trim() : ''
@@ -128,6 +173,21 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
+  // PR-A2 billing — quote BEFORE row create so an INSUFFICIENT_BALANCE
+  // fails fast without leaving an orphan row. Quote returns 0 when mode=OFF
+  // or model has no pricing entry (fail-open mirrors task billing).
+  const normalizedResolution = typeof resolution === 'string' ? resolution : null
+  const normalizedDuration = typeof durationSec === 'number' && Number.isFinite(durationSec)
+    ? Math.round(durationSec)
+    : null
+  const quote = await quotePlaygroundCost({
+    outputType,
+    modelId: resolvedModelId,
+    durationSec: normalizedDuration,
+    resolution: normalizedResolution,
+    generationCount: 1,
+  })
+
   // Create row up front so failures still leave a record. Both image and
   // video are async (2026-06-02): the row starts 'pending', the worker
   // flips it to 'running' → 'succeeded'/'failed'. The client polls
@@ -142,17 +202,62 @@ export const POST = apiHandler(async (request: NextRequest) => {
       referenceVideos: referenceVideos.length > 0 ? JSON.stringify(referenceVideos) : null,
       referenceText: refText || null,
       outputType,
-      modelKey,
-      resolution: typeof resolution === 'string' ? resolution : null,
+      modelKey: trimmedModelKey,
+      resolution: normalizedResolution,
       aspectRatio: typeof aspectRatio === 'string' ? aspectRatio : null,
-      durationSec: typeof durationSec === 'number' && Number.isFinite(durationSec) ? Math.round(durationSec) : null,
+      durationSec: normalizedDuration,
       generationCount: 1,
       status: initialStatus,
+      costEstimate: quote.quotedCost > 0 ? quote.quotedCost : null,
+      pricingVersion: quote.pricingVersion,
     },
   })
 
+  // PR-A2 billing — freeze quoted cost against user balance after row
+  // create. Idempotency keyed on run.id, so retries collapse onto the
+  // same freeze. If freeze returns null when quoted > 0 it's an
+  // InsufficientBalance signal: flip the row 'failed' and surface 402.
+  let freezeId: string | null = null
+  if (quote.quotedCost > 0) {
+    freezeId = await freezeForPlayground({
+      userId,
+      playgroundRunId: run.id,
+      modelId: resolvedModelId,
+      outputType,
+      durationSec: normalizedDuration,
+      resolution: normalizedResolution,
+      quotedCost: quote.quotedCost,
+    })
+    if (!freezeId) {
+      try {
+        await prisma.playgroundRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'failed',
+            errorMessage: 'INSUFFICIENT_BALANCE',
+            completedAt: new Date(),
+          },
+        })
+      } catch (updateErr) {
+        const updateMsg = updateErr instanceof Error ? updateErr.message : String(updateErr)
+        _ulogError(
+          `[playground.run] FAILED to mark row failed after insufficient-balance id=${run.id} secondary=${updateMsg}`,
+        )
+      }
+      throw new ApiError('INSUFFICIENT_BALANCE', {
+        message: `余额不足，扣费 ${quote.quotedCost.toFixed(4)} 失败`,
+        required: quote.quotedCost,
+      })
+    }
+    // Stamp freezeId on row so the worker can confirm/rollback on terminal.
+    await prisma.playgroundRun.update({
+      where: { id: run.id },
+      data: { freezeId },
+    })
+  }
+
   _ulogInfo(
-    `[playground.run] start id=${run.id} userId=${userId} outputType=${outputType} model=${modelKey} refs.images=${referenceImages.length} refs.videos=${referenceVideos.length}`,
+    `[playground.run] start id=${run.id} userId=${userId} outputType=${outputType} model=${trimmedModelKey} quoted=${quote.quotedCost.toFixed(4)} freezeId=${freezeId || 'none'} refs.images=${referenceImages.length} refs.videos=${referenceVideos.length}`,
   )
 
   // Async dispatch (2026-06-02) — both image and video go through their
@@ -171,10 +276,31 @@ export const POST = apiHandler(async (request: NextRequest) => {
     // Enqueue failure is fatal — flip row to failed so the UI doesn't show
     // a stuck 'pending' forever. Re-throw so the API surfaces the problem.
     const errMsg = err instanceof Error ? err.message : 'enqueue_failed'
-    await prisma.playgroundRun.update({
-      where: { id: run.id },
-      data: { status: 'failed', errorMessage: errMsg, completedAt: new Date() },
-    }).catch(() => {})
+    try {
+      await prisma.playgroundRun.update({
+        where: { id: run.id },
+        data: { status: 'failed', errorMessage: errMsg, completedAt: new Date() },
+      })
+    } catch (updateErr) {
+      // Secondary failure flipping row to 'failed'. Per CLAUDE.md §3
+      // (不靜默吞錯) — log explicitly instead of `.catch(() => {})`.
+      // The primary enqueue error still surfaces to the client below;
+      // this log lets ops reconcile the orphaned 'pending' row.
+      const updateMsg = updateErr instanceof Error ? updateErr.message : String(updateErr)
+      _ulogError(
+        `[playground.run] FAILED to mark row failed after enqueue err id=${run.id} primary=${errMsg} secondary=${updateMsg}`,
+      )
+    }
+    // PR-A2 — refund the freeze: the job never ran, so the user must
+    // not be charged. refundForPlayground logs+swallows on rollback fail
+    // (ops needs to know but the enqueue error is the primary surface).
+    if (freezeId) {
+      await refundForPlayground({
+        freezeId,
+        playgroundRunId: run.id,
+        reason: `enqueue_failed:${errMsg}`,
+      })
+    }
     _ulogError(`[playground.run] enqueue failed id=${run.id} err=${errMsg}`)
     throw new ApiError('EXTERNAL_ERROR', {
       code: 'PLAYGROUND_ENQUEUE_FAILED',
