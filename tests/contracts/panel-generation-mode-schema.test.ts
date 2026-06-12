@@ -26,7 +26,7 @@ const EXPECTED_MODES = [
 ] as const
 
 const PHASE_1_5A_FIELDS = [
-  'generationMode',
+  'panelGenerationMode',
   'sceneContext',
   'motionLine',
   'keyframeUrl',
@@ -39,6 +39,11 @@ function loadPanelModelBlock(): string {
   const schema = readFileSync(join(process.cwd(), 'prisma', 'schema.prisma'), 'utf8')
   const match = schema.match(/model NovelPromotionPanel \{[\s\S]*?\n\}/)
   if (!match) throw new Error('NovelPromotionPanel model not found in schema.prisma')
+  // Lazy regex truncation guard: the real model block always ends with
+  // its @@map — if that's missing we matched a premature closing brace.
+  if (!match[0].includes('@@map("novel_promotion_panels")')) {
+    throw new Error('NovelPromotionPanel block truncated — regex matched an early closing brace')
+  }
   return match[0]
 }
 
@@ -54,10 +59,10 @@ describe('Phase 1.5A — PanelGenerationMode schema contract', () => {
     }
   })
 
-  it('generationMode DB default stays direct_t2v (legacy rows must not flip to R2V)', () => {
+  it('panelGenerationMode DB default stays direct_t2v (legacy rows must not flip to R2V)', () => {
     const model = loadPanelModelBlock()
     expect(model).toMatch(
-      /generationMode\s+PanelGenerationMode\s+@default\(direct_t2v\)/,
+      /panelGenerationMode\s+PanelGenerationMode\s+@default\(direct_t2v\)/,
     )
   })
 })

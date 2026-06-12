@@ -344,13 +344,19 @@ model NovelPromotionPanel {
   // panels to stay on current behavior (direct_t2v). The r2v_with_subjects
   // default for NEW panels is applied at the creation sites in Phase 1.5C,
   // where the worker starts reading this field.
-  generationMode       PanelGenerationMode       @default(direct_t2v)
+  // Named panelGenerationMode (not the spec's generationMode) to avoid
+  // colliding with NovelPromotionProject.generationMode (project-level
+  // r2v-narrative / t2i-storyboard axis) and the panel's own legacy
+  // videoGenerationMode (normal | firstlastframe) in 1.5C worker scopes.
+  panelGenerationMode  PanelGenerationMode       @default(direct_t2v)
   sceneContext         String?                   @db.Text // locked T2I/T2V prompt derived from description
   motionLine           String?                   @db.Text // I2V motion description (LLM-derived or user-edited)
   keyframeUrl          String?                   @db.Text // T2I->I2V: the selected keyframe (system-generated; imageUrl stays user-uploaded reference)
-  keyframeCandidates   Json?                     // T2I->I2V: 4 candidate thumbs (originals live in object storage)
+  // JSON-encoded string array — mirrors candidateImages/characters/props
+  // convention on this model (panels have no native Json columns).
+  keyframeCandidates   String?                   @db.Text // T2I->I2V: 4 candidate thumbs (originals live in object storage)
   r2vMotionRefUrl      String?                   @db.Text // R2V+motion: reference camera-motion clip
-  perShotProvider      String?                   // per-shot model override, e.g. "ark::seedance-2.0-r2v"
+  perShotProvider      String?                   @db.VarChar(128) // per-shot model override, e.g. "ark::seedance-2.0-r2v"
   storyboard           NovelPromotionStoryboard  @relation(fields: [storyboardId], references: [id], onDelete: Cascade)
   matchedVoiceLines    NovelPromotionVoiceLine[]
 
