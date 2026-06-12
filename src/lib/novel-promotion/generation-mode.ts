@@ -17,8 +17,56 @@
  * scattering `mode === ...` checks. Unknown/null defaults to r2v-narrative.
  */
 
+// Type-only Prisma import: this module is bundled into client components,
+// a value import of @prisma/client here would leak the server client
+// into the browser bundle.
+import type { PanelGenerationMode } from '@prisma/client'
+
 export const GENERATION_MODES = ['r2v-narrative', 't2i-storyboard'] as const
 export type GenerationMode = (typeof GENERATION_MODES)[number]
+
+// ── Phase 1.5C — per-PANEL generation mode (REDESIGN_PLAN §1.5) ──
+
+/**
+ * Literal mirror of the Prisma PanelGenerationMode enum. The `satisfies`
+ * check makes tsc fail if this list ever drifts from the schema.
+ */
+export const PANEL_GENERATION_MODES = [
+  'direct_t2v',
+  'r2v_with_subjects',
+  't2i_then_i2v',
+  'r2v_with_motion_ref',
+] as const satisfies readonly PanelGenerationMode[]
+
+export function isPanelGenerationMode(value: unknown): value is PanelGenerationMode {
+  return typeof value === 'string'
+    && (PANEL_GENERATION_MODES as readonly string[]).includes(value)
+}
+
+/**
+ * The panelGenerationMode to stamp on a NEWLY created panel.
+ *
+ * Priority:
+ *   1. sourcePanelMode — duplicating / making a variant of an existing
+ *      panel inherits its mode (legacy panels carry direct_t2v from the
+ *      DB default and stay on the legacy path).
+ *   2. project generationMode mapping:
+ *        'r2v-narrative' (default) → 'r2v_with_subjects'
+ *        't2i-storyboard'          → 't2i_then_i2v'
+ *
+ * The DB default stays direct_t2v on purpose (legacy rows must not flip
+ * — see the 1.5A contract test); the R2V-first default for new panels
+ * lives HERE, at the creation sites.
+ */
+export function defaultPanelGenerationMode(args: {
+  projectGenerationMode?: string | null
+  sourcePanelMode?: string | null
+}): PanelGenerationMode {
+  if (isPanelGenerationMode(args.sourcePanelMode)) return args.sourcePanelMode
+  return normalizeGenerationMode(args.projectGenerationMode) === 't2i-storyboard'
+    ? 't2i_then_i2v'
+    : 'r2v_with_subjects'
+}
 
 export const OPENING_PACINGS = ['hook', 'cinematic'] as const
 export type OpeningPacing = (typeof OPENING_PACINGS)[number]

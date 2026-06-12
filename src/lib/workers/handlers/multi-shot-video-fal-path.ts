@@ -48,6 +48,7 @@ import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { resolveNovelData } from './image-task-handler-shared'
 import { buildAudioDirective } from './multi-shot-audio-directive'
+import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import {
   collectCharacterRefs,
   collectSceneRefs,
@@ -78,8 +79,10 @@ const UNIVERSAL_FAL_CLEAN_FRAME_DIRECTIVE =
   'Pure live-action cinematic frame; only the narrative subject and environment appear; no text overlays, no UI graphics, no watermarks, no platform logos, no captions of any kind. The frame simulates clean unposted raw camera footage.'
 
 const MAX_REFERENCE_IMAGES = 9
-const MIN_DURATION_SEC = 4
-const MAX_DURATION_SEC = 15
+// Phase 1.5C: duration window from the shared per-provider module.
+const FAL_WINDOW = getMultiShotDurationWindow('fal')
+const MIN_DURATION_SEC = FAL_WINDOW.minTotalSec
+const MAX_DURATION_SEC = FAL_WINDOW.maxTotalSec
 
 interface PanelLite {
   id: string

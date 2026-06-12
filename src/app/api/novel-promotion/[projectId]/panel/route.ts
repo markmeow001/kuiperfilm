@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { serializeStructuredJsonField } from '@/lib/novel-promotion/panel-ai-data-sync'
+import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 
 function parseNullableNumberField(value: unknown): number | null {
   if (value === null || value === '') return null
@@ -75,6 +76,11 @@ export const POST = apiHandler(async (
       panels: {
         orderBy: { panelIndex: 'desc' },
         take: 1
+      },
+      // Phase 1.5C — project-level mode decides the new panel's
+      // panelGenerationMode (r2v-narrative → r2v_with_subjects).
+      episode: {
+        select: { novelPromotionProject: { select: { generationMode: true } } }
       }
     }
   })
@@ -110,6 +116,9 @@ export const POST = apiHandler(async (
       multiShotGroupOrder: typeof multiShotGroupOrder === 'number'
         ? multiShotGroupOrder
         : null,
+      panelGenerationMode: defaultPanelGenerationMode({
+        projectGenerationMode: storyboard.episode?.novelPromotionProject?.generationMode,
+      }),
     }
   })
 
@@ -334,6 +343,12 @@ export const PATCH = apiHandler(async (
       id: storyboardId,
       episode: { novelPromotionProject: { projectId } },
     },
+    // Phase 1.5C — project mode for the create-if-missing branch below.
+    include: {
+      episode: {
+        select: { novelPromotionProject: { select: { generationMode: true } } }
+      }
+    },
   })
 
   if (!storyboard) {
@@ -372,6 +387,9 @@ export const PATCH = apiHandler(async (
         imageUrl: null,
         videoPrompt: videoPrompt ?? null,
         firstLastFramePrompt: firstLastFramePrompt ?? null,
+        panelGenerationMode: defaultPanelGenerationMode({
+          projectGenerationMode: storyboard.episode?.novelPromotionProject?.generationMode,
+        }),
       }
     })
   }
@@ -422,6 +440,12 @@ export const PUT = apiHandler(async (
     where: {
       id: storyboardId,
       episode: { novelPromotionProject: { projectId } },
+    },
+    // Phase 1.5C — project mode for the create-if-missing branch below.
+    include: {
+      episode: {
+        select: { novelPromotionProject: { select: { generationMode: true } } }
+      }
     },
   })
 
@@ -499,6 +523,9 @@ export const PUT = apiHandler(async (
         firstLastFramePrompt: firstLastFramePrompt ?? null,
         actingNotes: actingNotes !== undefined ? toStructuredJsonField(actingNotes, 'actingNotes') : null,
         photographyRules: photographyRules !== undefined ? toStructuredJsonField(photographyRules, 'photographyRules') : null,
+        panelGenerationMode: defaultPanelGenerationMode({
+          projectGenerationMode: storyboard.episode?.novelPromotionProject?.generationMode,
+        }),
       }
     })
   }

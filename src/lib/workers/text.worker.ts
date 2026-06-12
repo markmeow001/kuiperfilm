@@ -35,6 +35,7 @@ import { handleReferenceToCharacterTask } from './handlers/reference-to-characte
 import { handleShotAITask } from './handlers/shot-ai-tasks'
 import { handleCharacterProfileTask } from './handlers/character-profile'
 import { handleRegisterArkAssetTask } from './handlers/register-ark-asset'
+import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 
 type AnyObj = Record<string, unknown>
 type JsonRecord = Record<string, unknown>
@@ -398,6 +399,10 @@ async function handleRegenerateStoryboardTextTask(job: Job<TaskJobData>) {
           srtSegment: panel.source_text || null,
           photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
           actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
+          // Phase 1.5C — regenerated panels are new rows; stamp from project mode.
+          panelGenerationMode: defaultPanelGenerationMode({
+            projectGenerationMode: novelPromotionData.generationMode,
+          }),
         },
       })
     }
@@ -601,6 +606,11 @@ async function handleInsertPanelTask(job: Job<TaskJobData>) {
         characters: generatedPanel.characters ? JSON.stringify(generatedPanel.characters) : prevPanel.characters,
         srtSegment: generatedSrtSegment || prevPanel.srtSegment,
         duration: generatedDuration,
+        // Phase 1.5C — an inserted panel inherits its neighbor's mode
+        // (same group context, mirrors the other prevPanel fallbacks above).
+        panelGenerationMode: defaultPanelGenerationMode({
+          sourcePanelMode: prevPanel.panelGenerationMode,
+        }),
       },
     })
 

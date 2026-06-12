@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireProjectAuthLight, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
+import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 
 /**
  * POST /api/novel-promotion/[projectId]/storyboard-group
@@ -29,7 +30,9 @@ export const POST = apiHandler(async (
   const episode = await prisma.novelPromotionEpisode.findUnique({
     where: { id: episodeId },
     include: {
-      clips: { orderBy: { createdAt: 'asc' } }
+      clips: { orderBy: { createdAt: 'asc' } },
+      // Phase 1.5C — project mode decides the initial panel's panelGenerationMode.
+      novelPromotionProject: { select: { generationMode: true } }
     }
   })
 
@@ -94,7 +97,10 @@ export const POST = apiHandler(async (
         shotType: '中景',
         cameraMove: '固定',
         description: '新镜头描述',
-        characters: '[]'
+        characters: '[]',
+        panelGenerationMode: defaultPanelGenerationMode({
+          projectGenerationMode: episode.novelPromotionProject?.generationMode,
+        })
       }
     })
 

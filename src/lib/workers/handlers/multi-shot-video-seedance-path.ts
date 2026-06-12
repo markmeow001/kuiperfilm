@@ -52,6 +52,7 @@ import {
 } from '../utils'
 import { reportTaskProgress } from '../shared'
 import { buildAudioDirective } from './multi-shot-audio-directive'
+import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
@@ -110,9 +111,12 @@ export const MAX_CHARACTER_REFS = 4
 export const MAX_SCENE_REFS = 2
 /** Seedance 2.0 duration range per the wiki (also clamped by generator).
  *  Both BobAPI 720p variant and ARK direct doubao-seedance-2-0-* share the
- *  same 4-15s window. */
-export const MIN_DURATION_SEC = 4
-export const MAX_DURATION_SEC = 15
+ *  same 4-15s window. Phase 1.5C: sourced from the shared per-provider
+ *  window module; re-exported because this file is the import hub the
+ *  ark path already pulls these from. */
+const TAIJIAI_WINDOW = getMultiShotDurationWindow('taijiai')
+export const MIN_DURATION_SEC = TAIJIAI_WINDOW.minTotalSec
+export const MAX_DURATION_SEC = TAIJIAI_WINDOW.maxTotalSec
 
 export interface PanelLite {
   id: string
