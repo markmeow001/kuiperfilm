@@ -269,6 +269,16 @@ model NovelPromotionClip {
   @@map("novel_promotion_clips")
 }
 
+// Phase 1.5A (REDESIGN_PLAN §1.5) — per-panel video generation mode.
+// R2V-first 4-mode architecture: worker routing lands in Phase 1.5C;
+// until then these fields are dormant (written but not read).
+enum PanelGenerationMode {
+  direct_t2v          // T2V, no reference — current/legacy behavior
+  r2v_with_subjects   // R2V, auto-inject character/location/prop refs (new-panel default from 1.5C)
+  t2i_then_i2v        // T2I 4 candidates -> user picks keyframe -> I2V
+  r2v_with_motion_ref // R2V + reference camera-motion clip
+}
+
 model NovelPromotionPanel {
   id                   String                    @id @default(uuid())
   storyboardId         String
@@ -327,6 +337,26 @@ model NovelPromotionPanel {
   previousImageUrl     String?                   @db.Text
   previousImageMediaId String?
   previousImageMedia   MediaObject?              @relation("NovelPromotionPanelPreviousImageMedia", fields: [previousImageMediaId], references: [id], onDelete: SetNull)
+  // ── Phase 1.5A — R2V-first 4-mode fields (REDESIGN_PLAN §1.5A) ──
+  // DB default is direct_t2v (NOT r2v_with_subjects as the spec model
+  // block suggests): `prisma db push` applies the default to every
+  // existing row, and the spec's own backfill note requires existing
+  // panels to stay on current behavior (direct_t2v). The r2v_with_subjects
+  // default for NEW panels is applied at the creation sites in Phase 1.5C,
+  // where the worker starts reading this field.
+  // Named panelGenerationMode (not the spec's generationMode) to avoid
+  // colliding with NovelPromotionProject.generationMode (project-level
+  // r2v-narrative / t2i-storyboard axis) and the panel's own legacy
+  // videoGenerationMode (normal | firstlastframe) in 1.5C worker scopes.
+  panelGenerationMode  PanelGenerationMode       @default(direct_t2v)
+  sceneContext         String?                   @db.Text // locked T2I/T2V prompt derived from description
+  motionLine           String?                   @db.Text // I2V motion description (LLM-derived or user-edited)
+  keyframeUrl          String?                   @db.Text // T2I->I2V: the selected keyframe (system-generated; imageUrl stays user-uploaded reference)
+  // JSON-encoded string array — mirrors candidateImages/characters/props
+  // convention on this model (panels have no native Json columns).
+  keyframeCandidates   String?                   @db.Text // T2I->I2V: 4 candidate thumbs (originals live in object storage)
+  r2vMotionRefUrl      String?                   @db.Text // R2V+motion: reference camera-motion clip
+  perShotProvider      String?                   @db.VarChar(128) // per-shot model override, e.g. "ark::seedance-2.0-r2v"
   storyboard           NovelPromotionStoryboard  @relation(fields: [storyboardId], references: [id], onDelete: Cascade)
   matchedVoiceLines    NovelPromotionVoiceLine[]
 
