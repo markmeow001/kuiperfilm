@@ -94,7 +94,7 @@ describe('POST /api/playground/run — modelKey enablement gate (PR-A1)', () => 
       },
     })
 
-    const res = await POST(req)
+    const res = await POST(req, { params: Promise.resolve({}) })
     expect(res.status).toBe(403)
     const json = await res.json()
     expect(json.error.code).toBe('FORBIDDEN')
@@ -125,7 +125,7 @@ describe('POST /api/playground/run — modelKey enablement gate (PR-A1)', () => 
       },
     })
 
-    const res = await POST(req)
+    const res = await POST(req, { params: Promise.resolve({}) })
     expect(res.status).toBe(403)
     const json = await res.json()
     expect(json.error.code).toBe('FORBIDDEN')
@@ -145,7 +145,7 @@ describe('POST /api/playground/run — modelKey enablement gate (PR-A1)', () => 
       },
     })
 
-    const res = await POST(req)
+    const res = await POST(req, { params: Promise.resolve({}) })
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.success).toBe(true)
@@ -167,7 +167,7 @@ describe('POST /api/playground/run — modelKey enablement gate (PR-A1)', () => 
       },
     })
 
-    const res = await POST(req)
+    const res = await POST(req, { params: Promise.resolve({}) })
     expect(res.status).toBe(200)
     expect(prismaMock.playgroundRun.create).toHaveBeenCalledOnce()
     expect(enqueueMock.enqueuePlaygroundVideoJob).toHaveBeenCalledOnce()
@@ -184,7 +184,7 @@ describe('POST /api/playground/run — modelKey enablement gate (PR-A1)', () => 
       body: '{not valid json',
     })
 
-    const res = await POST(req)
+    const res = await POST(req, { params: Promise.resolve({}) })
     expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.error.code).toBe('INVALID_PARAMS')
@@ -204,7 +204,7 @@ describe('POST /api/playground/run — modelKey enablement gate (PR-A1)', () => 
       },
     })
 
-    await POST(req)
+    await POST(req, { params: Promise.resolve({}) })
     expect(apiConfigMock.resolveModelSelection).toHaveBeenCalledWith(
       'user-1',
       'atlascloud::nano-banana-pro',

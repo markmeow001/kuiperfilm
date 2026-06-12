@@ -25,6 +25,8 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { generateImage } from '@/lib/generator-api'
+import { parseModelKeyStrict } from '@/lib/model-config-contract'
+import { captureForPlayground, refundForPlayground } from '@/lib/playground/billing'
 import { uploadImageSourceToCos, waitExternalResult, toSignedUrlIfCos } from '../utils'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
@@ -123,16 +125,53 @@ export async function handlePlaygroundImageTask(job: Job<PlaygroundImageJobData>
     // (CSP-allowed) storage with a predictable lifetime.
     const cosKey = await uploadImageSourceToCos(sourceUrl, `playground-runs/${playgroundRunId}`, playgroundRunId)
 
+    // PR-A2 billing — capture the freeze on success. costEstimate was
+    // computed at submit time using the same params (model + resolution),
+    // so for now actualCost === costEstimate. Phase 9.1 will replace
+    // this with usage-based settlement (e.g. real seconds generated).
+    const actualCost = run.costEstimate ?? 0
+    let chargedCost = 0
+    if (run.freezeId && actualCost > 0) {
+      const parsed = parseModelKeyStrict(run.modelKey)
+      const modelId = parsed?.modelKey ?? run.modelKey
+      try {
+        await captureForPlayground({
+          freezeId: run.freezeId,
+          playgroundRunId,
+          modelId,
+          outputType: 'image',
+          resolution: run.resolution,
+          actualCost,
+        })
+        chargedCost = actualCost
+      } catch (captureErr) {
+        // Capture failure on the success path is a billing-side bug, not
+        // a generation failure. Log loudly + refund so the user isn't
+        // double-jeopardized. Image content was produced and persisted
+        // either way — surface the row succeeded.
+        const captureMsg = captureErr instanceof Error ? captureErr.message : String(captureErr)
+        _ulogError(
+          `[playground-image] capture FAILED runId=${playgroundRunId} freezeId=${run.freezeId} err=${captureMsg} — refunding`,
+        )
+        await refundForPlayground({
+          freezeId: run.freezeId,
+          playgroundRunId,
+          reason: `capture_failed:${captureMsg}`,
+        })
+      }
+    }
+
     await prisma.playgroundRun.update({
       where: { id: playgroundRunId },
       data: {
         status: 'succeeded',
         resultUrls: JSON.stringify([cosKey]),
         completedAt: new Date(),
+        costActual: chargedCost > 0 ? chargedCost : null,
       },
     })
 
-    _ulogInfo(`[playground-image] success runId=${playgroundRunId} cosKey=${cosKey}`)
+    _ulogInfo(`[playground-image] success runId=${playgroundRunId} cosKey=${cosKey} charged=${chargedCost}`)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     try {
@@ -148,6 +187,15 @@ export async function handlePlaygroundImageTask(job: Job<PlaygroundImageJobData>
       _ulogError(
         `[playground-image] FAILED to mark row failed runId=${playgroundRunId} primary=${errMsg} secondary=${updateMsg}`,
       )
+    }
+    // PR-A2 billing — refund the freeze on failure. refundForPlayground
+    // logs+swallows secondary rollback errors so the primary surfaces.
+    if (run.freezeId) {
+      await refundForPlayground({
+        freezeId: run.freezeId,
+        playgroundRunId,
+        reason: `generation_failed:${errMsg}`,
+      })
     }
     _ulogError(`[playground-image] threw runId=${playgroundRunId} err=${errMsg}`)
     throw err

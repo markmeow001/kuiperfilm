@@ -24,7 +24,13 @@ interface PureRecordParams extends RecordParams {
   taskType?: string | null
 }
 
-const VIRTUAL_PROJECT_IDS = new Set(['asset-hub', 'global-asset-hub', 'system'])
+// 'playground' is added 2026-06-12 (PR-A2) — Playground runs are
+// project-independent by design, but the ledger writes balance flow
+// records (BalanceTransaction) for all charges. Marking 'playground'
+// virtual skips the UsageCost row (no project to aggregate against)
+// while still writing the BalanceTransaction so admin sees the charge.
+// Phase 9.1 will replace this with proper Task-bound billing.
+const VIRTUAL_PROJECT_IDS = new Set(['asset-hub', 'global-asset-hub', 'system', 'playground'])
 
 function isProjectScoped(projectId: string): boolean {
   return Boolean(projectId && !VIRTUAL_PROJECT_IDS.has(projectId))

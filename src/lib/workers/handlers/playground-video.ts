@@ -27,6 +27,8 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
 import { generateVideo } from '@/lib/generator-api'
+import { parseModelKeyStrict } from '@/lib/model-config-contract'
+import { captureForPlayground, refundForPlayground } from '@/lib/playground/billing'
 import { uploadVideoSourceToCos, waitExternalResult, toSignedUrlIfCos } from '../utils'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
@@ -169,16 +171,50 @@ export async function handlePlaygroundVideoTask(job: Job<PlaygroundVideoJobData>
       polled.downloadHeaders,
     )
 
+    // PR-A2 billing — capture the freeze on success. costEstimate was
+    // computed at submit time using model + resolution + durationSec, so
+    // for now actualCost === costEstimate. Phase 9.1 will replace this
+    // with usage-based settlement (real seconds, real resolution).
+    const actualCost = run.costEstimate ?? 0
+    let chargedCost = 0
+    if (run.freezeId && actualCost > 0) {
+      const parsed = parseModelKeyStrict(run.modelKey)
+      const modelId = parsed?.modelKey ?? run.modelKey
+      try {
+        await captureForPlayground({
+          freezeId: run.freezeId,
+          playgroundRunId,
+          modelId,
+          outputType: 'video',
+          durationSec: run.durationSec,
+          resolution: run.resolution,
+          actualCost,
+        })
+        chargedCost = actualCost
+      } catch (captureErr) {
+        const captureMsg = captureErr instanceof Error ? captureErr.message : String(captureErr)
+        _ulogError(
+          `[playground-video] capture FAILED runId=${playgroundRunId} freezeId=${run.freezeId} err=${captureMsg} — refunding`,
+        )
+        await refundForPlayground({
+          freezeId: run.freezeId,
+          playgroundRunId,
+          reason: `capture_failed:${captureMsg}`,
+        })
+      }
+    }
+
     await prisma.playgroundRun.update({
       where: { id: playgroundRunId },
       data: {
         status: 'succeeded',
         resultUrls: JSON.stringify([cosKey]),
         completedAt: new Date(),
+        costActual: chargedCost > 0 ? chargedCost : null,
       },
     })
 
-    _ulogInfo(`[playground-video] success runId=${playgroundRunId} cosKey=${cosKey}`)
+    _ulogInfo(`[playground-video] success runId=${playgroundRunId} cosKey=${cosKey} charged=${chargedCost}`)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     try {
@@ -199,6 +235,14 @@ export async function handlePlaygroundVideoTask(job: Job<PlaygroundVideoJobData>
       _ulogError(
         `[playground-video] FAILED to mark row failed runId=${playgroundRunId} primary=${errMsg} secondary=${updateMsg}`,
       )
+    }
+    // PR-A2 billing — refund the freeze on failure.
+    if (run.freezeId) {
+      await refundForPlayground({
+        freezeId: run.freezeId,
+        playgroundRunId,
+        reason: `generation_failed:${errMsg}`,
+      })
     }
     _ulogError(`[playground-video] threw runId=${playgroundRunId} err=${errMsg}`)
     // Re-throw so BullMQ marks the job failed (and may retry per
