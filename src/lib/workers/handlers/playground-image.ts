@@ -135,12 +135,20 @@ export async function handlePlaygroundImageTask(job: Job<PlaygroundImageJobData>
     _ulogInfo(`[playground-image] success runId=${playgroundRunId} cosKey=${cosKey}`)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
-    await prisma.playgroundRun
-      .update({
+    try {
+      await prisma.playgroundRun.update({
         where: { id: playgroundRunId },
         data: { status: 'failed', errorMessage: errMsg, completedAt: new Date() },
       })
-      .catch(() => {})
+    } catch (updateErr) {
+      // Secondary failure flipping row to 'failed'. Log explicitly per
+      // CLAUDE.md §3 (不靜默吞錯) instead of `.catch(() => {})`. Ops needs
+      // to know the row is stuck out-of-band with the job state.
+      const updateMsg = updateErr instanceof Error ? updateErr.message : String(updateErr)
+      _ulogError(
+        `[playground-image] FAILED to mark row failed runId=${playgroundRunId} primary=${errMsg} secondary=${updateMsg}`,
+      )
+    }
     _ulogError(`[playground-image] threw runId=${playgroundRunId} err=${errMsg}`)
     throw err
   }

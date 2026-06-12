@@ -181,8 +181,8 @@ export async function handlePlaygroundVideoTask(job: Job<PlaygroundVideoJobData>
     _ulogInfo(`[playground-video] success runId=${playgroundRunId} cosKey=${cosKey}`)
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
-    await prisma.playgroundRun
-      .update({
+    try {
+      await prisma.playgroundRun.update({
         where: { id: playgroundRunId },
         data: {
           status: 'failed',
@@ -190,7 +190,16 @@ export async function handlePlaygroundVideoTask(job: Job<PlaygroundVideoJobData>
           completedAt: new Date(),
         },
       })
-      .catch(() => {})
+    } catch (updateErr) {
+      // Secondary failure flipping row to 'failed'. We can't surface this to
+      // the user (BullMQ will re-throw the primary), but ops needs to know
+      // the row state is stuck out-of-band with the job state. Per
+      // CLAUDE.md §3 (不靜默吞錯) — log explicitly instead of `.catch(() => {})`.
+      const updateMsg = updateErr instanceof Error ? updateErr.message : String(updateErr)
+      _ulogError(
+        `[playground-video] FAILED to mark row failed runId=${playgroundRunId} primary=${errMsg} secondary=${updateMsg}`,
+      )
+    }
     _ulogError(`[playground-video] threw runId=${playgroundRunId} err=${errMsg}`)
     // Re-throw so BullMQ marks the job failed (and may retry per
     // backoff policy). The PlaygroundRun row already reflects the
