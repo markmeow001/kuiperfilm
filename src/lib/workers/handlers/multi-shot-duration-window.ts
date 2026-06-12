@@ -33,6 +33,10 @@ export interface MultiShotDurationWindow {
 const SEEDANCE_2_WINDOW: MultiShotDurationWindow = { minTotalSec: 4, maxTotalSec: 15 }
 
 const WINDOWS_BY_PROVIDER: Record<string, MultiShotDurationWindow> = {
+  // minTotalSec 0 is deliberate: Kling Omni has no documented composite
+  // floor — the b-path enforces per-shot minimums itself via
+  // KLING_OMNI_DEFAULT_PER_SHOT_DURATION when distributing durations.
+  // This module is NOT the enforcement point for tencent-vod minimums.
   'tencent-vod': { minTotalSec: 0, maxTotalSec: KLING_OMNI_MAX_TOTAL_DURATION },
   taijiai: SEEDANCE_2_WINDOW,
   ark: SEEDANCE_2_WINDOW,
@@ -57,6 +61,10 @@ export function getMultiShotDurationWindow(provider: string): MultiShotDurationW
 /**
  * REDESIGN_PLAN §1.5C signature: the max total seconds one multi-shot
  * dispatch may carry for the given provider.
+ *
+ * ⚠️ Despite the spec-mandated name, this is the COMPOSITE total cap
+ * (all shots in one dispatch combined), NOT a per-individual-shot cap.
+ * Do not use it to clamp a single shot's duration.
  */
 export function getMaxDurationPerShot(provider: string): number {
   return getMultiShotDurationWindow(provider).maxTotalSec

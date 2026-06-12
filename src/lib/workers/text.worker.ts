@@ -401,7 +401,7 @@ async function handleRegenerateStoryboardTextTask(job: Job<TaskJobData>) {
           actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
           // Phase 1.5C — regenerated panels are new rows; stamp from project mode.
           panelGenerationMode: defaultPanelGenerationMode({
-            projectGenerationMode: novelPromotionData.generationMode,
+            projectGenerationMode: normalizedNovelPromotionData.generationMode,
           }),
         },
       })

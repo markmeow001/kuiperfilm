@@ -258,6 +258,12 @@ export async function persistSingleClipStoryboard(
       where: { projectId },
       select: { generationMode: true },
     })
+    if (!npProject) {
+      // Explicit, not silent (CLAUDE.md §3): a missing NP project row at
+      // this point is a data-consistency smell. The r2v-first default is
+      // still safe to write, so log loudly and proceed.
+      logError('[persistSingleClipStoryboard] novelPromotionProject missing — stamping default panelGenerationMode', { projectId })
+    }
     const panelGenerationMode = defaultPanelGenerationMode({
       projectGenerationMode: npProject?.generationMode,
     })
@@ -408,6 +414,10 @@ export async function persistStoryboardsAndPanels(params: {
       where: { projectId },
       select: { generationMode: true },
     })
+    if (!npProject) {
+      // Explicit, not silent (CLAUDE.md §3) — see single-clip path note.
+      logError('[persistStoryboardsAndPanels] novelPromotionProject missing — stamping default panelGenerationMode', { projectId })
+    }
     const panelGenerationMode = defaultPanelGenerationMode({
       projectGenerationMode: npProject?.generationMode,
     })

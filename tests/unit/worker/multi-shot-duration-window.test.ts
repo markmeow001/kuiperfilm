@@ -17,6 +17,12 @@ describe('multi-shot duration window (Phase 1.5C shared module)', () => {
       .toBe(KLING_OMNI_MAX_TOTAL_DURATION)
   })
 
+  it('tencent-vod floor is deliberately 0 — the b-path enforces per-shot minimums itself', () => {
+    // Pinned so a future change to a non-zero floor is a conscious
+    // decision, not a copy-paste of the Seedance window.
+    expect(getMultiShotDurationWindow('tencent-vod').minTotalSec).toBe(0)
+  })
+
   it('getMaxDurationPerShot returns the provider cap (REDESIGN_PLAN §1.5C signature)', () => {
     expect(getMaxDurationPerShot('fal')).toBe(15)
     expect(getMaxDurationPerShot('tencent-vod')).toBe(KLING_OMNI_MAX_TOTAL_DURATION)
