@@ -210,6 +210,10 @@ export async function persistSingleClipStoryboard(
   projectId: string,
   episodeId: string,
   clipEntry: ClipPanelsResult,
+  // Phase 1.5C — the caller (script-to-storyboard handler) already holds
+  // the project's generationMode; pass it in rather than re-querying once
+  // per clip inside the transaction.
+  projectGenerationMode: string | null | undefined,
 ): Promise<PersistedStoryboard | null> {
   return await prisma.$transaction(async (tx) => {
     // 2026-05-01: race-safe atomic replace. Three guarantees:
@@ -253,20 +257,9 @@ export async function persistSingleClipStoryboard(
     })
 
     // Phase 1.5C — project mode decides the panelGenerationMode stamped
-    // on every LLM-generated panel in this clip (fetched once per clip).
-    const npProject = await tx.novelPromotionProject.findUnique({
-      where: { projectId },
-      select: { generationMode: true },
-    })
-    if (!npProject) {
-      // Explicit, not silent (CLAUDE.md §3): a missing NP project row at
-      // this point is a data-consistency smell. The r2v-first default is
-      // still safe to write, so log loudly and proceed.
-      logError('[persistSingleClipStoryboard] novelPromotionProject missing — stamping default panelGenerationMode', { projectId })
-    }
-    const panelGenerationMode = defaultPanelGenerationMode({
-      projectGenerationMode: npProject?.generationMode,
-    })
+    // on every LLM-generated panel in this clip (passed from the caller,
+    // no per-clip re-query).
+    const panelGenerationMode = defaultPanelGenerationMode({ projectGenerationMode })
 
     const persistedPanels: PersistedStoryboard['panels'] = []
     // Phase 11.2: collect names across all panels in this clip for one-shot junction sync.

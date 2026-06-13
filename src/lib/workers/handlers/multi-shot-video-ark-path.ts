@@ -57,8 +57,6 @@ import {
 import {
   UNIVERSAL_SEEDANCE_NEGATIVE,
   MAX_REFERENCE_IMAGES,
-  MIN_DURATION_SEC,
-  MAX_DURATION_SEC,
   collectCharacterRefs,
   collectSceneRefs,
   buildSeedancePrompt,
@@ -68,6 +66,13 @@ import {
   type SceneRef,
   type PanelLite,
 } from './multi-shot-video-seedance-path'
+import { getMultiShotDurationWindow } from './multi-shot-duration-window'
+
+// Phase 1.5C — resolve ARK's own window directly (was previously pulled
+// via the seedance-path re-export under the 'taijiai' key, which obscured
+// the provider identity). Both map to the same Seedance 2.0 4-15s window.
+const { minTotalSec: MIN_DURATION_SEC, maxTotalSec: MAX_DURATION_SEC } =
+  getMultiShotDurationWindow('ark')
 
 /**
  * Resolve raw image URLs back to their active arkAssetId (if any).

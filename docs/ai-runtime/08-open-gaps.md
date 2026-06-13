@@ -33,6 +33,37 @@
 
 ## Phase 11+ 留下的语义缺口
 
+### Multi-shot 合成时长窗口仍是 provider 级硬编码（Phase 1.5C 后续）
+
+`src/lib/workers/handlers/multi-shot-duration-window.ts` 的 `WINDOWS_BY_PROVIDER`
+把 multi-shot 合成总时长窗口（Seedance 2.0 = 4–15s、tencent-vod = Kling Omni 15s）
+**按 provider 硬编码**。这是把原本散在 4 个 path 文件的 4 份拷贝收敛成单一来源的
+中间态，比之前好，但仍不是从 capability catalog 解析。
+
+**为什么没直接走 catalog**：
+- `taijiai`（BobAPI）完全不在 `standards/capabilities/image-video.catalog.json` 里。
+- `VideoCapabilities`(`model-config-contract.ts`) 没有「合成总时长窗口」字段 —— catalog
+  现有的 `durationOptions` 是**单次调用**的 per-shot 时长选项，跟 multi-shot composite
+  的**总时长上限**是两个不同概念，不能直接复用。
+
+**收口动作**（建议跟 Phase 1.5C slice 3 worker 重构一起，或之后独立做）：
+1. `VideoCapabilities` 加 `multiShotCompositeMinSec?` / `multiShotCompositeMaxSec?`。
+2. catalog 补 taijiai 条目。
+3. `getMultiShotDurationWindow(provider, modelId)` 改从 catalog 按 (provider, modelId) 解析，删 `WINDOWS_BY_PROVIDER` 表。
+
+目前硬编码不影响主链路（值正确、单一来源、未知 provider 显式 throw），不阻塞。
+
+### panelGenerationMode 在 9 个建立点逐一盖章（Phase 1.5C 后续）
+
+`panelGenerationMode: defaultPanelGenerationMode(...)` 目前在 9 个 `novelPromotionPanel.create`
+调用点手动重复。专案没有共用的 panel-create helper（全是裸 `prisma.create`，pre-existing
+风格），也没用 Prisma extension。**风险**：第 10 个建立点会 silently 漏盖 default。
+
+**收口动作**：Phase 1.5C slice 3 重构 worker dispatch 时，顺势抽
+`createNovelPromotionPanel({ data, projectGenerationMode?, sourcePanelMode? }, tx)` 单一
+choke point，把 9 个调用点收敛进去（也能顺带统一 PATCH/PUT 的 create-if-missing 分支）。
+未做前：新增 panel 建立点务必记得带 `panelGenerationMode`。
+
 ### MediaObject 跨用户 import 时的 ownership 语义（Phase 11.2 Q-005 后续）
 
 Phase 11.5 Q-005 给 `MediaObject` 加了 `uploadedByUserId`,让 `assertReferenceImagesOwned` 能拒绝跨用户引用别人上传的图。但 Phase 11.2 import-from-global 流程把 `GlobalCharacter.appearances[*].imageMediaId` 直接拷到 `NovelPromotionCharacter.appearances[*].imageMediaId` 时,对应的 MediaObject 仍然挂在 **原 uploader**(global asset 创建者 user A)名下。

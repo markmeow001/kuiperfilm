@@ -109,14 +109,12 @@ export const MAX_CHARACTER_REFS = 4
 /** Soft cap on scene refs. Most groups stay in 1 location; 2 covers the
  * "interior→exterior cut within one group" case. */
 export const MAX_SCENE_REFS = 2
-/** Seedance 2.0 duration range per the wiki (also clamped by generator).
- *  Both BobAPI 720p variant and ARK direct doubao-seedance-2-0-* share the
- *  same 4-15s window. Phase 1.5C: sourced from the shared per-provider
- *  window module; re-exported because this file is the import hub the
- *  ark path already pulls these from. */
+/** Seedance 2.0 (BobAPI/taijiai) duration range — Phase 1.5C sources it
+ *  from the shared per-provider window module. Internal to this path now
+ *  (ARK resolves its own 'ark' window directly). */
 const TAIJIAI_WINDOW = getMultiShotDurationWindow('taijiai')
-export const MIN_DURATION_SEC = TAIJIAI_WINDOW.minTotalSec
-export const MAX_DURATION_SEC = TAIJIAI_WINDOW.maxTotalSec
+const MIN_DURATION_SEC = TAIJIAI_WINDOW.minTotalSec
+const MAX_DURATION_SEC = TAIJIAI_WINDOW.maxTotalSec
 
 export interface PanelLite {
   id: string

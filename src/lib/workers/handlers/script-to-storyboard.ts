@@ -208,7 +208,7 @@ export async function handleScriptToStoryboardTask(job: Job<TaskJobData>) {
                     },
                     runStep,
                     onClipComplete: async (clipResult) => {
-                      const persisted = await persistSingleClipStoryboard(projectId, episodeId, clipResult)
+                      const persisted = await persistSingleClipStoryboard(projectId, episodeId, clipResult, novelData.generationMode)
                       // Race-safe persist returns null when the clip
                       // it was meant to replace was deleted between
                       // orchestrator init and persist (e.g. clips_build
