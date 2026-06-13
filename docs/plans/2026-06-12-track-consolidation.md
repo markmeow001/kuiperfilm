@@ -51,8 +51,17 @@ AI 短劇製作平台，未來多人使用 + 商業化：
     - ✅ slice 1：duration window module + 9 建立點 panelGenerationMode 蓋章（PR #9 merged）
     - ✅ slice 2（1.5B prompts）：發現 generic detail 已是 R2V-first（5-6 月重構成果），
          不造重複 prompt；只更新 router 註解+測試 pin 住。motion line generator 併入 slice 3。
-    - ⏸ slice 3：per-mode video worker routing（統一 composeMultiShot）+ NP_AGENT_MOTION_LINE_GENERATOR
-         (t2i→i2v 用) + legacy_path flag 新舊並行一週。⚠️ 切換時要拍板 legacy 專案 generationMode backfill。
+    - ✅ slice 3a：consolidate Seedance-family dispatch params（seedanceFamilyParams 單一choke point，PR #12 merged）
+    - 🔁 slice 3 **範圍收斂（2026-06-13 user 拍板）**：原「per-panel 4-mode worker routing +
+         NP_AGENT_MOTION_LINE_GENERATOR + legacy_path 新舊並行」**取消**。改成「主流程 R2V-only」：
+         * 主管線只走 R2V（分析→自動切組→帶每段分鏡 prompt→Seedance 生視頻），對齊北極星
+           「核心管線 = Seedance R2V；附加 = Playground 文生圖/圖生視頻」。
+         * **不做** per-panel generationMode 路由 / motion-line generator / t2i→i2v worker path /
+           legacy_path flag → 最高風險的那塊整個移除（schema 的 keyframeUrl/motionLine/… 欄位留著當 nullable，無消費者，無害）。
+         * t2i-storyboard 選擇器**保留**(預設 R2V)；它就是現存 prod 流程(文生圖→i2v)，留著零成本、不逼出 per-panel 路由。要極致關鍵幀控制的進階使用走 Playground。
+         * ✅ **對白為主決定秒數**：Seedance + ARK composite path 接上 buildDialogueDrivenDurations
+           （fal/atlascloud/Kling b-path 早已接），對白驅動 composite 總時長,靜默組才退回 panel-count baseline。
+       ⏳ 待辦：Playground 圖生(FREEDOM)在有 API key 的環境實測一次(本沙箱無 key 跑不了)。
  6. Phase 9.1：Playground + 長尾任務收進 createRun/Task（多人+計費統一 spine）
 
 框架期（2 週）
