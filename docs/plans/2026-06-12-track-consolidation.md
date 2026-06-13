@@ -79,4 +79,5 @@ AI 短劇製作平台，未來多人使用 + 商業化：
 
 - **不要再往 /v5 加功能**（凍結）；敘事編輯請等 Phase 1.5D-bis。
 - 新工作一律對應到本文件的佇列編號，不再發明新的 PR-X 編號。
-- 產品缺口備忘：props LLM 抽取（Stage 2b）零進度；Playground FREEDOM 生圖失敗待查（`project_kuiperfilm_playground_freedom_image_fail`）。
+- 產品缺口備忘：Playground FREEDOM 生圖失敗待查（已靜態診斷，管線正常，待 errorMessage —— 見 QUESTIONS.md Q-005）。
+  ~~props LLM 抽取（Stage 2b）零進度~~ → **已完成**：analyze-novel.ts 有獨立 `analyze_props` LLM 步驟，道具為 first-class asset（2026-06-13 核實）。
