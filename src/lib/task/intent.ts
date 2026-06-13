@@ -63,6 +63,9 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.VIDEO_MULTI_SHOT]: 'generate',
   [TASK_TYPE.VIDEO_EDITOR_RENDER]: 'process',
   [TASK_TYPE.EPISODE_STITCH_MP4]: 'process',
+  // Reporting a real-person reference image to Volcengine's asset library —
+  // a registration side-effect, not content generation.
+  [TASK_TYPE.REGISTER_ARK_ASSET]: 'process',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {
