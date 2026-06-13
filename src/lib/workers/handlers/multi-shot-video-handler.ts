@@ -342,9 +342,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
     await reportTaskProgress(job, 15, { stage: 'seedance_composite_start' })
     return await runMultiShotSeedanceComposite({
       ...seedanceFamilyParams,
-      // 2026-05-18 — per-group curated visual style override mirrors the
-      // b-path. Worker uses it to source negativePrompt (and, in due
-      // course, style anchor) when overriding the project default.
+      // lightingPresetId is seedance/ark-only (atlascloud/fal don't accept it).
       ...(lightingPresetId ? { lightingPresetId } : {}),
     })
   }
