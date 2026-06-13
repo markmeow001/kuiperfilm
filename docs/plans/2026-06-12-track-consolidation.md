@@ -46,8 +46,13 @@ AI 短劇製作平台，未來多人使用 + 商業化：
  3. PR-D2/D3/D4 從待辦移除，歸併進 Phase 1.5D-bis / 1.5E
 
 地基期（2-3 週）★ 新框架真正本體
- 4. Phase 1.5A schema migration（0.5d，一切前置）
- 5. Phase 1.5C worker routing 重構 → R2V-first 4-mode（3d，最高風險，legacy_path flag 並行）
+ 4. ✅ Phase 1.5A schema migration（PR #8 merged 2026-06-12）
+ 5. Phase 1.5C worker routing 重構 → R2V-first 4-mode（最高風險，legacy_path flag 並行）
+    - ✅ slice 1：duration window module + 9 建立點 panelGenerationMode 蓋章（PR #9 merged）
+    - ✅ slice 2（1.5B prompts）：發現 generic detail 已是 R2V-first（5-6 月重構成果），
+         不造重複 prompt；只更新 router 註解+測試 pin 住。motion line generator 併入 slice 3。
+    - ⏸ slice 3：per-mode video worker routing（統一 composeMultiShot）+ NP_AGENT_MOTION_LINE_GENERATOR
+         (t2i→i2v 用) + legacy_path flag 新舊並行一週。⚠️ 切換時要拍板 legacy 專案 generationMode backfill。
  6. Phase 9.1：Playground + 長尾任務收進 createRun/Task（多人+計費統一 spine）
 
 框架期（2 週）

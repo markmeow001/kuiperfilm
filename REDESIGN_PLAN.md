@@ -262,21 +262,28 @@ model NovelPromotionPanel {
 **既有 `imageUrl`** 保留為 user 上傳的 reference 用途，跟新 `keyframeUrl`（系統 T2I 產生）區分。
 **Backfill：** 既有 panel 預設 `direct_t2v` 不影響現存資料。
 
-#### 1.5B · Prompt template 重寫（1 天）
+#### 1.5B · Prompt template 重寫 — ✅ 大部分已被 5-6 月 prompt 重構提前完成（2026-06-12 修訂）
 
-- 新增 `NP_AGENT_STORYBOARD_R2V_DETAIL` — model-agnostic、不強制英文運鏡詞、不寫 `multi_shot_group`
-- 新增 `NP_AGENT_MOTION_LINE_GENERATOR` — 從 `panel.description` + `panel.dialogue` + `panel.cameraMove` 三輸入反推 motion line（給 T2I→I2V 跟 R2V 用）
-- 既有 `NP_KLING_AGENT_STORYBOARD_DETAIL` 降級為「Kling provider 專屬 variant」，不再是預設
+> **修訂說明**：本節原假設 generic `agent_storyboard_detail` 還是 T2V 導向、需另建 R2V variant。
+> 實際上 2026-05~06 的 narrative-quality 系列重構已把 generic 演化成 **R2V-first**
+> （description 即 R2V 敘事主文本、五要素三層結構、model-agnostic、不強制英文運鏡、無 multi_shot_group）。
+> 所以：
 
-**路由更新** (`storyboard-prompt-router.ts`)：
+- ~~新增 `NP_AGENT_STORYBOARD_R2V_DETAIL`~~ → **不做**。generic `NP_AGENT_STORYBOARD_DETAIL` 已是 R2V detail，複製等於 ~419 行雙語重複，違反「不打補丁／DRY」。
+- `NP_AGENT_MOTION_LINE_GENERATOR` → **延到 1.5C slice 3**，跟它的消費者（t2i→i2v worker path）一起建，避免無消費者的 dead prompt。
+- 既有 `NP_KLING_AGENT_STORYBOARD_DETAIL` 維持 Kling 專屬 variant（現狀已是）。
+
+**路由現狀** (`storyboard-prompt-router.ts`) — 已正確的二分法（detail/Phase-3 階段 panel 還沒建立，沒有 per-panel mode；唯一決策軸是目標 provider 的提示詞方言）：
 
 ```typescript
-function pickStoryboardDetailPromptId(provider: string, mode: PanelGenerationMode): PromptId {
-  if (provider === 'kling' || provider === 'tencent-vod') return PROMPT_IDS.NP_KLING_AGENT_STORYBOARD_DETAIL
-  if (mode === 'r2v_with_subjects' || mode === 'r2v_with_motion_ref') return PROMPT_IDS.NP_AGENT_STORYBOARD_R2V_DETAIL
-  return PROMPT_IDS.NP_AGENT_STORYBOARD_DETAIL  // generic T2V
+function pickStoryboardDetailPromptId(videoModel): PromptId {
+  return isKlingVideoModel(videoModel)            // Kling-/ 開頭
+    ? PROMPT_IDS.NP_KLING_AGENT_STORYBOARD_DETAIL  // Kling 專屬
+    : PROMPT_IDS.NP_AGENT_STORYBOARD_DETAIL        // = R2V-first（Seedance/ARK/AtlasCloud/Fal）
 }
 ```
+
+2026-06-12：router doc comment + 測試已更新標註 generic=R2V，防後人按舊草稿造重複 prompt。
 
 #### 1.5C · Worker routing 重構（3 天，**最高風險**）
 

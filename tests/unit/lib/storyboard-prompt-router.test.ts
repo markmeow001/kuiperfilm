@@ -54,6 +54,23 @@ describe('pickStoryboardDetailPromptId', () => {
     })
   })
 
+  // Phase 1.5C slice 2 — pin the semantic that the generic prompt IS the
+  // R2V-first detail template, and every R2V provider key routes to it.
+  // Guards against a future contributor re-introducing a separate
+  // NP_AGENT_STORYBOARD_R2V_DETAIL per the superseded §1.5B draft.
+  describe('R2V providers route to the generic (= R2V-first) detail prompt', () => {
+    it.each([
+      'taijiai::seedance-2.0-720p',
+      'ark::doubao-seedance-2-0-250528',
+      'atlascloud::seedance-2.0-t2v',
+      'fal::bytedance/seedance-2.0/reference-to-video',
+    ])('%s -> NP_AGENT_STORYBOARD_DETAIL (the R2V-first template)', (modelKey) => {
+      expect(pickStoryboardDetailPromptId(modelKey)).toBe(
+        PROMPT_IDS.NP_AGENT_STORYBOARD_DETAIL,
+      )
+    })
+  })
+
   describe('defaults to generic on missing/empty input', () => {
     it.each([null, undefined, '', '   '])(
       'maps %p to generic prompt',
