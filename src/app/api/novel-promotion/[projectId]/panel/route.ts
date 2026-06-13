@@ -5,6 +5,20 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { serializeStructuredJsonField } from '@/lib/novel-promotion/panel-ai-data-sync'
 import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 
+/**
+ * Phase 1.5C — fetch a project's generationMode for stamping a new panel.
+ * Used only on the create-if-missing cold paths (PATCH/PUT), so the lookup
+ * stays off the common update path. projectId is already auth-verified by
+ * the caller's requireProjectAuthLight.
+ */
+async function fetchProjectGenerationMode(projectId: string): Promise<string | null> {
+  const np = await prisma.novelPromotionProject.findUnique({
+    where: { projectId },
+    select: { generationMode: true },
+  })
+  return np?.generationMode ?? null
+}
+
 function parseNullableNumberField(value: unknown): number | null {
   if (value === null || value === '') return null
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -343,12 +357,6 @@ export const PATCH = apiHandler(async (
       id: storyboardId,
       episode: { novelPromotionProject: { projectId } },
     },
-    // Phase 1.5C — project mode for the create-if-missing branch below.
-    include: {
-      episode: {
-        select: { novelPromotionProject: { select: { generationMode: true } } }
-      }
-    },
   })
 
   if (!storyboard) {
@@ -388,7 +396,7 @@ export const PATCH = apiHandler(async (
         videoPrompt: videoPrompt ?? null,
         firstLastFramePrompt: firstLastFramePrompt ?? null,
         panelGenerationMode: defaultPanelGenerationMode({
-          projectGenerationMode: storyboard.episode?.novelPromotionProject?.generationMode,
+          projectGenerationMode: await fetchProjectGenerationMode(projectId),
         }),
       }
     })
@@ -440,12 +448,6 @@ export const PUT = apiHandler(async (
     where: {
       id: storyboardId,
       episode: { novelPromotionProject: { projectId } },
-    },
-    // Phase 1.5C — project mode for the create-if-missing branch below.
-    include: {
-      episode: {
-        select: { novelPromotionProject: { select: { generationMode: true } } }
-      }
     },
   })
 
@@ -524,7 +526,7 @@ export const PUT = apiHandler(async (
         actingNotes: actingNotes !== undefined ? toStructuredJsonField(actingNotes, 'actingNotes') : null,
         photographyRules: photographyRules !== undefined ? toStructuredJsonField(photographyRules, 'photographyRules') : null,
         panelGenerationMode: defaultPanelGenerationMode({
-          projectGenerationMode: storyboard.episode?.novelPromotionProject?.generationMode,
+          projectGenerationMode: await fetchProjectGenerationMode(projectId),
         }),
       }
     })

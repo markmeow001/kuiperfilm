@@ -58,14 +58,3 @@ export function getMultiShotDurationWindow(provider: string): MultiShotDurationW
   return window
 }
 
-/**
- * REDESIGN_PLAN §1.5C signature: the max total seconds one multi-shot
- * dispatch may carry for the given provider.
- *
- * ⚠️ Despite the spec-mandated name, this is the COMPOSITE total cap
- * (all shots in one dispatch combined), NOT a per-individual-shot cap.
- * Do not use it to clamp a single shot's duration.
- */
-export function getMaxDurationPerShot(provider: string): number {
-  return getMultiShotDurationWindow(provider).maxTotalSec
-}
