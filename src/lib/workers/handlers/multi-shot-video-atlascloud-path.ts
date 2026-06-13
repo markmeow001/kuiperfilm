@@ -52,6 +52,7 @@ import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { resolveNovelData } from './image-task-handler-shared'
 import { buildAudioDirective } from './multi-shot-audio-directive'
+import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import {
   collectCharacterRefs,
   collectSceneRefs,
@@ -92,8 +93,10 @@ const UNIVERSAL_ATLASCLOUD_CLEAN_FRAME_DIRECTIVE =
   '純電影級實拍畫面,畫面內僅包含敘事主體與環境,無任何文字疊加 / 圖形 UI 覆蓋 / 浮水印 / 角標 / 平台 logo,畫面整潔乾淨,模擬無後製字幕的純拍攝素材。'
 
 const MAX_REFERENCE_IMAGES = 9
-const MIN_DURATION_SEC = 4
-const MAX_DURATION_SEC = 15
+// Phase 1.5C: duration window from the shared per-provider module.
+const ATLASCLOUD_WINDOW = getMultiShotDurationWindow('atlascloud')
+const MIN_DURATION_SEC = ATLASCLOUD_WINDOW.minTotalSec
+const MAX_DURATION_SEC = ATLASCLOUD_WINDOW.maxTotalSec
 /** Floor for a single shot's airtime when sizing an all-silent group by
  *  action density — keeps a hold shot from collapsing under 2s. */
 const MIN_PER_SHOT_SEC = 2

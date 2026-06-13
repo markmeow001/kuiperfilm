@@ -7,6 +7,7 @@ import { TASK_TYPE } from '@/lib/task/types'
 import { buildDefaultTaskBillingInfo } from '@/lib/billing'
 import { getProjectModelConfig, buildImageBillingPayload } from '@/lib/config-service'
 import { prisma } from '@/lib/prisma'
+import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 
 export const POST = apiHandler(async (
   request: NextRequest,
@@ -91,7 +92,11 @@ export const POST = apiHandler(async (
         location: variant.location || sourcePanel.location,
         characters: variant.characters ? JSON.stringify(variant.characters) : sourcePanel.characters,
         srtSegment: sourcePanel.srtSegment,
-        duration: sourcePanel.duration
+        duration: sourcePanel.duration,
+        // Phase 1.5C — a variant inherits its source panel's mode.
+        panelGenerationMode: defaultPanelGenerationMode({
+          sourcePanelMode: sourcePanel.panelGenerationMode,
+        })
       }
     })
   })

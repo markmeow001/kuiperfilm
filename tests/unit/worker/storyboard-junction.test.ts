@@ -53,6 +53,11 @@ const txMock = vi.hoisted(() => ({
   novelPromotionCharacter: {
     findMany: vi.fn(async () => []),
   },
+  // Phase 1.5C — helper fetches project generationMode to stamp
+  // panelGenerationMode on every created panel.
+  novelPromotionProject: {
+    findUnique: vi.fn(async () => ({ generationMode: 'r2v-narrative' })),
+  },
 }))
 
 const prismaMock = vi.hoisted(() => ({

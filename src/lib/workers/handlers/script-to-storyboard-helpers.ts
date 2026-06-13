@@ -30,6 +30,7 @@ export type PersistedStoryboard = {
 // Dialogue extraction + attribution live in ./dialogue-extraction (2026-05-28
 // split). Re-exported here so existing importers keep their path.
 import { attributeDialogueToPanels } from './dialogue-extraction'
+import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 export {
   extractDialogueLinesFromSourceText,
   extractDialogueFromSourceText,
@@ -251,6 +252,22 @@ export async function persistSingleClipStoryboard(
       select: { name: true },
     })
 
+    // Phase 1.5C — project mode decides the panelGenerationMode stamped
+    // on every LLM-generated panel in this clip (fetched once per clip).
+    const npProject = await tx.novelPromotionProject.findUnique({
+      where: { projectId },
+      select: { generationMode: true },
+    })
+    if (!npProject) {
+      // Explicit, not silent (CLAUDE.md §3): a missing NP project row at
+      // this point is a data-consistency smell. The r2v-first default is
+      // still safe to write, so log loudly and proceed.
+      logError('[persistSingleClipStoryboard] novelPromotionProject missing — stamping default panelGenerationMode', { projectId })
+    }
+    const panelGenerationMode = defaultPanelGenerationMode({
+      projectGenerationMode: npProject?.generationMode,
+    })
+
     const persistedPanels: PersistedStoryboard['panels'] = []
     // Phase 11.2: collect names across all panels in this clip for one-shot junction sync.
     const allCharacterNames: string[] = []
@@ -296,6 +313,7 @@ export async function persistSingleClipStoryboard(
           photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
           actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
           duration: panel.duration || null,
+          panelGenerationMode,
         },
         select: {
           id: true,
@@ -390,6 +408,20 @@ export async function persistStoryboardsAndPanels(params: {
       select: { name: true },
     })
 
+    // Phase 1.5C — mirror of the single-clip path: stamp every
+    // LLM-generated panel with the project-mode-derived default.
+    const npProject = await tx.novelPromotionProject.findUnique({
+      where: { projectId },
+      select: { generationMode: true },
+    })
+    if (!npProject) {
+      // Explicit, not silent (CLAUDE.md §3) — see single-clip path note.
+      logError('[persistStoryboardsAndPanels] novelPromotionProject missing — stamping default panelGenerationMode', { projectId })
+    }
+    const panelGenerationMode = defaultPanelGenerationMode({
+      projectGenerationMode: npProject?.generationMode,
+    })
+
     for (const clipEntry of clipPanels) {
       const storyboard = await tx.novelPromotionStoryboard.create({
         data: {
@@ -434,6 +466,7 @@ export async function persistStoryboardsAndPanels(params: {
             photographyRules: panel.photographyPlan ? JSON.stringify(panel.photographyPlan) : null,
             actingNotes: panel.actingNotes ? JSON.stringify(panel.actingNotes) : null,
             duration: panel.duration || null,
+            panelGenerationMode,
           },
           select: {
             id: true,
