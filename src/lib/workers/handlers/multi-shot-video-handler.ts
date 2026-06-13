@@ -310,6 +310,28 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
 
   const validPanels = panels as NonNullable<(typeof panels)[number]>[]
 
+  // Phase 1.5C — the four Seedance-family composite paths (seedance / ark /
+  // atlascloud / fal) take an identical base + the same optional-field set.
+  // Build that shared shape once instead of repeating the conditional-spread
+  // block at each dispatch site below. Per-provider extras (ark.resolution,
+  // seedance|ark.lightingPresetId) are spread by the call site on top of this.
+  // This is also the single dispatch choke point Phase 1.5C slice 3's
+  // per-panel mode routing will hook into.
+  const seedanceFamilyParams = {
+    job,
+    projectId,
+    validPanels,
+    videoModel,
+    sound,
+    aspectRatio,
+    ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
+    ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
+    ...(rawPrompt ? { rawPrompt } : {}),
+    ...(panelDurations ? { panelDurations } : {}),
+    ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
+    ...(visualStyleId ? { visualStyleId } : {}),
+  }
+
   // ─────────────────── SEEDANCE COMPOSITE PATH ───────────────────
   // Single composite video (4-15s) built from up to 9 reference images
   // (characters → scenes → panels) delivered via BobAPI's content[] @N
@@ -319,21 +341,10 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   if (useSeedanceComposite) {
     await reportTaskProgress(job, 15, { stage: 'seedance_composite_start' })
     return await runMultiShotSeedanceComposite({
-      job,
-      projectId,
-      validPanels,
-      videoModel,
-      sound,
-      aspectRatio,
-      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
-      ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
-      ...(rawPrompt ? { rawPrompt } : {}),
-      ...(panelDurations ? { panelDurations } : {}),
-      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
+      ...seedanceFamilyParams,
       // 2026-05-18 — per-group curated visual style override mirrors the
       // b-path. Worker uses it to source negativePrompt (and, in due
       // course, style anchor) when overriding the project default.
-      ...(visualStyleId ? { visualStyleId } : {}),
       ...(lightingPresetId ? { lightingPresetId } : {}),
     })
   }
@@ -350,18 +361,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   if (useArkComposite) {
     await reportTaskProgress(job, 15, { stage: 'ark_composite_start' })
     return await runMultiShotArkComposite({
-      job,
-      projectId,
-      validPanels,
-      videoModel,
-      sound,
-      aspectRatio,
-      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
-      ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
-      ...(rawPrompt ? { rawPrompt } : {}),
-      ...(panelDurations ? { panelDurations } : {}),
-      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
-      ...(visualStyleId ? { visualStyleId } : {}),
+      ...seedanceFamilyParams,
       ...(lightingPresetId ? { lightingPresetId } : {}),
       ...(resolution ? { resolution } : {}),
     })
@@ -373,20 +373,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   // not an endpoint capability. Mode picked by slug suffix.
   if (useAtlasCloudComposite) {
     await reportTaskProgress(job, 15, { stage: 'atlascloud_composite_start' })
-    return await runMultiShotAtlasCloudComposite({
-      job,
-      projectId,
-      validPanels,
-      videoModel,
-      sound,
-      aspectRatio,
-      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
-      ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
-      ...(rawPrompt ? { rawPrompt } : {}),
-      ...(panelDurations ? { panelDurations } : {}),
-      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
-      ...(visualStyleId ? { visualStyleId } : {}),
-    })
+    return await runMultiShotAtlasCloudComposite({ ...seedanceFamilyParams })
   }
 
   // ─────────────── FAL COMPOSITE PATH ───────────────
@@ -395,20 +382,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   // image_urls[] for r2v + @Image1/@Image2/... prompt tags.
   if (useFalComposite) {
     await reportTaskProgress(job, 15, { stage: 'fal_composite_start' })
-    return await runMultiShotFalComposite({
-      job,
-      projectId,
-      validPanels,
-      videoModel,
-      sound,
-      aspectRatio,
-      ...(characterOverrides && characterOverrides.length > 0 ? { characterOverrides } : {}),
-      ...(locationOverrides && locationOverrides.length > 0 ? { locationOverrides } : {}),
-      ...(rawPrompt ? { rawPrompt } : {}),
-      ...(panelDurations ? { panelDurations } : {}),
-      ...(typeof totalDurationSeconds === 'number' ? { totalDurationSeconds } : {}),
-      ...(visualStyleId ? { visualStyleId } : {}),
-    })
+    return await runMultiShotFalComposite({ ...seedanceFamilyParams })
   }
 
   await reportTaskProgress(job, 15, { stage: 'collect_characters' })

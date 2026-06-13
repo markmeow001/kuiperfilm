@@ -38,26 +38,42 @@ const atlascloudPath = readWorkerFile('src/lib/workers/handlers/multi-shot-video
 const falPath = readWorkerFile('src/lib/workers/handlers/multi-shot-video-fal-path.ts')
 const bPath = readWorkerFile('src/lib/workers/handlers/multi-shot-video-b-path.ts')
 
-/** Counts how many times the handler spreads characterOverrides into a
- *  dispatch call. There are 5 vendor paths (seedance/ark/atlascloud/fal/
- *  b-path); every one must receive it. */
-function countOverrideSpreads(src: string): number {
-  return (src.match(/characterOverrides && characterOverrides\.length > 0 \? \{ characterOverrides \}/g) || []).length
+/** Counts how many times an override field is conditionally spread into a
+ *  dispatch param object in the handler source. */
+function countSpreads(src: string, field: string): number {
+  const re = new RegExp(`${field} && ${field}\\.length > 0 \\? \\{ ${field} \\}`, 'g')
+  return (src.match(re) || []).length
+}
+
+/** Counts dispatch sites that spread the shared Seedance-family base. */
+function countFamilyBaseSpreads(src: string): number {
+  return (src.match(/\.\.\.seedanceFamilyParams/g) || []).length
 }
 
 describe('multi-shot handler forwards characterOverrides to ALL vendor paths (2026-05-28 regression)', () => {
-  it('handler spreads characterOverrides into all 5 dispatch sites', () => {
-    // seedance + ark + atlascloud + fal + b-path = 5. Before the fix this
-    // was 3 (atlascloud + fal were missing) and the swap-costume override
-    // never reached those two providers.
-    expect(countOverrideSpreads(handler)).toBe(5)
+  // Phase 1.5C — the 4 Seedance-family paths (seedance/ark/atlascloud/fal)
+  // now inherit overrides via the shared `seedanceFamilyParams` base built
+  // once; b-path keeps its own spread. So the guard is: (a) the shared base
+  // carries the overrides, (b) all 4 family dispatches spread that base, and
+  // (c) b-path carries the overrides itself. Net effect = all 5 paths get
+  // overrides, same as the original 5-literal-spread version.
+  it('shared seedanceFamilyParams base carries characterOverrides + locationOverrides', () => {
+    const base = handler.match(/const seedanceFamilyParams = \{[\s\S]*?\n  \}/)?.[0] ?? ''
+    expect(base).toMatch(/characterOverrides && characterOverrides\.length > 0 \? \{ characterOverrides \}/)
+    expect(base).toMatch(/locationOverrides && locationOverrides\.length > 0 \? \{ locationOverrides \}/)
   })
 
-  it('handler spreads locationOverrides into atlascloud + fal too (parity)', () => {
-    // seedance/ark/b-path already passed locationOverrides; atlascloud +
-    // fal were the two gaps. 5 total once wired.
-    const count = (handler.match(/locationOverrides && locationOverrides\.length > 0 \? \{ locationOverrides \}/g) || []).length
-    expect(count).toBe(5)
+  it('all 4 Seedance-family dispatches spread the shared base, and b-path carries overrides itself', () => {
+    // 4 family dispatches inherit overrides via ...seedanceFamilyParams.
+    expect(countFamilyBaseSpreads(handler)).toBe(4)
+    // Two literal override spreads remain in the file: one in the shared
+    // base, one in the b-path dispatch (separate param shape). The b-path
+    // block must still carry them directly.
+    expect(countSpreads(handler, 'characterOverrides')).toBe(2)
+    expect(countSpreads(handler, 'locationOverrides')).toBe(2)
+    const bPathBlock = handler.match(/runMultiShotBPath\(\{[\s\S]*?\n    \}\)/)?.[0] ?? ''
+    expect(bPathBlock).toMatch(/characterOverrides && characterOverrides\.length > 0 \? \{ characterOverrides \}/)
+    expect(bPathBlock).toMatch(/locationOverrides && locationOverrides\.length > 0 \? \{ locationOverrides \}/)
   })
 })
 
