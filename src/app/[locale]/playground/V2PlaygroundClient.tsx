@@ -75,6 +75,11 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   // Video-only: duration in seconds. Defaulted to 5 for first-run snappiness;
   // Seedance / Kling all accept 4-15.
   const [durationSec, setDurationSec] = useState<number>(5)
+  // Video-only resolution (720p/1080p…). Driven by the selected model's
+  // capability-catalog resolutionOptions; the picker only renders when the
+  // model exposes a real choice (>1 option). 2026-06-16 — AtlasCloud Seedance
+  // R2V now offers 1080p.
+  const [resolution, setResolution] = useState<string>('720p')
 
   // Output state
   const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
@@ -87,7 +92,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   const costEstimate = usePlaygroundCostEstimate({
     modelKey,
     outputType,
-    ...(outputType === 'video' ? { durationSec } : {}),
+    ...(outputType === 'video' ? { durationSec, resolution } : {}),
   })
 
   // File picker refs
@@ -151,6 +156,20 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
     const found = activeModels.find((m) => m.value === modelKey)
     if (!found) setModelKey(activeModels[0].value)
   }, [activeModels, modelKey])
+
+  // Resolution options come from the selected model's built-in capability
+  // catalog (findBuiltinCapabilities → resolutionOptions). Only show the
+  // picker when there's a real choice (>1). Keep `resolution` valid when the
+  // model changes — fall back to 720p if available, else the first option.
+  const selectedVideoModel = activeModels.find((m) => m.value === modelKey)
+  const resolutionOptions: string[] =
+    (outputType === 'video' && selectedVideoModel?.capabilities?.video?.resolutionOptions) || []
+  const showResolutionPicker = resolutionOptions.length > 1
+  useEffect(() => {
+    if (resolutionOptions.length > 0 && !resolutionOptions.includes(resolution)) {
+      setResolution(resolutionOptions.includes('720p') ? '720p' : resolutionOptions[0])
+    }
+  }, [resolutionOptions, resolution])
 
   // Auto-pick up worker-completed video runs: when usePlaygroundRuns
   // refetches (every 3s while pending/running rows exist), promote ANY
@@ -239,6 +258,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
         modelKey: useModelKey,
         aspectRatio,
         ...(outputType === 'video' ? { durationSec } : {}),
+        ...(showResolutionPicker ? { resolution } : {}),
       })
       // Latest run goes to the preview area.
       setLatestRun({
@@ -739,6 +759,25 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
               >
                 {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (
                   <option key={sec} value={sec}>{sec}s</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
+          {/* Video-only: resolution. Rendered only when the selected model's
+              capability catalog exposes >1 option (e.g. AtlasCloud Seedance R2V
+              480p/720p/1080p). Mirrors the 比例/時長 control style. */}
+          {showResolutionPicker ? (
+            <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+              <span>解析度</span>
+              <select
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+                disabled={isBusy}
+                className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+              >
+                {resolutionOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
             </label>
