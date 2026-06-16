@@ -133,6 +133,19 @@ describe('AtlasCloud composite duration priority (Phase M)', () => {
     expect(src).toMatch(/const refMap = mode === 'r2v' \? buildR2vRefMapSection/)
   })
 
+  it('forwards params.resolution into the generator options (720p/1080p choice)', () => {
+    // 2026-06-16 — AtlasCloud was effectively baked to 720p because the
+    // path never forwarded the dispatcher's resolved resolution to the
+    // generator (only ARK did). The generator already accepts a flat
+    // `resolution` body field; the params interface must declare it and
+    // the generate({ options }) block must spread it through (conditionally
+    // so omitting it falls back to the generator's '720p' default rather
+    // than sending undefined). Without this the project-level 1080p pick
+    // is silently dropped on the AtlasCloud r2v variant.
+    expect(src).toMatch(/resolution\?: '480p' \| '720p' \| '1080p'/)
+    expect(src).toMatch(/\.\.\.\(params\.resolution \? \{ resolution: params\.resolution \} : \{\}\)/)
+  })
+
   it('totalDurationSeconds (Phase P) sits between panelDurations and dialogue-driven', () => {
     // The if/else if chain MUST check (1) panelDurations, then (1.5)
     // totalDurationSeconds, then (2) dialogue-driven, then (3) baseline.

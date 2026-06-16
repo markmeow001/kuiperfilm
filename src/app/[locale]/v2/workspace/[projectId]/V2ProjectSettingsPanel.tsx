@@ -71,6 +71,11 @@ function modelSupportsResolutionChoice(videoModel: string | null | undefined): b
   if (!videoModel) return false
   return videoModel === 'ark::doubao-seedance-2-0-260128'
     || videoModel === 'ark::doubao-seedance-2-0-fast-260128'
+    // 2026-06-16 — AtlasCloud Seedance 2.0 R2V honors the project-level
+    // resolution now that the worker forwards it (was baked to 720p). Live
+    // schema confirms 480p/720p/1080p for this variant. Only r2v is wired;
+    // fast-r2v / t2v / i2v stay 720p-only.
+    || videoModel === 'atlascloud::seedance-2.0-r2v'
 }
 
 function modelSupports1080p(videoModel: string | null | undefined): boolean {

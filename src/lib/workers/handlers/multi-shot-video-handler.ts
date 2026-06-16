@@ -371,7 +371,10 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
   // not an endpoint capability. Mode picked by slug suffix.
   if (useAtlasCloudComposite) {
     await reportTaskProgress(job, 15, { stage: 'atlascloud_composite_start' })
-    return await runMultiShotAtlasCloudComposite({ ...seedanceFamilyParams })
+    return await runMultiShotAtlasCloudComposite({
+      ...seedanceFamilyParams,
+      ...(resolution ? { resolution } : {}),
+    })
   }
 
   // ─────────────── FAL COMPOSITE PATH ───────────────

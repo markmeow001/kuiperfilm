@@ -474,6 +474,13 @@ export async function runMultiShotAtlasCloudComposite(params: {
    *  2026-05-28 — wired for parity with seedance/ark paths (was a hardcoded
    *  empty map before). */
   locationOverrides?: Array<{ locationId: string; viewName?: string }>
+  /** 2026-06-16 — resolution choice forwarded from the dispatcher. The
+   *  AtlasCloud generator takes a flat `resolution` body field (default
+   *  '720p'); this surfaces the project-level NovelPromotionProject.
+   *  videoResolution to the r2v variant so the user's 720p/1080p pick is
+   *  honored instead of silently baked to 720p. Resolved + validated
+   *  upstream in multi-shot-video-handler; omitted → generator default. */
+  resolution?: '480p' | '720p' | '1080p'
 }): Promise<{
   storyboardId: string
   multiShotVideoUrl: string
@@ -859,6 +866,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
       aspectRatio,
       generateAudio: sound,
       ...(referenceImages.length > 0 ? { referenceImages } : {}),
+      ...(params.resolution ? { resolution: params.resolution } : {}),
       // Phase S — forward per-group motion/camera reference video to
       // AtlasCloud's reference_videos[] (max 3, we send the 1 we have).
       // Skipped when user hasn't uploaded one or when the mode is t2v

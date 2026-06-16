@@ -1505,7 +1505,8 @@
         ],
         "resolutionOptions": [
           "480p",
-          "720p"
+          "720p",
+          "1080p"
         ],
         "generateAudioOptions": [
           true,
