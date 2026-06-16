@@ -13,6 +13,7 @@
 import { useMemo } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useProjectData } from '@/lib/query/hooks/useProjectData'
+import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { useUpdateProjectConfig } from '@/lib/query/mutations/useProjectConfigMutations'
 import { useStyleProfile } from '@/lib/query/hooks/useStyleProfile'
 import { useUpdateStyleProfile } from '@/lib/query/mutations/updateStyleProfile'
@@ -53,6 +54,10 @@ interface ProjectShape {
     videoRatio?: string | null
     videoResolution?: string | null
     videoModel?: string | null
+    // 2026-06-16 — per-project text/analysis model (drives 一鍵分析 +
+    // 角色/場景/道具 extraction). The global /profile default only seeds NEW
+    // projects, so existing projects can only be changed here.
+    analysisModel?: string | null
   } | null
 }
 
@@ -91,6 +96,7 @@ interface V2ProjectSettingsPanelProps {
 export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProps) {
   const projectQuery = useProjectData(projectId)
   const styleQuery = useStyleProfile(projectId)
+  const userModelsQuery = useUserModels()
   const updateConfig = useUpdateProjectConfig(projectId)
   const updateStyle = useUpdateStyleProfile(projectId)
 
@@ -98,6 +104,8 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
   const videoRatio = project?.novelPromotionData?.videoRatio ?? '9:16'
   const videoResolution = (project?.novelPromotionData?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
   const videoModel = project?.novelPromotionData?.videoModel ?? null
+  const analysisModel = project?.novelPromotionData?.analysisModel ?? null
+  const textModels = userModelsQuery.data?.llm ?? []
   const showResolutionPicker = modelSupportsResolutionChoice(videoModel)
   const allow1080p = modelSupports1080p(videoModel)
   const selectedPresetKey = (styleQuery.data?.stylePresetKey ?? null) as PresetKey | null
@@ -145,6 +153,10 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
 
   function handleResolutionChange(value: '480p' | '720p' | '1080p') {
     updateConfig.mutate({ key: 'videoResolution', value })
+  }
+
+  function handleAnalysisModelChange(value: string) {
+    if (value) updateConfig.mutate({ key: 'analysisModel', value })
   }
 
   function handleApplyPreset(key: PresetKey) {
@@ -235,6 +247,42 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
           </div>
         </div>
       ) : null}
+
+      {/* Text / analysis model — drives 一鍵分析 + 角色/場景/道具 extraction.
+          Stored per-project on analysisModel; the global /profile default only
+          seeds NEW projects, so existing projects must be changed here. */}
+      <div className="mb-5">
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
+          文本 / 分析模型 · TEXT MODEL
+          <span className="ml-2 font-serif-cn text-[14px] text-stone-600">
+            劇本拆解 · 角色/場景/道具 抽取用此模型
+          </span>
+        </div>
+        {textModels.length === 0 ? (
+          <div className="font-serif-cn text-[13px] text-stone-600">
+            尚無啟用的文本模型 — 請到 /profile 啟用後再選
+          </div>
+        ) : (
+          <select
+            value={analysisModel ?? ''}
+            onChange={(e) => handleAnalysisModelChange(e.target.value)}
+            disabled={updateConfig.isPending}
+            className="w-full max-w-[420px] rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-mono text-xs text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+          >
+            {!analysisModel ? (
+              <option value="" disabled>— 選擇文本模型 —</option>
+            ) : null}
+            {analysisModel && !textModels.some((m) => m.value === analysisModel) ? (
+              <option value={analysisModel}>{analysisModel}（目前選用 · 未在啟用清單）</option>
+            ) : null}
+            {textModels.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}{(m.providerName ?? m.provider) ? ` · ${m.providerName ?? m.provider}` : ''}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
 
       {/* Style preset */}
       <div>
