@@ -144,18 +144,52 @@ cmd_status() {
   done
 }
 
+_wait_healthy() {
+  for _ in {1..60}; do
+    [[ "$(docker inspect -f '{{.State.Health.Status}}' kuiper-app 2>/dev/null || echo unknown)" == "healthy" ]] && return 0
+    sleep 3
+  done
+  return 1
+}
+
 cmd_update() {
   require_env
+  local nocache=""
+  [[ "${1:-}" == "--no-cache" ]] && nocache="--no-cache"
   yellow "==> Pulling latest source"
   cd "${REPO_ROOT}"
   git fetch --all
   current_branch="$(git rev-parse --abbrev-ref HEAD)"
+  local before after n
+  before="$(git rev-parse HEAD)"
   git pull --ff-only origin "${current_branch}"
-  yellow "==> Rebuilding + restarting"
+  after="$(git rev-parse HEAD)"
+  n="$(git rev-list --count "${before}..${after}" 2>/dev/null || echo 1)"
+  (( n < 1 )) && n=1
+  yellow "==> Rebuilding + restarting ${nocache:+(no-cache)}"
   cd "${SCRIPT_DIR}"
-  ${COMPOSE} build --pull
-  ${COMPOSE} up -d
-  green "Update complete."
+  ${COMPOSE} build ${nocache} --pull app
+  ${COMPOSE} up -d app
+  _wait_healthy || { red "App did not become healthy. ./deploy.sh logs"; exit 1; }
+
+  # A cached build can "succeed" yet bake a STALE runtime file (Docker COPY
+  # cache miss — hit 2026-06-17). Verify the container actually has the new
+  # prompts / worker source; if not, auto-recover with a clean rebuild.
+  yellow "==> Verifying the running container has the new runtime files"
+  if bash "${REPO_ROOT}/deploy/verify-deploy.sh" "${n}"; then
+    green "Update complete + verified."
+    return
+  fi
+  red "==> STALE files detected — auto-recovering with a --no-cache rebuild"
+  ${COMPOSE} build --no-cache --pull app
+  ${COMPOSE} up -d app
+  _wait_healthy || { red "App did not become healthy after no-cache rebuild."; exit 1; }
+  if bash "${REPO_ROOT}/deploy/verify-deploy.sh" "${n}"; then
+    green "Recovered — update complete + verified after --no-cache rebuild."
+  else
+    red "Still stale after --no-cache. Investigate manually (./deploy/verify-deploy.sh ${n})."
+    exit 1
+  fi
 }
 
 cmd_backup() {
@@ -187,7 +221,8 @@ case "${1:-}" in
   down)         cmd_down ;;
   logs)         cmd_logs ;;
   status)       cmd_status ;;
-  update)       cmd_update ;;
+  update)       cmd_update "${2:-}" ;;
+  verify)       bash "${REPO_ROOT}/deploy/verify-deploy.sh" "${2:-1}" ;;
   backup)       cmd_backup ;;
   *)
     cat <<EOF
@@ -200,7 +235,12 @@ Commands:
   down          Stop the stack (data preserved)
   logs          Tail logs from all services
   status        Show container + per-service health
-  update        git pull, rebuild, restart
+  update        git pull, rebuild, restart, then VERIFY the container has the
+                new runtime files (auto --no-cache rebuild if a stale bake is
+                detected). Pass --no-cache to force a clean rebuild up front.
+  verify [N]    Check the running container actually has the committed runtime
+                files from the last N commits (default 1). Catches cache-miss
+                stale bakes. Exits 1 if stale.
   backup        mysqldump + tar app-data into ./backups/
 
 Required: ${ENV_FILE} (copy .env.prod.example and edit)

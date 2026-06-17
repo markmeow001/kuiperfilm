@@ -17,7 +17,8 @@ Both are independent.
 | `Caddyfile` | Reverse proxy + auto HTTPS for the Next.js container |
 | `docker-compose.prod.yml` | 4-service stack: caddy + app + mysql + redis |
 | `.env.prod.example` | Annotated template for secrets/config (copy → `.env.prod`) |
-| `deploy.sh` | CLI wrapper around docker compose: bootstrap / up / down / logs / status / update / backup / init-secrets |
+| `deploy.sh` | CLI wrapper around docker compose: bootstrap / up / down / logs / status / update / verify / backup / init-secrets |
+| `verify-deploy.sh` | Post-deploy check that the running container actually has the committed runtime files (catches Docker cache-miss stale bakes). `update` runs it automatically. |
 | `DEPLOYMENT.md` | This document |
 
 ---
@@ -151,10 +152,34 @@ invite codes for the team via `/admin/invites`.
 ```bash
 ./deploy.sh status     # container + per-service health
 ./deploy.sh logs       # tail caddy + app + mysql + redis
-./deploy.sh update     # git pull + rebuild + restart
+./deploy.sh update     # git pull + rebuild + restart + VERIFY (see below)
+./deploy.sh verify 1   # check the running container has the last N commits' runtime files
 ./deploy.sh down       # stop everything (data preserved)
 ./deploy.sh backup     # mysqldump + tar volumes into deploy/backups/
 ```
+
+### ⚠️ Deploy verification — the Docker cache-miss trap (read this)
+
+A **cached** `docker compose build` can finish green with a **healthy
+container yet bake a STALE file** (Docker COPY-layer cache miss). Hit
+2026-06-17: a prompt-`.txt`-only deploy reported "Built / healthy" but the
+container still ran the OLD prompt — the change wasn't live until a
+`--no-cache` rebuild. "Build done + healthy" does **not** prove the new code
+is live.
+
+What is read straight from source at runtime (a stale bake = a real bug):
+- `lib/prompts/**`, `standards/**`, `messages/**` — read from disk per request.
+- `src/lib/**`, `scripts/**` — the worker runs `tsx src/lib/workers/index.ts`
+  (TypeScript from source, **not** compiled), and the entrypoint runs `tsx scripts/…`.
+
+Only `src/app/**` (Next.js pages/components/API routes) is compiled into `.next`;
+its raw source copy in the image is unused, so a source mismatch there is benign
+(confirm via `.next` instead).
+
+**`./deploy.sh update` now verifies automatically** and, if it finds a stale
+runtime file, auto-recovers with a `--no-cache` rebuild. To force a clean build
+up front: `./deploy.sh update --no-cache`. To verify a deploy you did manually:
+`./deploy.sh verify <N>` (N = number of recent commits to check).
 
 ### Helper scripts
 
