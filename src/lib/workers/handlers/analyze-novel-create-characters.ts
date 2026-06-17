@@ -168,43 +168,62 @@ export async function processNewCharacters(params: {
       select: { id: true },
     })
 
-    // Seed the primary CharacterAppearance row so downstream consumers
-    // (regenerate-group / upload-asset-image / SubjectsPage cards) have
-    // an appearanceId to bind to. The image is generated lazily when the
-    // user clicks 重新生成 / 一鍵生圖. expected_appearances from the LLM
-    // may carry additional change_reason entries; we honour the first
-    // one here and leave secondary appearances for the multi-appearance
-    // workflow (saved as project_kuiperai_multi_appearance_plan memory).
-    const expectedAppearances = Array.isArray(item.expected_appearances)
-      ? (item.expected_appearances as Array<{ id?: number; change_reason?: string }>)
+    // Seed CharacterAppearance rows so downstream consumers (regenerate-group
+    // / upload-asset-image / SubjectsPage cards) have an appearanceId to bind
+    // to. Images are generated lazily when the user clicks 重新生成 / 一鍵生圖.
+    //
+    // 2026-06-16 — create ALL detected appearances, not just the primary.
+    // The LLM emits one expected_appearances entry per PERSISTENT look
+    // (初始形象 / 換裝 / 年齡變化), each with its own era-grounded
+    // visual_description. A script that gives 王玄 three looks (修仙成年 /
+    // 返老還春少年 / 現代便裝) now surfaces three 造型 instead of one.
+    // (Previously we honoured only the first entry and left the rest for the
+    // manual multi-appearance workflow — project_kuiperai_multi_appearance_plan.)
+    // Capped to avoid runaway extraction; the prompt's 子形象 guardrails
+    // already exclude effects / emotions / one-off actions.
+    const MAX_APPEARANCES = 8
+    const topVisualDescription = readText(item.visual_description).trim()
+    const rawAppearances = Array.isArray(item.expected_appearances)
+      ? (item.expected_appearances as Array<{
+          id?: number
+          change_reason?: string
+          visual_description?: string
+        }>)
       : []
-    const initialChangeReason =
-      readText(expectedAppearances[0]?.change_reason).trim() || '初始形象'
+    // Always create at least the primary; fall back to the top-level
+    // visual_description for index 0 (older prompt filled only that one).
+    const appearances = (
+      rawAppearances.length > 0 ? rawAppearances : [{ change_reason: '初始形象' }]
+    ).slice(0, MAX_APPEARANCES)
 
-    // visual_description is the LLM-authored, era-grounded image prompt for
-    // the initial appearance. Without it, the image worker fed an empty
-    // userPrompt to the generator and got generic Tencent VOD output (a
-    // contemporary drama could surface battlefield armor, robes, etc.).
-    // Keep both `description` (singular, used as fallback prompt source)
-    // and `descriptions` (JSON array, the canonical multi-prompt store)
-    // in sync so either consumer works.
-    const visualDescription = readText(item.visual_description).trim()
-    await prisma.characterAppearance.create({
-      data: {
-        characterId: character.id,
-        appearanceIndex: PRIMARY_APPEARANCE_INDEX,
-        changeReason: initialChangeReason,
-        description: visualDescription || null,
-        descriptions: visualDescription ? JSON.stringify([visualDescription]) : null,
-        // image-urls contract requires JSON-strings in DB for both
-        // imageUrls AND previousImageUrls — null on either field breaks
-        // attachMediaFieldsToProject and cascades a 500 to the project
-        // /data endpoint, blanking the v2 home name + step status.
-        imageUrls: '[]',
-        previousImageUrls: '[]',
-      },
-      select: { id: true },
-    })
+    for (let i = 0; i < appearances.length; i += 1) {
+      const entry = appearances[i]
+      const changeReason =
+        readText(entry.change_reason).trim() || (i === 0 ? '初始形象' : `造型 ${i + 1}`)
+      // Per-appearance description; the primary falls back to the top-level
+      // visual_description so a script with a single look still gets a prompt
+      // (otherwise the image worker fed an empty userPrompt → generic VOD output).
+      // Keep `description` (singular fallback) and `descriptions` (JSON array,
+      // canonical multi-prompt store) in sync so either consumer works.
+      const desc =
+        readText(entry.visual_description).trim() || (i === 0 ? topVisualDescription : '')
+      await prisma.characterAppearance.create({
+        data: {
+          characterId: character.id,
+          appearanceIndex: i === 0 ? PRIMARY_APPEARANCE_INDEX : i,
+          changeReason,
+          description: desc || null,
+          descriptions: desc ? JSON.stringify([desc]) : null,
+          // image-urls contract requires JSON-strings in DB for both
+          // imageUrls AND previousImageUrls — null on either field breaks
+          // attachMediaFieldsToProject and cascades a 500 to the project
+          // /data endpoint, blanking the v2 home name + step status.
+          imageUrls: '[]',
+          previousImageUrls: '[]',
+        },
+        select: { id: true },
+      })
+    }
     created.push(character)
   }
 

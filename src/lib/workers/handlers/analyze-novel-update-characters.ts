@@ -91,6 +91,51 @@ export async function processUpdatedCharacters(params: {
         backfilled.push({ characterId: existing.id, appearanceId: primary.id })
       }
     }
+
+    // 2026-06-16 — backfill MISSING sub-appearances for an existing character.
+    // The prompt now emits expected_appearances on updated_characters too; if
+    // the source gives the character multiple looks (換裝 / 年齡變化) but the
+    // library only holds some indices, create the missing ones. Non-destructive:
+    // existing appearanceIndex rows are never touched (user edits preserved) —
+    // we only append indices that don't exist yet, so re-analysing an existing
+    // character grows the missing looks instead of staying at one.
+    const expectedAppearances = Array.isArray(item.expected_appearances)
+      ? (item.expected_appearances as Array<{
+          id?: number
+          change_reason?: string
+          visual_description?: string
+        }>)
+      : []
+    if (expectedAppearances.length > 1) {
+      const MAX_APPEARANCES = 8
+      const existingRows = await prisma.characterAppearance.findMany({
+        where: { characterId: existing.id },
+        select: { appearanceIndex: true },
+      })
+      const existingIndices = new Set(existingRows.map((row) => row.appearanceIndex))
+      for (let i = 1; i < Math.min(expectedAppearances.length, MAX_APPEARANCES); i += 1) {
+        if (existingIndices.has(i)) continue
+        const entry = expectedAppearances[i]
+        const desc = readText(entry.visual_description).trim()
+        const changeReason = readText(entry.change_reason).trim() || `造型 ${i + 1}`
+        // Create the appearance row only — image is generated lazily when the
+        // user clicks 一鍵生圖 / 重新生成, matching the new_characters path. We
+        // intentionally do NOT auto-submit an IMAGE_CHARACTER task here: a
+        // re-analysis could otherwise fan out paid image jobs across every
+        // character without the user asking for it.
+        await prisma.characterAppearance.create({
+          data: {
+            characterId: existing.id,
+            appearanceIndex: i,
+            changeReason,
+            description: desc || null,
+            descriptions: desc ? JSON.stringify([desc]) : null,
+            imageUrls: '[]',
+            previousImageUrls: '[]',
+          },
+        })
+      }
+    }
   }
 
   for (const { characterId, appearanceId } of backfilled) {

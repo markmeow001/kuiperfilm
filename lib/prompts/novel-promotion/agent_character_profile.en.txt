@@ -30,7 +30,8 @@ Extraction rules:
 Field rules:
 - role_level: one of S/A/B/C/D based on narrative importance
 - costume_tier: 1-5 based on social identity (not role_level)
-- expected_appearances: always include at least one initial appearance
+- expected_appearances: always include at least one initial appearance (id=0); add id=1, 2... for persistent costume/age changes. ⭐ **Each expected_appearance entry MUST carry its own 80-150 word visual_description** (same rules as new_characters.visual_description, era-grounded): id=0 = the full look of the initial appearance; id=1,2... = the full look of that variant (same person — costume changes keep the face/hair and only change clothing; age changes such as de-aging or old-age memory must rewrite the age accordingly). This lets every look generate its own image instead of only the initial one. Only persistent visual changes warrant a sub-appearance — exclude effects/emotions/one-off actions.
+  - Example: source says "adult cultivator in white robe → loses control and de-ages to ~18 → changes into modern casual wear" → emit 3 expected_appearances: id=0 "adult, white Daoist robe", id=1 "youth, de-aged, still white robe", id=2 "young man, modern casual wear", each with its own visual_description.
 - introduction: include identity, relationship mapping, and common address mapping
 - **appearance_mode: REQUIRED**, one of:
   - `on_screen` — appears in the visible frame this episode
@@ -62,7 +63,8 @@ The output contains exactly two arrays:
       "primary_identifier": "signature visual marker",
       "visual_keywords": ["keyword1", "keyword2"],
       "expected_appearances": [
-        { "id": 0, "change_reason": "initial appearance" }
+        { "id": 0, "change_reason": "initial appearance", "visual_description": "Full visual prompt for this look (80-150 words, same rules as visual_description above)" },
+        { "id": 1, "change_reason": "costume/age change reason (if any)", "visual_description": "Full visual prompt for this look (80-150 words, reflecting the costume/age change)" }
       ]
     }
   ],
@@ -73,7 +75,11 @@ The output contains exactly two arrays:
       "updated_aliases": ["new alias 1", "new alias 2"],
       "visual_description": "Full visual prompt (same 80-150 word format as new_characters, era-grounded, no period-mismatch). Always emit this field even for existing characters; the worker only fills it when the character has no existing visual prompt and never overwrites user edits.",
       "gender": "male/female/other",
-      "era_period": "modern/fantasy/historical/sci-fi"
+      "era_period": "modern/fantasy/historical/sci-fi",
+      "expected_appearances": [
+        { "id": 0, "change_reason": "initial appearance", "visual_description": "Full visual prompt for this look (80-150 words)" },
+        { "id": 1, "change_reason": "costume/age change reason (if any)", "visual_description": "Full visual prompt for this look (80-150 words)" }
+      ]
     }
   ]
 }
@@ -84,3 +90,5 @@ Strict constraints:
 3. Keep all strings in English.
 4. visual_description is required for both new_characters AND updated_characters, and must stay consistent with era_period (no historical attire in modern stories, no modern attire in historical stories).
 5. Always emit visual_description on updated_characters even when the character looks complete. The worker fills it only when the character's existing visual prompt is empty (rescue path for legacy data); user edits are preserved.
+6. expected_appearances is required (at least the id=0 initial appearance); **every expected_appearance entry must carry its own visual_description** (80-150 words — fill the sub-appearances too, not just change_reason). Only persistent visual changes get a sub-appearance; never effects/emotions/one-off actions.
+7. Emit expected_appearances on updated_characters too (with sub-appearances). When a character has multiple looks in the source but the asset library only holds the initial one, the worker creates the MISSING sub-appearances (existing indices untouched, user edits preserved) — so re-analyzing an existing character also grows the missing looks instead of staying at one.

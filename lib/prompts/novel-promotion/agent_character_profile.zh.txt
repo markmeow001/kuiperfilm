@@ -176,6 +176,15 @@ D级（群众演员）：
    - 每个角色必须至少有一个 id=0 的"初始形象"
    - 如有换装/年龄变化等，添加 id=1, 2... 的子形象
    - change_reason 简要说明变化原因（如"出浴状态"、"战斗装束"、"年老回忆"）
+   - ⭐【每个子形象都要写自己的 visual_description】：每个 expected_appearance 条目都必须带
+     一段 80-150 字的 visual_description（规则同 new_characters.visual_description，紧扣
+     era_period/social_class/occupation/costume_tier/suggested_colors/visual_keywords）。
+     · id=0 = 初始形象的完整外观；id=1,2... = 该造型的完整外观（同一个人，但反映该造型的
+       变化）。换装类造型保持面容/发型一致、只改服装配饰；年龄变化类造型（如返老还春、年老
+       回忆）要相应改写年龄外观。这样下游每个造型都能独立生图，不会只有初始形象有描述。
+     · 示例：某角色原文写「修仙成年白衣 → 走火入魔返老还春变十八岁 → 换上现代便装」
+       → 应输出 3 个 expected_appearances：id=0「成年·白衣道袍」、id=1「少年·返老还春·仍白袍」、
+         id=2「青年·现代便装」，每个都带自己的 visual_description。
 
 【种族 / Ethnicity 设定 ⭐重要】
 
@@ -235,8 +244,8 @@ D级（群众演员）：
       "primary_identifier": "眼角泪痣（仅S/A级需要）",
       "visual_keywords": ["精英气质", "禁欲系"],
       "expected_appearances": [
-        {"id": 0, "change_reason": "初始形象"},
-        {"id": 1, "change_reason": "换装/特殊状态的原因（如有）"}
+        {"id": 0, "change_reason": "初始形象", "visual_description": "该造型的完整视觉提示词（80-150字，规则同上方 visual_description）"},
+        {"id": 1, "change_reason": "换装/年龄变化等原因（如有）", "visual_description": "该造型的完整视觉提示词（80-150字，反映此造型的服装/年龄变化）"}
       ]
     }
   ],
@@ -247,7 +256,11 @@ D级（群众演员）：
       "updated_aliases": ["新发现的别名1", "新发现的别名2"],
       "visual_description": "完整的外观提示词（与 new_characters 同格式，80-150 字，紧扣 era_period/social_class/occupation/costume_tier/suggested_colors/visual_keywords/primary_identifier，时装剧禁古装/盔甲/战场装）。即便是已有角色也输出此字段；worker 仅在角色尚无外观提示词时填入，已有提示词不会被覆盖。",
       "gender": "男/女",
-      "era_period": "现代都市/古代唐朝/未来科幻"
+      "era_period": "现代都市/古代唐朝/未来科幻",
+      "expected_appearances": [
+        {"id": 0, "change_reason": "初始形象", "visual_description": "该造型的完整视觉提示词（80-150字）"},
+        {"id": 1, "change_reason": "换装/年龄变化等原因（如有）", "visual_description": "该造型的完整视觉提示词（80-150字）"}
+      ]
     }
   ]
 }
@@ -269,6 +282,11 @@ D级（群众演员）：
 
 5. **总是回填 visual_description**：updated_characters 中**每个**条目都必须输出 visual_description，即使你认为该角色已经被分析过。理由：原始分析可能在 prompt 还不要求 visual_description 时就完成，导致 DB 里没有外观提示词、生图模型只能瞎猜（结果错性别/错时代）。worker 端只会在该角色「目前外观提示词为空」时回填，所以你重复输出不会覆盖用户已编辑的内容。
 
+6. **总是输出 expected_appearances（含子形象）**：updated_characters 也要按【子形象筛选规则】输出完整的
+   expected_appearances（每个条目带自己的 visual_description）。如果该角色在原文中有多个造型（换装/年龄变化）
+   而资产库里只有初始形象，worker 会**补建缺少的子造型**（已存在的索引不动、不覆盖用户编辑）。这样既有角色
+   重新分析后也能自动长出缺少的造型，而不是只停在一个。
+
 【严格要求】
 1. 只返回JSON，不得有其他文字
 2. role_level 必须是 S/A/B/C/D 之一
@@ -279,7 +297,7 @@ D级（群众演员）：
 7. introduction 必填，描述角色身份、关系、称呼映射
 8. 如果发现已有角色的新信息，放入 updated_characters 而不是创建新角色
 9. updated_characters 中的 name 必须与已有资产库中的名字完全一致
-10. expected_appearances 必填，至少包含 id=0 的初始形象
+10. expected_appearances 必填，至少包含 id=0 的初始形象；**每个 expected_appearance 条目都必须带自己的 visual_description**（80-150字，子形象也要写满，不能只写 change_reason）
 11. 只有持续性视觉变化才添加子形象，临时特效/情绪/动作不添加
 12. visual_description 必填，必须与 era_period 一致（时装剧禁用古装/盔甲/战场装/法袍等）
 13. 输出必须是**严格合法的JSON**：字符串中不能出现原始换行/回车/制表符
