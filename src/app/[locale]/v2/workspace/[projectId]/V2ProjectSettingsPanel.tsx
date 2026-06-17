@@ -33,6 +33,18 @@ const RATIO_OPTIONS: Array<{ value: string; label: string; caption: string }> = 
   { value: '4:3', label: '4:3', caption: '經典' },
 ]
 
+// 2026-06-16 — 整集目標總時長（秒）。Kept in sync with the inline widget in
+// storyboard/VideoModelPickerInline.tsx. Surfaced here on the project home so
+// it can be set BEFORE the first 分鏡 generation (the inline one only appears
+// after groups exist). Affects script_to_storyboard panel count + grouping.
+const DURATION_OPTIONS: Array<{ value: number; label: string; caption: string }> = [
+  { value: 30, label: '30s', caption: '短' },
+  { value: 60, label: '1 分鐘', caption: '預設' },
+  { value: 90, label: '1 分半', caption: '' },
+  { value: 120, label: '2 分鐘', caption: '' },
+  { value: 180, label: '3 分鐘', caption: '長' },
+]
+
 const CATEGORY_ORDER: PresetCategory[] = [
   'realistic', 'anime', 'chinese', 'korean', 'cg-3d', 'western',
 ]
@@ -54,6 +66,7 @@ interface ProjectShape {
     videoRatio?: string | null
     videoResolution?: string | null
     videoModel?: string | null
+    targetDuration?: number | null
     // 2026-06-16 — per-project text/analysis model (drives 一鍵分析 +
     // 角色/場景/道具 extraction). The global /profile default only seeds NEW
     // projects, so existing projects can only be changed here.
@@ -104,6 +117,7 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
   const videoRatio = project?.novelPromotionData?.videoRatio ?? '9:16'
   const videoResolution = (project?.novelPromotionData?.videoResolution ?? '720p') as '480p' | '720p' | '1080p'
   const videoModel = project?.novelPromotionData?.videoModel ?? null
+  const targetDuration = project?.novelPromotionData?.targetDuration ?? 60
   const analysisModel = project?.novelPromotionData?.analysisModel ?? null
   const textModels = userModelsQuery.data?.llm ?? []
   const showResolutionPicker = modelSupportsResolutionChoice(videoModel)
@@ -149,6 +163,10 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
 
   function handleRatioChange(value: string) {
     updateConfig.mutate({ key: 'videoRatio', value })
+  }
+
+  function handleTargetDurationChange(value: number) {
+    updateConfig.mutate({ key: 'targetDuration', value })
   }
 
   function handleResolutionChange(value: '480p' | '720p' | '1080p') {
@@ -205,6 +223,42 @@ export function V2ProjectSettingsPanel({ projectId }: V2ProjectSettingsPanelProp
               >
                 {r.label}
                 <span className="ml-1.5 font-serif-cn text-[14px] opacity-70">{r.caption}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Target duration — settable here BEFORE the first 分鏡 generation
+          (the inline storyboard widget only appears after groups exist, so
+          users couldn't pick duration up-front). Affects panel count +
+          grouping; needs 重新分析 / 重新切組 to re-apply to the LLM. */}
+      <div className="mb-5">
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">
+          整集目標時長 · DURATION
+          <span className="ml-2 font-serif-cn text-[14px] text-stone-600">
+            影響分鏡數量 — 改了要按「重新分析 / 重新切組」才生效
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {DURATION_OPTIONS.map((d) => {
+            const active = d.value === targetDuration
+            return (
+              <button
+                key={d.value}
+                type="button"
+                onClick={() => handleTargetDurationChange(d.value)}
+                disabled={updateConfig.isPending}
+                className={`rounded-sm border px-3 py-2 font-mono text-xs transition-all disabled:opacity-50 ${
+                  active
+                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
+                    : 'border-stone-800 text-stone-500 hover:border-stone-700'
+                }`}
+              >
+                {d.label}
+                {d.caption ? (
+                  <span className="ml-1.5 font-serif-cn text-[14px] opacity-70">{d.caption}</span>
+                ) : null}
               </button>
             )
           })}
