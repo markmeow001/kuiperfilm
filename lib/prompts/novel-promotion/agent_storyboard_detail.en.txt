@@ -189,6 +189,17 @@ model has clear direction = complete, faithful output.
      / styleAnchor. video_prompt describes what's in frame, not the camera.
   5. NO vague collective nouns ("crowd", "everyone", "people", "all of
      them", "the group") — name specific characters or give a count.
+  ⭐ 5b. Background / crowd faces MUST be written as "varied" (stops crowds
+     from inheriting the protagonist's face): for any group of unnamed
+     non-lead characters with no reference image (passers-by, extras,
+     soldiers, disciples, guests, monks, onlookers…), add one line making
+     them DISTINCT — "these X have varied faces, mixed ages, different hair
+     and builds, NONE resembling the protagonist, no two faces alike".
+     Reason: the @ImageN reference is an identity anchor belonging ONLY to
+     the named lead; without this line the model copies the lead's face onto
+     everyone in frame (one lead ref → a screen full of the lead's face). Add
+     distinguishing cues (different hair / heights / builds / clothing) so the
+     model has enough variety signal.
   6. REQUIRED: every panel includes one "Ambient sound: …" line with a
      concrete PHYSICAL source (collar rustle / cold wind through metal
      grating / countdown ticking / footsteps / rain…). This is part of the

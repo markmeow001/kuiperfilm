@@ -261,6 +261,15 @@ Not stylistic preferences — empirical model behavior.
      "three bodyguards". The model cannot infer how many entities a
      collective covers — output becomes a blurred mass of human shapes.
 
+  3b. ⭐ Background / crowd MUST be written as "varied faces" (stops crowds
+     from inheriting the protagonist's face).
+     - For groups of unnamed non-lead characters with no reference image
+       (passers-by, extras, soldiers, disciples, guests, onlookers…), the
+       description MUST add: "these X have varied faces, mixed ages, different
+       hair and builds, NONE resembling the protagonist, no two faces alike".
+     - Reason: the reference image belongs only to the named lead; without
+       this line the model copies the lead's face onto everyone in frame.
+
   4. ❌ DO NOT repeat fixed appearance traits already in @image-N refs.
      Body proportions, skin color, hairstyle, base costume are carried
      by the reference image. Repeating these wastes char budget and adds
