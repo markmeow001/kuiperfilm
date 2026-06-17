@@ -212,6 +212,25 @@ model has clear direction = complete, faithful output.
      spatial reverb). No such limit when the shot has dialogue.
      Only EXTREME facial detail (pores / sweat reflection / micro-redness) stays
      reserved for emotional-peak close-ups.
+
+  ⭐ Material / texture density (the key to a premium look — matching competitors):
+     Every shot's "development" layer MUST carry AT LEAST 2-3 concrete material /
+     texture details, not just "what the person is doing":
+     · Clothing: fabric weave, drape and pull, worn creases, the different sheen
+       of silk / leather / metal.
+     · Surfaces: stone relief and damp reflection, wood grain, metal wear, moss /
+       water stains / rust.
+     · Atmosphere: layered mist and volumetric light, light pools, dust / rain /
+       灵气 particles floating in the beam, fore/background depth-of-field falloff.
+     · Light: layered practical sources, natural highlights and soft shadows, the
+       way each material truly responds to light.
+     These are SIMULTANEOUS (a "visual point" per rule 2, not an action beat) — so
+     they cost no time and never violate the 1-main-action rule. Reason: the
+     "premium feel" of competitor output comes mostly from material density; only
+     describing the action looks cheap and empty.
+     WARNING: still bound by red-line rule 4 — write only "materials and light the
+     eye can see", NOT equipment / IMAX / 8K / film grain / Arri terms (that's the
+     styleAnchor's job). Facial pores / sweat stay close-up-only (see above).
   7. Dialogue lines ≤ 30 words each — long lines destabilize TTS.
 
 Self-check before output (every panel):

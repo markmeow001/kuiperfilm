@@ -61,6 +61,19 @@ Planning rules:
      environmental micro-motion (clouds, shifting light, smoke, banners, distant
      figures). A purely static wide gets generated as duplicate/frozen frames —
      the #1 cause of stuttery output. The detail stage writes the move from this.
+   - ⭐ EPISODE OPENING = a grand, sweeping environment shot: the FIRST panel of
+     the episode (the whole story's opening) MUST be a bigger "world-opening"
+     shot than a normal scene establishing shot — an aerial / drone / extreme-wide
+     / grand high-angle view of this episode's core setting (mountain peaks above
+     a sea of clouds, a cliffside secret realm, a city-night skyline, a full
+     ancient-city vista…), with a strong camera move (slow push-in / lateral
+     sweep / tilt-down reveal / aerial swoop) + atmosphere (rolling clouds,
+     flowing 灵气, shifting light, wind through foliage) for an epic opening, then
+     cut to the first main-subject shot. Add this opening environment shot even
+     when the source jumps straight to a character — it's the viewer's first
+     impression. Fill the description with the environment's material/volumetric
+     detail (mist, light, depth layers) and an explicit camera move; never a
+     frozen empty plate.
 
 8. ★ Favor motion in shot selection (key to smoothness): when several shot
    designs would tell the same story, prefer ones where the subject is mid-
