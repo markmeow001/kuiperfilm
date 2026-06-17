@@ -71,3 +71,95 @@ export function buildAudioDirective(
     + '畫面無字幕、無 logo、無屏幕信息。'
   )
 }
+
+export interface RawDialogueBeat {
+  speaker: string
+  content: string
+}
+
+/**
+ * Speaker tokens that are actually structural narrative labels, not characters.
+ * A `镜头1` / `环境音效` / `场景` immediately before a 「…」 must NOT be turned
+ * into a speech line. Kept tight on purpose — real character names are unlikely
+ * to collide with these.
+ */
+const NON_SPEAKER_LABELS = new Set([
+  '镜头', '鏡頭', '环境音效', '環境音效', '场景', '場景', '场景参考', '場景參考',
+  '参考', '參考', '风格', '風格', '画面', '畫面', '旁白', '字幕', '音效', '背景',
+  '开头', '開頭', '中段', '展开', '展開', '收尾', '收束', '空间锚点', '空間錨點',
+  // locatives that commonly precede a quoted ambient-sound noun (远处「钟声」)
+  '远处', '遠處', '近处', '近處', '周围', '周圍', '四周', '身后', '身後', '头顶',
+  '頭頂', '空中', '远方', '遠方', '耳边', '耳邊', '楼下', '樓下', '楼上', '樓上',
+  '门外', '門外', '窗外', '屋内', '屋內', '室内', '室內',
+])
+
+const stripSpeakerDecorations = (token: string): string =>
+  token.replace(/^[@＠]/, '').replace(/[MＭFＦ]$/, '').trim()
+
+/**
+ * Extract on-camera dialogue beats from a hand-edited R2V narrative.
+ *
+ * Matches `{speaker}「…」`, `{speaker}:「…」`, `{speaker}：「…」` and
+ * `{speaker}（声线：…）:「…」` — the forms GroupCard's narrative builder and the
+ * storyboard-detail LLM emit. A speaker name MUST sit on the same span right
+ * before the 「 — bare 「…」 (VO content lines whose speaker is on the previous
+ * line, or quoted non-dialogue terms) is skipped so we don't voice non-dialogue.
+ *
+ * 2026-06-16 — AtlasCloud Seedance R2V reliably TTS's `{speaker}说「…」` but very
+ * often ships SILENT on plain `{speaker}「…」` (proven by the sibling BobAPI
+ * seedance path, which rewrites every line into `说「…」` form and documents that
+ * pure-visual prompts produce no speech). The rawPrompt branch shipped the
+ * narrative verbatim with no 说 verb, so dialogue went unvoiced even though the
+ * audio directive asked for 逐字配音. We extract the beats here and the caller
+ * appends an explicit 说「…」 speech list the model acts on.
+ */
+export function extractRawDialogueBeats(
+  raw: string,
+  knownSpeakers?: ReadonlyArray<string>,
+): RawDialogueBeat[] {
+  if (!raw) return []
+  const roster = (knownSpeakers ?? [])
+    .map((n) => stripSpeakerDecorations(n))
+    .filter((n) => n.length > 0)
+  const useRoster = roster.length > 0
+  const re = /([一-龥A-Za-z0-9·•]{1,12})(?:（[^）]*）)?[:：]?「([^」]+)」/g
+  const beats: RawDialogueBeat[] = []
+  const seen = new Set<string>()
+  for (const match of raw.matchAll(re)) {
+    const rawSpeaker = stripSpeakerDecorations(match[1])
+    const content = match[2].trim()
+    if (!rawSpeaker || !content) continue
+    let speaker = rawSpeaker
+    if (useRoster) {
+      const hit = roster.find((n) => rawSpeaker === n || rawSpeaker.endsWith(n))
+      if (!hit) continue
+      speaker = hit
+    } else {
+    // Skip structural labels and verb-ended runs (e.g. 他说的「天命」 where the
+    // "speaker" is really a clause tail, or an already-rewritten X说「…」).
+      if (NON_SPEAKER_LABELS.has(rawSpeaker)) continue
+      if (/[说說道的是在]$/.test(rawSpeaker)) continue
+    }
+    const key = `${speaker} ${content}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    beats.push({ speaker, content })
+  }
+  return beats
+}
+
+/**
+ * Build an explicit, structured speech list in the proven `{speaker}说「…」` form
+ * so AtlasCloud Seedance actually voices the dialogue. Returns '' when there are
+ * no beats (caller skips appending). "仅朗读一次/请勿额外添加" guards against the
+ * model double-reading lines that also appear in the prose narrative.
+ */
+export function buildSpeechDialogueBlock(beats: ReadonlyArray<RawDialogueBeat>): string {
+  if (beats.length === 0) return ''
+  const lines = beats.map((b, i) => `${i + 1}. ${b.speaker}说「${b.content}」`)
+  return (
+    '【配音台詞清單 — 請讓畫面中對應角色逐字朗讀下列台詞，配音與唇形嚴格同步，'
+    + '每句僅朗讀一次，請勿改寫、跳過或額外添加台詞】：\n'
+    + lines.join('\n')
+  )
+}

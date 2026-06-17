@@ -47,7 +47,12 @@ import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { resolveNovelData } from './image-task-handler-shared'
-import { buildAudioDirective, countDialogueBeats } from './multi-shot-audio-directive'
+import {
+  buildAudioDirective,
+  buildSpeechDialogueBlock,
+  countDialogueBeats,
+  extractRawDialogueBeats,
+} from './multi-shot-audio-directive'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import {
   collectCharacterRefs,
@@ -427,10 +432,21 @@ export async function runMultiShotFalComposite(params: {
   if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
     const raw = params.rawPrompt.trim()
     dialogueBeatCount = countDialogueBeats(raw)
+    // 2026-06-16 — same silent-dialogue fix as the AtlasCloud path: the verbatim
+    // narrative writes dialogue as `沈冰雪「…」` (no 说 verb) which Seedance often
+    // ships silent. Extract beats by the group's real character names and append
+    // an explicit 说「…」 speech list. Sound on + dialogue present only.
+    const speechBlock = sound
+      ? buildSpeechDialogueBlock(
+          extractRawDialogueBeats(raw, characterRefs.map((c) => c.name)),
+        )
+      : ''
     // 2026-06-03 — raw branch previously shipped no audio directive (audit
     // finding): append the shared one so fal's narrative-edit flow gets the
     // same moderation-avoidance + silent-when-muted behavior as auto-build.
-    promptCore = [raw, buildAudioDirective(dialogueBeatCount, sound)].join('\n\n')
+    promptCore = [raw, speechBlock, buildAudioDirective(dialogueBeatCount, sound)]
+      .filter((s) => s.length > 0)
+      .join('\n\n')
   } else {
     const built = buildFalPrompt(
       usedPanels,

@@ -17,7 +17,12 @@
  * call, and adds the missing `soundEnabled` dimension.
  */
 import { describe, expect, it } from 'vitest'
-import { buildAudioDirective, countDialogueBeats } from '@/lib/workers/handlers/multi-shot-audio-directive'
+import {
+  buildAudioDirective,
+  buildSpeechDialogueBlock,
+  countDialogueBeats,
+  extractRawDialogueBeats,
+} from '@/lib/workers/handlers/multi-shot-audio-directive'
 
 describe('buildAudioDirective', () => {
   it('defaults soundEnabled to true (back-compat with single-arg callers)', () => {
@@ -97,5 +102,62 @@ describe('countDialogueBeats — 2026-06-17 R2V dialogue regression', () => {
     const narrative = '【開場】洞府內，霧氣繚繞。環境音效：低頻風聲穿過石壁的回響。'
     expect(countDialogueBeats(narrative)).toBe(0)
     expect(buildAudioDirective(0, true)).toMatch(/嚴禁/)
+  })
+})
+
+// 2026-06-16 — countDialogueBeats only flips the directive branch (ask for TTS).
+// AtlasCloud Seedance R2V still ships SILENT on plain {speaker}「…」 because the
+// line lacks the 说 speech-verb the model gates TTS on (sibling BobAPI seedance
+// path proves {speaker}说「…」 is required). extractRawDialogueBeats +
+// buildSpeechDialogueBlock turn the verbatim narrative dialogue into an explicit
+// 说「…」 list so the dialogue is actually voiced.
+describe('extractRawDialogueBeats — R2V narrative dialogue → speech beats', () => {
+  it('extracts on-camera dialogue with no colon (the reported bug case)', () => {
+    const narrative =
+      '镜头1：[开头]…环境音效：牙齿上下碰撞的微弱声。\n'
+      + '沈冰雪「我警告你，乖乖陪我演完这场戏，否则你和王玄生的那个小野种，死！」\n'
+      + '镜头2：急速推近…'
+    const beats = extractRawDialogueBeats(narrative)
+    expect(beats).toEqual([
+      { speaker: '沈冰雪', content: '我警告你，乖乖陪我演完这场戏，否则你和王玄生的那个小野种，死！' },
+    ])
+  })
+
+  it('extracts colon, fullwidth-colon and （声线：…） speaker forms', () => {
+    expect(extractRawDialogueBeats('王玄:「走吧」')).toEqual([{ speaker: '王玄', content: '走吧' }])
+    expect(extractRawDialogueBeats('王玄：「走吧」')).toEqual([{ speaker: '王玄', content: '走吧' }])
+    expect(extractRawDialogueBeats('沈冰雪（声线：女性，冷冽）:「站住」')).toEqual([
+      { speaker: '沈冰雪', content: '站住' },
+    ])
+  })
+
+  it('does NOT treat structural labels or clause-tails before 「…」 as speakers', () => {
+    expect(extractRawDialogueBeats('场景「豪森大酒店宴厅」')).toEqual([])
+    expect(extractRawDialogueBeats('环境音效：远处「钟声」回响')).toEqual([])
+    expect(extractRawDialogueBeats('他说的「天命」不可违')).toEqual([])
+  })
+
+  it('dedupes identical speaker+line and skips bare VO content lines', () => {
+    const narrative = '王玄 声音(仅音频，无画面文字，嘴部不动)：\n「天命如此」\n王玄「天命如此」\n王玄「天命如此」'
+    const beats = extractRawDialogueBeats(narrative)
+    // bare 「天命如此」 (VO content, no speaker on its line) is skipped; the two
+    // 王玄「天命如此」 collapse to one.
+    expect(beats).toEqual([{ speaker: '王玄', content: '天命如此' }])
+  })
+
+  it('builds an explicit 说「…」 speech list the model can voice', () => {
+    const block = buildSpeechDialogueBlock([
+      { speaker: '沈冰雪', content: '我警告你' },
+      { speaker: '王玄', content: '住手' },
+    ])
+    expect(block).toMatch(/配音/)
+    expect(block).toContain('沈冰雪说「我警告你」')
+    expect(block).toContain('王玄说「住手」')
+    expect(block).toMatch(/僅朗讀一次|仅朗读一次/)
+  })
+
+  it('returns empty block for no beats (caller appends nothing)', () => {
+    expect(buildSpeechDialogueBlock([])).toBe('')
+    expect(extractRawDialogueBeats('洞府内，雾气缭绕，无人说话。')).toEqual([])
   })
 })

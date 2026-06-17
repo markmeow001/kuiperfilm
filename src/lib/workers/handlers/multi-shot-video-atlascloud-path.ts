@@ -51,7 +51,12 @@ import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { resolveNovelData } from './image-task-handler-shared'
-import { buildAudioDirective, countDialogueBeats } from './multi-shot-audio-directive'
+import {
+  buildAudioDirective,
+  buildSpeechDialogueBlock,
+  countDialogueBeats,
+  extractRawDialogueBeats,
+} from './multi-shot-audio-directive'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import {
   collectCharacterRefs,
@@ -759,11 +764,24 @@ export async function runMultiShotAtlasCloudComposite(params: {
     const refMap = mode === 'r2v' ? buildR2vRefMapSection(r2vRefOrder) : ''
     const timingGuide = buildPerShotDurationGuide(perShotDurations)
     const scaffolded = composeRawPromptScaffold(raw, refMap, timingGuide)
+    // 2026-06-16 — the verbatim narrative writes dialogue as `沈冰雪「…」` (no 说
+    // verb), which AtlasCloud Seedance R2V often ships SILENT (the sibling BobAPI
+    // seedance path proves `{speaker}说「…」` is required to unlock TTS). Extract
+    // the beats using the group's real character names (precise — 「…」 is generic
+    // punctuation) and append an explicit 说「…」 speech list the model voices.
+    // Only when sound is on AND there is dialogue.
+    const speechBlock = sound
+      ? buildSpeechDialogueBlock(
+          extractRawDialogueBeats(raw, characterRefs.map((c) => c.name)),
+        )
+      : ''
     // 2026-06-03 — the raw branch previously shipped NO audio directive, so
     // the primary R2V narrative-edit flow re-exposed both the AtlasCloud
     // audio-moderation false-positive and the "低頻貝斯 → fake hum" incident.
     // Append it here too (gated on the raw-derived dialogue count + sound).
-    promptCore = [scaffolded, buildAudioDirective(dialogueBeatCount, sound)].join('\n\n')
+    promptCore = [scaffolded, speechBlock, buildAudioDirective(dialogueBeatCount, sound)]
+      .filter((s) => s.length > 0)
+      .join('\n\n')
   } else {
     const built = buildAtlasCloudPrompt(
       usedPanels,
