@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { uploadToCOS, generateUniqueKey } from '@/lib/cos'
 import sharp from 'sharp'
@@ -163,43 +163,53 @@ export const POST = apiHandler(async (
     //
     // Only rewrite when the uploaded image is the appearance's selected
     // image — that's the one panel gen actually feeds to the model.
+    // 2026-06-16 — run the vision-LLM description rewrite AFTER the response
+    // is sent (Next 15 `after`). The image + imageUrl are already persisted
+    // above, so the upload returns immediately and the card's "上傳中" overlay
+    // clears at once instead of waiting the full LLM round-trip (which made
+    // uploads look stuck until a manual refresh, esp. on slower LLM providers).
     if (shouldUpdateImageUrl) {
-      const result = await redescribeAssetFromImage({
-        kind: 'character',
-        imageKeyOrUrl: key,
-        projectId,
-        userId: authResult.session.user.id,
-        entityId: appearance.id,
+      const appearanceId = appearance.id
+      const prevDescription = appearance.description ?? null
+      const prevDescriptions = appearance.descriptions ?? null
+      after(async () => {
+        try {
+          const result = await redescribeAssetFromImage({
+            kind: 'character',
+            imageKeyOrUrl: key,
+            projectId,
+            userId: authResult.session.user.id,
+            entityId: appearanceId,
+          })
+          if (result.ok) {
+            await db.characterAppearance.update({
+              where: { id: appearanceId },
+              data: {
+                previousDescription: prevDescription,
+                previousDescriptions: prevDescriptions,
+                description: result.description,
+                // Worker's pickAppearanceDescription prefers `descriptions`
+                // (plural JSON array) over `description` (singular); reset the
+                // array to the new value so both readers see the same story.
+                descriptions: JSON.stringify([result.description]),
+              },
+            })
+          } else {
+            createScopedLogger({
+              module: 'api.upload-asset-image',
+              action: 'character_appearance_describe',
+            }).warn({
+              message: 'character description rewrite skipped',
+              details: { appearanceId, code: result.code, error: result.message },
+            })
+          }
+        } catch (err) {
+          createScopedLogger({
+            module: 'api.upload-asset-image',
+            action: 'character_appearance_describe',
+          }).warn({ message: 'character description rewrite failed (after)', details: { appearanceId, error: (err as Error)?.message } })
+        }
       })
-      if (result.ok) {
-        await db.characterAppearance.update({
-          where: { id: appearance.id },
-          data: {
-            previousDescription: appearance.description ?? null,
-            previousDescriptions: appearance.descriptions ?? null,
-            description: result.description,
-            // Worker's pickAppearanceDescription prefers `descriptions`
-            // (plural, JSON array of LLM-generated variants) over
-            // `description` (singular). If we only rewrote the singular
-            // form, the worker would keep reading the stale LLM-script
-            // text and the new image-derived description would never
-            // make it into the prompt. Reset the array to a single
-            // entry matching the new singular value so both readers
-            // see the same story.
-            descriptions: JSON.stringify([result.description]),
-          },
-        })
-      } else {
-        // Swallow — upload itself succeeded. User can hit "從圖抽描述"
-        // manually later, or edit description directly.
-        createScopedLogger({
-          module: 'api.upload-asset-image',
-          action: 'character_appearance_describe',
-        }).warn({
-          message: 'character description rewrite skipped',
-          details: { appearanceId: appearance.id, code: result.code, error: result.message },
-        })
-      }
     }
 
     return NextResponse.json({
@@ -288,31 +298,43 @@ export const POST = apiHandler(async (
     // image in sync. `labelText` from the form is just the view-name
     // label (e.g. "窗邊"); we overwrite it with the LLM's read of the
     // actual scene contents.
+    // 2026-06-16 — defer the vision-LLM rewrite to after() (see character path).
     if (touchedImage) {
-      const result = await redescribeAssetFromImage({
-        kind: 'location',
-        imageKeyOrUrl: key,
-        projectId,
-        userId: authResult.session.user.id,
-        entityId: touchedImage.id,
+      const touchedImageId = touchedImage.id
+      const prevDescription = touchedImage.previousDescription
+      after(async () => {
+        try {
+          const result = await redescribeAssetFromImage({
+            kind: 'location',
+            imageKeyOrUrl: key,
+            projectId,
+            userId: authResult.session.user.id,
+            entityId: touchedImageId,
+          })
+          if (result.ok) {
+            await prisma.locationImage.update({
+              where: { id: touchedImageId },
+              data: {
+                previousDescription: prevDescription,
+                description: result.description,
+              },
+            })
+          } else {
+            createScopedLogger({
+              module: 'api.upload-asset-image',
+              action: 'location_image_describe',
+            }).warn({
+              message: 'location description rewrite skipped',
+              details: { locationImageId: touchedImageId, code: result.code, error: result.message },
+            })
+          }
+        } catch (err) {
+          createScopedLogger({
+            module: 'api.upload-asset-image',
+            action: 'location_image_describe',
+          }).warn({ message: 'location description rewrite failed (after)', details: { locationImageId: touchedImageId, error: (err as Error)?.message } })
+        }
       })
-      if (result.ok) {
-        await prisma.locationImage.update({
-          where: { id: touchedImage.id },
-          data: {
-            previousDescription: touchedImage.previousDescription,
-            description: result.description,
-          },
-        })
-      } else {
-        createScopedLogger({
-          module: 'api.upload-asset-image',
-          action: 'location_image_describe',
-        }).warn({
-          message: 'location description rewrite skipped',
-          details: { locationImageId: touchedImage.id, code: result.code, error: result.message },
-        })
-      }
     }
 
     return NextResponse.json({
@@ -338,29 +360,39 @@ export const POST = apiHandler(async (
       data: { imageUrl: key },
     })
 
-    // Auto-rewrite prop.description from the uploaded image. Worker
-    // reads `prop.description || prop.summary` for the 道具 line of
-    // the image prompt — keeping description in sync stops user-uploaded
-    // images from drifting away from the text description.
-    const propResult = await redescribeAssetFromImage({
-      kind: 'prop',
-      imageKeyOrUrl: key,
-      projectId,
-      userId: authResult.session.user.id,
-      entityId: prop.id,
-    })
-    if (propResult.ok) {
-      await db.novelPromotionProp.update({
-        where: { id: prop.id },
-        data: { description: propResult.description },
-      })
-    } else {
-      createScopedLogger({
-        module: 'api.upload-asset-image',
-        action: 'prop_describe',
-      }).warn({
-        message: 'prop description rewrite skipped',
-        details: { propId: prop.id, code: propResult.code, error: propResult.message },
+    // Auto-rewrite prop.description from the uploaded image — deferred to
+    // after() (see character path) so the upload returns immediately.
+    {
+      const propId = prop.id
+      after(async () => {
+        try {
+          const propResult = await redescribeAssetFromImage({
+            kind: 'prop',
+            imageKeyOrUrl: key,
+            projectId,
+            userId: authResult.session.user.id,
+            entityId: propId,
+          })
+          if (propResult.ok) {
+            await db.novelPromotionProp.update({
+              where: { id: propId },
+              data: { description: propResult.description },
+            })
+          } else {
+            createScopedLogger({
+              module: 'api.upload-asset-image',
+              action: 'prop_describe',
+            }).warn({
+              message: 'prop description rewrite skipped',
+              details: { propId, code: propResult.code, error: propResult.message },
+            })
+          }
+        } catch (err) {
+          createScopedLogger({
+            module: 'api.upload-asset-image',
+            action: 'prop_describe',
+          }).warn({ message: 'prop description rewrite failed (after)', details: { propId, error: (err as Error)?.message } })
+        }
       })
     }
 
