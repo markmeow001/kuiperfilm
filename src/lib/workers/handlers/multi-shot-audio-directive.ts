@@ -23,6 +23,28 @@
  *     so a sound-source noun in the description (e.g. 低頻貝斯沉音) is not
  *     synthesized into a human-like hum (2026-05-29 incident).
  */
+/**
+ * Count dialogue "beats" in a hand-edited rawPrompt narrative — decides whether
+ * buildAudioDirective emits the lip-synced-TTS branch or the ambient-only
+ * (speech-banned) branch.
+ *
+ * Matches every form the narrative builders emit:
+ *   - 「…」     spoken / VO content. GroupCard buildInitialNarrativeSeedance
+ *              renders dialogue as 王玄:「位列仙班！」 and VO as 「洞府一甲子…」;
+ *              「 only ever wraps speech in these narratives.
+ *   - 對白：    auto-built atlascloud format
+ *   - : "       Kling buildInitialNarrative ASCII-quote form
+ *
+ * 2026-06-17 — the old inline regex (/對白：|说「|: "/) missed the Seedance
+ * 「…」 form, so dialogueBeatCount was 0 for the primary R2V narrative-edit
+ * path → the ambient-only directive (below) forbade speech → R2V went silent
+ * on dialogue. Regression from 18250aa, which wired this already-broken count
+ * into a speech-banning directive. Matching 「 restores native dialogue.
+ */
+export function countDialogueBeats(raw: string): number {
+  return (raw.match(/「|對白：|: "/g) || []).length
+}
+
 export function buildAudioDirective(
   dialogueBeatCount: number,
   soundEnabled: boolean = true,

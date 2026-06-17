@@ -17,7 +17,7 @@
  * call, and adds the missing `soundEnabled` dimension.
  */
 import { describe, expect, it } from 'vitest'
-import { buildAudioDirective } from '@/lib/workers/handlers/multi-shot-audio-directive'
+import { buildAudioDirective, countDialogueBeats } from '@/lib/workers/handlers/multi-shot-audio-directive'
 
 describe('buildAudioDirective', () => {
   it('defaults soundEnabled to true (back-compat with single-arg callers)', () => {
@@ -65,5 +65,37 @@ describe('buildAudioDirective', () => {
     it('silent branch is identical regardless of dialogue count', () => {
       expect(buildAudioDirective(0, false)).toBe(buildAudioDirective(5, false))
     })
+  })
+})
+
+describe('countDialogueBeats — 2026-06-17 R2V dialogue regression', () => {
+  // GroupCard buildInitialNarrativeSeedance renders dialogue as 王玄:「…」 and
+  // VO as 「…」. The old raw-branch regex (/對白：|说「|: "/) missed these, so
+  // dialogueBeatCount was 0 → buildAudioDirective emitted the ambient-only
+  // "嚴禁合成…說話聲" directive → R2V went silent on dialogue. These cases lock
+  // the fix: the Seedance narrative format MUST count as dialogue.
+  it('counts Seedance 「…」 on-camera + VO dialogue (the bug case)', () => {
+    const narrative = [
+      '【開場】環境音效：整齊的腳步停頓聲與厚重衣物摩擦的下跪聲。',
+      '王玄:「位列仙班！」',
+      '王玄 聲音(僅音頻，無畫面文字，嘴部不動):',
+      '「洞府一甲子，凡塵彈指間，我王玄今日終於要突破劍仙境。」',
+    ].join('\n')
+    expect(countDialogueBeats(narrative)).toBeGreaterThan(0)
+    // → drives the lip-synced-TTS branch, NOT the speech-ban branch
+    const directive = buildAudioDirective(countDialogueBeats(narrative), true)
+    expect(directive).toMatch(/逐字配音/)
+    expect(directive).not.toMatch(/嚴禁合成任何人聲/)
+  })
+
+  it('still counts the auto-built 對白： and Kling : " forms', () => {
+    expect(countDialogueBeats('第1鏡：他開門。對白：王玄說「走吧」')).toBeGreaterThan(0)
+    expect(countDialogueBeats('young man opens the door, 王玄: "let\'s go"')).toBeGreaterThan(0)
+  })
+
+  it('returns 0 for a pure-ambient narrative (no dialogue) → ambient directive', () => {
+    const narrative = '【開場】洞府內，霧氣繚繞。環境音效：低頻風聲穿過石壁的回響。'
+    expect(countDialogueBeats(narrative)).toBe(0)
+    expect(buildAudioDirective(0, true)).toMatch(/嚴禁/)
   })
 })

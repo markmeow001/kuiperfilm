@@ -51,7 +51,7 @@ import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
 import { resolveNovelData } from './image-task-handler-shared'
-import { buildAudioDirective } from './multi-shot-audio-directive'
+import { buildAudioDirective, countDialogueBeats } from './multi-shot-audio-directive'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import {
   collectCharacterRefs,
@@ -755,7 +755,7 @@ export async function runMultiShotAtlasCloudComposite(params: {
     // is a bare token the model can't bind to a reference image; without
     // the timing guide a hand-written multi-action shot gets starved.
     const raw = params.rawPrompt.trim()
-    dialogueBeatCount = (raw.match(/對白：|说「|: "/g) || []).length
+    dialogueBeatCount = countDialogueBeats(raw)
     const refMap = mode === 'r2v' ? buildR2vRefMapSection(r2vRefOrder) : ''
     const timingGuide = buildPerShotDurationGuide(perShotDurations)
     const scaffolded = composeRawPromptScaffold(raw, refMap, timingGuide)
