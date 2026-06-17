@@ -96,11 +96,25 @@ Upgraded examples:
   handheld follows the motion"
 - Emotion: "Symmetrical composition, @young woman centered head bowed,
   her raised finger in foreground, candle on the windowsill blurred in
-  background, a tear traces down her cheek, locked-off camera"
+  background, a tear traces down her cheek, camera eases in very slowly"
 - Establishing wide: "High-angle 45° down, @teenage boy in the lower-
   right quarter like a small dot running outward, rotten wooden fence
   in the lower-left third foreground, wet mud reflections in midground,
   silhouetted cliffs in background, camera pulls back slowly"
+
+⚠️ Camera-motion rules by shot type (don't lock everything — locking face /
+wide shots is the #1 cause of frozen, stuttery output):
+- OBJECT / hand / detail close-up (a hand turning a page, a letter, a ticking
+  number): LOCKED camera (moving it exposes other parts), BUT the object must
+  still micro-move (fingertip drags, number ticks, paper trembles).
+- FACE / emotion close-up (a character's face, eyes, tears): NEVER locked —
+  use a slow push-in (or gentle orbit) PLUS facial micro-motion (eyes shifting,
+  jaw tightening, blink, lip tremor, breathing, a tear sliding). This is the
+  key to smooth emotional shots; a locked face with no micro-motion freezes.
+- WIDE / establishing / tiny-subject shot (the freeze hotspot): MUST carry BOTH
+  a slow camera move (slow push / drift / tilt-down / pull-back / crane) AND
+  environmental micro-motion (drifting clouds, shifting light, smoke, banners /
+  water rippling, distant figures walking, falling leaves). Never a locked still.
 
 ⚠️ 9:16 VERTICAL composition rules (short-drama aspect ratio — applies to
 EVERY shot, overrides the horizontal-by-default intuition above):

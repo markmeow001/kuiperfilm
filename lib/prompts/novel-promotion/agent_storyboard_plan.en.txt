@@ -53,9 +53,21 @@ Planning rules:
 5. Prefer concrete, visible actions over abstract wording.
 6. Return strict JSON only.
 7. REQUIRED establishing shot: every scene MUST open with 1 establishing shot
-   (wide/full, pure environment/atmosphere, subject distant or not yet entered)
-   immediately followed by a main-subject shot — ≥2 panels, never merged into
-   one. Do not weaken this to "one establishing shot is enough".
+   (wide/full, subject distant or not yet entered) immediately followed by a
+   main-subject shot — ≥2 panels, never merged into one. Do not weaken this to
+   "one establishing shot is enough".
+   - ⚠️ An establishing shot is NOT a frozen empty plate: its description must
+     call for a slow camera move (slow push / drift / tilt-down / pull-back) +
+     environmental micro-motion (clouds, shifting light, smoke, banners, distant
+     figures). A purely static wide gets generated as duplicate/frozen frames —
+     the #1 cause of stuttery output. The detail stage writes the move from this.
+
+8. ★ Favor motion in shot selection (key to smoothness): when several shot
+   designs would tell the same story, prefer ones where the subject is mid-
+   action / interacting / needs a camera move, over inherently static framings
+   (plain standing portraits, locked empty wides). Period/epic genres especially:
+   don't stack rows of standing portraits and locked wides. If a static framing
+   is unavoidable, its description MUST still specify a camera move + micro-motion.
 
 Panel-count rule (CRITICAL):
 - Target total video duration for this clip: {target_duration} seconds.
