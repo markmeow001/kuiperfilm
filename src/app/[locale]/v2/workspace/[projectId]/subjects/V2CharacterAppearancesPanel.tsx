@@ -195,6 +195,13 @@ function AppearanceManageRow({
   const update = useUpdateCharacterAppearanceMeta(projectId)
   const del = useDeleteCharacterAppearance(projectId)
   const register = useRegisterArkAsset(projectId)
+  // Per-appearance image upload. The upload-and-expand mutation was previously
+  // only wired into 新增造型 (AddAppearanceButton); existing appearances (e.g.
+  // the auto-created 年輕 / 現代 looks) had no way to upload a custom reference
+  // — only 描述 / 刪除. This adds a per-row 上傳 so each look can take its own
+  // image (upload → 3-view sheet, same as the add-new flow).
+  const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
   const display = appearance.changeReason || `造型 ${(appearance.appearanceIndex ?? 0) + 1}`
   const idxLabel = `#${(appearance.appearanceIndex ?? 0) + 1}`
@@ -257,6 +264,18 @@ function AppearanceManageRow({
         },
       },
     )
+  }
+
+  function handleUploadFile(file: File) {
+    uploadExpand.mutate(
+      { file, characterId, appearanceId: appearance.id },
+      {
+        onError: (err) => {
+          alert(`上傳失敗:${(err as Error)?.message ?? '未知'}`)
+        },
+      },
+    )
+    if (uploadInputRef.current) uploadInputRef.current.value = ''
   }
 
   return (
@@ -326,6 +345,28 @@ function AppearanceManageRow({
             {update.isPending ? (
               <span className="font-mono text-[12px] text-stone-500">儲存中…</span>
             ) : null}
+            {/* 上傳 — per-appearance custom reference image. Upload → 3-view
+                sheet (same upload-and-expand path as 新增造型). Lets the user
+                give each look (年輕 / 現代 / …) its own image, not just #1. */}
+            <button
+              type="button"
+              onClick={() => uploadInputRef.current?.click()}
+              disabled={uploadExpand.isPending}
+              title="上傳這個造型的參考圖（會生成 3 視角）"
+              className="flex-shrink-0 rounded-sm border border-stone-800 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-all hover:border-amber-500/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {uploadExpand.isPending ? '上傳中…' : '上傳'}
+            </button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleUploadFile(file)
+              }}
+            />
             {/* ✎ edit description — user-asked 2026-05-13: 'every appearance
                 needs its own description editor, not just the first one'. */}
             <button
