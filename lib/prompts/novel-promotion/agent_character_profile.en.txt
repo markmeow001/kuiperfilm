@@ -38,6 +38,7 @@ Field rules:
   - `voice_only` — only heard via OS/VO/narration/inner monologue this episode, never visible
   - `mixed` — both on-screen and has OS/VO in this episode
   voice_only characters do not require a visual_description (downstream UI will let the user opt in to portrait generation).
+- **voice_description: REQUIRED** for every extracted character (including voice_only ones). A one-sentence description of the character's dubbing voice/timbre, consumed by downstream TTS / dialogue video generation so the same character sounds consistent and on-character across every shot. Format: gender + 2-4 voice-quality adjectives (pitch, timbre, demeanor). Examples: "male, mature deep magnetic", "young female, bright and gentle", "middle-aged male, raspy and authoritative", "teenage boy, crisp and lively". Infer it from gender + age_range + personality_tags + role/archetype (e.g. a cold domineering CEO → "male, deep steady with authority"; a gentle virtuous heroine → "female, warm and soft"). Describe the VOICE ONLY — never appearance/visual info (that is visual_description's job).
 
 Output format (JSON only).
 The output contains exactly two arrays:
@@ -52,6 +53,7 @@ The output contains exactly two arrays:
       "visual_description": "An 80-150 word English visual prompt for the initial appearance, ready to feed into a text-to-image model. MUST stay strictly grounded in the source text era_period, social_class, occupation, costume_tier, suggested_colors, visual_keywords, and primary_identifier. Cover age, hairstyle/color, facial features, expression, upper-body wear, lower-body wear, accessories/footwear, overall mood. Never drift outside the era: a modern drama must NOT mention armor/robes/period costumes; a historical piece must NOT mention suits/wristwatches; sci-fi must NOT mention period-court attire. If era_period is modern/contemporary/urban, only contemporary clothing (shirts/suits/jeans/hoodies/dresses) is allowed.",
       "gender": "male/female/other",
       "age_range": "young adult",
+      "voice_description": "Dubbing voice/timbre: gender + 2-4 voice-quality adjectives (e.g. 'male, mature deep magnetic', 'young female, bright and gentle'). Inferred from gender/age_range/personality_tags/role; describe the voice only, not appearance. Required even for voice_only characters.",
       "role_level": "S",
       "archetype": "character archetype",
       "personality_tags": ["tag1", "tag2"],
@@ -74,6 +76,7 @@ The output contains exactly two arrays:
       "updated_introduction": "Updated intro with newly discovered mapping",
       "updated_aliases": ["new alias 1", "new alias 2"],
       "visual_description": "Full visual prompt (same 80-150 word format as new_characters, era-grounded, no period-mismatch). Always emit this field even for existing characters; the worker only fills it when the character has no existing visual prompt and never overwrites user edits.",
+      "voice_description": "Dubbing voice/timbre: gender + 2-4 voice-quality adjectives (e.g. 'male, mature deep magnetic'). Always emit this field even for existing characters; the worker only backfills it when the character has no existing voice description and never overwrites user edits.",
       "gender": "male/female/other",
       "era_period": "modern/fantasy/historical/sci-fi",
       "expected_appearances": [
@@ -90,5 +93,6 @@ Strict constraints:
 3. Keep all strings in English.
 4. visual_description is required for both new_characters AND updated_characters, and must stay consistent with era_period (no historical attire in modern stories, no modern attire in historical stories).
 5. Always emit visual_description on updated_characters even when the character looks complete. The worker fills it only when the character's existing visual prompt is empty (rescue path for legacy data); user edits are preserved.
+5b. voice_description is REQUIRED for every character in both new_characters AND updated_characters (including voice_only characters): gender + 2-4 voice-quality adjectives, voice only (no appearance info). The worker backfills it only when the existing voice description is empty; user edits are preserved.
 6. expected_appearances is required (at least the id=0 initial appearance); **every expected_appearance entry must carry its own visual_description** (80-150 words — fill the sub-appearances too, not just change_reason). Only persistent visual changes get a sub-appearance; never effects/emotions/one-off actions.
 7. Emit expected_appearances on updated_characters too (with sub-appearances). When a character has multiple looks in the source but the asset library only holds the initial one, the worker creates the MISSING sub-appearances (existing indices untouched, user edits preserved) — so re-analyzing an existing character also grows the missing looks instead of staying at one.

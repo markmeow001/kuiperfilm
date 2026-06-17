@@ -72,6 +72,10 @@ type UpdatePanelTextMutation = UseMutationResult<
 interface CharacterRosterEntry {
   id: string
   name: string
+  // LLM-authored dubbing voice/timbre (gender + voice qualities), surfaced
+  // from profileData.voice_description by the assets API. Threaded to
+  // GroupCard so the Seedance narrative can characterize each speaker's TTS.
+  voiceDescription?: string | null
   appearances?: Array<{
     id: string
     appearanceIndex?: number

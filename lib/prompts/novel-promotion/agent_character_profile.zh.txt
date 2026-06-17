@@ -38,6 +38,23 @@
    ⚠️ voice_only 角色不强制要求 visual_description（可留空 / 用默认描述）；
        下游 UI 会让用户选择是否生成形象图。on_screen / mixed 角色照常生成。
 
+【配音音色 voice_description 字段 - 必填 ⭐重要】
+
+每个提取的角色（包含 voice_only 角色）都必须有 voice_description 字段，用一句话描述该角色的
+配音音色，供下游 TTS / 视频对白生成使用，让同一角色在所有镜头里听起来一致、贴合人设。
+
+格式：性别 + 2-4 个声线特征形容词（如音高、音色、气质）。
+   - 示例："男性，成熟低沉富有磁性"
+   - 示例："年轻女性，清亮温柔"
+   - 示例："中年男性，沙哑威严"
+   - 示例："少年，清脆活泼"
+
+判定依据：综合 gender（性别）、age_range（年龄段）、personality_tags（性格标签）、
+role（身份/角色原型）推断。例如「高冷霸道总裁」→「男性，低沉沉稳带威严」；
+「贤惠温柔女主」→「女性，温婉柔和」。
+
+⚠️ voice_description 只描述声音，**不要**写画面/外貌信息（那是 visual_description 的职责）。
+
 【角色介绍 introduction 规则 ⭐重要】
 
 每个角色必须有 introduction 字段，用于帮助后续 AI 正确识别角色。包含：
@@ -233,6 +250,7 @@ D级（群众演员）：
       "visual_description": "用一段 80-150 字的中文，针对 expected_appearances[0]（初始形象）写出可直接喂给文生图模型的视觉提示词。必须严格紧扣【原文内容】中给出的时代/场景（era_period）、社会阶层（social_class）、职业（occupation）、服装华丽度（costume_tier）、建议色（suggested_colors）、视觉关键词（visual_keywords）、辨识标志（primary_identifier）。涵盖：年龄外观、发型发色、五官特征、表情气质、上身衣着、下身衣着、配饰/鞋履、整体氛围。⚠️ 严禁脱离原文设定：现代都市剧不要写古装/盔甲/法袍/战场装；古代剧不要写西装/手表；科幻剧不要写明清袍服。如果原文是时装剧（era_period 含『现代』『都市』『当代』），衣着只能是当代服饰（衬衫/西装/牛仔/卫衣/连衣裙等）。",
       "gender": "男/女",
       "age_range": "约二十五岁",
+      "voice_description": "配音音色：性别 + 2-4 个声线特征形容词（如「男性，成熟低沉富有磁性」「年轻女性，清亮温柔」）。综合 gender/age_range/personality_tags/role 推断，只描述声音不写外貌。voice_only 角色也必填。",
       "role_level": "S/A/B/C/D",
       "archetype": "角色原型（如霸道总裁）",
       "personality_tags": ["高冷", "腹黑"],
@@ -255,6 +273,7 @@ D级（群众演员）：
       "updated_introduction": "更新后的角色介绍（补充新发现的关系、称呼、真名等）",
       "updated_aliases": ["新发现的别名1", "新发现的别名2"],
       "visual_description": "完整的外观提示词（与 new_characters 同格式，80-150 字，紧扣 era_period/social_class/occupation/costume_tier/suggested_colors/visual_keywords/primary_identifier，时装剧禁古装/盔甲/战场装）。即便是已有角色也输出此字段；worker 仅在角色尚无外观提示词时填入，已有提示词不会被覆盖。",
+      "voice_description": "配音音色：性别 + 2-4 个声线特征形容词（如「男性，成熟低沉富有磁性」）。即便是已有角色也输出此字段；worker 仅在角色尚无音色描述时回填，不会覆盖用户已编辑的值。",
       "gender": "男/女",
       "era_period": "现代都市/古代唐朝/未来科幻",
       "expected_appearances": [
@@ -300,7 +319,8 @@ D级（群众演员）：
 10. expected_appearances 必填，至少包含 id=0 的初始形象；**每个 expected_appearance 条目都必须带自己的 visual_description**（80-150字，子形象也要写满，不能只写 change_reason）
 11. 只有持续性视觉变化才添加子形象，临时特效/情绪/动作不添加
 12. visual_description 必填，必须与 era_period 一致（时装剧禁用古装/盔甲/战场装/法袍等）
-13. 输出必须是**严格合法的JSON**：字符串中不能出现原始换行/回车/制表符
+13. voice_description 必填（new_characters 和 updated_characters 的**每个**角色都要，包含 voice_only 角色）：性别 + 2-4 个声线特征形容词，只描述声音不写外貌
+14. 输出必须是**严格合法的JSON**：字符串中不能出现原始换行/回车/制表符
 
 ⚠️【JSON引号处理】
 - 原文中的中文引号（""''）必须**原样保留**，严禁转换为英文双引号 "

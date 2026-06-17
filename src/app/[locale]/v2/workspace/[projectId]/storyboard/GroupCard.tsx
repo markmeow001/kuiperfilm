@@ -107,6 +107,11 @@ interface CharacterAppearanceRef {
 interface CharacterRef {
   id: string
   name: string
+  // LLM-authored dubbing voice/timbre (gender + voice qualities), pulled
+  // from profileData.voice_description by the assets API. Used by
+  // buildInitialNarrativeSeedance to characterize each speaker's TTS voice
+  // so dialogue sounds on-character and consistent across shots.
+  voiceDescription?: string | null
   appearances?: CharacterAppearanceRef[]
 }
 
@@ -1199,6 +1204,32 @@ export function GroupCard({
     const TENCENT_SUBJECT_INFOS_CAP = 3
     const headerLines: string[] = []
     let refSlot = 1
+
+    // 2026-06-16 — per-speaker dubbing voice/timbre lookup. The LLM authors
+    // a 性别 + 声线特征 string per character (profileData.voice_description,
+    // surfaced as character.voiceDescription by the assets API). Match a
+    // voice line's speaker to a cast member alias-tolerantly so the emitted
+    // narrative characterizes the TTS voice (matching the competitor format)
+    // and stays consistent across shots. Falls back to no voice line when a
+    // speaker has no description, so the line format never breaks.
+    const lookupVoiceDescription = (speaker: string): string | null => {
+      const target = speaker.trim().toLowerCase()
+      if (!target) return null
+      for (const cast of groupCast) {
+        const candidate = cast.character.name.trim().toLowerCase()
+        if (!candidate) continue
+        if (
+          candidate === target ||
+          candidate.includes(target) ||
+          target.includes(candidate)
+        ) {
+          const vd = cast.character.voiceDescription?.trim()
+          if (vd) return vd
+        }
+      }
+      return null
+    }
+
     const charsToAnchor = groupCast.slice(0, TENCENT_SUBJECT_INFOS_CAP)
     const remainingForScenes = TENCENT_SUBJECT_INFOS_CAP - charsToAnchor.length
     const scenesToAnchor = groupScenes.slice(0, remainingForScenes)
@@ -1238,11 +1269,24 @@ export function GroupCard({
       const structuredVoiceLines = Array.isArray(p.voiceLines) ? p.voiceLines : []
       if (structuredVoiceLines.length > 0) {
         for (const v of structuredVoiceLines) {
+          // Inject the speaker's voice timbre so the dialogue TTS sounds
+          // on-character and consistent across shots (competitor parity:
+          // "王玄 声音（仅音频，无画面文字）：男性，成熟低沉富有磁性").
+          // No description → fall back to the original format unchanged.
+          const voiceDescription = lookupVoiceDescription(v.speaker)
           if (v.isVoiceover) {
-            lines.push(`${v.speaker} 声音(仅音频，无画面文字，嘴部不动):`)
+            lines.push(
+              voiceDescription
+                ? `${v.speaker} 声音(仅音频，无画面文字，嘴部不动)：${voiceDescription}`
+                : `${v.speaker} 声音(仅音频，无画面文字，嘴部不动):`,
+            )
             lines.push(`「${v.content}」`)
           } else {
-            lines.push(`${v.speaker}:「${v.content}」`)
+            lines.push(
+              voiceDescription
+                ? `${v.speaker}（声线：${voiceDescription}）:「${v.content}」`
+                : `${v.speaker}:「${v.content}」`,
+            )
           }
         }
       } else {

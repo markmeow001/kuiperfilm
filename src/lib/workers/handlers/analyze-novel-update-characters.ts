@@ -67,6 +67,42 @@ export async function processUpdatedCharacters(params: {
         characterUpdates.aliases = JSON.stringify(merged)
       }
     }
+    // 2026-06-16 — non-destructive backfill of voice_description into
+    // profileData. The prompt now authors a per-character dubbing
+    // voice/timbre (性别 + 声线特征) used by the Seedance narrative voice
+    // lines. Legacy characters extracted before the field existed have no
+    // voice_description, so re-analysis fills it — but only when ABSENT, so
+    // a user-edited value is never clobbered.
+    const newVoiceDescription = readText(item.voice_description).trim()
+    if (newVoiceDescription) {
+      const row = await prisma.novelPromotionCharacter.findUnique({
+        where: { id: existing.id },
+        select: { profileData: true },
+      })
+      let profile: Record<string, unknown> = {}
+      if (row?.profileData) {
+        try {
+          const parsed = JSON.parse(row.profileData)
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            profile = parsed as Record<string, unknown>
+          }
+        } catch {
+          // Corrupt legacy JSON — start from an empty object rather than
+          // throwing; we only want to add the missing voice field.
+          profile = {}
+        }
+      }
+      const hasVoice =
+        typeof profile.voice_description === 'string' &&
+        profile.voice_description.trim().length > 0
+      if (!hasVoice) {
+        characterUpdates.profileData = JSON.stringify({
+          ...profile,
+          voice_description: newVoiceDescription,
+        })
+      }
+    }
+
     if (Object.keys(characterUpdates).length > 0) {
       await prisma.novelPromotionCharacter.update({
         where: { id: existing.id },

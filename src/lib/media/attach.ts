@@ -140,6 +140,27 @@ async function attachMediaFieldsToStoryboard<T extends Record<string, unknown>>(
   }
 }
 
+/**
+ * Pull the LLM-authored dubbing voice/timbre (性别 + 声线特征) out of the
+ * character's profileData JSON blob into a clean top-level field. Stored
+ * inside profileData (no dedicated column) by analyze-novel-create/update;
+ * surfaced here so the Seedance narrative voice lines can read it without
+ * every consumer re-parsing profileData. Returns null when absent / corrupt.
+ */
+function extractVoiceDescription(profileData: unknown): string | null {
+  if (typeof profileData !== 'string' || !profileData.trim()) return null
+  try {
+    const parsed = JSON.parse(profileData)
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const value = (parsed as Record<string, unknown>).voice_description
+      if (typeof value === 'string' && value.trim()) return value.trim()
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
 async function attachMediaFieldsToProjectCharacter<T extends Record<string, unknown>>(character: T) {
   const customVoiceMedia = await resolveMediaRef(character.customVoiceMediaId, character.customVoiceUrl)
   const appearances = await Promise.all(
@@ -151,6 +172,10 @@ async function attachMediaFieldsToProjectCharacter<T extends Record<string, unkn
     customVoiceMedia,
     customVoiceUrl: customVoiceMedia?.url || character.customVoiceUrl || null,
     appearances,
+    // Derived from profileData.voice_description; the storyboard narrative
+    // (GroupCard.buildInitialNarrativeSeedance) reads this to characterize
+    // each speaker's TTS voice.
+    voiceDescription: extractVoiceDescription(character.profileData),
   }
 }
 

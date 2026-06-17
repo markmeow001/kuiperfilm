@@ -75,6 +75,9 @@ export interface Character {
   // 角色档案（两阶段生成）
   profileData?: string | null             // JSON格式的角色档案
   profileConfirmed?: boolean             // 档案是否已确认
+  // 配音音色描述（性别 + 声线特征），由 LLM 在 profileData.voice_description
+  // 中产出，attachMediaFieldsToProject 抽到顶层供分镜叙事使用
+  voiceDescription?: string | null
 }
 
 // 场景图片（独立表）

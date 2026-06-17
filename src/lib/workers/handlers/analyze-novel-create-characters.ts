@@ -146,6 +146,11 @@ export async function processNewCharacters(params: {
       visual_keywords: toStringArray(item.visual_keywords),
       gender: item.gender,
       age_range: item.age_range,
+      // 2026-06-16 — per-character dubbing voice/timbre (性别 + 声线特征).
+      // The LLM authors it so generated dialogue TTS sounds on-character
+      // and consistent across shots; surfaced to the Seedance narrative
+      // voice lines downstream (GroupCard.buildInitialNarrativeSeedance).
+      voice_description: readText(item.voice_description).trim() || undefined,
       // Preserved when present (mined VO speakers ship 'voice_only' so
       // downstream UI can offer "skip portrait generation" affordances).
       appearance_mode: typeof item.appearance_mode === 'string' ? item.appearance_mode : undefined,
