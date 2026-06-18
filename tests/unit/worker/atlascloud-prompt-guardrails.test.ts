@@ -27,10 +27,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAudioDirective,
+  buildR2vRefMapSection,
   composeRawPromptScaffold,
   estimatePromptTokens,
   isPromptLengthRisky,
   PROMPT_TOKEN_WARN_THRESHOLD,
+  R2V_REFERENCE_COLOR_FIDELITY_DIRECTIVE,
 } from '@/lib/workers/handlers/multi-shot-video-atlascloud-path'
 
 describe('buildAudioDirective', () => {
@@ -77,6 +79,32 @@ describe('composeRawPromptScaffold', () => {
 
   it('ships verbatim when refMap and timing are both empty', () => {
     expect(composeRawPromptScaffold('純文字', '', '')).toBe('純文字')
+  })
+})
+
+// 2026-06-17 — r2v ships zero character description text (the reference image is
+// the anchor), so a bound WHITE robe has no text re-asserting its color and the
+// dark narrative + backlight desaturates it to grey (user-reported: 王玄 白衣→灰).
+// The ref-map carries a generic inherent-color-fidelity directive so mood light
+// changes brightness, not the reference's hue.
+describe('buildR2vRefMapSection — inherent-color fidelity', () => {
+  const charRef = { kind: 'char' as const, ref: { id: 'c1', name: '王玄', imageUrl: 'u' } }
+
+  it('appends the color-fidelity directive after the image map', () => {
+    const out = buildR2vRefMapSection([charRef])
+    expect(out).toContain('image 1 = 角色「王玄」')
+    expect(out).toContain(R2V_REFERENCE_COLOR_FIDELITY_DIRECTIVE)
+    expect(out.indexOf('image 1')).toBeLessThan(out.indexOf('固有色保真'))
+  })
+
+  it('directive names inherent-color preservation + the white-stays-white case', () => {
+    expect(R2V_REFERENCE_COLOR_FIDELITY_DIRECTIVE).toMatch(/固有色|固有色相/)
+    expect(R2V_REFERENCE_COLOR_FIDELITY_DIRECTIVE).toMatch(/白色|本白/)
+    expect(R2V_REFERENCE_COLOR_FIDELITY_DIRECTIVE).toMatch(/参考图/)
+  })
+
+  it('returns empty for no refs (t2v/i2v) — no directive leaks in', () => {
+    expect(buildR2vRefMapSection([])).toBe('')
   })
 })
 

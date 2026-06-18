@@ -170,7 +170,22 @@ type R2vRefEntry = { kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneR
  *
  * Returns '' when there are no ordered refs (t2v/i2v, or no refs at all).
  */
-function buildR2vRefMapSection(r2vRefOrder: R2vRefEntry[]): string {
+// 2026-06-17 — r2v injects ZERO character description text by design (the
+// reference image is the anchor), so the only place a robe's white color lives
+// is the image. Under a dark/oppressive narrative + backlit god-rays, Seedance
+// desaturates white robes toward grey because nothing in the TEXT re-asserts the
+// inherent color (user-reported: bound white 王玄 → grey on screen). This generic
+// directive — appended to the ref-map so it ships in both the auto-built and
+// rawPrompt branches — tells the model that mood lighting changes brightness, not
+// the reference's inherent hue. Generic (works for any color), so it needs no
+// per-character color parsing (sub-appearance descriptions often omit robe color).
+export const R2V_REFERENCE_COLOR_FIDELITY_DIRECTIVE =
+  '【固有色保真】以上参考图是人物服装、发色及道具/场景固有颜色的唯一基准：场景氛围光只改变'
+  + '明暗与冷暖，不改变固有色相。浅色/白色服装在暗调、逆光或压迫氛围的镜头中仍保持清晰可辨的'
+  + '白色调（仅暗部柔和落入浅灰阶，高光与主体维持本白），不被整体染成灰或黑；其余颜色同样严格'
+  + '贴合参考图。'
+
+export function buildR2vRefMapSection(r2vRefOrder: R2vRefEntry[]): string {
   if (r2vRefOrder.length === 0) return ''
   const mapLines = r2vRefOrder.map((entry, i) => {
     const label =
@@ -181,7 +196,7 @@ function buildR2vRefMapSection(r2vRefOrder: R2vRefEntry[]): string {
           : `道具「${entry.ref.name}」`
     return `image ${i + 1} = ${label}`
   })
-  return `參考圖對應：\n${mapLines.join('\n')}`
+  return `參考圖對應：\n${mapLines.join('\n')}\n\n${R2V_REFERENCE_COLOR_FIDELITY_DIRECTIVE}`
 }
 
 /**
