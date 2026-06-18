@@ -378,6 +378,11 @@
    - 生成模型會 attend 到被否定的名詞，反而觸發。
    - 字幕 / 水印 / 文字壓制由後端 negativePrompt 統一處理。
 
+⭐ 1b. ❌ **禁止用字幕 / 字卡 / 名条 / 角色名牌介紹角色身份**
+   - ❌ 錯：「乾 字幕：王玄二弟子」——純淨畫面管線上會被渲染成畫面文字、又被當口白念出來。
+   - ✅ 對：身份只用「@角色名 綁參考圖 + 視覺特徵（服裝 / 站位 / 年齡）」演出來，關係寫進對白或動作。
+   - 身份用畫面演，不用字幕打。
+
 2. ❌ **禁止剪輯 / 器材術語**
    - 不要寫「shot on Arri Alexa」「IMAX quality」「film grain」「8K detail」「35mm 鏡頭」「電影級光影」「professional film production quality」
    - 這類詞由 styleAnchor 統一處理（已綁專案 visualStyleId）。

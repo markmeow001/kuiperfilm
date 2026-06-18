@@ -57,6 +57,7 @@ import {
   countDialogueBeats,
   extractRawDialogueBeats,
 } from './multi-shot-audio-directive'
+import { stripCaptionLines } from './multi-shot-narrative-sanitize'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import {
   collectCharacterRefs,
@@ -759,7 +760,23 @@ export async function runMultiShotAtlasCloudComposite(params: {
     // per-shot timing guide: without the ref-map a hand-written "@Vera"
     // is a bare token the model can't bind to a reference image; without
     // the timing guide a hand-written multi-action shot gets starved.
-    const raw = params.rawPrompt.trim()
+    // 2026-06-17 — strip on-screen caption / name-card lines (乾 字幕: 王玄二弟子)
+    // the storyboard LLM emits: on a clean-frame R2V pipeline they get both
+    // rendered into the frame AND read aloud as 口白 (user-reported). Root cause
+    // is the prompt fix; this neutralizes narratives already saved with captions.
+    const { cleaned: raw, removed: strippedCaptions } = stripCaptionLines(
+      params.rawPrompt.trim(),
+    )
+    if (strippedCaptions.length > 0) {
+      logger.warn({
+        message: 'AtlasCloud rawPrompt: stripped on-screen caption lines',
+        details: {
+          storyboardId: validPanels[0].storyboardId,
+          count: strippedCaptions.length,
+          removed: strippedCaptions.slice(0, 10),
+        },
+      })
+    }
     dialogueBeatCount = countDialogueBeats(raw)
     const refMap = mode === 'r2v' ? buildR2vRefMapSection(r2vRefOrder) : ''
     const timingGuide = buildPerShotDurationGuide(perShotDurations)

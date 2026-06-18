@@ -184,6 +184,17 @@ model has clear direction = complete, faithful output.
      "strictly without X") — handled by the worker's dedicated
      negative_prompt field. Mentioning them in the positive prompt
      probabilistically triggers the very artifact you're trying to avoid.
+  ⭐ 3b. NEVER introduce or tag a character via a "subtitle / caption / name
+     card / lower-third / title card" line.
+     Wrong: "乾 subtitle: second disciple of Wang Xuan" / "坤 caption: third
+            disciple". On a clean-frame R2V pipeline this fails twice: (1) the
+            model renders the text into the frame (the very 字幕 the backend
+            suppresses), and (2) the model reads the caption aloud as dialogue
+            (user-reported: captions get voiced).
+     Right: convey identity ONLY through "@name (bound reference image) + visual
+            traits" — robe color / stance / age / accessories, e.g. "@乾 in a
+            black Taoist robe stands front-left, solemn". State relationships in
+            dialogue or action, never as a caption. Identity is acted, not typed.
   4. NO camera / equipment terms ("Arri Alexa", "IMAX", "film grain", "8K",
      "35mm lens", "cinematic lighting") — handled by project visualStyleId
      / styleAnchor. video_prompt describes what's in frame, not the camera.

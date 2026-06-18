@@ -261,6 +261,12 @@ Not stylistic preferences — empirical model behavior.
      and probabilistically generate it. Suppression goes through the
      worker's negative_prompt, not the positive prompt.
 
+  ⭐ 1b. ❌ NEVER introduce a character via a subtitle / caption / name-card.
+     Wrong: "乾 subtitle: second disciple" — on a clean-frame pipeline it gets
+     rendered into the frame AND read aloud as dialogue. Convey identity only
+     via "@name (reference image) + visual traits (costume / stance / age)";
+     state relationships in dialogue or action. Identity is acted, not typed.
+
   2. ❌ NO camera / film-equipment terms.
      Don't write "shot on Arri Alexa", "IMAX quality", "film grain",
      "8K detail", "35mm lens", "cinematic lighting", "professional film

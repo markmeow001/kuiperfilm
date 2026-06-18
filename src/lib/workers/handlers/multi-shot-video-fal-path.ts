@@ -53,6 +53,7 @@ import {
   countDialogueBeats,
   extractRawDialogueBeats,
 } from './multi-shot-audio-directive'
+import { stripCaptionLines } from './multi-shot-narrative-sanitize'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 import {
   collectCharacterRefs,
@@ -430,7 +431,21 @@ export async function runMultiShotFalComposite(params: {
   let promptCore: string
   let dialogueBeatCount: number
   if (params.rawPrompt && params.rawPrompt.trim().length > 0) {
-    const raw = params.rawPrompt.trim()
+    // 2026-06-17 — strip on-screen caption / name-card lines (乾 字幕: 王玄二弟子)
+    // the storyboard LLM emits; on clean-frame R2V they get rendered AND voiced.
+    const { cleaned: raw, removed: strippedCaptions } = stripCaptionLines(
+      params.rawPrompt.trim(),
+    )
+    if (strippedCaptions.length > 0) {
+      logger.warn({
+        message: 'fal rawPrompt: stripped on-screen caption lines',
+        details: {
+          storyboardId: validPanels[0].storyboardId,
+          count: strippedCaptions.length,
+          removed: strippedCaptions.slice(0, 10),
+        },
+      })
+    }
     dialogueBeatCount = countDialogueBeats(raw)
     // 2026-06-16 — same silent-dialogue fix as the AtlasCloud path: the verbatim
     // narrative writes dialogue as `沈冰雪「…」` (no 说 verb) which Seedance often
