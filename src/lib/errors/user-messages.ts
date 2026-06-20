@@ -23,6 +23,7 @@ export const USER_ERROR_MESSAGES_ZH: Record<UnifiedErrorCode, string> = {
   GENERATION_FAILED: '生成失败，请稍后重试。',
   WATCHDOG_TIMEOUT: '任务执行超时，系统已终止该任务。',
   WORKER_EXECUTION_ERROR: '任务执行失败，请稍后重试。',
+  SKILL_PRECONDITION_FAILED: '此 Skill 的前置條件尚未滿足（例如角色 / 場景 / 道具的參考圖還沒備齊）。請先完成前置設定後再試。',
   INTERNAL_ERROR: '系统内部错误，请稍后重试。',
 }
 

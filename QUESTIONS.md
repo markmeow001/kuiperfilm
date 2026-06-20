@@ -373,3 +373,23 @@ Image（13 個）：
   - import-location 對稱：body `{globalLocationId, includeImages?}`，返回完整 location object
   - 不做：不做 batch import（一次一個 asset；batch 拆 11.2.5 若需要）
   - 測試：`tests/integration/api/projects/import-character.test.ts` 8 cases；`tests/integration/api/projects/import-location.test.ts` 8 cases
+
+---
+
+## Q-005 [待補資訊] Playground 圖生(Freedom Mode)失敗 — 管線靜態檢查通過,缺實際 error 字串
+
+- **背景**: 記憶 `project_kuiperfilm_playground_freedom_image_fail` 標示 Playground 圖生會失敗,待查。
+- **本輪靜態檢查結論(2026-06-13,無金鑰環境,純讀碼)**: 整條圖生管線**結構正確**,不是 plumbing 的問題:
+  - `POST /api/playground/run` (route.ts) — 驗證、model enablement(`resolveModelSelection`)、quote/freeze、建 row、enqueue,錯誤處理完整(enqueue 失敗會 refund + 標 failed)。✅
+  - `handlePlaygroundImageTask` (playground-image.ts) — 讀 row → `generateImage` → sync 取 `imageUrl` / async 走 `waitExternalResult` 輪詢 → 下載上傳 COS → capture/refund 計費。✅
+  - 結果 URL 取值 `result.url ?? result.imageUrl`:`GenerateResult` 確有 `imageUrl`,sync provider 取得到。✅
+  - 一度懷疑:playground image job 的 `job.data` 沒有 `taskId`,而 `waitExternalResult` 會呼叫 `assertTaskActive(job.data.taskId)`。**已排除** —`isTaskActive(undefined)` 在 2026-05-28 已明確 return true(就是為 playground 這種無 Task row 的 job 設計),async 輪詢不會因此誤死。
+- **因此**: 失敗點幾乎可確定在**某個 provider 的 `doGenerate` 回 success:false**(供應商 API key / 不支援的參數 / 該模型在該帳號未開通 / pricing 缺),這要看**實際的 error 才能定位**,靜態讀碼到此為止。
+- **回來後請提供以下任一,我就能直接定位**:
+  1. 失敗那筆 `PlaygroundRun` row 的 `errorMessage` 欄位值(DB 直接查最快)。
+  2. 或 worker log 裡 `[playground-image] failed early` / `threw` 那行的 err 字串。
+  3. 或:當時選的是哪個模型(modelKey,provider::modelId)+ 有沒有帶參考圖。
+- **我的傾向**: 先拿到 errorMessage 再修;管線本身不用動。
+- **狀態**: 待補資訊
+- **建立時間**: 2026-06-13
+- **相關檔案**: `src/app/api/playground/run/route.ts`、`src/lib/workers/handlers/playground-image.ts`、`src/lib/generator-api.ts`、`src/lib/generators/factory.ts`(provider 路由)

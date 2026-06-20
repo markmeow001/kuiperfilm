@@ -53,6 +53,7 @@ import {
 import { reportTaskProgress } from '../shared'
 import { buildAudioDirective } from './multi-shot-audio-directive'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
+import { buildDialogueDrivenDurations, estimateSilentActionSeconds } from './speech-duration-estimator'
 import { buildMultiShotClipUpdate } from '@/lib/storyboard/multi-shot-clips'
 import { createScopedLogger } from '@/lib/logging/core'
 import { parseModelKeyStrict } from '@/lib/model-config-contract'
@@ -594,16 +595,53 @@ export async function runMultiShotSeedanceComposite(params: {
   //       override forwarded by frontend even when panelDurations is
   //       omitted (sendRaw=true narrative-edit path). Honours user's
   //       explicit 15s pick under that gate.
-  //   2. Panel-count × 2s baseline (5 panels → 10s), clamped 4-15s.
+  //   2. (2026-06-13) dialogue-driven — size the composite from each panel's
+  //      spoken line so dialogue always has airtime (aligns Seedance with
+  //      fal / atlascloud / b-path, which already do this). Dialogue is the
+  //      primary duration signal per product direction.
+  //   3. Panel-count × 2s baseline (silent groups only), clamped 4-15s.
   let duration: number
+  let durationSource: 'panelDurations' | 'totalDurationSeconds' | 'dialogueDriven' | 'baseline'
   if (params.panelDurations && params.panelDurations.length > 0) {
     const sum = params.panelDurations.reduce((s, d) => s + (Number.isFinite(d) ? d : 0), 0)
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(sum)))
+    durationSource = 'panelDurations'
   } else if (typeof params.totalDurationSeconds === 'number' && params.totalDurationSeconds > 0) {
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(params.totalDurationSeconds)))
+    durationSource = 'totalDurationSeconds'
   } else {
-    const baseline = Math.round(usedPanels.length * 2)
-    duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))
+    // Dialogue-driven (primary signal) + silent-action floors — mirrors the
+    // atlascloud path exactly so all Seedance-family providers size composites
+    // identically (review parity fix: was panel×2 with no action floor, which
+    // under-sized silent groups and could drop multi-action shots mid-action).
+    const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
+    const actionSecondsByPanelId = new Map<string, number>()
+    for (const panel of usedPanels) {
+      const seg = (panel.srtSegment ?? '').trim()
+      if (seg) {
+        const extracted = extractSpokenLineFromSrtSegment(seg, '旁白')
+        if (extracted) dialogueByPanel.set(panel.id, [extracted])
+      }
+      const actionSec = estimateSilentActionSeconds(panel.description || panel.videoPrompt || '')
+      if (actionSec > 0) actionSecondsByPanelId.set(panel.id, actionSec)
+    }
+    let driven: ReturnType<typeof buildDialogueDrivenDurations> = null
+    try {
+      driven = buildDialogueDrivenDurations({ panels: usedPanels, dialogueByPanelId: dialogueByPanel, actionSecondsByPanelId })
+    } catch (err) {
+      logger.warn({
+        message: 'buildDialogueDrivenDurations failed, falling back to baseline',
+        details: { error: (err as Error)?.message ?? '' },
+      })
+    }
+    if (driven && driven.hasDialogue) {
+      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, driven.totalDuration))
+      durationSource = 'dialogueDriven'
+    } else {
+      const baseline = Math.max(10, Math.round(usedPanels.length * 2.5))
+      duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))
+      durationSource = 'baseline'
+    }
   }
 
   logger.info({
@@ -617,6 +655,7 @@ export async function runMultiShotSeedanceComposite(params: {
       hasFirstFrame: Boolean(firstFrameUrl),
       referenceUrlCount: referenceUrls.length,
       duration,
+      durationSource,
       aspectRatio,
       // generateAudio MUST stay true when dialogueBeatCount > 0 — the
       // audio directive in the prompt only works if the request body
