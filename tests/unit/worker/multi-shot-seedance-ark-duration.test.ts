@@ -66,13 +66,21 @@ describe.each(PATHS)('%s composite duration is dialogue-driven by default', (_na
     expect(src).toMatch(/durationSource = 'panelDurations'[\s\S]*?else if[\s\S]*?totalDurationSeconds[\s\S]*?durationSource = 'totalDurationSeconds'/)
   })
 
-  it('only falls back to the panel-count baseline for SILENT groups', () => {
+  it('only falls back to the SILENT baseline inside the no-dialogue branch, using the fal/atlascloud formula', () => {
     // The baseline must live inside the `else { ... if (driven.hasDialogue)`
-    // branch — i.e. it's reached only when no panel has dialogue. The old
-    // unconditional `panel_count * 2` baseline must be gone from the
-    // top-level priority chain.
+    // branch — reached only when no panel has dialogue. Formula is pinned to
+    // Math.max(10, round(panel*2.5)) for parity with fal/atlascloud (was an
+    // under-sized panel*2 before the 2026-06-20 review fix). \b after the 2.5
+    // prevents matching a stray 2 prefix.
     expect(src).toMatch(/if \(driven && driven\.hasDialogue\)/)
-    expect(src).toMatch(/durationSource = 'dialogueDriven'\s*\n\s*\} else \{[\s\S]*?usedPanels\.length \* 2[\s\S]*?durationSource = 'baseline'/)
+    expect(src).toMatch(/durationSource = 'dialogueDriven'\s*\n\s*\} else \{[\s\S]*?Math\.max\(10, Math\.round\(usedPanels\.length \* 2\.5\)\)[\s\S]*?durationSource = 'baseline'/)
+  })
+
+  it('feeds silent-action floors into the estimator (parity with atlascloud — prevents multi-action drop)', () => {
+    // estimateSilentActionSeconds gives action-dense silent panels a floor so
+    // the "only the first action renders" truncation bug can't reappear.
+    expect(src).toMatch(/estimateSilentActionSeconds\(panel\.description \|\| panel\.videoPrompt \|\| ''\)/)
+    expect(src).toMatch(/buildDialogueDrivenDurations\(\{ panels: usedPanels, dialogueByPanelId: dialogueByPanel, actionSecondsByPanelId \}\)/)
   })
 
   it('catches DIALOGUE_EXCEEDS_KLING_BUDGET and falls back without crashing', () => {

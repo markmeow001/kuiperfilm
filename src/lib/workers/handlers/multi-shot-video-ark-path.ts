@@ -67,7 +67,7 @@ import {
   type PanelLite,
 } from './multi-shot-video-seedance-path'
 import { extractSpokenLineFromSrtSegment } from './multi-shot-video-b-path'
-import { buildDialogueDrivenDurations } from './speech-duration-estimator'
+import { buildDialogueDrivenDurations, estimateSilentActionSeconds } from './speech-duration-estimator'
 import { getMultiShotDurationWindow } from './multi-shot-duration-window'
 
 // Phase 1.5C — resolve ARK's own window directly (was previously pulled
@@ -389,16 +389,24 @@ export async function runMultiShotArkComposite(params: {
     duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, Math.round(params.totalDurationSeconds)))
     durationSource = 'totalDurationSeconds'
   } else {
+    // Dialogue-driven (primary signal) + silent-action floors — mirrors the
+    // atlascloud path exactly so all Seedance-family providers size composites
+    // identically (review parity fix: was panel×2 with no action floor, which
+    // under-sized silent groups and could drop multi-action shots mid-action).
     const dialogueByPanel = new Map<string, Array<{ speaker: string; content: string }>>()
+    const actionSecondsByPanelId = new Map<string, number>()
     for (const panel of usedPanels) {
       const seg = (panel.srtSegment ?? '').trim()
-      if (!seg) continue
-      const extracted = extractSpokenLineFromSrtSegment(seg, '旁白')
-      if (extracted) dialogueByPanel.set(panel.id, [extracted])
+      if (seg) {
+        const extracted = extractSpokenLineFromSrtSegment(seg, '旁白')
+        if (extracted) dialogueByPanel.set(panel.id, [extracted])
+      }
+      const actionSec = estimateSilentActionSeconds(panel.description || panel.videoPrompt || '')
+      if (actionSec > 0) actionSecondsByPanelId.set(panel.id, actionSec)
     }
     let driven: ReturnType<typeof buildDialogueDrivenDurations> = null
     try {
-      driven = buildDialogueDrivenDurations({ panels: usedPanels, dialogueByPanelId: dialogueByPanel })
+      driven = buildDialogueDrivenDurations({ panels: usedPanels, dialogueByPanelId: dialogueByPanel, actionSecondsByPanelId })
     } catch (err) {
       logger.warn({
         message: 'buildDialogueDrivenDurations failed, falling back to baseline',
@@ -409,7 +417,7 @@ export async function runMultiShotArkComposite(params: {
       duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, driven.totalDuration))
       durationSource = 'dialogueDriven'
     } else {
-      const baseline = Math.round(usedPanels.length * 2)
+      const baseline = Math.max(10, Math.round(usedPanels.length * 2.5))
       duration = Math.max(MIN_DURATION_SEC, Math.min(MAX_DURATION_SEC, baseline))
       durationSource = 'baseline'
     }
