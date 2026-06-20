@@ -55,7 +55,6 @@ import {
 import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { V2LocationEditModal } from './V2LocationEditModal'
-import { ArkAssetRegisterChip } from './ArkAssetRegisterChip'
 import { useRegisterArkAsset } from '@/lib/query/mutations/useRegisterArkAsset'
 import { V2ManualAddSubjectModal, type ManualAddSubjectType } from './V2ManualAddSubjectModal'
 import { V2LocationCreationModal } from './V2LocationCreationModal'
