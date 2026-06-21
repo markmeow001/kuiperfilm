@@ -62,7 +62,10 @@ AI 短劇製作平台，未來多人使用 + 商業化：
          * ✅ **對白為主決定秒數**：Seedance + ARK composite path 接上 buildDialogueDrivenDurations
            （fal/atlascloud/Kling b-path 早已接），對白驅動 composite 總時長,靜默組才退回 panel-count baseline。
        ⏳ 待辦：Playground 圖生(FREEDOM)在有 API key 的環境實測一次(本沙箱無 key 跑不了)。
- 6. Phase 9.1：Playground + 長尾任務收進 createRun/Task（多人+計費統一 spine）
+ 6. ✅ Phase 9.1：Playground 收進 submitTask/createRun/Task（多人+計費統一 spine）
+    — A+A（合成 projectId='playground'、Task 唯一真相、舊 PlaygroundRun 凍結）已實作；
+      刪 enqueue.ts + billing.ts sidecar；詳見 docs/plans/2026-06-20-phase-9.1-playground-task-spine.md。
+      長尾任務（其餘零散 AI 路徑）若有殘留再另開。
 
 框架期（2 週）
  7. Phase 1 拆 monolith + 套 tokens-v2（先重構後改皮，分兩 PR）
