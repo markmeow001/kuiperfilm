@@ -21,10 +21,7 @@ for (const worker of workers) {
   worker.on('failed', (job, err) => {
     _ulogError(`[Workers] job failed: ${worker.name}`, {
       jobId: job?.id,
-      // taskId only exists on TaskJobData, not the Playground sidecar job
-      // shapes (PlaygroundVideoJobData / PlaygroundImageJobData, which track
-      // state on PlaygroundRun). Optional-read so the log line stays correct
-      // for every job kind without widening the union.
+      // Optional-read taskId so the log line stays correct for any job shape.
       taskId: (job?.data as Partial<{ taskId: string }> | undefined)?.taskId,
       taskType: job?.data?.type,
       error: err.message,

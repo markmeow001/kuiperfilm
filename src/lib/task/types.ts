@@ -83,6 +83,12 @@ export const TASK_TYPE = {
   // ARK asset:// reference so Seedance 2.0 will accept it (its real-
   // person face filter rejects raw URLs of photorealistic AI portraits).
   REGISTER_ARK_ASSET: 'register_ark_asset',
+  // Phase 9.1 (2026-06-20) — Playground (standalone text/image→image,
+  // image/text→video) now rides the unified Task spine instead of a
+  // bespoke PlaygroundRun path. projectId is the synthetic 'playground'
+  // sentinel (no FK on Task.projectId; already in billing VIRTUAL_PROJECT_IDS).
+  PLAYGROUND_IMAGE: 'playground_image',
+  PLAYGROUND_VIDEO: 'playground_video',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

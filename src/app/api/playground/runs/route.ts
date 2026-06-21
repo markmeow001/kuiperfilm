@@ -1,22 +1,25 @@
 /**
- * Phase T-1 (2026-05-27) — Playground runs history.
+ * Phase 9.1 (2026-06-20) — Playground runs history, now read off the Task
+ * spine (projectId='playground'). Maps Task rows to the original
+ * PlaygroundRun client shape via taskToPlaygroundRunView.
  *
  * GET /api/playground/runs?limit=20&workspaceId=...
- *   → returns the calling user's recent runs (or workspace shared runs
- *     when workspaceId is set + user is a member). Newest first.
+ *   → the calling user's recent playground runs, or a workspace's shared
+ *     runs (any member) when workspaceId is set. Newest first.
  *
- * Returns signed result URLs for browser playback. Reference images / videos
- * are returned as raw COS keys; client signs on demand for replay.
+ * Pre-9.1 PlaygroundRun rows are frozen history (decision: Task is sole
+ * source of truth) and are intentionally not surfaced here.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { getSignedUrl } from '@/lib/cos'
+import { taskToPlaygroundRunView } from '@/lib/playground/run-view'
 
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
+const PLAYGROUND_PROJECT_ID = 'playground'
 
 export const GET = apiHandler(async (request: NextRequest) => {
   const authResult = await requireUserAuth()
@@ -31,7 +34,7 @@ export const GET = apiHandler(async (request: NextRequest) => {
     : DEFAULT_LIMIT
   const workspaceId = searchParams.get('workspaceId') || null
 
-  // Workspace-shared mode: any member can see all runs.
+  // Workspace-shared mode: any member sees all runs submitted under it.
   if (workspaceId) {
     const member = await prisma.workspaceMember.findFirst({
       where: { workspaceId, userId },
@@ -46,43 +49,17 @@ export const GET = apiHandler(async (request: NextRequest) => {
     }
   }
 
-  const runs = await prisma.playgroundRun.findMany({
+  // Workspace runs are tagged via payload.workspaceId (cross-user); personal
+  // runs are scoped to the caller. projectId='playground' is exclusive to
+  // playground tasks, so it alone separates them from project work.
+  const tasks = await prisma.task.findMany({
     where: workspaceId
-      ? { workspaceId }
-      : { userId, workspaceId: null },
+      ? { projectId: PLAYGROUND_PROJECT_ID, payload: { path: '$.workspaceId', equals: workspaceId } }
+      : { projectId: PLAYGROUND_PROJECT_ID, userId },
     orderBy: { createdAt: 'desc' },
     take: limit,
   })
 
-  // Sign result URLs that are COS keys; pass through HTTP URLs.
-  const signed = runs.map((r) => {
-    let resultUrls: string[] | null = null
-    if (r.resultUrls) {
-      try {
-        const parsed = JSON.parse(r.resultUrls)
-        if (Array.isArray(parsed)) {
-          resultUrls = parsed.map((u) =>
-            typeof u === 'string' && (u.startsWith('images/') || u.startsWith('video/'))
-              ? getSignedUrl(u, 3600)
-              : u,
-          )
-        }
-      } catch {
-        // Malformed JSON in DB — ignore, return null.
-      }
-    }
-    return {
-      id: r.id,
-      prompt: r.prompt,
-      outputType: r.outputType,
-      modelKey: r.modelKey,
-      status: r.status,
-      resultUrls,
-      errorMessage: r.errorMessage,
-      createdAt: r.createdAt,
-      completedAt: r.completedAt,
-    }
-  })
-
-  return NextResponse.json({ runs: signed })
+  const runs = tasks.map(taskToPlaygroundRunView)
+  return NextResponse.json({ runs })
 })

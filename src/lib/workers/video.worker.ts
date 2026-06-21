@@ -19,7 +19,7 @@ import { getProviderConfig } from '@/lib/api-config'
 import { handleMultiShotVideoTask } from './handlers/multi-shot-video-handler'
 import { handleVideoEditorRenderTask } from './handlers/video-editor-render'
 import { handleEpisodePackageZipTask } from './handlers/episode-package-zip'
-import { handlePlaygroundVideoTask, type PlaygroundVideoJobData } from './handlers/playground-video'
+import { handlePlaygroundVideoTask } from './handlers/playground-video'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 type AnyObj = Record<string, unknown>
@@ -321,25 +321,22 @@ async function processVideoTask(job: Job<TaskJobData>) {
       return await handleVideoEditorRenderTask(job)
     case TASK_TYPE.EPISODE_STITCH_MP4:
       return await handleEpisodePackageZipTask(job)
+    case TASK_TYPE.PLAYGROUND_VIDEO:
+      return await handlePlaygroundVideoTask(job)
     default:
       throw new Error(`Unsupported video task type: ${job.data.type}`)
   }
 }
 
 export function createVideoWorker() {
-  // Phase T-2 (2026-05-27) — Playground jobs share the video queue but
-  // bypass withTaskLifecycle. They write status directly to the
-  // PlaygroundRun row (which IS the unit of tracking) instead of going
-  // through the project-scoped Task table. The `job.data.type ===
-  // 'playground_video'` check below routes those jobs into the dedicated
-  // handler before the regular pipeline takes over.
-  return new Worker<TaskJobData | PlaygroundVideoJobData>(
+  // Phase 9.1 (2026-06-20) — Playground video jobs now ride the unified
+  // Task spine (projectId='playground' sentinel), so they flow through
+  // withTaskLifecycle + processVideoTask like every other video task. The
+  // old bespoke `type === 'playground_video'` bypass is gone.
+  return new Worker<TaskJobData>(
     QUEUE_NAME.VIDEO,
     async (job) => {
-      if ((job.data as { type?: string }).type === 'playground_video') {
-        return await handlePlaygroundVideoTask(job as Job<PlaygroundVideoJobData>)
-      }
-      return await withTaskLifecycle(job as Job<TaskJobData>, processVideoTask)
+      return await withTaskLifecycle(job, processVideoTask)
     },
     {
       connection: queueRedis,

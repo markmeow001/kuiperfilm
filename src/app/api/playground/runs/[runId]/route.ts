@@ -1,24 +1,20 @@
 /**
- * Phase V (2026-05-28) — single-run status endpoint for Playground.
+ * Phase 9.1 (2026-06-20) — single-run status endpoint, now read off the Task
+ * spine (projectId='playground'). Polled by V2PlaygroundClient every 3s while
+ * a run is pending/running so the UI can flip to the result once the worker
+ * writes it. Maps the Task row to the original client shape.
  *
- * GET /api/playground/runs/[runId]
- *   → polled by V2PlaygroundClient every 3s while latestRun is
- *     in pending/processing state, so the UI can flip from the
- *     "生成中…" spinner to the actual video once the worker writes
- *     the resultUrl back. Without this, video runs sat as 「尚未生成」
- *     forever because the page never re-fetched.
- *
- * Auth: same scope as the list endpoint — owner only (workspace
- * shared mode reads the list endpoint, which already gates on
- * workspace membership). This endpoint is for the run's submitter
- * watching their own job, so a single userId check is enough.
+ * Auth: owner only (workspace-shared reads go through the LIST endpoint,
+ * which gates on membership). A single userId check keeps the surface small.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
-import { getSignedUrl } from '@/lib/cos'
+import { taskToPlaygroundRunView } from '@/lib/playground/run-view'
+
+const PLAYGROUND_PROJECT_ID = 'playground'
 
 export const GET = apiHandler(async (
   _request: NextRequest,
@@ -30,44 +26,15 @@ export const GET = apiHandler(async (
   const userId = session.user.id
   const { runId } = await context.params
 
-  const run = await prisma.playgroundRun.findUnique({ where: { id: runId } })
-  if (!run) {
+  const task = await prisma.task.findUnique({ where: { id: runId } })
+  if (!task || task.projectId !== PLAYGROUND_PROJECT_ID) {
     throw new ApiError('NOT_FOUND')
   }
-  if (run.userId !== userId) {
+  if (task.userId !== userId) {
     // Workspace-shared runs are read through the LIST endpoint; this
-    // single-run polling channel is owner-only for now to keep the
-    // surface small.
+    // single-run polling channel is owner-only to keep the surface small.
     throw new ApiError('NOT_FOUND')
   }
 
-  let resultUrls: string[] | null = null
-  if (run.resultUrls) {
-    try {
-      const parsed = JSON.parse(run.resultUrls)
-      if (Array.isArray(parsed)) {
-        resultUrls = parsed.map((u) =>
-          typeof u === 'string' && (u.startsWith('images/') || u.startsWith('video/'))
-            ? getSignedUrl(u, 3600)
-            : u,
-        )
-      }
-    } catch {
-      // Malformed JSON — ignore.
-    }
-  }
-
-  return NextResponse.json({
-    run: {
-      id: run.id,
-      prompt: run.prompt,
-      outputType: run.outputType,
-      modelKey: run.modelKey,
-      status: run.status,
-      resultUrls,
-      errorMessage: run.errorMessage,
-      createdAt: run.createdAt,
-      completedAt: run.completedAt,
-    },
-  })
+  return NextResponse.json({ run: taskToPlaygroundRunView(task) })
 })

@@ -13,7 +13,7 @@ import {
   handlePanelVariantTask,
   handlePropImageTask,
 } from './handlers/image-task-handlers'
-import { handlePlaygroundImageTask, type PlaygroundImageJobData } from './handlers/playground-image'
+import { handlePlaygroundImageTask } from './handlers/playground-image'
 
 type AnyObj = Record<string, unknown>
 
@@ -44,23 +44,22 @@ async function processImageTask(job: Job<TaskJobData>) {
       return await handlePanelImageTask(job)
     case TASK_TYPE.PANEL_VARIANT:
       return await handlePanelVariantTask(job)
+    case TASK_TYPE.PLAYGROUND_IMAGE:
+      return await handlePlaygroundImageTask(job)
     default:
       throw new Error(`Unsupported image task type: ${job.data.type}`)
   }
 }
 
 export function createImageWorker() {
-  // 2026-06-02 — Playground image jobs share the image queue but bypass
-  // withTaskLifecycle (no project-scoped Task row; PlaygroundRun IS the
-  // tracking unit). Route them to the dedicated handler before the regular
-  // pipeline, mirroring playground_video on the video queue.
-  return new Worker<TaskJobData | PlaygroundImageJobData>(
+  // Phase 9.1 (2026-06-20) — Playground image jobs now ride the unified
+  // Task spine (projectId='playground' sentinel), so they flow through
+  // withTaskLifecycle + processImageTask like every other image task. The
+  // old bespoke `type === 'playground_image'` bypass is gone.
+  return new Worker<TaskJobData>(
     QUEUE_NAME.IMAGE,
     async (job) => {
-      if ((job.data as { type?: string }).type === 'playground_image') {
-        return await handlePlaygroundImageTask(job as Job<PlaygroundImageJobData>)
-      }
-      return await withTaskLifecycle(job as Job<TaskJobData>, processImageTask)
+      return await withTaskLifecycle(job, processImageTask)
     },
     {
       connection: queueRedis,
