@@ -42,6 +42,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { V2StoryboardGroupsView } from './V2StoryboardGroupsView'
+import { V2StoryboardGalleryView } from './V2StoryboardGalleryView'
 import { V2ManualPanelModal, type ManualPanelDraft } from './V2ManualPanelModal'
 import { StaleStoryboardCleanupModal } from './StaleStoryboardCleanupModal'
 import { resolveErrorDisplay } from '@/lib/errors/display'
@@ -1383,387 +1384,63 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   }
 
   // ─── Gallery layout (default) ────────────────────────────────────
-  // 60/40 split: left main grid of panel cards at the project's
-  // actual videoRatio, right side selected-shot preview + edit form.
+  // Phase 1 step 3 (2026-06-21) — full branch extracted to
+  // V2StoryboardGalleryView. See that file for the toolbar JSX +
+  // 60/40 grid + selected-shot inspector. Pure relocation; behavior
+  // unchanged.
   if (layoutMode === 'gallery') {
-    const selectedIdxForGallery = allPanels.findIndex((p) => p.id === selected?.id)
     return (
-      <>
-      {globalOverlaysNode}
-      <div className="flex h-full flex-col">
-        {/* Top toolbar — analyze + autogroup + layout toggle
-            (2026-05-12: split into two rows — view toggle on top,
-            title + action cluster below — same as Groups layout) */}
-        <div className="border-b border-amber-900/15 px-8 pb-3 pt-5">
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-end">{layoutToggleNode}</div>
-            {/* 2026-05-19 — picker mirrored from groups toolbar so gallery
-                users can see/change the current video model without
-                switching layouts. Wrap-aware; sits on its own row to
-                avoid crowding the existing title+actions row below. */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              {videoModelPickerNode}
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="font-fraunces text-sm italic text-amber-500/80">{t('header.panelsHeader')}</div>
-                {hasGroups ? (
-                  <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-                    {t('header.groupSummary', { groups: orderedGroupIds.length, grouped: groupedPanelCount, total: allPanels.length })}
-                  </span>
-                ) : null}
-                <div className="font-mono text-[14px] tracking-wider text-stone-500">
-                  {t('header.shotsAndRatio', { total: allPanels.length, ratio: projectVideoRatio })}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={analyzeBusy || !currentEpisodeId || !canEdit}
-                onClick={handleAnalyzeStoryboard}
-                title={t('buttons.regenerateStoryboardTitleOverwrite')}
-                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
-                {analyzeBusy ? analyzeBusyLabel : t('buttons.regenerateStoryboardArrow')}
-              </button>
-              <button
-                type="button"
-                disabled={!currentEpisodeId}
-                onClick={() => setStaleCleanupOpen(true)}
-                title={t('buttons.cleanupSourceTitle')}
-                className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {t('buttons.cleanupSourceFull')}
-              </button>
-              <button
-                type="button"
-                disabled={autoGroup.isPending || allPanels.length < 2 || analyzeBusy || !canEdit}
-                onClick={handleAutoGroup}
-                title={
-                  analyzeBusy
-                    ? t('multiShot.tipScriptAnalyzing')
-                    : t('multiShot.tipSplitDetailLLM')
-                }
-                className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                {autoGroup.isPending ? t('buttons.splitting') : analyzeBusy ? t('buttons.splitWhileAnalyzing') : hasGroups ? t('buttons.resplit') : t('buttons.smartSplit')}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSubmitMultiShot()}
-                disabled={multiShotState.status === 'submitting' || !canMultiShot}
-                title={
-                  !canMultiShot
-                    ? t('multiShot.tipCurrentModelNotMultiShot')
-                    : videoFamily === 'seedance'
-                      ? t('multiShot.tipSeedancePerGroup')
-                      : t('multiShot.tipKlingPerGroup')
-                }
-                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <AppIcon name="sparklesAlt" className="h-3 w-3" />
-                {multiShotState.status === 'submitting'
-                  ? t('buttons.sendingMultiShot', { sent: multiShotState.sent, total: multiShotState.total })
-                  : videoFamily === 'seedance'
-                    ? t('buttons.multiShotComposite')
-                    : t('buttons.smartMultiShot')}
-              </button>
-              </div>
-            </div>
-          </div>
-          {analyzeBusy ? (
-            <div className="mt-2 flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
-              <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-              <span>{analyzeBannerLabel}</span>
-              {analyzePhase === 'processing' ? (
-                <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-stone-900/60">
-                  <div
-                    className="h-full bg-amber-400 transition-all duration-500"
-                    style={{ width: `${Math.max(2, Math.min(100, analyzeProgress))}%` }}
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {multiShotState.status === 'done' ? (
-            <div className="mt-2 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300">
-              {t('multiShotSubmitted.doneTemplate', { count: multiShotState.sent })}
-              {multiShotState.failures > 0 ? t('multiShotSubmitted.failuresSuffix', { count: multiShotState.failures }) : ''}
-            </div>
-          ) : null}
-          {multiShotState.status === 'error' ? (
-            <div className="mt-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
-              {multiShotState.message}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Main 60/40 split */}
-        <div className="grid flex-1 grid-cols-[1.5fr_1fr] gap-0 overflow-hidden">
-          {/* Left: gallery grid */}
-          <div className="overflow-y-auto px-8 py-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
-              {allPanels.map((p, i) => {
-                const active = p.id === selected?.id
-                const accent = accentForGroupId(p.multiShotGroupId, orderedGroupIds)
-                const localImg = imageInFlight.has(p.id)
-                const localVid = videoInFlight.has(p.id)
-                const remoteImg = serverInflightPanelImageIds.has(p.id)
-                const remoteVid = serverInflightPanelVideoIds.has(p.id)
-                const isImg = localImg || remoteImg
-                const isVid = localVid || remoteVid
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setSelectedId(p.id)}
-                    className={`group flex flex-col overflow-hidden rounded-sm border-l-4 border-y border-r text-left transition-all ${accent} ${
-                      active
-                        ? 'border-amber-500/60 ring-2 ring-amber-500/20'
-                        : 'border-stone-800/60 hover:border-amber-500/40'
-                    }`}
-                  >
-                    <div className={`relative ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
-                      {p.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.imageUrl} alt={`#${i + 1}`} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <AppIcon name="image" className="h-7 w-7 text-stone-600" />
-                        </div>
-                      )}
-                      <div className="absolute left-2 top-2 rounded bg-stone-950/60 px-2 py-0.5 font-mono text-[14px] text-stone-200 backdrop-blur-sm">
-                        #{String(i + 1).padStart(2, '0')}
-                      </div>
-                      {p.videoUrl ? (
-                        <div className="absolute bottom-2 right-2 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[12px] text-stone-950 backdrop-blur-sm">
-                          {t('gallery.videoBadge')}
-                        </div>
-                      ) : null}
-                      {isImg || isVid ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
-                          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                          <div className="font-mono text-[12px] tracking-wider text-amber-300">
-                            {isVid ? t('gallery.videoGenerating') : t('gallery.imageGenerating')}
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="bg-stone-900/40 px-3 py-2">
-                      <div className="line-clamp-2 font-serif-cn text-xs leading-snug text-stone-200">
-                        {p.description?.slice(0, 60) ?? t('gallery.panelPlaceholder', { n: i + 1 })}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Right: selected shot detail */}
-          <aside className="overflow-y-auto border-l border-amber-900/15 bg-stone-950/40 px-6 py-6">
-            {selected ? (
-              <>
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="font-fraunces text-base italic text-amber-500/80">
-                    {t('gallery.shotLabel', { n: String(selectedIdxForGallery + 1).padStart(2, '0') })}
-                  </div>
-                  <div className="font-mono text-[14px] tracking-wider text-stone-500">
-                    {selected.videoUrl ? t('gallery.videoGenerated') : selected.imageUrl ? t('gallery.imageGeneratedBadge') : t('gallery.notGenerated')}
-                  </div>
-                </div>
-                <div className={`relative mx-auto max-h-[480px] max-w-[280px] overflow-hidden rounded-sm border border-stone-800 ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
-                  {selected.videoUrl ? (
-                    <video
-                      key={selected.id + ':' + selected.videoUrl}
-                      src={selected.videoUrl}
-                      poster={selected.imageUrl ?? undefined}
-                      controls
-                      preload="metadata"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : selected.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={selected.imageUrl} alt="selected" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <AppIcon name="image" className="h-8 w-8 text-stone-600" />
-                    </div>
-                  )}
-                  {isCurrentPanelVideoInFlight || isCurrentPanelImageInFlight ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/75 backdrop-blur-sm">
-                      <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                      <div className="font-fraunces text-sm italic text-amber-300">
-                        {isCurrentPanelVideoInFlight ? t('gallery.videoGeneratingFull') : t('gallery.imageGeneratingFull')}
-                      </div>
-                      <div className="px-3 text-center font-serif-cn text-[14px] text-stone-300">
-                        {t('gallery.autoUpdateHint')}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    disabled={!selected || regenPanel.isPending || !canEdit}
-                    onClick={() => {
-                      if (!selected) return
-                      const panelIdAtSubmit = selected.id
-                      regenPanel.mutate(
-                        { panelId: panelIdAtSubmit },
-                        {
-                          onSuccess: () => {
-                            setImageInFlight((prev) => {
-                              const next = new Set(prev)
-                              next.add(panelIdAtSubmit)
-                              return next
-                            })
-                            void activePanelImageTasks.refetch()
-                          },
-                        },
-                      )
-                    }}
-                    className="rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
-                  >
-                    {regenPanel.isPending
-                      ? t('gallery.submitting')
-                      : selected?.imageUrl
-                        ? t('gallery.regenImage')
-                        : t('gallery.generateImage')}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
-                    onClick={() => handleGenerateVideo()}
-                    className="rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-serif-cn text-xs text-amber-300 transition-all hover:bg-amber-500/20 disabled:opacity-50"
-                  >
-                    {generateVideo.isPending
-                      ? t('gallery.submitting')
-                      : isCurrentPanelVideoInFlight
-                        ? t('gallery.generating')
-                        : selected.videoUrl
-                          ? t('gallery.regenVideoArrow')
-                          : t('gallery.generateVideo')}
-                  </button>
-                </div>
-
-                {/* 2026-05-17 — fal Seedance per-shot override row (mini).
-                    Mirrors the Selected Shot card's secondary row below
-                    the main 生成視頻 CTA. Compact labels (Seedance / Fast)
-                    because the panel-card mini area is narrow. */}
-                <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-stone-500">
-                  <span className="shrink-0">{t('gallery.fal.label')}</span>
-                  <button
-                    type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
-                    onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
-                    title={t('gallery.fal.seedanceTitle')}
-                    className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
-                  >
-                    {t('gallery.fal.seedance')}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
-                    onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
-                    title={t('gallery.fal.fastTitle')}
-                    className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
-                  >
-                    {t('gallery.fal.fast')}
-                  </button>
-                </div>
-
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('gallery.fields.descriptionLabel')}</div>
-                      <button
-                        type="button"
-                        onClick={handleSaveDescription}
-                        disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
-                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
-                      >
-                        {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
-                      </button>
-                    </div>
-                    <textarea
-                      value={descDraft}
-                      onChange={(e) => setDescDraft(e.target.value)}
-                      rows={4}
-                      className="w-full rounded-sm border border-stone-800 bg-stone-900/50 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500/50"
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('gallery.fields.dialogueLabel')}</div>
-                      <button
-                        type="button"
-                        onClick={handleSaveDialogue}
-                        disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
-                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
-                      >
-                        {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
-                      </button>
-                    </div>
-                    <textarea
-                      value={dialogueDraft}
-                      onChange={(e) => setDialogueDraft(e.target.value)}
-                      rows={3}
-                      placeholder={t('gallery.fields.dialoguePlaceholder')}
-                      className="w-full rounded-sm border border-stone-800 bg-stone-900/50 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500/50"
-                    />
-                  </div>
-                </div>
-
-                {selectedGroupTaskId ? (
-                  <div className="mt-3">
-                    <MultiShotBindingsRail
-                      taskId={selectedGroupTaskId}
-                      groupLabel={selectedGroupLabel}
-                      projectId={projectId}
-                    />
-                  </div>
-                ) : null}
-
-                <div className="mt-3 flex gap-2">
-                  <a
-                    href={selected.imageUrl ?? '#'}
-                    download={selected.imageUrl ? `panel-${(selectedIdxForGallery + 1).toString().padStart(2, '0')}.jpg` : undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-disabled={!selected.imageUrl}
-                    onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.imageUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
-                  >
-                    <AppIcon name="download" className="h-3 w-3" />
-                    {t('gallery.downloads.image')}
-                  </a>
-                  <a
-                    href={selected.videoUrl ?? '#'}
-                    download={selected.videoUrl ? `panel-${(selectedIdxForGallery + 1).toString().padStart(2, '0')}.mp4` : undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-disabled={!selected.videoUrl}
-                    onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.videoUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
-                  >
-                    <AppIcon name="download" className="h-3 w-3" />
-                    {t('gallery.downloads.video')}
-                  </a>
-                </div>
-              </>
-            ) : (
-              <div className="flex h-full items-center justify-center text-center">
-                <p className="font-fraunces text-sm italic text-stone-500">{t('gallery.noSelected')}</p>
-              </div>
-            )}
-          </aside>
-        </div>
-      </div>
-      </>
+      <V2StoryboardGalleryView
+        projectId={projectId}
+        currentEpisodeId={currentEpisodeId}
+        projectVideoRatio={projectVideoRatio}
+        aspectClass={aspectClass}
+        canMultiShot={canMultiShot}
+        videoFamily={videoFamily}
+        canEdit={canEdit}
+        globalOverlaysNode={globalOverlaysNode}
+        layoutToggleNode={layoutToggleNode}
+        videoModelPickerNode={videoModelPickerNode}
+        analyzeBusy={analyzeBusy}
+        analyzeBusyLabel={analyzeBusyLabel}
+        analyzeBannerLabel={analyzeBannerLabel}
+        analyzePhase={analyzePhase}
+        analyzeProgress={analyzeProgress}
+        onAnalyzeStoryboard={handleAnalyzeStoryboard}
+        onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
+        autoGroup={autoGroup}
+        onAutoGroup={handleAutoGroup}
+        multiShotState={multiShotState}
+        onSubmitMultiShot={handleSubmitMultiShot}
+        allPanels={allPanels}
+        hasGroups={hasGroups}
+        orderedGroupIds={orderedGroupIds}
+        groupedPanelCount={groupedPanelCount}
+        selected={selected ?? null}
+        setSelectedId={setSelectedId}
+        selectedGroupTaskId={selectedGroupTaskId}
+        selectedGroupLabel={selectedGroupLabel}
+        imageInFlight={imageInFlight}
+        setImageInFlight={setImageInFlight}
+        videoInFlight={videoInFlight}
+        serverInflightPanelImageIds={serverInflightPanelImageIds}
+        serverInflightPanelVideoIds={serverInflightPanelVideoIds}
+        isCurrentPanelImageInFlight={isCurrentPanelImageInFlight}
+        isCurrentPanelVideoInFlight={isCurrentPanelVideoInFlight}
+        regenPanel={regenPanel}
+        generateVideo={generateVideo}
+        updatePanelText={updatePanelText}
+        activePanelImageTasks={activePanelImageTasks}
+        onGenerateVideo={handleGenerateVideo}
+        descDraft={descDraft}
+        setDescDraft={setDescDraft}
+        descChanged={descChanged}
+        onSaveDescription={handleSaveDescription}
+        dialogueDraft={dialogueDraft}
+        setDialogueDraft={setDialogueDraft}
+        dialogueChanged={dialogueChanged}
+        onSaveDialogue={handleSaveDialogue}
+      />
     )
   }
 
