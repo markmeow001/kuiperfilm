@@ -55,7 +55,7 @@ interface PanelLike {
   storyboardId?: string | null
 }
 
-type UpdatePanelTextMutation = UseMutationResult<
+export type UpdatePanelTextMutation = UseMutationResult<
   unknown,
   Error,
   {
@@ -69,7 +69,7 @@ type UpdatePanelTextMutation = UseMutationResult<
   }
 >
 
-interface CharacterRosterEntry {
+export interface CharacterRosterEntry {
   id: string
   name: string
   // LLM-authored dubbing voice/timbre (gender + voice qualities), surfaced
@@ -85,7 +85,7 @@ interface CharacterRosterEntry {
   }>
 }
 
-interface LocationRosterEntry {
+export interface LocationRosterEntry {
   id: string
   name: string
   images?: Array<{
