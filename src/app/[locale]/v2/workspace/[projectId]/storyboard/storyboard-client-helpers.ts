@@ -81,6 +81,12 @@ export type AnalyzeState =
 // line. Source comes from getVideoModelVariant(model)?.family.
 export type VideoFamily = 'kling' | 'seedance' | null
 
+// 2026-06-22 (Phase 1 step 4) — per-panel image/video display toggle.
+// User can switch a panel between showing its still image vs its
+// generated video preview. Timeline Shot sub-view needs this type;
+// previously declared locally inside V2StoryboardClient.
+export type MediaDisplayMode = 'image' | 'video'
+
 export const KLING_GROUP_SIZE = 5 // panel/group; API allows 2-6
 
 // 6 distinct accent colours for multi-shot group ribbons. Cycles if more
