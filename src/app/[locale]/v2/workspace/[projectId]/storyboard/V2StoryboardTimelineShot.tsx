@@ -31,15 +31,11 @@ import type {
   MultiShotState,
   MediaDisplayMode,
   VideoFamily,
+  FailedTaskMeta,
 } from './storyboard-client-helpers'
 import type { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import type { useGenerateVideo } from '@/lib/query/hooks/useStoryboards'
 import type { useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
-
-interface FailedTaskMeta {
-  errorCode: string | null
-  errorMessage: string | null
-}
 
 export interface V2StoryboardTimelineShotProps {
   selected: PanelLike | null

@@ -25,13 +25,9 @@ import {
   accentForGroupId,
   type PanelLike,
   type AnalyzeState,
+  type FailedTaskMeta,
 } from './storyboard-client-helpers'
 import type { AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
-
-interface FailedTaskMeta {
-  errorCode: string | null
-  errorMessage: string | null
-}
 
 export interface V2StoryboardTimelineStripProps {
   // ── identity / shared shape ──

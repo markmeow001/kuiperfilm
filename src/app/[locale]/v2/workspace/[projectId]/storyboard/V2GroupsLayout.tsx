@@ -34,6 +34,12 @@ import { computeGroupRecommendedDurationSec } from '@/lib/workers/handlers/speec
 import type { UseMutationResult } from '@tanstack/react-query'
 import type { VideoFamily } from './storyboard-client-helpers'
 
+// Local PanelLike (also exists in storyboard-client-helpers as a
+// richer superset, and in GroupCard with extra fields like voiceLines).
+// Pre-existing parallel-declaration tech debt — NOT cleaned up in
+// PR #18 because consolidating across V2GroupsLayout + GroupCard
+// requires moving GroupCard's voiceLines to helpers, which expands
+// scope. Tracked for a future dedicated refactor.
 interface PanelCharacterRef {
   name: string
   appearance?: string

@@ -87,6 +87,30 @@ export type VideoFamily = 'kling' | 'seedance' | null
 // previously declared locally inside V2StoryboardClient.
 export type MediaDisplayMode = 'image' | 'video'
 
+// 2026-06-22 (Phase 1 step 4 cleanup, PR #18) — types previously
+// parallel-declared across multiple Timeline sub-views. Lifted here so
+// future schema additions only touch one place. Source of truth:
+//   - FailedTaskMeta:    shape produced by useTaskList's
+//                        derived failedPanelImageIds / failedPanelVideoIds.
+//   - EpisodeBinding:    EpisodeCharacter junction projection used by
+//                        the Inspector's appearance-resolution priority
+//                        (mirrors worker collectPanelReferenceImages).
+//   - EpisodeWithNumber: NovelPromotionEpisode subset used by the
+//                        Inspector for the 「綁定本集」 label.
+export interface FailedTaskMeta {
+  errorCode: string | null
+  errorMessage: string | null
+}
+
+export interface EpisodeBinding {
+  characterId: string
+  appearanceId: string | null
+}
+
+export interface EpisodeWithNumber {
+  episodeNumber?: number
+}
+
 export const KLING_GROUP_SIZE = 5 // panel/group; API allows 2-6
 
 // 6 distinct accent colours for multi-shot group ribbons. Cycles if more
