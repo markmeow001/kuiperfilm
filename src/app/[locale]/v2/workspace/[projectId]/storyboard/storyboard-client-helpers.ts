@@ -72,6 +72,21 @@ export type AnalyzeState =
   | { status: 'submitted' }
   | { status: 'error'; message: string }
 
+// 2026-06-22 (Phase 1 step 4 prep) — single source of truth for the
+// video-model family used by layout siblings to switch CTA wording +
+// disable states (Kling = batch multi-shot, Seedance = composite).
+// Previously declared in 3 places (V2GroupsLayout inline union,
+// V2StoryboardGroupsView, V2StoryboardGalleryView); consolidated here
+// so adding a future family (e.g. 'fal-only') only changes this one
+// line. Source comes from getVideoModelVariant(model)?.family.
+export type VideoFamily = 'kling' | 'seedance' | null
+
+// 2026-06-22 (Phase 1 step 4) — per-panel image/video display toggle.
+// User can switch a panel between showing its still image vs its
+// generated video preview. Timeline Shot sub-view needs this type;
+// previously declared locally inside V2StoryboardClient.
+export type MediaDisplayMode = 'image' | 'video'
+
 export const KLING_GROUP_SIZE = 5 // panel/group; API allows 2-6
 
 // 6 distinct accent colours for multi-shot group ribbons. Cycles if more

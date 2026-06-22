@@ -40,9 +40,9 @@ import { useProjectAssets } from '@/lib/query/hooks/useProjectAssets'
 import { useEpisodeCharacterBindings } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
 import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
-import { MultiShotBindingsRail } from './MultiShotBindingsRail'
 import { V2StoryboardGroupsView } from './V2StoryboardGroupsView'
 import { V2StoryboardGalleryView } from './V2StoryboardGalleryView'
+import { V2StoryboardTimelineView } from './V2StoryboardTimelineView'
 import { V2ManualPanelModal, type ManualPanelDraft } from './V2ManualPanelModal'
 import { StaleStoryboardCleanupModal } from './StaleStoryboardCleanupModal'
 import { resolveErrorDisplay } from '@/lib/errors/display'
@@ -53,12 +53,12 @@ import {
   aspectClassFromRatio,
   accentForGroupId,
   chunk,
-  type PanelCharacterRef,
   type PanelLike,
   type StoryboardLike,
   type ProjectLikeFull,
   type MultiShotState,
   type AnalyzeState,
+  type MediaDisplayMode,
 } from './storyboard-client-helpers'
 
 interface V2StoryboardClientProps {
@@ -146,7 +146,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // 看不回原圖（user 報「無法切回去圖」）。改成 per-panel override：
   // - 沒紀錄 → auto（有 video 顯示 video，否則顯示 image，等同舊行為）
   // - user 點 toggle → 紀錄 'image' / 'video'，下次選回同個 panel 還記得
-  type MediaDisplayMode = 'image' | 'video'
+  // MediaDisplayMode imported from storyboard-client-helpers (Phase 1 step 4 prep).
   const [mediaDisplayOverride, setMediaDisplayOverride] = useState<Record<string, MediaDisplayMode>>({})
   // Lightbox: when set, render a full-screen overlay of this URL. Lets
   // the timeline-view Selected Shot stay tile-sized (matching the
@@ -1445,954 +1445,82 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   }
 
   // ─── Timeline layout (existing) ──────────────────────────────────
+  // Phase 1 step 4 (2026-06-22) — full branch extracted to
+  // V2StoryboardTimelineView (which orchestrates 4 sub-views: Strip,
+  // Text, Shot, Inspector). All derived values computed here in the
+  // parent (per reviewer Q1 qualify) and flow down. Pure relocation;
+  // behavior unchanged.
   return (
-    <div className="flex h-full flex-col">
-      {/* Top: panel strip
-          (2026-05-12: split toolbar into two rows — view toggle on top,
-          title + action cluster below — same as Gallery / Groups) */}
-      <div className="border-b border-amber-900/15 px-12 pb-4 pt-6">
-        <div className="mb-3 flex flex-col gap-2">
-          <div className="flex justify-end">{layoutToggleNode}</div>
-          {/* 2026-05-19 — picker mirrored from groups toolbar so timeline
-              users can see/change the current video model without
-              switching layouts (matches gallery treatment). */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            {videoModelPickerNode}
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="font-fraunces text-sm italic text-amber-500/80">{t('timeline.header')}</div>
-              {hasGroups ? (
-                <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
-                  {t('header.groupSummary', { groups: orderedGroupIds.length, grouped: groupedPanelCount, total: allPanels.length })}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-3">
-            <button
-              type="button"
-              disabled={analyzeBusy || !currentEpisodeId || !canEdit}
-              onClick={handleAnalyzeStoryboard}
-              title={t('timeline.regenStoryboardTitle')}
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
-              {analyzeBusy ? analyzeBusyLabel : t('buttons.regenerateStoryboardArrow')}
-            </button>
-            <button
-              type="button"
-              disabled={!currentEpisodeId}
-              onClick={() => setStaleCleanupOpen(true)}
-              title={t('timeline.cleanupSourceTitle')}
-              className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t('buttons.cleanupSourceFull')}
-            </button>
-            <button
-              type="button"
-              disabled={autoGroup.isPending || allPanels.length < 2 || !canEdit}
-              onClick={handleAutoGroup}
-              title={t('timeline.autoGroupTitle')}
-              className="flex items-center gap-1.5 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              {autoGroup.isPending ? t('buttons.splitting') : hasGroups ? t('buttons.resplit') : t('buttons.smartSplit')}
-            </button>
-            {/*
-              Batch generate buttons — surface a one-click path to fill
-              every panel without an image / video. Each button only
-              shows up when there's actually work to do (avoids "0 個"
-              dead-button noise). Disabled while either is in flight so
-              the user can't accidentally submit overlapping batches.
-            */}
-            {(() => {
-              const missingImages = allPanels.filter((p) => !p.imageUrl).length
-              if (missingImages === 0) return null
-              return (
-                <button
-                  type="button"
-                  disabled={batchImageState !== null || regenPanel.isPending || !canEdit}
-                  onClick={handleBatchGenerateImages}
-                  title={t('timeline.batchImageTitle', { count: missingImages })}
-                  className="flex items-center gap-1.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <AppIcon name="image" className="h-3 w-3" />
-                  {batchImageState
-                    ? t('timeline.batchImageSubmitting', { done: batchImageState.submitted, total: batchImageState.total })
-                    : t('timeline.batchImageLabel', { count: missingImages })}
-                </button>
-              )
-            })()}
-            {(() => {
-              const eligibleForVideo = allPanels.filter(
-                (p) => Boolean(p.imageUrl) && !p.videoUrl,
-              ).length
-              if (eligibleForVideo === 0) return null
-              return (
-                <button
-                  type="button"
-                  disabled={batchVideoState !== null || generateVideo.isPending || !canEdit}
-                  onClick={handleBatchGenerateVideos}
-                  title={t('timeline.batchVideoTitle', { count: eligibleForVideo })}
-                  className="flex items-center gap-1.5 rounded-sm border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-sky-300 transition-all hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <AppIcon name="play" className="h-3 w-3" />
-                  {batchVideoState
-                    ? t('timeline.batchVideoSubmitting', { done: batchVideoState.submitted, total: batchVideoState.total })
-                    : t('timeline.batchVideoLabel', { count: eligibleForVideo })}
-                </button>
-              )
-            })()}
-            <div className="font-mono text-[14px] tracking-wider text-stone-500">
-              {t('timeline.shotsDraft', { count: allPanels.length })}
-            </div>
-            </div>
-          </div>
-        </div>
-        {analyzeBusy ? (
-          <div className="mb-2 flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
-            <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-            <span>{analyzeBannerLabel}</span>
-            {analyzePhase === 'processing' ? (
-              <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-stone-900/60">
-                <div
-                  className="h-full bg-amber-400 transition-all duration-500"
-                  style={{ width: `${Math.max(2, Math.min(100, analyzeProgress))}%` }}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-        {analyzeState.status === 'error' ? (
-          <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
-            {t('generateSplash.submitErrorPrefix', { message: analyzeState.message })}
-          </div>
-        ) : null}
-        {autoGroup.isError ? (() => {
-          // 2026-05-21 — route mutation error through resolveErrorDisplay
-          // so CONFLICT / TASK_STILL_PROCESSING / EPISODE_NO_CLIPS all
-          // surface their targeted friendly text instead of the raw
-          // payload message (which was already partly friendly via
-          // resolveTaskErrorMessage, but didn't pick up our specific
-          // sub-codes like TASK_STILL_PROCESSING).
-          const err = autoGroup.error as Error & { payload?: { error?: { code?: string; message?: string } } }
-          const payload = err?.payload
-          const display = resolveErrorDisplay({
-            code: payload?.error?.code ?? null,
-            message: payload?.error?.message ?? err?.message ?? null,
-          })
-          return (
-            <div className="mb-2 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs text-rose-300">
-              {t('errors.splitFailedWithReason', { reason: display?.message ?? err?.message ?? t('errors.unknown') })}
-            </div>
-          )
-        })() : null}
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {allPanels.map((p, i) => {
-            const active = p.id === selectedId
-            const hasImage = Boolean(p.imageUrl)
-            const accent = accentForGroupId(p.multiShotGroupId, orderedGroupIds)
-            const groupBoundary = i > 0
-              && p.multiShotGroupId
-              && allPanels[i - 1].multiShotGroupId !== p.multiShotGroupId
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setSelectedId(p.id)}
-                className={`flex-shrink-0 overflow-hidden rounded-sm border-l-4 border-y border-r text-left transition-all ${accent} ${
-                  active
-                    ? 'border-amber-500/60 ring-2 ring-amber-500/20'
-                    : 'border-stone-800/60 hover:border-stone-700'
-                } ${groupBoundary ? 'ml-2' : ''}`}
-              >
-                <div
-                  className={`relative ${thumbHeightClass} overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900`}
-                  // Inline aspectRatio (instead of Tailwind aspect-[9/16])
-                  // because user-reported "thumbs render 16:9 even though
-                  // project is 9:16" — Tailwind arbitrary aspect classes
-                  // can be silently dropped if the JIT scanner doesn't
-                  // see the literal at build time, and falling back to
-                  // the parent's intrinsic ratio is exactly the
-                  // landscape-looking-thumb bug. Inline style is
-                  // bulletproof.
-                  style={{ aspectRatio: projectVideoRatio.replace(':', '/') }}
-                >
-                  {hasImage ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imageUrl ?? ''} alt={`panel ${i + 1}`} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-stone-950/70">
-                      <AppIcon name="image" className="h-5 w-5 text-stone-600" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-stone-950/90 via-transparent to-transparent" />
-                  <div className="absolute left-2 top-1.5 rounded bg-stone-950/50 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 backdrop-blur-sm">
-                    #{String(i + 1).padStart(2, '0')}
-                  </div>
-                  {(() => {
-                    const localImg = imageInFlight.has(p.id)
-                    const localVid = videoInFlight.has(p.id)
-                    const remoteImg = serverInflightPanelImageIds.has(p.id)
-                    const remoteVid = serverInflightPanelVideoIds.has(p.id)
-                    const isImg = localImg || remoteImg
-                    const isVid = localVid || remoteVid
-                    if (isImg || isVid) {
-                      return (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
-                          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                          <div className="font-mono text-[12px] tracking-wider text-amber-300">
-                            {isVid ? t('gallery.videoGenerating') : t('gallery.imageGenerating')}
-                          </div>
-                        </div>
-                      )
-                    }
-                    // Failure overlay — only show when there's no
-                    // current in-flight retry AND there's no successful
-                    // image/video yet. Image failures dominate over
-                    // video failures (you regenerate image first).
-                    const failedImg = !p.imageUrl && failedPanelImageIds.get(p.id)
-                    const failedVid = !!p.imageUrl && !p.videoUrl && failedPanelVideoIds.get(p.id)
-                    const failed = failedImg || failedVid
-                    if (failed) {
-                      const code = failed.errorCode ?? ''
-                      // Friendlier 2-line label than the raw error
-                      // dump. RATE_LIMIT happens often in the user's
-                      // Tencent quota world; ViolationContent is a
-                      // content-policy rejection and means "edit the
-                      // description, then retry". Anything else falls
-                      // through to a generic 失敗 with a tooltip.
-                      const label = code === 'RATE_LIMIT'
-                        ? t('timeline.panelFailedLabels.rateLimit')
-                        : /Violation|Content/i.test(failed.errorMessage ?? '')
-                          ? t('timeline.panelFailedLabels.violation')
-                          : t('timeline.panelFailedLabels.generic')
-                      const tooltip = `${code || ''}${code ? ' — ' : ''}${failed.errorMessage ?? t('timeline.panelFailedRetryHint', { action: failedImg ? t('gallery.generateImage') : t('gallery.generateVideo') })}`
-                      return (
-                        <div
-                          title={tooltip}
-                          className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-rose-950/80 backdrop-blur-sm"
-                        >
-                          <AppIcon name="alert" className="h-5 w-5 text-rose-300" />
-                          <div className="font-mono text-[12px] tracking-wider text-rose-200">
-                            ✗ {label}
-                          </div>
-                          <div className="font-mono text-[8px] tracking-wider text-rose-400/80">
-                            {t('timeline.panelFailedRetryHint', { action: failedImg ? t('gallery.generateImage') : t('gallery.generateVideo') })}
-                          </div>
-                        </div>
-                      )
-                    }
-                    return null
-                  })()}
-                </div>
-                {/*
-                  Description text used to live here as a per-thumb
-                  caption row, which made the strip card silhouette
-                  read as 16:9 even on 9:16 projects (image is 9:16
-                  but the caption + image stack added landscape
-                  proportions). User asked 2026-05-02 for a clean
-                  thumbs-only strip; the full description still lives
-                  in the lower 描述詞 column for the selected shot.
-                */}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/*
-        3-column body. Originally text-LEFT / image-CENTER / inspector-RIGHT.
-        User asked 2026-05-02 to put Selected Shot on the leftmost so the
-        9:16 image anchors the eye, and to push every text/chip/binding
-        column to the right. We use `order-N` Tailwind classes to swap
-        the visual order without cutting/pasting the JSX blocks (each
-        block is large and tightly tied to surrounding state). Result:
-        Selected Shot first (order-1), text-fields second (order-2),
-        bindings/cast/notes third (order-3) — but they remain in the
-        DOM in their original order so React keys / refs stay stable.
-      */}
-      <div className="grid flex-1 grid-cols-12 gap-5 overflow-y-auto px-6 py-6">
-        {/* Text column — visually middle, was leftmost.
-            Widened to col-span-5 because the 視角 / 景別 / 運鏡 chip
-            grids and the 描述詞 / 對話 textareas were getting pinched
-            at col-span-3 on a 14" laptop, while the Selected Shot
-            column had ~50% empty whitespace around a 260px image. */}
-        <div className="col-span-5 space-y-5 order-2">
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[14px] tracking-wider text-amber-600">
-                {t('timeline.shotDescTitle', { n: String(selectedIndex + 1).padStart(2, '0') })}
-              </div>
-              <button
-                type="button"
-                onClick={handleSaveDescription}
-                disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
-              </button>
-            </div>
-            <textarea
-              value={descDraft}
-              onChange={(e) => setDescDraft(e.target.value)}
-              rows={5}
-              placeholder={t('timeline.descPlaceholder')}
-              className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
-            />
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[14px] tracking-wider text-amber-600">
-                {t('timeline.shotDialogueTitle', { n: String(selectedIndex + 1).padStart(2, '0') })}
-              </div>
-              <button
-                type="button"
-                onClick={handleSaveDialogue}
-                disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
-              </button>
-            </div>
-            <textarea
-              value={dialogueDraft}
-              onChange={(e) => setDialogueDraft(e.target.value)}
-              rows={3}
-              placeholder={t('timeline.dialoguePlaceholder')}
-              className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
-            />
-          </div>
-
-          {/*
-            Functional chip groups:
-              - 景別  → panel.shotType   (DB column shotType)
-              - 運鏡  → panel.cameraMove (DB column cameraMove)
-            Click to set, click the active one again to clear. Saved
-            immediately via useUpdateProjectPanel — no separate save
-            button. The previous static `active={N}` props rendered
-            decorative-only chips that did nothing on click and
-            misled the user into thinking they were saving (reported
-            2026-05-02).
-
-            視角 / 質量詞 chip groups intentionally NOT rendered: there's
-            no backing schema column for either field, so wiring them
-            would require either a migration or appending tag prefixes
-            to panel.description (which pollutes the user's text). Will
-            ship in a follow-up commit when the schema gains
-            viewAngle / qualityTags fields.
-          */}
-          <PromptChipGroup
-            label={t('chips.shotSizeLabel')}
-            options={[t('chips.shotSizes.wide'), t('chips.shotSizes.panorama'), t('chips.shotSizes.medium'), t('chips.shotSizes.near'), t('chips.shotSizes.closeup')]}
-            cols={3}
-            active={selected?.shotType ?? null}
-            onChange={(value) => {
-              if (!selected || selected.storyboardId == null || selected.panelIndex == null) return
-              updatePanel.mutate({
-                storyboardId: selected.storyboardId,
-                panelIndex: selected.panelIndex,
-                shotType: value,
-              })
-            }}
-          />
-          <PromptChipGroup
-            label={t('chips.movementLabel')}
-            options={[t('chips.movements.pushIn'), t('chips.movements.tiltDown'), t('chips.movements.handheld'), t('chips.movements.snapZoom'), t('chips.movements.upgrade')]}
-            cols={1}
-            active={selected?.cameraMove ?? null}
-            onChange={(value) => {
-              if (!selected || selected.storyboardId == null || selected.panelIndex == null) return
-              updatePanel.mutate({
-                storyboardId: selected.storyboardId,
-                panelIndex: selected.panelIndex,
-                cameraMove: value,
-              })
-            }}
-          />
-          {updatePanel.isPending ? (
-            <div className="font-mono text-[12px] tracking-wider text-stone-500">{t('chips.saving')}</div>
-          ) : updatePanel.isError ? (
-            <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-mono text-[12px] tracking-wider text-rose-300">
-              {t('chips.saveFailedWith', { reason: (updatePanel.error as Error)?.message ?? t('chips.saveFailedUnknown') })}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Selected Shot — visually leftmost (order-1).
-            Shrunk to col-span-3 so the 9:16 still doesn't sit inside
-            a wide empty container that read as "16:9 frame around
-            a 9:16 image" — the user-reported visual confusion when
-            the shot was col-span-6. The image's own max-w-[260px]
-            already prevents it from blowing up at this width. */}
-        <div className="col-span-3 order-1">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="font-fraunces text-sm italic text-amber-500/80">Selected Shot</div>
-            <button
-              type="button"
-              onClick={() => handleSubmitMultiShot()}
-              disabled={multiShotState.status === 'submitting' || !canMultiShot}
-              className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-500 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title={(() => {
-                const m = project?.novelPromotionData?.videoModel ?? ''
-                if (!canMultiShot) {
-                  return t('details.modelNotMultiShotInline')
-                }
-                if (videoFamily === 'seedance') {
-                  return t('details.tipSeedanceComposite')
-                }
-                if (/^tencent-vod::Kling-(3|O1)/i.test(m)) {
-                  return t('details.tipBPath', { model: m.split('::')[1] })
-                }
-                return t('details.tipKlingC')
-              })()}
-            >
-              <AppIcon name="sparklesAlt" className="h-3 w-3" />
-              {multiShotState.status === 'submitting'
-                ? t('buttons.sendingMultiShot', { sent: multiShotState.sent, total: multiShotState.total })
-                : (() => {
-                    const m = project?.novelPromotionData?.videoModel ?? ''
-                    if (videoFamily === 'seedance') {
-                      return t('details.multiShotSeedance')
-                    }
-                    return /^tencent-vod::Kling-(3|O1)/i.test(m)
-                      ? t('details.multiShotBPath')
-                      : t('details.multiShotKlingBatch')
-                  })()}
-            </button>
-          </div>
-          {/* 2026-05-13 — 圖/視頻顯示切換 + B 路徑「生成原圖」CTA。
-              三種狀態：
-              (a) image + video 都有 → 顯示 toggle，user 切著看
-              (b) 只有 video（B 路徑 t2v 直接出視頻，跳過生圖）→ 顯示
-                  「🖼 生成原圖」按鈕，補上 imageUrl 之後 toggle 自動出現
-              (c) 只有 image 或都沒有 → 不顯示，下方既有的「生成圖片 /
-                  ↻ 重新生成圖」按鈕負責 */}
-          {selected?.imageUrl && selected?.videoUrl ? (
-            <div className="mb-3 inline-flex rounded-sm border border-stone-800/60 bg-stone-900/40 font-mono text-[12px]">
-              <button
-                type="button"
-                onClick={() =>
-                  setMediaDisplayOverride((prev) => ({ ...prev, [selected.id]: 'image' }))
-                }
-                className={`flex items-center gap-1.5 px-3 py-1.5 transition-all ${
-                  selectedMediaDisplayMode === 'image'
-                    ? 'bg-amber-500/20 text-amber-300'
-                    : 'text-stone-500 hover:text-stone-300'
-                }`}
-                title={t('toggle.showImage')}
-              >
-                <AppIcon name="image" className="h-3 w-3" />
-                {t('toggle.image')}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setMediaDisplayOverride((prev) => ({ ...prev, [selected.id]: 'video' }))
-                }
-                className={`flex items-center gap-1.5 border-l border-stone-800/60 px-3 py-1.5 transition-all ${
-                  selectedMediaDisplayMode === 'video'
-                    ? 'bg-amber-500/20 text-amber-300'
-                    : 'text-stone-500 hover:text-stone-300'
-                }`}
-                title={t('toggle.showVideo')}
-              >
-                <span aria-hidden>▶</span>
-                {t('toggle.video')}
-              </button>
-            </div>
-          ) : selected?.videoUrl && !selected?.imageUrl ? (
-            <button
-              type="button"
-              disabled={!selected || regenPanel.isPending || isCurrentPanelImageInFlight || !canEdit}
-              onClick={() => {
-                if (!selected) return
-                const panelIdAtSubmit = selected.id
-                regenPanel.mutate(
-                  { panelId: panelIdAtSubmit },
-                  {
-                    onSuccess: () => {
-                      setImageInFlight((prev) => {
-                        const next = new Set(prev)
-                        next.add(panelIdAtSubmit)
-                        return next
-                      })
-                      void activePanelImageTasks.refetch()
-                    },
-                  },
-                )
-              }}
-              className="mb-3 inline-flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-              title={t('bpath.missingImageHint')}
-            >
-              <AppIcon name="image" className="h-3 w-3" />
-              {isCurrentPanelImageInFlight
-                ? t('bpath.submittingImage')
-                : regenPanel.isPending
-                  ? t('bpath.submitting')
-                  : t('bpath.generateImageButton')}
-            </button>
-          ) : null}
-          {multiShotState.status === 'done' ? (
-            <div className="mb-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-              {t('multiShotSubmitted.doneTemplate', { count: multiShotState.sent })}
-              {multiShotState.failures > 0 ? t('multiShotSubmitted.failuresSuffix', { count: multiShotState.failures }) : ''}
-            </div>
-          ) : null}
-          {multiShotState.status === 'error' ? (
-            <div className="mb-3 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-              {multiShotState.message}
-            </div>
-          ) : null}
-
-          {/*
-            Selected Shot — sized as a thumbnail-with-controls (≈ same
-            footprint as the right-column multi-shot 9:16 player at
-            180×320). User pointed out 2026-05-02 the previous full-
-            col-span-6 width was overwhelming and out of proportion
-            with the rest of the timeline page. Click on the
-            image/video to open a fullscreen lightbox with the
-            original-resolution asset for detailed inspection.
-          */}
-          <div
-            className={`overflow-hidden rounded-sm border border-stone-800/60 bg-stone-900/30 mx-auto ${
-              isPortraitRatio ? 'max-w-[260px]' : 'max-w-[480px]'
-            }`}
-          >
-            <div
-              className="relative bg-gradient-to-br from-stone-800 to-stone-900"
-              style={{ aspectRatio: projectVideoRatio.replace(':', '/') }}
-            >
-              {selectedMediaDisplayMode === 'video' && selected?.videoUrl ? (
-                // Video player. Use the still imageUrl as poster so first
-                // paint is the same frame the user is used to seeing while
-                // idle, then switch to playing video on user click. The
-                // image/video toggle above lets the user explicitly switch
-                // back to viewing the still image even after a video exists.
-                <video
-                  key={selected.id + ':' + selected.videoUrl}
-                  src={selected.videoUrl}
-                  poster={selected.imageUrl ?? undefined}
-                  controls
-                  preload="metadata"
-                  className="h-full w-full object-cover"
-                />
-              ) : selectedMediaDisplayMode === 'image' && selected?.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={selected.imageUrl}
-                  alt="selected"
-                  className="h-full w-full cursor-zoom-in object-cover"
-                  onClick={() => selected.imageUrl && setZoomImageUrl(selected.imageUrl)}
-                  title={t('selectedShot.zoomTitle')}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <AppIcon name="image" className="h-8 w-8 text-stone-600" />
-                </div>
-              )}
-              {isCurrentPanelVideoInFlight || isCurrentPanelImageInFlight ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-stone-950/75 backdrop-blur-sm">
-                  <AppIcon name="sparklesAlt" className="h-8 w-8 animate-pulse text-amber-400" />
-                  <div className="font-fraunces text-base italic text-amber-300">
-                    {isCurrentPanelVideoInFlight ? t('selectedShot.videoGeneratingFull') : t('selectedShot.imageGeneratingFull')}
-                  </div>
-                  <div className="px-6 text-center font-serif-cn text-xs text-stone-300">
-                    {isCurrentPanelVideoInFlight
-                      ? t('selectedShot.klingUpdateHint')
-                      : t('selectedShot.tencentUpdateHint')}
-                  </div>
-                  <div className="mt-1 h-0.5 w-48 overflow-hidden rounded-full bg-stone-800/60">
-                    <div className="h-full w-1/3 animate-[progressSlide_2s_linear_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
-                  </div>
-                </div>
-              ) : (() => {
-                // Failure overlay for the Selected Shot — same logic as
-                // the strip thumbnail. Renders only when the panel has
-                // a recent failed task AND no live retry in flight.
-                if (!selected) return null
-                const failedImg = !selected.imageUrl && failedPanelImageIds.get(selected.id)
-                const failedVid = !!selected.imageUrl && !selected.videoUrl && failedPanelVideoIds.get(selected.id)
-                const failed = failedImg || failedVid
-                if (!failed) return null
-                const code = failed.errorCode ?? ''
-                const isRateLimit = code === 'RATE_LIMIT'
-                const isViolation = /Violation|Content/i.test(failed.errorMessage ?? '')
-                const headline = isRateLimit
-                  ? t('panelFailure.rateLimit')
-                  : isViolation
-                    ? t('panelFailure.violation')
-                    : t('panelFailure.generic')
-                const detail = isRateLimit
-                  ? t('panelFailure.rateLimitDetail')
-                  : isViolation
-                    ? t('panelFailure.violationDetail')
-                    : (failed.errorMessage ?? t('panelFailure.retryHint'))
-                return (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-rose-950/85 backdrop-blur-sm">
-                    <AppIcon name="alert" className="h-8 w-8 text-rose-300" />
-                    <div className="font-fraunces text-base italic text-rose-200">
-                      ✗ {headline}
-                    </div>
-                    <div className="px-6 text-center font-serif-cn text-xs text-rose-300/90">
-                      {detail}
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
-            <div className="bg-stone-900/60 px-4 py-3">
-              <div className="font-serif-cn text-stone-100">
-                {t('selectedShot.shotLabel', { n: String(selectedIndex + 1).padStart(2, '0') })}
-              </div>
-              {selected?.videoUrl ? (
-                <div className="mt-1 font-mono text-[14px] tracking-wider text-amber-500">
-                  {t('selectedShot.videoReady')}
-                </div>
-              ) : isCurrentPanelVideoInFlight ? (
-                <div className="mt-1 flex items-center gap-1.5 font-mono text-[14px] tracking-wider text-amber-400">
-                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-                  {t('selectedShot.videoGenerating')}
-                </div>
-              ) : selected?.imageUrl ? (
-                <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
-                  {t('selectedShot.imageReadyVideoPending')}
-                </div>
-              ) : (
-                <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">{t('selectedShot.notGenerated')}</div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-center gap-3">
-            <button
-              type="button"
-              disabled={!selected || regenPanel.isPending || !canEdit}
-              onClick={() => {
-                if (!selected) return
-                const panelIdAtSubmit = selected.id
-                regenPanel.mutate(
-                  { panelId: panelIdAtSubmit },
-                  {
-                    onSuccess: () => {
-                      setImageInFlight((prev) => {
-                        const next = new Set(prev)
-                        next.add(panelIdAtSubmit)
-                        return next
-                      })
-                      // Trigger an immediate activeImageTasks refetch so the
-                      // server-side set catches up faster than its 3s tick.
-                      void activePanelImageTasks.refetch()
-                    },
-                  },
-                )
-              }}
-              className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 bg-stone-900/50 py-2.5 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="image" className="h-3.5 w-3.5" />
-              {regenPanel.isPending
-                ? t('gallery.submitting')
-                : selected?.imageUrl
-                  ? t('gallery.regenImage')
-                  : t('gallery.generateImage')}
-            </button>
-            <button
-              type="button"
-              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
-              onClick={() => handleGenerateVideo()}
-              title={
-                !selected?.imageUrl
-                  ? t('genBlocked.needImageFirst')
-                  : isCurrentPanelVideoInFlight
-                    ? t('genBlocked.videoStillGenerating')
-                    : t('multiShot.tipKlingPerGroup')
-              }
-              className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2.5 font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="play" className="h-3.5 w-3.5" />
-              {generateVideo.isPending
-                ? t('gallery.submitting')
-                : isCurrentPanelVideoInFlight
-                  ? t('gallery.generating')
-                  : selected?.videoUrl
-                    ? t('gallery.regenVideoArrow')
-                    : t('gallery.generateVideo')}
-            </button>
-          </div>
-          {/* 2026-05-17 — Seedance 2.0 (fal) alternate row. Lets the user
-              force-use fal Seedance for this one shot without changing
-              the project's default videoModel. Two variants: standard
-              (1080p + native audio, slower / pricier) and Fast (cheap).
-              Smaller, secondary visual weight so it doesn't compete with
-              the project-default "生成視頻" CTA above. Disabled state
-              tracks the same prerequisites (need image, no inflight). */}
-          <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-stone-500">
-            <span className="shrink-0">{t('gallery.fal.label')}</span>
-            <button
-              type="button"
-              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
-              onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
-              title={
-                !selected?.imageUrl
-                  ? t('genBlocked.needImageFirst')
-                  : t('gallery.fal.seedanceTitle')
-              }
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="play" className="h-3 w-3" />
-              {t('gallery.fal.seedance')} (1080p+audio)
-            </button>
-            <button
-              type="button"
-              disabled={!selected || !selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
-              onClick={() => handleGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
-              title={
-                !selected?.imageUrl
-                  ? t('genBlocked.needImageFirst')
-                  : t('gallery.fal.fastTitle')
-              }
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <AppIcon name="play" className="h-3 w-3" />
-              {t('gallery.fal.seedance')} {t('gallery.fal.fast')}
-            </button>
-          </div>
-          {/* Download row — surface the underlying COS URL as a direct
-              download for users who want the raw asset for editing
-              elsewhere (CapCut / 剪映 / PR). Disabled until the asset
-              actually exists. <a download> uses the filename hint so
-              the saved file gets a meaningful name instead of the
-              cosKey hash. */}
-          {selected ? (
-            <div className="mt-3 flex items-center gap-3">
-              <a
-                href={selected.imageUrl ?? '#'}
-                download={selected.imageUrl ? `panel-${String(selectedIndex + 1).padStart(2, '0')}.jpg` : undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-disabled={!selected.imageUrl}
-                onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all ${
-                  selected.imageUrl
-                    ? 'hover:border-amber-500/40 hover:text-amber-400'
-                    : 'cursor-not-allowed opacity-40'
-                }`}
-              >
-                <AppIcon name="download" className="h-3 w-3" />
-                {t('downloads.staticImage')}
-              </a>
-              <a
-                href={selected.videoUrl ?? '#'}
-                download={selected.videoUrl ? `panel-${String(selectedIndex + 1).padStart(2, '0')}.mp4` : undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-disabled={!selected.videoUrl}
-                onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all ${
-                  selected.videoUrl
-                    ? 'hover:border-amber-500/40 hover:text-amber-400'
-                    : 'cursor-not-allowed opacity-40'
-                }`}
-              >
-                <AppIcon name="download" className="h-3 w-3" />
-                {t('downloads.video')}
-              </a>
-            </div>
-          ) : null}
-          {regenPanel.isError ? (
-            <p className="mt-3 rounded-sm border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-              {(regenPanel.error as Error)?.message ?? t('regenResult.errorFallback')}
-            </p>
-          ) : null}
-          {regenPanel.isSuccess ? (
-            <p className="mt-3 rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-              {t('regenResult.successQueued')}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Inspector (cast / notes / multi-shot bindings) — rightmost (order-3).
-            Widened to col-span-4 so the 9:16 multi-shot bindings player
-            (180×320) plus its CAST / SCENES chip rows fit without
-            horizontal scrolling. Plus user-reported clipping at the
-            right edge — this gives the column real estate the rail
-            actually needs. 3 + 5 + 4 = 12. */}
-        <div className="col-span-4 space-y-5 order-3">
-          {selectedGroupTaskId ? (
-            <MultiShotBindingsRail
-              taskId={selectedGroupTaskId}
-              groupLabel={selectedGroupLabel}
-              projectId={projectId}
-            />
-          ) : null}
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('cast.title')}</div>
-              {currentEpisode?.episodeNumber ? (
-                <div className="font-mono text-[11px] tracking-wider text-stone-500">
-                  {t('cast.epBinding', { episode: currentEpisode.episodeNumber })}
-                </div>
-              ) : null}
-            </div>
-            {/*
-              Each panel character is rendered with the appearance the
-              worker WOULD use right now — looks up
-              EpisodeCharacter(currentEpisodeId, characterId) and falls
-              back to characterRoster[0].appearances[0] when no
-              binding exists. Match exactly the resolution priority in
-              multi-shot-video-b-path.ts:820-855 so the chip reflects
-              the actual generation outcome (no surprises).
-            */}
-            {Array.isArray(selected?.characters) && selected.characters.length > 0 ? (
-              <div className="space-y-1.5">
-                {selected.characters.map((ref, i) => {
-                  // Post-2026-05-04 panels store characters as
-                  // {name, appearance?}[]. The storyboards API decodes
-                  // legacy bare-string entries into the same shape.
-                  const name = typeof ref === 'string'
-                    ? ref
-                    : (ref as PanelCharacterRef)?.name ?? ''
-                  const appearanceHint = typeof ref === 'string'
-                    ? null
-                    : (ref as PanelCharacterRef)?.appearance ?? null
-                  const character = characterRoster.find(
-                    (c) => (c.name ?? '').trim().toLowerCase() === name.trim().toLowerCase(),
-                  )
-                  const appearances = character?.appearances ?? []
-                  const binding = episodeBindings.find(
-                    (b) => b.characterId === character?.id,
-                  )
-                  // Resolution priority (mirrors worker
-                  // collectPanelReferenceImages) — 2026-05-13 reordered:
-                  //   1. panel.characters[i].appearance hint matched against
-                  //      changeReason (per-shot LLM intent wins)
-                  //   2. EpisodeCharacter binding (this episode, fallback
-                  //      when LLM did not pick)
-                  //   3. appearances[0]
-                  let resolved = null as
-                    | { id: string | null; label: string; imageUrl: string | null; isDefault: boolean }
-                    | null
-                  if (appearanceHint) {
-                    const ap = appearances.find(
-                      (a) => (a.changeReason ?? '').toLowerCase() === appearanceHint.toLowerCase(),
-                    )
-                    if (ap) {
-                      resolved = {
-                        id: ap.id ?? null,
-                        label: ap.changeReason || appearanceHint,
-                        imageUrl: ap.imageUrl ?? null,
-                        isDefault: false,
-                      }
-                    }
-                  }
-                  if (!resolved && binding?.appearanceId) {
-                    const ap = appearances.find((a) => a.id === binding.appearanceId)
-                    if (ap) {
-                      resolved = {
-                        id: ap.id ?? null,
-                        label: ap.changeReason || t('cast.appearanceLabel', { n: (ap.appearanceIndex ?? 0) + 1 }),
-                        imageUrl: ap.imageUrl ?? null,
-                        isDefault: false,
-                      }
-                    }
-                  }
-                  if (!resolved && appearances.length > 0) {
-                    const ap = appearances[0]
-                    resolved = {
-                      id: ap.id ?? null,
-                      label: ap.changeReason || t('cast.initialAppearance'),
-                      imageUrl: ap.imageUrl ?? null,
-                      isDefault: true,
-                    }
-                  }
-                  return (
-                    <div
-                      key={`${name}-${i}`}
-                      className="flex items-center gap-2.5 rounded-sm border border-stone-800/60 bg-stone-900/40 px-2.5 py-1.5"
-                      title={
-                        resolved?.isDefault
-                          ? t('cast.titleDefault', { label: resolved.label })
-                          : t('cast.titleBound', { label: resolved?.label ?? t('cast.titleBoundNone') })
-                      }
-                    >
-                      <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-sm bg-gradient-to-br from-amber-500 to-rose-700">
-                        {resolved?.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={resolved.imageUrl}
-                            alt={name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate font-serif-cn text-xs text-stone-200">{name}</div>
-                        <div className="truncate font-mono text-[11px] tracking-wider text-amber-500/70">
-                          {resolved
-                            ? resolved.isDefault
-                              ? t('cast.appearancePresetSuffix', { label: resolved.label })
-                              : resolved.label
-                            : t('cast.noAppearance')}
-                        </div>
-                      </div>
-                      {resolved?.isDefault && appearances.length > 1 ? (
-                        <span
-                          className="flex-shrink-0 rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-amber-300"
-                          title={t('cast.unboundChipTitle')}
-                        >
-                          {t('cast.unboundChipLabel')}
-                        </span>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="font-serif-cn text-xs text-stone-500">{t('cast.noCharacters')}</p>
-            )}
-          </div>
-
-          <div>
-            <div className="mb-2 font-mono text-[14px] tracking-wider text-amber-600">{t('notes.title')}</div>
-            <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-2 font-serif-cn text-xs leading-relaxed text-stone-400">
-              {selected?.videoPrompt ?? t('notes.empty')}
-            </div>
-          </div>
-        </div>
-      </div>
-      {/*
-        Click-to-zoom lightbox for the Selected Shot. Renders only when
-        the user has tapped the thumbnail-sized preview. Click anywhere
-        (or hit Esc) to dismiss. Image is fit-contain so a 9:16 still
-        stays inside the viewport without cropping.
-      */}
-      {zoomImageUrl ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setZoomImageUrl(null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setZoomImageUrl(null)
-          }}
-          tabIndex={-1}
-          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-stone-950/95 p-8"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={zoomImageUrl}
-            alt="Zoomed"
-            className="max-h-full max-w-full object-contain"
-          />
-          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[14px] uppercase tracking-wider text-stone-400">
-            click anywhere or press esc to close
-          </div>
-        </div>
-      ) : null}
-
-      {globalOverlaysNode}
-    </div>
+    <V2StoryboardTimelineView
+      projectId={projectId}
+      project={project}
+      currentEpisodeId={currentEpisodeId}
+      currentEpisode={currentEpisode as { episodeNumber?: number } | null}
+      projectVideoRatio={projectVideoRatio}
+      isPortraitRatio={isPortraitRatio}
+      thumbHeightClass={thumbHeightClass}
+      canMultiShot={canMultiShot}
+      videoFamily={videoFamily}
+      canEdit={canEdit}
+      globalOverlaysNode={globalOverlaysNode}
+      layoutToggleNode={layoutToggleNode}
+      videoModelPickerNode={videoModelPickerNode}
+      allPanels={allPanels}
+      orderedGroupIds={orderedGroupIds}
+      hasGroups={hasGroups}
+      groupedPanelCount={groupedPanelCount}
+      selected={selected ?? null}
+      selectedId={selectedId}
+      selectedIndex={selectedIndex}
+      setSelectedId={setSelectedId}
+      selectedGroupTaskId={selectedGroupTaskId}
+      selectedGroupLabel={selectedGroupLabel}
+      selectedMediaDisplayMode={selectedMediaDisplayMode}
+      setMediaDisplayOverride={setMediaDisplayOverride}
+      analyzeBusy={analyzeBusy}
+      analyzeBusyLabel={analyzeBusyLabel}
+      analyzeBannerLabel={analyzeBannerLabel}
+      analyzePhase={analyzePhase}
+      analyzeProgress={analyzeProgress}
+      analyzeState={analyzeState}
+      onAnalyzeStoryboard={handleAnalyzeStoryboard}
+      onStaleCleanupOpen={() => setStaleCleanupOpen(true)}
+      autoGroup={autoGroup}
+      onAutoGroup={handleAutoGroup}
+      multiShotState={multiShotState}
+      onSubmitMultiShot={handleSubmitMultiShot}
+      batchImageState={batchImageState}
+      batchVideoState={batchVideoState}
+      onBatchGenerateImages={handleBatchGenerateImages}
+      onBatchGenerateVideos={handleBatchGenerateVideos}
+      imageInFlight={imageInFlight}
+      setImageInFlight={setImageInFlight}
+      videoInFlight={videoInFlight}
+      serverInflightPanelImageIds={serverInflightPanelImageIds}
+      serverInflightPanelVideoIds={serverInflightPanelVideoIds}
+      failedPanelImageIds={failedPanelImageIds}
+      failedPanelVideoIds={failedPanelVideoIds}
+      isCurrentPanelImageInFlight={isCurrentPanelImageInFlight}
+      isCurrentPanelVideoInFlight={isCurrentPanelVideoInFlight}
+      regenPanel={regenPanel}
+      generateVideo={generateVideo}
+      updatePanelText={updatePanelText}
+      updatePanel={updatePanel}
+      activePanelImageTasks={activePanelImageTasks}
+      onGenerateVideo={handleGenerateVideo}
+      descDraft={descDraft}
+      setDescDraft={setDescDraft}
+      descChanged={descChanged}
+      onSaveDescription={handleSaveDescription}
+      dialogueDraft={dialogueDraft}
+      setDialogueDraft={setDialogueDraft}
+      dialogueChanged={dialogueChanged}
+      onSaveDialogue={handleSaveDialogue}
+      characterRoster={characterRoster}
+      episodeBindings={episodeBindings}
+      zoomImageUrl={zoomImageUrl}
+      setZoomImageUrl={setZoomImageUrl}
+    />
   )
 }
 
