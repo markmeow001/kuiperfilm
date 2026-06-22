@@ -34,7 +34,7 @@ import {
   type LocationRosterEntry,
 } from './V2GroupsLayout'
 import { isMultiShotCapable } from '@/lib/video-models/variants'
-import type { PanelLike, MultiShotState } from './storyboard-client-helpers'
+import type { PanelLike, MultiShotState, VideoFamily } from './storyboard-client-helpers'
 import type { AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 import type { GroupRegenOverrides } from './GroupCard'
 
@@ -42,12 +42,9 @@ import type { GroupRegenOverrides } from './GroupCard'
 // Siblings NEVER re-declare types; they import from the owner module.
 // Replaced step 2's placeholder `AutoGroupMutationLike` / `OverridesPayload` /
 // `SubmitResult` with the real types from the source modules.
-
-// Mirrors V2GroupsLayout's `videoFamily` typing exactly so the prop
-// forwards cleanly (V2GroupsLayout's own field is inlined as a union;
-// shared declaration would need a fresh shared types module — not worth
-// it for two call sites, so we declare it parallel-shaped here).
-type VideoFamily = 'kling' | 'seedance' | null
+//
+// Phase 1 step 4 prep (2026-06-22) — `VideoFamily` moved to the shared
+// helpers module (was previously parallel-declared in 3 places).
 
 // Per-episode character → appearance binding type matches V2GroupsLayout.
 interface EpisodeBinding {

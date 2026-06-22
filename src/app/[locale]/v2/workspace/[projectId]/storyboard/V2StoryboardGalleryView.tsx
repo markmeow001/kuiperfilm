@@ -38,17 +38,17 @@ import {
   accentForGroupId,
   type PanelLike,
   type MultiShotState,
+  type VideoFamily,
 } from './storyboard-client-helpers'
 import type { useGenerateVideo } from '@/lib/query/hooks/useStoryboards'
 import type { useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
 import type { useRegenerateProjectPanelImage } from '@/lib/query/mutations/storyboard-panel-mutations'
 import type { useAutoGroupMultiShot, AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
 
-// Mirrors V2GroupsLayout's `videoFamily` typing exactly. Declared
-// parallel-shaped here because the source is an inline union on the
-// V2GroupsLayout props interface — not worth a separate shared types
-// module for two call sites.
-type VideoFamily = 'kling' | 'seedance' | null
+// Phase 1 step 4 prep (2026-06-22) — `VideoFamily` consolidated to
+// storyboard-client-helpers (single source of truth). Was previously
+// parallel-declared in 3 places (V2GroupsLayout inline union, both
+// sibling views).
 
 export interface V2StoryboardGalleryViewProps {
   // ── Identity / project shape ──

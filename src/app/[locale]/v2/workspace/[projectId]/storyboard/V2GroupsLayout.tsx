@@ -32,6 +32,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { GroupCard, type GroupRegenOverrides } from './GroupCard'
 import { computeGroupRecommendedDurationSec } from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
+import type { VideoFamily } from './storyboard-client-helpers'
 
 interface PanelCharacterRef {
   name: string
@@ -122,7 +123,7 @@ interface V2GroupsLayoutProps {
   /** 2026-05-17 — Family-aware CTA wording. Kling = batch multi-shot
    *  (N stitched clips), Seedance = composite (1 video, 9-ref @N). The
    *  GroupCard CTA label must match what the worker produces. */
-  videoFamily?: 'kling' | 'seedance' | null
+  videoFamily?: VideoFamily
   /**
    * 2026-05-18 — pass-through of NovelPromotionProject.visualStyleId.
    * GroupCard's Seedance narrative builder uses it to inject styleAnchor +
