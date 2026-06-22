@@ -153,7 +153,15 @@ interface V2GroupsLayoutProps {
     groupId: string,
     panelIds: string[],
     overrides: GroupRegenOverrides,
-  ) => Promise<{ taskId: string | null; error?: string }>
+  ) => Promise<GroupRegenSubmitResult>
+}
+
+// Phase 1 step 3 (2026-06-21) — extracted to a named export so the
+// layout sibling (V2StoryboardGroupsView) can use the real type
+// instead of mirroring its own SubmitResult interface.
+export type GroupRegenSubmitResult = {
+  taskId: string | null
+  error?: string
 }
 
 const GROUP_ACCENTS = [

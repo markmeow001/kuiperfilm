@@ -24,6 +24,7 @@
  */
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
+import type { UseMutationResult } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import {
@@ -34,39 +35,24 @@ import {
 } from './V2GroupsLayout'
 import { isMultiShotCapable } from '@/lib/video-models/variants'
 import type { PanelLike, MultiShotState } from './storyboard-client-helpers'
+import type { AutoGroupResult } from '@/lib/query/mutations/auto-group-multi-shot-mutation'
+import type { GroupRegenOverrides } from './GroupCard'
 
-// `autoGroup` is the mutation object returned by useAutoGroupMultiShot.
-// We type it minimally — only the fields the toolbar reads — to avoid
-// re-importing the full mutation type here.
-interface AutoGroupMutationLike {
-  isPending: boolean
-  mutate: (vars: { episodeId: string }) => void
-}
+// Phase 1 step 3 (2026-06-21) — type-import convention applied.
+// Siblings NEVER re-declare types; they import from the owner module.
+// Replaced step 2's placeholder `AutoGroupMutationLike` / `OverridesPayload` /
+// `SubmitResult` with the real types from the source modules.
 
-// 2026-05-17 — Variant family for label switching (Kling = batch,
-// Seedance composite = single composite). Mirrors V2GroupsLayout's
-// own `videoFamily` typing so the prop forwards cleanly.
+// Mirrors V2GroupsLayout's `videoFamily` typing exactly so the prop
+// forwards cleanly (V2GroupsLayout's own field is inlined as a union;
+// shared declaration would need a fresh shared types module — not worth
+// it for two call sites, so we declare it parallel-shaped here).
 type VideoFamily = 'kling' | 'seedance' | null
 
 // Per-episode character → appearance binding type matches V2GroupsLayout.
 interface EpisodeBinding {
   characterId: string
   appearanceId: string | null
-}
-
-interface OverridesPayload {
-  characterOverrides: Array<{ characterId: string; appearanceId?: string }>
-  locationOverrides: Array<{ locationId: string; viewName?: string }>
-  rawPrompt?: string
-  panelDurations?: number[]
-  totalDurationSeconds?: number
-  firstFrameImageUrl?: string
-  lastFrameImageUrl?: string
-}
-
-interface SubmitResult {
-  taskId: string | null
-  error?: string
 }
 
 export interface V2StoryboardGroupsViewProps {
@@ -100,7 +86,7 @@ export interface V2StoryboardGroupsViewProps {
   analyzeBusyLabel: string
   onAnalyzeStoryboard: () => void
   onStaleCleanupOpen: () => void
-  autoGroup: AutoGroupMutationLike
+  autoGroup: UseMutationResult<AutoGroupResult, Error, { episodeId: string }>
   multiShotState: MultiShotState
   onSubmitMultiShot: () => void
 
@@ -302,7 +288,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
         targetDurationSec={targetDurationSec}
         episodeId={currentEpisodeId}
         referenceVideoByStoryboardId={referenceVideoByStoryboardId}
-        onRegenerateGroup={async (groupId, panelIds, overrides: OverridesPayload): Promise<SubmitResult> => {
+        onRegenerateGroup={async (groupId, panelIds, overrides: GroupRegenOverrides) => {
           if (!projectVideoModel) {
             return { taskId: null, error: t('errors.modelNotMultiShotShort') }
           }
