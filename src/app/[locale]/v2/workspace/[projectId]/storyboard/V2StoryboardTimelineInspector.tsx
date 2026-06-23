@@ -14,19 +14,14 @@
  */
 
 import { useTranslations } from 'next-intl'
-// eslint-disable-next-line @next/next/no-img-element
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
-import type { PanelLike, PanelCharacterRef } from './storyboard-client-helpers'
+import type {
+  PanelLike,
+  PanelCharacterRef,
+  EpisodeBinding,
+  EpisodeWithNumber,
+} from './storyboard-client-helpers'
 import type { CharacterRosterEntry } from './V2GroupsLayout'
-
-interface EpisodeWithNumber {
-  episodeNumber?: number
-}
-
-interface EpisodeBinding {
-  characterId: string
-  appearanceId: string | null
-}
 
 export interface V2StoryboardTimelineInspectorProps {
   projectId: string
@@ -83,7 +78,11 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
             {selected.characters.map((ref, i) => {
               // Post-2026-05-04 panels store characters as
               // {name, appearance?}[]. The storyboards API decodes
-              // legacy bare-string entries into the same shape.
+              // legacy bare-string entries into the same shape, but
+              // TS strict-types `characters: PanelCharacterRef[]` so
+              // the `typeof ref === 'string'` runtime check needs a
+              // cast in the else branch. (PR #18 M-2 union expansion
+              // was reverted to avoid GroupCard/V2GroupsLayout fan-out.)
               const name = typeof ref === 'string'
                 ? ref
                 : (ref as PanelCharacterRef)?.name ?? ''

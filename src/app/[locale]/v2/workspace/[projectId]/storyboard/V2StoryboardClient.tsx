@@ -1416,7 +1416,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         hasGroups={hasGroups}
         orderedGroupIds={orderedGroupIds}
         groupedPanelCount={groupedPanelCount}
-        selected={selected ?? null}
+        selected={selected}
         setSelectedId={setSelectedId}
         selectedGroupTaskId={selectedGroupTaskId}
         selectedGroupLabel={selectedGroupLabel}
@@ -1469,7 +1469,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
       orderedGroupIds={orderedGroupIds}
       hasGroups={hasGroups}
       groupedPanelCount={groupedPanelCount}
-      selected={selected ?? null}
+      selected={selected}
       selectedId={selectedId}
       selectedIndex={selectedIndex}
       setSelectedId={setSelectedId}

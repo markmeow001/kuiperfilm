@@ -31,9 +31,7 @@ import type { UseMutationResult } from '@tanstack/react-query'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { MultiShotBindingsRail } from './MultiShotBindingsRail'
-import {
-  type UpdatePanelTextMutation,
-} from './V2GroupsLayout'
+import type { UpdatePanelTextMutation } from './V2GroupsLayout'
 import {
   accentForGroupId,
   type PanelLike,

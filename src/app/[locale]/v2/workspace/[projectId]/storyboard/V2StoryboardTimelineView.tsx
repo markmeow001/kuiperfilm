@@ -47,6 +47,9 @@ import type {
   AnalyzeState,
   MediaDisplayMode,
   VideoFamily,
+  FailedTaskMeta,
+  EpisodeBinding,
+  EpisodeWithNumber,
 } from './storyboard-client-helpers'
 import type {
   UpdatePanelTextMutation,
@@ -59,20 +62,6 @@ import type {
 } from '@/lib/query/mutations/storyboard-panel-mutations'
 import type { useGenerateVideo } from '@/lib/query/hooks/useStoryboards'
 import type { useActiveTasks } from '@/lib/query/hooks/useTaskStatus'
-
-interface FailedTaskMeta {
-  errorCode: string | null
-  errorMessage: string | null
-}
-
-interface EpisodeWithNumber {
-  episodeNumber?: number
-}
-
-interface EpisodeBinding {
-  characterId: string
-  appearanceId: string | null
-}
 
 export interface V2StoryboardTimelineViewProps {
   // ── identity / project shape ──
@@ -171,9 +160,6 @@ export interface V2StoryboardTimelineViewProps {
 export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
   return (
     <div className="flex h-full flex-col">
-      {/* Top: panel strip
-          (2026-05-12: split toolbar into two rows — view toggle on top,
-          title + action cluster below — same as Gallery / Groups) */}
       <V2StoryboardTimelineStrip
         allPanels={props.allPanels}
         selectedId={props.selectedId}
