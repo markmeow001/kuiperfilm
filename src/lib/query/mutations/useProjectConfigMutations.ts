@@ -159,6 +159,44 @@ export function useAnalyzeProjectAssets(projectId: string) {
     })
 }
 
+export interface AnalyzeAllEpisodesResult {
+    success: boolean
+    total: number
+    submitted: number
+    skipped: number
+    failed: number
+}
+
+/**
+ * 批次「分析全部集」(2026-06-25) — fans out analyze-with-cascade across every
+ * episode that doesn't yet have a storyboard (storyboard TEXT only; video stays
+ * a manual per-group action). Returns a summary; the per-episode storyboards
+ * fill in via the normal task-status polling, so we just invalidate tasks +
+ * assets to flip the banners to queued.
+ */
+export function useAnalyzeAllEpisodes(projectId: string) {
+    const queryClient = useQueryClient()
+
+    return useMutation({
+        mutationFn: async () =>
+            requestJsonWithError<AnalyzeAllEpisodesResult>(
+                `/api/novel-promotion/${projectId}/analyze-all-episodes`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                },
+                'Failed to analyze all episodes',
+            ),
+        onSettled: () => {
+            invalidateQueryTemplates(queryClient, [
+                queryKeys.tasks.all(projectId),
+                queryKeys.projectAssets.all(projectId),
+            ])
+        },
+    })
+}
+
 /**
  * 获取下游分镜统计（用于重建确认）
  */

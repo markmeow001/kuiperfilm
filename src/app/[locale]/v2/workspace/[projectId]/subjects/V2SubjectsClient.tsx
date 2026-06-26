@@ -52,7 +52,7 @@ import {
   useUpdateProjectAppearanceDescription,
   useUploadAndExpandCharacterToMultiView,
 } from '@/lib/query/mutations/character-image-ops-mutations'
-import { useAnalyzeProjectAssets } from '@/lib/query/mutations/useProjectConfigMutations'
+import { useAnalyzeProjectAssets, useAnalyzeAllEpisodes } from '@/lib/query/mutations/useProjectConfigMutations'
 import { V2CharacterEditModal } from './V2CharacterEditModal'
 import { V2LocationEditModal } from './V2LocationEditModal'
 import { useRegisterArkAsset } from '@/lib/query/mutations/useRegisterArkAsset'
@@ -140,6 +140,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const deleteCharacter = useDeleteProjectCharacter(projectId)
   const uploadExpand = useUploadAndExpandCharacterToMultiView(projectId)
   const analyze = useAnalyzeProjectAssets(projectId)
+  const analyzeAll = useAnalyzeAllEpisodes(projectId)
   const registerArkAsset = useRegisterArkAsset(projectId)
   // 2026-05-23 Phase 3 — single shared callback the SubjectGrid card
   // chips invoke. Mirrors useRegisterArkAsset semantics; alert on error.
@@ -472,6 +473,38 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         },
       },
     )
+  }
+
+  // 批次「分析全部集」(2026-06-25) — fans out the same analyze→storyboard cascade
+  // across every episode without a storyboard. Video stays a manual per-group
+  // action. The per-episode banners flip to queued via the tasks invalidation.
+  async function handleAnalyzeAllEpisodes() {
+    if (!canEdit || analyzeAll.isPending) return
+    if (!window.confirm(t('analyzeAll.confirm'))) return
+    try {
+      const res = await analyzeAll.mutateAsync()
+      if (res.submitted === 0) {
+        window.alert(t('analyzeAll.noWork', { total: res.total }))
+      } else {
+        const failedTail = res.failed > 0
+          ? t('analyzeAll.resultFailedTail', { failed: res.failed })
+          : ''
+        window.alert(
+          t('analyzeAll.result', {
+            submitted: res.submitted,
+            skipped: res.skipped,
+            failedTail,
+          }),
+        )
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all(projectId) })
+    } catch (err) {
+      window.alert(
+        t('analyzeAll.error', {
+          reason: err instanceof Error ? err.message : String(err),
+        }),
+      )
+    }
   }
 
   function handleRegenChar(c: CharacterLike) {
@@ -1025,6 +1058,16 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       >
         <AppIcon name="sparklesAlt" className="h-3 w-3" />
         {analyzeLabel} {currentEpisode ? `· ${currentEpisode.name}` : ''}
+      </button>
+      <button
+        type="button"
+        onClick={handleAnalyzeAllEpisodes}
+        disabled={!canEdit || analyzeAll.isPending}
+        title={t('analyzeAll.confirm')}
+        className="flex items-center gap-1.5 rounded-sm border border-violet-500/50 bg-violet-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <AppIcon name="sparklesAlt" className="h-3 w-3" />
+        {analyzeAll.isPending ? t('analyzeAll.submitting') : t('analyzeAll.button')}
       </button>
       <Link
         href={`/${locale}/workspace/asset-hub`}

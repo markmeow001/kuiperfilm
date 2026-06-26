@@ -142,5 +142,14 @@
     "closeAria": "关闭预览",
     "alt": "预览",
     "escHint": "ESC / 点背景关闭"
+  },
+  "analyzeAll": {
+    "button": "分析全部集",
+    "submitting": "排入中…",
+    "confirm": "将批次分析所有「还没有分镜」的剧集，在后台逐集生成分镜文字（不生成预览图）。影片仍需你逐集手动按生成。继续？",
+    "result": "已排入 {submitted} 集分析，略过 {skipped} 集（已有分镜）{failedTail}。分镜会在后台陆续生成，各集完成后自动出现。",
+    "resultFailedTail": "，{failed} 集提交失败可稍后重试",
+    "noWork": "没有需要分析的剧集 — 全部 {total} 集都已有分镜。",
+    "error": "批次分析失败：{reason}"
   }
 }

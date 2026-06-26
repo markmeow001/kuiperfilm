@@ -67,6 +67,9 @@ export async function maybeSubmitLLMTask(params: {
   body?: unknown
   dedupeKey?: string | null
   priority?: number
+  // 2026-06-25 — controlled-bulk fan-out (analyze-all-episodes) bypasses the
+  // per-user submit rate limit; see submitTask.skipRateLimit. Server-only.
+  skipRateLimit?: boolean
 }) {
   const policy = getLLMTaskPolicy(params.type)
   const observeEnabled = LLM_OBSERVE_ENABLED || policy.consoleEnabled
@@ -128,6 +131,7 @@ export async function maybeSubmitLLMTask(params: {
     type: params.type,
     targetType: params.targetType,
     targetId: params.targetId,
+    ...(params.skipRateLimit ? { skipRateLimit: true } : {}),
     payload: {
       ...payload,
       sync: 1,

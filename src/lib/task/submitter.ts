@@ -112,6 +112,12 @@ export async function submitTask(params: {
   // `payload` by the caller before getting here, so billing freezes
   // on the resolved model. See loadSkillConfigForProject.
   skillId?: string | null
+  // 2026-06-25 — controlled-bulk paths (e.g. "analyze all episodes" fans out
+  // one analyze per episode) submit a BOUNDED, deduped set in one server action.
+  // The per-user rate limit exists to stop UNcontrolled UI loops, not these — and
+  // actual LLM load is still throttled by text-worker concurrency. Set true ONLY
+  // from a server-side orchestrator over a known-finite list, never a raw client path.
+  skipRateLimit?: boolean
 }) {
   const logger = createScopedLogger({
     module: 'task.submitter',
@@ -125,7 +131,9 @@ export async function submitTask(params: {
   // before we touch the DB / billing / queue, so a runaway loop
   // can't accumulate failed Task rows or burn quota. Categorized
   // by task type — see src/lib/task/rate-limit.ts for limits.
-  await enforceRateLimit({ userId: params.userId, taskType: params.type })
+  if (!params.skipRateLimit) {
+    await enforceRateLimit({ userId: params.userId, taskType: params.type })
+  }
 
   // 2026-05-16 (B / F-QA-2 root cause) — refuse to enqueue when an
   // incompatible task is already mutating this episode's storyboard

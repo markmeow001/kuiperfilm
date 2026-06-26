@@ -85,6 +85,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/ai-modify-appearance/route.ts',
   'src/app/api/novel-promotion/[projectId]/ai-modify-location/route.ts',
   'src/app/api/novel-promotion/[projectId]/ai-modify-shot-prompt/route.ts',
+  'src/app/api/novel-promotion/[projectId]/analyze-all-episodes/route.ts',
   'src/app/api/novel-promotion/[projectId]/analyze-global/route.ts',
   'src/app/api/novel-promotion/[projectId]/analyze-shot-variants/route.ts',
   'src/app/api/novel-promotion/[projectId]/analyze/route.ts',
