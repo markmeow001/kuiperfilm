@@ -43,7 +43,7 @@
  * into a speech-banning directive. Matching 「 restores native dialogue.
  */
 export function countDialogueBeats(raw: string): number {
-  return (raw.match(/「|“|對白：|: "/g) || []).length
+  return (raw.match(/「|[:：]\s*“|對白：|: "/g) || []).length
 }
 
 export function buildAudioDirective(

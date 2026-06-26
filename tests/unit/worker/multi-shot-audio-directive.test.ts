@@ -125,6 +125,24 @@ describe('v3 字段格式 “…” 弯引号对白', () => {
     ])
   })
 
+  it('does NOT count “…” used for emphasis/quotation in ambient prose (no colon)', () => {
+    // curly quotes are general Chinese quotation; only count them in 角色：“…” dialogue position
+    expect(countDialogueBeats('被称为“绝世高手”的剑客缓缓转身')).toBe(0)
+    expect(countDialogueBeats('画面必须包含“动”的元素')).toBe(0)
+  })
+
+  it('counts the colon-prefixed v3 dialogue form but not bare emphasis in the same string', () => {
+    expect(countDialogueBeats('被称为“高手”的人；曹古拉（恐惧）：“你是谁”')).toBe(1)
+  })
+
+  it('extracts beats from a narrative mixing 「」 and “” styles', () => {
+    const beats = extractRawDialogueBeats('王玄「走吧」\n曹古拉（恐惧）：“你是谁？”', ['王玄', '曹古拉'])
+    expect(beats).toEqual([
+      { speaker: '王玄', content: '走吧' },
+      { speaker: '曹古拉', content: '你是谁？' },
+    ])
+  })
+
   it('still extracts the legacy 「」 form (back-compat)', () => {
     expect(extractRawDialogueBeats('王玄:「走吧」', ['王玄'])).toEqual([{ speaker: '王玄', content: '走吧' }])
   })
