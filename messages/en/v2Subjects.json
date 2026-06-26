@@ -147,9 +147,10 @@
     "button": "Analyze all episodes",
     "submitting": "Queuing…",
     "confirm": "Batch-analyze every episode that doesn't have a storyboard yet, building storyboard text in the background (no preview images). Video still needs you to press generate per group. Continue?",
-    "result": "Queued {submitted} episode(s); skipped {skipped} (already have storyboards){failedTail}. Storyboards build in the background and each episode appears as it finishes.",
+    "result": "Queued {submitted} episode(s); skipped {skipped} (storyboard complete){failedTail}{deferredTail}. Storyboards build in the background and each episode appears as it finishes.",
     "resultFailedTail": "; {failed} failed to submit, retry later",
     "noWork": "Nothing to analyze — all {total} episodes already have storyboards.",
-    "error": "Batch analyze failed: {reason}"
+    "error": "Batch analyze failed: {reason}",
+    "resultDeferredTail": "; {deferred} over the per-batch cap — click “Analyze all episodes” again to continue"
   }
 }

@@ -483,17 +483,21 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     if (!window.confirm(t('analyzeAll.confirm'))) return
     try {
       const res = await analyzeAll.mutateAsync()
-      if (res.submitted === 0) {
+      if (res.submitted === 0 && res.deferred === 0) {
         window.alert(t('analyzeAll.noWork', { total: res.total }))
       } else {
         const failedTail = res.failed > 0
           ? t('analyzeAll.resultFailedTail', { failed: res.failed })
+          : ''
+        const deferredTail = res.deferred > 0
+          ? t('analyzeAll.resultDeferredTail', { deferred: res.deferred })
           : ''
         window.alert(
           t('analyzeAll.result', {
             submitted: res.submitted,
             skipped: res.skipped,
             failedTail,
+            deferredTail,
           }),
         )
       }

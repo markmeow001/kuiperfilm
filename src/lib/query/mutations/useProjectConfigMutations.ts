@@ -165,6 +165,8 @@ export interface AnalyzeAllEpisodesResult {
     submitted: number
     skipped: number
     failed: number
+    /** Episodes over the per-batch cap; re-click to continue (skip-existing). */
+    deferred: number
 }
 
 /**
