@@ -111,6 +111,30 @@ describe('countDialogueBeats — 2026-06-17 R2V dialogue regression', () => {
 // path proves {speaker}说「…」 is required). extractRawDialogueBeats +
 // buildSpeechDialogueBlock turn the verbatim narrative dialogue into an explicit
 // 说「…」 list so the dialogue is actually voiced.
+// 2026-06-25 — v3 字段格式把台词写成 角色（情绪）：“台词”（弯引号 U+201C/U+201D），
+// 不是 「」。parser 必须同时吃两种，否则改格式后对白侦测归零 → R2V 又静音。
+describe('v3 字段格式 “…” 弯引号对白', () => {
+  it('countDialogueBeats counts the v3 “…” form', () => {
+    expect(countDialogueBeats('【人物对应台词】曹古拉（恐惧）：“你为什么会有半神手段？”')).toBeGreaterThan(0)
+  })
+
+  it('extractRawDialogueBeats extracts speaker + content from 角色（情绪）：“…”', () => {
+    const narrative = '【人物对应台词】曹古拉（歇斯底里、恐惧）：“你不过是个二十出头的愣头青”'
+    expect(extractRawDialogueBeats(narrative, ['曹古拉', '王玄'])).toEqual([
+      { speaker: '曹古拉', content: '你不过是个二十出头的愣头青' },
+    ])
+  })
+
+  it('still extracts the legacy 「」 form (back-compat)', () => {
+    expect(extractRawDialogueBeats('王玄:「走吧」', ['王玄'])).toEqual([{ speaker: '王玄', content: '走吧' }])
+  })
+
+  it('does not treat the 【人物对应台词】 field label as a speaker (heuristic mode)', () => {
+    // bare label + quote, no roster — label must be denylisted
+    expect(extractRawDialogueBeats('人物对应台词：“无关内容”')).toEqual([])
+  })
+})
+
 describe('extractRawDialogueBeats — R2V narrative dialogue → speech beats', () => {
   it('extracts on-camera dialogue with no colon (the reported bug case)', () => {
     const narrative =

@@ -34,6 +34,7 @@
  *              「 only ever wraps speech in these narratives.
  *   - 對白：    auto-built atlascloud format
  *   - : "       Kling buildInitialNarrative ASCII-quote form
+ *   - “…”     v3 字段格式 角色（情绪）：“台词” 的弯引号（2026-06-25）
  *
  * 2026-06-17 — the old inline regex (/對白：|说「|: "/) missed the Seedance
  * 「…」 form, so dialogueBeatCount was 0 for the primary R2V narrative-edit
@@ -42,7 +43,7 @@
  * into a speech-banning directive. Matching 「 restores native dialogue.
  */
 export function countDialogueBeats(raw: string): number {
-  return (raw.match(/「|對白：|: "/g) || []).length
+  return (raw.match(/「|“|對白：|: "/g) || []).length
 }
 
 export function buildAudioDirective(
@@ -91,6 +92,8 @@ const NON_SPEAKER_LABELS = new Set([
   '远处', '遠處', '近处', '近處', '周围', '周圍', '四周', '身后', '身後', '头顶',
   '頭頂', '空中', '远方', '遠方', '耳边', '耳邊', '楼下', '樓下', '楼上', '樓上',
   '门外', '門外', '窗外', '屋内', '屋內', '室内', '室內',
+  // v3 字段标签：【人物对应台词】角色：「…」 — 标签本身不是说话者
+  '人物对应台词', '人物對應台詞', '台词', '台詞',
 ])
 
 const stripSpeakerDecorations = (token: string): string =>
@@ -122,7 +125,7 @@ export function extractRawDialogueBeats(
     .map((n) => stripSpeakerDecorations(n))
     .filter((n) => n.length > 0)
   const useRoster = roster.length > 0
-  const re = /([一-龥A-Za-z0-9·•]{1,12})(?:（[^）]*）)?[:：]?「([^」]+)」/g
+  const re = /([一-龥A-Za-z0-9·•]{1,12})(?:（[^）]*）)?[:：]?[「“]([^」”]+)[」”]/g
   const beats: RawDialogueBeat[] = []
   const seen = new Set<string>()
   for (const match of raw.matchAll(re)) {
