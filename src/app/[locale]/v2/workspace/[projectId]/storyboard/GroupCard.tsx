@@ -1092,7 +1092,7 @@ export function GroupCard({
       // shot header collapses to 「镜头N｜」 and dialogue renders as the
       // 【人物对应台词】 field. Legacy (pre-v3) descriptions keep the old
       // 「镜头N: framing·camera」 header + bare dialogue lines (back-compat).
-      const isV3Block = desc.includes('【画面内容】')
+      const isV3Block = desc.includes('【画面内容】') || desc.includes('【景别】') || desc.includes('【运镜手法】')
 
       // Build dialogue lines first — same per-speaker voice-timbre logic for both
       // formats. Dialogue stays the voiceLines data source and keeps 「」 (TTS

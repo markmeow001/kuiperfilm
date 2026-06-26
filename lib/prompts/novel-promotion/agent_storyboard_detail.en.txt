@@ -421,3 +421,10 @@ When to use:
 - "time freeze orbit" for sword arcs / bullets / raindrops / key instants
 - "POV" for falls, getting hit, waking up, high-speed travel
 - "45° high angle" for grand vistas / armies / cities
+
+
+[Strict requirements — recap (must hold)]
+1. Write `description` in the "v3 field block" format (see "description field-block output" above): all six fields 【硬切/运镜】【景别】【构图】【光线】【运镜手法】【画面内容】, with the Setup/Develop/Resolve tension arc + spatial anchors + ambient sound + micro-actions INSIDE 【画面内容】. description must be as rich as video_prompt — never thin passive prose. Only difference: description keeps full character names (@Name), video_prompt swaps to age+gender. Do NOT write the shot number or dialogue into description.
+2. Close-ups split in two: object / detail close-ups use a locked camera; FACE / emotion close-ups use a slow push + facial micro-motion (never blanket-locked — see the close-up camera rule above).
+3. 景别: rotate the 4 daily tiers (小全景 / 中景 / 半身景 / 近景); use 大远景 only for an episode opening / epic establishing shot, 特写 only for emotional peaks / a key prop.
+4. JSON schema unchanged (shot_type / camera_move / description / video_prompt). Keep source_text verbatim. Return JSON array only.
