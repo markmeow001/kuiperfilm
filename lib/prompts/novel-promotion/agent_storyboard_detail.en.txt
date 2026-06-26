@@ -391,6 +391,21 @@ serve the SAME single main action and do NOT violate rule 2 ("one main action").
    → @CharacterB pulls back, then lifts her head to look back (responder) → the two
    lock eyes, frozen in tense standoff"
 
+[Cross-shot consistency anchors + light / VFX / fight choreography — anti-continuity-break & premium look (v3 spec merged, 2026-06-25)]
+
+A. Cross-shot consistency anchors (prop / spirit / pose): for any prop, non-human spirit, or fixed pose that recurs, GENERATE one "standard anchor" passage and REUSE the same text every shot (rewriting each shot drifts).
+   · Prop scale anchor: lock size with a stable reference ("about basketball-sized, clearly smaller than a child's head, can be tucked under one arm") + explicit negations (never half-body-sized / on a pedestal / needs both arms) + grip lock (which hand does what) + state timeline (normal / enraged-red / cracked-leaking — which state this shot is in).
+   · Non-human spirit form lock: hard-negate "a human figure in a black robe"; keep only the few agreed solid features (e.g. a roiling ash-grey smoke mass, an ancient non-human face flickering within, two faint green eyes the only solid thing, no human form / robe / limbs / mouth); once set, keep it consistent for the whole drama.
+   · Cross-shot pose anchor: recurring fixed poses (a healing pose, a casting gesture) get one standard passage copied verbatim each shot.
+
+B. Ambient-light lock (stops the whole scene going dark / grey): the model kills ambient light if told a prop is the "only light source" -> dark, muddy frame, so never write that. Keep base ambient light (lantern / candle warm-yellow, daylight) ON, characters and background readable; special light is accent-only. Give an explicit brightness target (overall warm, expressions readable; no cold-blue dark grade, no dead black). Lock day/night: "day-interior" = bright daylight outside doors/windows, never night / moonlight / neon.
+
+C. VFX in layers: avoid "the whole body glows / like a lightbulb"; write "faintly wreathing + blazing at the moment of release". For energy/healing avoid the ambiguity of "palm flat on the body": palm hovers channeling qi, an energy orb forms between palm and target, becoming a light-membrane enveloping the body, particles drifting. Good/evil & warm/cold clash: the protagonist's warm-gold force and the antagonist's dark qi cancel each other on screen.
+
+D. Write continuity risks as POSITIVE assertions (echoes [five-element red line] rule 3, no-negation): don't pile "never ..." negations at the shot's end for known pitfalls (prop grows / wrong fly direction / cold-blue / people pressed together) -- the negated noun back-fires (the retired AVOID-subtitle is the lesson). Rephrase positively: "lamp grows" -> "the soul-lamp stays basketball-sized, clearly smaller than a head"; "hits a non-existent wall" -> "slams into the red-wood pillar at frame right". Visual-style negatives (no fantasy / cold-blue) go to the backend negativePrompt, not the description.
+
+E. Fight long-take choreography (high-intensity action only): use a "pseudo one-take" structure -- build-up (an explosion out of stillness) -> clash (POV cuts in) -> climax (spatial traversal + environmental destruction) -> final standoff (frozen tension). Keys: every heavy hit has physical environmental feedback (censer tumbling / screen tearing / tea-set shattering / petals flying); continuous camera into a pseudo one-take (tracking / fast pull-back / low-angle / weaving through objects / slow-motion / freeze); the two sides' energy colors clash (black-gold vs red-gold); each character gets "visual trait + energy VFX + action style"; end frozen at the burst of airflow, energy circling, petals suspended.
+
 ⚠️ Transformation / morph / shapeshift rule (added 2026-05-28):
 
 Generative models (Seedance / Kling R2V) CANNOT gradually morph one subject
