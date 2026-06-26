@@ -29,7 +29,7 @@ Output schema example (field names must be preserved):
 [
   {
     "panel_number": 1,
-    "description": "panel description",
+    "description": "【硬切/运镜】hard cut\n【景别】medium\n【构图】@A (frame mid·foreground) faces camera, hands on the desk; @B (frame right·background) faces left\n【光线】warm interior ambient as base, expression readable\n【运镜手法】static (restrained)\n【画面内容】[START] @A presses both hands on the desk, leans in; [MID] locks eyes on @B, jaw twitches; [END] face hardens into cold pressure. Ambient sound: low interior HVAC hum.",
     "characters": [{ "name": "Character", "appearance": "appearance" }],
     "location": "location name",
     "scene_type": "daily",
@@ -46,7 +46,8 @@ Rules:
 2. Keep source_text semantically aligned with input; do not rewrite story meaning.
 3. video_prompt should be motion-ready and concrete.
 4. Prefer age+gender wording in video_prompt when naming actors in camera directions.
-5. Return JSON array only.
+5. description uses the "v3 field block" (see "description field-block output" above: 【硬切/运镜】【景别】【构图】【光线】【运镜手法】【画面内容】; do NOT write the shot number or the dialogue).
+6. Return JSON array only.
 
 Composition and frame layering (Cinematic richness — added 2026-05-21):
 
@@ -253,67 +254,32 @@ Self-check before output (every panel):
   □ Has an "Ambient sound:" line?
   □ Any "transform / morph / shapeshift"? If so, split into two panels?
 
-⚠️ Write every panel in three layers — [START]/[MID]/[END] timeline anchors
-(three-layer structure added 2026-05-29; upgraded to explicit timeline anchors
-2026-06-03):
+⚠️ [description field-block output — v3 field block (one block per panel; upgraded 2026-06-25)]
 
-Write BOTH description AND video_prompt as a "[START] → [MID] → [END]" tension
-arc of THE SAME main beat, using these three EXPLICIT segment markers. The
-bracketed markers are "segment boundaries on the timeline" — the same technique
-peer platforms use (Veo timestamp prompting / Seedance timeline prompting):
-split the shot's runtime into a start / middle / end window and describe the
-frame's state inside each window.
-⚠️ Why [START]/[MID]/[END] and NOT [0s][3s][6s]: this stage (detail refinement)
-   does NOT know each panel's target seconds — the real seconds are computed by
-   the worker from dialogue/action density LATER and injected separately as a
-   "shot N ≈ X seconds" guide. Hard-coding seconds here would be a guess and
-   would clash with that downstream guide, so use RELATIVE segment markers.
-(Note: the three segments are the setup-build-resolve of ONE instant's tension
-arc, NOT 3 sequential actions — still bound by rule 2 "one main action". The
-brackets [START]/[MID]/[END] are TIME-SEGMENT markers, NOT action beats, so the
-rule-2 self-check that counts "→ / then / period" will NOT miscount them as
-multi-action. Each segment still holds only 1 main action; the three segments
-merely spread that single action's wind-up / drive / settle across the timeline.)
+Write each panel's description as this FIXED field block (fixed order — easy to parse, and makes the model attend field-by-field). The shot number "镜头N｜" and the dialogue "【人物对应台词】" are assembled by the backend; description itself does NOT write the number or the dialogue:
 
-⚠️ CRITICAL — description is the R2V narrative main text (the frontend preview
-AND the string fed to the video model both read `description`). It must be
-written JUST AS RICH as video_prompt — full spatial anchors + ambient sound +
-micro-action layering + Setup/Develop/Resolve. The ONLY difference: description
-keeps full character names (@Name), video_prompt swaps to age+gender. Do NOT
-leave description as thin prose — that makes the R2V narrative look sparse even
-when video_prompt is rich.
+  【硬切/运镜】<cut from the previous shot: hard cut / shot-reverse-shot on eyeline / hard cut on a line's end / match cut / wipe-to-black>
+  【景别】<one of the 4 daily tiers (小全景 small-full-shot / 中景 medium / 半身景 medium-close, waist-up / 近景 close, chest-up); use 大远景 (extreme-wide / aerial) ONLY for an episode opening / epic establishing shot; use 特写 (close-up / extreme CU) ONLY for emotional peaks (eyes / lips / a tear) or a key prop>
+  【构图】<framing triple (REQUIRED, anti-continuity-break): each character at frame left/mid/right + facing + foreground/background + axis. e.g. "@Kael (frame right·foreground) faces left, @Arthur (frame left·background) faces right">
+  【光线】<follow the global base; main-light direction + special-light rim; keep base ambient light ON, subject readable (see ambient-light lock)>
+  【运镜手法】<push / pull / tilt / track / dive / orbit / freeze + speed & restraint; prefer the dramatic-camera vocabulary above>
+  【画面内容】<this shot's tension arc + micro-actions + ambient sound + @refs, written as below>
 
-Fill each layer with these "visual anchors" (they coexist, cost no time, more
-is fine):
+Inside 【画面内容】 still write the tension arc of ONE main action ([START] → [MID] → [END] three time-segment anchors — ONE main action's wind-up / drive / settle spread on the timeline, NOT 3 sequential actions; still bound by rule 2 "one main action". The brackets are time markers, not action beats, so the rule-2 self-check that counts "→ / then / period" won't miscount them. This stage doesn't know per-shot seconds, so use relative segment markers, not [0s][3s]):
+  · Micro-action layering (REQUIRED): write emotion as concrete body micro-motion, not adjectives (Wrong "looks tense" → Right "jaw clenches, fists tighten, nails digging into palms").
+  · Ambient sound (REQUIRED): one line "Ambient sound: …" at the end of 【画面内容】 (concrete source, not a vague word).
+  · @refs: write only "current action + emotion + expression", never re-describe the appearance @image N already carries (rule 1).
 
-1. Spatial anchor (REQUIRED): each character's in-frame position + facing.
-   e.g. "@A (frame right, foreground) faces left, @B (frame left, background)
-   faces right"
-2. Micro-action layering (REQUIRED): write emotion as concrete body micro-
-   motion, not adjectives.
-   Wrong: "looks tense" → Right: "neck muscles contract, jaw clenches with
-   restrained excitement, fists tighten, nails digging into palms"
-3. Composition + camera grammar: reuse the composition-layers + dramatic-
-   camera vocabulary above (focus pull / over-the-shoulder / low-angle…).
-4. One "Ambient sound:" line (REQUIRED): see rule 6.
+Reference (v3 field block; the three segments are time slices of the SAME "sensing → standoff → countdown" tension arc, NOT three separate actions):
+  【硬切/运镜】hard cut from the previous shot
+  【景别】close-up
+  【构图】@Kael (frame right·foreground) faces left; @Arthur (frame left·background) faces right; left-right depth standoff axis
+  【光线】cool interior ambient as base; warm fill on the near cheek rims the profile; expression readable
+  【运镜手法】focus pull (foreground→background then back), restrained
+  【画面内容】[START] Setup: @Kael's neck muscles contract, head turns smoothly left-back. [MID] Develop: focus snaps from foreground @Kael to background @Arthur then back; @Kael's mouth curls into a taunting cold smile, right jaw twitching. [END] Resolve: cut to @Arthur's POV, a red holographic countdown flares before the retina, freezes on the blinking red number. Ambient sound: low wind reverberating dully + crisp electronic countdown ticking.
 
-Reference structure (match this density; note all three segments are time
-slices of the SAME "sensing → standoff → countdown ignites" tension arc, NOT
-three separate actions):
-   [START] Setup · 【CU · sensing the gaze】
-   [Spatial anchor] @Kael (frame right, foreground) faces left; @Arthur (frame
-   left, background) faces right. Neck muscles contract, head turns smoothly.
-   Ambient sound: faint collar rustle.
-
-   [MID] Develop · 【focus pull · clash of intent】
-   Focus shifts from foreground @Kael to background @Arthur, then snaps back.
-   @Kael's mouth curls into a taunting cold smile, right jaw twitching.
-   Ambient sound: low wind reverberating dully through the space, building tension.
-
-   [END] Resolve · 【POV · countdown ignites】
-   Cut to @Arthur's first-person view; a red holographic countdown flares
-   before the retina, frame freezes on the blinking red number.
-   Ambient sound: crisp electronic countdown ticking.
+⚠️ Still bound by rule 2 "one main action": the three segments above are ONE short shot's ONE main action rising over time — the focus pull / POV switch are camera & focus moves, not extra action beats. If the planned main action is itself complex, write fewer words rather than stuff in extra beats.
+(description keeps full character names; video_prompt still uses age+gender and may keep its existing simpler structure — not required to field-ize.)
 
 ⚠️ Duration-adaptive (localized from Seedance's timeline-prompting guidance):
    - Short shot (high action density / ~3–5s): collapse to TWO segments —
