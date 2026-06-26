@@ -43,11 +43,11 @@ export const POST = apiHandler(async (
 
   // Validate panelIds
   const panelIds = body.panelIds
-  if (!Array.isArray(panelIds) || panelIds.length < 2 || panelIds.length > 6) {
+  if (!Array.isArray(panelIds) || panelIds.length < 1 || panelIds.length > 6) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'PANEL_IDS_INVALID',
       field: 'panelIds',
-      details: { message: 'panelIds must be an array of 2-6 panel IDs' },
+      details: { message: 'panelIds must be an array of 1-6 panel IDs' },
     })
   }
 
@@ -210,11 +210,11 @@ export const POST = apiHandler(async (
       // Treat empty/whitespace as "not provided" rather than rejecting —
       // makes UI debouncing trivial.
       rawPrompt = undefined
-    } else if (trimmed.length > 4000) {
+    } else if (trimmed.length > 8000) {
       throw new ApiError('INVALID_PARAMS', {
         code: 'RAW_PROMPT_TOO_LONG',
         field: 'rawPrompt',
-        details: { length: trimmed.length, max: 4000 },
+        details: { length: trimmed.length, max: 8000 },
       })
     } else {
       rawPrompt = trimmed

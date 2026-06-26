@@ -239,7 +239,7 @@ export async function handleMultiShotVideoTask(job: Job<TaskJobData>) {
       ? resolutionRaw
       : undefined
 
-  if (!Array.isArray(panelIds) || panelIds.length < 2) {
+  if (!Array.isArray(panelIds) || panelIds.length < 1) {
     throw new Error('MULTI_SHOT_PANEL_IDS_INVALID')
   }
 

@@ -1449,7 +1449,7 @@ export function GroupCard({
   }
 
   async function handleRegenerate() {
-    if (panels.length < 2) {
+    if (panels.length < 1) {
       setRegenState({ status: 'error', message: t('errors.needTwoPanels') })
       return
     }
@@ -1682,7 +1682,7 @@ export function GroupCard({
           {expanded ? (
             <button
               type="button"
-              disabled={regenState.status === 'submitting' || panels.length < 2 || !canMultiShot || !canEdit}
+              disabled={regenState.status === 'submitting' || panels.length < 1 || !canMultiShot || !canEdit}
               onClick={(e) => {
                 e.stopPropagation()
                 void handleRegenerate()

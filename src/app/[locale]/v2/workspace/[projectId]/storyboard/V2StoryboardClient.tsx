@@ -1099,7 +1099,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         const sorted = panels
           .slice()
           .sort((a, b) => (a.multiShotGroupOrder ?? 0) - (b.multiShotGroupOrder ?? 0))
-        if (sorted.length < 2) continue
+        if (sorted.length < 1) continue
         const ids = (sorted.length > 6 ? sorted.slice(0, 6) : sorted).map((p) => p.id)
         tmp.push({ groupId, panelIds: ids })
       }
