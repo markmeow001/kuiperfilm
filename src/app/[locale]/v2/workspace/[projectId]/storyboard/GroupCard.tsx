@@ -593,6 +593,14 @@ export function GroupCard({
   // starting point. Once the user types anything, narrativeDirty=true
   // and we stop re-seeding to avoid clobbering their edit.
   const SHOT_TYPE_TO_FRAMING: Record<string, string> = {
+    // v3 四档日常主力 + 两档特殊（2026-06-25）
+    小全景: '小全景',
+    半身景: '半身景',
+    大远景: '大远景',
+    大遠景: '大远景',
+    极端特写: '极端特写',
+    極端特寫: '极端特写',
+    // legacy keys (existing panels) kept for back-compat
     远景: '远景',
     遠景: '远景',
     全景: '全景',
@@ -1080,41 +1088,29 @@ export function GroupCard({
     for (let i = 0; i < count; i++) {
       const p = panels[i]
       const desc = (p.description ?? p.prompt ?? '').trim()
-      const shotTypeRaw = p.shotType?.trim() ?? ''
-      const framing = SHOT_TYPE_TO_FRAMING[shotTypeRaw] ?? '中景'
-      const cameraMoveRaw = p.cameraMove?.trim() ?? ''
-      const cameraMoveCn = CAMERA_MOVE_TO_CN[cameraMoveRaw] ?? cameraMoveRaw
+      // v3 field-block descriptions already carry 【景别】/【运镜手法】 etc., so the
+      // shot header collapses to 「镜头N｜」 and dialogue renders as the
+      // 【人物对应台词】 field. Legacy (pre-v3) descriptions keep the old
+      // 「镜头N: framing·camera」 header + bare dialogue lines (back-compat).
+      const isV3Block = desc.includes('【画面内容】')
 
-      // Shot header: 镜头N: framing·camera
-      // Drop the camera fragment when 固定 (visually empty info).
-      // 2026-05-18 — dropped "(Photorealistic Cinematic)" tag. It was a
-      // hardcoded editing-style claim that contradicted non-realistic
-      // visualStyleId choices and added noise to every shot block.
-      const cameraFragment = cameraMoveCn && cameraMoveCn !== '固定镜头' ? `·${cameraMoveCn}` : ''
-      const lines: string[] = [`镜头${i + 1}: ${framing}${cameraFragment}`]
-
-      if (desc) lines.push(desc)
-
-      // Voice lines — Seedance native dialogue. VO/OS lines get the
-      // explicit "仅音频,无画面文字,嘴部不动" rider so BobAPI does NOT
-      // lip-sync them (matching the OS rule the prompt chain enforces).
+      // Build dialogue lines first — same per-speaker voice-timbre logic for both
+      // formats. Dialogue stays the voiceLines data source and keeps 「」 (TTS
+      // unlock); v3 just wraps it in the 【人物对应台词】 field.
+      const dialogueLines: string[] = []
       const structuredVoiceLines = Array.isArray(p.voiceLines) ? p.voiceLines : []
       if (structuredVoiceLines.length > 0) {
         for (const v of structuredVoiceLines) {
-          // Inject the speaker's voice timbre so the dialogue TTS sounds
-          // on-character and consistent across shots (competitor parity:
-          // "王玄 声音（仅音频，无画面文字）：男性，成熟低沉富有磁性").
-          // No description → fall back to the original format unchanged.
           const voiceDescription = lookupVoiceDescription(v.speaker)
           if (v.isVoiceover) {
-            lines.push(
+            dialogueLines.push(
               voiceDescription
                 ? `${v.speaker} 声音(仅音频，无画面文字，嘴部不动)：${voiceDescription}`
                 : `${v.speaker} 声音(仅音频，无画面文字，嘴部不动):`,
             )
-            lines.push(`「${v.content}」`)
+            dialogueLines.push(`「${v.content}」`)
           } else {
-            lines.push(
+            dialogueLines.push(
               voiceDescription
                 ? `${v.speaker}（声线：${voiceDescription}）:「${v.content}」`
                 : `${v.speaker}:「${v.content}」`,
@@ -1123,14 +1119,30 @@ export function GroupCard({
         }
       } else {
         const srt = (p.srtSegment ?? '').trim()
-        if (srt) lines.push(srt)
+        if (srt) dialogueLines.push(srt)
       }
 
-      // 2026-05-18 — removed per-shot negative sentence
-      // ("严格无任何字幕、文字、logo或屏幕信息"). Negative directives now
-      // ride on BobAPI's negative_prompt body field; emitting them in the
-      // positive prompt was probabilistically inducing the very artifacts
-      // (subtitle bars, on-screen logos) it was trying to suppress.
+      const lines: string[] = []
+      if (isV3Block) {
+        lines.push(`镜头${i + 1}｜`)
+        if (desc) lines.push(desc)
+        lines.push(
+          dialogueLines.length > 0
+            ? `【人物对应台词】\n${dialogueLines.join('\n')}`
+            : '【人物对应台词】无',
+        )
+      } else {
+        const shotTypeRaw = p.shotType?.trim() ?? ''
+        const framing = SHOT_TYPE_TO_FRAMING[shotTypeRaw] ?? '中景'
+        const cameraMoveRaw = p.cameraMove?.trim() ?? ''
+        const cameraMoveCn = CAMERA_MOVE_TO_CN[cameraMoveRaw] ?? cameraMoveRaw
+        // Drop the camera fragment when 固定 (visually empty info).
+        const cameraFragment = cameraMoveCn && cameraMoveCn !== '固定镜头' ? `·${cameraMoveCn}` : ''
+        lines.push(`镜头${i + 1}: ${framing}${cameraFragment}`)
+        if (desc) lines.push(desc)
+        for (const dl of dialogueLines) lines.push(dl)
+      }
+
       shotBlocks.push(lines.join('\n'))
     }
 
