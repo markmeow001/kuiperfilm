@@ -15,7 +15,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
   const { updateNodeData } = useReactFlow()
   const meta = NODE_META.text
   return (
-    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={260} noTarget>
+    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={260}>
       <div className="p-3">
         <textarea
           value={d.prompt}

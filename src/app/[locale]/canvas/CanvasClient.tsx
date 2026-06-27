@@ -20,6 +20,7 @@ import {
   ReactFlowProvider,
   Background,
   BackgroundVariant,
+  ConnectionMode,
   Controls,
   MiniMap,
   addEdge,
@@ -233,6 +234,12 @@ function CanvasInner() {
         maxZoom={3}
         proOptions={{ hideAttribution: true }}
         fitView={false}
+        // Loose: a drag from any handle to any handle connects (direction =
+        // drag start as source). Strict (default) only allowed source→target,
+        // which blocked connecting onto source-only nodes. connectionRadius
+        // snaps near-misses so the small handles are easy to hit.
+        connectionMode={ConnectionMode.Loose}
+        connectionRadius={42}
         defaultEdgeOptions={{ animated: true, style: { stroke: CANVAS_TOKENS.accent, strokeWidth: 1.5 } }}
       >
         <Background variant={BackgroundVariant.Dots} gap={CANVAS_TOKENS.grid} size={1.4} color="rgba(255,255,255,0.10)" />

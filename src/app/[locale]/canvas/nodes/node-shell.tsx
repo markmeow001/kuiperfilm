@@ -24,11 +24,13 @@ interface NodeShellProps {
   width?: number
 }
 
+// Larger hit area (16px) so the port is easy to grab; paired with the
+// ReactFlow connectionRadius so near-misses still snap to it.
 const handleStyle = (color: string) => ({
-  width: 11,
-  height: 11,
+  width: 16,
+  height: 16,
   background: color,
-  border: `2px solid ${CANVAS_TOKENS.bg.card}`,
+  border: `3px solid ${CANVAS_TOKENS.bg.card}`,
 })
 
 export function NodeShell({

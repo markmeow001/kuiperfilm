@@ -36,8 +36,15 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     // Upstream image/character nodes → reference URLs. For a video node the
     // first one becomes the i2v first frame; for an image node they're
     // edit/consistency references. Reactive via React Flow's connection hooks.
-    const incoming = useNodeConnections({ handleType: 'target' })
-    const upstream = useNodesData(incoming.map((c) => c.source))
+    // Under ConnectionMode.Loose a connection can land on any handle, so we
+    // can't filter by handleType='target' — take every edge where THIS node is
+    // the target (this node receives) regardless of which handle was used.
+    const connections = useNodeConnections()
+    const incomingSourceIds = useMemo(
+      () => connections.filter((c) => c.target === id).map((c) => c.source),
+      [connections, id],
+    )
+    const upstream = useNodesData(incomingSourceIds)
     const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream), [upstream])
 
     // Default the model to the first enabled one once catalogs load.
