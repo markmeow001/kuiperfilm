@@ -20,6 +20,7 @@ import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
 import { NodeShell } from './node-shell'
 import { DEFAULT_STAGE, type DirectorStageState } from '../director/stage-types'
+import { REST_POSE } from '../director/pose-presets'
 
 // three.js + R3F + drei are heavy (~250kB). Load the stage only when a director
 // node actually opens it, keeping the base canvas bundle light. ssr:false —
@@ -49,7 +50,13 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const meta = NODE_META.director
-  const stage = (d.stage as DirectorStageState | undefined) ?? DEFAULT_STAGE
+  // Normalize old (M2a) stages: their mannequins predate the pose rig, so fill
+  // REST_POSE once here — downstream code can then rely on pose being present.
+  const rawStage = (d.stage as DirectorStageState | undefined) ?? DEFAULT_STAGE
+  const stage: DirectorStageState = {
+    ...rawStage,
+    mannequins: rawStage.mannequins.map((m) => (m.pose ? m : { ...m, pose: REST_POSE })),
+  }
 
   async function handleSend(dataUrl: string, newStage: DirectorStageState) {
     setError(null)

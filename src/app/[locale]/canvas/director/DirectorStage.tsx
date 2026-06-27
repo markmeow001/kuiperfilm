@@ -18,6 +18,8 @@ import { Grid, OrbitControls, TransformControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { CANVAS_TOKENS } from '../lib/canvas-tokens'
 import { Mannequin } from './Mannequin'
+import { SliderRow } from './SliderRow'
+import { POSE_PRESETS, REST_POSE, RIG_SLIDER_GROUPS, type Joint, type Pose } from './pose-presets'
 import {
   type DirectorStageState,
   type StageMannequin,
@@ -25,6 +27,9 @@ import {
   type Vec3,
   makeMannequin,
 } from './stage-types'
+
+const RAD2DEG = 180 / Math.PI
+const DEG2RAD = Math.PI / 180
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `m_${Date.now()}_${Math.round(Math.random() * 1e6)}`
@@ -249,6 +254,25 @@ export function DirectorStage({ initialState, onClose, onSend, saving }: Directo
     setState((s) => ({ ...s, camera: { ...s.camera, ...patch } }))
   }, [])
 
+  const selectedMannequin = state.mannequins.find((m) => m.id === selectedId) ?? null
+
+  const applyPose = useCallback((id: string, pose: Pose) => {
+    setState((s) => ({ ...s, mannequins: s.mannequins.map((m) => (m.id === id ? { ...m, pose } : m)) }))
+  }, [])
+
+  const setJointAxis = useCallback((id: string, joint: Joint, axis: 0 | 1 | 2, rad: number) => {
+    setState((s) => ({
+      ...s,
+      mannequins: s.mannequins.map((m) => {
+        if (m.id !== id) return m
+        const cur = m.pose ?? REST_POSE
+        const nextAxis = [...cur.joints[joint]] as [number, number, number]
+        nextAxis[axis] = rad
+        return { ...m, pose: { ...cur, joints: { ...cur.joints, [joint]: nextAxis } } }
+      }),
+    }))
+  }, [])
+
   const handleSend = useCallback(() => {
     const url = captureRef.current?.()
     if (url) onSend(url, state)
@@ -326,6 +350,62 @@ export function DirectorStage({ initialState, onClose, onSend, saving }: Directo
         <input type="range" min={18} max={90} step={1} value={state.camera.fov} onChange={(e) => commitCamera({ fov: Number(e.target.value) })} />
         <span style={{ color: CANVAS_TOKENS.accent }}>{state.camera.fov}°</span>
       </div>
+
+      {/* Rig panel — pose presets + per-joint sliders (M2b), shown when a
+          mannequin is selected */}
+      {selectedMannequin ? (
+        <div
+          className="absolute right-4 top-16 bottom-16 flex w-64 flex-col overflow-hidden rounded-xl"
+          style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}
+        >
+          <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+            <span className="font-mono text-[12px]" style={{ color: selectedMannequin.color }}>{selectedMannequin.label} · 姿势</span>
+            <button
+              type="button"
+              onClick={() => applyPose(selectedMannequin.id, REST_POSE)}
+              className="rounded px-2 py-0.5 font-mono text-[10px]"
+              style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}
+            >
+              重置
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2">
+            {/* Pose presets */}
+            <div className="mb-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>预设姿势</div>
+            <div className="mb-3 grid grid-cols-3 gap-1">
+              {POSE_PRESETS.map((preset) => (
+                <button
+                  key={preset.name}
+                  type="button"
+                  onClick={() => applyPose(selectedMannequin.id, preset.pose)}
+                  className="rounded py-1 text-[11px] transition-colors hover:opacity-80"
+                  style={{ color: CANVAS_TOKENS.text.primary, background: CANVAS_TOKENS.bg.hover }}
+                >
+                  {preset.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Per-joint rig sliders */}
+            {RIG_SLIDER_GROUPS.map((g) => (
+              <div key={g.group} className="mb-2">
+                <div className="mb-0.5 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{g.group}</div>
+                {g.rows.map((row) => (
+                  <SliderRow
+                    key={`${row.joint}-${row.axis}`}
+                    label={row.label}
+                    value={(selectedMannequin.pose ?? REST_POSE).joints[row.joint][row.axis] * RAD2DEG}
+                    min={-180}
+                    max={180}
+                    onChange={(deg) => setJointAxis(selectedMannequin.id, row.joint, row.axis, deg * DEG2RAD)}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Hint */}
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>

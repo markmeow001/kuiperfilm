@@ -9,15 +9,20 @@
  * Persisted inside the director node's data.stage so reopening restores the
  * scene. Pure data (no three.js objects) so it serializes to the Canvas DB.
  */
+import { REST_POSE, type Pose } from './pose-presets'
+
 export type Vec3 = [number, number, number]
 
 export interface StageMannequin {
   id: string
   label: string
   position: Vec3
-  rotation: Vec3 // euler radians
+  rotation: Vec3 // euler radians (whole-body facing)
   scale: number
   color: string
+  // Articulated rig (per-joint, M2b). Optional because M2a-era saved stages
+  // predate it — normalized to REST_POSE at the load boundary (DirectorNode).
+  pose?: Pose
 }
 
 export interface StageCamera {
@@ -51,5 +56,6 @@ export function makeMannequin(id: string, index: number): StageMannequin {
     rotation: [0, 0, 0],
     scale: 1,
     color: MANNEQUIN_COLORS[index % MANNEQUIN_COLORS.length],
+    pose: REST_POSE,
   }
 }

@@ -180,8 +180,13 @@ M4 进阶（~大，可选）
        DirectorNode 用 next/dynamic 懒加载(canvas 路由 67.5kB 不被 3D 撑大)；
        director 注册进 tokens/refs/validation/serialize/CanvasClient + 加进 ref-bearing
        → 连 video 节点 = 截图当 i2v 首帧。
-   M2b 进阶：逐关节 rig(SliderRow) + 20 姿势预设 + 机位视角 live toggle + 群众阵列 +
-       几何道具 + 画幅比例 + 全景背景 + AI识图导入。
+   ✅ M2b 逐关节 rig + 姿势预设（build/tsc/eslint/24test 绿，未 deploy）：
+       Mannequin 改成 articulated 骨架(嵌套 bone group，肩→上臂→肘→前臂 等层级)；
+       pose-presets.ts(Pose=root+10关节 Euler；20 预设 站立/T型/行走/跑步/坐/蹲/跪/
+       叉腰/鞠躬/思考/格斗/踢/投/推/招手/伸手/抱臂/看手机…)；SliderRow(uiux-spec 核心
+       组件)；DirectorStage 右栏=预设网格 + 6 组逐关节滑桿(躯干/头/左右臂/左右腿)；
+       向后兼容 M2a 存档(pose ?? REST)。
+   M2c 余下：机位视角 live toggle + 群众阵列 + 几何道具 + 画幅比例 + 全景背景 + AI识图导入。
 
   M1.5b 配方目录（次轴，复用 storyboard prompt 工程）+ **逐段 inline 编辑+单独重生**（low effort 高 UX，杀抽卡感）
   M3   串接序列 + 角色库(CharacterAppearance) + 脚本/音频节点
