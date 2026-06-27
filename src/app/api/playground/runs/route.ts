@@ -52,6 +52,13 @@ export const GET = apiHandler(async (request: NextRequest) => {
   // Workspace runs are tagged via payload.workspaceId (cross-user); personal
   // runs are scoped to the caller. projectId='playground' is exclusive to
   // playground tasks, so it alone separates them from project work.
+  //
+  // NOTE (latent): the playground UI does not yet send workspaceId, so no run
+  // is workspace-tagged today and personal mode is exact. When the
+  // workspace-shared playground UI is wired, personal mode should additionally
+  // exclude workspace-tagged runs (payload.workspaceId set) to match the
+  // pre-9.1 `workspaceId: null` semantics — and the JSON-path filter below
+  // needs a smoke test on this MySQL/Prisma version. See the 9.1 plan doc.
   const tasks = await prisma.task.findMany({
     where: workspaceId
       ? { projectId: PLAYGROUND_PROJECT_ID, payload: { path: '$.workspaceId', equals: workspaceId } }

@@ -378,10 +378,10 @@ async function mergePayloadMetaWithExisting(
   payload: Record<string, unknown> | null,
 ): Promise<Record<string, unknown> | null> {
   if (!payload) return payload
-  // Playground jobs have no backing Task row (state lives on PlaygroundRun).
-  // Skip the meta-merge read entirely — there's nothing to merge with.
-  // 2026-05-28: caused playground-video to crash on Prisma findUnique
-  // with id: undefined.
+  // Defensive: a job without a taskId has no Task row to merge against, so
+  // skip the meta-merge read entirely. (Pre-9.1 this guarded the bespoke
+  // playground path; post-9.1 playground rides the Task spine and always has
+  // a taskId, but the null-guard stays as general safety.)
   if (!taskId) return payload
   const existing = await taskModel.findUnique({
     where: { id: taskId },
@@ -406,7 +406,8 @@ async function mergePayloadMetaWithExisting(
 }
 
 export async function updateTaskPayload(taskId: string | undefined | null, payload: Record<string, unknown> | null) {
-  // Playground jobs have no Task row — nothing to update.
+  // Defensive null-guard: nothing to update without a Task row. (Post-9.1
+  // playground rides the Task spine and always has one.)
   if (!taskId) return null
   const merged = await mergePayloadMetaWithExisting(taskId, payload)
   return await taskModel.update({
@@ -425,11 +426,11 @@ function activeTaskWhere(taskId: string) {
 }
 
 export async function isTaskActive(taskId: string | undefined | null) {
-  // Jobs without a backing Task row (e.g. playground_video, which tracks
-  // state on PlaygroundRun instead) have no taskId. The Task-cancellation
-  // concept doesn't apply to them, so treat as active and let the job
-  // proceed. Querying findUnique({ where: { id: undefined } }) would throw
-  // "needs at least one of id or dedupeKey" and kill the job. (2026-05-28)
+  // Defensive: a job without a taskId has no Task-cancellation concept, so
+  // treat it as active and let it proceed. findUnique({ where: { id:
+  // undefined } }) would otherwise throw "needs at least one of id or
+  // dedupeKey" and kill the job. (Pre-9.1 this covered the bespoke playground
+  // path; post-9.1 playground rides the Task spine and always has a taskId.)
   if (!taskId) return true
   const task = await withPrismaRetry(() =>
     taskModel.findUnique({
@@ -485,10 +486,10 @@ export async function touchTaskHeartbeat(taskId: string | undefined | null) {
 }
 
 export async function tryUpdateTaskProgress(taskId: string | undefined | null, progress: number, payload?: Record<string, unknown> | null) {
-  // Playground jobs run via PlaygroundRun, not Task. They reach the
-  // shared worker progress helper because the BullMQ job is the same
-  // shape, but there's no Task row to update. Soft no-op so the worker
-  // can keep streaming progress events without blowing up. (2026-05-28)
+  // Defensive: a job without a taskId has no Task row to update — soft no-op
+  // so the shared worker progress helper can keep streaming events without
+  // blowing up. (Pre-9.1 this covered the bespoke playground path; post-9.1
+  // playground rides the Task spine and always has a taskId.)
   if (!taskId) return false
   // payload meta keys (locale, route, userTier, runId, provider, etc.)
   // are owned across multiple layers — merge instead of replace so

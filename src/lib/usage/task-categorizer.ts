@@ -33,6 +33,9 @@ const VIDEO_TYPES = new Set<string>([
   // Phase 12.7 FFmpeg full-episode mp4 stitch — counts as a "video"
   // generation event from the user's POV (one click → one mp4 out).
   'episode_stitch_mp4',
+  // Phase 9.1 — Playground video rides the Task spine; categorize like any
+  // other video gen so usage stats + the rate-limit gate apply.
+  'playground_video',
 ])
 
 const IMAGE_TYPES = new Set<string>([
@@ -56,6 +59,8 @@ const IMAGE_TYPES = new Set<string>([
   'ai_create_character',
   'ai_create_location',
   'reference_to_character',
+  // Phase 9.1 — Playground image rides the Task spine.
+  'playground_image',
 ])
 
 const ANALYZE_TYPES = new Set<string>([
