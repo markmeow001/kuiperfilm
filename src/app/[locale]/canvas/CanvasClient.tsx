@@ -52,6 +52,25 @@ function bezier(sx: number, sy: number, ex: number, ey: number) {
   return `M ${sx} ${sy} C ${sx + c} ${sy}, ${ex - c} ${ey}, ${ex} ${ey}`
 }
 
+/** 干净的 inline stroke icon（取代 emoji）。16px、currentColor、lucide 风格。*/
+function ToolIcon({ name }: { name: string }) {
+  const common = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  switch (name) {
+    case '添加节点':
+      return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>
+    case '工具箱': // 2x2 grid
+      return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
+    case '素材库': // image
+      return <svg {...common}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="1.6" /><path d="m21 15-4.5-4.5L7 20" /></svg>
+    case '角色库': // user
+      return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>
+    case '历史记录': // clock
+      return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+    default:
+      return null
+  }
+}
+
 interface CanvasClientProps {
   locale: string
 }
@@ -207,25 +226,41 @@ export function CanvasClient(_props: CanvasClientProps) {
         onWheel={onWheel}
         onDoubleClick={onBgDoubleClick}
       >
-        <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.k})` }}>
-          {/* 连线层（SVG，世界坐标，overflow visible 让线超出 1x1 仍渲染）*/}
-          <svg className="pointer-events-none absolute left-0 top-0" style={{ width: 1, height: 1, overflow: 'visible' }}>
-            {edges.map((ed) => {
-              const a = nodeById(ed.from)
-              const b = nodeById(ed.to)
-              if (!a || !b) return null
-              const s = outPort(a)
-              const t = inPort(b)
-              return <path key={ed.id} d={bezier(s.x, s.y, t.x, t.y)} stroke="rgba(255,255,255,0.45)" strokeWidth={2} fill="none" />
-            })}
-            {pending && connectRef.current && (() => {
-              const a = nodeById(connectRef.current.from)
-              if (!a) return null
-              const s = outPort(a)
-              return <path d={bezier(s.x, s.y, pending.wx, pending.wy)} stroke="rgba(124,92,255,0.8)" strokeWidth={2} strokeDasharray="5 4" fill="none" />
-            })()}
-          </svg>
+        {/* 连线层：屏幕坐标 + 覆盖整个容器 + 在节点之下（之前放在 transform 内的 1x1 SVG 被裁切 → 没线）*/}
+        <svg className="pointer-events-none absolute inset-0 h-full w-full">
+          {edges.map((ed) => {
+            const a = nodeById(ed.from)
+            const b = nodeById(ed.to)
+            if (!a || !b) return null
+            const so = outPort(a)
+            const ti = inPort(b)
+            return (
+              <path
+                key={ed.id}
+                d={bezier(so.x * viewport.k + viewport.x, so.y * viewport.k + viewport.y, ti.x * viewport.k + viewport.x, ti.y * viewport.k + viewport.y)}
+                stroke="rgba(255,255,255,0.5)"
+                strokeWidth={2}
+                fill="none"
+              />
+            )
+          })}
+          {pending && connectRef.current && (() => {
+            const a = nodeById(connectRef.current.from)
+            if (!a) return null
+            const so = outPort(a)
+            return (
+              <path
+                d={bezier(so.x * viewport.k + viewport.x, so.y * viewport.k + viewport.y, pending.wx * viewport.k + viewport.x, pending.wy * viewport.k + viewport.y)}
+                stroke="rgba(124,92,255,0.85)"
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                fill="none"
+              />
+            )
+          })()}
+        </svg>
 
+        <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.k})` }}>
           {nodes.map((n) => {
             const meta = NODE_META[n.type]
             return (
@@ -290,27 +325,21 @@ export function CanvasClient(_props: CanvasClientProps) {
 
       {/* 底部工具列（仿 LibTV，置中胶囊）*/}
       <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-[#1a1a1d]/90 px-2 py-1.5 shadow-2xl shadow-black/50 backdrop-blur">
-        {[
-          { icon: '＋', title: '添加节点' },
-          { icon: '⬚', title: '工具箱' },
-          { icon: '🖼', title: '素材库' },
-          { icon: '👤', title: '角色库' },
-          { icon: '🕘', title: '历史记录' },
-        ].map((b) => (
+        {['添加节点', '工具箱', '素材库', '角色库', '历史记录'].map((title) => (
           <button
-            key={b.title}
+            key={title}
             type="button"
-            title={b.title}
+            title={title}
             onClick={() => {
-              if (b.title !== '添加节点') return
+              if (title !== '添加节点') return
               const cw = containerRef.current?.clientWidth ?? 800
               const ch = containerRef.current?.clientHeight ?? 600
               const v = vpRef.current
               setMenu({ sx: cw / 2, sy: ch / 2 - 80, wx: (-v.x + cw / 2) / v.k, wy: (-v.y + ch / 2) / v.k, from: null })
             }}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-[15px] text-stone-400 transition-colors hover:bg-white/10 hover:text-stone-100"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-white/10 hover:text-stone-100"
           >
-            {b.icon}
+            <ToolIcon name={title} />
           </button>
         ))}
       </div>
