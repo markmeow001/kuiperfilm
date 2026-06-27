@@ -29,6 +29,14 @@ export interface CanvasNodeData extends Record<string, unknown> {
   runId?: string | null
   /** Last known result media URL (cached so reload shows something pre-poll). */
   resultUrl?: string | null
+  /**
+   * Durable COS key for ref-bearing nodes (character/director uploads). Preferred
+   * over resultUrl when feeding downstream references: it's a bare key the worker
+   * re-signs fresh, so the reference survives the signed-URL expiry that would
+   * otherwise break i2v after a few hours. Undefined for run-result nodes whose
+   * underlying key isn't exposed to the client.
+   */
+  referenceKey?: string | null
 }
 
 /** Minimal serializable node (what we store in the Canvas DB row / localStorage). */
@@ -69,6 +77,7 @@ export const DEFAULT_NODE_DATA = {
   resolution: '720p',
   runId: null as string | null,
   resultUrl: null as string | null,
+  referenceKey: null as string | null,
 } satisfies Record<string, unknown>
 
 export const EMPTY_CANVAS: SerializedCanvas = {

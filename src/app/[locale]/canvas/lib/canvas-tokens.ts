@@ -33,7 +33,7 @@ export const CANVAS_TOKENS = {
 } as const
 
 /** Per-node-type accent + label metadata. */
-export type CanvasNodeType = 'character' | 'image' | 'video' | 'text'
+export type CanvasNodeType = 'character' | 'image' | 'video' | 'text' | 'director'
 
 export const NODE_META: Record<
   CanvasNodeType,
@@ -43,4 +43,5 @@ export const NODE_META: Record<
   image: { label: '图片', accent: CANVAS_TOKENS.accent, hint: '文字生图 / 编辑' },
   video: { label: '视频', accent: '#7BE3A4', hint: '首帧图 → 短片' },
   text: { label: '文本', accent: CANVAS_TOKENS.text.secondary, hint: '脚本 / 提示词' },
+  director: { label: '导演台', accent: '#4F8EF7', hint: '3D 站位 → 参考图' },
 }

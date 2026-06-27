@@ -41,6 +41,7 @@ import { useCanvas, useSaveCanvas } from '@/lib/query/mutations/canvas-mutations
 import { makeMediaNode } from './nodes/MediaNode'
 import { TextNode } from './nodes/TextNode'
 import { CharacterNode } from './nodes/CharacterNode'
+import { DirectorNode } from './nodes/DirectorNode'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -52,9 +53,10 @@ const nodeTypes: NodeTypes = {
   video: makeMediaNode('video'),
   text: TextNode,
   character: CharacterNode,
+  director: DirectorNode,
 }
 
-const ADD_ORDER: CanvasNodeType[] = ['image', 'video', 'character', 'text']
+const ADD_ORDER: CanvasNodeType[] = ['image', 'video', 'director', 'character', 'text']
 
 function makeNode(type: CanvasNodeType, x: number, y: number): Node<CanvasNodeData> {
   return {

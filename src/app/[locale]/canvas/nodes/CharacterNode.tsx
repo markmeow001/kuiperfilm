@@ -27,7 +27,9 @@ export function CharacterNode({ id, data, selected }: NodeProps) {
     setError(null)
     try {
       const result = await upload.mutateAsync({ file, type: 'image' })
-      updateNodeData(id, { resultUrl: result.signedUrl, runId: result.key })
+      // referenceKey = durable COS key (worker re-signs for i2v); resultUrl =
+      // signed URL for the thumbnail.
+      updateNodeData(id, { resultUrl: result.signedUrl, referenceKey: result.key })
     } catch (err) {
       setError((err as Error)?.message ?? '上传失败')
     }

@@ -29,6 +29,25 @@ describe('pickUpstreamReferenceUrls', () => {
     ).toEqual([])
   })
 
+  it('prefers the durable referenceKey over the (expiring) resultUrl', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'director', data: { referenceKey: 'images/playground-ref/u/abc.png', resultUrl: 'https://signed-expiring' } },
+        { type: 'character', data: { referenceKey: 'images/playground-ref/u/def.png', resultUrl: 'https://x' } },
+      ]),
+    ).toEqual(['images/playground-ref/u/abc.png', 'images/playground-ref/u/def.png'])
+  })
+
+  it('falls back to resultUrl when no referenceKey (run-result nodes)', () => {
+    expect(
+      pickUpstreamReferenceUrls([{ type: 'image', data: { resultUrl: 'https://signed-fresh' } }]),
+    ).toEqual(['https://signed-fresh'])
+  })
+
+  it('includes director nodes as ref-bearing', () => {
+    expect(pickUpstreamReferenceUrls([{ type: 'director', data: { resultUrl: 'https://shot' } }])).toEqual(['https://shot'])
+  })
+
   it('tolerates null/undefined entries', () => {
     expect(pickUpstreamReferenceUrls([null, undefined, { type: 'image', data: { resultUrl: 'https://ok' } }])).toEqual([
       'https://ok',

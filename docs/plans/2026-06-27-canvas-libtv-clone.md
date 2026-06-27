@@ -126,6 +126,18 @@ M4 进阶（~大，可选）
 3. React Flow 自订节点 + 不引 antd 自建 UI。
 4. **AGPL 红线**：全程零 infinite-canvas 程式码，只照截图/spec 重写。
 
+## LibTV 生成方式研究结论（2026-06-27，~/canvas_ref/libtv-skills-research.md + libtv-usage-research.md）
+
+第三方调研 + GitHub `libtv-labs/libtv-skills` 拆解，核心结论：
+
+1. **LibTV 核心生成法 = 节点图数据流**：上游节点的「输出」直接当下游节点的「输入」，靠连线传递。**= 我们的 i2v 串接路线，方向已验证对。**
+2. **他们的「skill」是空壳搬运工**：公开 repo 只是把用户原始自然语言原样转发给服务器，**分镜拆解/模型路由/prompt 工程全在服务器端黑箱**，没有可抄的配方档。→ 验证「raw prose 进、服务器端编排」spine 路线。
+3. **我们已赢两点**（差异化，要守住）：① 参考传递——他们把 OSS URL 塞进 prose 字串让服务器 parse；我们用 **React Flow typed edge** 传，更干净。② 配方——他们景别/运镜/光线是一坨 prose；我们**字段化（v3 规范）**，更透明可控。
+4. **导演台 3D = 最值得抄**：专为解决「多角色跨镜头一致性」（KuiperAI 长期痛点）。3D 人偶摆位→截图→当参考图喂生成，给模型视觉空间参考而非文字走位。
+5. **逐段 inline 编辑 + 单独重生** = 杀掉「抽卡/生一段祈祷能用」，对比 wizard 流的最大 UX 赢点。
+6. **skill primitive = 节点链「打组」→「添加到工具箱」一键复用** = 我们 M1.5b 配方目录 + Phase 2.5。
+7. **Seedance 2.0 默认主力**：一次出对白+音效+环境音+BGM、原生多镜头、不排队。
+
 ## 进度
 
 **M1 ✅ 完成（2026-06-27）** — `npm run build` 绿、tsc 绿、eslint 绿、7 unit test 绿：
@@ -150,6 +162,28 @@ M4 进阶（~大，可选）
 - 测试：`tests/unit/canvas/`（serialize 7 + refs 4 + repository 5 = 16 绿）。
 - **未 commit、未 deploy**（等授权）。线上仍旧手写壳 a966115。
 
-## 待 user 拍板（下一步）
-- M1+M1.5a 要不要 commit + deploy 上线试（deploy 会跑 db push 建 canvas 表，需 prod 授权）。
-- 接着做 **M1.5b 配方目录**（最高杠杆，复用 storyboard prompt）还是 **M2 导演台 3D**。
+**连线 bugfix ✅（commit 98ec180，已 deploy prod）**：节点连不上的根因=Strict connectionMode + 角色/文本 source-only（noTarget）+ 无 video 节点→无可达 target。修法 connectionMode=Loose + connectionRadius=42 + 全节点双端点 + handle 11→16px + i2v 上游侦测改 target===id（Loose 下也准）。canvas 表已验 rows=1（持久化端到端通）。
+
+## 分期（按研究调整）
+
+```
+✅ M1   React Flow 壳 + 出图（已 deploy）
+✅ M1.5a DB 持久化 + i2v 首帧串接（已 deploy）
+✅ fix  连线（Loose + 双端点，已 deploy）
+
+▶ M2   导演台 3D ★★★（研究确认最高价值 = 多角色跨镜头一致性，真差异化）— 当前主轴
+   ✅ M2a 地基（build/tsc/eslint/16test 绿，未 deploy）：装 three@0.185+R3F9+drei；
+       director/(stage-types + Mannequin 素体primitive + DirectorStage 全屏)；
+       素体 move/rotate/scale(TransformControls+模式钮) + 机位锥/注视球 gizmo +
+       FOV slider + OrbitControls 导演视角 + 截图(隐藏 helper 后 toDataURL) →
+       upload → director 节点 resultUrl + 持久化 stage 到 data.stage；
+       DirectorNode 用 next/dynamic 懒加载(canvas 路由 67.5kB 不被 3D 撑大)；
+       director 注册进 tokens/refs/validation/serialize/CanvasClient + 加进 ref-bearing
+       → 连 video 节点 = 截图当 i2v 首帧。
+   M2b 进阶：逐关节 rig(SliderRow) + 20 姿势预设 + 机位视角 live toggle + 群众阵列 +
+       几何道具 + 画幅比例 + 全景背景 + AI识图导入。
+
+  M1.5b 配方目录（次轴，复用 storyboard prompt 工程）+ **逐段 inline 编辑+单独重生**（low effort 高 UX，杀抽卡感）
+  M3   串接序列 + 角色库(CharacterAppearance) + 脚本/音频节点
+  M4   AI 识图导入 3D + 360 全景 + polyfilm provider
+```
