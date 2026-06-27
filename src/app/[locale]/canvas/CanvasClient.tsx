@@ -1,74 +1,332 @@
 'use client'
 
 /**
- * 无限画布壳 M1 — 纯 React（无 zustand/tldraw 依赖），仿 infinite-canvas 的
- * transform-based 平移/缩放 + 绝对定位可拖拉节点 + SVG 贝塞尔连线。UI 对标 LibTV。
+ * 无限画布 M1 — React Flow(@xyflow/react, MIT) 引擎（= LibTV 实测同款），套
+ * LibTV 配色 token。图片/视频节点接现有 Playground run spine 出图出片（计费/
+ * worker/轮询全继承，无新 task type）。
  *
- * 连线 UX（仿 LibTV / infinite-canvas）：
- *  - 每个节点右侧有「输出 port」、左侧有「输入 port」。
- *  - 从输出 port 拖出 → 实时贝塞尔跟随光标 →
- *      · 松手在另一个节点上 → 连成一条边
- *      · 松手在空白处 → 弹节点菜单，选类型后「生成连好的下一个节点」（节点增加节点）
+ * M1 范围：React Flow 壳 + 4 节点(图片/视频/角色/文本) + 文生图/文生视频生成 +
+ * 节点连线(handle→handle / 拖到空白生连好的下一个节点) + localStorage 持久化。
+ * 画布存 DB(新表 Canvas)、导演台 3D、配方目录、i2v 首帧串接 = M1.5/M2。
  *
- * 生成走 Task spine、画布存 DB、导演台 3D = 后续。
+ * 设计/分期见 repo docs/plans/2026-06-27-canvas-libtv-clone.md。
  */
 
-import { useCallback, useRef, useState } from 'react'
+import '@xyflow/react/dist/style.css'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  BackgroundVariant,
+  Controls,
+  MiniMap,
+  addEdge,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  type Connection,
+  type Edge,
+  type Node,
+  type NodeTypes,
+  type ReactFlowInstance,
+} from '@xyflow/react'
+import { CANVAS_TOKENS, NODE_META, type CanvasNodeType } from './lib/canvas-tokens'
+import { DEFAULT_NODE_DATA, type CanvasNodeData } from './lib/canvas-types'
+import { serializeCanvas, deserializeCanvas } from './lib/canvas-serialize'
+import { CanvasGenerationProvider } from './lib/canvas-generation'
+import { useCanvas, useSaveCanvas } from '@/lib/query/mutations/canvas-mutations'
+import { makeMediaNode } from './nodes/MediaNode'
+import { TextNode } from './nodes/TextNode'
+import { CharacterNode } from './nodes/CharacterNode'
 
-type NodeType = 'character' | 't2i' | 'i2v' | 'text'
-interface CanvasNode {
-  id: string
-  type: NodeType
-  x: number
-  y: number
-  title: string
-  prompt: string
-}
-interface Edge {
-  id: string
-  from: string
-  to: string
-}
-interface Viewport {
-  x: number
-  y: number
-  k: number
+const uid = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `n_${Date.now()}_${Math.round(Math.random() * 1e6)}`
+
+const nodeTypes: NodeTypes = {
+  image: makeMediaNode('image'),
+  video: makeMediaNode('video'),
+  text: TextNode,
+  character: CharacterNode,
 }
 
-const NODE_META: Record<NodeType, { label: string; dot: string; ring: string; hint: string }> = {
-  character: { label: '角色', dot: 'text-violet-300', ring: 'border-violet-500/40', hint: '绑参考图 / 角色库' },
-  t2i: { label: '文生图', dot: 'text-amber-300', ring: 'border-amber-500/40', hint: 'prompt → 图' },
-  i2v: { label: '图生视频', dot: 'text-emerald-300', ring: 'border-emerald-500/40', hint: '首帧图 → 短片' },
-  text: { label: '文本', dot: 'text-stone-300', ring: 'border-stone-500/40', hint: '脚本 / 提示词' },
-}
-const NODE_W = 240
-const NODE_H = 150
-const uid = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.round(performance.now())}`)
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
-const outPort = (n: CanvasNode) => ({ x: n.x + NODE_W, y: n.y + NODE_H / 2 })
-const inPort = (n: CanvasNode) => ({ x: n.x, y: n.y + NODE_H / 2 })
-function bezier(sx: number, sy: number, ex: number, ey: number) {
-  const c = Math.max(Math.abs(ex - sx) * 0.5, 50)
-  return `M ${sx} ${sy} C ${sx + c} ${sy}, ${ex - c} ${ey}, ${ex} ${ey}`
-}
+const ADD_ORDER: CanvasNodeType[] = ['image', 'video', 'character', 'text']
 
-/** 干净的 inline stroke icon（取代 emoji）。16px、currentColor、lucide 风格。*/
-function ToolIcon({ name }: { name: string }) {
-  const common = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  switch (name) {
-    case '添加节点':
-      return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>
-    case '工具箱': // 2x2 grid
-      return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-    case '素材库': // image
-      return <svg {...common}><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="1.6" /><path d="m21 15-4.5-4.5L7 20" /></svg>
-    case '角色库': // user
-      return <svg {...common}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>
-    case '历史记录': // clock
-      return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-    default:
-      return null
+function makeNode(type: CanvasNodeType, x: number, y: number): Node<CanvasNodeData> {
+  return {
+    id: uid(),
+    type,
+    position: { x, y },
+    data: { title: NODE_META[type].label, ...DEFAULT_NODE_DATA },
   }
+}
+
+interface AddMenu {
+  screenX: number
+  screenY: number
+  flowX: number
+  flowY: number
+  /** When set, the new node is auto-connected from this source id. */
+  fromNodeId: string | null
+}
+
+function CanvasInner() {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<CanvasNodeData>>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [menu, setMenu] = useState<AddMenu | null>(null)
+  const [zoom, setZoom] = useState(1)
+  const rf = useReactFlow()
+  const instanceRef = useRef<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null)
+  const loadedRef = useRef(false)
+  const canvasIdRef = useRef<string | null>(null)
+  const pendingViewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+
+  const canvasQuery = useCanvas()
+  const save = useSaveCanvas()
+
+  // ── Hydrate from DB once the query resolves ──
+  useEffect(() => {
+    if (loadedRef.current || canvasQuery.isLoading) return
+    loadedRef.current = true
+    const canvas = canvasQuery.data?.canvas
+    if (!canvas) return
+    canvasIdRef.current = canvas.id
+    const { nodes: n, edges: e, viewport } = deserializeCanvas({
+      nodes: canvas.nodes,
+      edges: canvas.edges,
+      viewport: canvas.viewport,
+    })
+    setNodes(n)
+    setEdges(e)
+    // Apply viewport now if the instance is ready, else stash for onInit.
+    if (instanceRef.current) instanceRef.current.setViewport(viewport)
+    else pendingViewportRef.current = viewport
+  }, [canvasQuery.isLoading, canvasQuery.data, setNodes, setEdges])
+
+  // ── Autosave (debounced) to DB on any change ──
+  useEffect(() => {
+    if (!loadedRef.current) return
+    // Don't create an empty row for a brand-new user who did nothing yet.
+    if (nodes.length === 0 && !canvasIdRef.current) return
+    const t = setTimeout(() => {
+      const vp = instanceRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
+      const serialized = serializeCanvas(nodes, edges, vp)
+      save.mutate(
+        {
+          ...(canvasIdRef.current ? { id: canvasIdRef.current } : {}),
+          nodes: serialized.nodes,
+          edges: serialized.edges,
+          viewport: serialized.viewport,
+        },
+        {
+          onSuccess: ({ canvas }) => {
+            canvasIdRef.current = canvas.id
+          },
+        },
+      )
+    }, 800)
+    return () => clearTimeout(t)
+    // save is stable from react-query; intentionally excluded to avoid re-arming.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges])
+
+  const onConnect = useCallback(
+    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+    [setEdges],
+  )
+
+  // Drag from a handle, release on empty canvas → open add-menu wired to source.
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: { isValid: boolean | null; fromNode?: { id: string } | null }) => {
+      if (connectionState.isValid) return // landed on a node → onConnect handled it
+      const fromId = connectionState.fromNode?.id ?? null
+      if (!fromId) return
+      const { clientX, clientY } = 'changedTouches' in event ? event.changedTouches[0] : event
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      const flow = rf.screenToFlowPosition({ x: clientX, y: clientY })
+      setMenu({
+        screenX: clientX - (rect?.left ?? 0),
+        screenY: clientY - (rect?.top ?? 0),
+        flowX: flow.x,
+        flowY: flow.y,
+        fromNodeId: fromId,
+      })
+    },
+    [rf],
+  )
+
+  const onPaneDoubleClick = useCallback(
+    (event: React.MouseEvent) => {
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      const flow = rf.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      setMenu({
+        screenX: event.clientX - (rect?.left ?? 0),
+        screenY: event.clientY - (rect?.top ?? 0),
+        flowX: flow.x,
+        flowY: flow.y,
+        fromNodeId: null,
+      })
+    },
+    [rf],
+  )
+
+  const addNodeFromMenu = useCallback(
+    (type: CanvasNodeType) => {
+      if (!menu) return
+      const node = makeNode(type, menu.flowX - 140, menu.flowY - 40)
+      setNodes((ns) => [...ns, node])
+      if (menu.fromNodeId) {
+        const edge: Edge = { id: uid(), source: menu.fromNodeId, target: node.id, animated: true }
+        setEdges((es) => addEdge(edge, es))
+      }
+      setMenu(null)
+    },
+    [menu, setNodes, setEdges],
+  )
+
+  const openDockMenu = useCallback(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect()
+    const cx = (rect?.width ?? 800) / 2
+    const cy = (rect?.height ?? 600) / 2
+    const flow = rf.screenToFlowPosition({ x: (rect?.left ?? 0) + cx, y: (rect?.top ?? 0) + cy })
+    setMenu({ screenX: cx, screenY: cy, flowX: flow.x, flowY: flow.y, fromNodeId: null })
+  }, [rf])
+
+  const minimapColor = useCallback((n: Node) => NODE_META[(n.type as CanvasNodeType) ?? 'text']?.accent ?? CANVAS_TOKENS.text.muted, [])
+
+  const dockButtons = useMemo(
+    () => [
+      { key: 'add', label: '添加节点', onClick: openDockMenu },
+      { key: 'toolbox', label: '工具箱', onClick: () => {} },
+      { key: 'material', label: '素材库', onClick: () => {} },
+      { key: 'character', label: '角色库', onClick: () => {} },
+      { key: 'history', label: '历史', onClick: () => {} },
+    ],
+    [openDockMenu],
+  )
+
+  return (
+    <div ref={wrapperRef} className="fixed inset-0 overflow-hidden" style={{ background: CANVAS_TOKENS.bg.canvas }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onConnectEnd={onConnectEnd}
+        onDoubleClick={onPaneDoubleClick}
+        onInit={(inst) => {
+          instanceRef.current = inst as ReactFlowInstance<Node<CanvasNodeData>, Edge>
+          if (pendingViewportRef.current) {
+            inst.setViewport(pendingViewportRef.current)
+            pendingViewportRef.current = null
+          }
+        }}
+        onMove={(_e, vp) => setZoom(vp.zoom)}
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        minZoom={0.2}
+        maxZoom={3}
+        proOptions={{ hideAttribution: true }}
+        fitView={false}
+        defaultEdgeOptions={{ animated: true, style: { stroke: CANVAS_TOKENS.accent, strokeWidth: 1.5 } }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={CANVAS_TOKENS.grid} size={1.4} color="rgba(255,255,255,0.10)" />
+        <Controls position="bottom-right" showInteractive={false} style={{ filter: 'invert(0.9) hue-rotate(180deg)' }} />
+        <MiniMap
+          position="bottom-right"
+          pannable
+          zoomable
+          nodeColor={minimapColor}
+          maskColor="rgba(0,0,0,0.6)"
+          style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, marginBottom: 56 }}
+        />
+      </ReactFlow>
+
+      {/* Top bar */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between px-4"
+        style={{ background: `${CANVAS_TOKENS.bg.panel}cc`, borderBottom: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}
+      >
+        <div className="pointer-events-auto flex items-center gap-3 font-mono text-[13px]">
+          <Link href="/zh/v2" className="text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>‹ 返回</Link>
+          <span style={{ color: CANVAS_TOKENS.accent }}>◇</span>
+          <span style={{ color: CANVAS_TOKENS.text.primary }}>无限画布</span>
+          <span style={{ color: CANVAS_TOKENS.text.muted }}>· 未命名</span>
+        </div>
+        <div className="pointer-events-auto flex items-center gap-2 font-mono text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
+          <span className="rounded px-2 py-1" style={{ background: CANVAS_TOKENS.bg.hover }}>{Math.round(zoom * 100)}%</span>
+        </div>
+      </div>
+
+      {/* Empty hint */}
+      {nodes.length === 0 && !menu ? (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1" style={{ color: CANVAS_TOKENS.text.muted }}>
+          <div className="text-2xl" style={{ color: CANVAS_TOKENS.accent }}>◇</div>
+          <p className="text-sm">双击画布添加节点</p>
+          <p className="text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>从节点右侧端点拖出 → 连下一个节点</p>
+        </div>
+      ) : null}
+
+      {/* Add-node menu */}
+      {menu ? (
+        <>
+          <div className="absolute inset-0 z-30" onClick={() => setMenu(null)} />
+          <div
+            className="absolute z-40 w-48 overflow-hidden rounded-xl"
+            style={{
+              left: Math.min(menu.screenX, (wrapperRef.current?.clientWidth ?? 800) - 200),
+              top: Math.min(menu.screenY, (wrapperRef.current?.clientHeight ?? 600) - 220),
+              background: CANVAS_TOKENS.bg.popover,
+              border: `1px solid ${CANVAS_TOKENS.hairline}`,
+              boxShadow: '0 16px 40px rgba(0,0,0,0.55)',
+            }}
+          >
+            <div className="px-3 py-2 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted, borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+              {menu.fromNodeId ? '连接 · 新节点' : '添加节点'}
+            </div>
+            {ADD_ORDER.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => addNodeFromMenu(t)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-left text-[13px] transition-colors hover:bg-white/5"
+                style={{ color: CANVAS_TOKENS.text.primary }}
+              >
+                <span className="flex items-center gap-2">
+                  <span style={{ color: NODE_META[t].accent }}>◆</span>
+                  {NODE_META[t].label}
+                </span>
+                <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{NODE_META[t].hint}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* Bottom-center dock */}
+      <div
+        className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full px-2 py-1.5"
+        style={{ background: `${CANVAS_TOKENS.bg.card}e6`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+      >
+        {dockButtons.map((b) => (
+          <button
+            key={b.key}
+            type="button"
+            onClick={b.onClick}
+            className="rounded-full px-3 py-1.5 font-mono text-[12px] transition-colors hover:bg-white/10"
+            style={{ color: b.key === 'add' ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.secondary }}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 interface CanvasClientProps {
@@ -76,281 +334,11 @@ interface CanvasClientProps {
 }
 
 export function CanvasClient(_props: CanvasClientProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, k: 1 })
-  const [nodes, setNodes] = useState<CanvasNode[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
-  const [menu, setMenu] = useState<{ sx: number; sy: number; wx: number; wy: number; from: string | null } | null>(null)
-  const [pending, setPending] = useState<{ wx: number; wy: number } | null>(null)
-
-  // In-flight interaction state in refs (avoids stale closures + extra renders).
-  const panRef = useRef<{ px: number; py: number; ox: number; oy: number } | null>(null)
-  const dragRef = useRef<{ id: string; px: number; py: number; ox: number; oy: number } | null>(null)
-  const connectRef = useRef<{ from: string } | null>(null)
-  const vpRef = useRef(viewport)
-  vpRef.current = viewport
-
-  const toWorld = useCallback((clientX: number, clientY: number) => {
-    const rect = containerRef.current?.getBoundingClientRect()
-    const sx = clientX - (rect?.left ?? 0)
-    const sy = clientY - (rect?.top ?? 0)
-    const v = vpRef.current
-    return { wx: (sx - v.x) / v.k, wy: (sy - v.y) / v.k, sx, sy }
-  }, [])
-
-  const onWheel = useCallback((e: React.WheelEvent) => {
-    const rect = containerRef.current?.getBoundingClientRect()
-    const sx = e.clientX - (rect?.left ?? 0)
-    const sy = e.clientY - (rect?.top ?? 0)
-    setViewport((v) => {
-      const wx = (sx - v.x) / v.k
-      const wy = (sy - v.y) / v.k
-      const k = clamp(v.k * (e.deltaY < 0 ? 1.1 : 0.9), 0.2, 3)
-      return { k, x: sx - wx * k, y: sy - wy * k }
-    })
-  }, [])
-
-  const onBgPointerDown = useCallback((e: React.PointerEvent) => {
-    if (e.button !== 0) return
-    setMenu(null)
-    const v = vpRef.current
-    panRef.current = { px: e.clientX, py: e.clientY, ox: v.x, oy: v.y }
-  }, [])
-
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (connectRef.current) {
-        const { wx, wy } = toWorld(e.clientX, e.clientY)
-        setPending({ wx, wy })
-        return
-      }
-      if (dragRef.current) {
-        const d = dragRef.current
-        const k = vpRef.current.k
-        setNodes((ns) => ns.map((n) => (n.id === d.id ? { ...n, x: d.ox + (e.clientX - d.px) / k, y: d.oy + (e.clientY - d.py) / k } : n)))
-        return
-      }
-      if (panRef.current) {
-        const p = panRef.current
-        setViewport((v) => ({ ...v, x: p.ox + (e.clientX - p.px), y: p.oy + (e.clientY - p.py) }))
-      }
-    },
-    [toWorld],
-  )
-
-  const onPointerUp = useCallback(
-    (e: React.PointerEvent) => {
-      if (connectRef.current) {
-        const from = connectRef.current.from
-        const { wx, wy, sx, sy } = toWorld(e.clientX, e.clientY)
-        // hit-test: released over another node?
-        const target = nodes.find((n) => n.id !== from && wx >= n.x && wx <= n.x + NODE_W && wy >= n.y && wy <= n.y + NODE_H)
-        if (target) {
-          setEdges((es) => (es.some((ed) => ed.from === from && ed.to === target.id) ? es : [...es, { id: uid(), from, to: target.id }]))
-        } else {
-          // released on empty → spawn a CONNECTED next node
-          setMenu({ sx, sy, wx, wy, from })
-        }
-        connectRef.current = null
-        setPending(null)
-      }
-      panRef.current = null
-      dragRef.current = null
-    },
-    [nodes, toWorld],
-  )
-
-  const onNodePointerDown = useCallback((e: React.PointerEvent, node: CanvasNode) => {
-    e.stopPropagation()
-    if (e.button !== 0) return
-    dragRef.current = { id: node.id, px: e.clientX, py: e.clientY, ox: node.x, oy: node.y }
-  }, [])
-
-  const onOutPortDown = useCallback((e: React.PointerEvent, node: CanvasNode) => {
-    e.stopPropagation()
-    if (e.button !== 0) return
-    connectRef.current = { from: node.id }
-    const p = outPort(node)
-    setPending({ wx: p.x, wy: p.y })
-  }, [])
-
-  const onBgDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      const { wx, wy, sx, sy } = toWorld(e.clientX, e.clientY)
-      setMenu({ sx, sy, wx, wy, from: null })
-    },
-    [toWorld],
-  )
-
-  const addNode = useCallback(
-    (type: NodeType) => {
-      if (!menu) return
-      const id = uid()
-      setNodes((ns) => [...ns, { id, type, x: menu.wx - (menu.from ? 0 : NODE_W / 2), y: menu.wy - NODE_H / 2, title: NODE_META[type].label, prompt: '' }])
-      if (menu.from) setEdges((es) => [...es, { id: uid(), from: menu.from as string, to: id }])
-      setMenu(null)
-    },
-    [menu],
-  )
-
-  const nodeById = (id: string) => nodes.find((n) => n.id === id)
-
   return (
-    <div className="fixed inset-0 select-none overflow-hidden bg-[#0e0e10] text-stone-200">
-      {/* 顶栏 */}
-      <div className="absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between border-b border-white/5 bg-[#141416]/80 px-4 backdrop-blur">
-        <div className="flex items-center gap-2 font-mono text-[13px] tracking-wider text-stone-300">
-          <span className="text-violet-400">◇</span> 无限画布 <span className="text-stone-600">·</span>
-          <span className="text-stone-500">未命名画布</span>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-[12px] text-stone-400">
-          <span className="rounded bg-white/5 px-2 py-1">⚡ —</span>
-          <span className="rounded bg-white/5 px-2 py-1">{Math.round(viewport.k * 100)}%</span>
-        </div>
-      </div>
-
-      {/* 画布 */}
-      <div
-        ref={containerRef}
-        className="absolute inset-0 cursor-grab active:cursor-grabbing"
-        style={{
-          backgroundColor: '#0e0e10',
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize: `${24 * viewport.k}px ${24 * viewport.k}px`,
-          backgroundPosition: `${viewport.x}px ${viewport.y}px`,
-        }}
-        onPointerDown={onBgPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={onPointerUp}
-        onWheel={onWheel}
-        onDoubleClick={onBgDoubleClick}
-      >
-        {/* 连线层：屏幕坐标 + 覆盖整个容器 + 在节点之下（之前放在 transform 内的 1x1 SVG 被裁切 → 没线）*/}
-        <svg className="pointer-events-none absolute inset-0 h-full w-full">
-          {edges.map((ed) => {
-            const a = nodeById(ed.from)
-            const b = nodeById(ed.to)
-            if (!a || !b) return null
-            const so = outPort(a)
-            const ti = inPort(b)
-            return (
-              <path
-                key={ed.id}
-                d={bezier(so.x * viewport.k + viewport.x, so.y * viewport.k + viewport.y, ti.x * viewport.k + viewport.x, ti.y * viewport.k + viewport.y)}
-                stroke="rgba(255,255,255,0.5)"
-                strokeWidth={2}
-                fill="none"
-              />
-            )
-          })}
-          {pending && connectRef.current && (() => {
-            const a = nodeById(connectRef.current.from)
-            if (!a) return null
-            const so = outPort(a)
-            return (
-              <path
-                d={bezier(so.x * viewport.k + viewport.x, so.y * viewport.k + viewport.y, pending.wx * viewport.k + viewport.x, pending.wy * viewport.k + viewport.y)}
-                stroke="rgba(124,92,255,0.85)"
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                fill="none"
-              />
-            )
-          })()}
-        </svg>
-
-        <div className="absolute left-0 top-0 origin-top-left" style={{ transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.k})` }}>
-          {nodes.map((n) => {
-            const meta = NODE_META[n.type]
-            return (
-              <div
-                key={n.id}
-                className={`absolute cursor-grab rounded-lg border bg-[#1a1a1d]/95 shadow-xl shadow-black/40 active:cursor-grabbing ${meta.ring}`}
-                style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H }}
-                onPointerDown={(e) => onNodePointerDown(e, n)}
-              >
-                <div className="flex items-center justify-between border-b border-white/5 px-3 py-2">
-                  <span className={`font-mono text-[12px] tracking-wider ${meta.dot}`}>{meta.label}</span>
-                  <span className="text-[11px] text-stone-600">{meta.hint}</span>
-                </div>
-                <div className="flex h-[96px] items-center justify-center px-3 text-center text-[12px] text-stone-600">
-                  {n.type === 'text' ? '点击编辑文本…' : '（M1 占位 — 接线后在此出图/出片）'}
-                </div>
-                {/* 输入 port（左）*/}
-                <div className="absolute -left-[7px] top-1/2 h-3.5 w-3.5 -translate-y-1/2 rounded-full border-2 border-[#1a1a1d] bg-stone-500" />
-                {/* 输出 port（右，拖出连线）*/}
-                <div
-                  title="拖出连接下一个节点"
-                  onPointerDown={(e) => onOutPortDown(e, n)}
-                  className="absolute -right-[7px] top-1/2 h-3.5 w-3.5 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-[#1a1a1d] bg-violet-400 transition-transform hover:scale-125"
-                />
-              </div>
-            )
-          })}
-        </div>
-
-        {/* 空画布提示 */}
-        {nodes.length === 0 && !menu && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-stone-600">
-            <div className="text-2xl">◇</div>
-            <p className="text-sm">双击画布添加节点</p>
-            <p className="text-[12px] text-stone-700">从节点右侧紫点拖出 → 连下一个节点</p>
-          </div>
-        )}
-      </div>
-
-      {/* 节点类型菜单（双击 / 从 port 拖到空白）*/}
-      {menu && (
-        <div
-          className="absolute z-30 w-44 overflow-hidden rounded-lg border border-white/10 bg-[#1a1a1d] shadow-2xl shadow-black/50"
-          style={{ left: clamp(menu.sx, 8, (containerRef.current?.clientWidth ?? 800) - 184), top: clamp(menu.sy, 56, (containerRef.current?.clientHeight ?? 600) - 220) }}
-        >
-          <div className="border-b border-white/5 px-3 py-2 font-mono text-[11px] tracking-wider text-stone-500">
-            {menu.from ? '连接 · 新节点' : '添加节点'}
-          </div>
-          {(Object.keys(NODE_META) as NodeType[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => addNode(t)}
-              className="flex w-full items-center justify-between px-3 py-2.5 text-left text-[13px] text-stone-300 transition-colors hover:bg-white/5"
-            >
-              <span className={NODE_META[t].dot}>{NODE_META[t].label}</span>
-              <span className="text-[11px] text-stone-600">{NODE_META[t].hint}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 底部工具列（仿 LibTV，置中胶囊）*/}
-      <div className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-[#1a1a1d]/90 px-2 py-1.5 shadow-2xl shadow-black/50 backdrop-blur">
-        {['添加节点', '工具箱', '素材库', '角色库', '历史记录'].map((title) => (
-          <button
-            key={title}
-            type="button"
-            title={title}
-            onClick={() => {
-              if (title !== '添加节点') return
-              const cw = containerRef.current?.clientWidth ?? 800
-              const ch = containerRef.current?.clientHeight ?? 600
-              const v = vpRef.current
-              setMenu({ sx: cw / 2, sy: ch / 2 - 80, wx: (-v.x + cw / 2) / v.k, wy: (-v.y + ch / 2) / v.k, from: null })
-            }}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-400 transition-colors hover:bg-white/10 hover:text-stone-100"
-          >
-            <ToolIcon name={title} />
-          </button>
-        ))}
-      </div>
-
-      {/* 右下：缩放 / 复位 */}
-      <div className="absolute bottom-5 right-5 z-20 flex items-center gap-1 rounded-full border border-white/10 bg-[#1a1a1d]/90 px-2 py-1.5 text-stone-400 backdrop-blur">
-        <button type="button" title="缩小" onClick={() => setViewport((v) => ({ ...v, k: clamp(v.k * 0.9, 0.2, 3) }))} className="h-7 w-7 rounded hover:bg-white/10">－</button>
-        <span className="px-1 font-mono text-[12px]">{Math.round(viewport.k * 100)}%</span>
-        <button type="button" title="放大" onClick={() => setViewport((v) => ({ ...v, k: clamp(v.k * 1.1, 0.2, 3) }))} className="h-7 w-7 rounded hover:bg-white/10">＋</button>
-        <button type="button" title="复位" onClick={() => setViewport({ x: 0, y: 0, k: 1 })} className="ml-1 h-7 w-7 rounded hover:bg-white/10">⊙</button>
-      </div>
-    </div>
+    <ReactFlowProvider>
+      <CanvasGenerationProvider>
+        <CanvasInner />
+      </CanvasGenerationProvider>
+    </ReactFlowProvider>
   )
 }

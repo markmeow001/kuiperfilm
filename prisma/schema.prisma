@@ -698,6 +698,9 @@ model User {
   // Phase T (2026-05-27) — Playground / Freedom Mode runs owned by this user.
   playgroundRuns PlaygroundRun[] @relation("PlaygroundRunUser")
 
+  // 2026-06-27 — 无限画布 rows owned by this user.
+  canvases Canvas[] @relation("CanvasUser")
+
   // Phase 2.5 (2026-06-10) — Skill primitive. Community-authored Skills
   // owned by this user + per-user installed Skill records (我的 Skill).
   // See IMPL_PREP/R-skill-primitive.md for the full spec.
@@ -830,6 +833,32 @@ model PlaygroundRun {
   @@index([status])
   @@index([freezeId])
   @@map("playground_runs")
+}
+
+// 2026-06-27 — 无限画布（Infinite Canvas）. Independent creative surface like
+// Playground (not tied to a NovelPromotion project). One row per canvas;
+// nodes/edges/viewport are JSON-serialized blobs (React Flow shape). Stored as
+// @db.Text JSON strings to mirror PlaygroundRun's MySQL-friendly convention.
+// workspaceId is a plain scalar (no FK — same as Task.projectId) so we don't
+// have to thread a reverse relation through Workspace.
+model Canvas {
+  id          String   @id @default(uuid())
+  userId      String
+  workspaceId String?
+  title       String   @default("未命名画布")
+  // JSON.stringify(SerializedNode[]) — see app/[locale]/canvas/lib/canvas-types.
+  nodes       String   @db.Text
+  // JSON.stringify(SerializedEdge[]).
+  edges       String   @db.Text
+  // JSON.stringify(SerializedViewport) — nullable until first save.
+  viewport    String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation("CanvasUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("canvas")
 }
 
 // Phase 5 (2026-05-25) — Public API key for external automation (AI agents,

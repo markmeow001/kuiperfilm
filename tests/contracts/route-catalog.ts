@@ -74,6 +74,7 @@ const ROUTE_FILES = [
   'src/app/api/asset-hub/voices/upload/route.ts',
   'src/app/api/auth/[...nextauth]/route.ts',
   'src/app/api/auth/register/route.ts',
+  'src/app/api/canvas/route.ts',
   'src/app/api/cos/image/route.ts',
   'src/app/api/edit-requests/[requestId]/route.ts',
   'src/app/api/edit-requests/incoming/route.ts',

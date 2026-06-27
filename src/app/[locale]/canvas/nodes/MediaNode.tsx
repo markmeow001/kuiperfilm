@@ -1,0 +1,208 @@
+'use client'
+
+/**
+ * Image / video generative node. One component, two registrations (nodeTypes
+ * 'image' & 'video') parametrized by outputType. Wraps the Playground run
+ * spine via useCanvasGeneration: pick model → prompt → 生成 → poll → media lands
+ * in the node body. Billing/worker/polling are all inherited (no new task type).
+ *
+ * M1 scope = text→image / text→video. Frame-chaining (upstream image node's
+ * result as the video first-frame) needs a reference-from-result backend path
+ * and is the tracked next step — the edge is drawn but the frame isn't passed.
+ */
+import { useEffect, useMemo, useState } from 'react'
+import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '@xyflow/react'
+import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
+import type { CanvasNodeData } from '../lib/canvas-types'
+import { useCanvasGeneration } from '../lib/canvas-generation'
+import { pickUpstreamReferenceUrls } from '../lib/canvas-refs'
+import { NodeShell } from './node-shell'
+
+const ASPECT_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '4:5']
+
+type StatusLabel = '闲置' | '提交中' | '排队中' | '生成中' | '已完成' | '失败'
+
+export function makeMediaNode(outputType: 'image' | 'video') {
+  function MediaNode({ id, data, selected }: NodeProps) {
+    const d = data as CanvasNodeData
+    const { updateNodeData } = useReactFlow()
+    const gen = useCanvasGeneration()
+    const [submitting, setSubmitting] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const meta = NODE_META[outputType]
+    const models = outputType === 'image' ? gen.imageModels : gen.videoModels
+
+    // Upstream image/character nodes → reference URLs. For a video node the
+    // first one becomes the i2v first frame; for an image node they're
+    // edit/consistency references. Reactive via React Flow's connection hooks.
+    const incoming = useNodeConnections({ handleType: 'target' })
+    const upstream = useNodesData(incoming.map((c) => c.source))
+    const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream), [upstream])
+
+    // Default the model to the first enabled one once catalogs load.
+    useEffect(() => {
+      if (!d.modelKey && models.length > 0) {
+        updateNodeData(id, { modelKey: models[0].value })
+      }
+    }, [d.modelKey, models, id, updateNodeData])
+
+    const run = gen.runById(d.runId)
+    const status: StatusLabel = submitting
+      ? '提交中'
+      : run?.status === 'pending'
+        ? '排队中'
+        : run?.status === 'running'
+          ? '生成中'
+          : run?.status === 'succeeded'
+            ? '已完成'
+            : run?.status === 'failed'
+              ? '失败'
+              : '闲置'
+    const busy = submitting || run?.status === 'pending' || run?.status === 'running'
+
+    // Cache the result URL into node data so a reload shows it before polling.
+    const resultUrl = run?.resultUrls?.[0] ?? d.resultUrl ?? null
+    useEffect(() => {
+      if (run?.status === 'succeeded' && run.resultUrls?.[0] && run.resultUrls[0] !== d.resultUrl) {
+        updateNodeData(id, { resultUrl: run.resultUrls[0] })
+      }
+    }, [run, d.resultUrl, id, updateNodeData])
+
+    const canGenerate = Boolean(d.prompt.trim()) && Boolean(d.modelKey) && !busy
+
+    async function handleGenerate() {
+      if (!canGenerate) return
+      setError(null)
+      setSubmitting(true)
+      try {
+        const runId = await gen.submitNode({
+          prompt: d.prompt.trim(),
+          outputType,
+          modelKey: d.modelKey,
+          aspectRatio: d.aspectRatio,
+          // i2v: upstream image/character results → first frame (video) or
+          // edit/consistency references (image). Empty → pure text→media.
+          ...(upstreamRefs.length > 0 ? { referenceImages: upstreamRefs } : {}),
+          ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution } : {}),
+        })
+        updateNodeData(id, { runId, resultUrl: null })
+      } catch (err) {
+        setError((err as Error)?.message ?? '生成失败')
+      } finally {
+        setSubmitting(false)
+      }
+    }
+
+    const [aw, ah] = useMemo(() => d.aspectRatio.split(':').map(Number), [d.aspectRatio])
+
+    return (
+      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={280}>
+        {/* Preview body */}
+        <div className="px-3 pt-3">
+          <div
+            className="relative w-full overflow-hidden rounded-md"
+            style={{
+              aspectRatio: `${aw} / ${ah}`,
+              maxHeight: 200,
+              background: CANVAS_TOKENS.bg.app,
+              border: `1px solid ${CANVAS_TOKENS.hairline}`,
+            }}
+          >
+            {busy ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                <div
+                  className="h-7 w-7 animate-spin rounded-full border-2"
+                  style={{ borderColor: `${CANVAS_TOKENS.accent}40`, borderTopColor: CANVAS_TOKENS.accent }}
+                />
+                <span className="font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
+                  {status}
+                </span>
+              </div>
+            ) : resultUrl ? (
+              outputType === 'image' ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={resultUrl} alt="result" className="h-full w-full object-contain" />
+              ) : (
+                <video src={resultUrl} controls playsInline className="h-full w-full object-contain" />
+              )
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-center text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>
+                {outputType === 'image' ? '输入提示词生成图片' : '输入提示词生成视频'}
+              </div>
+            )}
+            {upstreamRefs.length > 0 ? (
+              <div
+                className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 font-mono text-[9px]"
+                style={{ background: `${CANVAS_TOKENS.bg.canvas}cc`, color: CANVAS_TOKENS.accent, border: `1px solid ${CANVAS_TOKENS.accent}55` }}
+              >
+                {outputType === 'video' ? `首帧 ← 上游 (${upstreamRefs.length})` : `参考 ← 上游 (${upstreamRefs.length})`}
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Config */}
+        <div className="space-y-2 p-3">
+          <textarea
+            value={d.prompt}
+            onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
+            placeholder={outputType === 'image' ? '描述画面…' : '描述运动 / 镜头…'}
+            rows={2}
+            className="nodrag w-full resize-none rounded-md px-2 py-1.5 text-[12px] outline-none"
+            style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+          />
+
+          <div className="flex items-center gap-1.5">
+            <select
+              value={d.modelKey}
+              onChange={(e) => updateNodeData(id, { modelKey: e.target.value })}
+              className="nodrag min-w-0 flex-1 truncate rounded-md px-2 py-1 font-mono text-[11px] outline-none"
+              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            >
+              {models.length === 0 ? <option value="">无可用模型 · 去 /profile 启用</option> : null}
+              {models.map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <select
+              value={d.aspectRatio}
+              onChange={(e) => updateNodeData(id, { aspectRatio: e.target.value })}
+              className="nodrag rounded-md px-1.5 py-1 font-mono text-[11px] outline-none"
+              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            >
+              {ASPECT_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
+
+          {outputType === 'video' ? (
+            <select
+              value={d.durationSec ?? 5}
+              onChange={(e) => updateNodeData(id, { durationSec: Number.parseInt(e.target.value, 10) || 5 })}
+              className="nodrag w-full rounded-md px-2 py-1 font-mono text-[11px] outline-none"
+              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            >
+              {Array.from({ length: 11 }, (_, i) => 5 + i).map((s) => <option key={s} value={s}>{s}s</option>)}
+            </select>
+          ) : null}
+
+          {error ? (
+            <div className="text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleGenerate}
+            disabled={!canGenerate}
+            className="nodrag w-full rounded-md py-1.5 font-mono text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}
+          >
+            {busy ? status : '生成'}
+          </button>
+        </div>
+      </NodeShell>
+    )
+  }
+  MediaNode.displayName = `MediaNode(${outputType})`
+  return MediaNode
+}
