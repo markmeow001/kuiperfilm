@@ -138,8 +138,17 @@ function CanvasInner() {
   }, [nodes, edges])
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+    (params: Connection) => {
+      // A director consumes its cast (it never sources an edge in this model).
+      // Under ConnectionMode.Loose a user can drag director→character, which
+      // would register no cast. Flip so the director is always the target.
+      let p = params
+      if (params.source && params.target && rf.getNode(params.source)?.type === 'director') {
+        p = { source: params.target, target: params.source, sourceHandle: params.targetHandle ?? null, targetHandle: params.sourceHandle ?? null }
+      }
+      setEdges((eds) => addEdge(p, eds))
+    },
+    [setEdges, rf],
   )
 
   // Drag from a handle, release on empty canvas → open add-menu wired to source.

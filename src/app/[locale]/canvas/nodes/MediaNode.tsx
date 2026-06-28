@@ -46,6 +46,13 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     )
     const upstream = useNodesData(incomingSourceIds)
     const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream), [upstream])
+    // Own input anchor (e.g. a 导演台 blocking screenshot) leads the reference
+    // list — for video it's the i2v first frame; combined with upstream cast
+    // refs (appearance), both blocking AND identity carry into this frame.
+    const allRefs = useMemo(
+      () => (d.anchorKey ? [d.anchorKey, ...upstreamRefs] : upstreamRefs),
+      [d.anchorKey, upstreamRefs],
+    )
 
     // Default the model to the first enabled one once catalogs load.
     useEffect(() => {
@@ -88,9 +95,9 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           outputType,
           modelKey: d.modelKey,
           aspectRatio: d.aspectRatio,
-          // i2v: upstream image/character results → first frame (video) or
-          // edit/consistency references (image). Empty → pure text→media.
-          ...(upstreamRefs.length > 0 ? { referenceImages: upstreamRefs } : {}),
+          // anchor (own blocking screenshot) + upstream refs (cast appearance).
+          // For video, allRefs[0] is the i2v first frame. Empty → pure text→media.
+          ...(allRefs.length > 0 ? { referenceImages: allRefs } : {}),
           ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution } : {}),
         })
         updateNodeData(id, { runId, resultUrl: null })
@@ -133,17 +140,25 @@ export function makeMediaNode(outputType: 'image' | 'video') {
               ) : (
                 <video src={resultUrl} controls playsInline className="h-full w-full object-contain" />
               )
+            ) : d.anchorUrl ? (
+              // blocking anchor (e.g. 导演台 站位 screenshot) shown dimmed until generated
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={d.anchorUrl} alt="站位锚" className="h-full w-full object-contain opacity-55" />
+                <div className="absolute inset-x-0 bottom-1 text-center text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary }}>站位锚 · 待生成</div>
+              </>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-center text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>
                 {outputType === 'image' ? '输入提示词生成图片' : '输入提示词生成视频'}
               </div>
             )}
-            {upstreamRefs.length > 0 ? (
+            {allRefs.length > 0 ? (
               <div
                 className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 font-mono text-[9px]"
                 style={{ background: `${CANVAS_TOKENS.bg.canvas}cc`, color: CANVAS_TOKENS.accent, border: `1px solid ${CANVAS_TOKENS.accent}55` }}
               >
-                {outputType === 'video' ? `首帧 ← 上游 (${upstreamRefs.length})` : `参考 ← 上游 (${upstreamRefs.length})`}
+                {d.anchorKey ? '站位' : outputType === 'video' ? '首帧' : '参考'}
+                {upstreamRefs.length > 0 ? `+卡司(${upstreamRefs.length})` : ` ←上游(${allRefs.length})`}
               </div>
             ) : null}
           </div>

@@ -1,30 +1,36 @@
 'use client'
 
 /**
- * 导演台 node (M2a) — opens the fullscreen 3D blocking stage, captures a shot
- * POV, and stores it as the node's reference image. Acts as a ref-bearing
- * source (like character/image): wire it into a video node → its screenshot
- * becomes the i2v first frame, giving the model a real spatial/blocking
- * reference for multi-character cross-shot consistency.
+ * 导演台 node (v2 — 持久场景 + 多机位).
  *
- * The stage is portaled to document.body so React Flow's canvas transform
- * doesn't clip/scale it. Stage state persists in data.stage so reopening
- * restores the arrangement.
+ * Opens the 3D stage. Each camera 发送 spawns a connected IMAGE frame node:
+ *  - frame.anchorKey = that camera's blocking screenshot (its own first-frame
+ *    reference) → every frame from this stage shares the same 3D blocking
+ *  - edges wired from the director's upstream CAST (character/image nodes) →
+ *    the frame, so each frame also carries the cast's appearance refs
+ * → both spatial relationship AND character identity propagate into every frame,
+ * which is what makes the shots a coherent 剧 rather than disconnected one-offs.
+ *
+ * Wire character nodes INTO the director (its left handle) to define the cast.
+ * The heavy 3D stage is lazy-loaded + portaled to document.body.
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
-import { useReactFlow, type NodeProps } from '@xyflow/react'
+import {
+  useNodeConnections,
+  useNodesData,
+  useReactFlow,
+  type Edge,
+  type Node,
+  type NodeProps,
+} from '@xyflow/react'
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
-import type { CanvasNodeData } from '../lib/canvas-types'
+import { DEFAULT_NODE_DATA, type CanvasNodeData } from '../lib/canvas-types'
 import { NodeShell } from './node-shell'
-import { DEFAULT_STAGE, type DirectorStageState } from '../director/stage-types'
-import { REST_POSE } from '../director/pose-presets'
+import { DEFAULT_STAGE, normalizeStage, type DirectorStageState } from '../director/stage-types'
 
-// three.js + R3F + drei are heavy (~250kB). Load the stage only when a director
-// node actually opens it, keeping the base canvas bundle light. ssr:false —
-// the stage is pure WebGL, no server render.
 const DirectorStage = dynamic(() => import('../director/DirectorStage').then((m) => m.DirectorStage), {
   ssr: false,
   loading: () => (
@@ -33,6 +39,9 @@ const DirectorStage = dynamic(() => import('../director/DirectorStage').then((m)
     </div>
   ),
 })
+
+const uid = () =>
+  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `n_${Date.now()}_${Math.round(Math.random() * 1e6)}`
 
 function dataUrlToFile(dataUrl: string, name: string): File {
   const [meta, b64] = dataUrl.split(',')
@@ -43,30 +52,55 @@ function dataUrlToFile(dataUrl: string, name: string): File {
   return new File([arr], name, { type: mime })
 }
 
+const CAST_TYPES = new Set(['character', 'image'])
+
 export function DirectorNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
-  const { updateNodeData } = useReactFlow()
+  const rf = useReactFlow()
+  const { updateNodeData, getNode, addNodes, addEdges } = rf
   const upload = useUploadPlaygroundReference()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const meta = NODE_META.director
-  // Normalize old (M2a) stages: their mannequins predate the pose rig, so fill
-  // REST_POSE once here — downstream code can then rely on pose being present.
-  const rawStage = (d.stage as DirectorStageState | undefined) ?? DEFAULT_STAGE
-  const stage: DirectorStageState = {
-    ...rawStage,
-    mannequins: rawStage.mannequins.map((m) => (m.pose ? m : { ...m, pose: REST_POSE })),
-  }
 
-  async function handleSend(dataUrl: string, newStage: DirectorStageState) {
+  // Cast = character/image nodes wired INTO the director.
+  const incoming = useNodeConnections({ handleType: 'target' })
+  const castIds = useMemo(() => incoming.map((c) => c.source), [incoming])
+  const castNodes = useNodesData(castIds)
+  const cast = useMemo(
+    () => castNodes.filter((n): n is NonNullable<typeof n> => Boolean(n) && CAST_TYPES.has(n.type ?? '')),
+    [castNodes],
+  )
+  const castLabels = useMemo(
+    () => cast.map((n) => (typeof (n.data as CanvasNodeData)?.title === 'string' && (n.data as CanvasNodeData).title) || '角色'),
+    [cast],
+  )
+
+  const stage: DirectorStageState = useMemo(() => normalizeStage(d.stage ?? DEFAULT_STAGE), [d.stage])
+
+  async function handleSendShot(dataUrl: string, label: string, newStage: DirectorStageState) {
     setError(null)
     try {
-      const file = dataUrlToFile(dataUrl, `director-${id}.png`)
-      const res = await upload.mutateAsync({ file, type: 'image' })
-      // referenceKey = durable COS key (worker re-signs); resultUrl = signed URL
-      // for the thumbnail. stage persists so reopening restores the arrangement.
-      updateNodeData(id, { resultUrl: res.signedUrl, referenceKey: res.key, stage: newStage })
-      setOpen(false)
+      const res = await upload.mutateAsync({ file: dataUrlToFile(dataUrl, `shot-${uid()}.png`), type: 'image' })
+      const self = getNode(id)
+      const base = self?.position ?? { x: 0, y: 0 }
+      const sentCount = Number.isFinite(d.sentCount) ? (d.sentCount as number) : 0
+
+      const frameId = uid()
+      const frame: Node<CanvasNodeData> = {
+        id: frameId,
+        type: 'image',
+        position: { x: base.x + 360, y: base.y + sentCount * 200 },
+        data: { ...DEFAULT_NODE_DATA, title: label, anchorKey: res.key, anchorUrl: res.signedUrl },
+      }
+      addNodes(frame)
+
+      // Wire the cast (appearance) into this frame so identity carries over.
+      const castEdges: Edge[] = cast.map((n) => ({ id: uid(), source: n.id, target: frameId, animated: true }))
+      if (castEdges.length > 0) addEdges(castEdges)
+
+      // Persist the stage + advance the frame-spread counter.
+      updateNodeData(id, { stage: newStage, sentCount: sentCount + 1 })
     } catch (err) {
       setError((err as Error)?.message ?? '发送失败')
     }
@@ -74,28 +108,24 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={240} noTarget>
+      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={240}>
         <div className="p-3">
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="nodrag relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-md text-[11px]"
+          <div
+            className="flex aspect-video w-full items-center justify-center rounded-md text-center text-[11px]"
             style={{ background: CANVAS_TOKENS.bg.app, color: CANVAS_TOKENS.text.muted, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
           >
-            {d.resultUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={d.resultUrl} alt="导演台站位" className="h-full w-full object-cover" />
-            ) : (
-              <span>3D 摆位 → 截图当参考图</span>
-            )}
-          </button>
+            <div>
+              <div>3D 场景 · {stage.mannequins.length} 人偶 · {stage.cameras.length} 机位</div>
+              {castLabels.length > 0 ? <div className="mt-1" style={{ color: CANVAS_TOKENS.text.secondary }}>卡司：{castLabels.join('、')}</div> : <div className="mt-1" style={{ color: CANVAS_TOKENS.text.muted }}>← 连角色节点设定卡司</div>}
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => setOpen(true)}
             className="nodrag mt-2 w-full rounded-md py-1.5 font-mono text-[12px] font-semibold"
             style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}
           >
-            {d.resultUrl ? '重新摆位' : '打开导演台'}
+            打开导演台
           </button>
           {error ? <div className="mt-1 text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
         </div>
@@ -103,7 +133,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
 
       {open
         ? createPortal(
-            <DirectorStage initialState={stage} onClose={() => setOpen(false)} onSend={handleSend} saving={upload.isPending} />,
+            <DirectorStage initialState={stage} castLabels={castLabels} onClose={() => setOpen(false)} onSendShot={handleSendShot} saving={upload.isPending} />,
             document.body,
           )
         : null}

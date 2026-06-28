@@ -37,6 +37,16 @@ export interface CanvasNodeData extends Record<string, unknown> {
    * underlying key isn't exposed to the client.
    */
   referenceKey?: string | null
+  /**
+   * INPUT anchor for a generative node — a durable COS key fed as the node's own
+   * reference/first-frame (distinct from referenceKey, which is a node's OUTPUT
+   * for downstream). Set when a 导演台 camera spawns a frame: the blocking
+   * screenshot anchors that frame's generation while the frame's generated
+   * result (resultUrl) is what downstream nodes consume. anchorUrl = signed URL
+   * for the node preview.
+   */
+  anchorKey?: string | null
+  anchorUrl?: string | null
 }
 
 /** Minimal serializable node (what we store in the Canvas DB row / localStorage). */
@@ -78,6 +88,8 @@ export const DEFAULT_NODE_DATA = {
   runId: null as string | null,
   resultUrl: null as string | null,
   referenceKey: null as string | null,
+  anchorKey: null as string | null,
+  anchorUrl: null as string | null,
 } satisfies Record<string, unknown>
 
 export const EMPTY_CANVAS: SerializedCanvas = {

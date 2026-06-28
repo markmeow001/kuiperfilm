@@ -1,13 +1,14 @@
 /**
- * 导演台 (3D director stage) state — M2a.
+ * 导演台 (3D director stage) state.
  *
- * A lightweight blocking stage: posable 素体 mannequins + one shot camera. The
- * user arranges figures + frames a camera, screenshots the camera POV, and
- * sends it to the canvas as a reference image (feeds i2v / image consistency).
- * Full per-joint rig + pose presets + crowd/props = M2b.
+ * v2 (持久场景 + 多机位): one stage holds the cast (mannequins) in their spatial
+ * relationship + MULTIPLE cameras. Each camera screenshots the SAME blocking →
+ * one frame per camera, so every frame shares consistent positions (the basis
+ * for a coherent 剧, not disconnected one-offs). Cast appearance is propagated
+ * by wiring character nodes into the director (DirectorNode auto-wires them onto
+ * each spawned frame).
  *
- * Persisted inside the director node's data.stage so reopening restores the
- * scene. Pure data (no three.js objects) so it serializes to the Canvas DB.
+ * Pure data (no three.js) so it serializes into the Canvas DB via data.stage.
  */
 import { REST_POSE, type Pose } from './pose-presets'
 
@@ -21,11 +22,13 @@ export interface StageMannequin {
   scale: number
   color: string
   // Articulated rig (per-joint, M2b). Optional because M2a-era saved stages
-  // predate it — normalized to REST_POSE at the load boundary (DirectorNode).
+  // predate it — normalized to REST_POSE by normalizeStage().
   pose?: Pose
 }
 
 export interface StageCamera {
+  id: string
+  label: string
   position: Vec3
   target: Vec3
   fov: number
@@ -33,21 +36,19 @@ export interface StageCamera {
 
 export interface DirectorStageState {
   mannequins: StageMannequin[]
-  camera: StageCamera
+  cameras: StageCamera[]
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale'
-export type StageView = 'director' | 'shot'
 
 const MANNEQUIN_COLORS = ['#6FA8FF', '#FF9E6F', '#7BE3A4', '#C8A2FF', '#F4C44E', '#E86F9E']
 
 export const DEFAULT_STAGE: DirectorStageState = {
   mannequins: [],
-  camera: { position: [0, 1.6, 4.5], target: [0, 1, 0], fov: 45 },
+  cameras: [{ id: 'cam-1', label: '机位1', position: [0, 1.6, 4.5], target: [0, 1, 0], fov: 45 }],
 }
 
 export function makeMannequin(id: string, index: number): StageMannequin {
-  // Fan new figures out along X so they don't overlap.
   const x = (index % 5) * 1.2 - 1.2
   return {
     id,
@@ -58,4 +59,37 @@ export function makeMannequin(id: string, index: number): StageMannequin {
     color: MANNEQUIN_COLORS[index % MANNEQUIN_COLORS.length],
     pose: REST_POSE,
   }
+}
+
+export function makeCamera(id: string, index: number): StageCamera {
+  return {
+    id,
+    label: `机位${index + 1}`,
+    position: [(index % 4) * 1.6 - 0.8, 1.6, 4.5 - (index % 2)],
+    target: [0, 1, 0],
+    fov: 45,
+  }
+}
+
+/**
+ * Normalize a persisted (possibly older) stage into the current shape:
+ *  - fill REST_POSE for pre-rig mannequins
+ *  - migrate a single `camera` (v1) → `cameras: [camera]`
+ * Never throws — degrades to DEFAULT_STAGE pieces.
+ */
+export function normalizeStage(raw: unknown): DirectorStageState {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as {
+    mannequins?: unknown
+    cameras?: unknown
+    camera?: { position?: Vec3; target?: Vec3; fov?: number }
+  }
+  const mannequins: StageMannequin[] = Array.isArray(r.mannequins)
+    ? (r.mannequins as StageMannequin[]).filter(Boolean).map((m) => (m.pose ? m : { ...m, pose: REST_POSE }))
+    : []
+  let cameras: StageCamera[] = Array.isArray(r.cameras) ? (r.cameras as StageCamera[]).filter(Boolean) : []
+  if (cameras.length === 0 && r.camera) {
+    cameras = [{ id: 'cam-1', label: '机位1', position: r.camera.position ?? [0, 1.6, 4.5], target: r.camera.target ?? [0, 1, 0], fov: r.camera.fov ?? 45 }]
+  }
+  if (cameras.length === 0) cameras = DEFAULT_STAGE.cameras.map((c) => ({ ...c }))
+  return { mannequins, cameras }
 }
