@@ -19,13 +19,17 @@ import * as THREE from 'three'
 import { CANVAS_TOKENS } from '../lib/canvas-tokens'
 import { Mannequin } from './Mannequin'
 import { SliderRow } from './SliderRow'
+import { Vec3Field } from './Vec3Field'
 import { POSE_PRESETS, REST_POSE, RIG_SLIDER_GROUPS, type Joint, type Pose } from './pose-presets'
+import { CAMERA_PRESETS, aspectRatio, computePreset } from './camera-presets'
 import {
   type DirectorStageState,
+  type StageAspect,
   type StageCamera,
   type StageMannequin,
   type TransformMode,
   type Vec3,
+  STAGE_ASPECTS,
   makeCamera,
   makeMannequin,
 } from './stage-types'
@@ -38,9 +42,34 @@ const uid = () =>
 const camKey = (id: string) => `cam:${id}`
 const tgtKey = (id: string) => `tgt:${id}`
 
-function lookAtQuat(position: Vec3, target: Vec3): THREE.Quaternion {
-  const m = new THREE.Matrix4().lookAt(new THREE.Vector3(...position), new THREE.Vector3(...target), new THREE.Vector3(0, 1, 0))
-  return new THREE.Quaternion().setFromRotationMatrix(m)
+/** Effective look-at: follow a mannequin (chest height) if bound, else manual target. */
+function effectiveTarget(cam: StageCamera, mannequins: StageMannequin[]): Vec3 {
+  if (cam.lookAtMannequinId) {
+    const m = mannequins.find((x) => x.id === cam.lookAtMannequinId)
+    if (m) return [m.position[0], m.position[1] + 1.0, m.position[2]]
+  }
+  return cam.target
+}
+
+/** Camera gizmo orientation = lookAt(target) + dutch roll about the view axis. */
+function camQuat(cam: StageCamera, mannequins: StageMannequin[]): THREE.Quaternion {
+  const target = effectiveTarget(cam, mannequins)
+  const m = new THREE.Matrix4().lookAt(new THREE.Vector3(...cam.position), new THREE.Vector3(...target), new THREE.Vector3(0, 1, 0))
+  const q = new THREE.Quaternion().setFromRotationMatrix(m)
+  if (cam.roll) q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), cam.roll * DEG2RAD))
+  return q
+}
+
+/** Focus point = selected mannequin (or centroid, or origin) at mid-height. */
+function focusPoint(mannequins: StageMannequin[], selectedMannequinId: string | null): Vec3 {
+  const m = selectedMannequinId ? mannequins.find((x) => x.id === selectedMannequinId) : null
+  const subj = m ?? mannequins[0]
+  if (subj) return [subj.position[0], subj.position[1] + 1.0, subj.position[2]]
+  return [0, 1, 0]
+}
+function facingOf(mannequins: StageMannequin[], selectedMannequinId: string | null): number {
+  const m = selectedMannequinId ? mannequins.find((x) => x.id === selectedMannequinId) : null
+  return (m ?? mannequins[0])?.rotation[1] ?? 0
 }
 
 interface SceneProps {
@@ -51,10 +80,11 @@ interface SceneProps {
   onCommitMannequin: (id: string, patch: Partial<StageMannequin>) => void
   onCommitCamera: (id: string, patch: Partial<StageCamera>) => void
   registerCapture: (fn: (cameraId: string) => string | null) => void
+  registerGetView: (fn: () => { position: Vec3; target: Vec3; fov: number }) => void
 }
 
-function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, onCommitCamera, registerCapture }: SceneProps) {
-  const { gl, scene } = useThree()
+function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView }: SceneProps) {
+  const { gl, scene, camera: viewCamera } = useThree()
   const helpersRef = useRef<THREE.Group>(null)
   const orbitRef = useRef<React.ComponentRef<typeof OrbitControls>>(null)
   const transformRef = useRef<React.ComponentRef<typeof TransformControls>>(null)
@@ -62,18 +92,24 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
   const camGizmoRefs = useRef<Record<string, THREE.Group | null>>({})
   const tgtGizmoRefs = useRef<Record<string, THREE.Mesh | null>>({})
 
-  // Live cameras in a ref so the stable capture closure reads current values.
-  const camerasRef = useRef(state.cameras)
-  camerasRef.current = state.cameras
+  // Live state in refs so the stable capture closure reads current values.
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   const capture = useCallback((cameraId: string): string | null => {
-    const sc = camerasRef.current.find((c) => c.id === cameraId)
+    const s = stateRef.current
+    const sc = s.cameras.find((c) => c.id === cameraId)
     if (!sc) return null
+    const target = effectiveTarget(sc, s.mannequins)
     const canvas = gl.domElement
-    const aspect = canvas.width / canvas.height || 1
-    const cam = new THREE.PerspectiveCamera(sc.fov, aspect, 0.05, 1000)
+    // Render full viewport at the canvas aspect (no distortion); for a fixed
+    // output ratio we crop the CANVAS (already sRGB/tone-mapped) — avoids the
+    // linear-color readback gotcha of render-target pixel reads.
+    const cam = new THREE.PerspectiveCamera(sc.fov, canvas.width / canvas.height || 1, 0.05, 1000)
     cam.position.set(...sc.position)
-    cam.lookAt(new THREE.Vector3(...sc.target))
+    cam.lookAt(new THREE.Vector3(...target))
+    if (sc.roll) cam.rotateZ(sc.roll * DEG2RAD)
+
     const helpers = helpersRef.current
     const tc = transformRef.current as unknown as THREE.Object3D | null
     const ph = helpers?.visible
@@ -81,16 +117,50 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
     if (helpers) helpers.visible = false
     if (tc) tc.visible = false
     gl.render(scene, cam)
-    const url = gl.domElement.toDataURL('image/png')
+
+    const ratio = aspectRatio(s.aspect)
+    let url: string
+    if (ratio == null) {
+      url = canvas.toDataURL('image/png')
+    } else {
+      const cw = canvas.width
+      const ch = canvas.height
+      let cropW = cw
+      let cropH = ch
+      if (ratio > cw / ch) cropH = Math.round(cw / ratio)
+      else cropW = Math.round(ch * ratio)
+      const sx = Math.floor((cw - cropW) / 2)
+      const sy = Math.floor((ch - cropH) / 2)
+      const c = document.createElement('canvas')
+      c.width = cropW
+      c.height = cropH
+      const ctx = c.getContext('2d')
+      if (!ctx) {
+        url = canvas.toDataURL('image/png') // fall back to uncropped rather than throw
+      } else {
+        ctx.drawImage(canvas, sx, sy, cropW, cropH, 0, 0, cropW, cropH)
+        url = c.toDataURL('image/png')
+      }
+    }
     if (helpers && ph !== undefined) helpers.visible = ph
     if (tc && pt !== undefined) tc.visible = pt
     return url
   }, [gl, scene])
 
+  const getView = useCallback(
+    () => ({
+      position: viewCamera.position.toArray() as Vec3,
+      target: (orbitRef.current?.target?.toArray() as Vec3) ?? [0, 1, 0],
+      fov: (viewCamera as THREE.PerspectiveCamera).fov ?? 45,
+    }),
+    [viewCamera],
+  )
+
   useEffect(() => {
     registerCapture(capture)
-    return () => registerCapture(() => null)
-  }, [registerCapture, capture])
+    registerGetView(getView)
+    return () => { registerCapture(() => null) }
+  }, [registerCapture, registerGetView, capture, getView])
 
   const selectedObject: THREE.Object3D | null = selectedId
     ? selectedId.startsWith('cam:')
@@ -133,7 +203,7 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
             <group
               ref={(el) => { if (el) camGizmoRefs.current[cam.id] = el; else delete camGizmoRefs.current[cam.id] }}
               position={cam.position}
-              quaternion={lookAtQuat(cam.position, cam.target)}
+              quaternion={camQuat(cam, state.mannequins)}
               onClick={(e) => { e.stopPropagation(); onSelect(camKey(cam.id)) }}
             >
               <mesh rotation={[Math.PI / 2, 0, 0]}>
@@ -141,14 +211,17 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
                 <meshStandardMaterial color={CANVAS_TOKENS.accent} emissive={CANVAS_TOKENS.accent} emissiveIntensity={selectedId === camKey(cam.id) ? 0.55 : 0.18} />
               </mesh>
             </group>
-            <mesh
-              ref={(el) => { if (el) tgtGizmoRefs.current[cam.id] = el; else delete tgtGizmoRefs.current[cam.id] }}
-              position={cam.target}
-              onClick={(e) => { e.stopPropagation(); onSelect(tgtKey(cam.id)) }}
-            >
-              <sphereGeometry args={[0.07, 12, 12]} />
-              <meshStandardMaterial color={CANVAS_TOKENS.gold} emissive={CANVAS_TOKENS.gold} emissiveIntensity={selectedId === tgtKey(cam.id) ? 0.6 : 0.2} />
-            </mesh>
+            {/* manual look-at gizmo — hidden when following a character */}
+            {cam.lookAtMannequinId ? null : (
+              <mesh
+                ref={(el) => { if (el) tgtGizmoRefs.current[cam.id] = el; else delete tgtGizmoRefs.current[cam.id] }}
+                position={cam.target}
+                onClick={(e) => { e.stopPropagation(); onSelect(tgtKey(cam.id)) }}
+              >
+                <sphereGeometry args={[0.07, 12, 12]} />
+                <meshStandardMaterial color={CANVAS_TOKENS.gold} emissive={CANVAS_TOKENS.gold} emissiveIntensity={selectedId === tgtKey(cam.id) ? 0.6 : 0.2} />
+              </mesh>
+            )}
           </group>
         ))}
       </group>
@@ -203,6 +276,20 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const [toast, setToast] = useState<string | null>(null)
   const [sentTotal, setSentTotal] = useState(0)
   const captureRef = useRef<((cameraId: string) => string | null) | null>(null)
+  const getViewRef = useRef<(() => { position: Vec3; target: Vec3; fov: number }) | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const [rootSize, setRootSize] = useState({ w: 0, h: 0 })
+
+  // Measure the stage so the framing overlay matches capture()'s centered
+  // max-fit crop exactly (same cw/ch ratio the crop uses).
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setRootSize({ w: el.clientWidth, h: el.clientHeight }))
+    ro.observe(el)
+    setRootSize({ w: el.clientWidth, h: el.clientHeight })
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     if (!toast) return
@@ -219,7 +306,12 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
       const cid = selectedId.slice(4)
       setState((s) => (s.cameras.length <= 1 ? s : { ...s, cameras: s.cameras.filter((c) => c.id !== cid) }))
     } else {
-      setState((s) => ({ ...s, mannequins: s.mannequins.filter((m) => m.id !== selectedId) }))
+      setState((s) => ({
+        ...s,
+        mannequins: s.mannequins.filter((m) => m.id !== selectedId),
+        // drop any camera's follow binding to the deleted mannequin
+        cameras: s.cameras.map((c) => (c.lookAtMannequinId === selectedId ? { ...c, lookAtMannequinId: null } : c)),
+      }))
     }
     setSelectedId(null)
   }, [selectedId])
@@ -267,11 +359,27 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const selectedCamId = selectedId && (selectedId.startsWith('cam:') || selectedId.startsWith('tgt:')) ? selectedId.slice(4) : null
   const selectedCamera = selectedCamId ? state.cameras.find((c) => c.id === selectedCamId) ?? null : null
 
+  const applyCameraPreset = useCallback((camId: string, preset: typeof CAMERA_PRESETS[number]) => {
+    // 当前视角 needs the live view; bail if not registered yet (avoids a
+    // self-referential degenerate camera at the focus point).
+    const view = preset.current ? getViewRef.current?.() ?? null : null
+    if (preset.current && !view) { setToast('视角未就绪，请稍候'); return }
+    setState((s) => {
+      const cam = s.cameras.find((c) => c.id === camId)
+      const focusId = cam?.lookAtMannequinId ?? null
+      const shot = computePreset(preset, focusPoint(s.mannequins, focusId), facingOf(s.mannequins, focusId), view)
+      // A preset sets an explicit position+target, so clear follow — otherwise
+      // effectiveTarget would override the preset's framing.
+      return { ...s, cameras: s.cameras.map((c) => (c.id === camId ? { ...c, position: shot.position, target: shot.target, fov: shot.fov, roll: shot.roll, lookAtMannequinId: null } : c)) }
+    })
+  }, [])
+  const setAspect = useCallback((a: StageAspect) => setState((s) => ({ ...s, aspect: a })), [])
+
   const btn = 'rounded-md px-3 py-1.5 font-mono text-[12px] transition-colors'
   const isMannequinSelected = Boolean(selectedMannequin)
 
   return (
-    <div className="fixed inset-0 z-50" style={{ background: CANVAS_TOKENS.bg.canvas }}>
+    <div ref={rootRef} className="fixed inset-0 z-50" style={{ background: CANVAS_TOKENS.bg.canvas }}>
       <Canvas shadows gl={{ preserveDrawingBuffer: true, antialias: true }} camera={{ position: [3.5, 2.6, 5.5], fov: 45 }} onPointerMissed={() => setSelectedId(null)}>
         <SceneContents
           state={state}
@@ -281,6 +389,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           onCommitMannequin={commitMannequin}
           onCommitCamera={commitCamera}
           registerCapture={(fn) => { captureRef.current = fn }}
+          registerGetView={(fn) => { getViewRef.current = fn }}
         />
       </Canvas>
 
@@ -296,8 +405,36 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
             </span>
           ) : null}
         </div>
-        <button type="button" onClick={onClose} className={btn} style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>✕ 关闭</button>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1.5 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
+            <span>画幅</span>
+            <select
+              value={state.aspect ?? 'auto'}
+              onChange={(e) => setAspect(e.target.value as StageAspect)}
+              className="rounded px-1.5 py-1 text-[11px] outline-none"
+              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            >
+              {STAGE_ASPECTS.map((a) => <option key={a} value={a}>{a === 'auto' ? '自适应' : a}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={onClose} className={btn} style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>✕ 关闭</button>
+        </div>
       </div>
+
+      {/* Framing overlay — exactly the centered max-fit crop region (mirrors
+          capture()'s crop math against the measured stage size). */}
+      {(() => {
+        const R = aspectRatio(state.aspect)
+        if (!R || rootSize.w === 0 || rootSize.h === 0) return null
+        const ar = rootSize.w / rootSize.h
+        const w = R > ar ? rootSize.w : rootSize.h * R
+        const h = R > ar ? rootSize.w / R : rootSize.h
+        return (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div style={{ width: w, height: h, border: `1px solid ${CANVAS_TOKENS.accent}aa`, boxShadow: '0 0 0 9999px rgba(0,0,0,0.34)' }} />
+          </div>
+        )
+      })()}
 
       {/* Left tool rail */}
       <div className="absolute left-4 top-16 flex flex-col gap-1.5 rounded-xl p-2" style={{ background: `${CANVAS_TOKENS.bg.card}e6`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
@@ -333,9 +470,6 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
                   {saving ? '…' : '发送'}
                 </button>
               </div>
-              {sel && selectedCamera?.id === cam.id ? (
-                <SliderRow label="FOV" value={cam.fov} min={18} max={90} unit="°" onChange={(v) => commitCamera(cam.id, { fov: v })} />
-              ) : null}
             </div>
           )
         })}
@@ -363,6 +497,54 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
                 ))}
               </div>
             ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Camera inspector — shown when a camera/target is selected */}
+      {selectedCamera && selectedCamId ? (
+        <div className="absolute right-4 top-16 bottom-16 flex w-64 flex-col overflow-hidden rounded-xl" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
+          <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+            <span className="font-mono text-[12px]" style={{ color: CANVAS_TOKENS.accent }}>摄像机 · {selectedCamera.label}</span>
+            <button type="button" onClick={() => sendShot(selectedCamId)} disabled={saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}>发送</button>
+          </div>
+          <div className="flex-1 space-y-2 overflow-y-auto p-2">
+            <label className="block">
+              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>名称</span>
+              <input value={selectedCamera.label} onChange={(e) => commitCamera(selectedCamId, { label: e.target.value })} className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }} />
+            </label>
+            <label className="block">
+              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>切换机位</span>
+              <select value={selectedCamId} onChange={(e) => setSelectedId(camKey(e.target.value))} className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+                {state.cameras.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            </label>
+            <Vec3Field label="位置" value={selectedCamera.position} onChange={(v) => commitCamera(selectedCamId, { position: v })} />
+            <label className="block">
+              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>注视目标</span>
+              <select
+                value={selectedCamera.lookAtMannequinId ?? 'manual'}
+                onChange={(e) => commitCamera(selectedCamId, { lookAtMannequinId: e.target.value === 'manual' ? null : e.target.value })}
+                className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none"
+                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                <option value="manual">手动坐标</option>
+                {state.mannequins.map((m) => <option key={m.id} value={m.id}>追踪：{m.label}</option>)}
+              </select>
+            </label>
+            {selectedCamera.lookAtMannequinId ? null : (
+              <Vec3Field label="注视坐标" value={selectedCamera.target} onChange={(v) => commitCamera(selectedCamId, { target: v })} />
+            )}
+            <SliderRow label="FOV" value={selectedCamera.fov} min={18} max={90} unit="°" onChange={(v) => commitCamera(selectedCamId, { fov: v })} />
+            <SliderRow label="荷兰角" value={selectedCamera.roll ?? 0} min={-45} max={45} unit="°" onChange={(v) => commitCamera(selectedCamId, { roll: v })} />
+            <div className="pt-1">
+              <div className="mb-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>机位视角预设</div>
+              <div className="grid grid-cols-2 gap-1">
+                {CAMERA_PRESETS.map((preset) => (
+                  <button key={preset.name} type="button" onClick={() => applyCameraPreset(selectedCamId, preset)} className="rounded py-1 text-[11px] transition-colors hover:opacity-80" style={{ color: CANVAS_TOKENS.text.primary, background: CANVAS_TOKENS.bg.hover }}>{preset.name}</button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

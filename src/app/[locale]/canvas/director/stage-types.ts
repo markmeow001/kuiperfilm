@@ -32,11 +32,20 @@ export interface StageCamera {
   position: Vec3
   target: Vec3
   fov: number
+  /** Dutch-angle roll in degrees (0 = level). */
+  roll?: number
+  /** When set, the camera's look-at follows this mannequin (overrides target). */
+  lookAtMannequinId?: string | null
 }
+
+/** Output framing aspect for screenshots. 'auto' = the live viewport ratio. */
+export type StageAspect = 'auto' | '21:9' | '16:9' | '4:3' | '1:1' | '3:4' | '9:16'
+export const STAGE_ASPECTS: StageAspect[] = ['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16']
 
 export interface DirectorStageState {
   mannequins: StageMannequin[]
   cameras: StageCamera[]
+  aspect?: StageAspect
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale'
@@ -91,5 +100,7 @@ export function normalizeStage(raw: unknown): DirectorStageState {
     cameras = [{ id: 'cam-1', label: '机位1', position: r.camera.position ?? [0, 1.6, 4.5], target: r.camera.target ?? [0, 1, 0], fov: r.camera.fov ?? 45 }]
   }
   if (cameras.length === 0) cameras = DEFAULT_STAGE.cameras.map((c) => ({ ...c }))
-  return { mannequins, cameras }
+  const rawAspect = (r as { aspect?: string }).aspect
+  const aspect: StageAspect = STAGE_ASPECTS.includes(rawAspect as StageAspect) ? (rawAspect as StageAspect) : 'auto'
+  return { mannequins, cameras, aspect }
 }
