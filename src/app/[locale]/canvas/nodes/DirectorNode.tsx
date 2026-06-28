@@ -60,7 +60,6 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
   const { updateNodeData, getNode, addNodes, addEdges } = rf
   const upload = useUploadPlaygroundReference()
   const [open, setOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const meta = NODE_META.director
 
   // Cast = character/image nodes wired INTO the director.
@@ -78,32 +77,29 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
 
   const stage: DirectorStageState = useMemo(() => normalizeStage(d.stage ?? DEFAULT_STAGE), [d.stage])
 
+  // Throws on failure so the stage can surface it (the node card is hidden
+  // behind the fullscreen stage during a send).
   async function handleSendShot(dataUrl: string, label: string, newStage: DirectorStageState) {
-    setError(null)
-    try {
-      const res = await upload.mutateAsync({ file: dataUrlToFile(dataUrl, `shot-${uid()}.png`), type: 'image' })
-      const self = getNode(id)
-      const base = self?.position ?? { x: 0, y: 0 }
-      const sentCount = Number.isFinite(d.sentCount) ? (d.sentCount as number) : 0
+    const res = await upload.mutateAsync({ file: dataUrlToFile(dataUrl, `shot-${uid()}.png`), type: 'image' })
+    const self = getNode(id)
+    const base = self?.position ?? { x: 0, y: 0 }
+    const sentCount = Number.isFinite(d.sentCount) ? (d.sentCount as number) : 0
 
-      const frameId = uid()
-      const frame: Node<CanvasNodeData> = {
-        id: frameId,
-        type: 'image',
-        position: { x: base.x + 360, y: base.y + sentCount * 200 },
-        data: { ...DEFAULT_NODE_DATA, title: label, anchorKey: res.key, anchorUrl: res.signedUrl },
-      }
-      addNodes(frame)
-
-      // Wire the cast (appearance) into this frame so identity carries over.
-      const castEdges: Edge[] = cast.map((n) => ({ id: uid(), source: n.id, target: frameId, animated: true }))
-      if (castEdges.length > 0) addEdges(castEdges)
-
-      // Persist the stage + advance the frame-spread counter.
-      updateNodeData(id, { stage: newStage, sentCount: sentCount + 1 })
-    } catch (err) {
-      setError((err as Error)?.message ?? '发送失败')
+    const frameId = uid()
+    const frame: Node<CanvasNodeData> = {
+      id: frameId,
+      type: 'image',
+      position: { x: base.x + 360, y: base.y + sentCount * 200 },
+      data: { ...DEFAULT_NODE_DATA, title: label, anchorKey: res.key, anchorUrl: res.signedUrl },
     }
+    addNodes(frame)
+
+    // Wire the cast (appearance) into this frame so identity carries over.
+    const castEdges: Edge[] = cast.map((n) => ({ id: uid(), source: n.id, target: frameId, animated: true }))
+    if (castEdges.length > 0) addEdges(castEdges)
+
+    // Persist the stage + advance the frame-spread counter.
+    updateNodeData(id, { stage: newStage, sentCount: sentCount + 1 })
   }
 
   return (
@@ -127,7 +123,6 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
           >
             打开导演台
           </button>
-          {error ? <div className="mt-1 text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
         </div>
       </NodeShell>
 

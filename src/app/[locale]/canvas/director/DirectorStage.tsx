@@ -190,7 +190,7 @@ interface DirectorStageProps {
   initialState: DirectorStageState
   onClose: () => void
   /** Capture cameraId's POV → spawn a frame on the canvas (label = camera label). */
-  onSendShot: (dataUrl: string, label: string, state: DirectorStageState) => void
+  onSendShot: (dataUrl: string, label: string, state: DirectorStageState) => void | Promise<void>
   /** Names of character nodes wired into the director (the cast), for display. */
   castLabels?: string[]
   saving?: boolean
@@ -200,7 +200,15 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
+  const [toast, setToast] = useState<string | null>(null)
+  const [sentTotal, setSentTotal] = useState(0)
   const captureRef = useRef<((cameraId: string) => string | null) | null>(null)
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3200)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const addMannequin = useCallback(() => setState((s) => ({ ...s, mannequins: [...s.mannequins, makeMannequin(uid(), s.mannequins.length)] })), [])
   const addCamera = useCallback(() => setState((s) => ({ ...s, cameras: [...s.cameras, makeCamera(uid(), s.cameras.length)] })), [])
@@ -239,10 +247,20 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
     }))
   }, [])
 
-  const sendShot = useCallback((cameraId: string) => {
+  const sendShot = useCallback(async (cameraId: string) => {
     const cam = state.cameras.find((c) => c.id === cameraId)
+    if (!cam) return
+    if (state.mannequins.length === 0) { setToast('先加至少一个人偶再发送'); return }
     const url = captureRef.current?.(cameraId)
-    if (url && cam) onSendShot(url, cam.label, state)
+    if (!url) { setToast('截图失败，请重试'); return }
+    try {
+      setToast(`发送中… ${cam.label}`)
+      await onSendShot(url, cam.label, state)
+      setSentTotal((n) => n + 1)
+      setToast(`✓ ${cam.label} 已发送到画布（关闭导演台后可见）`)
+    } catch (e) {
+      setToast(`发送失败：${(e as Error)?.message ?? '未知错误'}`)
+    }
   }, [onSendShot, state])
 
   const selectedMannequin = state.mannequins.find((m) => m.id === selectedId) ?? null
@@ -296,7 +314,13 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
 
       {/* Camera list — each row sends one frame sharing the blocking */}
       <div className="absolute bottom-5 left-4 w-60 rounded-xl p-2" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
-        <div className="mb-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>机位（截图 → 发送到画布当一帧）</div>
+        <div className="mb-1 flex items-center justify-between px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>
+          <span>机位（截图 → 发送一帧）</span>
+          {sentTotal > 0 ? <span style={{ color: CANVAS_TOKENS.accent }}>已发送 {sentTotal} 帧</span> : null}
+        </div>
+        {state.mannequins.length === 0 ? (
+          <div className="mb-1 px-1 text-[10px]" style={{ color: CANVAS_TOKENS.gold }}>先按左上「＋人偶」加角色，才能发送</div>
+        ) : null}
         {state.cameras.map((cam) => {
           const sel = selectedId === camKey(cam.id) || selectedId === tgtKey(cam.id)
           return (
@@ -305,8 +329,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
                 <button type="button" onClick={() => setSelectedId(camKey(cam.id))} className="flex-1 truncate text-left text-[12px]" style={{ color: sel ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.primary }}>
                   ◢ {cam.label}
                 </button>
-                <button type="button" onClick={() => sendShot(cam.id)} disabled={state.mannequins.length === 0 || saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}>
-                  发送
+                <button type="button" onClick={() => sendShot(cam.id)} disabled={saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}>
+                  {saving ? '…' : '发送'}
                 </button>
               </div>
               {sel && selectedCamera?.id === cam.id ? (
@@ -340,6 +364,16 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
               </div>
             ))}
           </div>
+        </div>
+      ) : null}
+
+      {/* Toast — send feedback (the spawned frame is behind this fullscreen stage) */}
+      {toast ? (
+        <div
+          className="absolute left-1/2 top-16 -translate-x-1/2 rounded-lg px-4 py-2 font-mono text-[12px]"
+          style={{ background: `${CANVAS_TOKENS.bg.popover}f5`, border: `1px solid ${CANVAS_TOKENS.accent}66`, color: CANVAS_TOKENS.text.primary, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}
+        >
+          {toast}
         </div>
       ) : null}
 
