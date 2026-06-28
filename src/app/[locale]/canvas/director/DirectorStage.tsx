@@ -12,9 +12,9 @@
  * Capture hides all helpers (grid/gizmos/transform) then renders from a temp
  * camera built from the requested camera's state, so the shot is a clean plate.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import { Grid, OrbitControls, TransformControls } from '@react-three/drei'
+import { GizmoHelper, GizmoViewport, Grid, Html, OrbitControls, TransformControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { CANVAS_TOKENS } from '../lib/canvas-tokens'
 import { Mannequin } from './Mannequin'
@@ -23,12 +23,14 @@ import { Vec3Field } from './Vec3Field'
 import { POSE_PRESETS, REST_POSE, RIG_SLIDER_GROUPS, type Joint, type Pose } from './pose-presets'
 import { CAMERA_PRESETS, aspectRatio, computePreset } from './camera-presets'
 import {
+  type BodyType,
   type DirectorStageState,
   type StageAspect,
   type StageCamera,
   type StageMannequin,
   type TransformMode,
   type Vec3,
+  BODY_TYPES,
   STAGE_ASPECTS,
   makeCamera,
   makeMannequin,
@@ -41,6 +43,9 @@ const uid = () =>
 
 const camKey = (id: string) => `cam:${id}`
 const tgtKey = (id: string) => `tgt:${id}`
+/** camera id from a selection key, or null if the selection isn't a camera/target. */
+const selectedCamIdFromSel = (sel: string | null): string | null =>
+  sel && (sel.startsWith('cam:') || sel.startsWith('tgt:')) ? sel.slice(4) : null
 
 /** Effective look-at: follow a mannequin (chest height) if bound, else manual target. */
 function effectiveTarget(cam: StageCamera, mannequins: StageMannequin[]): Vec3 {
@@ -72,18 +77,60 @@ function facingOf(mannequins: StageMannequin[], selectedMannequinId: string | nu
   return (m ?? mannequins[0])?.rotation[1] ?? 0
 }
 
+/** Bottom-dock icon button with hover tooltip. */
+function DockBtn({ label, active, onClick, children }: { label: string; active?: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      className="group relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-white/10"
+      style={{ background: active ? 'rgba(255,255,255,0.12)' : 'transparent', color: active ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.secondary }}
+    >
+      {children}
+      <span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded px-2 py-1 text-[11px] group-hover:block" style={{ background: CANVAS_TOKENS.bg.popover, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>{label}</span>
+    </button>
+  )
+}
+
+/* eslint-disable no-restricted-syntax -- canvas-local 3D-stage dock glyphs, not app UI icons */
+/** 8 LibTV-style dock glyphs (inline stroke SVG, 20px, currentColor). */
+function Glyph({ name }: { name: string }) {
+  const p = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+  switch (name) {
+    case 'pointer': return <svg {...p}><path d="M5 3l7 16 2.5-6.5L21 10z" /></svg>
+    case 'person': return <svg {...p}><circle cx="12" cy="6" r="2.4" /><path d="M12 8.4V15M8 11h8M9.5 21l2.5-6 2.5 6" /></svg>
+    case 'panorama': return <svg {...p}><path d="M3 8c4-2 14-2 18 0M3 16c4 2 14 2 18 0M3 8v8M21 8v8" /><path d="M13 11l3 2-3 2" /></svg>
+    case 'camera': return <svg {...p}><rect x="3" y="7" width="12" height="10" rx="2" /><path d="M15 10l6-3v10l-6-3z" /></svg>
+    case 'frame': return <svg {...p}><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3" /></svg>
+    case 'photo': return <svg {...p}><circle cx="12" cy="13" r="3.4" /><path d="M4 9a2 2 0 012-2h1l1.2-1.6h6.6L20 7a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z" /></svg>
+    case 'aiimport': return <svg {...p}><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M3 14l5-4 4 3 3-2 6 5" /><path d="M12 2v4M10 4h4" /></svg>
+    case 'fullscreen': return <svg {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+    default: return null
+  }
+}
+/* eslint-enable no-restricted-syntax */
+
 interface SceneProps {
   state: DirectorStageState
   selectedId: string | null
   mode: TransformMode
+  view: 'director' | 'shot'
+  activeShotCamId: string | null
+  hiddenIds: Record<string, boolean>
+  lockedIds: Record<string, boolean>
+  showGrid: boolean
+  showGround: boolean
+  showLabels: boolean
   onSelect: (id: string | null) => void
   onCommitMannequin: (id: string, patch: Partial<StageMannequin>) => void
   onCommitCamera: (id: string, patch: Partial<StageCamera>) => void
   registerCapture: (fn: (cameraId: string) => string | null) => void
   registerGetView: (fn: () => { position: Vec3; target: Vec3; fov: number }) => void
+  registerReset: (fn: () => void) => void
 }
 
-function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView }: SceneProps) {
+function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView, registerReset }: SceneProps) {
   const { gl, scene, camera: viewCamera } = useThree()
   const helpersRef = useRef<THREE.Group>(null)
   const orbitRef = useRef<React.ComponentRef<typeof OrbitControls>>(null)
@@ -156,11 +203,42 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
     [viewCamera],
   )
 
+  const resetView = useCallback(() => {
+    viewCamera.position.set(3.5, 2.6, 5.5)
+    if (orbitRef.current) { orbitRef.current.target.set(0, 1, 0); orbitRef.current.update() }
+  }, [viewCamera])
+
   useEffect(() => {
     registerCapture(capture)
     registerGetView(getView)
+    registerReset(resetView)
     return () => { registerCapture(() => null) }
-  }, [registerCapture, registerGetView, capture, getView])
+  }, [registerCapture, registerGetView, registerReset, capture, getView, resetView])
+
+  // 机位视角: drive the orbit camera to look through the active shot camera.
+  // Only positions the camera — orbit.enabled is owned by the single effect
+  // below (so there's exactly one writer, no lockout race).
+  const activeShot = view === 'shot' && activeShotCamId ? state.cameras.find((c) => c.id === activeShotCamId) ?? null : null
+  useEffect(() => {
+    const orbit = orbitRef.current
+    if (activeShot) {
+      const tgt = effectiveTarget(activeShot, state.mannequins)
+      viewCamera.position.set(...activeShot.position)
+      ;(viewCamera as THREE.PerspectiveCamera).fov = activeShot.fov
+      ;(viewCamera as THREE.PerspectiveCamera).updateProjectionMatrix()
+      if (orbit) { orbit.target.set(...tgt); orbit.update() }
+    } else {
+      ;(viewCamera as THREE.PerspectiveCamera).fov = 45
+      ;(viewCamera as THREE.PerspectiveCamera).updateProjectionMatrix()
+    }
+  }, [activeShot, viewCamera, state.mannequins])
+
+  // SINGLE owner of orbit.enabled: free in 导演视角, locked in 机位视角.
+  // Re-runs on selection change too, so an interrupted gizmo drag can't leave
+  // orbit stuck disabled.
+  useEffect(() => {
+    if (orbitRef.current) orbitRef.current.enabled = view === 'director'
+  }, [view, selectedId])
 
   const selectedObject: THREE.Object3D | null = selectedId
     ? selectedId.startsWith('cam:')
@@ -178,10 +256,6 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
     else onCommitMannequin(selectedId, { position: obj.position.toArray() as Vec3, rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z], scale: obj.scale.x })
   }, [selectedObject, selectedId, onCommitCamera, onCommitMannequin])
 
-  useEffect(() => {
-    if (!selectedObject && orbitRef.current) orbitRef.current.enabled = true
-  }, [selectedObject])
-
   const isCamOrTarget = Boolean(selectedId && (selectedId.startsWith('cam:') || selectedId.startsWith('tgt:')))
 
   return (
@@ -190,15 +264,17 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
       <hemisphereLight args={['#ffffff', '#2a2a30', 0.85]} />
       <directionalLight position={[4, 8, 5]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[40, 40]} />
-        <meshStandardMaterial color="#15151a" roughness={1} />
-      </mesh>
+      {showGround ? (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <planeGeometry args={[40, 40]} />
+          <meshStandardMaterial color="#15151a" roughness={1} />
+        </mesh>
+      ) : null}
 
       {/* Helpers — hidden during capture */}
       <group ref={helpersRef}>
-        <Grid args={[40, 40]} cellSize={0.5} cellColor="#2a2a32" sectionSize={2} sectionColor="#3a3a46" fadeDistance={28} infiniteGrid position={[0, 0.001, 0]} />
-        {state.cameras.map((cam) => (
+        {showGrid ? <Grid args={[40, 40]} cellSize={0.5} cellColor="#2a2a32" sectionSize={2} sectionColor="#3a3a46" fadeDistance={28} infiniteGrid position={[0, 0.001, 0]} /> : null}
+        {state.cameras.filter((cam) => !hiddenIds[cam.id]).map((cam) => (
           <group key={cam.id}>
             <group
               ref={(el) => { if (el) camGizmoRefs.current[cam.id] = el; else delete camGizmoRefs.current[cam.id] }}
@@ -211,7 +287,6 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
                 <meshStandardMaterial color={CANVAS_TOKENS.accent} emissive={CANVAS_TOKENS.accent} emissiveIntensity={selectedId === camKey(cam.id) ? 0.55 : 0.18} />
               </mesh>
             </group>
-            {/* manual look-at gizmo — hidden when following a character */}
             {cam.lookAtMannequinId ? null : (
               <mesh
                 ref={(el) => { if (el) tgtGizmoRefs.current[cam.id] = el; else delete tgtGizmoRefs.current[cam.id] }}
@@ -226,8 +301,17 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
         ))}
       </group>
 
+      {/* navigation cube (top-right). Portals to its own HUD scene so it's never
+          in the screenshot; only in 导演视角 so its click-tween can't yank the
+          look-through camera in 机位视角. */}
+      {view === 'director' ? (
+        <GizmoHelper alignment="top-right" margin={[72, 80]}>
+          <GizmoViewport axisColors={['#FF6F6F', '#7BE3A4', '#6FA8FF']} labelColor="#fff" />
+        </GizmoHelper>
+      ) : null}
+
       {/* Mannequins — wrapping group owns transform + selection */}
-      {state.mannequins.map((m) => (
+      {state.mannequins.filter((m) => !hiddenIds[m.id]).map((m) => (
         <group
           key={m.id}
           ref={(el) => { if (el) mannequinRefs.current[m.id] = el; else delete mannequinRefs.current[m.id] }}
@@ -237,20 +321,26 @@ function SceneContents({ state, selectedId, mode, onSelect, onCommitMannequin, o
           onClick={(e) => { e.stopPropagation(); onSelect(m.id) }}
         >
           <Mannequin data={m} selected={selectedId === m.id} />
+          {showLabels ? (
+            <Html position={[0, 2.05, 0]} center distanceFactor={9} zIndexRange={[10, 0]}>
+              <div style={{ background: 'rgba(10,10,11,0.82)', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none' }}>{m.label}</div>
+            </Html>
+          ) : null}
         </group>
       ))}
 
-      {selectedObject ? (
+      {/* transform gizmo — not on locked objects, not in 机位视角 */}
+      {selectedObject && view === 'director' && !(selectedId && lockedIds[selectedId.replace(/^(cam|tgt):/, '')]) ? (
         <TransformControls
           ref={transformRef}
           object={selectedObject}
           mode={isCamOrTarget ? 'translate' : mode}
           onObjectChange={commitSelected}
-          // Disable orbit while dragging the gizmo (drei doesn't auto-toggle a
-          // makeDefault OrbitControls); the effect below re-enables it if the
-          // gizmo unmounts mid-drag so orbit can never get stuck off.
+          // Disable orbit during the drag; restore to the view-derived value on
+          // release (gizmo only shows in 导演视角 so that's `true`). If the gizmo
+          // unmounts mid-drag, the single enabled-effect restores it.
           onMouseDown={() => { if (orbitRef.current) orbitRef.current.enabled = false }}
-          onMouseUp={() => { if (orbitRef.current) orbitRef.current.enabled = true }}
+          onMouseUp={() => { if (orbitRef.current) orbitRef.current.enabled = view === 'director' }}
         />
       ) : null}
 
@@ -275,10 +365,24 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const [mode, setMode] = useState<TransformMode>('translate')
   const [toast, setToast] = useState<string | null>(null)
   const [sentTotal, setSentTotal] = useState(0)
+  const [view, setView] = useState<'director' | 'shot'>('director')
+  const [hiddenIds, setHiddenIds] = useState<Record<string, boolean>>({})
+  const [lockedIds, setLockedIds] = useState<Record<string, boolean>>({})
+  const [showGrid, setShowGrid] = useState(true)
+  const [showGround, setShowGround] = useState(true)
+  const [showLabels, setShowLabels] = useState(true)
+  const [search, setSearch] = useState('')
+  const [addMenu, setAddMenu] = useState(false)
+  const [aspectMenu, setAspectMenu] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
   const captureRef = useRef<((cameraId: string) => string | null) | null>(null)
   const getViewRef = useRef<(() => { position: Vec3; target: Vec3; fov: number }) | null>(null)
+  const resetViewRef = useRef<(() => void) | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const [rootSize, setRootSize] = useState({ w: 0, h: 0 })
+
+  // Active shot camera for 机位视角 = selected camera, else first.
+  const activeShotCamId = (selectedCamIdFromSel(selectedId) ?? state.cameras[0]?.id) ?? null
 
   // Measure the stage so the framing overlay matches capture()'s centered
   // max-fit crop exactly (same cw/ch ratio the crop uses).
@@ -297,8 +401,27 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
     return () => clearTimeout(t)
   }, [toast])
 
-  const addMannequin = useCallback(() => setState((s) => ({ ...s, mannequins: [...s.mannequins, makeMannequin(uid(), s.mannequins.length)] })), [])
-  const addCamera = useCallback(() => setState((s) => ({ ...s, cameras: [...s.cameras, makeCamera(uid(), s.cameras.length)] })), [])
+  const addMannequin = useCallback((bodyType: BodyType = 'male') => {
+    const nid = uid()
+    setState((s) => ({ ...s, mannequins: [...s.mannequins, makeMannequin(nid, s.mannequins.length, bodyType)] }))
+    setSelectedId(nid)
+    setAddMenu(false)
+  }, [])
+  const addCamera = useCallback(() => {
+    const nid = uid()
+    setState((s) => ({ ...s, cameras: [...s.cameras, makeCamera(nid, s.cameras.length)] }))
+    setSelectedId(camKey(nid))
+  }, [])
+
+  const toggleHidden = useCallback((id: string) => setHiddenIds((h) => ({ ...h, [id]: !h[id] })), [])
+  const toggleLocked = useCallback((id: string) => setLockedIds((l) => ({ ...l, [id]: !l[id] })), [])
+
+  const toggleFullscreen = useCallback(() => {
+    const el = rootRef.current
+    if (!el) return
+    if (!document.fullscreenElement) { el.requestFullscreen?.().then(() => setFullscreen(true)).catch(() => {}) }
+    else { document.exitFullscreen?.().then(() => setFullscreen(false)).catch(() => {}) }
+  }, [])
 
   const removeSelected = useCallback(() => {
     if (!selectedId) return
@@ -362,12 +485,12 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const applyCameraPreset = useCallback((camId: string, preset: typeof CAMERA_PRESETS[number]) => {
     // 当前视角 needs the live view; bail if not registered yet (avoids a
     // self-referential degenerate camera at the focus point).
-    const view = preset.current ? getViewRef.current?.() ?? null : null
-    if (preset.current && !view) { setToast('视角未就绪，请稍候'); return }
+    const liveView = preset.current ? getViewRef.current?.() ?? null : null
+    if (preset.current && !liveView) { setToast('视角未就绪，请稍候'); return }
     setState((s) => {
       const cam = s.cameras.find((c) => c.id === camId)
       const focusId = cam?.lookAtMannequinId ?? null
-      const shot = computePreset(preset, focusPoint(s.mannequins, focusId), facingOf(s.mannequins, focusId), view)
+      const shot = computePreset(preset, focusPoint(s.mannequins, focusId), facingOf(s.mannequins, focusId), liveView)
       // A preset sets an explicit position+target, so clear follow — otherwise
       // effectiveTarget would override the preset's framing.
       return { ...s, cameras: s.cameras.map((c) => (c.id === camId ? { ...c, position: shot.position, target: shot.target, fov: shot.fov, roll: shot.roll, lookAtMannequinId: null } : c)) }
@@ -376,7 +499,6 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const setAspect = useCallback((a: StageAspect) => setState((s) => ({ ...s, aspect: a })), [])
 
   const btn = 'rounded-md px-3 py-1.5 font-mono text-[12px] transition-colors'
-  const isMannequinSelected = Boolean(selectedMannequin)
 
   return (
     <div ref={rootRef} className="fixed inset-0 z-50" style={{ background: CANVAS_TOKENS.bg.canvas }}>
@@ -385,44 +507,23 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           state={state}
           selectedId={selectedId}
           mode={mode}
+          view={view}
+          activeShotCamId={activeShotCamId}
+          hiddenIds={hiddenIds}
+          lockedIds={lockedIds}
+          showGrid={showGrid}
+          showGround={showGround}
+          showLabels={showLabels}
           onSelect={setSelectedId}
           onCommitMannequin={commitMannequin}
           onCommitCamera={commitCamera}
           registerCapture={(fn) => { captureRef.current = fn }}
           registerGetView={(fn) => { getViewRef.current = fn }}
+          registerReset={(fn) => { resetViewRef.current = fn }}
         />
       </Canvas>
 
-      {/* Top bar */}
-      <div className="absolute inset-x-0 top-0 flex h-12 items-center justify-between px-4" style={{ background: `${CANVAS_TOKENS.bg.panel}cc`, borderBottom: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
-        <div className="flex items-center gap-2 font-mono text-[13px]">
-          <span style={{ color: CANVAS_TOKENS.accent }}>◐</span>
-          <span style={{ color: CANVAS_TOKENS.text.primary }}>导演台</span>
-          <span className="text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>· 持久场景 · 每个机位 = 一帧（共用站位）</span>
-          {castLabels.length > 0 ? (
-            <span className="ml-2 rounded px-2 py-0.5 text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary }}>
-              卡司：{castLabels.join('、')}
-            </span>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
-            <span>画幅</span>
-            <select
-              value={state.aspect ?? 'auto'}
-              onChange={(e) => setAspect(e.target.value as StageAspect)}
-              className="rounded px-1.5 py-1 text-[11px] outline-none"
-              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
-            >
-              {STAGE_ASPECTS.map((a) => <option key={a} value={a}>{a === 'auto' ? '自适应' : a}</option>)}
-            </select>
-          </label>
-          <button type="button" onClick={onClose} className={btn} style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>✕ 关闭</button>
-        </div>
-      </div>
-
-      {/* Framing overlay — exactly the centered max-fit crop region (mirrors
-          capture()'s crop math against the measured stage size). */}
+      {/* Framing overlay — exactly the centered max-fit crop region */}
       {(() => {
         const R = aspectRatio(state.aspect)
         if (!R || rootSize.w === 0 || rootSize.h === 0) return null
@@ -436,53 +537,80 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
         )
       })()}
 
-      {/* Left tool rail */}
-      <div className="absolute left-4 top-16 flex flex-col gap-1.5 rounded-xl p-2" style={{ background: `${CANVAS_TOKENS.bg.card}e6`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
-        <button type="button" onClick={addMannequin} className={btn} style={{ color: CANVAS_TOKENS.text.primary, background: CANVAS_TOKENS.bg.hover }}>＋ 人偶</button>
-        <button type="button" onClick={addCamera} className={btn} style={{ color: CANVAS_TOKENS.accent, background: CANVAS_TOKENS.bg.hover }}>＋ 机位</button>
-        <button type="button" onClick={removeSelected} disabled={!selectedId} className={btn} style={{ color: selectedId ? '#FF8A8A' : CANVAS_TOKENS.text.muted, background: CANVAS_TOKENS.bg.hover, opacity: selectedId ? 1 : 0.4 }}>✕ 删除选中</button>
-        <div className="my-1 h-px" style={{ background: CANVAS_TOKENS.hairline }} />
-        {(['translate', 'rotate', 'scale'] as TransformMode[]).map((m) => (
-          <button key={m} type="button" onClick={() => setMode(m)} disabled={!isMannequinSelected && m !== 'translate'} className={btn} style={{ color: mode === m ? '#06222A' : CANVAS_TOKENS.text.secondary, background: mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, opacity: !isMannequinSelected && m !== 'translate' ? 0.4 : 1 }}>
-            {m === 'translate' ? '移动' : m === 'rotate' ? '旋转' : '缩放'}
-          </button>
-        ))}
+      {/* Top bar: title | 导演视角/机位视角 toggle | help+close */}
+      <div className="absolute inset-x-0 top-0 flex h-12 items-center justify-between px-4" style={{ background: `${CANVAS_TOKENS.bg.panel}cc`, borderBottom: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
+        <div className="flex items-center gap-2 font-mono text-[13px]">
+          <span style={{ color: CANVAS_TOKENS.accent }}>◐</span>
+          <span style={{ color: CANVAS_TOKENS.text.primary }}>3D导演台</span>
+          {castLabels.length > 0 ? <span className="ml-2 rounded px-2 py-0.5 text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary }}>卡司：{castLabels.join('、')}</span> : null}
+        </div>
+        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 rounded-lg p-0.5" style={{ background: CANVAS_TOKENS.bg.hover }}>
+          {(['director', 'shot'] as const).map((v) => (
+            <button key={v} type="button" onClick={() => setView(v)} className="rounded-md px-3 py-1 font-mono text-[12px]" style={{ background: view === v ? CANVAS_TOKENS.bg.card : 'transparent', color: view === v ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.muted }}>
+              {v === 'director' ? '导演视角' : '机位视角'}
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={onClose} className={btn} style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>✕</button>
       </div>
 
-      {/* Camera list — each row sends one frame sharing the blocking */}
-      <div className="absolute bottom-5 left-4 w-60 rounded-xl p-2" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
-        <div className="mb-1 flex items-center justify-between px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>
-          <span>机位（截图 → 发送一帧）</span>
-          {sentTotal > 0 ? <span style={{ color: CANVAS_TOKENS.accent }}>已发送 {sentTotal} 帧</span> : null}
+      {/* Left 场景 panel — scene tree (cameras + mannequins) with hide/lock/select */}
+      <div className="absolute left-0 top-12 bottom-0 flex w-56 flex-col" style={{ background: `${CANVAS_TOKENS.bg.panel}f2`, borderRight: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
+        <div className="px-3 py-2 font-mono text-[12px]" style={{ color: CANVAS_TOKENS.text.primary }}>场景</div>
+        <div className="px-2">
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索对象" className="w-full rounded-md px-2 py-1.5 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }} />
         </div>
-        {state.mannequins.length === 0 ? (
-          <div className="mb-1 px-1 text-[10px]" style={{ color: CANVAS_TOKENS.gold }}>先按左上「＋人偶」加角色，才能发送</div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {[
+            ...state.cameras.map((c) => ({ id: c.id, key: camKey(c.id), label: c.label, glyph: '◢', accent: CANVAS_TOKENS.accent })),
+            ...state.mannequins.map((m) => ({ id: m.id, key: m.id, label: m.label, glyph: '人', accent: m.color })),
+          ]
+            .filter((o) => !search || o.label.toLowerCase().includes(search.toLowerCase()))
+            .map((o) => {
+              const sel = selectedId === o.key || selectedId === tgtKey(o.id)
+              return (
+                <div key={o.key} className="group flex items-center gap-1 rounded-md px-1.5 py-1" style={{ background: sel ? CANVAS_TOKENS.bg.hover : 'transparent' }}>
+                  <button type="button" onClick={() => setSelectedId(o.key)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12px]" style={{ color: sel ? o.accent : CANVAS_TOKENS.text.primary, opacity: hiddenIds[o.id] ? 0.4 : 1 }}>
+                    <span style={{ color: o.accent }}>{o.glyph}</span>
+                    <span className="truncate">{o.label}</span>
+                  </button>
+                  <button type="button" title="隐藏" onClick={() => toggleHidden(o.id)} className="px-1 text-[11px]" style={{ color: hiddenIds[o.id] ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.muted }}>{hiddenIds[o.id] ? '◌' : '◉'}</button>
+                  <button type="button" title="锁定" onClick={() => toggleLocked(o.id)} className="px-1 text-[11px]" style={{ color: lockedIds[o.id] ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.muted }}>{lockedIds[o.id] ? '🔒' : '🔓'}</button>
+                </div>
+              )
+            })}
+          {state.cameras.length === 0 && state.mannequins.length === 0 ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>用底部工具栏添加角色/机位</div> : null}
+        </div>
+        {selectedId ? (
+          <button type="button" onClick={removeSelected} className="m-2 rounded-md py-1.5 text-[12px]" style={{ color: '#FF8A8A', background: CANVAS_TOKENS.bg.hover }}>✕ 删除选中</button>
         ) : null}
-        {state.cameras.map((cam) => {
-          const sel = selectedId === camKey(cam.id) || selectedId === tgtKey(cam.id)
-          return (
-            <div key={cam.id} className="mb-1 rounded-md p-1" style={{ background: sel ? CANVAS_TOKENS.bg.hover : 'transparent' }}>
-              <div className="flex items-center justify-between gap-1">
-                <button type="button" onClick={() => setSelectedId(camKey(cam.id))} className="flex-1 truncate text-left text-[12px]" style={{ color: sel ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.primary }}>
-                  ◢ {cam.label}
-                </button>
-                <button type="button" onClick={() => sendShot(cam.id)} disabled={saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}>
-                  {saving ? '…' : '发送'}
-                </button>
-              </div>
-            </div>
-          )
-        })}
       </div>
+
+      {/* ViewCube reset (top-right, below the gizmo) */}
+      <button type="button" onClick={() => resetViewRef.current?.()} className="absolute right-5 top-28 rounded-md px-2 py-1 font-mono text-[11px]" style={{ background: `${CANVAS_TOKENS.bg.card}e6`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>重置视角</button>
 
       {/* Rig panel — pose presets + per-joint sliders, shown on mannequin select */}
       {selectedMannequin ? (
         <div className="absolute right-4 top-16 bottom-16 flex w-64 flex-col overflow-hidden rounded-xl" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
           <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-            <span className="font-mono text-[12px]" style={{ color: selectedMannequin.color }}>{selectedMannequin.label} · 姿势</span>
-            <button type="button" onClick={() => applyPose(selectedMannequin.id, REST_POSE)} className="rounded px-2 py-0.5 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>重置</button>
+            <span className="font-mono text-[12px]" style={{ color: selectedMannequin.color }}>{selectedMannequin.label}</span>
+            <button type="button" onClick={() => applyPose(selectedMannequin.id, REST_POSE)} className="rounded px-2 py-0.5 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>重置姿势</button>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
+            {/* transform mode + body type */}
+            <div className="mb-2 flex gap-1">
+              {(['translate', 'rotate', 'scale'] as TransformMode[]).map((m) => (
+                <button key={m} type="button" onClick={() => setMode(m)} className="flex-1 rounded py-1 text-[11px]" style={{ color: mode === m ? '#06222A' : CANVAS_TOKENS.text.secondary, background: mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover }}>
+                  {m === 'translate' ? '移动' : m === 'rotate' ? '旋转' : '缩放'}
+                </button>
+              ))}
+            </div>
+            <label className="mb-2 block">
+              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>素体类型</span>
+              <select value={selectedMannequin.bodyType ?? 'male'} onChange={(e) => commitMannequin(selectedMannequin.id, { bodyType: e.target.value as BodyType })} className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+                {BODY_TYPES.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
+              </select>
+            </label>
             <div className="mb-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>预设姿势</div>
             <div className="mb-3 grid grid-cols-3 gap-1">
               {POSE_PRESETS.map((preset) => (
@@ -549,6 +677,54 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
         </div>
       ) : null}
 
+      {/* 3D场景 props — shown when nothing is selected */}
+      {!selectedMannequin && !selectedCamera ? (
+        <div className="absolute right-4 top-16 w-56 rounded-xl p-3" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
+          <div className="mb-2 font-mono text-[12px]" style={{ color: CANVAS_TOKENS.text.primary }}>3D场景</div>
+          {([['角色标签', showLabels, setShowLabels], ['网格', showGrid, setShowGrid], ['地面', showGround, setShowGround]] as const).map(([label, val, set]) => (
+            <button key={label} type="button" onClick={() => set(!val)} className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[12px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>
+              <span>{label}</span>
+              <span style={{ color: val ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.muted }}>{val ? '● 开' : '○ 关'}</span>
+            </button>
+          ))}
+          <div className="mt-2 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>选中角色/机位编辑属性 · 全景背景将于批 C 加入</div>
+        </div>
+      ) : null}
+
+      {/* close dock dropdowns on outside click */}
+      {addMenu || aspectMenu ? <div className="absolute inset-0 z-[9]" onClick={() => { setAddMenu(false); setAspectMenu(false) }} /> : null}
+
+      {/* Bottom dock — all tools (LibTV layout) */}
+      <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-2xl px-2 py-1.5" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
+        <DockBtn label="选择" active={!selectedId} onClick={() => setSelectedId(null)}><Glyph name="pointer" /></DockBtn>
+        <div className="relative">
+          <DockBtn label="添加角色" active={addMenu} onClick={() => { setAddMenu((v) => !v); setAspectMenu(false) }}><Glyph name="person" /></DockBtn>
+          {addMenu ? (
+            <div className="absolute bottom-12 left-0 w-40 overflow-hidden rounded-xl" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
+              {BODY_TYPES.map((b) => (
+                <button key={b.key} type="button" onClick={() => addMannequin(b.key)} className="block w-full px-3 py-2 text-left text-[12px] hover:bg-white/5" style={{ color: CANVAS_TOKENS.text.primary }}>{b.label}</button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <DockBtn label="全景图（批C）" onClick={() => setToast('全景背景将于批 C（生成）加入')}><Glyph name="panorama" /></DockBtn>
+        <DockBtn label="添加机位" onClick={addCamera}><Glyph name="camera" /></DockBtn>
+        <div className="relative">
+          <DockBtn label="画幅比例" active={aspectMenu} onClick={() => { setAspectMenu((v) => !v); setAddMenu(false) }}><Glyph name="frame" /></DockBtn>
+          {aspectMenu ? (
+            <div className="absolute bottom-12 left-0 w-32 overflow-hidden rounded-xl" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
+              {STAGE_ASPECTS.map((a) => (
+                <button key={a} type="button" onClick={() => { setAspect(a); setAspectMenu(false) }} className="block w-full px-3 py-1.5 text-left text-[12px] hover:bg-white/5" style={{ color: (state.aspect ?? 'auto') === a ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.primary }}>{a === 'auto' ? '自适应' : a}</button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <DockBtn label="截图发送当前机位" onClick={() => activeShotCamId && sendShot(activeShotCamId)}><Glyph name="photo" /></DockBtn>
+        <DockBtn label="AI识图导入（批C）" onClick={() => setToast('AI 识图导入将于批 C（生成）加入')}><Glyph name="aiimport" /></DockBtn>
+        <DockBtn label={fullscreen ? '退出全屏' : '全屏'} onClick={toggleFullscreen}><Glyph name="fullscreen" /></DockBtn>
+        {sentTotal > 0 ? <span className="ml-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.accent }}>已发送 {sentTotal} 帧</span> : null}
+      </div>
+
       {/* Toast — send feedback (the spawned frame is behind this fullscreen stage) */}
       {toast ? (
         <div
@@ -559,10 +735,6 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
         </div>
       ) : null}
 
-      {/* Hint */}
-      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>
-        左键选中 · 拖 gizmo 摆位 · ◢青锥=机位 / ●金球=注视点 · 加多个机位 → 每个发送一帧（站位一致）
-      </div>
     </div>
   )
 }

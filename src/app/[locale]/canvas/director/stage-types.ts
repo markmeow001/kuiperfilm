@@ -14,6 +14,29 @@ import { REST_POSE, type Pose } from './pose-presets'
 
 export type Vec3 = [number, number, number]
 
+/** 素体 body type — drives proportion multipliers in Mannequin. */
+export type BodyType = 'male' | 'female' | 'broad' | 'muscular' | 'slender' | 'teen' | 'child' | 'chibi'
+
+export interface BodyTypeDef {
+  key: BodyType
+  label: string
+  /** overall height scale, limb thickness, head scale. */
+  height: number
+  girth: number
+  head: number
+}
+
+export const BODY_TYPES: BodyTypeDef[] = [
+  { key: 'male', label: '男性素体', height: 1.0, girth: 1.0, head: 1.0 },
+  { key: 'female', label: '女性素体', height: 0.95, girth: 0.86, head: 0.96 },
+  { key: 'broad', label: '宽厚素体', height: 1.0, girth: 1.28, head: 1.05 },
+  { key: 'muscular', label: '健壮素体', height: 1.04, girth: 1.18, head: 0.98 },
+  { key: 'slender', label: '纤细素体', height: 1.0, girth: 0.78, head: 0.95 },
+  { key: 'teen', label: '少年素体', height: 0.86, girth: 0.84, head: 1.06 },
+  { key: 'child', label: '儿童素体', height: 0.68, girth: 0.86, head: 1.22 },
+  { key: 'chibi', label: '二头身', height: 0.6, girth: 1.15, head: 1.9 },
+]
+
 export interface StageMannequin {
   id: string
   label: string
@@ -21,6 +44,8 @@ export interface StageMannequin {
   rotation: Vec3 // euler radians (whole-body facing)
   scale: number
   color: string
+  /** 素体 body type (default 'male'). */
+  bodyType?: BodyType
   // Articulated rig (per-joint, M2b). Optional because M2a-era saved stages
   // predate it — normalized to REST_POSE by normalizeStage().
   pose?: Pose
@@ -57,15 +82,16 @@ export const DEFAULT_STAGE: DirectorStageState = {
   cameras: [{ id: 'cam-1', label: '机位1', position: [0, 1.6, 4.5], target: [0, 1, 0], fov: 45 }],
 }
 
-export function makeMannequin(id: string, index: number): StageMannequin {
+export function makeMannequin(id: string, index: number, bodyType: BodyType = 'male'): StageMannequin {
   const x = (index % 5) * 1.2 - 1.2
   return {
     id,
-    label: `角色${index + 1}`,
+    label: `角色${String.fromCharCode(65 + (index % 26))}`,
     position: [x, 0, 0],
     rotation: [0, 0, 0],
     scale: 1,
     color: MANNEQUIN_COLORS[index % MANNEQUIN_COLORS.length],
+    bodyType,
     pose: REST_POSE,
   }
 }

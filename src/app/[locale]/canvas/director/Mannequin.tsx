@@ -12,7 +12,7 @@
  */
 import { memo } from 'react'
 import { REST_POSE, type Pose } from './pose-presets'
-import type { StageMannequin } from './stage-types'
+import { BODY_TYPES, type StageMannequin } from './stage-types'
 
 interface MannequinProps {
   data: StageMannequin
@@ -25,29 +25,33 @@ export const Mannequin = memo(function Mannequin({ data, selected }: MannequinPr
   const j = pose.joints
   const emissive = selected ? color : '#000000'
   const intensity = selected ? 0.3 : 0
+  // Body-type proportions: vertical scale (height), limb radius (girth), head.
+  const bt = BODY_TYPES.find((b) => b.key === (data.bodyType ?? 'male')) ?? BODY_TYPES[0]
+  const g = bt.girth
 
   // Plain functions (NOT nested components) so React reconciles each as a stable
   // <mesh> — an inline component would remount/recreate all geometry per render.
   const mat = () => (
     <meshStandardMaterial color={color} emissive={emissive} emissiveIntensity={intensity} roughness={0.55} metalness={0.05} />
   )
-  // capsule limb segment (axis = Y), optional non-uniform scale to flatten/widen
+  // capsule limb segment (axis = Y); radius scaled by body girth
   const seg = (pos: [number, number, number], r: number, len: number, scale: [number, number, number] = [1, 1, 1]) => (
-    <mesh position={pos} scale={scale} castShadow>
+    <mesh position={pos} scale={[scale[0] * g, scale[1], scale[2] * g]} castShadow>
       <capsuleGeometry args={[r, len, 6, 14]} />
       {mat()}
     </mesh>
   )
-  // ball joint / rounded part
-  const ball = (pos: [number, number, number], r: number, scale: [number, number, number] = [1, 1, 1]) => (
-    <mesh position={pos} scale={scale} castShadow>
+  // ball joint / rounded part; radius scaled by body girth
+  const ball = (pos: [number, number, number], r: number, scale: [number, number, number] = [1, 1, 1], headMul = 1) => (
+    <mesh position={pos} scale={[scale[0] * g * headMul, scale[1] * g * headMul, scale[2] * g * headMul]} castShadow>
       <sphereGeometry args={[r, 18, 16]} />
       {mat()}
     </mesh>
   )
 
   return (
-    // pelvis (skeleton root) — pose.root lowers it for sit/crouch
+    // outer group scales total height by body type; pelvis lowers for sit/crouch
+    <group scale={[1, bt.height, 1]}>
     <group position={[pose.root[0], 0.9 + pose.root[1], pose.root[2]]}>
       {ball([0, 0, 0], 0.12, [1.25, 0.95, 0.74])}
 
@@ -56,10 +60,10 @@ export const Mannequin = memo(function Mannequin({ data, selected }: MannequinPr
         {seg([0, 0.16, 0], 0.115, 0.1, [1.05, 1, 0.72])}
         {seg([0, 0.4, 0], 0.155, 0.14, [1.4, 1, 0.72])}
 
-        {/* head */}
+        {/* head — scaled by body-type head factor (net = bt.head) */}
         <group position={[0, 0.56, 0]} rotation={j.head}>
           {seg([0, 0.04, 0], 0.05, 0.05)}
-          {ball([0, 0.2, 0], 0.13, [0.92, 1.05, 0.95])}
+          {ball([0, 0.2, 0], 0.13, [0.92, 1.05, 0.95], bt.head / g)}
           {/* nose marks facing (+Z) */}
           <mesh position={[0, 0.2, 0.13]} rotation={[Math.PI / 2, 0, 0]} castShadow>
             <coneGeometry args={[0.035, 0.08, 12]} />
@@ -110,6 +114,7 @@ export const Mannequin = memo(function Mannequin({ data, selected }: MannequinPr
           {ball([0, -0.4, 0.05], 0.08, [0.95, 0.55, 1.7])}
         </group>
       </group>
+    </group>
     </group>
   )
 })
