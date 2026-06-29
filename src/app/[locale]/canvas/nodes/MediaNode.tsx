@@ -17,7 +17,7 @@ import type { CanvasNodeData } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
 import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
-import { IMAGE_RECIPES, RECIPE_GROUPS } from '../lib/canvas-recipes'
+import { IMAGE_RECIPES } from '../lib/canvas-recipes'
 import { NodeShell } from './node-shell'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '4:5']
@@ -208,27 +208,36 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                 <span style={{ color: CANVAS_TOKENS.text.muted }}>{recipeMenu ? '▾' : '▸'}</span>
               </button>
               {recipeMenu ? (
-                <div className="nodrag absolute left-0 top-full z-50 mt-1 max-h-72 w-[260px] overflow-y-auto rounded-lg p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
-                  {RECIPE_GROUPS.map((g) => (
-                    <div key={g} className="mb-1.5">
-                      <div className="mb-0.5 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{g}</div>
-                      {IMAGE_RECIPES.filter((r) => r.group === g).map((r) => (
-                        <button
-                          key={r.key}
-                          type="button"
-                          onClick={() => {
-                            updateNodeData(id, { prompt: r.prompt, ...(r.aspectRatio ? { aspectRatio: r.aspectRatio } : {}) })
-                            setRecipeMenu(false)
-                          }}
-                          className="block w-full rounded px-2 py-1 text-left text-[12px] hover:bg-white/5"
-                          style={{ color: r.key === 'pano720' ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.primary }}
-                        >
-                          {r.label}{r.key === 'pano720' ? '（→ 导演台全景球）' : ''}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setRecipeMenu(false)} />
+                  {/* Wide 2-column layout (LibTV-style) — everything visible, no scroll */}
+                  <div className="nowheel nodrag absolute left-0 top-full z-50 mt-1 grid w-[440px] grid-cols-2 gap-x-4 gap-y-1 rounded-xl p-3" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
+                    {([['分镜叙事', '质感调节'], ['空间与机位', '设定图']] as const).map((colGroups, ci) => (
+                      <div key={ci} className="space-y-2">
+                        {colGroups.map((g) => (
+                          <div key={g}>
+                            <div className="mb-0.5 px-1 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>{g}</div>
+                            {IMAGE_RECIPES.filter((r) => r.group === g).map((r) => (
+                              <button
+                                key={r.key}
+                                type="button"
+                                onClick={() => {
+                                  updateNodeData(id, { prompt: r.prompt, ...(r.aspectRatio ? { aspectRatio: r.aspectRatio } : {}) })
+                                  setRecipeMenu(false)
+                                }}
+                                className="block w-full rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-white/8"
+                                style={{ color: r.key === 'pano720' ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.primary, background: r.key === 'pano720' ? `${CANVAS_TOKENS.accent}14` : 'transparent' }}
+                              >
+                                {r.label}
+                                {r.key === 'pano720' ? <span className="ml-1 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>生成全景场景图</span> : null}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </>
               ) : null}
             </div>
           ) : null}
