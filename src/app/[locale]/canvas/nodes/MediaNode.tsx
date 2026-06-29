@@ -20,7 +20,7 @@ import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { IMAGE_RECIPES } from '../lib/canvas-recipes'
 import { NodeShell } from './node-shell'
 
-const ASPECT_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '4:5']
+const ASPECT_OPTIONS = ['9:16', '16:9', '2:1', '21:9', '1:1', '4:3', '3:4', '4:5']
 const RESOLUTION_OPTIONS = ['480p', '720p', '1080p']
 // video generation modes (how upstream refs are used)
 const GEN_MODES: { key: 'text' | 'image' | 'omni'; label: string }[] = [

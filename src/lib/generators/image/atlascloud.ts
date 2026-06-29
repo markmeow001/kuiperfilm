@@ -103,6 +103,11 @@ const GPT_IMAGE_2_SIZE_ENUM = new Set([
  *  send an out-of-enum value (the gateway 400s on those). */
 function aspectRatioToGptImage2Size(aspectRatio: string | undefined): string {
   switch (aspectRatio) {
+    case '2:1':
+    case '21:9':
+      // GPT Image 2 has no ≥2:1 size — use its widest (3:2) so a panorama
+      // request still produces a wide image, not a square fallback.
+      return '1536x1024'
     case '16:9':
       return '1536x1024'
     case '9:16':
@@ -133,6 +138,8 @@ const NANO_BANANA_RATIO_ENUM = new Set([
 function normaliseNanoBananaRatio(input: string | undefined): string | undefined {
   if (!input) return undefined
   if (NANO_BANANA_RATIO_ENUM.has(input)) return input
+  // 2:1 (equirect panorama request) → Nano Banana's widest enum value 21:9.
+  if (input === '2:1') return '21:9'
   return undefined // unknown → let the model pick default
 }
 
