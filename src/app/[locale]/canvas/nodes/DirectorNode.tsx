@@ -77,6 +77,19 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
     [cast],
   )
 
+  // Upstream image nodes with a completed result → candidate 全景球 backgrounds
+  // (e.g. a 720全景图). label + runId + preview url.
+  const upstreamImages = useMemo(
+    () =>
+      cast
+        .filter((n) => n.type === 'image' && (n.data as CanvasNodeData)?.runId && (n.data as CanvasNodeData)?.resultUrl)
+        .map((n) => {
+          const dd = n.data as CanvasNodeData
+          return { runId: String(dd.runId), label: dd.title || '图片', url: dd.resultUrl as string }
+        }),
+    [cast],
+  )
+
   const stage: DirectorStageState = useMemo(() => normalizeStage(d.stage ?? DEFAULT_STAGE), [d.stage])
 
   // Throws on failure so the stage can surface it (the node card is hidden
@@ -139,6 +152,16 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
               uploadImage={async (file) => {
                 const res = await upload.mutateAsync({ file, type: 'image' })
                 return { key: res.key, url: res.signedUrl }
+              }}
+              upstreamImages={upstreamImages}
+              importBackground={async (runId) => {
+                const res = await fetch('/api/canvas/use-as-background', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ runId }),
+                })
+                if (!res.ok) throw new Error('导入失败（图片可能还没生成完）')
+                return (await res.json()) as { key: string; url: string }
               }}
               generateImage={async ({ prompt, refKey, aspectRatio }) => {
                 const modelKey = gen.imageModels[0]?.value

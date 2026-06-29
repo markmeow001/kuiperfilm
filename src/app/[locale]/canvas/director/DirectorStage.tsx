@@ -379,11 +379,15 @@ interface DirectorStageProps {
   uploadImage?: (file: File) => Promise<{ key: string; url: string }>
   /** Generate an image (AI识图: flat → 360 panorama). Resolves to result URL. */
   generateImage?: (opts: { prompt: string; refKey?: string; aspectRatio?: string }) => Promise<{ url: string }>
+  /** Upstream image nodes (e.g. 720全景图) usable as the 全景球 background. */
+  upstreamImages?: { runId: string; label: string; url: string }[]
+  /** Copy an upstream run-result into a durable bg key. Resolves to {key, url}. */
+  importBackground?: (runId: string) => Promise<{ key: string; url: string }>
 }
 
 const PANORAMA_PROMPT = '将这张场景图转换为无缝衔接的 360° 等距圆柱全景图（equirectangular panorama，2:1），左右边缘可平滑环绕拼接，保持原场景的风格、光线与氛围，适合作为环境背景球贴图'
 
-export function DirectorStage({ initialState, onClose, onSendShot, castLabels = [], saving, uploadImage, generateImage }: DirectorStageProps) {
+export function DirectorStage({ initialState, onClose, onSendShot, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -553,6 +557,21 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const [panoBusy, setPanoBusy] = useState(false)
   const mountedRef = useRef(true)
   useEffect(() => () => { mountedRef.current = false }, [])
+  const importFromUpstream = useCallback(async (runId: string) => {
+    if (panoBusy || !importBackground) return
+    setPanoBusy(true)
+    setToast('导入全景中…')
+    try {
+      const { key, url } = await importBackground(runId)
+      if (!mountedRef.current) return
+      setBackground({ mode: 'sphere', key, url })
+      setToast('✓ 已设为全景球背景')
+    } catch (e) {
+      if (mountedRef.current) setToast(`导入失败：${(e as Error)?.message ?? '未知错误'}`)
+    } finally {
+      if (mountedRef.current) setPanoBusy(false)
+    }
+  }, [panoBusy, importBackground, setBackground])
   const convertToPanorama = useCallback(async () => {
     if (panoBusy) return // guard both entry points (panel + dock) → no double-bill
     if (!generateImage) { setToast('生成未就绪'); return }
@@ -802,6 +821,22 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
             <button type="button" onClick={convertToPanorama} disabled={panoBusy} className="mt-2 w-full rounded-md py-1.5 text-[11px] font-semibold disabled:opacity-50" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.accent, border: `1px solid ${CANVAS_TOKENS.accent}55` }}>
               {panoBusy ? 'AI 转全景中…' : '✨ AI 识图转 360 全景'}
             </button>
+          ) : null}
+
+          {/* import a connected 720全景图 image node as the 全景球 background */}
+          {upstreamImages.length > 0 ? (
+            <div className="mt-2">
+              <div className="mb-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>从上游图片导入全景</div>
+              <div className="space-y-1">
+                {upstreamImages.map((u) => (
+                  <button key={u.runId} type="button" onClick={() => importFromUpstream(u.runId)} disabled={panoBusy} className="flex w-full items-center gap-2 rounded-md p-1 text-left text-[12px] disabled:opacity-50" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={u.url} alt={u.label} className="h-8 w-12 shrink-0 rounded object-cover" />
+                    <span className="truncate">{u.label} → 全景球</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : null}
           <div className="mt-2 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>上传平面场景图 → AI 转全景球，人物即站在场景中</div>
         </div>
