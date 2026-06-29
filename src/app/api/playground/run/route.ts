@@ -25,6 +25,7 @@ import { resolveModelSelection } from '@/lib/api-config'
 import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { mapTaskStatusToPlayground } from '@/lib/playground/run-view'
+import { filterSafeReferences } from '@/lib/playground/reference-guard'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
@@ -140,8 +141,23 @@ export const POST = apiHandler(async (request: NextRequest) => {
     })
   }
 
-  const referenceImages = parseStringArray(rawImages, 'referenceImages', MAX_REFERENCE_IMAGES)
-  const referenceVideos = parseStringArray(rawVideos, 'referenceVideos', MAX_REFERENCE_VIDEOS)
+  const rawRefImages = parseStringArray(rawImages, 'referenceImages', MAX_REFERENCE_IMAGES)
+  const rawRefVideos = parseStringArray(rawVideos, 'referenceVideos', MAX_REFERENCE_VIDEOS)
+  // Reject foreign COS keys (cross-user read) + internal/non-https URLs (SSRF).
+  // Fail explicitly rather than silently drop (CLAUDE.md §3 不静默吞错).
+  const imgGuard = filterSafeReferences(rawRefImages, userId)
+  const vidGuard = filterSafeReferences(rawRefVideos, userId)
+  if (imgGuard.rejected.length > 0 || vidGuard.rejected.length > 0) {
+    _ulogError(
+      `[playground.run] rejected unsafe references userId=${userId} images=${JSON.stringify(imgGuard.rejected)} videos=${JSON.stringify(vidGuard.rejected)}`,
+    )
+    throw new ApiError('FORBIDDEN', {
+      code: 'REFERENCE_NOT_ALLOWED',
+      details: { message: 'reference must be your own uploaded key or an https storage URL' },
+    })
+  }
+  const referenceImages = imgGuard.safe
+  const referenceVideos = vidGuard.safe
   const refText = typeof referenceText === 'string' ? referenceText.trim() : ''
   const wsId = typeof workspaceId === 'string' && workspaceId.length > 0 ? workspaceId : null
   const locale = (typeof rawLocale === 'string' && rawLocale ? rawLocale : 'zh') as Locale

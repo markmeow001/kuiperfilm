@@ -18,7 +18,10 @@ import { apiHandler, ApiError } from '@/lib/api-errors'
 import { taskToPlaygroundRunView } from '@/lib/playground/run-view'
 
 const DEFAULT_LIMIT = 20
-const MAX_LIMIT = 50
+// 200: the canvas region polls all its node runs through this list; a canvas can
+// hold many generative nodes and a small cap drops older nodes out of the poll
+// window so they never show their result. (canvas-validation caps nodes at 500.)
+const MAX_LIMIT = 200
 const PLAYGROUND_PROJECT_ID = 'playground'
 
 export const GET = apiHandler(async (request: NextRequest) => {

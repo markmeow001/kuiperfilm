@@ -14,7 +14,7 @@
  * The texture bakes into screenshots automatically (real scene content), so even
  * if the editor URL later expires the already-sent frames keep it baked.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { StageBackground } from './stage-types'
@@ -24,6 +24,12 @@ const DEG2RAD = Math.PI / 180
 export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?: () => void }) {
   const { scene } = useThree()
   const [tex, setTex] = useState<THREE.Texture | null>(null)
+  // Mirror the live texture in a ref so the unmount cleanup can dispose it —
+  // scene.background is NOT a scene-graph child, so R3F's unmount auto-dispose
+  // never frees it, and the loader cleanup only flips the cancelled flag.
+  const texRef = useRef<THREE.Texture | null>(null)
+  texRef.current = tex
+  useEffect(() => () => { texRef.current?.dispose() }, [])
 
   // Load the image when the URL changes (NOT on mode toggle — same image serves
   // both flat & sphere). Dispose the previous texture inside the state updater so

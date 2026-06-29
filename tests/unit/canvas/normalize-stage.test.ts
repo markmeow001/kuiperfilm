@@ -11,19 +11,32 @@ describe('normalizeStage', () => {
     expect(out.cameras[0].id).toBeTruthy()
   })
 
-  it('keeps existing cameras[] as-is', () => {
+  it('keeps existing cameras[] core fields (normalized shape)', () => {
     const v2 = { mannequins: [], cameras: [{ id: 'c1', label: '机位1', position: [0, 1, 4], target: [0, 1, 0], fov: 45 }] }
-    expect(normalizeStage(v2).cameras).toEqual(v2.cameras)
+    expect(normalizeStage(v2).cameras[0]).toMatchObject({ id: 'c1', label: '机位1', position: [0, 1, 4], target: [0, 1, 0], fov: 45 })
   })
 
-  it('backfills REST_POSE for pre-rig mannequins, keeps posed ones', () => {
-    const posed = { id: 'b', label: 'x', position: [0, 0, 0], rotation: [0, 0, 0], scale: 1, color: '#fff', pose: REST_POSE }
+  it('backfills REST_POSE for pre-rig mannequins, preserves posed ones', () => {
     const out = normalizeStage({
-      mannequins: [{ id: 'a', label: 'x', position: [0, 0, 0], rotation: [0, 0, 0], scale: 1, color: '#fff' }, posed],
+      mannequins: [
+        { id: 'a', label: 'x', position: [0, 0, 0], rotation: [0, 0, 0], scale: 1, color: '#fff' },
+        { id: 'b', label: 'x', position: [1, 0, 0], rotation: [0, 0, 0], scale: 1, color: '#fff', pose: REST_POSE },
+      ],
       cameras: [],
     })
     expect(out.mannequins[0].pose).toEqual(REST_POSE)
-    expect(out.mannequins[1]).toBe(posed) // untouched reference
+    expect(out.mannequins[1]).toMatchObject({ id: 'b', position: [1, 0, 0], pose: REST_POSE })
+  })
+
+  it('drops malformed mannequin/camera elements (no undefined Vec3 → no R3F crash)', () => {
+    const out = normalizeStage({
+      mannequins: [42, null, { id: 'ok', position: [1, 2, 3] }, { id: 'bad', position: 'nope' }],
+      cameras: [{ id: 'c', position: [0, 1, 4] }, 'garbage'],
+    })
+    // numbers/null dropped; objects kept with coerced Vec3 fallbacks
+    expect(out.mannequins.every((m) => Array.isArray(m.position) && m.position.length === 3)).toBe(true)
+    expect(out.mannequins.find((m) => m.id === 'bad')?.position).toEqual([0, 0, 0]) // invalid → fallback
+    expect(out.cameras.every((c) => Array.isArray(c.position) && c.position.length === 3)).toBe(true)
   })
 
   it('falls back to DEFAULT_STAGE cameras when none present', () => {

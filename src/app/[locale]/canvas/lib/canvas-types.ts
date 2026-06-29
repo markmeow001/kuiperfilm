@@ -25,6 +25,10 @@ export interface CanvasNodeData extends Record<string, unknown> {
   durationSec?: number
   /** Video-only: resolution token, e.g. '720p'. */
   resolution?: string
+  /** Video-only: generation mode (how upstream refs are used). */
+  genMode?: 'text' | 'image' | 'omni'
+  /** Video-only: camera-movement preset key (运镜), appended to the prompt. */
+  cameraMove?: string
   /** PlaygroundRun id once a generation has been submitted (null before). */
   runId?: string | null
   /** Last known result media URL (cached so reload shows something pre-poll). */

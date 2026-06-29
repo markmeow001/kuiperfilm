@@ -16,9 +16,17 @@ import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { pickUpstreamReferenceUrls } from '../lib/canvas-refs'
+import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { NodeShell } from './node-shell'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '4:5']
+const RESOLUTION_OPTIONS = ['480p', '720p', '1080p']
+// video generation modes (how upstream refs are used)
+const GEN_MODES: { key: 'text' | 'image' | 'omni'; label: string }[] = [
+  { key: 'text', label: '文生视频' },
+  { key: 'image', label: '图生视频' },
+  { key: 'omni', label: '全能参考' },
+]
 
 type StatusLabel = '闲置' | '提交中' | '排队中' | '生成中' | '已完成' | '失败'
 
@@ -45,7 +53,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
       [connections, id],
     )
     const upstream = useNodesData(incomingSourceIds)
-    const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream), [upstream])
+    const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
     // Own input anchor (e.g. a 导演台 blocking screenshot) leads the reference
     // list — for video it's the i2v first frame; combined with upstream cast
     // refs (appearance), both blocking AND identity carry into this frame.
@@ -85,20 +93,30 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
     const canGenerate = Boolean(d.prompt.trim()) && Boolean(d.modelKey) && !busy
 
+    // Video generation mode gates ref usage: 文生=ignore upstream refs, 图生/全能参考=use them.
+    // The director blocking anchor (d.anchorKey) is a hard blocking constraint, NOT an
+    // optional ref — it's always sent (and always shown), so display matches submission.
+    const genMode = outputType === 'video' ? d.genMode ?? (allRefs.length > 0 ? 'image' : 'text') : 'image'
+    const refsForSubmit = outputType === 'video' && genMode === 'text'
+      ? (d.anchorKey ? [d.anchorKey] : [])
+      : allRefs
+
     async function handleGenerate() {
       if (!canGenerate) return
       setError(null)
       setSubmitting(true)
       try {
+        const movePhrase = outputType === 'video' ? cameraMovePhrase(d.cameraMove) : ''
+        const finalPrompt = movePhrase ? `${d.prompt.trim()}，${movePhrase}` : d.prompt.trim()
         const runId = await gen.submitNode({
-          prompt: d.prompt.trim(),
+          prompt: finalPrompt,
           outputType,
           modelKey: d.modelKey,
           aspectRatio: d.aspectRatio,
           // anchor (own blocking screenshot) + upstream refs (cast appearance).
-          // For video, allRefs[0] is the i2v first frame. Empty → pure text→media.
-          ...(allRefs.length > 0 ? { referenceImages: allRefs } : {}),
-          ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution } : {}),
+          // For video, refsForSubmit[0] is the i2v first frame (gated by mode).
+          ...(refsForSubmit.length > 0 ? { referenceImages: refsForSubmit } : {}),
+          ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution ?? '720p' } : {}),
         })
         updateNodeData(id, { runId, resultUrl: null })
       } catch (err) {
@@ -166,6 +184,23 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
         {/* Config */}
         <div className="space-y-2 p-3">
+          {/* video: generation-mode tabs */}
+          {outputType === 'video' ? (
+            <div className="flex gap-1">
+              {GEN_MODES.map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => updateNodeData(id, { genMode: m.key })}
+                  className="nodrag flex-1 rounded-md py-1 text-[11px]"
+                  style={{ background: genMode === m.key ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: genMode === m.key ? '#06222A' : CANVAS_TOKENS.text.secondary }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <textarea
             value={d.prompt}
             onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
@@ -198,14 +233,35 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           </div>
 
           {outputType === 'video' ? (
-            <select
-              value={d.durationSec ?? 5}
-              onChange={(e) => updateNodeData(id, { durationSec: Number.parseInt(e.target.value, 10) || 5 })}
-              className="nodrag w-full rounded-md px-2 py-1 font-mono text-[11px] outline-none"
-              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
-            >
-              {Array.from({ length: 11 }, (_, i) => 5 + i).map((s) => <option key={s} value={s}>{s}s</option>)}
-            </select>
+            <>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={d.durationSec ?? 5}
+                  onChange={(e) => updateNodeData(id, { durationSec: Number.parseInt(e.target.value, 10) || 5 })}
+                  className="nodrag flex-1 rounded-md px-2 py-1 font-mono text-[11px] outline-none"
+                  style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                >
+                  {Array.from({ length: 11 }, (_, i) => 5 + i).map((s) => <option key={s} value={s}>{s}s</option>)}
+                </select>
+                <select
+                  value={d.resolution ?? '720p'}
+                  onChange={(e) => updateNodeData(id, { resolution: e.target.value })}
+                  className="nodrag flex-1 rounded-md px-2 py-1 font-mono text-[11px] outline-none"
+                  style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                >
+                  {RESOLUTION_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              {/* 运镜 camera-movement preset (appended to prompt) */}
+              <select
+                value={d.cameraMove ?? 'none'}
+                onChange={(e) => updateNodeData(id, { cameraMove: e.target.value })}
+                className="nodrag w-full rounded-md px-2 py-1 font-mono text-[11px] outline-none"
+                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                {CAMERA_MOVES.map((m) => <option key={m.key} value={m.key}>运镜：{m.label}</option>)}
+              </select>
+            </>
           ) : null}
 
           {error ? (

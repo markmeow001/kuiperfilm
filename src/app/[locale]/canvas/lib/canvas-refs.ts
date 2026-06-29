@@ -17,16 +17,19 @@
 const REF_BEARING_TYPES = new Set(['image', 'character', 'director'])
 
 export interface UpstreamNodeLike {
+  id?: string
   type?: string | null
   data?: { resultUrl?: string | null; referenceKey?: string | null } | Record<string, unknown> | null
 }
 
 export function pickUpstreamReferenceUrls(
   upstream: ReadonlyArray<UpstreamNodeLike | null | undefined>,
+  selfId?: string,
 ): string[] {
   const out: string[] = []
   for (const n of upstream) {
     if (!n || !n.type || !REF_BEARING_TYPES.has(n.type)) continue
+    if (selfId && n.id === selfId) continue // never feed a node its own output (self-loop)
     const data = n.data as { resultUrl?: unknown; referenceKey?: unknown } | null | undefined
     const key = data?.referenceKey
     const url = data?.resultUrl

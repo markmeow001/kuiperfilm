@@ -131,16 +131,47 @@ export function makeCamera(id: string, index: number): StageCamera {
  *  - migrate a single `camera` (v1) → `cameras: [camera]`
  * Never throws — degrades to DEFAULT_STAGE pieces.
  */
+/** A finite 3-tuple, else fallback. Guards malformed persisted Vec3 fields. */
+function vec3(v: unknown, fallback: Vec3): Vec3 {
+  return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number' && Number.isFinite(n))
+    ? [v[0], v[1], v[2]]
+    : fallback
+}
+function isObj(v: unknown): v is Record<string, unknown> {
+  return Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+}
+
 export function normalizeStage(raw: unknown): DirectorStageState {
   const r = (raw && typeof raw === 'object' ? raw : {}) as {
     mannequins?: unknown
     cameras?: unknown
     camera?: { position?: Vec3; target?: Vec3; fov?: number }
   }
-  const mannequins: StageMannequin[] = Array.isArray(r.mannequins)
-    ? (r.mannequins as StageMannequin[]).filter(Boolean).map((m) => (m.pose ? m : { ...m, pose: REST_POSE }))
-    : []
-  let cameras: StageCamera[] = Array.isArray(r.cameras) ? (r.cameras as StageCamera[]).filter(Boolean) : []
+  // Validate each element's shape — a malformed entry (number, missing Vec3)
+  // would otherwise feed `undefined` into R3F <group position> and throw.
+  const mannequins: StageMannequin[] = (Array.isArray(r.mannequins) ? r.mannequins : [])
+    .filter(isObj)
+    .map((m, i) => ({
+      id: typeof m.id === 'string' ? m.id : `m_restored_${i}`,
+      label: typeof m.label === 'string' ? m.label : `角色${i + 1}`,
+      position: vec3(m.position, [0, 0, 0]),
+      rotation: vec3(m.rotation, [0, 0, 0]),
+      scale: typeof m.scale === 'number' && Number.isFinite(m.scale) ? m.scale : 1,
+      color: typeof m.color === 'string' ? m.color : '#6FA8FF',
+      bodyType: m.bodyType as StageMannequin['bodyType'],
+      pose: (m.pose as StageMannequin['pose']) ?? REST_POSE,
+    }))
+  let cameras: StageCamera[] = (Array.isArray(r.cameras) ? r.cameras : [])
+    .filter(isObj)
+    .map((c, i) => ({
+      id: typeof c.id === 'string' ? c.id : `cam_restored_${i}`,
+      label: typeof c.label === 'string' ? c.label : `机位${i + 1}`,
+      position: vec3(c.position, [0, 1.6, 4.5]),
+      target: vec3(c.target, [0, 1, 0]),
+      fov: typeof c.fov === 'number' && Number.isFinite(c.fov) ? c.fov : 45,
+      roll: typeof c.roll === 'number' && Number.isFinite(c.roll) ? c.roll : undefined,
+      lookAtMannequinId: typeof c.lookAtMannequinId === 'string' ? c.lookAtMannequinId : null,
+    }))
   if (cameras.length === 0 && r.camera) {
     cameras = [{ id: 'cam-1', label: '机位1', position: r.camera.position ?? [0, 1.6, 4.5], target: r.camera.target ?? [0, 1, 0], fov: r.camera.fov ?? 45 }]
   }

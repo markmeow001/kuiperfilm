@@ -52,11 +52,15 @@ const selectedCamIdFromSel = (sel: string | null): string | null =>
 
 /** Effective look-at: follow a mannequin (chest height) if bound, else manual target. */
 function effectiveTarget(cam: StageCamera, mannequins: StageMannequin[]): Vec3 {
+  let t: Vec3 = cam.target
   if (cam.lookAtMannequinId) {
     const m = mannequins.find((x) => x.id === cam.lookAtMannequinId)
-    if (m) return [m.position[0], m.position[1] + 1.0, m.position[2]]
+    if (m) t = [m.position[0], m.position[1] + 1.0, m.position[2]]
   }
-  return cam.target
+  // Guard the degenerate eye==target case (lookAt → NaN quaternion): nudge +Z.
+  const dx = t[0] - cam.position[0], dy = t[1] - cam.position[1], dz = t[2] - cam.position[2]
+  if (dx * dx + dy * dy + dz * dz < 1e-6) return [t[0], t[1], t[2] + 0.01]
+  return t
 }
 
 /** Camera gizmo orientation = lookAt(target) + dutch roll about the view axis. */

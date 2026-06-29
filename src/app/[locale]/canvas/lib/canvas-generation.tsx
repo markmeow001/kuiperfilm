@@ -34,7 +34,9 @@ const CanvasGenerationContext = createContext<CanvasGenerationValue | null>(null
 
 export function CanvasGenerationProvider({ children }: { children: ReactNode }) {
   const submit = useSubmitPlaygroundRun()
-  const runsQuery = usePlaygroundRuns(null)
+  // Request a large window so every canvas node's run stays in the poll set
+  // (default 20 would drop older nodes; canvas can hold up to 500 nodes).
+  const runsQuery = usePlaygroundRuns(null, 200)
   const userModelsQuery = useUserModels()
 
   const runsById = useMemo(() => {

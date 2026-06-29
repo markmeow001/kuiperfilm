@@ -80,12 +80,15 @@ function CanvasInner() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CanvasNodeData>>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [menu, setMenu] = useState<AddMenu | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<{ screenX: number; screenY: number; nodeId: string } | null>(null)
   const [zoom, setZoom] = useState(1)
   const rf = useReactFlow()
   const instanceRef = useRef<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null)
   const loadedRef = useRef(false)
   const canvasIdRef = useRef<string | null>(null)
   const pendingViewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null)
+  const clipboardRef = useRef<Node<CanvasNodeData> | null>(null)
+  const creatingRef = useRef(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
 
   const canvasQuery = useCanvas()
@@ -116,8 +119,12 @@ function CanvasInner() {
     // Don't create an empty row for a brand-new user who did nothing yet.
     if (nodes.length === 0 && !canvasIdRef.current) return
     const t = setTimeout(() => {
+      // Don't fire a second id-less create while the first is still in flight —
+      // two concurrent creates would make two Canvas rows for a new user.
+      if (!canvasIdRef.current && creatingRef.current) return
       const vp = instanceRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 }
       const serialized = serializeCanvas(nodes, edges, vp)
+      if (!canvasIdRef.current) creatingRef.current = true
       save.mutate(
         {
           ...(canvasIdRef.current ? { id: canvasIdRef.current } : {}),
@@ -128,6 +135,9 @@ function CanvasInner() {
         {
           onSuccess: ({ canvas }) => {
             canvasIdRef.current = canvas.id
+          },
+          onSettled: () => {
+            creatingRef.current = false
           },
         },
       )
@@ -208,6 +218,101 @@ function CanvasInner() {
     setMenu({ screenX: cx, screenY: cy, flowX: flow.x, flowY: flow.y, fromNodeId: null })
   }, [rf])
 
+  // ── Node ops (context menu + keyboard) ──
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault()
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      setMenu(null)
+      setCtxMenu({ screenX: event.clientX - (rect?.left ?? 0), screenY: event.clientY - (rect?.top ?? 0), nodeId: node.id })
+    },
+    [],
+  )
+
+  const copyNode = useCallback((nodeId: string) => {
+    const n = nodes.find((x) => x.id === nodeId)
+    if (n) clipboardRef.current = n
+  }, [nodes])
+
+  const deleteNode = useCallback((nodeId: string) => {
+    setNodes((ns) => ns.filter((n) => n.id !== nodeId))
+    setEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId))
+  }, [setNodes, setEdges])
+
+  // Build a clean copy — only id/type/position/data, never RF internal fields
+  // (measured/dragging/internals). structuredClone the data to avoid aliasing
+  // nested fields if any are ever added. runId reset so the copy starts fresh.
+  const cloneNode = (src: Node<CanvasNodeData>, x: number, y: number): Node<CanvasNodeData> => ({
+    id: uid(),
+    type: src.type,
+    position: { x, y },
+    data: { ...structuredClone(src.data), runId: null },
+  })
+
+  const duplicateNode = useCallback((nodeId: string) => {
+    const n = nodes.find((x) => x.id === nodeId)
+    if (!n) return
+    const copy = cloneNode(n, n.position.x + 48, n.position.y + 48)
+    setNodes((ns) => [...ns.map((x) => ({ ...x, selected: false })), { ...copy, selected: true }])
+  }, [nodes, setNodes])
+
+  const pasteNode = useCallback((flowX?: number, flowY?: number) => {
+    const c = clipboardRef.current
+    if (!c) return
+    const copy = cloneNode(c, flowX ?? c.position.x + 48, flowY ?? c.position.y + 48)
+    setNodes((ns) => [...ns, copy])
+  }, [setNodes])
+
+  // 优化工作流布局: layered left→right by longest-path depth via Kahn topo-sort
+  // (terminates on cycles; cycle nodes keep depth 0).
+  const optimizeLayout = useCallback(() => {
+    setNodes((ns) => {
+      const ids = new Set(ns.map((n) => n.id))
+      const indeg = new Map<string, number>()
+      ns.forEach((n) => indeg.set(n.id, 0))
+      const valid = edges.filter((e) => ids.has(e.source) && ids.has(e.target))
+      valid.forEach((e) => indeg.set(e.target, (indeg.get(e.target) ?? 0) + 1))
+      const depth = new Map<string, number>()
+      const queue: string[] = []
+      ns.forEach((n) => { depth.set(n.id, 0); if ((indeg.get(n.id) ?? 0) === 0) queue.push(n.id) })
+      while (queue.length) {
+        const u = queue.shift() as string
+        for (const e of valid.filter((x) => x.source === u)) {
+          depth.set(e.target, Math.max(depth.get(e.target) ?? 0, (depth.get(u) ?? 0) + 1))
+          const left = (indeg.get(e.target) ?? 0) - 1
+          indeg.set(e.target, left)
+          if (left === 0) queue.push(e.target)
+        }
+      }
+      const COL = 360
+      const ROW = 240
+      const perCol = new Map<number, number>()
+      return ns.map((n) => {
+        const d = depth.get(n.id) ?? 0
+        const row = perCol.get(d) ?? 0
+        perCol.set(d, row + 1)
+        return { ...n, position: { x: 80 + d * COL, y: 80 + row * ROW } }
+      })
+    })
+  }, [edges, setNodes])
+
+  // keyboard shortcuts (ignore when typing in inputs)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
+      const meta = e.metaKey || e.ctrlKey
+      const selected = nodes.filter((n) => n.selected)
+      const sel = selected[0]
+      if (meta && e.key === 'c' && sel) { copyNode(sel.id); e.preventDefault() }
+      else if (meta && e.key === 'd' && sel) { duplicateNode(sel.id); e.preventDefault() }
+      else if (meta && e.key === 'v' && clipboardRef.current) { pasteNode(); e.preventDefault() }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) { selected.forEach((n) => deleteNode(n.id)); e.preventDefault() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode])
+
   const minimapColor = useCallback((n: Node) => NODE_META[(n.type as CanvasNodeType) ?? 'text']?.accent ?? CANVAS_TOKENS.text.muted, [])
 
   const dockButtons = useMemo(
@@ -232,6 +337,8 @@ function CanvasInner() {
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
         onDoubleClick={onPaneDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={() => { setCtxMenu(null); setMenu(null) }}
         onInit={(inst) => {
           instanceRef.current = inst as ReactFlowInstance<Node<CanvasNodeData>, Edge>
           if (pendingViewportRef.current) {
@@ -322,6 +429,48 @@ function CanvasInner() {
                 <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{NODE_META[t].hint}</span>
               </button>
             ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* Node right-click context menu */}
+      {ctxMenu ? (
+        <>
+          <div className="absolute inset-0 z-30" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null) }} />
+          <div
+            className="absolute z-40 w-52 overflow-hidden rounded-xl py-1"
+            style={{
+              left: Math.min(ctxMenu.screenX, (wrapperRef.current?.clientWidth ?? 800) - 220),
+              top: Math.min(ctxMenu.screenY, (wrapperRef.current?.clientHeight ?? 600) - 240),
+              background: CANVAS_TOKENS.bg.popover,
+              border: `1px solid ${CANVAS_TOKENS.hairline}`,
+              boxShadow: '0 16px 40px rgba(0,0,0,0.55)',
+            }}
+          >
+            {([
+              { label: '优化工作流布局', on: () => optimizeLayout(), kbd: '' },
+              { sep: true },
+              { label: '复制节点', on: () => copyNode(ctxMenu.nodeId), kbd: '⌘C' },
+              { label: '创建副本', on: () => duplicateNode(ctxMenu.nodeId), kbd: '⌘D' },
+              { label: '粘贴', on: () => pasteNode(), kbd: '⌘V', disabled: !clipboardRef.current },
+              { label: '删除', on: () => deleteNode(ctxMenu.nodeId), kbd: '⌘⌫', danger: true },
+            ] as Array<{ label?: string; on?: () => void; kbd?: string; sep?: boolean; disabled?: boolean; danger?: boolean }>).map((item, i) =>
+              item.sep ? (
+                <div key={`sep-${i}`} className="my-1 h-px" style={{ background: CANVAS_TOKENS.hairline }} />
+              ) : (
+                <button
+                  key={item.label}
+                  type="button"
+                  disabled={item.disabled}
+                  onClick={() => { item.on?.(); setCtxMenu(null) }}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition-colors hover:bg-white/5 disabled:opacity-40"
+                  style={{ color: item.danger ? '#FF8A8A' : CANVAS_TOKENS.text.primary }}
+                >
+                  <span>{item.label}</span>
+                  {item.kbd ? <span className="font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>{item.kbd}</span> : null}
+                </button>
+              ),
+            )}
           </div>
         </>
       ) : null}

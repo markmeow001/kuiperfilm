@@ -143,13 +143,15 @@ export function usePlaygroundCostEstimate(params: {
   })
 }
 
-export function usePlaygroundRuns(workspaceId?: string | null) {
+export function usePlaygroundRuns(workspaceId?: string | null, limit?: number) {
   return useQuery({
-    queryKey: ['playgroundRuns', workspaceId ?? 'personal'],
+    queryKey: ['playgroundRuns', workspaceId ?? 'personal', limit ?? 'default'],
     queryFn: async (): Promise<{ runs: PlaygroundRunRow[] }> => {
-      const url = workspaceId
-        ? `/api/playground/runs?workspaceId=${encodeURIComponent(workspaceId)}`
-        : '/api/playground/runs'
+      const params = new URLSearchParams()
+      if (workspaceId) params.set('workspaceId', workspaceId)
+      if (limit) params.set('limit', String(limit))
+      const qs = params.toString()
+      const url = qs ? `/api/playground/runs?${qs}` : '/api/playground/runs'
       return await requestJsonWithError(
         url,
         { method: 'GET' },
