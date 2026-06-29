@@ -275,7 +275,14 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
       {showGround ? (
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[40, 40]} />
-          <meshStandardMaterial color="#15151a" roughness={1} />
+          {/* With a scene background, make the floor a transparent shadow-catcher:
+              the black slab disappears and characters cast shadows onto the scene
+              → they read as grounded IN the environment, not floating on a plane. */}
+          {state.background?.url && state.background.mode !== 'none' ? (
+            <shadowMaterial transparent opacity={0.4} />
+          ) : (
+            <meshStandardMaterial color="#15151a" roughness={1} />
+          )}
         </mesh>
       ) : null}
 
