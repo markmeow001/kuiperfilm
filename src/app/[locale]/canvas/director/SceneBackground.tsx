@@ -52,6 +52,21 @@ export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?
     return () => { cancelled = true }
   }, [bg.url, onError])
 
+  // BackSide sphere shows the equirect mirrored (招牌字会反) — flip U to un-mirror
+  // in sphere mode, reset in flat mode. (flat & sphere never coexist.)
+  useEffect(() => {
+    if (!tex) return
+    if (bg.mode === 'sphere') {
+      tex.wrapS = THREE.RepeatWrapping
+      tex.repeat.x = -1
+      tex.offset.x = 1
+    } else {
+      tex.repeat.x = 1
+      tex.offset.x = 0
+    }
+    tex.needsUpdate = true
+  }, [tex, bg.mode])
+
   // SOLE writer of scene.background: flat image, or solid sky colour. (Sphere
   // mode paints via the mesh below, so background stays the sky colour.) On
   // unmount, reset to the sky colour — nothing else owns scene.background.
