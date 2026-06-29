@@ -2,43 +2,60 @@
 
 /**
  * Scene background for the 导演台 — puts an uploaded scene image behind the
- * mannequins so screenshots are character-IN-environment (the load-bearing bit
- * for usable generation references; see canvas_ref/libtv-scene-background-research).
+ * mannequins so screenshots are character-IN-environment.
  *
- *  - 'flat'   → scene.background = the image (full-frame backdrop, fills the
- *               view from any camera; great for ordinary scene photos)
- *  - 'sphere' → inverted equirect sphere around the stage (mannequins inside),
- *               with horizontal rotation + radius (for 360° panoramas, LibTV-style)
- *  - 'none'   → solid sky colour
+ *  - 'flat'   → 场景幕布: the image stands as a large vertical backdrop whose
+ *               BOTTOM edge sits on the ground (y=0). Characters at y=0 share the
+ *               same floor line as the backdrop → they read as grounded, not
+ *               floating. The backdrop billboards to face the camera (yaw only).
+ *  - 'sphere' → inverted equirect sphere around the stage (real 360° panorama).
+ *  - 'none'   → solid sky colour.
  *
- * The texture bakes into screenshots automatically (real scene content), so even
- * if the editor URL later expires the already-sent frames keep it baked.
+ * Both bake into screenshots (real scene content). capture() in DirectorStage
+ * orients the flat backdrop to the shot camera before rendering.
  */
 import { useEffect, useRef, useState } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { StageBackground } from './stage-types'
 
 const DEG2RAD = Math.PI / 180
 
-export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?: () => void }) {
-  const { scene } = useThree()
+// 场景幕布 geometry: backdrop height (world units ≈ metres) + distance behind the
+// scene centre. Bottom edge at y=0 so characters (feet at y=0) share the floor.
+export const BACKDROP_H = 7
+export const BACKDROP_D = 6
+
+/**
+ * Place + orient the flat backdrop: stand it behind the scene relative to the
+ * camera, bottom on the ground, facing the camera (yaw only, upright). Shared by
+ * the live useFrame and capture() so the screenshot matches the shot camera.
+ */
+export function orientBackdrop(mesh: THREE.Object3D, camX: number, camZ: number) {
+  const len = Math.hypot(camX, camZ) || 1
+  const dx = camX / len
+  const dz = camZ / len
+  mesh.position.set(-dx * BACKDROP_D, BACKDROP_H / 2, -dz * BACKDROP_D)
+  mesh.rotation.set(0, Math.atan2(dx, dz), 0)
+}
+
+export function SceneBackground({
+  bg,
+  onError,
+  backdropRef,
+}: {
+  bg: StageBackground
+  onError?: () => void
+  backdropRef?: React.RefObject<THREE.Mesh | null>
+}) {
+  const { scene, camera } = useThree()
   const [tex, setTex] = useState<THREE.Texture | null>(null)
-  // Mirror the live texture in a ref so the unmount cleanup can dispose it —
-  // scene.background is NOT a scene-graph child, so R3F's unmount auto-dispose
-  // never frees it, and the loader cleanup only flips the cancelled flag.
   const texRef = useRef<THREE.Texture | null>(null)
   texRef.current = tex
   useEffect(() => () => { texRef.current?.dispose() }, [])
 
-  // Load through the same-origin proxy when we have a durable key (COS/R2 signed
-  // URLs lack CORS → WebGL texture load fails + taints the capture canvas). Fall
-  // back to the raw url only when no key is available.
   const src = bg.key ? `/api/canvas/asset?key=${encodeURIComponent(bg.key)}` : bg.url ?? null
 
-  // Load the image when the source changes (NOT on mode toggle — same image
-  // serves both flat & sphere). Dispose the previous texture inside the state
-  // updater so the live scene.background texture is never freed while assigned.
   useEffect(() => {
     if (!src) { setTex((old) => { old?.dispose(); return null }); return }
     let cancelled = false
@@ -57,8 +74,8 @@ export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?
     return () => { cancelled = true }
   }, [src, onError])
 
-  // BackSide sphere shows the equirect mirrored (招牌字会反) — flip U to un-mirror
-  // in sphere mode, reset in flat mode. (flat & sphere never coexist.)
+  // Un-mirror the equirect on the BackSide sphere (招牌字会反). Flat backdrop uses
+  // the texture normally.
   useEffect(() => {
     if (!tex) return
     if (bg.mode === 'sphere') {
@@ -72,30 +89,38 @@ export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?
     tex.needsUpdate = true
   }, [tex, bg.mode])
 
-  // SOLE writer of scene.background: flat image, or solid sky colour. (Sphere
-  // mode paints via the mesh below, so background stays the sky colour.) On
-  // unmount, reset to the sky colour — nothing else owns scene.background.
+  // Background = solid sky colour for ALL modes now (flat uses a mesh backdrop,
+  // sphere uses its own mesh). Sole writer; reset on unmount.
   useEffect(() => {
-    if (bg.mode === 'flat' && tex) {
-      scene.background = tex
-    } else {
-      scene.background = new THREE.Color(bg.skyColor ?? '#0A0A0B')
-    }
-    // backgroundRotation only affects equirect/cube backgrounds — for flat it's
-    // a no-op (the sphere applies rotation on its own mesh).
+    scene.background = new THREE.Color(bg.skyColor ?? '#0A0A0B')
     scene.backgroundRotation = new THREE.Euler(0, (bg.rotationDeg ?? 0) * DEG2RAD, 0)
     return () => { scene.background = new THREE.Color(bg.skyColor ?? '#0A0A0B') }
-  }, [scene, bg.mode, bg.skyColor, bg.rotationDeg, tex])
+  }, [scene, bg.skyColor, bg.rotationDeg])
+
+  // Live billboard: orient the flat backdrop toward the orbit/active camera.
+  useFrame(() => {
+    if (bg.mode === 'flat' && backdropRef?.current) {
+      orientBackdrop(backdropRef.current, camera.position.x, camera.position.z)
+    }
+  })
 
   if (bg.mode === 'sphere' && tex) {
-    // BackSide = render the INNER surface so the camera at the centre sees the
-    // environment (the canonical skybox-sphere approach; the prior negative-scale
-    // trick left the inside unrendered → all black). Texture reads slightly
-    // mirrored, which is unnoticeable for a background plate.
     return (
       <mesh rotation={[0, (bg.rotationDeg ?? 0) * DEG2RAD, 0]}>
         <sphereGeometry args={[bg.radius ?? 60, 48, 32]} />
         <meshBasicMaterial map={tex} side={THREE.BackSide} toneMapped={false} />
+      </mesh>
+    )
+  }
+
+  if (bg.mode === 'flat' && tex) {
+    const img = tex.image as { width?: number; height?: number } | undefined
+    const aspect = img?.width && img?.height ? img.width / img.height : 1.6
+    const w = Math.max(BACKDROP_H * aspect, 14)
+    return (
+      <mesh ref={backdropRef}>
+        <planeGeometry args={[w, BACKDROP_H]} />
+        <meshBasicMaterial map={tex} side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
     )
   }

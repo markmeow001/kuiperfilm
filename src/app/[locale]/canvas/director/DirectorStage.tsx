@@ -22,7 +22,7 @@ import { SliderRow } from './SliderRow'
 import { Vec3Field } from './Vec3Field'
 import { POSE_PRESETS, REST_POSE, RIG_SLIDER_GROUPS, type Joint, type Pose } from './pose-presets'
 import { CAMERA_PRESETS, aspectRatio, computePreset } from './camera-presets'
-import { SceneBackground } from './SceneBackground'
+import { SceneBackground, orientBackdrop } from './SceneBackground'
 import {
   type BodyType,
   type DirectorStageState,
@@ -141,6 +141,7 @@ interface SceneProps {
 function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
   const { gl, scene, camera: viewCamera } = useThree()
   const helpersRef = useRef<THREE.Group>(null)
+  const backdropRef = useRef<THREE.Mesh>(null)
   const orbitRef = useRef<React.ComponentRef<typeof OrbitControls>>(null)
   const transformRef = useRef<React.ComponentRef<typeof TransformControls>>(null)
   const mannequinRefs = useRef<Record<string, THREE.Group | null>>({})
@@ -171,6 +172,8 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
     const pt = tc?.visible
     if (helpers) helpers.visible = false
     if (tc) tc.visible = false
+    // Orient the flat 场景幕布 to THIS shot camera (useFrame won't run mid-capture).
+    if (backdropRef.current) orientBackdrop(backdropRef.current, sc.position[0], sc.position[2])
     gl.render(scene, cam)
 
     const ratio = aspectRatio(s.aspect)
@@ -268,7 +271,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
 
   return (
     <>
-      <SceneBackground bg={state.background ?? DEFAULT_BACKGROUND} onError={onBgError} key={state.background?.url ?? 'none'} />
+      <SceneBackground bg={state.background ?? DEFAULT_BACKGROUND} onError={onBgError} backdropRef={backdropRef} key={state.background?.url ?? 'none'} />
       <hemisphereLight args={['#ffffff', '#2a2a30', 0.85]} />
       <directionalLight position={[4, 8, 5]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
 
