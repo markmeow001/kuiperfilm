@@ -192,6 +192,16 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
                 point. Project-independent tool so it lives in the global
                 header, not the per-project sidebar. Violet accent to
                 visually separate from amber project actions. */}
+            {/* 无限画布 — node-based canvas studio. Project-independent like
+                Playground; sits just before it. */}
+            <Link
+              href={`/${locale}/canvas`}
+              className="flex items-center gap-1 rounded-sm border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-cyan-300 transition-colors hover:bg-cyan-500/20 hover:border-cyan-400"
+              title="无限画布 · 节点式创作台,导演台 3D 站位、分镜串接、生图生视频"
+            >
+              <AppIcon name="image" className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">无限画布</span>
+            </Link>
             <Link
               href={`/${locale}/playground`}
               className="flex items-center gap-1 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-violet-300 transition-colors hover:bg-violet-500/20 hover:border-violet-400"

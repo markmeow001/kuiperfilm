@@ -148,9 +148,27 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
         <div className="mb-2 px-2 font-mono text-[10px] uppercase tracking-widest text-stone-600">
           工具
         </div>
+        {/* 无限画布 — node-based canvas studio (cloned from LibTV). Sits above
+            Playground in the 工具 section; project-independent like Playground. */}
+        <Link
+          href={`/${locale}/canvas`}
+          className="group flex w-full items-center gap-2 rounded-md border border-transparent px-2.5 py-2 text-left transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5"
+        >
+          <div className="w-5 font-mono text-[13px] tracking-wider text-cyan-400">◇</div>
+          <AppIcon name="image" className="h-4 w-4 flex-shrink-0 text-cyan-400" />
+          <div className="min-w-0 flex-1">
+            <div className="whitespace-nowrap font-serif-cn text-sm leading-none text-stone-300">
+              无限画布
+            </div>
+            <div className="mt-0.5 truncate font-fraunces text-[13px] italic text-stone-600">
+              Infinite Canvas
+            </div>
+          </div>
+        </Link>
+
         <Link
           href={`/${locale}/playground`}
-          className="group flex w-full items-center gap-2 rounded-md border border-transparent px-2.5 py-2 text-left transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
+          className="group mt-1 flex w-full items-center gap-2 rounded-md border border-transparent px-2.5 py-2 text-left transition-all hover:border-violet-500/30 hover:bg-violet-500/5"
         >
           <div className="w-5 font-mono text-[13px] tracking-wider text-violet-400">★</div>
           <AppIcon name="sparklesAlt" className="h-4 w-4 flex-shrink-0 text-violet-400" />
