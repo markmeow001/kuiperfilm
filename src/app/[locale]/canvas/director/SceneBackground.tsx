@@ -31,16 +31,21 @@ export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?
   texRef.current = tex
   useEffect(() => () => { texRef.current?.dispose() }, [])
 
-  // Load the image when the URL changes (NOT on mode toggle — same image serves
-  // both flat & sphere). Dispose the previous texture inside the state updater so
-  // the live scene.background texture is never freed while still assigned.
+  // Load through the same-origin proxy when we have a durable key (COS/R2 signed
+  // URLs lack CORS → WebGL texture load fails + taints the capture canvas). Fall
+  // back to the raw url only when no key is available.
+  const src = bg.key ? `/api/canvas/asset?key=${encodeURIComponent(bg.key)}` : bg.url ?? null
+
+  // Load the image when the source changes (NOT on mode toggle — same image
+  // serves both flat & sphere). Dispose the previous texture inside the state
+  // updater so the live scene.background texture is never freed while assigned.
   useEffect(() => {
-    if (!bg.url) { setTex((old) => { old?.dispose(); return null }); return }
+    if (!src) { setTex((old) => { old?.dispose(); return null }); return }
     let cancelled = false
     const loader = new THREE.TextureLoader()
     loader.setCrossOrigin('anonymous')
     loader.load(
-      bg.url,
+      src,
       (t) => {
         if (cancelled) { t.dispose(); return }
         t.colorSpace = THREE.SRGBColorSpace
@@ -50,7 +55,7 @@ export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?
       () => { if (!cancelled) { setTex((old) => { old?.dispose(); return null }); onError?.() } },
     )
     return () => { cancelled = true }
-  }, [bg.url, onError])
+  }, [src, onError])
 
   // BackSide sphere shows the equirect mirrored (招牌字会反) — flip U to un-mirror
   // in sphere mode, reset in flat mode. (flat & sphere never coexist.)
