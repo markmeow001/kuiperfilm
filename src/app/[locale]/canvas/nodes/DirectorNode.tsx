@@ -128,7 +128,17 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
 
       {open
         ? createPortal(
-            <DirectorStage initialState={stage} castLabels={castLabels} onClose={() => setOpen(false)} onSendShot={handleSendShot} saving={upload.isPending} />,
+            <DirectorStage
+              initialState={stage}
+              castLabels={castLabels}
+              onClose={() => setOpen(false)}
+              onSendShot={handleSendShot}
+              saving={upload.isPending}
+              uploadImage={async (file) => {
+                const res = await upload.mutateAsync({ file, type: 'image' })
+                return { key: res.key, url: res.signedUrl }
+              }}
+            />,
             document.body,
           )
         : null}

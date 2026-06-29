@@ -67,10 +67,29 @@ export interface StageCamera {
 export type StageAspect = 'auto' | '21:9' | '16:9' | '4:3' | '1:1' | '3:4' | '9:16'
 export const STAGE_ASPECTS: StageAspect[] = ['auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16']
 
+/** Scene background behind the mannequins. */
+export type BackgroundMode = 'none' | 'flat' | 'sphere'
+export interface StageBackground {
+  mode: BackgroundMode
+  /** durable COS key of the uploaded scene image (baked into screenshots). */
+  key?: string | null
+  /** signed URL for editor display (may expire between sessions). */
+  url?: string | null
+  /** 全景球 horizontal rotation in degrees. */
+  rotationDeg?: number
+  /** 全景球 radius. */
+  radius?: number
+  /** solid sky colour fallback when mode === 'none'. */
+  skyColor?: string
+}
+
+export const DEFAULT_BACKGROUND: StageBackground = { mode: 'none', rotationDeg: 0, radius: 60, skyColor: '#0A0A0B' }
+
 export interface DirectorStageState {
   mannequins: StageMannequin[]
   cameras: StageCamera[]
   aspect?: StageAspect
+  background?: StageBackground
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale'
@@ -128,5 +147,9 @@ export function normalizeStage(raw: unknown): DirectorStageState {
   if (cameras.length === 0) cameras = DEFAULT_STAGE.cameras.map((c) => ({ ...c }))
   const rawAspect = (r as { aspect?: string }).aspect
   const aspect: StageAspect = STAGE_ASPECTS.includes(rawAspect as StageAspect) ? (rawAspect as StageAspect) : 'auto'
-  return { mannequins, cameras, aspect }
+  const rawBg = (r as { background?: Partial<StageBackground> }).background
+  const background: StageBackground = rawBg && typeof rawBg === 'object'
+    ? { ...DEFAULT_BACKGROUND, ...rawBg, mode: (['none', 'flat', 'sphere'] as const).includes(rawBg.mode as BackgroundMode) ? (rawBg.mode as BackgroundMode) : 'none' }
+    : { ...DEFAULT_BACKGROUND }
+  return { mannequins, cameras, aspect, background }
 }

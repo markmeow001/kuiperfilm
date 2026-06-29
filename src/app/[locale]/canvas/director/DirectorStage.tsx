@@ -22,15 +22,18 @@ import { SliderRow } from './SliderRow'
 import { Vec3Field } from './Vec3Field'
 import { POSE_PRESETS, REST_POSE, RIG_SLIDER_GROUPS, type Joint, type Pose } from './pose-presets'
 import { CAMERA_PRESETS, aspectRatio, computePreset } from './camera-presets'
+import { SceneBackground } from './SceneBackground'
 import {
   type BodyType,
   type DirectorStageState,
   type StageAspect,
+  type StageBackground,
   type StageCamera,
   type StageMannequin,
   type TransformMode,
   type Vec3,
   BODY_TYPES,
+  DEFAULT_BACKGROUND,
   STAGE_ASPECTS,
   makeCamera,
   makeMannequin,
@@ -128,9 +131,10 @@ interface SceneProps {
   registerCapture: (fn: (cameraId: string) => string | null) => void
   registerGetView: (fn: () => { position: Vec3; target: Vec3; fov: number }) => void
   registerReset: (fn: () => void) => void
+  onBgError?: () => void
 }
 
-function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView, registerReset }: SceneProps) {
+function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
   const { gl, scene, camera: viewCamera } = useThree()
   const helpersRef = useRef<THREE.Group>(null)
   const orbitRef = useRef<React.ComponentRef<typeof OrbitControls>>(null)
@@ -260,7 +264,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
 
   return (
     <>
-      <color attach="background" args={[CANVAS_TOKENS.bg.canvas]} />
+      <SceneBackground bg={state.background ?? DEFAULT_BACKGROUND} onError={onBgError} key={state.background?.url ?? 'none'} />
       <hemisphereLight args={['#ffffff', '#2a2a30', 0.85]} />
       <directionalLight position={[4, 8, 5]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
 
@@ -357,9 +361,11 @@ interface DirectorStageProps {
   /** Names of character nodes wired into the director (the cast), for display. */
   castLabels?: string[]
   saving?: boolean
+  /** Upload a scene-background image → durable COS key + signed URL. */
+  uploadImage?: (file: File) => Promise<{ key: string; url: string }>
 }
 
-export function DirectorStage({ initialState, onClose, onSendShot, castLabels = [], saving }: DirectorStageProps) {
+export function DirectorStage({ initialState, onClose, onSendShot, castLabels = [], saving, uploadImage }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -498,6 +504,35 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   }, [])
   const setAspect = useCallback((a: StageAspect) => setState((s) => ({ ...s, aspect: a })), [])
 
+  const setBackground = useCallback((patch: Partial<StageBackground>) => {
+    setState((s) => ({ ...s, background: { ...DEFAULT_BACKGROUND, ...s.background, ...patch } }))
+  }, [])
+  const bgInputRef = useRef<HTMLInputElement>(null)
+  const onPickBackground = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!uploadImage) { setToast('上传未就绪'); return }
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { setToast('请上传 jpg/png/webp 图片'); return }
+    if (file.size > 20 * 1024 * 1024) { setToast('图片过大（上限 20MB）'); return }
+    try {
+      setToast('上传场景图中…')
+      const { key, url } = await uploadImage(file)
+      // default to 全景球 if the image looks panoramic (w≈2h), else 平面背景
+      setState((s) => {
+        const prevMode = s.background?.mode
+        const mode = prevMode && prevMode !== 'none' ? prevMode : 'flat'
+        return { ...s, background: { ...DEFAULT_BACKGROUND, ...s.background, mode, key, url } }
+      })
+      setToast('✓ 场景背景已设置')
+    } catch (err) {
+      setToast(`上传失败：${(err as Error)?.message ?? '未知错误'}`)
+    }
+  }, [uploadImage])
+
+  const bg = state.background ?? DEFAULT_BACKGROUND
+  const onBgError = useCallback(() => setToast('背景图加载失败（链接可能已过期，请重新上传）'), [])
+
   const btn = 'rounded-md px-3 py-1.5 font-mono text-[12px] transition-colors'
 
   return (
@@ -520,6 +555,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           registerCapture={(fn) => { captureRef.current = fn }}
           registerGetView={(fn) => { getViewRef.current = fn }}
           registerReset={(fn) => { resetViewRef.current = fn }}
+          onBgError={onBgError}
         />
       </Canvas>
 
@@ -679,7 +715,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
 
       {/* 3D场景 props — shown when nothing is selected */}
       {!selectedMannequin && !selectedCamera ? (
-        <div className="absolute right-4 top-16 w-56 rounded-xl p-3" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
+        <div className="absolute right-4 top-16 bottom-16 w-60 overflow-y-auto rounded-xl p-3" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
           <div className="mb-2 font-mono text-[12px]" style={{ color: CANVAS_TOKENS.text.primary }}>3D场景</div>
           {([['角色标签', showLabels, setShowLabels], ['网格', showGrid, setShowGrid], ['地面', showGround, setShowGround]] as const).map(([label, val, set]) => (
             <button key={label} type="button" onClick={() => set(!val)} className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[12px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>
@@ -687,9 +723,38 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
               <span style={{ color: val ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.muted }}>{val ? '● 开' : '○ 关'}</span>
             </button>
           ))}
-          <div className="mt-2 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>选中角色/机位编辑属性 · 全景背景将于批 C 加入</div>
+
+          {/* 全景背景 */}
+          <div className="mt-3 mb-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>全景背景</div>
+          {bg.url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={bg.url} alt="背景" className="mb-2 h-20 w-full rounded-md object-cover" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}` }} />
+          ) : null}
+          <div className="mb-2 flex gap-1">
+            <button type="button" onClick={() => bgInputRef.current?.click()} className="flex-1 rounded-md py-1.5 text-[11px]" style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}>{bg.url ? '换图' : '上传场景图'}</button>
+            {bg.url ? <button type="button" onClick={() => setBackground({ mode: 'none', key: null, url: null })} className="rounded-md px-2 py-1.5 text-[11px]" style={{ background: CANVAS_TOKENS.bg.hover, color: '#FF8A8A' }}>移除</button> : null}
+          </div>
+          {bg.url ? (
+            <div className="mb-2 flex gap-1">
+              {(['flat', 'sphere'] as const).map((m) => (
+                <button key={m} type="button" onClick={() => setBackground({ mode: m })} className="flex-1 rounded-md py-1 text-[11px]" style={{ background: bg.mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: bg.mode === m ? '#06222A' : CANVAS_TOKENS.text.secondary }}>
+                  {m === 'flat' ? '平面背景' : '全景球'}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {bg.url && bg.mode === 'sphere' ? <SliderRow label="水平旋转" value={bg.rotationDeg ?? 0} min={0} max={360} unit="°" onChange={(v) => setBackground({ rotationDeg: v })} /> : null}
+          {bg.url && bg.mode === 'sphere' ? <SliderRow label="球形半径" value={bg.radius ?? 60} min={8} max={120} unit="" onChange={(v) => setBackground({ radius: v })} /> : null}
+          <label className="mt-1 flex items-center justify-between text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>
+            <span>天空颜色</span>
+            <input type="color" value={bg.skyColor ?? '#0A0A0B'} onChange={(e) => setBackground({ skyColor: e.target.value })} className="h-6 w-10 rounded" />
+          </label>
+
+          <div className="mt-2 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>选中角色/机位编辑属性 · AI 识图转全景将于批 C 加入</div>
         </div>
       ) : null}
+
+      <input ref={bgInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPickBackground} />
 
       {/* close dock dropdowns on outside click */}
       {addMenu || aspectMenu ? <div className="absolute inset-0 z-[9]" onClick={() => { setAddMenu(false); setAspectMenu(false) }} /> : null}
@@ -707,7 +772,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
             </div>
           ) : null}
         </div>
-        <DockBtn label="全景图（批C）" onClick={() => setToast('全景背景将于批 C（生成）加入')}><Glyph name="panorama" /></DockBtn>
+        <DockBtn label="场景背景（上传场景图）" onClick={() => bgInputRef.current?.click()}><Glyph name="panorama" /></DockBtn>
         <DockBtn label="添加机位" onClick={addCamera}><Glyph name="camera" /></DockBtn>
         <div className="relative">
           <DockBtn label="画幅比例" active={aspectMenu} onClick={() => { setAspectMenu((v) => !v); setAddMenu(false) }}><Glyph name="frame" /></DockBtn>

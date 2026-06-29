@@ -30,6 +30,15 @@ describe('normalizeStage', () => {
     expect(normalizeStage({ mannequins: [] }).cameras).toHaveLength(DEFAULT_STAGE.cameras.length)
   })
 
+  it('defaults background to none + sanitizes an invalid mode', () => {
+    expect(normalizeStage({ mannequins: [] }).background?.mode).toBe('none')
+    expect(normalizeStage({ mannequins: [], background: { mode: 'bogus' } }).background?.mode).toBe('none')
+    const bg = normalizeStage({ mannequins: [], background: { mode: 'sphere', key: 'images/x.png', radius: 40 } }).background!
+    expect(bg.mode).toBe('sphere')
+    expect(bg.key).toBe('images/x.png')
+    expect(bg.radius).toBe(40)
+  })
+
   it('never throws on garbage / null elements', () => {
     expect(() => normalizeStage(null)).not.toThrow()
     expect(() => normalizeStage(undefined)).not.toThrow()
