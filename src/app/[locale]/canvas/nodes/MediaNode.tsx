@@ -17,6 +17,7 @@ import type { CanvasNodeData } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
 import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
+import { IMAGE_RECIPES, RECIPE_GROUPS } from '../lib/canvas-recipes'
 import { NodeShell } from './node-shell'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '1:1', '4:3', '3:4', '4:5']
@@ -37,6 +38,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     const gen = useCanvasGeneration()
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [recipeMenu, setRecipeMenu] = useState(false)
 
     const meta = NODE_META[outputType]
     const models = outputType === 'image' ? gen.imageModels : gen.videoModels
@@ -193,6 +195,44 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
         {/* Config */}
         <div className="space-y-2 p-3">
+          {/* image: 预设配方 menu (LibTV-style recipes, incl. 720全景) */}
+          {outputType === 'image' ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setRecipeMenu((v) => !v)}
+                className="nodrag flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px]"
+                style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                <span>✨ 预设配方</span>
+                <span style={{ color: CANVAS_TOKENS.text.muted }}>{recipeMenu ? '▾' : '▸'}</span>
+              </button>
+              {recipeMenu ? (
+                <div className="nodrag absolute left-0 top-full z-50 mt-1 max-h-72 w-[260px] overflow-y-auto rounded-lg p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
+                  {RECIPE_GROUPS.map((g) => (
+                    <div key={g} className="mb-1.5">
+                      <div className="mb-0.5 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{g}</div>
+                      {IMAGE_RECIPES.filter((r) => r.group === g).map((r) => (
+                        <button
+                          key={r.key}
+                          type="button"
+                          onClick={() => {
+                            updateNodeData(id, { prompt: r.prompt, ...(r.aspectRatio ? { aspectRatio: r.aspectRatio } : {}) })
+                            setRecipeMenu(false)
+                          }}
+                          className="block w-full rounded px-2 py-1 text-left text-[12px] hover:bg-white/5"
+                          style={{ color: r.key === 'pano720' ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.primary }}
+                        >
+                          {r.label}{r.key === 'pano720' ? '（→ 导演台全景球）' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* video: generation-mode tabs */}
           {outputType === 'video' ? (
             <div className="flex gap-1">
