@@ -68,12 +68,14 @@ export function SceneBackground({ bg, onError }: { bg: StageBackground; onError?
   }, [scene, bg.mode, bg.skyColor, bg.rotationDeg, tex])
 
   if (bg.mode === 'sphere' && tex) {
-    // scale.x = -1 turns the sphere inside-out (view from centre) and un-mirrors
-    // the equirect texture; FrontSide then faces inward correctly.
+    // BackSide = render the INNER surface so the camera at the centre sees the
+    // environment (the canonical skybox-sphere approach; the prior negative-scale
+    // trick left the inside unrendered → all black). Texture reads slightly
+    // mirrored, which is unnoticeable for a background plate.
     return (
-      <mesh rotation={[0, (bg.rotationDeg ?? 0) * DEG2RAD, 0]} scale={[-1, 1, 1]}>
+      <mesh rotation={[0, (bg.rotationDeg ?? 0) * DEG2RAD, 0]}>
         <sphereGeometry args={[bg.radius ?? 60, 48, 32]} />
-        <meshBasicMaterial map={tex} toneMapped={false} />
+        <meshBasicMaterial map={tex} side={THREE.BackSide} toneMapped={false} />
       </mesh>
     )
   }
