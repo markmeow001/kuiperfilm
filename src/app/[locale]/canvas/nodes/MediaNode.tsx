@@ -154,16 +154,24 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     }
 
     const [aw, ah] = useMemo(() => d.aspectRatio.split(':').map(Number), [d.aspectRatio])
+    // Node width adapts to the aspect ratio — wide for 2:1/16:9, narrow+tall for
+    // 9:16 — so the preview reflects the real output shape (not a fixed box).
+    const nodeWidth = useMemo(() => {
+      const ratio = aw && ah ? aw / ah : 1
+      const previewH = 190
+      const previewW = Math.min(Math.max(previewH * ratio, 150), 460)
+      return Math.round(Math.min(Math.max(previewW + 24, 250), 484))
+    }, [aw, ah])
 
     return (
-      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={280}>
+      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={nodeWidth}>
         {/* Preview body */}
         <div className="px-3 pt-3">
           <div
             className="relative w-full overflow-hidden rounded-md"
             style={{
               aspectRatio: `${aw} / ${ah}`,
-              maxHeight: 200,
+              maxHeight: 300,
               background: CANVAS_TOKENS.bg.app,
               border: `1px solid ${CANVAS_TOKENS.hairline}`,
             }}
