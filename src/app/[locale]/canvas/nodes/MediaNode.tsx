@@ -15,7 +15,7 @@ import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
-import { pickUpstreamReferenceUrls } from '../lib/canvas-refs'
+import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
 import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { NodeShell } from './node-shell'
 
@@ -54,6 +54,8 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     )
     const upstream = useNodesData(incomingSourceIds)
     const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
+    // Upstream 文本/脚本 nodes drive this shot's prompt (script → 分镜 chain).
+    const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
     // Own input anchor (e.g. a 导演台 blocking screenshot) leads the reference
     // list — for video it's the i2v first frame; combined with upstream cast
     // refs (appearance), both blocking AND identity carry into this frame.
@@ -91,7 +93,9 @@ export function makeMediaNode(outputType: 'image' | 'video') {
       }
     }, [run, d.resultUrl, id, updateNodeData])
 
-    const canGenerate = Boolean(d.prompt.trim()) && Boolean(d.modelKey) && !busy
+    // Effective prompt = upstream script text + this node's own prompt.
+    const basePrompt = [upstreamText, d.prompt.trim()].filter(Boolean).join('\n')
+    const canGenerate = Boolean(basePrompt) && Boolean(d.modelKey) && !busy
 
     // Video generation mode gates ref usage: 文生=ignore upstream refs, 图生/全能参考=use them.
     // The director blocking anchor (d.anchorKey) is a hard blocking constraint, NOT an
@@ -107,7 +111,12 @@ export function makeMediaNode(outputType: 'image' | 'video') {
       setSubmitting(true)
       try {
         const movePhrase = outputType === 'video' ? cameraMovePhrase(d.cameraMove) : ''
-        const finalPrompt = movePhrase ? `${d.prompt.trim()}，${movePhrase}` : d.prompt.trim()
+        const finalPrompt = movePhrase ? `${basePrompt}，${movePhrase}` : basePrompt
+        if (finalPrompt.length > 4000) {
+          setError(`提示词过长（${finalPrompt.length}/4000），请精简上游脚本或本节点描述`)
+          setSubmitting(false)
+          return
+        }
         const runId = await gen.submitNode({
           prompt: finalPrompt,
           outputType,
@@ -201,10 +210,15 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             </div>
           ) : null}
 
+          {upstreamText ? (
+            <div className="rounded-md px-2 py-1 text-[10px]" style={{ background: `${CANVAS_TOKENS.accent}14`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.accent}33` }}>
+              脚本 ← 上游：{upstreamText.length > 48 ? upstreamText.slice(0, 48) + '…' : upstreamText}
+            </div>
+          ) : null}
           <textarea
             value={d.prompt}
             onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
-            placeholder={outputType === 'image' ? '描述画面…' : '描述运动 / 镜头…'}
+            placeholder={outputType === 'image' ? (upstreamText ? '补充画面细节（可留空，用上游脚本）' : '描述画面…') : (upstreamText ? '补充运动 / 镜头（可留空）' : '描述运动 / 镜头…')}
             rows={2}
             className="nodrag w-full resize-none rounded-md px-2 py-1.5 text-[12px] outline-none"
             style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}

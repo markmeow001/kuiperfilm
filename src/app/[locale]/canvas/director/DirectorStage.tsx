@@ -367,9 +367,13 @@ interface DirectorStageProps {
   saving?: boolean
   /** Upload a scene-background image → durable COS key + signed URL. */
   uploadImage?: (file: File) => Promise<{ key: string; url: string }>
+  /** Generate an image (AI识图: flat → 360 panorama). Resolves to result URL. */
+  generateImage?: (opts: { prompt: string; refKey?: string; aspectRatio?: string }) => Promise<{ url: string }>
 }
 
-export function DirectorStage({ initialState, onClose, onSendShot, castLabels = [], saving, uploadImage }: DirectorStageProps) {
+const PANORAMA_PROMPT = '将这张场景图转换为无缝衔接的 360° 等距圆柱全景图（equirectangular panorama，2:1），左右边缘可平滑环绕拼接，保持原场景的风格、光线与氛围，适合作为环境背景球贴图'
+
+export function DirectorStage({ initialState, onClose, onSendShot, castLabels = [], saving, uploadImage, generateImage }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -536,6 +540,36 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
 
   const bg = state.background ?? DEFAULT_BACKGROUND
   const onBgError = useCallback(() => setToast('背景图加载失败（链接可能已过期，请重新上传）'), [])
+  const [panoBusy, setPanoBusy] = useState(false)
+  const mountedRef = useRef(true)
+  useEffect(() => () => { mountedRef.current = false }, [])
+  const convertToPanorama = useCallback(async () => {
+    if (panoBusy) return // guard both entry points (panel + dock) → no double-bill
+    if (!generateImage) { setToast('生成未就绪'); return }
+    if (!bg.key) { setToast('请先上传场景图，再 AI 转全景'); return }
+    setPanoBusy(true)
+    setToast('AI 识图转全景中…（约 1 分钟，消耗点数）')
+    try {
+      const { url } = await generateImage({ prompt: PANORAMA_PROMPT, refKey: bg.key, aspectRatio: '2:1' })
+      // Re-upload the result to a durable key so the panorama survives reload /
+      // signed-URL expiry (the run result URL alone is ephemeral).
+      let durable: { key: string | null; url: string } = { key: null, url }
+      if (uploadImage) {
+        try {
+          const blob = await (await fetch(url)).blob()
+          const up = await uploadImage(new File([blob], `panorama-${Date.now()}.png`, { type: blob.type || 'image/png' }))
+          durable = { key: up.key, url: up.url }
+        } catch { /* keep ephemeral url if re-upload fails */ }
+      }
+      if (!mountedRef.current) return // stage closed mid-generation
+      setBackground({ mode: 'sphere', url: durable.url, key: durable.key })
+      setToast('✓ 已生成 360° 全景背景')
+    } catch (e) {
+      if (mountedRef.current) setToast(`转全景失败：${(e as Error)?.message ?? '未知错误'}`)
+    } finally {
+      if (mountedRef.current) setPanoBusy(false)
+    }
+  }, [panoBusy, generateImage, uploadImage, bg.key, setBackground])
 
   const btn = 'rounded-md px-3 py-1.5 font-mono text-[12px] transition-colors'
 
@@ -754,7 +788,12 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
             <input type="color" value={bg.skyColor ?? '#0A0A0B'} onChange={(e) => setBackground({ skyColor: e.target.value })} className="h-6 w-10 rounded" />
           </label>
 
-          <div className="mt-2 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>选中角色/机位编辑属性 · AI 识图转全景将于批 C 加入</div>
+          {bg.key ? (
+            <button type="button" onClick={convertToPanorama} disabled={panoBusy} className="mt-2 w-full rounded-md py-1.5 text-[11px] font-semibold disabled:opacity-50" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.accent, border: `1px solid ${CANVAS_TOKENS.accent}55` }}>
+              {panoBusy ? 'AI 转全景中…' : '✨ AI 识图转 360 全景'}
+            </button>
+          ) : null}
+          <div className="mt-2 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>上传平面场景图 → AI 转全景球，人物即站在场景中</div>
         </div>
       ) : null}
 
@@ -789,7 +828,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           ) : null}
         </div>
         <DockBtn label="截图发送当前机位" onClick={() => activeShotCamId && sendShot(activeShotCamId)}><Glyph name="photo" /></DockBtn>
-        <DockBtn label="AI识图导入（批C）" onClick={() => setToast('AI 识图导入将于批 C（生成）加入')}><Glyph name="aiimport" /></DockBtn>
+        <DockBtn label="AI识图导入（上传场景图 → 转全景）" onClick={() => (bg.key ? convertToPanorama() : bgInputRef.current?.click())}><Glyph name="aiimport" /></DockBtn>
         <DockBtn label={fullscreen ? '退出全屏' : '全屏'} onClick={toggleFullscreen}><Glyph name="fullscreen" /></DockBtn>
         {sentTotal > 0 ? <span className="ml-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.accent }}>已发送 {sentTotal} 帧</span> : null}
       </div>

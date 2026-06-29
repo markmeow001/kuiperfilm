@@ -37,6 +37,8 @@ import { CANVAS_TOKENS, NODE_META, type CanvasNodeType } from './lib/canvas-toke
 import { DEFAULT_NODE_DATA, type CanvasNodeData } from './lib/canvas-types'
 import { serializeCanvas, deserializeCanvas } from './lib/canvas-serialize'
 import { CanvasGenerationProvider } from './lib/canvas-generation'
+import { TOOLBOX_PRESETS } from './lib/canvas-toolbox'
+import { useCharacterLibrary } from './lib/use-character-library'
 import { useCanvas, useSaveCanvas } from '@/lib/query/mutations/canvas-mutations'
 import { makeMediaNode } from './nodes/MediaNode'
 import { TextNode } from './nodes/TextNode'
@@ -81,6 +83,9 @@ function CanvasInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [menu, setMenu] = useState<AddMenu | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ screenX: number; screenY: number; nodeId: string } | null>(null)
+  const [showSequence, setShowSequence] = useState(false)
+  const [toolbox, setToolbox] = useState(false)
+  const [charLib, setCharLib] = useState(false)
   const [zoom, setZoom] = useState(1)
   const rf = useReactFlow()
   const instanceRef = useRef<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null)
@@ -313,15 +318,65 @@ function CanvasInner() {
     return () => window.removeEventListener('keydown', onKey)
   }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode])
 
+  // Shot sequence = image/video nodes ordered left→right, top→bottom (the
+  // storyboard reading order) — the drama as an ordered list of shots.
+  const shots = useMemo(() => {
+    // Bucket x into columns first → a fully transitive (col, y) comparator.
+    // A pairwise |Δx|>threshold compare is non-transitive and can mis-order.
+    const col = (x: number) => Math.round(x / 120)
+    return nodes
+      .filter((n) => n.type === 'image' || n.type === 'video')
+      .sort((a, b) => (col(a.position.x) !== col(b.position.x) ? col(a.position.x) - col(b.position.x) : a.position.y - b.position.y))
+  }, [nodes])
+
+  const focusNode = useCallback((nodeId: string) => {
+    const n = nodes.find((x) => x.id === nodeId)
+    if (!n) return
+    rf.setCenter(n.position.x + 140, n.position.y + 90, { zoom: 1.1, duration: 400 })
+    setNodes((ns) => ns.map((x) => ({ ...x, selected: x.id === nodeId })))
+  }, [nodes, rf, setNodes])
+
+  // viewport-center flow coords for dropping new nodes/graphs
+  const centerFlow = useCallback(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect()
+    return rf.screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 800) / 2, y: (rect?.top ?? 0) + (rect?.height ?? 600) / 2 })
+  }, [rf])
+
+  const applyToolboxPreset = useCallback((presetKey: string) => {
+    const preset = TOOLBOX_PRESETS.find((p) => p.key === presetKey)
+    if (!preset) return
+    const c = centerFlow()
+    const { nodes: newNodes, edges: newEdges } = preset.build(uid, c.x - 280, c.y - 80)
+    setNodes((ns) => [...ns.map((x) => ({ ...x, selected: false })), ...newNodes])
+    if (newEdges.length) setEdges((es) => [...es, ...newEdges])
+    setToolbox(false)
+  }, [centerFlow, setNodes, setEdges])
+
+  const characterLibQuery = useCharacterLibrary(charLib)
+  const dropCharacter = useCallback((name: string, imageUrl: string | null) => {
+    const c = centerFlow()
+    const node: Node<CanvasNodeData> = {
+      id: uid(),
+      type: 'character',
+      position: { x: c.x - 120, y: c.y - 80 },
+      // imageUrl is a signed asset-hub URL (not in the playground-ref namespace,
+      // so it can't be a durable referenceKey — the ref guard only accepts URLs,
+      // not foreign keys). Store it as resultUrl; downstream falls back to it.
+      // In-session it works; re-pick if the signed URL expires.
+      data: { ...DEFAULT_NODE_DATA, title: name, resultUrl: imageUrl, referenceKey: null },
+    }
+    setNodes((ns) => [...ns, node])
+    setCharLib(false)
+  }, [centerFlow, setNodes])
+
   const minimapColor = useCallback((n: Node) => NODE_META[(n.type as CanvasNodeType) ?? 'text']?.accent ?? CANVAS_TOKENS.text.muted, [])
 
   const dockButtons = useMemo(
     () => [
       { key: 'add', label: '添加节点', onClick: openDockMenu },
-      { key: 'toolbox', label: '工具箱', onClick: () => {} },
-      { key: 'material', label: '素材库', onClick: () => {} },
-      { key: 'character', label: '角色库', onClick: () => {} },
-      { key: 'history', label: '历史', onClick: () => {} },
+      { key: 'toolbox', label: '工具箱', onClick: () => setToolbox((v) => !v) },
+      { key: 'sequence', label: '镜头序列', onClick: () => setShowSequence((v) => !v) },
+      { key: 'character', label: '角色库', onClick: () => setCharLib((v) => !v) },
     ],
     [openDockMenu],
   )
@@ -471,6 +526,82 @@ function CanvasInner() {
                 </button>
               ),
             )}
+          </div>
+        </>
+      ) : null}
+
+      {/* 镜头序列条 — the drama as an ordered list of shots */}
+      {showSequence ? (
+        <div
+          className="absolute inset-x-0 bottom-20 z-20 mx-auto flex max-w-[92%] items-center gap-2 overflow-x-auto rounded-xl p-2"
+          style={{ background: `${CANVAS_TOKENS.bg.panel}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+        >
+          <span className="shrink-0 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>镜头序列 ({shots.length})</span>
+          {shots.length === 0 ? (
+            <span className="px-2 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>暂无镜头 · 加图片/视频节点</span>
+          ) : null}
+          {shots.map((n, i) => {
+            const data = n.data as CanvasNodeData
+            const url = data.resultUrl ?? data.anchorUrl ?? null
+            return (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => focusNode(n.id)}
+                title={data.title}
+                className="relative h-16 w-24 shrink-0 overflow-hidden rounded-md"
+                style={{ border: `1px solid ${n.selected ? CANVAS_TOKENS.accent : CANVAS_TOKENS.hairline}`, background: CANVAS_TOKENS.bg.app }}
+              >
+                {url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={url} alt={`shot ${i + 1}`} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>待生成</span>
+                )}
+                <span className="absolute left-1 top-1 rounded px-1 font-mono text-[10px]" style={{ background: `${CANVAS_TOKENS.bg.canvas}cc`, color: CANVAS_TOKENS.text.primary }}>{i + 1}</span>
+                {n.type === 'video' ? <span className="absolute right-1 bottom-1 text-[11px]" style={{ color: CANVAS_TOKENS.accent }}>▶</span> : null}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {/* 工具箱 — one-click preset workflows */}
+      {toolbox ? (
+        <>
+          <div className="absolute inset-0 z-20" onClick={() => setToolbox(false)} />
+          <div className="absolute bottom-20 left-1/2 z-30 w-80 -translate-x-1/2 rounded-xl p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
+            <div className="mb-1 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>工具箱 · 一键预设工作流</div>
+            {TOOLBOX_PRESETS.map((p) => (
+              <button key={p.key} type="button" onClick={() => applyToolboxPreset(p.key)} className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left hover:bg-white/5" style={{ color: CANVAS_TOKENS.text.primary }}>
+                <span className="text-[13px]">{p.label}</span>
+                <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{p.hint}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* 角色库 — drop a saved character (CharacterAppearance) as a node */}
+      {charLib ? (
+        <>
+          <div className="absolute inset-0 z-20" onClick={() => setCharLib(false)} />
+          <div className="absolute bottom-20 left-1/2 z-30 max-h-[50vh] w-96 -translate-x-1/2 overflow-y-auto rounded-xl p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
+            <div className="mb-1 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>角色库 · 点选放入画布</div>
+            {characterLibQuery.isLoading ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>加载中…</div> : null}
+            {characterLibQuery.isError ? <div className="px-2 py-3 text-[11px]" style={{ color: '#FF8A8A' }}>加载角色库失败 · <button type="button" className="underline" onClick={() => characterLibQuery.refetch()}>重试</button></div> : null}
+            {characterLibQuery.data && characterLibQuery.data.length === 0 ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>暂无角色 · 可在资产库创建</div> : null}
+            <div className="grid grid-cols-3 gap-2">
+              {(characterLibQuery.data ?? []).map((c) => (
+                <button key={`${c.characterId}-${c.appearanceId}`} type="button" onClick={() => dropCharacter(c.name, c.imageUrl)} title={c.name} className="overflow-hidden rounded-md" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}`, background: CANVAS_TOKENS.bg.app }}>
+                  {c.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.imageUrl} alt={c.name} className="h-20 w-full object-cover" />
+                  ) : null}
+                  <div className="truncate px-1 py-0.5 text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary }}>{c.name}</div>
+                </button>
+              ))}
+            </div>
           </div>
         </>
       ) : null}

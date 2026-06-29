@@ -28,6 +28,7 @@ import {
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import { DEFAULT_NODE_DATA, type CanvasNodeData } from '../lib/canvas-types'
+import { useCanvasGeneration } from '../lib/canvas-generation'
 import { NodeShell } from './node-shell'
 import { DEFAULT_STAGE, normalizeStage, type DirectorStageState } from '../director/stage-types'
 
@@ -59,6 +60,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
   const rf = useReactFlow()
   const { updateNodeData, getNode, addNodes, addEdges } = rf
   const upload = useUploadPlaygroundReference()
+  const gen = useCanvasGeneration()
   const [open, setOpen] = useState(false)
   const meta = NODE_META.director
 
@@ -137,6 +139,28 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
               uploadImage={async (file) => {
                 const res = await upload.mutateAsync({ file, type: 'image' })
                 return { key: res.key, url: res.signedUrl }
+              }}
+              generateImage={async ({ prompt, refKey, aspectRatio }) => {
+                const modelKey = gen.imageModels[0]?.value
+                if (!modelKey) throw new Error('无可用图片模型，请到 /profile 启用')
+                const runId = await gen.submitNode({
+                  prompt,
+                  outputType: 'image',
+                  modelKey,
+                  ...(aspectRatio ? { aspectRatio } : {}),
+                  ...(refKey ? { referenceImages: [refKey] } : {}),
+                })
+                // poll the single-run endpoint to completion (max 5 min)
+                const deadline = Date.now() + 5 * 60 * 1000
+                while (Date.now() < deadline) {
+                  await new Promise((r) => setTimeout(r, 3000))
+                  const res = await fetch(`/api/playground/runs/${runId}`)
+                  if (!res.ok) continue
+                  const { run } = (await res.json()) as { run: { status: string; resultUrls: string[] | null; errorMessage: string | null } }
+                  if (run.status === 'succeeded' && run.resultUrls?.[0]) return { url: run.resultUrls[0] }
+                  if (run.status === 'failed') throw new Error(run.errorMessage ?? '生成失败')
+                }
+                throw new Error('生成超时')
               }}
             />,
             document.body,

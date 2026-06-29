@@ -22,6 +22,24 @@ export interface UpstreamNodeLike {
   data?: { resultUrl?: string | null; referenceKey?: string | null } | Record<string, unknown> | null
 }
 
+/**
+ * Collect text from upstream 文本/脚本 nodes feeding a generative node — the
+ * script that drives this shot. Returns the joined prompt fragments in
+ * connection order so a 文本 node wired into an image/video node contributes its
+ * content to that node's generation (script → 分镜 → 生成 chain).
+ */
+export function pickUpstreamText(
+  upstream: ReadonlyArray<UpstreamNodeLike | null | undefined>,
+): string {
+  const out: string[] = []
+  for (const n of upstream) {
+    if (!n || n.type !== 'text') continue
+    const prompt = (n.data as { prompt?: unknown } | null | undefined)?.prompt
+    if (typeof prompt === 'string' && prompt.trim()) out.push(prompt.trim())
+  }
+  return out.join('\n')
+}
+
 export function pickUpstreamReferenceUrls(
   upstream: ReadonlyArray<UpstreamNodeLike | null | undefined>,
   selfId?: string,
