@@ -36,7 +36,7 @@ import {
 import { CANVAS_TOKENS, NODE_META, type CanvasNodeType } from './lib/canvas-tokens'
 import { DEFAULT_NODE_DATA, type CanvasNodeData } from './lib/canvas-types'
 import { serializeCanvas, deserializeCanvas } from './lib/canvas-serialize'
-import { CanvasGenerationProvider } from './lib/canvas-generation'
+import { CanvasGenerationProvider, useCanvasGeneration } from './lib/canvas-generation'
 import { TOOLBOX_PRESETS } from './lib/canvas-toolbox'
 import { useCharacterLibrary } from './lib/use-character-library'
 import { useCanvas, useSaveCanvas } from '@/lib/query/mutations/canvas-mutations'
@@ -98,6 +98,34 @@ function CanvasInner() {
 
   const canvasQuery = useCanvas()
   const save = useSaveCanvas()
+  const gen = useCanvasGeneration()
+
+  // Nodes currently generating (their run is pending/running) → the edges feeding
+  // them flow brightly to signal "working", like LibTV. Idle edges stay dim/static.
+  const workingNodeIds = useMemo(() => {
+    const s = new Set<string>()
+    for (const n of nodes) {
+      const runId = (n.data as CanvasNodeData)?.runId
+      const st = gen.runById(runId)?.status
+      if (st === 'pending' || st === 'running') s.add(n.id)
+    }
+    return s
+  }, [nodes, gen])
+
+  const displayEdges = useMemo(
+    () =>
+      edges.map((e) => {
+        const working = workingNodeIds.has(e.target) || workingNodeIds.has(e.source)
+        return {
+          ...e,
+          animated: working,
+          style: working
+            ? { stroke: CANVAS_TOKENS.accent, strokeWidth: 2.5, opacity: 1 }
+            : { stroke: CANVAS_TOKENS.accent, strokeWidth: 1.5, opacity: 0.45 },
+        }
+      }),
+    [edges, workingNodeIds],
+  )
 
   // ── Hydrate from DB once the query resolves ──
   useEffect(() => {
@@ -385,7 +413,7 @@ function CanvasInner() {
     <div ref={wrapperRef} className="fixed inset-0 overflow-hidden" style={{ background: CANVAS_TOKENS.bg.canvas }}>
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={displayEdges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
