@@ -10,8 +10,9 @@
  * result as the video first-frame) needs a reference-from-result backend path
  * and is the tracked next step — the edge is drawn but the frame isn't passed.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '@xyflow/react'
+import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
@@ -39,6 +40,21 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [recipeMenu, setRecipeMenu] = useState(false)
+    const upload = useUploadPlaygroundReference()
+    const refInputRef = useRef<HTMLInputElement | null>(null)
+    async function handleRefUpload(e: React.ChangeEvent<HTMLInputElement>) {
+      const file = e.target.files?.[0]
+      e.target.value = ''
+      if (!file) return
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { setError('请上传 jpg/png/webp'); return }
+      try {
+        const res = await upload.mutateAsync({ file, type: 'image' })
+        // anchorKey = the node's own input reference (fed to generation, e.g. 720全景)
+        updateNodeData(id, { anchorKey: res.key, anchorUrl: res.signedUrl })
+      } catch (err) {
+        setError((err as Error)?.message ?? '参考图上传失败')
+      }
+    }
 
     const meta = NODE_META[outputType]
     const models = outputType === 'image' ? gen.imageModels : gen.videoModels
@@ -174,7 +190,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={d.anchorUrl} alt="站位锚" className="h-full w-full object-contain opacity-55" />
-                <div className="absolute inset-x-0 bottom-1 text-center text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary }}>站位锚 · 待生成</div>
+                <div className="absolute inset-x-0 bottom-1 text-center text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary }}>参考图 · 待生成</div>
               </>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center text-center text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>
@@ -186,7 +202,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                 className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 font-mono text-[9px]"
                 style={{ background: `${CANVAS_TOKENS.bg.canvas}cc`, color: CANVAS_TOKENS.accent, border: `1px solid ${CANVAS_TOKENS.accent}55` }}
               >
-                {d.anchorKey ? '站位' : outputType === 'video' ? '首帧' : '参考'}
+                {d.anchorKey ? '参考' : outputType === 'video' ? '首帧' : '参考'}
                 {upstreamRefs.length > 0 ? `+卡司(${upstreamRefs.length})` : ` ←上游(${allRefs.length})`}
               </div>
             ) : null}
@@ -256,6 +272,26 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                   {m.label}
                 </button>
               ))}
+            </div>
+          ) : null}
+
+          {/* 参考图 upload — a reference image fed to this node's generation
+              (e.g. upload a scene photo + 预设 720全景 → make a panorama from it) */}
+          {outputType === 'image' ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => refInputRef.current?.click()}
+                disabled={upload.isPending}
+                className="nodrag flex items-center gap-1 rounded-md px-2 py-1 text-[11px]"
+                style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                {upload.isPending ? '上传中…' : d.anchorKey ? '＋ 换参考图' : '＋ 参考图'}
+              </button>
+              {d.anchorKey ? (
+                <button type="button" onClick={() => updateNodeData(id, { anchorKey: null, anchorUrl: null })} className="nodrag text-[11px]" style={{ color: '#FF8A8A' }}>移除</button>
+              ) : null}
+              <input ref={refInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleRefUpload} />
             </div>
           ) : null}
 
