@@ -84,18 +84,20 @@ const ATLASCLOUD_IMAGE_EDIT_MODEL_MAP: Record<string, string> = {
 }
 
 /** Resolve the API slug. When `useEdit` (referenceImages present) we pick the
- *  `/edit` img2img variant so the references are actually consumed. */
-function resolveAtlasCloudImageModel(modelId?: string, useEdit = false): string {
+ *  `/edit` img2img variant so the references are actually consumed.
+ *  Exported for unit testing (pure function). */
+export function resolveAtlasCloudImageModel(modelId?: string, useEdit = false): string {
   const map = useEdit ? ATLASCLOUD_IMAGE_EDIT_MODEL_MAP : ATLASCLOUD_IMAGE_MODEL_MAP
   if (modelId && map[modelId]) {
     return map[modelId]
   }
   // If the user passed a full slug already, accept it — but swap the endpoint
   // suffix to match the requested mode so refs aren't dropped / forced.
-  if (modelId && (modelId.includes('/text-to-image') || modelId.includes('/edit'))) {
-    return useEdit
-      ? modelId.replace('/text-to-image', '/edit')
-      : modelId.replace('/edit', '/text-to-image')
+  // Anchored to the END so a model name that merely contains "/edit" or
+  // "/text-to-image" as a substring isn't corrupted.
+  if (modelId && /\/(text-to-image|edit)$/.test(modelId)) {
+    const base = modelId.replace(/\/(text-to-image|edit)$/, '')
+    return `${base}/${useEdit ? 'edit' : 'text-to-image'}`
   }
   // Sane default.
   return map['nano-banana-pro']
@@ -197,8 +199,13 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     } = options as AtlasCloudImageOptions
 
     // Reference images present → use the img2img `/edit` slug so AtlasCloud
-    // actually consumes them (the t2i slug ignores `images`).
-    const useEdit = referenceImages.length > 0
+    // actually consumes them (the t2i slug ignores `images`). Filter out any
+    // empty/blank entries so we never POST an empty string as an image URL
+    // (AtlasCloud 400s on those with an opaque message).
+    const validRefs = referenceImages.filter(
+      (u): u is string => typeof u === 'string' && u.trim().length > 0,
+    )
+    const useEdit = validRefs.length > 0
     const atlasModel = resolveAtlasCloudImageModel(modelId, useEdit)
     const logger = createScopedLogger({
       module: 'generator.atlascloud-image',
@@ -206,9 +213,9 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     })
 
     // Build body per model family. Each family has its own schema (see
-    // file-level doc). Sending fields that aren't in a model's schema
-    // is silently dropped by the gateway, so we only set what each
-    // variant actually consumes.
+    // file-level doc). We only set fields a given variant's schema actually
+    // declares — over-sending risks a 400 from the gateway, so don't rely on
+    // silent drops.
     const body: Record<string, unknown> = {
       model: atlasModel,
       prompt: paramPrompt,
@@ -217,7 +224,7 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     // img2img: pass the reference URLs the `/edit` slug consumes. AtlasCloud
     // fetches them server-side, so signed COS URLs work directly.
     if (useEdit) {
-      body.images = referenceImages
+      body.images = validRefs
     }
 
     if (isGptImage2Slug(atlasModel)) {
@@ -235,9 +242,11 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     } else if (isNanoBananaSlug(atlasModel)) {
       const ratio = normaliseNanoBananaRatio(aspectRatio)
       if (ratio) body.aspect_ratio = ratio
-      // Resolution enum varies by model (1k/2k/4k); pass through verbatim
-      // when set, gateway rejects unknowns with 400 + clear message.
-      if (resolution) body.resolution = resolution
+      // Only nano-banana-pro / nano-banana-2 declare `resolution` (1k/2k/4k).
+      // The base nano-banana family (`google/nano-banana/...`) has no such
+      // field, so don't send it there.
+      const isBaseNanoBanana = atlasModel.startsWith('google/nano-banana/')
+      if (resolution && !isBaseNanoBanana) body.resolution = resolution
       if (outputFormat) body.output_format = outputFormat
       // nano-banana-pro supports web grounding; harmless on other variants.
       if (typeof enableWebSearch === 'boolean') body.enable_web_search = enableWebSearch
@@ -246,7 +255,7 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     if (useEdit) {
       logger.info({
         message: 'AtlasCloud image-to-image (edit) — references applied',
-        details: { model: atlasModel, refCount: referenceImages.length },
+        details: { model: atlasModel, refCount: validRefs.length },
       })
     }
 

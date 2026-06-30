@@ -27,7 +27,9 @@ function parseStringArray(value: unknown): string[] {
   if (typeof value === 'string' && value) {
     try {
       const parsed = JSON.parse(value)
-      return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+      return Array.isArray(parsed)
+        ? parsed.filter((v): v is string => typeof v === 'string' && v.length > 0)
+        : []
     } catch {
       return []
     }

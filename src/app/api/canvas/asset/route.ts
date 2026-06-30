@@ -33,20 +33,43 @@ export const GET = apiHandler(async (request: NextRequest) => {
   }
 
   const signed = getSignedUrl(key, 600)
+  // Bound the proxy: an abort timeout so a slow/hung COS fetch can't pin a
+  // worker thread, and a size cap so an oversized object can't balloon memory.
+  const MAX_BYTES = 15 * 1024 * 1024
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 15_000)
   let upstream: Response
   try {
-    upstream = await fetch(signed)
+    upstream = await fetch(signed, { signal: ac.signal })
   } catch (err) {
     _ulogError(`[canvas.asset] upstream fetch failed key=${key} err=${err instanceof Error ? err.message : String(err)}`)
     throw new ApiError('INTERNAL_ERROR', { code: 'ASSET_FETCH_FAILED' })
+  } finally {
+    clearTimeout(timer)
   }
   if (!upstream.ok) {
     _ulogError(`[canvas.asset] upstream ${upstream.status} key=${key}`)
     throw new ApiError('NOT_FOUND', { code: 'ASSET_NOT_FOUND' })
   }
 
-  const buf = await upstream.arrayBuffer()
-  const contentType = upstream.headers.get('content-type') ?? 'image/png'
+  // Only serve images — never reflect an error page / octet-stream verbatim.
+  const contentType = (upstream.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+  if (!ALLOWED_TYPES.includes(contentType)) {
+    _ulogError(`[canvas.asset] rejected content-type="${contentType}" key=${key}`)
+    throw new ApiError('FORBIDDEN', { code: 'ASSET_NOT_IMAGE' })
+  }
+  // Reject early when the upstream advertises an oversized body.
+  const declaredLen = Number(upstream.headers.get('content-length') ?? 0)
+  if (declaredLen > MAX_BYTES) {
+    throw new ApiError('INVALID_PARAMS', { code: 'ASSET_TOO_LARGE' })
+  }
+
+  const buf = Buffer.from(await upstream.arrayBuffer())
+  // Guard against a missing/lying content-length (chunked responses).
+  if (buf.length > MAX_BYTES) {
+    throw new ApiError('INVALID_PARAMS', { code: 'ASSET_TOO_LARGE' })
+  }
   return new NextResponse(buf, {
     status: 200,
     headers: {
