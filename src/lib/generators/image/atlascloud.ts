@@ -32,11 +32,19 @@
  * already accepts ATLASCLOUD:IMAGE:requestId (extended in async-poll.ts
  * Phase U). resultUrl in the poll response is the rendered image URL.
  *
- * Reference image (img2img): AtlasCloud image endpoint does NOT accept
- * reference_images on text-to-image variants (404 on image-to-image
- * slugs at this time). When the model picker pairs a t2i model with
- * user-uploaded refs (Playground / character-image flow), the refs
- * are silently dropped — generator logs the count for diagnostics.
+ * Reference image (img2img): AtlasCloud exposes a separate **`/edit`**
+ * slug per model family that accepts `images: string[]` (a list of input
+ * image URLs). Verified 2026-06-29 against the schema CDN:
+ *   - openai/gpt-image-2/edit        props: prompt + images + size + quality + output_format
+ *   - google/nano-banana-pro/edit    props: prompt + images + aspect_ratio + resolution + output_format + enable_web_search
+ *   - google/nano-banana/edit        props: prompt + images + aspect_ratio + output_format
+ *   - google/nano-banana-2/edit      props: prompt + images + aspect_ratio + resolution + ...
+ * When the caller supplies referenceImages we route to the matching
+ * `/edit` slug and pass the (signed) URLs through `images` — AtlasCloud
+ * fetches them server-side. The text-to-image slug is used only when no
+ * reference is present. (Previously refs were silently dropped because we
+ * always used the t2i slug — that produced unrelated images for the
+ * canvas "720 from an uploaded photo" flow.)
  */
 
 import { BaseImageGenerator, type ImageGenerateParams, type GenerateResult } from '../base'
@@ -66,14 +74,31 @@ const ATLASCLOUD_IMAGE_MODEL_MAP: Record<string, string> = {
   'nano-banana-2': 'google/nano-banana-2/text-to-image',
 }
 
-function resolveAtlasCloudImageModel(modelId?: string): string {
-  if (modelId && ATLASCLOUD_IMAGE_MODEL_MAP[modelId]) {
-    return ATLASCLOUD_IMAGE_MODEL_MAP[modelId]
+/** img2img (`/edit`) counterparts — used when referenceImages are present.
+ *  Each accepts `images: string[]` (input image URLs). */
+const ATLASCLOUD_IMAGE_EDIT_MODEL_MAP: Record<string, string> = {
+  'gpt-image-2': 'openai/gpt-image-2/edit',
+  'nano-banana-pro': 'google/nano-banana-pro/edit',
+  'nano-banana': 'google/nano-banana/edit',
+  'nano-banana-2': 'google/nano-banana-2/edit',
+}
+
+/** Resolve the API slug. When `useEdit` (referenceImages present) we pick the
+ *  `/edit` img2img variant so the references are actually consumed. */
+function resolveAtlasCloudImageModel(modelId?: string, useEdit = false): string {
+  const map = useEdit ? ATLASCLOUD_IMAGE_EDIT_MODEL_MAP : ATLASCLOUD_IMAGE_MODEL_MAP
+  if (modelId && map[modelId]) {
+    return map[modelId]
   }
-  // If user passed the full slug already, accept it verbatim.
-  if (modelId && modelId.includes('/text-to-image')) return modelId
+  // If the user passed a full slug already, accept it — but swap the endpoint
+  // suffix to match the requested mode so refs aren't dropped / forced.
+  if (modelId && (modelId.includes('/text-to-image') || modelId.includes('/edit'))) {
+    return useEdit
+      ? modelId.replace('/text-to-image', '/edit')
+      : modelId.replace('/edit', '/text-to-image')
+  }
   // Sane default.
-  return ATLASCLOUD_IMAGE_MODEL_MAP['nano-banana-pro']
+  return map['nano-banana-pro']
 }
 
 function isGptImage2Slug(slug: string): boolean {
@@ -171,7 +196,10 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       enableWebSearch,
     } = options as AtlasCloudImageOptions
 
-    const atlasModel = resolveAtlasCloudImageModel(modelId)
+    // Reference images present → use the img2img `/edit` slug so AtlasCloud
+    // actually consumes them (the t2i slug ignores `images`).
+    const useEdit = referenceImages.length > 0
+    const atlasModel = resolveAtlasCloudImageModel(modelId, useEdit)
     const logger = createScopedLogger({
       module: 'generator.atlascloud-image',
       action: 'atlascloud_image_submit',
@@ -184,6 +212,12 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     const body: Record<string, unknown> = {
       model: atlasModel,
       prompt: paramPrompt,
+    }
+
+    // img2img: pass the reference URLs the `/edit` slug consumes. AtlasCloud
+    // fetches them server-side, so signed COS URLs work directly.
+    if (useEdit) {
+      body.images = referenceImages
     }
 
     if (isGptImage2Slug(atlasModel)) {
@@ -209,13 +243,10 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       if (typeof enableWebSearch === 'boolean') body.enable_web_search = enableWebSearch
     }
 
-    if (referenceImages.length > 0) {
-      // Current AtlasCloud image schemas don't have image-to-image
-      // variants exposed via CDN — only text-to-image. We log the drop
-      // for diagnostics so we know if a caller relied on refs.
+    if (useEdit) {
       logger.info({
-        message: 'reference images dropped — AtlasCloud image gen is text-only for these slugs',
-        details: { model: atlasModel, droppedCount: referenceImages.length },
+        message: 'AtlasCloud image-to-image (edit) — references applied',
+        details: { model: atlasModel, refCount: referenceImages.length },
       })
     }
 
