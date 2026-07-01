@@ -199,6 +199,12 @@ const ROUTE_FILES = [
   'src/app/api/runs/[runId]/events/route.ts',
   'src/app/api/runs/[runId]/route.ts',
   'src/app/api/runs/route.ts',
+  // Phase 2.5 Skill primitive (PR #5) endpoints — registered here so the
+  // route-coverage guard passes; categorized as infra by the resolvers.
+  'src/app/api/skill-installations/[id]/route.ts',
+  'src/app/api/skill-installations/route.ts',
+  'src/app/api/skills/[slug]/route.ts',
+  'src/app/api/skills/route.ts',
   'src/app/api/sse/route.ts',
   'src/app/api/system/boot-id/route.ts',
   'src/app/api/task-target-states/route.ts',
