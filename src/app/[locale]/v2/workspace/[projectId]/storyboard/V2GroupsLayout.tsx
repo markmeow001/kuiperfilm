@@ -32,35 +32,11 @@ import { AppIcon } from '@/components/ui/icons'
 import { GroupCard, type GroupRegenOverrides } from './GroupCard'
 import { computeGroupRecommendedDurationSec } from '@/lib/workers/handlers/speech-duration-estimator'
 import type { UseMutationResult } from '@tanstack/react-query'
-import type { VideoFamily } from './storyboard-client-helpers'
+import type { VideoFamily, PanelLike } from './storyboard-client-helpers'
 
-// Local PanelLike (also exists in storyboard-client-helpers as a
-// richer superset, and in GroupCard with extra fields like voiceLines).
-// Pre-existing parallel-declaration tech debt — NOT cleaned up in
-// PR #18 because consolidating across V2GroupsLayout + GroupCard
-// requires moving GroupCard's voiceLines to helpers, which expands
-// scope. Tracked for a future dedicated refactor.
-interface PanelCharacterRef {
-  name: string
-  appearance?: string
-}
-
-interface PanelLike {
-  id: string
-  panelIndex?: number | null
-  description?: string | null
-  prompt?: string | null
-  srtSegment?: string | null
-  // Decoded server-side; see storyboards API route.
-  characters?: PanelCharacterRef[] | null
-  location?: string | null
-  multiShotGroupId?: string | null
-  multiShotGroupOrder?: number | null
-  // Phase S — needed to resolve which storyboard a group belongs to so
-  // the GroupCard can hand the reference-video upload widget the right
-  // storyboardId. All panels in a multi-shot group share one storyboard.
-  storyboardId?: string | null
-}
+// PanelLike + PanelCharacterRef now live in storyboard-client-helpers as the
+// single shared declaration (2026-07-01 — three-way unification; GroupCard's
+// voiceLines field was lifted up so all three consumers share one type).
 
 export type UpdatePanelTextMutation = UseMutationResult<
   unknown,

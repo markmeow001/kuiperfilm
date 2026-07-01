@@ -13,6 +13,18 @@ export interface PanelCharacterRef {
   appearance?: string
 }
 
+/**
+ * Voice line attached to a panel by the storyboards API. Server joins
+ * NovelPromotionVoiceLine via matchedPanelId. `isVoiceover` is derived
+ * server-side from speaker markers (OS / VO / V.O. / O.S. / 画外音 / 旁白 /
+ * 独白) so the UI can render off-camera lines differently (no lip-sync).
+ */
+export interface PanelVoiceLine {
+  speaker: string
+  content: string
+  isVoiceover: boolean
+}
+
 export interface PanelLike {
   id: string
   storyboardId?: string | null
@@ -28,6 +40,10 @@ export interface PanelLike {
   location?: string | null
   // Decoded server-side; see storyboards API route.
   characters?: PanelCharacterRef[] | null
+  // 2026-05-13 — Structured voice lines (server joins NovelPromotionVoiceLine).
+  // When present, GroupCard's buildInitialNarrative prefers these over
+  // srtSegment so OS / voice-over lines can be tagged for off-camera render.
+  voiceLines?: PanelVoiceLine[]
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
 }

@@ -27,6 +27,7 @@ import { NarrativeHighlighter } from './NarrativeHighlighter'
 import { GroupReferenceVideoSlot } from './GroupReferenceVideoSlot'
 import { StyleOverridePreview } from './StyleOverridePreview'
 import { formatTimeRange } from './groupcard-helpers'
+import type { PanelLike } from './storyboard-client-helpers'
 import { visualStyles, getStyleSafe, sanitizeStyleString } from '@/lib/style-library'
 import {
   useMultiShotTask,
@@ -51,49 +52,6 @@ import type { UseMutationResult } from '@tanstack/react-query'
  * `auto`; all other groups default to `off`.
  */
 type ColdOpenMode = 'off' | 'auto' | ColdOpenVariant
-
-interface PanelCharacterRef {
-  name: string
-  appearance?: string
-}
-
-/**
- * Voice line attached to a panel by the storyboards API.
- * Server joins NovelPromotionVoiceLine via matchedPanelId. The
- * `isVoiceover` flag is derived server-side from speaker markers
- * (OS / VO / V.O. / O.S. / 画外音 / 旁白 / 独白) so the UI can render
- * off-camera lines with a different style (no lip-sync indicator).
- */
-interface PanelVoiceLine {
-  speaker: string
-  content: string
-  isVoiceover: boolean
-}
-
-interface PanelLike {
-  id: string
-  description?: string | null
-  prompt?: string | null
-  srtSegment?: string | null
-  // Decoded server-side; see storyboards API route.
-  characters?: PanelCharacterRef[] | null
-  location?: string | null
-  multiShotGroupId?: string | null
-  multiShotGroupOrder?: number | null
-  // Optional shot framing — present on panels created by analyze-novel
-  // v2+; legacy panels may have null. Used by buildInitialNarrative to
-  // emit 镜头N·<景别> shot titles in the cinematic prompt format.
-  shotType?: string | null
-  cameraMove?: string | null
-  // 2026-05-13 — Structured voice lines (server joins NovelPromotionVoiceLine).
-  // When present, buildInitialNarrative prefers these over srtSegment so
-  // OS / voice-over lines can be tagged for off-camera rendering.
-  voiceLines?: PanelVoiceLine[]
-  // 2026-05-13 — Generated panel image (storyboard image gen output).
-  // Used by 首幀鎖定 mode to default the first/last frame to existing
-  // panel images. Null when image gen hasn't run for this panel.
-  imageUrl?: string | null
-}
 
 interface CharacterAppearanceRef {
   id: string
