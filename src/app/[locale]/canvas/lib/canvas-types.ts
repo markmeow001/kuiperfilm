@@ -29,6 +29,19 @@ export interface CanvasNodeData extends Record<string, unknown> {
   genMode?: 'text' | 'image' | 'omni'
   /** Video-only: camera-movement preset key (运镜), appended to the prompt. */
   cameraMove?: string
+  /**
+   * Selected visual-style id (from the style library). When set, the style's
+   * anchor is prepended and its visual modifiers appended to the prompt at
+   * submit time — the playground spine has no style field, so injection is
+   * client-side into the prompt text. Null = no style.
+   */
+  styleId?: string | null
+  /**
+   * Image-only: how many variants to generate on one "生成" (1/2/4). The canvas
+   * fans out N playground runs (the spine hardcodes generationCount=1), and the
+   * extra results land in sibling frame nodes. Defaults to 1.
+   */
+  batchCount?: number
   /** PlaygroundRun id once a generation has been submitted (null before). */
   runId?: string | null
   /** Last known result media URL (cached so reload shows something pre-poll). */
@@ -89,6 +102,8 @@ export const DEFAULT_NODE_DATA = {
   aspectRatio: '9:16',
   durationSec: 5,
   resolution: '720p',
+  styleId: null as string | null,
+  batchCount: 1,
   runId: null as string | null,
   resultUrl: null as string | null,
   referenceKey: null as string | null,

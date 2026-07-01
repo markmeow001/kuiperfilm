@@ -14,15 +14,21 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '@xyflow/react'
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
-import type { CanvasNodeData } from '../lib/canvas-types'
+import { type CanvasNodeData, DEFAULT_NODE_DATA } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
 import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { IMAGE_RECIPES } from '../lib/canvas-recipes'
+import { visualStyles } from '@/lib/style-library'
 import { NodeShell } from './node-shell'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '2:1', '21:9', '1:1', '4:3', '3:4', '4:5']
 const RESOLUTION_OPTIONS = ['480p', '720p', '1080p']
+const BATCH_OPTIONS = [1, 2, 4]
+// Styles sorted for the picker (active only, by display order).
+const STYLE_OPTIONS = visualStyles
+  .filter((s) => s.isActive)
+  .sort((a, b) => a.displayOrder - b.displayOrder)
 // video generation modes (how upstream refs are used)
 const GEN_MODES: { key: 'text' | 'image' | 'omni'; label: string }[] = [
   { key: 'text', label: '文生视频' },
@@ -35,11 +41,16 @@ type StatusLabel = '闲置' | '提交中' | '排队中' | '生成中' | '已完�
 export function makeMediaNode(outputType: 'image' | 'video') {
   function MediaNode({ id, data, selected }: NodeProps) {
     const d = data as CanvasNodeData
-    const { updateNodeData } = useReactFlow()
+    const { updateNodeData, addNodes, getNode } = useReactFlow()
     const gen = useCanvasGeneration()
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [recipeMenu, setRecipeMenu] = useState(false)
+    const [styleMenu, setStyleMenu] = useState(false)
+    const selectedStyle = useMemo(
+      () => (d.styleId ? STYLE_OPTIONS.find((s) => s.id === d.styleId) ?? null : null),
+      [d.styleId],
+    )
     const upload = useUploadPlaygroundReference()
     const refInputRef = useRef<HTMLInputElement | null>(null)
     async function handleRefUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -128,14 +139,20 @@ export function makeMediaNode(outputType: 'image' | 'video') {
       setError(null)
       setSubmitting(true)
       try {
+        // Style injection: the playground spine has no style field, so we fold
+        // the selected style's anchor (prefix) + modifiers (suffix) into the
+        // prompt text — same shape injectStyleProfile() uses server-side.
+        const styled = selectedStyle
+          ? [selectedStyle.styleAnchor, basePrompt, selectedStyle.visualModifiers].filter(Boolean).join('\n')
+          : basePrompt
         const movePhrase = outputType === 'video' ? cameraMovePhrase(d.cameraMove) : ''
-        const finalPrompt = movePhrase ? `${basePrompt}，${movePhrase}` : basePrompt
+        const finalPrompt = movePhrase ? `${styled}，${movePhrase}` : styled
         if (finalPrompt.length > 4000) {
           setError(`提示词过长（${finalPrompt.length}/4000），请精简上游脚本或本节点描述`)
           setSubmitting(false)
           return
         }
-        const runId = await gen.submitNode({
+        const submission = {
           prompt: finalPrompt,
           outputType,
           modelKey: d.modelKey,
@@ -144,8 +161,36 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           // For video, refsForSubmit[0] is the i2v first frame (gated by mode).
           ...(refsForSubmit.length > 0 ? { referenceImages: refsForSubmit } : {}),
           ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution ?? '720p' } : {}),
-        })
-        updateNodeData(id, { runId, resultUrl: null })
+        }
+        // Batch (image only): fan out N playground runs — the spine hardcodes
+        // generationCount=1, so N runs = N variants. Run #1 stays on this node;
+        // extras spawn sibling frame nodes to the right so the user sees a row.
+        const batch = outputType === 'image' ? Math.min(Math.max(d.batchCount ?? 1, 1), 4) : 1
+        const runIds = await Promise.all(Array.from({ length: batch }, () => gen.submitNode(submission)))
+        updateNodeData(id, { runId: runIds[0], resultUrl: null })
+        if (runIds.length > 1) {
+          const self = getNode(id)
+          const baseX = self?.position.x ?? 0
+          const baseY = self?.position.y ?? 0
+          addNodes(
+            runIds.slice(1).map((rid, i) => ({
+              id: `n_${Date.now()}_${i}_${Math.round(baseX)}`,
+              type: 'image' as const,
+              position: { x: baseX + (i + 1) * (nodeWidth + 32), y: baseY },
+              data: {
+                ...DEFAULT_NODE_DATA,
+                title: `${meta.label} · 变体 ${i + 2}`,
+                // finalPrompt already has the style folded in — leave styleId
+                // null on the sibling so a re-generate won't double-inject it.
+                prompt: finalPrompt,
+                modelKey: d.modelKey,
+                aspectRatio: d.aspectRatio,
+                styleId: null,
+                runId: rid,
+              },
+            })),
+          )
+        }
       } catch (err) {
         setError((err as Error)?.message ?? '生成失败')
       } finally {
@@ -283,6 +328,71 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             </div>
           ) : null}
 
+          {/* 风格 picker — inject a visual-style anchor into the prompt (both
+              image & video). Reuses the shared 29-style library + thumbnails. */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setStyleMenu((v) => !v)}
+              className="nodrag flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-[11px]"
+              style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${selectedStyle ? `${CANVAS_TOKENS.accent}66` : CANVAS_TOKENS.hairline}` }}
+            >
+              <span className="flex items-center gap-1.5 truncate">
+                {selectedStyle?.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={selectedStyle.thumbnailUrl} alt="" className="h-4 w-4 rounded object-cover" />
+                ) : null}
+                <span className="truncate">{selectedStyle ? `风格：${selectedStyle.nameZh}` : '🎨 视觉风格'}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                {selectedStyle ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); updateNodeData(id, { styleId: null }) }}
+                    className="text-[11px]"
+                    style={{ color: '#FF8A8A' }}
+                  >
+                    清除
+                  </span>
+                ) : null}
+                <span style={{ color: CANVAS_TOKENS.text.muted }}>{styleMenu ? '▾' : '▸'}</span>
+              </span>
+            </button>
+            {styleMenu ? (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setStyleMenu(false)} />
+                <div className="nowheel nodrag absolute left-0 top-full z-50 mt-1 max-h-[280px] w-[300px] overflow-y-auto rounded-xl p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {STYLE_OPTIONS.map((s) => {
+                      const active = s.id === d.styleId
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => { updateNodeData(id, { styleId: s.id }); setStyleMenu(false) }}
+                          title={`${s.category} · ${s.nameZh}`}
+                          className="group flex flex-col items-center gap-0.5 rounded-md p-1 transition-colors hover:bg-white/8"
+                          style={{ border: `1px solid ${active ? CANVAS_TOKENS.accent : 'transparent'}` }}
+                        >
+                          <div className="relative aspect-square w-full overflow-hidden rounded" style={{ background: CANVAS_TOKENS.bg.app }}>
+                            {s.thumbnailUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={s.thumbnailUrl} alt={s.nameZh} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center font-mono text-[13px]" style={{ color: CANVAS_TOKENS.text.muted }}>{s.category}</div>
+                            )}
+                          </div>
+                          <span className="w-full truncate text-center text-[10px]" style={{ color: active ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.secondary }}>{s.nameZh}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+
           {/* 参考图 upload — a reference image fed to this node's generation
               (e.g. upload a scene photo + 预设 720全景 → make a panorama from it) */}
           {outputType === 'image' ? (
@@ -337,6 +447,18 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             >
               {ASPECT_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
+            {/* batch count (image only): N variants per 生成 → N sibling nodes */}
+            {outputType === 'image' ? (
+              <select
+                value={d.batchCount ?? 1}
+                onChange={(e) => updateNodeData(id, { batchCount: Number.parseInt(e.target.value, 10) || 1 })}
+                title="一次生成的变体数量"
+                className="nodrag rounded-md px-1.5 py-1 font-mono text-[11px] outline-none"
+                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                {BATCH_OPTIONS.map((n) => <option key={n} value={n}>×{n}</option>)}
+              </select>
+            ) : null}
           </div>
 
           {outputType === 'video' ? (
