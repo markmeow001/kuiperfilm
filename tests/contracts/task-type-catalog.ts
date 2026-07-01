@@ -53,6 +53,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.REGISTER_ARK_ASSET]: 'tests/unit/worker/register-ark-asset.test.ts',
   [TASK_TYPE.PLAYGROUND_IMAGE]: 'tests/unit/worker/playground-task-handler.test.ts',
   [TASK_TYPE.PLAYGROUND_VIDEO]: 'tests/unit/worker/playground-task-handler.test.ts',
+  [TASK_TYPE.CANVAS_STORYBOARD]: 'tests/unit/worker/canvas-storyboard-handler.test.ts',
 } as const satisfies Record<TaskType, string>
 
 export const TASK_TYPE_CATALOG: ReadonlyArray<TaskTypeCoverageEntry> = (Object.values(TASK_TYPE) as TaskType[])

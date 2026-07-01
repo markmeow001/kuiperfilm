@@ -77,6 +77,7 @@ const ANALYZE_TYPES = new Set<string>([
   'character_profile_batch_confirm',
   'ai_modify_shot_prompt',
   'regenerate_storyboard_text',
+  'canvas_storyboard',
 ])
 
 const VOICE_TYPES = new Set<string>([

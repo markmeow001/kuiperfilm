@@ -22,6 +22,7 @@ import { getProjectModelConfig } from '@/lib/config-service'
 import { reportTaskProgress, reportTaskStreamChunk, withTaskLifecycle } from './shared'
 import { assertTaskActive } from './utils'
 import { handleStoryToScriptTask } from './handlers/story-to-script'
+import { handleCanvasStoryboardTask } from './handlers/canvas-storyboard'
 import { handleScriptToStoryboardTask } from './handlers/script-to-storyboard'
 import { handleVoiceAnalyzeTask } from './handlers/voice-analyze'
 import { handleAssetHubAIDesignTask } from './handlers/asset-hub-ai-design'
@@ -674,6 +675,8 @@ async function processTextTask(job: Job<TaskJobData>) {
       return await handleInsertPanelTask(job)
     case TASK_TYPE.REGISTER_ARK_ASSET:
       return await handleRegisterArkAssetTask(job)
+    case TASK_TYPE.CANVAS_STORYBOARD:
+      return await handleCanvasStoryboardTask(job)
     default:
       throw new Error(`Unsupported text task type: ${job.data.type}`)
   }

@@ -76,6 +76,7 @@ const ROUTE_FILES = [
   'src/app/api/auth/register/route.ts',
   'src/app/api/canvas/asset/route.ts',
   'src/app/api/canvas/route.ts',
+  'src/app/api/canvas/storyboard/route.ts',
   'src/app/api/canvas/use-as-background/route.ts',
   'src/app/api/cos/image/route.ts',
   'src/app/api/edit-requests/[requestId]/route.ts',

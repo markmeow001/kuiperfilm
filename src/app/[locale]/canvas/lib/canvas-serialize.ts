@@ -14,7 +14,7 @@ import {
   EMPTY_CANVAS,
 } from './canvas-types'
 
-const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director']
+const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director', 'script']
 
 function isValidType(t: unknown): t is CanvasNodeType {
   return typeof t === 'string' && (VALID_TYPES as readonly string[]).includes(t)

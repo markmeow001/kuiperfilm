@@ -9,7 +9,7 @@
  */
 import { z } from 'zod'
 
-const NODE_TYPES = ['character', 'image', 'video', 'text', 'director'] as const
+const NODE_TYPES = ['character', 'image', 'video', 'text', 'director', 'script'] as const
 
 export const MAX_NODES = 500
 export const MAX_EDGES = 1000

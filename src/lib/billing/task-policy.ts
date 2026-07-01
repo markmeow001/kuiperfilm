@@ -54,6 +54,7 @@ const BILLABLE_TASK_TYPES = new Set<TaskType>([
   TASK_TYPE.VIDEO_MULTI_SHOT,
   TASK_TYPE.PLAYGROUND_IMAGE,
   TASK_TYPE.PLAYGROUND_VIDEO,
+  TASK_TYPE.CANVAS_STORYBOARD,
 ])
 
 function toNumber(value: unknown, fallback: number) {
@@ -309,6 +310,7 @@ export function buildDefaultTaskBillingInfo(taskType: TaskType, payload: AnyPayl
     case TASK_TYPE.ASSET_HUB_AI_MODIFY_CHARACTER:
     case TASK_TYPE.ASSET_HUB_AI_MODIFY_LOCATION:
     case TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER:
+    case TASK_TYPE.CANVAS_STORYBOARD:
       return buildTextTaskInfo(taskType, payload)
     case TASK_TYPE.PANEL_VARIANT:
       return buildImageTaskInfo(taskType, payload)

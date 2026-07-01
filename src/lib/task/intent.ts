@@ -68,6 +68,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.REGISTER_ARK_ASSET]: 'process',
   [TASK_TYPE.PLAYGROUND_IMAGE]: 'generate',
   [TASK_TYPE.PLAYGROUND_VIDEO]: 'generate',
+  [TASK_TYPE.CANVAS_STORYBOARD]: 'build',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {

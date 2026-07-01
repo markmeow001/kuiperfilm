@@ -44,6 +44,7 @@ import { makeMediaNode } from './nodes/MediaNode'
 import { TextNode } from './nodes/TextNode'
 import { CharacterNode } from './nodes/CharacterNode'
 import { DirectorNode } from './nodes/DirectorNode'
+import { ScriptNode } from './nodes/ScriptNode'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -56,9 +57,10 @@ const nodeTypes: NodeTypes = {
   text: TextNode,
   character: CharacterNode,
   director: DirectorNode,
+  script: ScriptNode,
 }
 
-const ADD_ORDER: CanvasNodeType[] = ['image', 'video', 'director', 'character', 'text']
+const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'director', 'character', 'text']
 
 function makeNode(type: CanvasNodeType, x: number, y: number): Node<CanvasNodeData> {
   return {

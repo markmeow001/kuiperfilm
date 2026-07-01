@@ -12,6 +12,17 @@ import type { CanvasNodeType } from './canvas-tokens'
  * Extends Record<string, unknown> because React Flow v12 constrains a custom
  * node's data to an index-signature shape.
  */
+/** One storyboard shot produced by the script node (mirrors the worker's
+ *  CanvasStoryboardShot; kept here so the client doesn't import server code). */
+export interface CanvasStoryboardShot {
+  shotNumber: number
+  description: string
+  shotSize?: string
+  cameraMove?: string
+  durationSec?: number
+  dialogue?: string
+}
+
 export interface CanvasNodeData extends Record<string, unknown> {
   /** User-facing title shown in the node header (editable). */
   title: string
@@ -72,6 +83,10 @@ export interface CanvasNodeData extends Record<string, unknown> {
    */
   anchorKey?: string | null
   anchorUrl?: string | null
+  /** Script node: the generated storyboard shots (persisted so reload keeps them). */
+  shots?: CanvasStoryboardShot[] | null
+  /** Script node: the in-flight CANVAS_STORYBOARD task id (poll /api/tasks/[id]). */
+  storyboardTaskId?: string | null
 }
 
 /** Minimal serializable node (what we store in the Canvas DB row / localStorage). */
@@ -114,6 +129,8 @@ export const DEFAULT_NODE_DATA = {
   batchCount: 1,
   lastFrameKey: null as string | null,
   lastFramePreview: null as string | null,
+  shots: null as CanvasStoryboardShot[] | null,
+  storyboardTaskId: null as string | null,
   runId: null as string | null,
   resultUrl: null as string | null,
   referenceKey: null as string | null,
