@@ -14,9 +14,15 @@ import type { Job } from 'bullmq'
 import { generateVoiceWithIndexTTS2 } from '@/lib/voice/generate-voice-line'
 import { getAudioApiKey, getProviderKey, resolveModelSelectionOrSingle } from '@/lib/api-config'
 import { getSignedUrl, uploadToCOS } from '@/lib/cos'
+import { isSafeReference } from '@/lib/playground/reference-guard'
 import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
+
+// Result signed-URL lifetime — long enough that reopening a saved canvas after
+// a break still plays (VOICE_LINE stores the raw key + re-signs; the canvas
+// persists the node's audioUrl, so a short TTL would 403 on reload).
+const RESULT_URL_TTL_SECONDS = 7 * 24 * 3600
 
 export async function handleCanvasTtsTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as Record<string, unknown>
@@ -28,14 +34,17 @@ export async function handleCanvasTtsTask(job: Job<TaskJobData>) {
 
   if (!text) throw new Error('CANVAS_TTS: text is required')
   if (!referenceAudioKey) throw new Error('CANVAS_TTS: referenceAudioKey is required')
+  // Defense-in-depth: the worker is the last line — re-validate the key is the
+  // caller's own bare voice key, never trust the payload blindly (no http/data
+  // URL passthrough → no server-side fetch of an attacker-controlled URL).
+  if (!referenceAudioKey.startsWith('voice/') || !isSafeReference(referenceAudioKey, job.data.userId)) {
+    throw new Error('CANVAS_TTS: referenceAudioKey must be the caller\'s own voice key')
+  }
 
   await reportTaskProgress(job, 15, { stage: 'canvas_tts_prepare' })
   await assertTaskActive(job, 'canvas_tts_prepare')
 
-  // Reference audio: a bare COS key (voice/playground-ref/<userId>/…) → signed URL.
-  const referenceAudioUrl = referenceAudioKey.startsWith('http') || referenceAudioKey.startsWith('data:')
-    ? referenceAudioKey
-    : getSignedUrl(referenceAudioKey, 3600)
+  const referenceAudioUrl = getSignedUrl(referenceAudioKey, 3600)
 
   // Resolve the FAL audio endpoint + key (must be a fal-provider audio model).
   const audioSelection = await resolveModelSelectionOrSingle(job.data.userId, audioModel, 'audio')
@@ -59,7 +68,7 @@ export async function handleCanvasTtsTask(job: Job<TaskJobData>) {
   await assertTaskActive(job, 'canvas_tts_persist')
   const audioKey = `voice/playground-ref/${job.data.userId}/tts-${job.data.targetId}.wav`
   const cosKey = await uploadToCOS(generated.audioData, audioKey)
-  const audioUrl = getSignedUrl(cosKey, 7200)
+  const audioUrl = getSignedUrl(cosKey, RESULT_URL_TTL_SECONDS)
 
   await reportTaskProgress(job, 95, { stage: 'canvas_tts_done' })
 

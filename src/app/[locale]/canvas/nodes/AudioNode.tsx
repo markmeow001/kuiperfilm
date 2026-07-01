@@ -145,7 +145,7 @@ export function AudioNode({ id, data, selected }: NodeProps) {
           {d.referenceAudioName ? (
             <span className="truncate text-[10px]" style={{ color: CANVAS_TOKENS.text.muted, maxWidth: 120 }}>{d.referenceAudioName}</span>
           ) : null}
-          <input ref={audioInputRef} type="file" accept="audio/wav,audio/mpeg,audio/mp4,audio/webm,audio/ogg" className="hidden" onChange={handleRefUpload} />
+          <input ref={audioInputRef} type="file" accept="audio/wav,audio/x-wav,audio/wave,audio/mpeg,audio/mp3,audio/mp4,audio/webm,audio/ogg" className="hidden" onChange={handleRefUpload} />
         </div>
 
         <input

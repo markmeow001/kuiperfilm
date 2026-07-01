@@ -71,4 +71,12 @@ describe('handleCanvasTtsTask', () => {
     apiConfigMock.resolveModelSelectionOrSingle.mockResolvedValueOnce({ provider: 'tencent', modelId: 'x', modelKey: 'y' })
     await expect(handleCanvasTtsTask(makeJob({ text: 'hi', referenceAudioKey: 'voice/playground-ref/user-1/ref.wav' }))).rejects.toThrow(/PROVIDER_UNSUPPORTED/)
   })
+
+  it('rejects a reference key outside the caller voice namespace (defense-in-depth)', async () => {
+    // another user's key
+    await expect(handleCanvasTtsTask(makeJob({ text: 'hi', referenceAudioKey: 'voice/playground-ref/other-user/ref.wav' }))).rejects.toThrow(/own voice key/)
+    // an external URL must never reach the FAL fetch
+    await expect(handleCanvasTtsTask(makeJob({ text: 'hi', referenceAudioKey: 'https://attacker.com/x.wav' }))).rejects.toThrow(/own voice key/)
+    expect(voiceMock.generateVoiceWithIndexTTS2).not.toHaveBeenCalled()
+  })
 })

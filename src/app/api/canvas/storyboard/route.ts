@@ -66,6 +66,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
     targetId,
     payload: {
       script,
+      // buildTextTaskInfo checks analysisModel first, then model — set both so
+      // billing identifies the model regardless of field-order refactors.
+      analysisModel: model,
       model,
       maxInputTokens,
       maxOutputTokens: 3000,

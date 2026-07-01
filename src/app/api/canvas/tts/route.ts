@@ -13,6 +13,7 @@ import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
+import { estimateVoiceLineMaxSeconds } from '@/lib/voice/generate-voice-line'
 import { isSafeReference } from '@/lib/playground/reference-guard'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
@@ -50,18 +51,24 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (!referenceAudioKey) {
     throw new ApiError('INVALID_PARAMS', { code: 'REFERENCE_AUDIO_REQUIRED' })
   }
-  // Reject a foreign / non-own reference audio key (IDOR) — same guard as the
-  // image/video reference boundary; voice/ keys must be in the caller's namespace.
-  if (!isSafeReference(referenceAudioKey, userId)) {
+  if (emotionPrompt.length > 500) {
+    throw new ApiError('INVALID_PARAMS', { code: 'EMOTION_PROMPT_TOO_LONG', details: { max: 500 } })
+  }
+  // Reference audio must be a BARE own-namespace voice key — the audio node only
+  // ever uploads a clip (→ voice/playground-ref/<userId>/…). Rejecting URLs
+  // outright (not just isSafeReference, which permits external https) closes the
+  // server-side-fetch-of-attacker-URL vector for this path.
+  if (!referenceAudioKey.startsWith('voice/') || !isSafeReference(referenceAudioKey, userId)) {
     throw new ApiError('FORBIDDEN', {
       code: 'REFERENCE_NOT_ALLOWED',
-      details: { message: 'reference audio must be your own uploaded key' },
+      details: { message: 'reference audio must be your own uploaded voice key' },
     })
   }
 
   const targetId = crypto.randomUUID()
-  // Rough spoken-length estimate for the billing quote (~4 CJK chars/sec).
-  const maxSeconds = Math.min(120, Math.max(1, Math.ceil(text.length / 4)))
+  // Use the shared voice estimator so the billing quote matches the rest of the
+  // voice pipeline (chars/2), capped at 120s for the canvas node.
+  const maxSeconds = Math.min(120, estimateVoiceLineMaxSeconds(text))
 
   const submitted = await submitTask({
     userId,

@@ -12,6 +12,13 @@ function toObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+// Synthetic project ids with no real DB row (playground/canvas/asset-hub/…).
+// Tasks under these are caller-private: there is no project to grant cross-user
+// access, so we must NOT fall through to requireProjectAccess (which happens to
+// return NOT_FOUND today only because the row is absent — a fragile implicit
+// guard the moment such a row ever gets created).
+const VIRTUAL_PROJECT_IDS = new Set(['playground', 'asset-hub', 'global-asset-hub', 'system'])
+
 export const GET = apiHandler(async (
   request: NextRequest,
   context: { params: Promise<{ taskId: string }> },
@@ -31,7 +38,9 @@ export const GET = apiHandler(async (
   // returned 404 on every cross-user lookup and the UI rendered "未生成"
   // even when the teammate's video was actually finished and stored.
   if (task.userId !== session.user.id) {
-    if (!task.projectId) {
+    if (!task.projectId || VIRTUAL_PROJECT_IDS.has(task.projectId)) {
+      // Virtual-project tasks (canvas / playground) are owner-only — no
+      // project-level sharing, and don't rely on the missing-row accident.
       throw new ApiError('NOT_FOUND')
     }
     const access = await requireProjectAccess(task.projectId, session.user.id, 'read')
