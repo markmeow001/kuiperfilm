@@ -30,10 +30,11 @@ const STYLE_OPTIONS = visualStyles
   .filter((s) => s.isActive)
   .sort((a, b) => a.displayOrder - b.displayOrder)
 // video generation modes (how upstream refs are used)
-const GEN_MODES: { key: 'text' | 'image' | 'omni'; label: string }[] = [
+const GEN_MODES: { key: 'text' | 'image' | 'omni' | 'firstlast'; label: string }[] = [
   { key: 'text', label: '文生视频' },
   { key: 'image', label: '图生视频' },
   { key: 'omni', label: '全能参考' },
+  { key: 'firstlast', label: '首尾帧' },
 ]
 
 type StatusLabel = '闲置' | '提交中' | '排队中' | '生成中' | '已完成' | '失败'
@@ -53,6 +54,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     )
     const upload = useUploadPlaygroundReference()
     const refInputRef = useRef<HTMLInputElement | null>(null)
+    const lastFrameInputRef = useRef<HTMLInputElement | null>(null)
     async function handleRefUpload(e: React.ChangeEvent<HTMLInputElement>) {
       const file = e.target.files?.[0]
       e.target.value = ''
@@ -64,6 +66,18 @@ export function makeMediaNode(outputType: 'image' | 'video') {
         updateNodeData(id, { anchorKey: res.key, anchorUrl: res.signedUrl })
       } catch (err) {
         setError((err as Error)?.message ?? '参考图上传失败')
+      }
+    }
+    async function handleLastFrameUpload(e: React.ChangeEvent<HTMLInputElement>) {
+      const file = e.target.files?.[0]
+      e.target.value = ''
+      if (!file) return
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { setError('请上传 jpg/png/webp'); return }
+      try {
+        const res = await upload.mutateAsync({ file, type: 'image' })
+        updateNodeData(id, { lastFrameKey: res.key, lastFramePreview: res.signedUrl })
+      } catch (err) {
+        setError((err as Error)?.message ?? '尾帧上传失败')
       }
     }
 
@@ -136,6 +150,10 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
     async function handleGenerate() {
       if (!canGenerate) return
+      if (outputType === 'video' && genMode === 'firstlast') {
+        if (refsForSubmit.length === 0) { setError('首尾帧：请先连入或设定首帧图'); return }
+        if (!d.lastFrameKey) { setError('首尾帧：请上传尾帧图'); return }
+      }
       setError(null)
       setSubmitting(true)
       try {
@@ -160,6 +178,10 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           // anchor (own blocking screenshot) + upstream refs (cast appearance).
           // For video, refsForSubmit[0] is the i2v first frame (gated by mode).
           ...(refsForSubmit.length > 0 ? { referenceImages: refsForSubmit } : {}),
+          // 首尾帧: send the tail frame; first frame = referenceImages[0].
+          ...(outputType === 'video' && genMode === 'firstlast' && d.lastFrameKey
+            ? { lastFrameUrl: d.lastFrameKey }
+            : {}),
           ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution ?? '720p' } : {}),
         }
         // Batch (image only): fan out N playground runs — the spine hardcodes
@@ -325,6 +347,30 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                   {m.label}
                 </button>
               ))}
+            </div>
+          ) : null}
+
+          {/* 首尾帧: last-frame upload (first frame comes from the upstream ref) */}
+          {outputType === 'video' && genMode === 'firstlast' ? (
+            <div className="flex items-center gap-1.5">
+              {d.lastFramePreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={d.lastFramePreview} alt="尾帧" className="h-8 w-8 rounded object-cover" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}` }} />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => lastFrameInputRef.current?.click()}
+                disabled={upload.isPending}
+                className="nodrag flex items-center gap-1 rounded-md px-2 py-1 text-[11px]"
+                style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                {upload.isPending ? '上传中…' : d.lastFrameKey ? '＋ 换尾帧' : '＋ 尾帧图'}
+              </button>
+              {d.lastFrameKey ? (
+                <button type="button" onClick={() => updateNodeData(id, { lastFrameKey: null, lastFramePreview: null })} className="nodrag text-[11px]" style={{ color: '#FF8A8A' }}>移除</button>
+              ) : null}
+              <input ref={lastFrameInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleLastFrameUpload} />
+              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>仅 fal/Minimax/BobAPI 支持</span>
             </div>
           ) : null}
 

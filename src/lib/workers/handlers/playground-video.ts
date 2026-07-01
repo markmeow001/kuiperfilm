@@ -53,6 +53,8 @@ export async function handlePlaygroundVideoTask(
 
   const refImageKeys = parseStringArray(payload.referenceImages)
   const refVideoKeys = parseStringArray(payload.referenceVideos)
+  const lastFrameKey = typeof payload.lastFrameUrl === 'string' ? payload.lastFrameUrl : ''
+  const signedLastFrameUrl = lastFrameKey ? (toSignedUrlIfCos(lastFrameKey, 7200) ?? lastFrameKey) : ''
   const signedImageUrls = refImageKeys.map((k) => toSignedUrlIfCos(k, 7200) ?? k)
   const signedVideoUrls = refVideoKeys
     .map((k) => toSignedUrlIfCos(k, 7200))
@@ -78,6 +80,10 @@ export async function handlePlaygroundVideoTask(
     ...(duration ? { duration } : {}),
     ...(aspectRatio ? { aspectRatio } : {}),
     ...(resolution ? { resolution } : {}),
+    // 首尾帧: the leading image is the first frame; this is the last frame.
+    // Generators that support it (fal / Minimax / BobAPI) read lastFrameImageUrl
+    // and switch to first-last-frame mode; others ignore the extra option.
+    ...(signedLastFrameUrl ? { lastFrameImageUrl: signedLastFrameUrl } : {}),
     ...(signedImageUrls.length > 1
       ? { referenceImages: signedImageUrls.slice(1) as unknown as string }
       : {}),

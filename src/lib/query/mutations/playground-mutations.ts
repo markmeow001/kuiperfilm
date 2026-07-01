@@ -46,6 +46,8 @@ export interface PlaygroundRunSubmission {
   referenceImages?: string[]
   referenceVideos?: string[]
   referenceText?: string
+  /** 首尾帧: last-frame image (own COS key or https URL). First frame = referenceImages[0]. */
+  lastFrameUrl?: string
   outputType: 'image' | 'video'
   modelKey: string
   resolution?: string

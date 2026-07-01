@@ -26,7 +26,15 @@ export interface CanvasNodeData extends Record<string, unknown> {
   /** Video-only: resolution token, e.g. '720p'. */
   resolution?: string
   /** Video-only: generation mode (how upstream refs are used). */
-  genMode?: 'text' | 'image' | 'omni'
+  genMode?: 'text' | 'image' | 'omni' | 'firstlast'
+  /**
+   * Video-only (首尾帧 mode): the LAST-frame image. First frame comes from the
+   * upstream ref / anchor; this is the tail. lastFrameKey = durable COS key sent
+   * to the run; lastFramePreview = signed URL for the node thumbnail.
+   * Only fal / Minimax / BobAPI video models consume it; others ignore it.
+   */
+  lastFrameKey?: string | null
+  lastFramePreview?: string | null
   /** Video-only: camera-movement preset key (运镜), appended to the prompt. */
   cameraMove?: string
   /**
@@ -104,6 +112,8 @@ export const DEFAULT_NODE_DATA = {
   resolution: '720p',
   styleId: null as string | null,
   batchCount: 1,
+  lastFrameKey: null as string | null,
+  lastFramePreview: null as string | null,
   runId: null as string | null,
   resultUrl: null as string | null,
   referenceKey: null as string | null,

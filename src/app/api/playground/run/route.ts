@@ -83,6 +83,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceImages: rawImages,
     referenceVideos: rawVideos,
     referenceText,
+    lastFrameUrl: rawLastFrame,
     outputType,
     modelKey,
     resolution,
@@ -95,6 +96,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceImages?: unknown
     referenceVideos?: unknown
     referenceText?: unknown
+    lastFrameUrl?: unknown
     outputType?: unknown
     modelKey?: unknown
     resolution?: unknown
@@ -143,13 +145,19 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   const rawRefImages = parseStringArray(rawImages, 'referenceImages', MAX_REFERENCE_IMAGES)
   const rawRefVideos = parseStringArray(rawVideos, 'referenceVideos', MAX_REFERENCE_VIDEOS)
+  // Optional last-frame image (首尾帧 / first-last-frame video). Single ref,
+  // guarded with the same safety filter as the others.
+  const rawLastFrameArr = typeof rawLastFrame === 'string' && rawLastFrame.trim()
+    ? [rawLastFrame.trim()]
+    : []
   // Reject foreign COS keys (cross-user read) + internal/non-https URLs (SSRF).
   // Fail explicitly rather than silently drop (CLAUDE.md §3 不静默吞错).
   const imgGuard = filterSafeReferences(rawRefImages, userId)
   const vidGuard = filterSafeReferences(rawRefVideos, userId)
-  if (imgGuard.rejected.length > 0 || vidGuard.rejected.length > 0) {
+  const lastFrameGuard = filterSafeReferences(rawLastFrameArr, userId)
+  if (imgGuard.rejected.length > 0 || vidGuard.rejected.length > 0 || lastFrameGuard.rejected.length > 0) {
     _ulogError(
-      `[playground.run] rejected unsafe references userId=${userId} images=${JSON.stringify(imgGuard.rejected)} videos=${JSON.stringify(vidGuard.rejected)}`,
+      `[playground.run] rejected unsafe references userId=${userId} images=${JSON.stringify(imgGuard.rejected)} videos=${JSON.stringify(vidGuard.rejected)} lastFrame=${JSON.stringify(lastFrameGuard.rejected)}`,
     )
     throw new ApiError('FORBIDDEN', {
       code: 'REFERENCE_NOT_ALLOWED',
@@ -157,6 +165,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     })
   }
   const referenceImages = imgGuard.safe
+  const lastFrameSafe = lastFrameGuard.safe[0] ?? null
   const referenceVideos = vidGuard.safe
   const refText = typeof referenceText === 'string' ? referenceText.trim() : ''
   const wsId = typeof workspaceId === 'string' && workspaceId.length > 0 ? workspaceId : null
@@ -196,6 +205,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceImages,
     referenceVideos,
     ...(refText ? { referenceText: refText } : {}),
+    ...(lastFrameSafe ? { lastFrameUrl: lastFrameSafe } : {}),
     ...(normalizedResolution ? { resolution: normalizedResolution } : {}),
     ...(typeof aspectRatio === 'string' ? { aspectRatio } : {}),
     ...(normalizedDuration ? { duration: normalizedDuration } : {}),
