@@ -91,6 +91,7 @@ const VOICE_TYPES = new Set<TaskType>([
   TASK_TYPE.VOICE_LINE,
   TASK_TYPE.VOICE_DESIGN,
   TASK_TYPE.ASSET_HUB_VOICE_DESIGN,
+  TASK_TYPE.CANVAS_TTS,
 ])
 
 export function getQueueTypeByTaskType(type: TaskType): QueueType {

@@ -40,7 +40,7 @@ function getWavDurationFromBuffer(buffer: Buffer): number {
   }
 }
 
-async function generateVoiceWithIndexTTS2(params: {
+export async function generateVoiceWithIndexTTS2(params: {
   endpoint: string
   referenceAudioUrl: string
   text: string

@@ -55,6 +55,7 @@ const BILLABLE_TASK_TYPES = new Set<TaskType>([
   TASK_TYPE.PLAYGROUND_IMAGE,
   TASK_TYPE.PLAYGROUND_VIDEO,
   TASK_TYPE.CANVAS_STORYBOARD,
+  TASK_TYPE.CANVAS_TTS,
 ])
 
 function toNumber(value: unknown, fallback: number) {
@@ -282,6 +283,7 @@ export function buildDefaultTaskBillingInfo(taskType: TaskType, payload: AnyPayl
       }
     }
     case TASK_TYPE.VOICE_LINE:
+    case TASK_TYPE.CANVAS_TTS:
       return buildVoiceTaskInfo(taskType, payload)
     case TASK_TYPE.VOICE_DESIGN:
     case TASK_TYPE.ASSET_HUB_VOICE_DESIGN:

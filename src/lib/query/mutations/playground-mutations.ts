@@ -27,7 +27,7 @@ export function useUploadPlaygroundReference() {
       type,
     }: {
       file: File
-      type: 'image' | 'video'
+      type: 'image' | 'video' | 'audio'
     }): Promise<UploadResult> => {
       const formData = new FormData()
       formData.append('file', file)

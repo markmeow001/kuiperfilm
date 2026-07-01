@@ -24,6 +24,7 @@ import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+const MAX_AUDIO_SIZE_BYTES = 15 * 1024 * 1024 // 15 MB (reference voice clip)
 const ALLOWED_IMAGE_MIMES: ReadonlySet<string> = new Set([
   'image/jpeg',
   'image/png',
@@ -33,6 +34,16 @@ const ALLOWED_VIDEO_MIMES: ReadonlySet<string> = new Set([
   'video/mp4',
   'video/quicktime',
   'video/webm',
+])
+const ALLOWED_AUDIO_MIMES: ReadonlySet<string> = new Set([
+  'audio/wav',
+  'audio/x-wav',
+  'audio/wave',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/mp4',
+  'audio/webm',
+  'audio/ogg',
 ])
 
 function extensionFor(mime: string): string {
@@ -49,6 +60,19 @@ function extensionFor(mime: string): string {
       return 'mov'
     case 'video/webm':
       return 'webm'
+    case 'audio/wav':
+    case 'audio/x-wav':
+    case 'audio/wave':
+      return 'wav'
+    case 'audio/mpeg':
+    case 'audio/mp3':
+      return 'mp3'
+    case 'audio/mp4':
+      return 'm4a'
+    case 'audio/webm':
+      return 'weba'
+    case 'audio/ogg':
+      return 'ogg'
     default:
       return 'bin'
   }
@@ -78,16 +102,15 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (!(file instanceof File)) {
     throw new ApiError('INVALID_PARAMS', { code: 'FILE_FIELD_MISSING' })
   }
-  if (type !== 'image' && type !== 'video') {
+  if (type !== 'image' && type !== 'video' && type !== 'audio') {
     throw new ApiError('INVALID_PARAMS', {
       code: 'TYPE_INVALID',
-      details: { message: 'type must be "image" or "video"' },
+      details: { message: 'type must be "image", "video" or "audio"' },
     })
   }
 
-  const isImage = type === 'image'
-  const allowed = isImage ? ALLOWED_IMAGE_MIMES : ALLOWED_VIDEO_MIMES
-  const sizeCap = isImage ? MAX_IMAGE_SIZE_BYTES : MAX_VIDEO_SIZE_BYTES
+  const allowed = type === 'image' ? ALLOWED_IMAGE_MIMES : type === 'video' ? ALLOWED_VIDEO_MIMES : ALLOWED_AUDIO_MIMES
+  const sizeCap = type === 'image' ? MAX_IMAGE_SIZE_BYTES : type === 'video' ? MAX_VIDEO_SIZE_BYTES : MAX_AUDIO_SIZE_BYTES
 
   if (!allowed.has(file.type)) {
     throw new ApiError('INVALID_PARAMS', {
@@ -111,9 +134,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
   const ext = extensionFor(file.type)
-  const keyPrefix = isImage
+  const keyPrefix = type === 'image'
     ? `images/playground-ref/${userId}/ref`
-    : `video/playground-ref/${userId}/ref`
+    : type === 'video'
+      ? `video/playground-ref/${userId}/ref`
+      : `voice/playground-ref/${userId}/ref`
   const key = generateUniqueKey(keyPrefix, ext)
   await uploadToCOS(buffer, key)
 

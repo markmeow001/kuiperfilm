@@ -84,6 +84,7 @@ const VOICE_TYPES = new Set<string>([
   'voice_line',
   'voice_design',
   'asset_hub_voice_design',
+  'canvas_tts',
 ])
 
 export function categorizeTaskType(taskType: string): UsageCategory {

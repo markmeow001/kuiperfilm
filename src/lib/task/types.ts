@@ -93,6 +93,9 @@ export const TASK_TYPE = {
   // storyboard shots (text-only). Rides the text worker; result JSON is read
   // back via /api/tasks/[taskId]. Uses the 'playground' virtual project id.
   CANVAS_STORYBOARD: 'canvas_storyboard',
+  // Canvas 无限画布 audio node — text + a reference voice clip → cloned TTS
+  // (FAL IndexTTS2). Rides the VOICE worker; result audio url in Task.result.
+  CANVAS_TTS: 'canvas_tts',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

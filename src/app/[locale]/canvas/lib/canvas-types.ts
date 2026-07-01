@@ -87,6 +87,15 @@ export interface CanvasNodeData extends Record<string, unknown> {
   shots?: CanvasStoryboardShot[] | null
   /** Script node: the in-flight CANVAS_STORYBOARD task id (poll /api/tasks/[id]). */
   storyboardTaskId?: string | null
+  /** Audio node: uploaded reference voice clip (durable COS key + display name). */
+  referenceAudioKey?: string | null
+  referenceAudioName?: string | null
+  /** Audio node: emotion prompt + clone strength (0–1). */
+  emotionPrompt?: string | null
+  emotionStrength?: number
+  /** Audio node: generated speech url + in-flight CANVAS_TTS task id. */
+  audioUrl?: string | null
+  ttsTaskId?: string | null
 }
 
 /** Minimal serializable node (what we store in the Canvas DB row / localStorage). */
@@ -131,6 +140,12 @@ export const DEFAULT_NODE_DATA = {
   lastFramePreview: null as string | null,
   shots: null as CanvasStoryboardShot[] | null,
   storyboardTaskId: null as string | null,
+  referenceAudioKey: null as string | null,
+  referenceAudioName: null as string | null,
+  emotionPrompt: null as string | null,
+  emotionStrength: 0.4,
+  audioUrl: null as string | null,
+  ttsTaskId: null as string | null,
   runId: null as string | null,
   resultUrl: null as string | null,
   referenceKey: null as string | null,
