@@ -61,6 +61,12 @@ export interface CanvasNodeData extends Record<string, unknown> {
    * extra results land in sibling frame nodes. Defaults to 1.
    */
   batchCount?: number
+  /**
+   * Signature of the inputs (upstream text + reference list) captured at the
+   * last generate. When the live inputs drift from this, the node shows the
+   * LibTV「输入已更新」badge so the user knows the result is stale.
+   */
+  inputsSig?: string | null
   /** PlaygroundRun id once a generation has been submitted (null before). */
   runId?: string | null
   /** Last known result media URL (cached so reload shows something pre-poll). */

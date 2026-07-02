@@ -90,6 +90,7 @@ function CanvasInner() {
   const [toolbox, setToolbox] = useState(false)
   const [charLib, setCharLib] = useState(false)
   const [showMinimap, setShowMinimap] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [zoom, setZoom] = useState(1)
   const rf = useReactFlow()
   const instanceRef = useRef<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null)
@@ -345,11 +346,14 @@ function CanvasInner() {
       else if (meta && e.key === 'c' && sel) { copyNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'd' && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'v' && clipboardRef.current) { pasteNode(); e.preventDefault() }
+      // LibTV single-key shortcuts (no modifier): Tab=新建节点, D=创建副本
+      else if (e.key === 'Tab' && !meta && !e.altKey) { openDockMenu(); e.preventDefault() }
+      else if ((e.key === 'd' || e.key === 'D') && !meta && !e.altKey && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) { selected.forEach((n) => deleteNode(n.id)); e.preventDefault() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode])
+  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode, optimizeLayout, openDockMenu])
 
   // Shot sequence = image/video nodes ordered left→right, top→bottom (the
   // storyboard reading order) — the drama as an ordered list of shots.
@@ -410,9 +414,12 @@ function CanvasInner() {
       { key: 'toolbox', label: '工具箱', onClick: () => setToolbox((v) => !v) },
       { key: 'sequence', label: '镜头序列', onClick: () => setShowSequence((v) => !v) },
       { key: 'character', label: '角色库', onClick: () => setCharLib((v) => !v) },
+      { key: 'shortcuts', label: '快捷键', onClick: () => setShortcutsOpen((v) => !v) },
     ],
     [openDockMenu],
   )
+
+  const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes])
 
   return (
     <div ref={wrapperRef} className="fixed inset-0 overflow-hidden" style={{ background: CANVAS_TOKENS.bg.canvas }}>
@@ -536,7 +543,7 @@ function CanvasInner() {
             }}
           >
             <div className="px-3 py-2 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted, borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-              {menu.fromNodeId ? '连接 · 新节点' : '添加节点'}
+              {menu.fromNodeId ? '引用该节点生成' : '添加节点'}
             </div>
             {ADD_ORDER.map((t) => (
               <button
@@ -671,6 +678,59 @@ function CanvasInner() {
                 </button>
               ))}
             </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* Multi-select floating bar (LibTV: appears when ≥2 nodes selected) */}
+      {selectedNodes.length >= 2 ? (
+        <div
+          className="absolute left-1/2 top-16 z-20 flex -translate-x-1/2 items-center gap-1 rounded-xl p-1.5"
+          style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
+        >
+          <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已选 {selectedNodes.length}</span>
+          <button
+            type="button"
+            onClick={() => selectedNodes.forEach((n) => duplicateNode(n.id))}
+            className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
+            style={{ color: CANVAS_TOKENS.text.primary }}
+          >
+            创建副本
+          </button>
+          <button
+            type="button"
+            onClick={() => selectedNodes.forEach((n) => deleteNode(n.id))}
+            className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
+            style={{ color: '#FF8A8A' }}
+          >
+            删除
+          </button>
+        </div>
+      ) : null}
+
+      {/* 快捷键 panel */}
+      {shortcutsOpen ? (
+        <>
+          <div className="absolute inset-0 z-30" onClick={() => setShortcutsOpen(false)} />
+          <div
+            className="absolute bottom-20 left-1/2 z-40 w-72 -translate-x-1/2 rounded-xl p-3"
+            style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadowPopover }}
+          >
+            <div className="mb-2 text-[12px] font-semibold" style={{ color: CANVAS_TOKENS.text.primary }}>快捷键</div>
+            {([
+              ['新建节点', 'Tab'],
+              ['创建副本', 'D / ⌘D'],
+              ['复制 / 粘贴', '⌘C / ⌘V'],
+              ['删除', 'Del'],
+              ['整理画布', '⌥⇧F'],
+              ['添加节点', '双击空白'],
+              ['导演台 移动/旋转/缩放', 'V / R / S'],
+            ] as const).map(([label, key]) => (
+              <div key={label} className="flex items-center justify-between py-1 text-[12px]">
+                <span style={{ color: CANVAS_TOKENS.text.secondary }}>{label}</span>
+                <span className="font-mono" style={{ color: CANVAS_TOKENS.text.primary }}>{key}</span>
+              </div>
+            ))}
           </div>
         </>
       ) : null}

@@ -106,6 +106,13 @@ export function makeMediaNode(outputType: 'image' | 'video') {
       () => (d.anchorKey ? [d.anchorKey, ...upstreamRefs] : upstreamRefs),
       [d.anchorKey, upstreamRefs],
     )
+    // Live input signature vs the one captured at last generate → 「输入已更新」
+    // badge (LibTV) when upstream output/text drifted after this node produced.
+    const inputsSig = useMemo(
+      () => [upstreamText, ...allRefs].filter(Boolean).join('|'),
+      [upstreamText, allRefs],
+    )
+    const inputsChanged = Boolean(d.resultUrl) && d.inputsSig != null && d.inputsSig !== inputsSig
 
     // Default the model to the first enabled one once catalogs load.
     useEffect(() => {
@@ -189,7 +196,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
         // extras spawn sibling frame nodes to the right so the user sees a row.
         const batch = outputType === 'image' ? Math.min(Math.max(d.batchCount ?? 1, 1), 4) : 1
         const runIds = await Promise.all(Array.from({ length: batch }, () => gen.submitNode(submission)))
-        updateNodeData(id, { runId: runIds[0], resultUrl: null })
+        updateNodeData(id, { runId: runIds[0], resultUrl: null, inputsSig })
         if (runIds.length > 1) {
           const self = getNode(id)
           const baseX = self?.position.x ?? 0
@@ -273,6 +280,14 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                 {outputType === 'image' ? '输入提示词生成图片' : '输入提示词生成视频'}
               </div>
             )}
+            {inputsChanged && !busy ? (
+              <div
+                className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px]"
+                style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}
+              >
+                输入已更新
+              </div>
+            ) : null}
             {run?.status === 'failed' ? (
               <div className="absolute inset-x-0 bottom-1 text-center text-[10px]" style={{ color: '#FF8A8A' }}>
                 生成失败 · 点选节点查看
