@@ -22,6 +22,7 @@ import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { resolveModelSelection } from '@/lib/api-config'
+import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { mapTaskStatusToPlayground } from '@/lib/playground/run-view'
@@ -189,7 +190,17 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
-  const normalizedResolution = typeof resolution === 'string' ? resolution : null
+  let normalizedResolution = typeof resolution === 'string' ? resolution : null
+  // Image models with tiered (per-resolution) pricing REQUIRE a resolution to
+  // quote — a missing one used to bubble BILLING_CAPABILITY_PRICE_NOT_FOUND
+  // as an opaque 500. Default to the model's first declared option (mirrors
+  // resolveGenerationOptionsForModel's auto-fill on the project paths, and
+  // matches the provider default, e.g. Grok 1k).
+  if (!normalizedResolution && outputType === 'image') {
+    const caps = resolveBuiltinCapabilitiesByModelKey('image', trimmedModelKey)
+    const opts = caps?.image?.resolutionOptions
+    if (opts && opts.length > 0) normalizedResolution = opts[0]
+  }
   const normalizedDuration = typeof durationSec === 'number' && Number.isFinite(durationSec)
     ? Math.round(durationSec)
     : null

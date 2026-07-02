@@ -1332,12 +1332,11 @@
           "4:3",
           "3:4",
           "21:9",
-          "9:21",
           "2:3",
           "3:2"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": false
       }
     }
   },
@@ -1354,12 +1353,11 @@
           "4:3",
           "3:4",
           "21:9",
-          "9:21",
           "2:3",
           "3:2"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": false
       }
     }
   },
@@ -1381,12 +1379,11 @@
           "4:3",
           "3:4",
           "21:9",
-          "9:21",
           "2:3",
           "3:2"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": false
       }
     }
   },
@@ -1404,7 +1401,7 @@
           "3:4"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": false
       }
     }
   },
@@ -1448,8 +1445,8 @@
           "3:4",
           "3:2",
           "2:3",
-          "21:9",
-          "9:21"
+          "2:1",
+          "1:2"
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true
@@ -1474,8 +1471,8 @@
           "3:4",
           "3:2",
           "2:3",
-          "21:9",
-          "9:21"
+          "2:1",
+          "1:2"
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true

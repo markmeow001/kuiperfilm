@@ -75,6 +75,10 @@ function extractCapabilityFieldsFromModel(
   if (!isRecord(namespace)) return []
   return Object.entries(namespace)
     .filter(([key, value]) => key.endsWith('Options') && Array.isArray(value) && value.every(isCapabilityValue) && value.length > 0)
+    // aspectRatio is a per-request picker choice (canvas/playground), not a
+    // profile default — the generation-side lookup skips it, so offering it
+    // here would be a placebo dropdown whose value is silently discarded.
+    .filter(([key]) => key !== 'aspectRatioOptions')
     .map(([key, value]) => ({
       field: key.slice(0, -'Options'.length),
       options: value as CapabilityValue[],
@@ -249,6 +253,8 @@ export function ApiConfigTabContainer() {
                   if (!isRecord(namespace)) return [] as Array<{ field: string; options: CapabilityValue[] }>
                   return Object.entries(namespace)
                     .filter(([key, value]) => key.endsWith('Options') && Array.isArray(value) && value.every(isCapabilityValue) && value.length > 0)
+                    // aspectRatio: per-request choice, not a profile default (lookup skips it)
+                    .filter(([key]) => key !== 'aspectRatioOptions')
                     .map(([key, value]) => ({
                       field: key.slice(0, -'Options'.length),
                       options: value as CapabilityValue[],

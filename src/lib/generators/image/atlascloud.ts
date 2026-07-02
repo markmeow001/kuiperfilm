@@ -218,24 +218,33 @@ export function aspectRatioToZImageSize(aspectRatio: string | undefined): string
   }
 }
 
-/** Grok Imagine aspect_ratio enum (from schema, 2026-07-02). */
+/** Grok Imagine aspect_ratio enum — LIVE schema values (re-verified in the
+ *  2026-07-02 code review; the marketing "13 options" include 2:1/1:2 and
+ *  9:19.5-style phone ratios, and notably do NOT include 21:9/9:21). */
 const GROK_RATIO_ENUM = new Set([
   '1:1',
-  '16:9',
-  '9:16',
-  '4:3',
   '3:4',
-  '3:2',
+  '4:3',
+  '9:16',
+  '16:9',
   '2:3',
-  '21:9',
-  '9:21',
+  '3:2',
+  '9:19.5',
+  '19.5:9',
+  '9:20',
+  '20:9',
+  '1:2',
+  '2:1',
 ])
 
-/** Exported for unit testing (pure). */
+/** Exported for unit testing (pure). Grok supports 2:1 natively (720全景
+ *  recipes pass through untouched); our legacy widescreen values map to the
+ *  closest schema value. */
 export function normaliseGrokRatio(input: string | undefined): string | undefined {
   if (!input) return undefined
   if (GROK_RATIO_ENUM.has(input)) return input
-  if (input === '2:1') return '21:9' // panorama request → widest enum value
+  if (input === '21:9') return '2:1'
+  if (input === '9:21') return '1:2'
   return undefined
 }
 
@@ -340,10 +349,8 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       if (typeof enableWebSearch === 'boolean') body.enable_web_search = enableWebSearch
     } else if (isZImageSlug(atlasModel)) {
       // Z-Image: free-form star-separated size (t2i only; refs rejected above).
+      // Schema declares NO output_format on z-image/turbo — don't send one.
       body.size = aspectRatioToZImageSize(aspectRatio)
-      if (outputFormat && ['jpeg', 'png', 'webp'].includes(outputFormat)) {
-        body.output_format = outputFormat
-      }
     } else if (isGrokImagineSlug(atlasModel)) {
       // Grok: aspect_ratio + resolution ('1k'/'2k') + num_images. The spine
       // bills per run (generationCount=1), so num_images is pinned to 1 —

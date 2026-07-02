@@ -72,7 +72,11 @@ describe('resolveAtlasCloudImageModel', () => {
 
     it('grok ratio/resolution normalisers accept enum values and map aliases', () => {
       expect(normaliseGrokRatio('16:9')).toBe('16:9')
-      expect(normaliseGrokRatio('2:1')).toBe('21:9')
+      // 2:1 is NATIVE in the live Grok schema (720全景 passes through);
+      // legacy widescreen values map to the closest schema ratio.
+      expect(normaliseGrokRatio('2:1')).toBe('2:1')
+      expect(normaliseGrokRatio('21:9')).toBe('2:1')
+      expect(normaliseGrokRatio('9:21')).toBe('1:2')
       expect(normaliseGrokRatio('5:7')).toBeUndefined()
       expect(normaliseGrokResolution('1k')).toBe('1k')
       expect(normaliseGrokResolution('2K')).toBe('2k')

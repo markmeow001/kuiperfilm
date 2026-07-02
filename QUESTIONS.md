@@ -393,3 +393,10 @@ Image（13 個）：
 - **狀態**: 待補資訊
 - **建立時間**: 2026-06-13
 - **相關檔案**: `src/app/api/playground/run/route.ts`、`src/lib/workers/handlers/playground-image.ts`、`src/lib/generator-api.ts`、`src/lib/generators/factory.ts`(provider 路由)
+
+## Q: Grok Imagine (quality) /edit 每張輸入參考圖加收 $0.01，要不要進計費？
+- **背景**: AtlasCloud live schema 明寫 `image_urls` "each input is billed at $0.01"。canvas 圖生圖最多可帶 8 張參考 → surcharge 最高 $0.08，超過輸出本體價（1k=$0.05）。目前 pricing 只登記輸出兩檔（1k/2k），surcharge 低收。
+- **選項**: (a) settle 時按 refCount 動態加價（要動 billing settle 邏輯）(b) pricing 加保守 buffer（多凍結少退）(c) 接受低收（量小、參考圖多數 1-2 張 = $0.01-0.02）
+- **狀態**: 待拍板
+- **建立時間**: 2026-07-02
+- **相關檔案**: `standards/pricing/image-video.pricing.json`、`src/lib/billing/task-policy.ts`

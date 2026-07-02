@@ -183,6 +183,16 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
     async function handleGenerate() {
       if (!canGenerate) return
+      // Pre-submit gate: a model with no img2img variant (z-image) hard-fails
+      // on refs worker-side — catch it here and skip the freeze/rollback trip.
+      if (
+        outputType === 'image' &&
+        refsForSubmit.length > 0 &&
+        selectedModel?.capabilities?.image?.supportReferenceImage === false
+      ) {
+        setError('该模型不支持参考图/图生图：请断开上游图片、移除参考图，或换用 Grok Imagine 等支持编辑的模型')
+        return
+      }
       if (outputType === 'video' && genMode === 'firstlast') {
         if (refsForSubmit.length === 0) { setError('首尾帧：请先连入或设定首帧图'); return }
         if (!d.lastFrameKey) { setError('首尾帧：请上传尾帧图'); return }
