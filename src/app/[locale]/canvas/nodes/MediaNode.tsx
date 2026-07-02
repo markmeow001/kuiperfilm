@@ -231,9 +231,10 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     }, [aw, ah])
 
     return (
+      <div className="relative">
       <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={nodeWidth}>
-        {/* Preview body */}
-        <div className="px-3 pt-3">
+        {/* Preview body — the card itself is preview-only (LibTV) */}
+        <div className="p-3">
           <div
             className="relative w-full overflow-hidden rounded-md"
             style={{
@@ -272,6 +273,11 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                 {outputType === 'image' ? '输入提示词生成图片' : '输入提示词生成视频'}
               </div>
             )}
+            {run?.status === 'failed' ? (
+              <div className="absolute inset-x-0 bottom-1 text-center text-[10px]" style={{ color: '#FF8A8A' }}>
+                生成失败 · 点选节点查看
+              </div>
+            ) : null}
             {allRefs.length > 0 ? (
               <div
                 className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 font-mono text-[9px]"
@@ -284,8 +290,22 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           </div>
         </div>
 
-        {/* Config */}
-        <div className="space-y-2 p-3">
+      </NodeShell>
+
+      {/* Floating config panel — LibTV node-floating-ui: appears below the
+          card while the node is selected. Part of the node's DOM, so clicking
+          inside keeps the selection (and RF elevates selected nodes above
+          neighbors). */}
+      {selected ? (
+        <div
+          className="nodrag absolute left-0 top-full z-20 mt-2 space-y-2 rounded-xl p-3"
+          style={{
+            width: Math.max(nodeWidth, 340),
+            background: CANVAS_TOKENS.bg.panel,
+            border: `1px solid ${CANVAS_TOKENS.hairline}`,
+            boxShadow: CANVAS_TOKENS.shadowPopover,
+          }}
+        >
           {/* image: 预设配方 menu (LibTV-style recipes, incl. 720全景) */}
           {outputType === 'image' ? (
             <div className="relative">
@@ -553,7 +573,8 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             {busy ? status : '↑ 生成'}
           </button>
         </div>
-      </NodeShell>
+      ) : null}
+      </div>
     )
   }
   MediaNode.displayName = `MediaNode(${outputType})`
