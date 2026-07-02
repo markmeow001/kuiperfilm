@@ -33,11 +33,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const locale = (typeof body.locale === 'string' ? body.locale : 'zh') as Locale
 
   if (!script) {
-    throw new ApiError('INVALID_PARAMS', { code: 'SCRIPT_REQUIRED' })
+    throw new ApiError('INVALID_PARAMS', { code: 'SCRIPT_REQUIRED', message: '请输入或连入剧本' })
   }
   if (script.length > MAX_SCRIPT_CHARS) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'SCRIPT_TOO_LONG',
+      message: `剧本过长（${script.length}/${MAX_SCRIPT_CHARS} 字符），请分段处理`,
       details: { max: MAX_SCRIPT_CHARS, got: script.length },
     })
   }

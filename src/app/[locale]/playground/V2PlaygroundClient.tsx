@@ -238,6 +238,12 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
       alert('請先輸入提示詞')
       return
     }
+    // Server rejects >4000 with PROMPT_TOO_LONG — catch it client-side with a
+    // count so the user can act (long video 敘事 prompts hit this easily).
+    if (prompt.trim().length > 4000) {
+      alert(`提示詞過長（${prompt.trim().length}/4000 字符），請精簡後再生成`)
+      return
+    }
     const useModelKey = overrideModelKey ?? modelKey
     if (!useModelKey) {
       alert('請先選擇模型')

@@ -106,21 +106,24 @@ export const POST = apiHandler(async (request: NextRequest) => {
     locale?: unknown
   }
 
-  // Validate
+  // Validate. Every reject carries a human-readable `message` — ApiError falls
+  // back to the generic "Invalid parameters" otherwise, which is what users
+  // saw in the 6/30 生视频 bug report and could not act on.
   if (typeof prompt !== 'string' || !prompt.trim()) {
-    throw new ApiError('INVALID_PARAMS', { code: 'PROMPT_REQUIRED' })
+    throw new ApiError('INVALID_PARAMS', { code: 'PROMPT_REQUIRED', message: '请输入提示词' })
   }
   if (prompt.length > 4000) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'PROMPT_TOO_LONG',
+      message: `提示词过长（${prompt.length}/4000 字符），请精简后重试`,
       details: { max: 4000, got: prompt.length },
     })
   }
   if (outputType !== 'image' && outputType !== 'video') {
-    throw new ApiError('INVALID_PARAMS', { code: 'OUTPUT_TYPE_INVALID' })
+    throw new ApiError('INVALID_PARAMS', { code: 'OUTPUT_TYPE_INVALID', message: '输出类型无效（image/video）' })
   }
   if (typeof modelKey !== 'string' || !modelKey.trim()) {
-    throw new ApiError('INVALID_PARAMS', { code: 'MODEL_KEY_REQUIRED' })
+    throw new ApiError('INVALID_PARAMS', { code: 'MODEL_KEY_REQUIRED', message: '请先选择模型' })
   }
   const trimmedModelKey = modelKey.trim()
 

@@ -35,16 +35,17 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const locale = (typeof body.locale === 'string' ? body.locale : 'zh') as Locale
 
   if (!text) {
-    throw new ApiError('INVALID_PARAMS', { code: 'TEXT_REQUIRED' })
+    throw new ApiError('INVALID_PARAMS', { code: 'TEXT_REQUIRED', message: '请输入文字内容' })
   }
   if (text.length > MAX_TEXT_CHARS) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'TEXT_TOO_LONG',
+      message: `文字过长（${text.length}/${MAX_TEXT_CHARS} 字符），请精简后重试`,
       details: { max: MAX_TEXT_CHARS, got: text.length },
     })
   }
   if (!isCanvasTextMode(mode)) {
-    throw new ApiError('INVALID_PARAMS', { code: 'INVALID_MODE' })
+    throw new ApiError('INVALID_PARAMS', { code: 'INVALID_MODE', message: '写作模式无效' })
   }
 
   // Resolve the user's analysis (LLM) model — project → own /profile → admin
