@@ -33,6 +33,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
     const taskId = d.textTaskId
     if (!taskId) return
     let cancelled = false
+    let transientFails = 0
     const tick = async () => {
       try {
         const res = await fetch(`/api/tasks/${taskId}`)
@@ -40,8 +41,10 @@ export function TextNode({ id, data, selected }: NodeProps) {
         const json = await res.json()
         const task = json?.task
         if (cancelled) return
+        transientFails = 0
         if (task?.status === 'completed') {
           const text = typeof task.result?.text === 'string' ? task.result.text : null
+          if (!text) setError('AI 返回格式异常，请重试')
           updateNodeData(id, { ...(text ? { prompt: text } : {}), textTaskId: null })
           return
         }
@@ -53,8 +56,14 @@ export function TextNode({ id, data, selected }: NodeProps) {
         pollRef.current = setTimeout(tick, 1500)
       } catch (err) {
         if (cancelled) return
-        setError((err as Error)?.message ?? 'AI 写作失败')
-        updateNodeData(id, { textTaskId: null })
+        // Transient poll errors (deploy 502 burst, network blips) must NOT
+        // abandon the taskId — the paid task usually still completes. Keep
+        // retrying with backoff; taskId persists in node data so a reload
+        // resumes polling too. Only a definitive status:'failed' clears it.
+        transientFails += 1
+        if (transientFails >= 5) setError('任务查询多次失败，仍在重试…')
+        pollRef.current = setTimeout(tick, Math.min(1500 * transientFails, 10_000))
+        void err
       }
     }
     tick()
@@ -65,6 +74,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
   }, [d.textTaskId, id, updateNodeData])
 
   async function runAssist(mode: (typeof AI_MODES)[number]['key']) {
+    if (busy) return
     const text = (d.prompt ?? '').trim()
     if (!text) { setError('先输入一些文字'); return }
     setError(null)

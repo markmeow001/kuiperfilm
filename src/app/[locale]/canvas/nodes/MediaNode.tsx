@@ -507,7 +507,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
             // LibTV「/」唤起: typing / in an empty prompt opens the recipe menu
             onKeyDown={(e) => {
-              if (outputType === 'image' && e.key === '/' && !d.prompt) {
+              if (outputType === 'image' && e.key === '/' && !d.prompt && !e.nativeEvent.isComposing) {
                 e.preventDefault()
                 setRecipeMenu(true)
               }

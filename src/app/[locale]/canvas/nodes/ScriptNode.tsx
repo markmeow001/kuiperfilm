@@ -88,6 +88,8 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
         throw new Error(json?.error?.message ?? json?.error ?? '提交失败')
       }
       updateNodeData(id, { storyboardTaskId: json.taskId, shots: null })
+      // Old index-based selection is meaningless against the new shot list.
+      setPicked(null)
     } catch (err) {
       setError((err as Error)?.message ?? '提交失败')
       setPhase('failed')
@@ -96,16 +98,36 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
 
   // ── Shot-table editing (LibTV script v2 layer 1): edit / delete / reorder /
   // add — always via a NEW array into node data (immutability rule). ──
+  // Batch-range selection: which shots the fan-out buttons act on (default all).
+  const [picked, setPicked] = useState<Set<number> | null>(null)
+
   const setShots = (next: CanvasStoryboardShot[]) => updateNodeData(id, { shots: next })
   const editShot = (i: number, patch: Partial<CanvasStoryboardShot>) =>
     setShots(shots.map((s, j) => (j === i ? { ...s, ...patch } : s)))
-  const deleteShot = (i: number) => setShots(shots.filter((_, j) => j !== i))
+  // picked stores INDICES, so every structural edit must remap it in the same
+  // action — otherwise a delete/reorder silently shifts the selection onto
+  // different shots and batch-generate spends money on the wrong ones.
+  const deleteShot = (i: number) => {
+    setShots(shots.filter((_, j) => j !== i))
+    setPicked((p) => {
+      if (p === null) return null
+      const next = new Set<number>()
+      p.forEach((k) => { if (k < i) next.add(k); else if (k > i) next.add(k - 1) })
+      return next
+    })
+  }
   const moveShot = (i: number, dir: -1 | 1) => {
     const j = i + dir
     if (j < 0 || j >= shots.length) return
     const next = [...shots]
     ;[next[i], next[j]] = [next[j], next[i]]
     setShots(next)
+    setPicked((p) => {
+      if (p === null) return null
+      const swapped = new Set<number>()
+      p.forEach((k) => swapped.add(k === i ? j : k === j ? i : k))
+      return swapped
+    })
   }
   const addShot = () =>
     setShots([
@@ -113,8 +135,6 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
       { shotNumber: (shots[shots.length - 1]?.shotNumber ?? 0) + 1, description: '', dialogue: '' },
     ])
 
-  // Batch-range selection: which shots the fan-out buttons act on (default all).
-  const [picked, setPicked] = useState<Set<number> | null>(null)
   const isPicked = (i: number) => picked === null || picked.has(i)
   const togglePick = (i: number) => {
     const base = picked ?? new Set(shots.map((_, j) => j))
@@ -144,8 +164,11 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
             title: `镜 ${s.shotNumber}`,
             // Video shots carry the LLM's camera move + duration into the node.
             prompt: target === 'video' && s.cameraMove ? `${framed}，运镜：${s.cameraMove}` : framed,
+            // genMode intentionally NOT pinned: MediaNode's heuristic picks
+            // 图生 when the user later wires in refs (pinning 'text' would
+            // silently drop them).
             ...(target === 'video'
-              ? { durationSec: Math.min(Math.max(Math.round(s.durationSec ?? 5), 5), 15), genMode: 'text' as const }
+              ? { durationSec: Math.min(Math.max(Math.round(s.durationSec ?? 5), 5), 15) }
               : {}),
           },
         }

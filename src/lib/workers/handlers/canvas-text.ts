@@ -26,7 +26,10 @@ export const CANVAS_TEXT_MODES = {
 export type CanvasTextMode = keyof typeof CANVAS_TEXT_MODES
 
 export function isCanvasTextMode(v: unknown): v is CanvasTextMode {
-  return typeof v === 'string' && v in CANVAS_TEXT_MODES
+  // Object.hasOwn (not `in`): `in` walks the prototype chain, so payloads like
+  // mode:"toString" would pass the whitelist and stringify a builtin into the
+  // LLM instruction.
+  return typeof v === 'string' && Object.hasOwn(CANVAS_TEXT_MODES, v)
 }
 
 export async function handleCanvasTextTask(job: Job<TaskJobData>) {

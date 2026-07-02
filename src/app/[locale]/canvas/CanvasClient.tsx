@@ -109,6 +109,12 @@ function CanvasInner() {
   const gen = useCanvasGeneration()
   const upload = useUploadPlaygroundReference()
   const [dropError, setDropError] = useState<string | null>(null)
+  const dropErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flashDropError = useCallback((msg: string, ms: number) => {
+    if (dropErrorTimerRef.current) clearTimeout(dropErrorTimerRef.current)
+    setDropError(msg)
+    dropErrorTimerRef.current = setTimeout(() => setDropError(null), ms)
+  }, [])
 
   // 拖档入画布 (LibTV): drop image files anywhere → upload as reference +
   // spawn image nodes at the cursor, ready to edit/generate from.
@@ -119,8 +125,7 @@ function CanvasInner() {
       e.preventDefault()
       const images = files.filter((f) => /^image\/(jpeg|png|webp)$/.test(f.type))
       if (images.length === 0) {
-        setDropError('仅支持拖入 jpg/png/webp 图片')
-        setTimeout(() => setDropError(null), 3000)
+        flashDropError('仅支持拖入 jpg/png/webp 图片', 3000)
         return
       }
       const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
@@ -140,12 +145,11 @@ function CanvasInner() {
           }
           setNodes((ns) => [...ns, node])
         } catch (err) {
-          setDropError((err as Error)?.message ?? `${file.name} 上传失败`)
-          setTimeout(() => setDropError(null), 4000)
+          flashDropError((err as Error)?.message ?? `${file.name} 上传失败`, 4000)
         }
       }
     },
-    [rf, setNodes, upload],
+    [rf, setNodes, upload, flashDropError],
   )
 
   // Nodes currently generating (their run is pending/running) → the edges feeding

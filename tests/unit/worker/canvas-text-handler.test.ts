@@ -58,6 +58,12 @@ describe('handleCanvasTextTask', () => {
     await expect(handleCanvasTextTask(makeJob({ text: 't', mode: 'jailbreak', model: 'm' }))).rejects.toThrow(/invalid mode/)
   })
 
+  it('rejects prototype-chain keys (mode:"toString" must not pass the whitelist)', async () => {
+    for (const mode of ['toString', 'constructor', 'valueOf', 'hasOwnProperty']) {
+      await expect(handleCanvasTextTask(makeJob({ text: 't', mode, model: 'm' }))).rejects.toThrow(/invalid mode/)
+    }
+  })
+
   it('throws when model is not resolved', async () => {
     await expect(handleCanvasTextTask(makeJob({ text: 't', mode: 'expand' }))).rejects.toThrow(/model not resolved/)
   })
