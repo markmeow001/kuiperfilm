@@ -50,6 +50,15 @@ describe('handleCanvasTextTask', () => {
     expect(call?.messages[0]?.content).toContain('T')
   })
 
+  it('compress mode REPLACES with the compressed prompt and sends the length-cap instruction', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '精简后的提示词', reasoning: '' })
+    const res = await handleCanvasTextTask(makeJob({ text: '超长视频提示词……', mode: 'compress', model: 'm' }))
+    expect(res.text).toBe('精简后的提示词')
+    const call = (aiMock.executeAiTextStep.mock.calls as unknown as Array<[{ messages: Array<{ content: string }> }]>)[0]?.[0]
+    expect(call?.messages[0]?.content).toContain('1000 字符以内')
+    expect(call?.messages[0]?.content).toContain('运镜')
+  })
+
   it('throws when text is missing', async () => {
     await expect(handleCanvasTextTask(makeJob({ mode: 'expand', model: 'm' }))).rejects.toThrow(/text is required/)
   })

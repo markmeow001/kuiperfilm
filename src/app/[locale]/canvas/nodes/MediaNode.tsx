@@ -20,6 +20,7 @@ import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
 import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { IMAGE_RECIPES } from '../lib/canvas-recipes'
 import { visualStyles } from '@/lib/style-library'
+import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
 import { NodeShell } from './node-shell'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '2:1', '21:9', '1:1', '4:3', '3:4', '4:5']
@@ -174,8 +175,13 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           ? [selectedStyle.styleAnchor, basePrompt, selectedStyle.visualModifiers].filter(Boolean).join('\n')
           : basePrompt
         const movePhrase = outputType === 'video' ? cameraMovePhrase(d.cameraMove) : ''
-        const finalPrompt = movePhrase ? `${styled}，${movePhrase}` : styled
-        if (finalPrompt.length > 4000) {
+        let finalPrompt = movePhrase ? `${styled}，${movePhrase}` : styled
+        // Video: over-long prompts get diluted by Seedance-class models —
+        // auto-compress via the CANVAS_TEXT task (billed as a text task).
+        // Image: hard guard mirroring the server cap.
+        if (outputType === 'video' && finalPrompt.length > VIDEO_PROMPT_SOFT_LIMIT) {
+          finalPrompt = await compressVideoPrompt(finalPrompt)
+        } else if (finalPrompt.length > 4000) {
           setError(`提示词过长（${finalPrompt.length}/4000），请精简上游脚本或本节点描述`)
           setSubmitting(false)
           return

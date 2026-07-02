@@ -21,6 +21,9 @@ export const CANVAS_TEXT_MODES = {
   rewrite: '改写下面的文字，使表达更流畅自然、更有张力，保持原意与语言不变。只输出改写后的正文，不要任何解释。',
   polish: '润色下面的文字：修正语病、收紧冗词、统一语气，内容与语言保持不变。只输出润色后的正文，不要任何解释。',
   continue: '顺着下面的文字自然续写一段，延续既有的风格、人物与语言。只输出续写的正文（不要重复原文），不要任何解释。',
+  // Video-prompt compression (Seedance-class models dilute/ignore over-long
+  // prompts): keep the essentials, hard-cap the output length.
+  compress: '把下面的视频生成提示词压缩到 1000 字符以内。必须保留：主体（人物/物体及其外观关键词）、场景环境、一个主要动作、镜头景别与运镜、光线氛围、风格关键词；删除重复描述与冗余修饰词；保持原语言。只输出压缩后的提示词，不要任何解释。',
 } as const
 
 export type CanvasTextMode = keyof typeof CANVAS_TEXT_MODES

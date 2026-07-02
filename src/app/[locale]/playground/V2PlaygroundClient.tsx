@@ -31,6 +31,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
+import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   useUploadPlaygroundReference,
@@ -83,6 +84,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
 
   // Output state
   const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
+  const [compressing, setCompressing] = useState(false)
 
   // T-3 cost estimate (live) — refetches when model/outputType/duration changes.
   // Resolution isn't currently a user-controlled state in Playground T-1/T-2
@@ -238,9 +240,8 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
       alert('請先輸入提示詞')
       return
     }
-    // Server rejects >4000 with PROMPT_TOO_LONG — catch it client-side with a
-    // count so the user can act (long video 敘事 prompts hit this easily).
-    if (prompt.trim().length > 4000) {
+    // Image prompts: hard client-side guard mirroring the server cap.
+    if (outputType === 'image' && prompt.trim().length > 4000) {
       alert(`提示詞過長（${prompt.trim().length}/4000 字符），請精簡後再生成`)
       return
     }
@@ -249,6 +250,21 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
       alert('請先選擇模型')
       return
     }
+    // Video prompts: Seedance-class models dilute over-long prompts, so
+    // anything past the soft limit is auto-compressed via the CANVAS_TEXT
+    // task before submit (normally billed as a text task).
+    let effectivePrompt = prompt.trim()
+    if (outputType === 'video' && effectivePrompt.length > VIDEO_PROMPT_SOFT_LIMIT) {
+      setCompressing(true)
+      try {
+        effectivePrompt = await compressVideoPrompt(effectivePrompt)
+      } catch (err) {
+        alert(`提示詞過長（${prompt.trim().length} 字符）且自動壓縮失敗：${(err as Error)?.message ?? '未知錯誤'}`)
+        return
+      } finally {
+        setCompressing(false)
+      }
+    }
     // Phase T-3 — when this is a cross-model swap, also sync the picker so
     // subsequent runs and the cost estimate reflect the new selection.
     if (overrideModelKey && overrideModelKey !== modelKey) {
@@ -256,7 +272,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
     }
     try {
       const result = await submit.mutateAsync({
-        prompt: prompt.trim(),
+        prompt: effectivePrompt,
         referenceImages: refImages.map((r) => r.key),
         referenceVideos: refVideo ? [refVideo.key] : [],
         referenceText: refText.trim() || undefined,
@@ -269,7 +285,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
       // Latest run goes to the preview area.
       setLatestRun({
         id: result.run.id,
-        prompt: prompt.trim(),
+        prompt: effectivePrompt,
         outputType: result.run.outputType as 'image' | 'video',
         modelKey: result.run.modelKey,
         status: result.run.status as PlaygroundRunRow['status'],
@@ -287,7 +303,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
     setLatestRun(run)
   }
 
-  const isBusy = upload.isPending || submit.isPending
+  const isBusy = upload.isPending || submit.isPending || compressing
 
   // ── Render ────────────────────────────────────────────────────────
 
@@ -830,11 +846,13 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
             }
             className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-2.5 font-mono text-[13px] font-semibold uppercase tracking-wider text-stone-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submit.isPending
-              ? '提交中…'
-              : latestRun?.status === 'pending' || latestRun?.status === 'running'
-                ? '生成中…'
-                : '生成'}
+            {compressing
+              ? '壓縮提示詞…'
+              : submit.isPending
+                ? '提交中…'
+                : latestRun?.status === 'pending' || latestRun?.status === 'running'
+                  ? '生成中…'
+                  : '生成'}
             <span className="rounded-sm border border-stone-950/30 px-1 font-mono text-[10px] opacity-70">⌘+↵</span>
           </button>
         </div>
