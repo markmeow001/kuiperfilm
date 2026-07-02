@@ -505,7 +505,14 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           <textarea
             value={d.prompt}
             onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
-            placeholder={outputType === 'image' ? (upstreamText ? '补充画面细节（可留空，用上游脚本）' : '描述画面…') : (upstreamText ? '补充运动 / 镜头（可留空）' : '描述运动 / 镜头…')}
+            // LibTV「/」唤起: typing / in an empty prompt opens the recipe menu
+            onKeyDown={(e) => {
+              if (outputType === 'image' && e.key === '/' && !d.prompt) {
+                e.preventDefault()
+                setRecipeMenu(true)
+              }
+            }}
+            placeholder={outputType === 'image' ? (upstreamText ? '补充画面细节，输入 / 唤起预设配方' : '描述画面，输入 / 唤起预设配方…') : (upstreamText ? '补充运动 / 镜头（可留空）' : '描述运动 / 镜头…')}
             rows={2}
             className="nodrag w-full resize-none rounded-md px-2 py-1.5 text-[12px] outline-none"
             style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}

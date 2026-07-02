@@ -39,6 +39,7 @@ import { CanvasGenerationProvider, useCanvasGeneration } from './lib/canvas-gene
 import { TOOLBOX_PRESETS } from './lib/canvas-toolbox'
 import { useCharacterLibrary } from './lib/use-character-library'
 import { useCanvas, useSaveCanvas } from '@/lib/query/mutations/canvas-mutations'
+import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { makeMediaNode } from './nodes/MediaNode'
 import { TextNode } from './nodes/TextNode'
 import { CharacterNode } from './nodes/CharacterNode'
@@ -106,6 +107,46 @@ function CanvasInner() {
   const canvasQuery = useCanvas()
   const save = useSaveCanvas()
   const gen = useCanvasGeneration()
+  const upload = useUploadPlaygroundReference()
+  const [dropError, setDropError] = useState<string | null>(null)
+
+  // 拖档入画布 (LibTV): drop image files anywhere → upload as reference +
+  // spawn image nodes at the cursor, ready to edit/generate from.
+  const onFileDrop = useCallback(
+    async (e: React.DragEvent) => {
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length === 0) return // not a file drag (e.g. RF node drag) — ignore
+      e.preventDefault()
+      const images = files.filter((f) => /^image\/(jpeg|png|webp)$/.test(f.type))
+      if (images.length === 0) {
+        setDropError('仅支持拖入 jpg/png/webp 图片')
+        setTimeout(() => setDropError(null), 3000)
+        return
+      }
+      const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      for (const [i, file] of images.entries()) {
+        try {
+          const res = await upload.mutateAsync({ file, type: 'image' })
+          const node: Node<CanvasNodeData> = {
+            id: uid(),
+            type: 'image',
+            position: { x: flow.x - 140 + i * 320, y: flow.y - 40 },
+            data: {
+              ...DEFAULT_NODE_DATA,
+              title: file.name.replace(/\.[^.]+$/, '') || '图片',
+              anchorKey: res.key,
+              anchorUrl: res.signedUrl,
+            },
+          }
+          setNodes((ns) => [...ns, node])
+        } catch (err) {
+          setDropError((err as Error)?.message ?? `${file.name} 上传失败`)
+          setTimeout(() => setDropError(null), 4000)
+        }
+      }
+    },
+    [rf, setNodes, upload],
+  )
 
   // Nodes currently generating (their run is pending/running) → the edges feeding
   // them flow brightly to signal "working", like LibTV. Idle edges stay dim/static.
@@ -516,7 +557,13 @@ function CanvasInner() {
   const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes])
 
   return (
-    <div ref={wrapperRef} className="fixed inset-0 overflow-hidden" style={{ background: CANVAS_TOKENS.bg.canvas }}>
+    <div
+      ref={wrapperRef}
+      className="fixed inset-0 overflow-hidden"
+      style={{ background: CANVAS_TOKENS.bg.canvas }}
+      onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault() }}
+      onDrop={onFileDrop}
+    >
       <ReactFlow
         nodes={nodes}
         edges={displayEdges}
@@ -779,6 +826,16 @@ function CanvasInner() {
             </div>
           </div>
         </>
+      ) : null}
+
+      {/* Drop upload feedback */}
+      {dropError || upload.isPending ? (
+        <div
+          className="absolute left-1/2 top-16 z-30 -translate-x-1/2 rounded-lg px-3 py-1.5 text-[12px]"
+          style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, color: dropError ? '#FF8A8A' : CANVAS_TOKENS.text.secondary, boxShadow: CANVAS_TOKENS.shadow }}
+        >
+          {dropError ?? '图片上传中…'}
+        </div>
       ) : null}
 
       {/* Multi-select floating bar (LibTV: appears when ≥2 nodes selected) */}
