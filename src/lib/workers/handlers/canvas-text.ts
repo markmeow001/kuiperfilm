@@ -23,7 +23,7 @@ export const CANVAS_TEXT_MODES = {
   continue: '顺着下面的文字自然续写一段，延续既有的风格、人物与语言。只输出续写的正文（不要重复原文），不要任何解释。',
   // Video-prompt compression (Seedance-class models dilute/ignore over-long
   // prompts): keep the essentials, hard-cap the output length.
-  compress: '把下面的视频生成提示词压缩到 1000 字符以内。必须保留：主体（人物/物体及其外观关键词）、场景环境、一个主要动作、镜头景别与运镜、光线氛围、风格关键词；删除重复描述与冗余修饰词；保持原语言。只输出压缩后的提示词，不要任何解释。',
+  compress: '把下面的视频生成提示词压缩到 1500 字符以内。硬性要求（要素保全优先于字数）：①出现的每个人物及其外观关键词一个都不能丢；②动作保持原有先后顺序；③关键道具、场景环境、镜头景别与运镜、光线氛围、风格关键词全部保留。只删除：重复的描述、纯叙事铺陈、不影响画面的修饰词。在满足以上前提下越精炼越好；保持原语言。只输出压缩后的提示词，不要任何解释。',
 } as const
 
 export type CanvasTextMode = keyof typeof CANVAS_TEXT_MODES
