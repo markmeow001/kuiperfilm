@@ -400,3 +400,11 @@ Image（13 個）：
 - **狀態**: 待拍板
 - **建立時間**: 2026-07-02
 - **相關檔案**: `standards/pricing/image-video.pricing.json`、`src/lib/billing/task-policy.ts`
+
+## Q: Playground 生視頻丟參考圖 → 只吃「樣式」不當「首幀」（user 期望 i2v 首幀行為）
+- **現象**: user 多次實測，Playground 視頻 + 參考圖，輸出只跟參考圖的風格/樣式走，人物場景構圖不是從該圖起始。
+- **初步判斷**: Playground 沒有生成模式選擇器（canvas 視頻節點有 文生/图生/全能参考/首尾帧 四個 tab）。Seedance 系每個模式是不同 endpoint 變體（t2v/i2v/r2v）——參考圖如果被 dispatch 到 r2v（reference-to-video，語義=風格/身份參考）而不是 i2v（image-to-video，語義=首幀），就會出現 user 描述的行為。要查 playground-video handler + dispatcher 對「有 referenceImages」時選哪個變體。
+- **候選修法**: (a) Playground 加跟 canvas 一樣的模式 tabs（首選，UI 對齊）(b) 預設改為：有 1 張圖參考→i2v 首幀、多張→r2v（隱式規則，違反明確性）
+- **狀態**: 待調查（先查 dispatch 路徑再修）
+- **建立時間**: 2026-07-02
+- **相關檔案**: `src/lib/workers/handlers/playground-video.ts`、`src/app/[locale]/playground/V2PlaygroundClient.tsx`、AtlasCloud/ARK video dispatcher
