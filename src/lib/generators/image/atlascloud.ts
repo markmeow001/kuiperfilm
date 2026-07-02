@@ -72,16 +72,28 @@ const ATLASCLOUD_IMAGE_MODEL_MAP: Record<string, string> = {
   'nano-banana-pro': 'google/nano-banana-pro/text-to-image',
   'nano-banana': 'google/nano-banana/text-to-image',
   'nano-banana-2': 'google/nano-banana-2/text-to-image',
+  // 2026-07-02 — schema slugs verified via static.atlascloud.ai/model/schema/*
+  // (see ~/canvas_ref/atlascloud-new-image-models-2026-07-02.md).
+  'z-image-turbo': 'z-image/turbo',
+  'grok-imagine-image': 'xai/grok-imagine-image/text-to-image',
+  'grok-imagine-image-quality': 'xai/grok-imagine-image-quality/text-to-image',
 }
 
 /** img2img (`/edit`) counterparts — used when referenceImages are present.
- *  Each accepts `images: string[]` (input image URLs). */
+ *  GPT/Nano accept `images: string[]`; Grok accepts `image_urls: string[]`.
+ *  Z-Image Turbo has NO edit variant — doGenerate rejects refs explicitly
+ *  (an entry here would silently reroute refs to another model's edit). */
 const ATLASCLOUD_IMAGE_EDIT_MODEL_MAP: Record<string, string> = {
   'gpt-image-2': 'openai/gpt-image-2/edit',
   'nano-banana-pro': 'google/nano-banana-pro/edit',
   'nano-banana': 'google/nano-banana/edit',
   'nano-banana-2': 'google/nano-banana-2/edit',
+  'grok-imagine-image': 'xai/grok-imagine-image/edit',
+  'grok-imagine-image-quality': 'xai/grok-imagine-image-quality/edit',
 }
+
+/** Logical ids that have no img2img variant at AtlasCloud. */
+const ATLASCLOUD_NO_EDIT_MODELS = new Set(['z-image-turbo'])
 
 /** Resolve the API slug. When `useEdit` (referenceImages present) we pick the
  *  `/edit` img2img variant so the references are actually consumed.
@@ -170,6 +182,75 @@ function normaliseNanoBananaRatio(input: string | undefined): string | undefined
   return undefined // unknown → let the model pick default
 }
 
+function isZImageSlug(slug: string): boolean {
+  return slug.startsWith('z-image/')
+}
+
+function isGrokImagineSlug(slug: string): boolean {
+  return slug.startsWith('xai/grok-imagine-image')
+}
+
+/** Z-Image `size` uses a STAR separator (`1024*1024`), free-form W*H up to
+ *  2048 per side. Map our aspectRatio convention to clean multiples; 2:1 maps
+ *  exactly (2048*1024) — good for the 720全景 recipe.
+ *  Exported for unit testing (pure). */
+export function aspectRatioToZImageSize(aspectRatio: string | undefined): string {
+  switch (aspectRatio) {
+    case '2:1':
+      return '2048*1024'
+    case '21:9':
+      return '2048*880'
+    case '16:9':
+      return '2048*1152'
+    case '9:16':
+      return '1152*2048'
+    case '4:3':
+      return '1600*1200'
+    case '3:4':
+      return '1200*1600'
+    case '3:2':
+      return '1536*1024'
+    case '2:3':
+      return '1024*1536'
+    case '1:1':
+    default:
+      return '1024*1024'
+  }
+}
+
+/** Grok Imagine aspect_ratio enum (from schema, 2026-07-02). */
+const GROK_RATIO_ENUM = new Set([
+  '1:1',
+  '16:9',
+  '9:16',
+  '4:3',
+  '3:4',
+  '3:2',
+  '2:3',
+  '21:9',
+  '9:21',
+])
+
+/** Exported for unit testing (pure). */
+export function normaliseGrokRatio(input: string | undefined): string | undefined {
+  if (!input) return undefined
+  if (GROK_RATIO_ENUM.has(input)) return input
+  if (input === '2:1') return '21:9' // panorama request → widest enum value
+  return undefined
+}
+
+/** Grok resolution is '1k' | '2k'. Accept those (case-insensitive) plus a
+ *  couple of aliases from our video-style pickers; unknown → omit (model
+ *  default = 1k). Exported for unit testing (pure). */
+export function normaliseGrokResolution(input: string | undefined): string | undefined {
+  if (!input) return undefined
+  const v = input.toLowerCase()
+  if (v === '1k' || v === '2k') return v
+  if (v === '1080p') return '1k'
+  if (v === '1440p' || v === '4k') return '2k'
+  return undefined
+}
+
 interface AtlasCloudImageSubmitResponse {
   code?: number
   message?: string
@@ -206,6 +287,11 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       (u): u is string => typeof u === 'string' && u.trim().length > 0,
     )
     const useEdit = validRefs.length > 0
+    // No-edit models: reject refs explicitly (不隐式回退) — the generic edit-map
+    // fallback would silently reroute the request to another model's /edit.
+    if (useEdit && modelId && ATLASCLOUD_NO_EDIT_MODELS.has(modelId)) {
+      throw new Error(`${modelId} 不支持参考图（无 img2img 变体）：请移除参考图，或改用 Nano Banana / GPT Image 2 / Grok Imagine`)
+    }
     const atlasModel = resolveAtlasCloudImageModel(modelId, useEdit)
     const logger = createScopedLogger({
       module: 'generator.atlascloud-image',
@@ -222,9 +308,11 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     }
 
     // img2img: pass the reference URLs the `/edit` slug consumes. AtlasCloud
-    // fetches them server-side, so signed COS URLs work directly.
+    // fetches them server-side, so signed COS URLs work directly. Field name
+    // is per-family: Grok declares `image_urls`, GPT/Nano declare `images`.
     if (useEdit) {
-      body.images = validRefs
+      if (isGrokImagineSlug(atlasModel)) body.image_urls = validRefs
+      else body.images = validRefs
     }
 
     if (isGptImage2Slug(atlasModel)) {
@@ -250,6 +338,21 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       if (outputFormat) body.output_format = outputFormat
       // nano-banana-pro supports web grounding; harmless on other variants.
       if (typeof enableWebSearch === 'boolean') body.enable_web_search = enableWebSearch
+    } else if (isZImageSlug(atlasModel)) {
+      // Z-Image: free-form star-separated size (t2i only; refs rejected above).
+      body.size = aspectRatioToZImageSize(aspectRatio)
+      if (outputFormat && ['jpeg', 'png', 'webp'].includes(outputFormat)) {
+        body.output_format = outputFormat
+      }
+    } else if (isGrokImagineSlug(atlasModel)) {
+      // Grok: aspect_ratio + resolution ('1k'/'2k') + num_images. The spine
+      // bills per run (generationCount=1), so num_images is pinned to 1 —
+      // canvas batch ×N fans out N runs instead.
+      const ratio = normaliseGrokRatio(aspectRatio)
+      if (ratio) body.aspect_ratio = ratio
+      const grokRes = normaliseGrokResolution(resolution)
+      if (grokRes) body.resolution = grokRes
+      body.num_images = 1
     }
 
     if (useEdit) {

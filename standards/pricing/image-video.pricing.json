@@ -636,12 +636,48 @@
     "pricing": {
       "mode": "capability",
       "tiers": [
-        { "when": { "resolution": "480p", "generateAudio": true },  "amount": 0.8 },
-        { "when": { "resolution": "720p", "generateAudio": true },  "amount": 1.73 },
-        { "when": { "resolution": "1080p", "generateAudio": true }, "amount": 3.89 },
-        { "when": { "resolution": "480p", "generateAudio": false },  "amount": 0.4 },
-        { "when": { "resolution": "720p", "generateAudio": false },  "amount": 0.86 },
-        { "when": { "resolution": "1080p", "generateAudio": false }, "amount": 1.94 }
+        {
+          "when": {
+            "resolution": "480p",
+            "generateAudio": true
+          },
+          "amount": 0.8
+        },
+        {
+          "when": {
+            "resolution": "720p",
+            "generateAudio": true
+          },
+          "amount": 1.73
+        },
+        {
+          "when": {
+            "resolution": "1080p",
+            "generateAudio": true
+          },
+          "amount": 3.89
+        },
+        {
+          "when": {
+            "resolution": "480p",
+            "generateAudio": false
+          },
+          "amount": 0.4
+        },
+        {
+          "when": {
+            "resolution": "720p",
+            "generateAudio": false
+          },
+          "amount": 0.86
+        },
+        {
+          "when": {
+            "resolution": "1080p",
+            "generateAudio": false
+          },
+          "amount": 1.94
+        }
       ]
     }
   },
@@ -652,10 +688,34 @@
     "pricing": {
       "mode": "capability",
       "tiers": [
-        { "when": { "resolution": "480p", "generateAudio": true }, "amount": 0.2 },
-        { "when": { "resolution": "720p", "generateAudio": true }, "amount": 0.43 },
-        { "when": { "resolution": "480p", "generateAudio": false }, "amount": 0.1 },
-        { "when": { "resolution": "720p", "generateAudio": false }, "amount": 0.21 }
+        {
+          "when": {
+            "resolution": "480p",
+            "generateAudio": true
+          },
+          "amount": 0.2
+        },
+        {
+          "when": {
+            "resolution": "720p",
+            "generateAudio": true
+          },
+          "amount": 0.43
+        },
+        {
+          "when": {
+            "resolution": "480p",
+            "generateAudio": false
+          },
+          "amount": 0.1
+        },
+        {
+          "when": {
+            "resolution": "720p",
+            "generateAudio": false
+          },
+          "amount": 0.21
+        }
       ]
     }
   },
@@ -1327,25 +1387,37 @@
     "apiType": "video",
     "provider": "fal",
     "modelId": "bytedance/seedance-2.0/image-to-video",
-    "pricing": { "mode": "flat", "flatAmount": 0.096 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.096
+    }
   },
   {
     "apiType": "video",
     "provider": "fal",
     "modelId": "bytedance/seedance-2.0/reference-to-video",
-    "pricing": { "mode": "flat", "flatAmount": 0.096 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.096
+    }
   },
   {
     "apiType": "video",
     "provider": "fal",
     "modelId": "bytedance/seedance-2.0/fast/image-to-video",
-    "pricing": { "mode": "flat", "flatAmount": 0.076 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.076
+    }
   },
   {
     "apiType": "video",
     "provider": "fal",
     "modelId": "bytedance/seedance-2.0/fast/reference-to-video",
-    "pricing": { "mode": "flat", "flatAmount": 0.076 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.076
+    }
   },
   {
     "apiType": "video",
@@ -6114,25 +6186,77 @@
     "apiType": "image",
     "provider": "atlascloud",
     "modelId": "nano-banana-pro",
-    "pricing": { "mode": "flat", "flatAmount": 0.04 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.04
+    }
   },
   {
     "apiType": "image",
     "provider": "atlascloud",
     "modelId": "nano-banana",
-    "pricing": { "mode": "flat", "flatAmount": 0.025 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.025
+    }
   },
   {
     "apiType": "image",
     "provider": "atlascloud",
     "modelId": "nano-banana-2",
-    "pricing": { "mode": "flat", "flatAmount": 0.015 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.015
+    }
   },
   {
     "apiType": "image",
     "provider": "atlascloud",
     "modelId": "gpt-image-2",
-    "pricing": { "mode": "flat", "flatAmount": 0.05 }
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.05
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "z-image-turbo",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.005
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "grok-imagine-image",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.02
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "grok-imagine-image-quality",
+    "pricing": {
+      "mode": "capability",
+      "tiers": [
+        {
+          "when": {
+            "resolution": "1k"
+          },
+          "amount": 0.05
+        },
+        {
+          "when": {
+            "resolution": "2k"
+          },
+          "amount": 0.07
+        }
+      ]
+    }
   },
   {
     "apiType": "video",

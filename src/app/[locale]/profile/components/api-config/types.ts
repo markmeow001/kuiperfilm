@@ -120,6 +120,10 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'nano-banana', name: 'Gemini 3 Flash Image (AtlasCloud · 快速)', type: 'image', provider: 'atlascloud' },
     { modelId: 'nano-banana-2', name: 'Gemini 3.1 Flash Image (AtlasCloud · 經濟)', type: 'image', provider: 'atlascloud' },
     { modelId: 'gpt-image-2', name: 'GPT Image 2 (AtlasCloud · OpenAI 按 token 計費)', type: 'image', provider: 'atlascloud' },
+    // 2026-07-02 — AtlasCloud 新图像模型三连（slug 见 generators/image/atlascloud.ts）。
+    { modelId: 'z-image-turbo', name: 'Z-Image Turbo (AtlasCloud · 極速廉價，無圖生圖)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'grok-imagine-image', name: 'Grok Imagine (AtlasCloud · xAI 標準)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'grok-imagine-image-quality', name: 'Grok Imagine Quality (AtlasCloud · xAI 高質)', type: 'image', provider: 'atlascloud' },
     // 视频模型
     { modelId: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance 1.0 Pro Fast', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-0-lite-i2v-250428', name: 'Seedance 1.0 Lite', type: 'video', provider: 'ark' },

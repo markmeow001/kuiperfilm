@@ -31,6 +31,9 @@ export interface LLMCapabilities {
 
 export interface ImageCapabilities {
   resolutionOptions?: string[]
+  /** Per-model aspect-ratio enum (e.g. Grok's 1:1…21:9); pickers fall back to
+   *  the global default list when absent. */
+  aspectRatioOptions?: string[]
   supportNegativePrompt?: boolean
   supportReferenceImage?: boolean
   fieldI18n?: CapabilityFieldI18nMap
@@ -89,6 +92,7 @@ const LLM_ALLOWED_FIELDS = new Set<keyof LLMCapabilities>([
 
 const IMAGE_ALLOWED_FIELDS = new Set<keyof ImageCapabilities>([
   'resolutionOptions',
+  'aspectRatioOptions',
   'supportNegativePrompt',
   'supportReferenceImage',
   'fieldI18n',
@@ -296,6 +300,15 @@ function validateImageCapabilities(issues: CapabilityValidationIssue[], raw: unk
     })
   }
 
+  const aspectRatioOptions = raw.aspectRatioOptions
+  if (aspectRatioOptions !== undefined && !isStringArray(aspectRatioOptions)) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.image.aspectRatioOptions',
+      message: 'aspectRatioOptions must be a non-empty string array',
+    })
+  }
+
   if (raw.supportNegativePrompt !== undefined && typeof raw.supportNegativePrompt !== 'boolean') {
     issues.push({
       code: 'CAPABILITY_FIELD_INVALID',
@@ -314,6 +327,7 @@ function validateImageCapabilities(issues: CapabilityValidationIssue[], raw: unk
 
   validateFieldI18nMap(issues, 'image', raw.fieldI18n, {
     resolution: isStringArray(resolutionOptions) ? resolutionOptions : undefined,
+    aspectRatio: isStringArray(aspectRatioOptions) ? aspectRatioOptions : undefined,
   })
 }
 

@@ -85,6 +85,28 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     const meta = NODE_META[outputType]
     const models = outputType === 'image' ? gen.imageModels : gen.videoModels
 
+    // Per-model spec from the capability catalog (CLAUDE.md: no hardcoded
+    // model capabilities) — aspect ratios and, for image models that declare
+    // them (Grok 1k/2k, Nano Pro 1k/2k/4k), a resolution picker. Falls back
+    // to the global lists when the model declares nothing.
+    const selectedModel = useMemo(() => models.find((m) => m.value === d.modelKey) ?? null, [models, d.modelKey])
+    const modelAspects = outputType === 'image' ? selectedModel?.capabilities?.image?.aspectRatioOptions : undefined
+    const aspectOptions = useMemo(() => {
+      const base = modelAspects && modelAspects.length > 0 ? modelAspects : ASPECT_OPTIONS
+      // Keep the current value selectable even when the model doesn't declare
+      // it (e.g. 720全景's 2:1 on GPT — the generator maps it to the closest).
+      return base.includes(d.aspectRatio) ? base : [d.aspectRatio, ...base]
+    }, [modelAspects, d.aspectRatio])
+    const imageResolutions = outputType === 'image'
+      ? selectedModel?.capabilities?.image?.resolutionOptions ?? null
+      : null
+    // Single effective value used by BOTH the select and the submission, so
+    // what the user sees is exactly what gets sent (d.resolution defaults to
+    // the video '720p', which image models don't understand).
+    const effectiveImageResolution = imageResolutions && imageResolutions.length > 0
+      ? (d.resolution && imageResolutions.includes(d.resolution) ? d.resolution : imageResolutions[0])
+      : null
+
     // Upstream image/character nodes → reference URLs. For a video node the
     // first one becomes the i2v first frame; for an image node they're
     // edit/consistency references. Reactive via React Flow's connection hooks.
@@ -199,6 +221,9 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             ? { lastFrameUrl: d.lastFrameKey }
             : {}),
           ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution ?? '720p' } : {}),
+          ...(outputType === 'image' && effectiveImageResolution
+            ? { resolution: effectiveImageResolution }
+            : {}),
         }
         // Batch (image only): fan out N playground runs — the spine hardcodes
         // generationCount=1, so N runs = N variants. Run #1 stays on this node;
@@ -542,8 +567,20 @@ export function makeMediaNode(outputType: 'image' | 'video') {
               className="nodrag rounded-md px-1.5 py-1 font-mono text-[11px] outline-none"
               style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
             >
-              {ASPECT_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+              {aspectOptions.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
+            {/* image resolution — only for models that declare options (catalog) */}
+            {outputType === 'image' && imageResolutions && imageResolutions.length > 0 ? (
+              <select
+                value={effectiveImageResolution ?? imageResolutions[0]}
+                onChange={(e) => updateNodeData(id, { resolution: e.target.value })}
+                title="解析度"
+                className="nodrag rounded-md px-1.5 py-1 font-mono text-[11px] outline-none"
+                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                {imageResolutions.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            ) : null}
             {/* batch count (image only): N variants per 生成 → N sibling nodes */}
             {outputType === 'image' ? (
               <select

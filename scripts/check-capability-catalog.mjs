@@ -11,6 +11,7 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
   llm: new Set(['reasoningEffortOptions', 'fieldI18n']),
   image: new Set([
     'resolutionOptions',
+    'aspectRatioOptions',
     'supportNegativePrompt',
     'supportReferenceImage',
     'fieldI18n',
@@ -32,7 +33,7 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
 }
 const CAPABILITY_NAMESPACE_I18N_FIELDS = {
   llm: { reasoningEffort: 'reasoningEffortOptions' },
-  image: { resolution: 'resolutionOptions' },
+  image: { resolution: 'resolutionOptions', aspectRatio: 'aspectRatioOptions' },
   video: {
     generationMode: 'generationModeOptions',
     generateAudio: 'generateAudioOptions',

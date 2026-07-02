@@ -711,10 +711,32 @@
     "modelId": "bytedance/seedance-2.0/image-to-video",
     "capabilities": {
       "video": {
-        "generationModeOptions": ["normal"],
-        "durationOptions": [4,5,6,7,8,9,10,11,12,13,14,15],
-        "resolutionOptions": ["480p","720p","1080p"],
-        "generateAudioOptions": [true,false],
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p",
+          "1080p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
         "supportGenerateAudio": true,
         "supportNegativePrompt": false,
         "supportReferenceImage": false
@@ -727,10 +749,32 @@
     "modelId": "bytedance/seedance-2.0/reference-to-video",
     "capabilities": {
       "video": {
-        "generationModeOptions": ["normal"],
-        "durationOptions": [4,5,6,7,8,9,10,11,12,13,14,15],
-        "resolutionOptions": ["480p","720p","1080p"],
-        "generateAudioOptions": [true,false],
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p",
+          "1080p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
         "supportGenerateAudio": true,
         "supportNegativePrompt": false,
         "supportReferenceImage": true
@@ -743,10 +787,32 @@
     "modelId": "bytedance/seedance-2.0/fast/image-to-video",
     "capabilities": {
       "video": {
-        "generationModeOptions": ["normal"],
-        "durationOptions": [4,5,6,7,8,9,10,11,12,13,14,15],
-        "resolutionOptions": ["480p","720p","1080p"],
-        "generateAudioOptions": [true,false],
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p",
+          "1080p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
         "supportGenerateAudio": true,
         "supportNegativePrompt": false,
         "supportReferenceImage": false
@@ -759,10 +825,32 @@
     "modelId": "bytedance/seedance-2.0/fast/reference-to-video",
     "capabilities": {
       "video": {
-        "generationModeOptions": ["normal"],
-        "durationOptions": [4,5,6,7,8,9,10,11,12,13,14,15],
-        "resolutionOptions": ["480p","720p","1080p"],
-        "generateAudioOptions": [true,false],
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p",
+          "1080p"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
         "supportGenerateAudio": true,
         "supportNegativePrompt": false,
         "supportReferenceImage": true
@@ -1232,8 +1320,24 @@
     "modelId": "nano-banana-pro",
     "capabilities": {
       "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k",
+          "4k"
+        ],
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "21:9",
+          "9:21",
+          "2:3",
+          "3:2"
+        ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -1243,8 +1347,19 @@
     "modelId": "nano-banana",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "21:9",
+          "9:21",
+          "2:3",
+          "3:2"
+        ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -1254,8 +1369,24 @@
     "modelId": "nano-banana-2",
     "capabilities": {
       "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k",
+          "4k"
+        ],
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "21:9",
+          "9:21",
+          "2:3",
+          "3:2"
+        ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": false
+        "supportReferenceImage": true
       }
     }
   },
@@ -1265,8 +1396,89 @@
     "modelId": "gpt-image-2",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "z-image-turbo",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "2:1",
+          "21:9"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "grok-imagine-image",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k"
+        ],
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9",
+          "9:21"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "grok-imagine-image-quality",
+    "capabilities": {
+      "image": {
+        "resolutionOptions": [
+          "1k",
+          "2k"
+        ],
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9",
+          "9:21"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
       }
     }
   },
