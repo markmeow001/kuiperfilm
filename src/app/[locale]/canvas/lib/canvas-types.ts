@@ -102,6 +102,8 @@ export interface CanvasNodeData extends Record<string, unknown> {
   /** Audio node: generated speech url + in-flight CANVAS_TTS task id. */
   audioUrl?: string | null
   ttsTaskId?: string | null
+  /** Text node: in-flight CANVAS_TEXT (writing assistant) task id. */
+  textTaskId?: string | null
 }
 
 /** Minimal serializable node (what we store in the Canvas DB row / localStorage). */

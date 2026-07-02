@@ -33,6 +33,10 @@ describe('Phase 9.1 — playground task queue routing', () => {
     expect(getQueueTypeByTaskType(TASK_TYPE.CANVAS_STORYBOARD)).toBe('text')
   })
 
+  it('routes CANVAS_TEXT to the text queue', () => {
+    expect(getQueueTypeByTaskType(TASK_TYPE.CANVAS_TEXT)).toBe('text')
+  })
+
   it('routes CANVAS_TTS to the voice queue (not text)', () => {
     expect(getQueueTypeByTaskType(TASK_TYPE.CANVAS_TTS)).toBe('voice')
   })

@@ -69,6 +69,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.PLAYGROUND_IMAGE]: 'generate',
   [TASK_TYPE.PLAYGROUND_VIDEO]: 'generate',
   [TASK_TYPE.CANVAS_STORYBOARD]: 'build',
+  [TASK_TYPE.CANVAS_TEXT]: 'build',
   [TASK_TYPE.CANVAS_TTS]: 'generate',
 }
 
