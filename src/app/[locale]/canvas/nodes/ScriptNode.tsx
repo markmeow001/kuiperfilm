@@ -170,8 +170,8 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
             <button
               type="button"
               onClick={handleFanOut}
-              className="nodrag w-full rounded-md py-1.5 text-[12px] font-semibold"
-              style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}
+              className="nodrag w-full rounded-lg py-1.5 text-[12px] font-semibold"
+              style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}
             >
               批量生成分镜（{shots.length} 个图片节点）
             </button>

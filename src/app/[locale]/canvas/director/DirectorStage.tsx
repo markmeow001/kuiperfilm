@@ -703,7 +703,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
             {/* transform mode + body type */}
             <div className="mb-2 flex gap-1">
               {(['translate', 'rotate', 'scale'] as TransformMode[]).map((m) => (
-                <button key={m} type="button" onClick={() => setMode(m)} className="flex-1 rounded py-1 text-[11px]" style={{ color: mode === m ? '#06222A' : CANVAS_TOKENS.text.secondary, background: mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover }}>
+                <button key={m} type="button" onClick={() => setMode(m)} className="flex-1 rounded py-1 text-[11px]" style={{ color: mode === m ? CANVAS_TOKENS.accentText : CANVAS_TOKENS.text.secondary, background: mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover }}>
                   {m === 'translate' ? '移动' : m === 'rotate' ? '旋转' : '缩放'}
                 </button>
               ))}
@@ -737,7 +737,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
         <div className="absolute right-4 top-16 bottom-16 flex w-64 flex-col overflow-hidden rounded-xl" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
           <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
             <span className="font-mono text-[12px]" style={{ color: CANVAS_TOKENS.accent }}>摄像机 · {selectedCamera.label}</span>
-            <button type="button" onClick={() => sendShot(selectedCamId)} disabled={saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}>发送</button>
+            <button type="button" onClick={() => sendShot(selectedCamId)} disabled={saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>发送</button>
           </div>
           <div className="flex-1 space-y-2 overflow-y-auto p-2">
             <label className="block">
@@ -798,13 +798,13 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
             <img src={bg.url} alt="背景" className="mb-2 h-20 w-full rounded-md object-cover" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}` }} />
           ) : null}
           <div className="mb-2 flex gap-1">
-            <button type="button" onClick={() => bgInputRef.current?.click()} className="flex-1 rounded-md py-1.5 text-[11px]" style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}>{bg.url ? '换图' : '上传场景图'}</button>
+            <button type="button" onClick={() => bgInputRef.current?.click()} className="flex-1 rounded-md py-1.5 text-[11px]" style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>{bg.url ? '换图' : '上传场景图'}</button>
             {bg.url ? <button type="button" onClick={() => setBackground({ mode: 'none', key: null, url: null })} className="rounded-md px-2 py-1.5 text-[11px]" style={{ background: CANVAS_TOKENS.bg.hover, color: '#FF8A8A' }}>移除</button> : null}
           </div>
           {bg.url ? (
             <div className="mb-2 flex gap-1">
               {(['flat', 'sphere'] as const).map((m) => (
-                <button key={m} type="button" onClick={() => setBackground({ mode: m })} className="flex-1 rounded-md py-1 text-[11px]" style={{ background: bg.mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: bg.mode === m ? '#06222A' : CANVAS_TOKENS.text.secondary }}>
+                <button key={m} type="button" onClick={() => setBackground({ mode: m })} className="flex-1 rounded-md py-1 text-[11px]" style={{ background: bg.mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: bg.mode === m ? CANVAS_TOKENS.accentText : CANVAS_TOKENS.text.secondary }}>
                   {m === 'flat' ? '平面背景' : '全景球'}
                 </button>
               ))}

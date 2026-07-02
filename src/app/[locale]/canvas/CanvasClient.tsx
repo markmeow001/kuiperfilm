@@ -21,7 +21,6 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
-  Controls,
   MiniMap,
   addEdge,
   useNodesState,
@@ -90,6 +89,7 @@ function CanvasInner() {
   const [showSequence, setShowSequence] = useState(false)
   const [toolbox, setToolbox] = useState(false)
   const [charLib, setCharLib] = useState(false)
+  const [showMinimap, setShowMinimap] = useState(false)
   const [zoom, setZoom] = useState(1)
   const rf = useReactFlow()
   const instanceRef = useRef<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null)
@@ -124,8 +124,8 @@ function CanvasInner() {
           ...e,
           animated: working,
           style: working
-            ? { stroke: CANVAS_TOKENS.accent, strokeWidth: 2.5, opacity: 1 }
-            : { stroke: CANVAS_TOKENS.accent, strokeWidth: 1.5, opacity: 0.45 },
+            ? { stroke: CANVAS_TOKENS.edge.lit, strokeWidth: 2.5, opacity: 1 }
+            : { stroke: CANVAS_TOKENS.edge.idle, strokeWidth: 2, opacity: 1 },
         }
       }),
     [edges, workingNodeIds],
@@ -341,7 +341,8 @@ function CanvasInner() {
       const meta = e.metaKey || e.ctrlKey
       const selected = nodes.filter((n) => n.selected)
       const sel = selected[0]
-      if (meta && e.key === 'c' && sel) { copyNode(sel.id); e.preventDefault() }
+      if (e.altKey && e.shiftKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF')) { optimizeLayout(); e.preventDefault() }
+      else if (meta && e.key === 'c' && sel) { copyNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'd' && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'v' && clipboardRef.current) { pasteNode(); e.preventDefault() }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) { selected.forEach((n) => deleteNode(n.id)); e.preventDefault() }
@@ -445,34 +446,70 @@ function CanvasInner() {
         // snaps near-misses so the small handles are easy to hit.
         connectionMode={ConnectionMode.Loose}
         connectionRadius={42}
-        defaultEdgeOptions={{ animated: true, style: { stroke: CANVAS_TOKENS.accent, strokeWidth: 1.5 } }}
+        defaultEdgeOptions={{ animated: false, style: { stroke: CANVAS_TOKENS.edge.idle, strokeWidth: 2 } }}
       >
         <Background variant={BackgroundVariant.Dots} gap={CANVAS_TOKENS.grid} size={1.4} color="rgba(255,255,255,0.10)" />
-        <Controls position="bottom-right" showInteractive={false} style={{ filter: 'invert(0.9) hue-rotate(180deg)' }} />
-        <MiniMap
-          position="bottom-right"
-          pannable
-          zoomable
-          nodeColor={minimapColor}
-          maskColor="rgba(0,0,0,0.6)"
-          style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, marginBottom: 56 }}
-        />
+        {showMinimap ? (
+          <MiniMap
+            position="bottom-right"
+            pannable
+            zoomable
+            nodeColor={minimapColor}
+            maskColor="rgba(0,0,0,0.6)"
+            style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, marginBottom: 8 }}
+          />
+        ) : null}
       </ReactFlow>
 
-      {/* Top bar */}
-      <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between px-4"
-        style={{ background: `${CANVAS_TOKENS.bg.panel}cc`, borderBottom: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}
-      >
-        <div className="pointer-events-auto flex items-center gap-3 font-mono text-[13px]">
-          <Link href="/zh/v2" className="text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>‹ 返回</Link>
-          <span style={{ color: CANVAS_TOKENS.accent }}>◇</span>
+      {/* Top bar — LibTV floating capsule (transparent over canvas, no full-width bar) */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-12 items-center justify-between px-3">
+        <div
+          className="pointer-events-auto flex h-10 items-center gap-3 rounded-xl px-3 text-[13px]"
+          style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
+        >
+          <Link href="/zh/v2" className="text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>‹ 返回</Link>
           <span style={{ color: CANVAS_TOKENS.text.primary }}>无限画布</span>
           <span style={{ color: CANVAS_TOKENS.text.muted }}>· 未命名</span>
         </div>
-        <div className="pointer-events-auto flex items-center gap-2 font-mono text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
-          <span className="rounded px-2 py-1" style={{ background: CANVAS_TOKENS.bg.hover }}>{Math.round(zoom * 100)}%</span>
-        </div>
+      </div>
+
+      {/* Bottom-left control strip — 资产/整理/小地图/缩放 (LibTV layout) */}
+      <div
+        className="absolute bottom-5 left-4 z-20 flex items-center gap-1 rounded-xl p-1"
+        style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
+      >
+        <button
+          type="button"
+          onClick={optimizeLayout}
+          title="整理画布 ⌥⇧F"
+          className="h-7 rounded-lg px-2 text-[12px] transition-colors"
+          style={{ color: CANVAS_TOKENS.text.secondary }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = CANVAS_TOKENS.bg.hover }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+        >
+          整理画布
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowMinimap((v) => !v)}
+          title="切换小地图"
+          className="h-7 rounded-lg px-2 text-[12px] transition-colors"
+          style={{ color: showMinimap ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.secondary, background: showMinimap ? CANVAS_TOKENS.bg.hover : 'transparent' }}
+        >
+          小地图
+        </button>
+        <div className="mx-0.5 h-4 w-px" style={{ background: CANVAS_TOKENS.hairline }} />
+        <button type="button" onClick={() => rf.zoomOut()} title="缩小 ⌘-" className="h-7 w-7 rounded-lg text-[14px]" style={{ color: CANVAS_TOKENS.text.secondary }}>−</button>
+        <button
+          type="button"
+          onClick={() => rf.fitView({ duration: 300 })}
+          title="适应画布 ⌘0"
+          className="h-7 rounded-lg px-1.5 font-mono text-[12px]"
+          style={{ color: CANVAS_TOKENS.text.secondary }}
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button type="button" onClick={() => rf.zoomIn()} title="放大 ⌘+" className="h-7 w-7 rounded-lg text-[14px]" style={{ color: CANVAS_TOKENS.text.secondary }}>＋</button>
       </div>
 
       {/* Empty hint */}
@@ -638,20 +675,20 @@ function CanvasInner() {
         </>
       ) : null}
 
-      {/* Bottom-center dock */}
+      {/* Bottom-center dock — LibTV rounded-12 card, 49px tall, 8px padding/gap */}
       <div
-        className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full px-2 py-1.5"
-        style={{ background: `${CANVAS_TOKENS.bg.card}e6`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+        className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl p-2"
+        style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
       >
         {dockButtons.map((b) => (
           <button
             key={b.key}
             type="button"
             onClick={b.onClick}
-            className="rounded-full px-3 py-1.5 font-mono text-[12px] transition-colors hover:bg-white/10"
-            style={{ color: b.key === 'add' ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.secondary }}
+            className="h-8 rounded-lg px-2.5 text-[13px] transition-colors hover:bg-white/10"
+            style={{ color: b.key === 'add' ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.secondary }}
           >
-            {b.label}
+            {b.key === 'add' ? '＋ ' : ''}{b.label}
           </button>
         ))}
       </div>

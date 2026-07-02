@@ -162,8 +162,8 @@ export function AudioNode({ id, data, selected }: NodeProps) {
           type="button"
           onClick={handleGenerate}
           disabled={busy || !text || !d.referenceAudioKey}
-          className="nodrag w-full rounded-md py-1.5 font-mono text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ background: meta.accent, color: '#3A0A2A' }}
+          className="nodrag w-full rounded-lg py-1.5 text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+          style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}
         >
           {phase === 'submitting' ? '提交中…' : phase === 'running' ? '配音生成中…' : d.audioUrl ? '重新配音' : '生成配音'}
         </button>

@@ -342,7 +342,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                   type="button"
                   onClick={() => updateNodeData(id, { genMode: m.key })}
                   className="nodrag flex-1 rounded-md py-1 text-[11px]"
-                  style={{ background: genMode === m.key ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: genMode === m.key ? '#06222A' : CANVAS_TOKENS.text.secondary }}
+                  style={{ background: genMode === m.key ? CANVAS_TOKENS.bg.active : 'transparent', color: genMode === m.key ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.secondary, border: `1px solid ${genMode === m.key ? CANVAS_TOKENS.hairline : 'transparent'}` }}
                 >
                   {m.label}
                 </button>
@@ -547,10 +547,10 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             type="button"
             onClick={handleGenerate}
             disabled={!canGenerate}
-            className="nodrag w-full rounded-md py-1.5 font-mono text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}
+            className="nodrag w-full rounded-lg py-1.5 text-[12px] font-semibold tracking-wide transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}
           >
-            {busy ? status : '生成'}
+            {busy ? status : '↑ 生成'}
           </button>
         </div>
       </NodeShell>

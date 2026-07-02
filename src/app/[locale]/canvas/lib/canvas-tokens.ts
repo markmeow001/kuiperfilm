@@ -1,9 +1,12 @@
 /**
  * LibTV-derived design tokens for the infinite-canvas region.
  *
- * Source: ~/canvas_ref/libtv-uiux-spec.md (agent audit of liblib.tv, 2026-06-27).
- * Near-black, low-chroma, single cyan accent. Kept as a typed constant object so
- * node components and the canvas shell stay visually consistent without copying
+ * Source: ~/canvas_ref/libtv-full-clone-spec-2026-07-01.md — getComputedStyle
+ * MEASURED values from liblib.tv (2026-07-01 re-audit). These replace the
+ * 2026-06-27 estimated palette (near-black + cyan): the real LibTV surface is
+ * a warmer #141414/#262626 gray ramp with a blue #1880FF accent, neutral gray
+ * edges, and a white generate CTA. Kept as a typed constant object so node
+ * components and the canvas shell stay visually consistent without copying
  * hex strings around (immutable single source — see coding-style 鐵則).
  *
  * NOTE: these are canvas-local on purpose. The rest of KuiperAI V2 uses the
@@ -11,24 +14,35 @@
  */
 export const CANVAS_TOKENS = {
   bg: {
-    canvas: '#0A0A0B',
-    app: '#0E0E10',
-    panel: '#131316',
-    popover: '#16161A',
-    card: '#1B1B1F',
-    hover: '#232328',
-    input: '#202024',
+    canvas: '#141414',
+    app: '#1B1B1B',
+    panel: '#262626',
+    popover: '#1A1A1A',
+    card: '#262626',
+    hover: 'rgba(255,255,255,0.10)',
+    active: 'rgba(255,255,255,0.15)',
+    input: '#1B1B1B',
   },
-  accent: '#4FD2E8', // cyan — CTA / slider fill / selected ring / primary action
+  accent: '#1880FF', // brand blue — links / slider fill / primary emphasis
+  accentText: '#FFFFFF', // text on accent surfaces
+  cta: '#FFFFFF', // generate ↑ button — white pill, dark glyph
+  ctaText: '#141414',
   gold: '#F4C44E', // credits / membership only
   sceneBlue: '#4F8EF7', // 3D 人偶 / gizmo only (M2)
   text: {
-    primary: '#F2F2F4',
-    secondary: '#A8A8B0',
+    primary: '#F7F7F7',
+    secondary: '#919191',
     muted: '#6E6E76',
   },
-  hairline: 'rgba(255,255,255,0.08)',
-  radius: { sm: 6, md: 10, lg: 14, xl: 20 },
+  hairline: '#363636', // 0.5–1px borders on cards / dock / top-bar capsules
+  selectedRing: '#A8A8A8', // selected node = inset 2px ring
+  edge: {
+    idle: '#86909C',
+    lit: '#C0C8D0', // selected/adjacent/working edges
+  },
+  shadow: '0 4px 10px rgba(0,0,0,0.12)', // node card
+  shadowPopover: '0 16px 40px rgba(0,0,0,0.55)',
+  radius: { sm: 6, md: 8, lg: 12, xl: 16 },
   grid: 24, // dot-grid spacing
 } as const
 

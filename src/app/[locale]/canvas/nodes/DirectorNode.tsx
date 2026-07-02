@@ -133,8 +133,8 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="nodrag mt-2 w-full rounded-md py-1.5 font-mono text-[12px] font-semibold"
-            style={{ background: CANVAS_TOKENS.accent, color: '#06222A' }}
+            className="nodrag mt-2 w-full rounded-lg py-1.5 text-[12px] font-semibold"
+            style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
           >
             打开导演台
           </button>
