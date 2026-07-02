@@ -14,7 +14,7 @@ import {
   EMPTY_CANVAS,
 } from './canvas-types'
 
-const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director', 'script', 'audio']
+const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'group']
 
 function isValidType(t: unknown): t is CanvasNodeType {
   return typeof t === 'string' && (VALID_TYPES as readonly string[]).includes(t)
@@ -33,6 +33,15 @@ export function serializeCanvas(
       x: n.position.x,
       y: n.position.y,
       data: n.data,
+      // 成组: children carry parentId (position is parent-relative); the group
+      // container persists its explicit size.
+      ...(n.parentId ? { parentId: n.parentId } : {}),
+      ...(n.type === 'group'
+        ? {
+            w: Number(n.style?.width ?? n.measured?.width) || 400,
+            h: Number(n.style?.height ?? n.measured?.height) || 300,
+          }
+        : {}),
     })),
     edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
     viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom },
@@ -54,14 +63,28 @@ export function deserializeCanvas(raw: unknown): {
   const srcNodes = Array.isArray(parsed.nodes) ? parsed.nodes : []
   const srcEdges = Array.isArray(parsed.edges) ? parsed.edges : []
 
-  const nodes: Node<CanvasNodeData>[] = srcNodes
-    .filter((n): n is SerializedNode => Boolean(n) && isValidType((n as SerializedNode).type))
-    .map((n) => ({
-      id: String(n.id),
-      type: n.type,
-      position: { x: Number(n.x) || 0, y: Number(n.y) || 0 },
-      data: { title: '', ...DEFAULT_NODE_DATA, ...((n.data ?? {}) as Partial<CanvasNodeData>) } as CanvasNodeData,
-    }))
+  const valid = srcNodes.filter(
+    (n): n is SerializedNode => Boolean(n) && isValidType((n as SerializedNode).type),
+  )
+  const validIds = new Set(valid.map((n) => String(n.id)))
+  const nodes: Node<CanvasNodeData>[] = valid
+    // React Flow requires parents to appear before their children — order
+    // groups first (stable within each bucket).
+    .sort((a, b) => Number(b.type === 'group') - Number(a.type === 'group'))
+    .map((n) => {
+      // Drop dangling parent refs (group row lost/corrupt) instead of crashing RF.
+      const parentId = n.parentId && validIds.has(String(n.parentId)) ? String(n.parentId) : undefined
+      return {
+        id: String(n.id),
+        type: n.type,
+        position: { x: Number(n.x) || 0, y: Number(n.y) || 0 },
+        data: { title: '', ...DEFAULT_NODE_DATA, ...((n.data ?? {}) as Partial<CanvasNodeData>) } as CanvasNodeData,
+        ...(parentId ? { parentId, extent: 'parent' as const } : {}),
+        ...(n.type === 'group'
+          ? { style: { width: Number(n.w) || 400, height: Number(n.h) || 300 } }
+          : {}),
+      }
+    })
 
   const nodeIds = new Set(nodes.map((n) => n.id))
   const edges: Edge[] = srcEdges

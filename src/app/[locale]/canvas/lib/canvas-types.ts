@@ -111,6 +111,11 @@ export interface SerializedNode {
   x: number
   y: number
   data: CanvasNodeData
+  /** Group membership (成组): child positions are relative to the parent. */
+  parentId?: string
+  /** Group container size (type 'group' only). */
+  w?: number
+  h?: number
 }
 
 export interface SerializedEdge {

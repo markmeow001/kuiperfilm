@@ -9,7 +9,7 @@
  */
 import { z } from 'zod'
 
-const NODE_TYPES = ['character', 'image', 'video', 'text', 'director', 'script', 'audio'] as const
+const NODE_TYPES = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'group'] as const
 
 export const MAX_NODES = 500
 export const MAX_EDGES = 1000
@@ -24,6 +24,11 @@ const serializedNodeSchema = z.object({
   // Per-node data is client-owned; accept any JSON object, bound elsewhere by
   // the overall byte cap.
   data: z.record(z.string(), z.unknown()).default({}),
+  // 成组 (grouping): children reference their group container; the container
+  // persists an explicit size.
+  parentId: z.string().min(1).max(128).optional(),
+  w: z.number().finite().optional(),
+  h: z.number().finite().optional(),
 })
 
 const serializedEdgeSchema = z.object({

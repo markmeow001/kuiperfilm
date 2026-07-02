@@ -72,4 +72,33 @@ describe('deserializeCanvas', () => {
     expect(deserializeCanvas('nonsense').viewport).toEqual({ x: 0, y: 0, zoom: 1 })
     expect(deserializeCanvas(42).nodes).toEqual([])
   })
+
+  it('round-trips 成组: parentId, group size, parent-before-child order', () => {
+    const child = { ...node('c', 'image', 12, 34), parentId: 'g', extent: 'parent' as const }
+    const group: Node<CanvasNodeData> = {
+      ...node('g', 'group', 100, 200),
+      style: { width: 420, height: 310 },
+    }
+    // child listed BEFORE its group on purpose — deserialization must reorder
+    const serialized = serializeCanvas([child, group], [], { x: 0, y: 0, zoom: 1 })
+
+    expect(serialized.nodes.find((n) => n.id === 'c')).toMatchObject({ parentId: 'g' })
+    expect(serialized.nodes.find((n) => n.id === 'g')).toMatchObject({ w: 420, h: 310 })
+
+    const back = deserializeCanvas(serialized)
+    const ids = back.nodes.map((n) => n.id)
+    expect(ids.indexOf('g')).toBeLessThan(ids.indexOf('c'))
+    expect(back.nodes.find((n) => n.id === 'c')).toMatchObject({ parentId: 'g', extent: 'parent' })
+    expect(back.nodes.find((n) => n.id === 'g')?.style).toEqual({ width: 420, height: 310 })
+  })
+
+  it('drops a dangling parentId instead of crashing React Flow', () => {
+    const back = deserializeCanvas({
+      nodes: [{ id: 'c', type: 'image', x: 1, y: 2, data: {}, parentId: 'missing' }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    })
+    expect(back.nodes[0].parentId).toBeUndefined()
+    expect(back.nodes[0].extent).toBeUndefined()
+  })
 })

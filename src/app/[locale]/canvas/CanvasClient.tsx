@@ -45,6 +45,7 @@ import { CharacterNode } from './nodes/CharacterNode'
 import { DirectorNode } from './nodes/DirectorNode'
 import { ScriptNode } from './nodes/ScriptNode'
 import { AudioNode } from './nodes/AudioNode'
+import { GroupNode } from './nodes/GroupNode'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -59,6 +60,7 @@ const nodeTypes: NodeTypes = {
   director: DirectorNode,
   script: ScriptNode,
   audio: AudioNode,
+  group: GroupNode,
 }
 
 const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'audio', 'director', 'character', 'text']
@@ -272,10 +274,89 @@ function CanvasInner() {
     if (n) clipboardRef.current = n
   }, [nodes])
 
+  // Absolute flow position — grouped children store parent-relative coords.
+  const absPos = useCallback((n: Node<CanvasNodeData>): { x: number; y: number } => {
+    if (!n.parentId) return n.position
+    const p = nodes.find((x) => x.id === n.parentId)
+    return p ? { x: n.position.x + p.position.x, y: n.position.y + p.position.y } : n.position
+  }, [nodes])
+
   const deleteNode = useCallback((nodeId: string) => {
-    setNodes((ns) => ns.filter((n) => n.id !== nodeId))
+    setNodes((ns) => {
+      const target = ns.find((n) => n.id === nodeId)
+      const rest = ns.filter((n) => n.id !== nodeId)
+      // Deleting a group container releases (not deletes) its children — they
+      // keep their canvas spot by converting back to absolute coordinates.
+      if (target?.type === 'group') {
+        return rest.map((n) => {
+          if (n.parentId !== nodeId) return n
+          const { parentId: _p, extent: _e, ...free } = n
+          return { ...free, position: { x: n.position.x + target.position.x, y: n.position.y + target.position.y } }
+        })
+      }
+      return rest
+    })
     setEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId))
   }, [setNodes, setEdges])
+
+  // ── 成组 / 解组 (LibTV G / ⇧G) ──
+  const groupSelected = useCallback(() => {
+    const sel = nodes.filter((n) => n.selected && n.type !== 'group' && !n.parentId)
+    if (sel.length < 2) return
+    const PAD = 40
+    const HEADER = 28
+    const b = rf.getNodesBounds(sel)
+    const gid = uid()
+    const gx = b.x - PAD
+    const gy = b.y - PAD - HEADER
+    const group: Node<CanvasNodeData> = {
+      id: gid,
+      type: 'group',
+      position: { x: gx, y: gy },
+      style: { width: b.width + PAD * 2, height: b.height + PAD * 2 + HEADER },
+      data: { ...DEFAULT_NODE_DATA, title: '分组' },
+      selected: true,
+    }
+    const selIds = new Set(sel.map((n) => n.id))
+    setNodes((ns) => [
+      // parents must precede children in the array (React Flow subflow rule)
+      ...ns.filter((n) => !selIds.has(n.id)).map((n) => ({ ...n, selected: false })),
+      group,
+      ...ns
+        .filter((n) => selIds.has(n.id))
+        .map((n) => ({
+          ...n,
+          parentId: gid,
+          extent: 'parent' as const,
+          position: { x: n.position.x - gx, y: n.position.y - gy },
+          selected: false,
+        })),
+    ])
+  }, [nodes, rf, setNodes])
+
+  const ungroupSelected = useCallback(() => {
+    const gids = new Set<string>()
+    nodes.forEach((n) => {
+      if (n.selected && n.type === 'group') gids.add(n.id)
+      if (n.selected && n.parentId) gids.add(n.parentId)
+    })
+    if (gids.size === 0) return
+    setNodes((ns) =>
+      ns
+        .filter((n) => !gids.has(n.id))
+        .map((n) => {
+          if (!n.parentId || !gids.has(n.parentId)) return n
+          const g = ns.find((x) => x.id === n.parentId)
+          const { parentId: _p, extent: _e, ...free } = n
+          return {
+            ...free,
+            position: g
+              ? { x: n.position.x + g.position.x, y: n.position.y + g.position.y }
+              : n.position,
+          }
+        }),
+    )
+  }, [nodes, setNodes])
 
   // Build a clean copy — only id/type/position/data, never RF internal fields
   // (measured/dragging/internals). structuredClone the data to avoid aliasing
@@ -289,10 +370,13 @@ function CanvasInner() {
 
   const duplicateNode = useCallback((nodeId: string) => {
     const n = nodes.find((x) => x.id === nodeId)
-    if (!n) return
-    const copy = cloneNode(n, n.position.x + 48, n.position.y + 48)
+    if (!n || n.type === 'group') return
+    // cloneNode strips parentId, so the copy lands at ABSOLUTE coords — for a
+    // grouped child that means converting from parent-relative first.
+    const p = absPos(n)
+    const copy = cloneNode(n, p.x + 48, p.y + 48)
     setNodes((ns) => [...ns.map((x) => ({ ...x, selected: false })), { ...copy, selected: true }])
-  }, [nodes, setNodes])
+  }, [nodes, setNodes, absPos])
 
   const pasteNode = useCallback((flowX?: number, flowY?: number) => {
     const c = clipboardRef.current
@@ -326,6 +410,9 @@ function CanvasInner() {
       const ROW = 240
       const perCol = new Map<number, number>()
       return ns.map((n) => {
+        // Groups and their children keep their manual arrangement — child
+        // coords are parent-relative, so re-laying them out here would scatter.
+        if (n.type === 'group' || n.parentId) return n
         const d = depth.get(n.id) ?? 0
         const row = perCol.get(d) ?? 0
         perCol.set(d, row + 1)
@@ -346,14 +433,15 @@ function CanvasInner() {
       else if (meta && e.key === 'c' && sel) { copyNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'd' && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'v' && clipboardRef.current) { pasteNode(); e.preventDefault() }
-      // LibTV single-key shortcuts (no modifier): Tab=新建节点, D=创建副本
+      // LibTV single-key shortcuts (no modifier): Tab=新建节点, D=创建副本, G=成组, ⇧G=解组
       else if (e.key === 'Tab' && !meta && !e.altKey) { openDockMenu(); e.preventDefault() }
+      else if ((e.key === 'g' || e.key === 'G') && !meta && !e.altKey) { if (e.shiftKey) ungroupSelected(); else groupSelected(); e.preventDefault() }
       else if ((e.key === 'd' || e.key === 'D') && !meta && !e.altKey && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) { selected.forEach((n) => deleteNode(n.id)); e.preventDefault() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode, optimizeLayout, openDockMenu])
+  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode, optimizeLayout, openDockMenu, groupSelected, ungroupSelected])
 
   // Shot sequence = image/video nodes ordered left→right, top→bottom (the
   // storyboard reading order) — the drama as an ordered list of shots.
@@ -363,15 +451,18 @@ function CanvasInner() {
     const col = (x: number) => Math.round(x / 120)
     return nodes
       .filter((n) => n.type === 'image' || n.type === 'video')
-      .sort((a, b) => (col(a.position.x) !== col(b.position.x) ? col(a.position.x) - col(b.position.x) : a.position.y - b.position.y))
-  }, [nodes])
+      .map((n) => ({ n, p: absPos(n) }))
+      .sort((a, b) => (col(a.p.x) !== col(b.p.x) ? col(a.p.x) - col(b.p.x) : a.p.y - b.p.y))
+      .map(({ n }) => n)
+  }, [nodes, absPos])
 
   const focusNode = useCallback((nodeId: string) => {
     const n = nodes.find((x) => x.id === nodeId)
     if (!n) return
-    rf.setCenter(n.position.x + 140, n.position.y + 90, { zoom: 1.1, duration: 400 })
+    const p = absPos(n)
+    rf.setCenter(p.x + 140, p.y + 90, { zoom: 1.1, duration: 400 })
     setNodes((ns) => ns.map((x) => ({ ...x, selected: x.id === nodeId })))
-  }, [nodes, rf, setNodes])
+  }, [nodes, rf, setNodes, absPos])
 
   // viewport-center flow coords for dropping new nodes/graphs
   const centerFlow = useCallback(() => {
@@ -691,6 +782,14 @@ function CanvasInner() {
           <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已选 {selectedNodes.length}</span>
           <button
             type="button"
+            onClick={groupSelected}
+            className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
+            style={{ color: CANVAS_TOKENS.text.primary }}
+          >
+            成组
+          </button>
+          <button
+            type="button"
             onClick={() => selectedNodes.forEach((n) => duplicateNode(n.id))}
             className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
             style={{ color: CANVAS_TOKENS.text.primary }}
@@ -719,6 +818,7 @@ function CanvasInner() {
             <div className="mb-2 text-[12px] font-semibold" style={{ color: CANVAS_TOKENS.text.primary }}>快捷键</div>
             {([
               ['新建节点', 'Tab'],
+              ['成组 / 解组', 'G / ⇧G'],
               ['创建副本', 'D / ⌘D'],
               ['复制 / 粘贴', '⌘C / ⌘V'],
               ['删除', 'Del'],
