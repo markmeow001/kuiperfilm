@@ -66,14 +66,24 @@ export function deserializeCanvas(raw: unknown): {
   const valid = srcNodes.filter(
     (n): n is SerializedNode => Boolean(n) && isValidType((n as SerializedNode).type),
   )
-  const validIds = new Set(valid.map((n) => String(n.id)))
+  // A parent must be a TOP-LEVEL group node (the UI only builds one nesting
+  // level; hand-crafted API payloads could smuggle group→group chains or
+  // parentId pointing at a regular node, which break React Flow's ordering
+  // rules on every subsequent load — strip those here, fail-soft).
+  const topLevelGroupIds = new Set(
+    srcNodes
+      .filter((n) => Boolean(n) && (n as SerializedNode).type === 'group' && !(n as SerializedNode).parentId)
+      .map((n) => String((n as SerializedNode).id)),
+  )
   const nodes: Node<CanvasNodeData>[] = valid
     // React Flow requires parents to appear before their children — order
     // groups first (stable within each bucket).
     .sort((a, b) => Number(b.type === 'group') - Number(a.type === 'group'))
     .map((n) => {
-      // Drop dangling parent refs (group row lost/corrupt) instead of crashing RF.
-      const parentId = n.parentId && validIds.has(String(n.parentId)) ? String(n.parentId) : undefined
+      const parentId =
+        n.type !== 'group' && n.parentId && topLevelGroupIds.has(String(n.parentId))
+          ? String(n.parentId)
+          : undefined
       return {
         id: String(n.id),
         type: n.type,

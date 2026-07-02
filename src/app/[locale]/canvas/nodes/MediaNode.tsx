@@ -108,8 +108,11 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     )
     // Live input signature vs the one captured at last generate → 「输入已更新」
     // badge (LibTV) when upstream output/text drifted after this node produced.
+    // Query strings are stripped: under COS storage the refs are signed URLs
+    // whose signature rotates on every fetch — hashing the raw URL would keep
+    // the badge lit forever. JSON.stringify avoids delimiter collisions.
     const inputsSig = useMemo(
-      () => [upstreamText, ...allRefs].filter(Boolean).join('|'),
+      () => JSON.stringify([upstreamText, ...allRefs.map((r) => r.split('?')[0])]),
       [upstreamText, allRefs],
     )
     const inputsChanged = Boolean(d.resultUrl) && d.inputsSig != null && d.inputsSig !== inputsSig
@@ -576,6 +579,13 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
           {error ? (
             <div className="text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div>
+          ) : null}
+          {/* Worker-side failure — the card badge says 点选节点查看, this is the
+              "查看": surface the run's error message in the panel. */}
+          {!error && run?.status === 'failed' ? (
+            <div className="text-[10px]" style={{ color: '#FF8A8A' }}>
+              生成失败：{run.errorMessage ?? '未知错误，请重试'}
+            </div>
           ) : null}
 
           <button

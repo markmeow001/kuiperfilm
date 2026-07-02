@@ -269,17 +269,19 @@ function CanvasInner() {
     [],
   )
 
-  const copyNode = useCallback((nodeId: string) => {
-    const n = nodes.find((x) => x.id === nodeId)
-    if (n) clipboardRef.current = n
-  }, [nodes])
-
   // Absolute flow position — grouped children store parent-relative coords.
   const absPos = useCallback((n: Node<CanvasNodeData>): { x: number; y: number } => {
     if (!n.parentId) return n.position
     const p = nodes.find((x) => x.id === n.parentId)
     return p ? { x: n.position.x + p.position.x, y: n.position.y + p.position.y } : n.position
   }, [nodes])
+
+  const copyNode = useCallback((nodeId: string) => {
+    const n = nodes.find((x) => x.id === nodeId)
+    // Snapshot with ABSOLUTE coords — a grouped child's own position is
+    // parent-relative, and paste treats the clipboard position as canvas space.
+    if (n) clipboardRef.current = { ...n, position: absPos(n) }
+  }, [nodes, absPos])
 
   const deleteNode = useCallback((nodeId: string) => {
     setNodes((ns) => {
@@ -434,9 +436,10 @@ function CanvasInner() {
       else if (meta && e.key === 'd' && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'v' && clipboardRef.current) { pasteNode(); e.preventDefault() }
       // LibTV single-key shortcuts (no modifier): Tab=新建节点, D=创建副本, G=成组, ⇧G=解组
-      else if (e.key === 'Tab' && !meta && !e.altKey) { openDockMenu(); e.preventDefault() }
-      else if ((e.key === 'g' || e.key === 'G') && !meta && !e.altKey) { if (e.shiftKey) ungroupSelected(); else groupSelected(); e.preventDefault() }
-      else if ((e.key === 'd' || e.key === 'D') && !meta && !e.altKey && sel) { duplicateNode(sel.id); e.preventDefault() }
+      // (Shift+Tab stays free for reverse keyboard navigation.)
+      else if (e.key === 'Tab' && !meta && !e.altKey && !e.shiftKey) { openDockMenu(); e.preventDefault() }
+      else if ((e.key === 'g' || e.key === 'G') && !meta && !e.altKey && !e.repeat) { if (e.shiftKey) ungroupSelected(); else groupSelected(); e.preventDefault() }
+      else if ((e.key === 'd' || e.key === 'D') && !meta && !e.altKey && !e.repeat && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) { selected.forEach((n) => deleteNode(n.id)); e.preventDefault() }
     }
     window.addEventListener('keydown', onKey)
@@ -544,6 +547,11 @@ function CanvasInner() {
         // snaps near-misses so the small handles are easy to hit.
         connectionMode={ConnectionMode.Loose}
         connectionRadius={42}
+        // Deletion is fully owned by our keyboard handler / context menu:
+        // RF's built-in Backspace handler cascade-DELETES a group's children,
+        // while ours RELEASES them (converts back to absolute coords). Leaving
+        // both active makes Backspace destroy data our Delete path preserves.
+        deleteKeyCode={null}
         defaultEdgeOptions={{ animated: false, style: { stroke: CANVAS_TOKENS.edge.idle, strokeWidth: 2 } }}
       >
         <Background variant={BackgroundVariant.Dots} gap={CANVAS_TOKENS.grid} size={1.4} color="rgba(255,255,255,0.10)" />
@@ -790,7 +798,21 @@ function CanvasInner() {
           </button>
           <button
             type="button"
-            onClick={() => selectedNodes.forEach((n) => duplicateNode(n.id))}
+            onClick={() => {
+              // One batched update: N copies land together and ALL stay
+              // selected (a per-node loop deselects every copy but the last).
+              const copies = selectedNodes
+                .filter((n) => n.type !== 'group')
+                .map((n) => {
+                  const p = absPos(n)
+                  return cloneNode(n, p.x + 48, p.y + 48)
+                })
+              if (copies.length === 0) return
+              setNodes((ns) => [
+                ...ns.map((x) => ({ ...x, selected: false })),
+                ...copies.map((c) => ({ ...c, selected: true })),
+              ])
+            }}
             className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
             style={{ color: CANVAS_TOKENS.text.primary }}
           >

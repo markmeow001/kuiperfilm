@@ -92,6 +92,23 @@ describe('deserializeCanvas', () => {
     expect(back.nodes.find((n) => n.id === 'g')?.style).toEqual({ width: 420, height: 310 })
   })
 
+  it('strips illegal parent topology: parentId to a non-group, and nested groups', () => {
+    const back = deserializeCanvas({
+      nodes: [
+        { id: 'a', type: 'image', x: 0, y: 0, data: {} },
+        { id: 'c', type: 'image', x: 1, y: 2, data: {}, parentId: 'a' }, // parent is not a group
+        { id: 'g1', type: 'group', x: 0, y: 0, data: {}, w: 100, h: 100 },
+        { id: 'g2', type: 'group', x: 0, y: 0, data: {}, w: 100, h: 100, parentId: 'g1' }, // nested group
+        { id: 'd', type: 'image', x: 1, y: 2, data: {}, parentId: 'g2' }, // parent group is itself nested
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    })
+    expect(back.nodes.find((n) => n.id === 'c')?.parentId).toBeUndefined()
+    expect(back.nodes.find((n) => n.id === 'g2')?.parentId).toBeUndefined()
+    expect(back.nodes.find((n) => n.id === 'd')?.parentId).toBeUndefined()
+  })
+
   it('drops a dangling parentId instead of crashing React Flow', () => {
     const back = deserializeCanvas({
       nodes: [{ id: 'c', type: 'image', x: 1, y: 2, data: {}, parentId: 'missing' }],

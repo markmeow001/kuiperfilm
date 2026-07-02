@@ -27,8 +27,8 @@ const serializedNodeSchema = z.object({
   // 成组 (grouping): children reference their group container; the container
   // persists an explicit size.
   parentId: z.string().min(1).max(128).optional(),
-  w: z.number().finite().optional(),
-  h: z.number().finite().optional(),
+  w: z.number().finite().positive().max(10_000).optional(),
+  h: z.number().finite().positive().max(10_000).optional(),
 })
 
 const serializedEdgeSchema = z.object({
