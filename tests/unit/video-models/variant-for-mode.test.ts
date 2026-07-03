@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { variantKeyForMode, isVariantSuffixedKey } from '@/lib/video-models/variant-for-mode'
+import { variantKeyForMode, isVariantSuffixedKey, variantModeMismatch } from '@/lib/video-models/variant-for-mode'
 
 const SEEDANCE_KEYS = [
   'atlascloud::seedance-2.0-t2v',
@@ -37,10 +37,33 @@ describe('variantKeyForMode', () => {
       .toBe('atlascloud::seedance-2.0-fast-i2v')
   })
 
-  it('passes through non-variant keys untouched (fal flat i2v, Kling)', () => {
+  it('passes through non-variant keys untouched (Kling)', () => {
     expect(variantKeyForMode('fal::kling-video-v2.5', 'image', SEEDANCE_KEYS))
       .toBe('fal::kling-video-v2.5')
     expect(isVariantSuffixedKey('fal::kling-video-v2.5')).toBe(false)
     expect(isVariantSuffixedKey('atlascloud::seedance-2.0-r2v')).toBe(true)
+  })
+
+  it('handles fal SLUG-style variant ids (the 2026-07-03 report: no auto-match)', () => {
+    const FAL_KEYS = [
+      'fal::bytedance/seedance-2.0/image-to-video',
+      'fal::bytedance/seedance-2.0/reference-to-video',
+      'fal::bytedance/seedance-2.0/fast/image-to-video',
+    ]
+    expect(variantKeyForMode('fal::bytedance/seedance-2.0/reference-to-video', 'image', FAL_KEYS))
+      .toBe('fal::bytedance/seedance-2.0/image-to-video')
+    expect(variantKeyForMode('fal::bytedance/seedance-2.0/image-to-video', 'omni', FAL_KEYS))
+      .toBe('fal::bytedance/seedance-2.0/reference-to-video')
+    // fast line: r2v sibling not enabled → unchanged
+    expect(variantKeyForMode('fal::bytedance/seedance-2.0/fast/image-to-video', 'omni', FAL_KEYS))
+      .toBe('fal::bytedance/seedance-2.0/fast/image-to-video')
+    expect(isVariantSuffixedKey('fal::bytedance/seedance-2.0/image-to-video')).toBe(true)
+  })
+
+  it('variantModeMismatch flags a variant key on the wrong endpoint (both styles)', () => {
+    expect(variantModeMismatch('atlascloud::seedance-2.0-r2v', 'image')).toBe(true)
+    expect(variantModeMismatch('atlascloud::seedance-2.0-i2v', 'image')).toBe(false)
+    expect(variantModeMismatch('fal::bytedance/seedance-2.0/reference-to-video', 'image')).toBe(true)
+    expect(variantModeMismatch('fal::kling-video-v2.5', 'image')).toBe(false)
   })
 })

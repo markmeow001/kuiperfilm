@@ -32,7 +32,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
-import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
+import { variantKeyForMode, variantModeMismatch, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   useUploadPlaygroundReference,
@@ -441,11 +441,9 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
                   if (eff !== modelKey) {
                     const label = videoModels.find((m) => m.value === eff)?.label ?? eff
                     notes.push(`已自動匹配端點：${label}`)
-                  } else {
-                    const want = videoRefMode === 'image' ? 'i2v' : 'r2v'
-                    if (/-(t2v|i2v|r2v)$/.test(modelKey) && !modelKey.endsWith(`-${want}`)) {
-                      return <div className="mt-1 font-mono text-[10px] text-amber-400">此模式需要 {want.toUpperCase()} 端點變體 — 請到 /profile 啟用對應模型</div>
-                    }
+                  } else if (variantModeMismatch(modelKey, videoRefMode)) {
+                    const want = videoRefMode === 'image' ? 'I2V' : 'R2V'
+                    return <div className="mt-1 font-mono text-[10px] text-amber-400">此模式需要 {want} 端點變體 — 請到 /profile 啟用對應模型</div>
                   }
                   return notes.length > 0
                     ? <div className="mt-1 font-mono text-[10px] text-stone-500">{notes.join(' · ')}</div>
