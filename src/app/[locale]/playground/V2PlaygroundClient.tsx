@@ -32,7 +32,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
-import { variantKeyForMode, variantModeMismatch, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
+import { variantKeyForMode, variantModeMismatch, isVariantSuffixedKey, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   useUploadPlaygroundReference,
@@ -431,6 +431,9 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
                     </button>
                   ))}
                 </div>
+                {/* Endpoint status — ALWAYS shown so "nothing happened" is
+                    never ambiguous (2026-07-03 report: silence on an already-
+                    matching / non-variant model read as "feature not working"). */}
                 {(() => {
                   const keys = videoModels.map((m) => m.value)
                   const eff = variantKeyForMode(modelKey, videoRefMode, keys)
@@ -444,10 +447,12 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
                   } else if (variantModeMismatch(modelKey, videoRefMode)) {
                     const want = videoRefMode === 'image' ? 'I2V' : 'R2V'
                     return <div className="mt-1 font-mono text-[10px] text-amber-400">此模式需要 {want} 端點變體 — 請到 /profile 啟用對應模型</div>
+                  } else if (isVariantSuffixedKey(modelKey)) {
+                    notes.push(`✓ 當前模型已是${videoRefMode === 'image' ? ' I2V 首幀' : ' R2V 參考'}端點`)
+                  } else {
+                    notes.push('⚠ 此模型不分首幀/參考端點，參考圖語義由模型自身決定（要確保首幀請改用 Seedance I2V）')
                   }
-                  return notes.length > 0
-                    ? <div className="mt-1 font-mono text-[10px] text-stone-500">{notes.join(' · ')}</div>
-                    : null
+                  return <div className="mt-1 font-mono text-[10px] text-stone-500">{notes.join(' · ')}</div>
                 })()}
               </div>
             ) : null}
