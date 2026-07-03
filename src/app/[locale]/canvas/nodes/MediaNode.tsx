@@ -21,6 +21,7 @@ import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { IMAGE_RECIPES } from '../lib/canvas-recipes'
 import { visualStyles } from '@/lib/style-library'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
+import { variantKeyForMode } from '@/lib/video-models/variant-for-mode'
 import { NodeShell } from './node-shell'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '2:1', '21:9', '1:1', '4:3', '3:4', '4:5']
@@ -218,10 +219,17 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           setSubmitting(false)
           return
         }
+        // Video mode tabs must reach the matching ENDPOINT variant — a t2v/
+        // i2v/r2v-suffixed key is swapped to the sibling implementing the
+        // selected mode (图生视频 = first frame needs the i2v endpoint; on an
+        // r2v key the image would only be a style/identity reference).
+        const effectiveModelKey = outputType === 'video'
+          ? variantKeyForMode(d.modelKey, genMode, models.map((m) => m.value))
+          : d.modelKey
         const submission = {
           prompt: finalPrompt,
           outputType,
-          modelKey: d.modelKey,
+          modelKey: effectiveModelKey,
           aspectRatio: d.aspectRatio,
           // anchor (own blocking screenshot) + upstream refs (cast appearance).
           // For video, refsForSubmit[0] is the i2v first frame (gated by mode).
@@ -428,6 +436,23 @@ export function makeMediaNode(outputType: 'image' | 'video') {
               ))}
             </div>
           ) : null}
+
+          {/* Mode ↔ endpoint feedback: variant-suffixed models (Seedance t2v/
+              i2v/r2v) swap endpoints per mode — say so, or warn when the
+              needed sibling isn't enabled. */}
+          {outputType === 'video' ? (() => {
+            const keys = models.map((m) => m.value)
+            const eff = variantKeyForMode(d.modelKey, genMode, keys)
+            if (eff !== d.modelKey) {
+              const label = models.find((m) => m.value === eff)?.label ?? eff
+              return <div className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>模式已匹配端点：{label}</div>
+            }
+            const wantSuffix = genMode === 'text' ? 't2v' : genMode === 'omni' ? 'r2v' : 'i2v'
+            if (/-(t2v|i2v|r2v)$/.test(d.modelKey) && !d.modelKey.endsWith(`-${wantSuffix}`)) {
+              return <div className="text-[10px]" style={{ color: '#F4C44E' }}>该模式需要 {wantSuffix.toUpperCase()} 端点变体，请在 /profile 启用后生效（当前将按所选模型语义执行）</div>
+            }
+            return null
+          })() : null}
 
           {/* 首尾帧: last-frame upload (first frame comes from the upstream ref) */}
           {outputType === 'video' && genMode === 'firstlast' ? (

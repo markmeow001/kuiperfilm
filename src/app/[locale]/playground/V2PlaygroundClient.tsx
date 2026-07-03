@@ -32,6 +32,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
+import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   useUploadPlaygroundReference,
@@ -85,6 +86,10 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   // Output state
   const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
   const [compressing, setCompressing] = useState(false)
+  // 参考图用途 (video): 'image' = first frame (i2v), 'omni' = style/identity
+  // reference (r2v). Defaults to first frame — the semantics users expected
+  // when they reported refs "only following the style" (2026-07-02).
+  const [videoRefMode, setVideoRefMode] = useState<Extract<VideoRefMode, 'image' | 'omni'>>('image')
 
   // T-3 cost estimate (live) — refetches when model/outputType/duration changes.
   // Resolution isn't currently a user-controlled state in Playground T-1/T-2
@@ -270,6 +275,13 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
     if (overrideModelKey && overrideModelKey !== modelKey) {
       setModelKey(overrideModelKey)
     }
+    // Video + refs: route to the endpoint variant implementing the chosen
+    // 参考图用途 (i2v sibling for first-frame, r2v for style reference). Keys
+    // without a t2v/i2v/r2v suffix — or without the sibling enabled — pass
+    // through unchanged.
+    const effectiveModelKey = outputType === 'video' && refImages.length > 0
+      ? variantKeyForMode(useModelKey, videoRefMode, videoModels.map((m) => m.value))
+      : useModelKey
     try {
       const result = await submit.mutateAsync({
         prompt: effectivePrompt,
@@ -277,7 +289,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
         referenceVideos: refVideo ? [refVideo.key] : [],
         referenceText: refText.trim() || undefined,
         outputType,
-        modelKey: useModelKey,
+        modelKey: effectiveModelKey,
         aspectRatio,
         ...(outputType === 'video' ? { durationSec } : {}),
         ...(showResolutionPicker ? { resolution } : {}),
@@ -394,6 +406,53 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
                 參考圖片 <span className="text-violet-400">({refImages.length}/{MAX_REF_IMAGES})</span>
               </span>
             </div>
+            {/* 参考图用途 — video only. Seedance-class endpoints give the image
+                different SEMANTICS per variant (i2v = first frame, r2v = style/
+                identity ref); the submit swaps to the sibling variant that
+                implements the chosen mode. */}
+            {outputType === 'video' && refImages.length > 0 ? (
+              <div className="mb-2">
+                <div className="flex gap-1">
+                  {([
+                    { key: 'image', label: '首幀（畫面從這張圖開始）' },
+                    { key: 'omni', label: '風格 / 角色參考' },
+                  ] as const).map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setVideoRefMode(m.key)}
+                      className={`flex-1 rounded-sm border px-2 py-1.5 font-mono text-[11px] transition-colors ${
+                        videoRefMode === m.key
+                          ? 'border-violet-500/60 bg-violet-500/10 text-violet-300'
+                          : 'border-stone-700 text-stone-500 hover:text-stone-300'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                {(() => {
+                  const keys = videoModels.map((m) => m.value)
+                  const eff = variantKeyForMode(modelKey, videoRefMode, keys)
+                  const notes: string[] = []
+                  if (videoRefMode === 'image' && refImages.length > 1) {
+                    notes.push('首幀模式僅使用第 1 張參考圖')
+                  }
+                  if (eff !== modelKey) {
+                    const label = videoModels.find((m) => m.value === eff)?.label ?? eff
+                    notes.push(`已自動匹配端點：${label}`)
+                  } else {
+                    const want = videoRefMode === 'image' ? 'i2v' : 'r2v'
+                    if (/-(t2v|i2v|r2v)$/.test(modelKey) && !modelKey.endsWith(`-${want}`)) {
+                      return <div className="mt-1 font-mono text-[10px] text-amber-400">此模式需要 {want.toUpperCase()} 端點變體 — 請到 /profile 啟用對應模型</div>
+                    }
+                  }
+                  return notes.length > 0
+                    ? <div className="mt-1 font-mono text-[10px] text-stone-500">{notes.join(' · ')}</div>
+                    : null
+                })()}
+              </div>
+            ) : null}
             <div className="grid grid-cols-5 gap-2">
               {/* Upload slot */}
               <button
