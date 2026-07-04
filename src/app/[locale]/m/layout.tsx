@@ -6,14 +6,14 @@
  * Desktop UI (V2 workspace) stays untouched — this is a parallel
  * surface that reuses the same hooks / APIs.
  *
- * Scope: project list → episode list → per-panel review (image +
- * video + dialogue). NO creation / NO editing / NO generation. If a
- * mobile user ever needs to author content, they fall back to /v2/*
- * on a real screen.
+ * Scope (2026-07-04): the mobile HOME is /m/playground — conversational
+ * image generation (chat thread over the playground run spine). Review
+ * remains at /m/projects (project list → episode list → per-panel
+ * review). Heavier authoring (storyboard/multi-shot) still lives on
+ * /v2/* on a real screen.
  *
- * The route is intentionally not wired into the desktop nav. Users
- * type the URL or bookmark it. We may add a UA-detect redirect later
- * once the surface is proven.
+ * Phone UAs are auto-redirected here by the middleware (see
+ * src/lib/mobile-detection.ts); the desktop-override banner opts out.
  */
 import type { Metadata } from 'next'
 import type { ReactNode } from 'react'

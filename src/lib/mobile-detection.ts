@@ -35,7 +35,8 @@ export function isPhoneUserAgent(userAgent: string | null | undefined): boolean 
  * "I really wanted desktop" case.
  *
  * Examples:
- *   /zh/v2                                  → /zh/m/projects
+ *   /zh/v2                                  → /zh/m/playground (mobile home = 生圖對話)
+ *   /zh/playground                          → /zh/m/playground
  *   /zh/v2/workspace/<pid>                  → /zh/m/projects/<pid>
  *   /zh/v2/workspace/<pid>/storyboard       → /zh/m/projects/<pid>
  *   /zh/v2/workspace/<pid>/script           → /zh/m/projects/<pid>
@@ -47,10 +48,12 @@ export function v2PathToMobile(pathname: string): string | null {
   if (parts.length < 2) return null
   const locale = parts[0]
   if (locale !== 'zh' && locale !== 'en') return null
+  // Desktop playground → mobile chat playground.
+  if (parts[1] === 'playground' && parts.length === 2) return `/${locale}/m/playground`
   if (parts[1] !== 'v2') return null
 
-  // /<locale>/v2  → projects list
-  if (parts.length === 2) return `/${locale}/m/projects`
+  // /<locale>/v2 → mobile home (conversational playground, 2026-07-04).
+  if (parts.length === 2) return `/${locale}/m/playground`
 
   // /<locale>/v2/new → don't redirect; new project needs desktop
   if (parts[2] === 'new') return null
@@ -77,6 +80,10 @@ export function mobilePathToV2(pathname: string): string {
   const locale = parts[0] === 'en' ? 'en' : 'zh'
   if (parts[1] !== 'm') return `/${locale}/v2`
 
+  // /m/playground → desktop playground
+  if (parts[2] === 'playground') {
+    return `/${locale}/playground`
+  }
   // /m/projects → /v2
   if (parts[2] === 'projects' && parts.length === 3) {
     return `/${locale}/v2`

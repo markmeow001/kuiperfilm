@@ -47,11 +47,11 @@ describe('isPhoneUserAgent', () => {
 
 describe('v2PathToMobile', () => {
   it('redirects /zh/v2 to projects list', () => {
-    expect(v2PathToMobile('/zh/v2')).toBe('/zh/m/projects')
+    expect(v2PathToMobile('/zh/v2')).toBe('/zh/m/playground')
   })
 
   it('redirects /en/v2 to en projects list', () => {
-    expect(v2PathToMobile('/en/v2')).toBe('/en/m/projects')
+    expect(v2PathToMobile('/en/v2')).toBe('/en/m/playground')
   })
 
   it('redirects workspace home to project mobile home', () => {
@@ -81,6 +81,11 @@ describe('v2PathToMobile', () => {
 })
 
 describe('mobilePathToV2', () => {
+  it('maps mobile home + playground paths (2026-07-04: chat playground is the mobile home)', () => {
+    expect(v2PathToMobile('/zh/playground')).toBe('/zh/m/playground')
+    expect(mobilePathToV2('/zh/m/playground')).toBe('/zh/playground')
+  })
+
   it('maps /m/projects to /v2', () => {
     expect(mobilePathToV2('/zh/m/projects')).toBe('/zh/v2')
   })

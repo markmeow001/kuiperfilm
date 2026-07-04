@@ -95,13 +95,21 @@ export default function MobileProjectsPage() {
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={() => signOut({ callbackUrl: `/${locale}/m/auth/signin` })}
-          className="rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400"
-        >
-          登出
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/${locale}/m/playground`}
+            className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-mono text-[10px] tracking-wider text-amber-400"
+          >
+            ✦ 生圖對話
+          </Link>
+          <button
+            type="button"
+            onClick={() => signOut({ callbackUrl: `/${locale}/m/auth/signin` })}
+            className="rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 font-mono text-[10px] tracking-wider text-stone-400 transition-all hover:border-amber-500/40 hover:text-amber-400"
+          >
+            登出
+          </button>
+        </div>
       </header>
 
       {error ? (
