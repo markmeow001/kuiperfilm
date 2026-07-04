@@ -67,7 +67,9 @@ Image（13 個）：
 - **跟本輪改動的關係**: 無。本輪是合併 `feature/multi-user`（多人系統 K1-K6 + 整合測試），未動 `safe-rewrite` 路徑。
 - **可能原因**: 跟 Phase 6 AI runtime unification 同時的遺留路由，尚未遷移到 `createRun` → worker handler。
 - **建議**: 由負責 Phase 6 / Phase 8 的 owner 處理，把 safe-rewrite 改走 worker；不在多人系統範疇。
-- **狀態**: 待確認
+- **狀態**: ✅ 已解決（2026-07-04 核實）— safe-rewrite/route.ts 已改走 `executeAiTextStep`（ai-runtime），
+  route 內無 `chatCompletion(` 直呼（原 line 56/74 已遷移）；`check:no-api-direct-llm-call` 綠。
+  route 檔頭註解已標「Q-004 fix」。
 - **建立時間**: 2026-04-28
 
 ---

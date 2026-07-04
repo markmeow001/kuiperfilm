@@ -11,7 +11,10 @@
 
 ## 未完全收口
 
-1. 长尾 AI handler 已完成第一批迁移，但仍有部分直接调用 `llm-client`（如 shot 系列、`text.worker`、`storyboard-phases`）待收口。
+1. ~~长尾 AI handler 仍有部分直接调用 `llm-client`（shot 系列 / `text.worker` / `storyboard-phases`）待收口。~~
+   ✅ 已收口（2026-07-04 核实）：`src/` 内 `@/lib/llm-client` 生产端已无直接 import，`chatCompletion(` 直呼仅存在于
+   `src/lib/llm/*` 基础层；最后一处 API route（`safe-rewrite`，见 Q-004）已改走 `executeAiTextStep`（ai-runtime）。
+   `check:no-api-direct-llm-call` 绿。（`src/lib/llm-client.ts` 现为 `./llm/runtime` 的薄 re-export shim。）
 2. 图片/视频/音频页面的运行态展示与控制仍存在 task-state 路径，未全部切到 run-store。
 3. 旧 task-stream 基础设施仍用于非 run 页面，尚未最终下线。
 
