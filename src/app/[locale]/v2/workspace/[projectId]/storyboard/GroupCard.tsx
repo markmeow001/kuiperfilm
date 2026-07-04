@@ -2429,7 +2429,9 @@ export function GroupCard({
                           </span>
                           {Array.isArray(p.characters) && p.characters.length > 0 ? (
                             <span className="font-mono text-[12px] tracking-wider text-stone-500">
-                              {p.characters.join(' / ')}
+                              {p.characters
+                                .map((c) => (typeof c === 'string' ? c : c.name))
+                                .join(' / ')}
                             </span>
                           ) : null}
                         </div>

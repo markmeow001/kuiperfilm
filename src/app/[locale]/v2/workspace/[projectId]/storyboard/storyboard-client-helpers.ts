@@ -38,8 +38,11 @@ export interface PanelLike {
   shotType?: string | null
   cameraMove?: string | null
   location?: string | null
-  // Decoded server-side; see storyboards API route.
-  characters?: PanelCharacterRef[] | null
+  // Decoded server-side; see storyboards API route. The API decodes legacy
+  // bare-string entries into {name} shape, but some panels still carry raw
+  // strings — so the honest type is the union. Readers must handle both
+  // (typeof c === 'string' ? c : c.name).
+  characters?: Array<PanelCharacterRef | string> | null
   // 2026-05-13 — Structured voice lines (server joins NovelPromotionVoiceLine).
   // When present, GroupCard's buildInitialNarrative prefers these over
   // srtSegment so OS / voice-over lines can be tagged for off-camera render.

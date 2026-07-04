@@ -26,7 +26,9 @@ export interface ColdOpenCharacterRef {
 export interface ColdOpenPanel {
   id: string
   description?: string | null
-  characters?: ColdOpenCharacterRef[] | string[] | null
+  // Union mirrors storyboard PanelLike.characters — panels may carry decoded
+  // {name} refs or raw bare strings. extractPanelCharNames handles both.
+  characters?: Array<ColdOpenCharacterRef | string> | null
   location?: string | null
   voiceLines?: ColdOpenVoiceLine[]
   /** Legacy fallback when voiceLines is missing. */
