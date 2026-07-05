@@ -1,5 +1,5 @@
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
-import { fal } from '@fal-ai/client'
+import { fal, createFalClient } from '@fal-ai/client'
 import { prisma } from '@/lib/prisma'
 import { getAudioApiKey, getProviderKey, resolveModelSelectionOrSingle } from '@/lib/api-config'
 import { extractCOSKey, getSignedUrl, imageUrlToBase64, toFetchableUrl, uploadToCOS } from '@/lib/cos'
@@ -55,9 +55,12 @@ export async function generateVoiceWithIndexTTS2(params: {
     _ulogInfo(`IndexTTS2: Using emotion prompt: ${params.emotionPrompt}`)
   }
 
-  if (params.falApiKey) {
-    fal.config({ credentials: params.falApiKey })
-  }
+  // Per-call scoped client so the FAL credential is NOT mutated on the global
+  // singleton. `fal.config()` sets module-level state; under voice-worker
+  // concurrency (up to QUEUE_CONCURRENCY_VOICE=10) two jobs with different keys
+  // could race — job A configures keyA, job B overwrites with keyB, then A's
+  // subscribe() runs under keyB. createFalClient isolates credentials per call.
+  const client = params.falApiKey ? createFalClient({ credentials: params.falApiKey }) : fal
 
   const audioDataUrl = params.referenceAudioUrl.startsWith('data:')
     ? params.referenceAudioUrl
@@ -80,7 +83,7 @@ export async function generateVoiceWithIndexTTS2(params: {
     input.emotion_prompt = params.emotionPrompt.trim()
   }
 
-  const result = await fal.subscribe(params.endpoint, {
+  const result = await client.subscribe(params.endpoint, {
     input,
     logs: false,
   })
