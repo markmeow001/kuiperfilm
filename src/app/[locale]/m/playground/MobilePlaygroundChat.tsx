@@ -129,7 +129,7 @@ export function MobilePlaygroundChat({ locale }: MobilePlaygroundChatProps) {
   }
 
   return (
-    <div className="flex h-[100svh] flex-col" style={{ background: C.bg, color: C.text }}>
+    <div className="flex h-full flex-col" style={{ background: C.bg, color: C.text }}>
       {/* Top bar — 64px, model pill on the LEFT (Gemini pattern) */}
       <header className="flex h-16 shrink-0 items-center justify-between pl-2 pr-3">
         <button

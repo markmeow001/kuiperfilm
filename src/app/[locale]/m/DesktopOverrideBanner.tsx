@@ -70,7 +70,7 @@ export function DesktopOverrideBanner() {
   return (
     <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-amber-900/30 bg-stone-950/95 px-3 py-2 backdrop-blur-sm">
       <div className="flex-1 font-mono text-[11px] leading-tight tracking-wider text-stone-400">
-        手機版只支援預覽 + 輕量編輯
+        手機版 · 完整創作流程請切桌面版
       </div>
       <button
         type="button"

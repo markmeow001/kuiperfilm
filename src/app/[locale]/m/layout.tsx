@@ -26,10 +26,14 @@ export const metadata: Metadata = {
 }
 
 export default function MobileLayout({ children }: { children: ReactNode }) {
+  // One flex column exactly the viewport tall: the banner takes its row and
+  // children get the REST (min-h-0 so inner scroll areas work). Stacking the
+  // banner above a 100svh child pushed the page below the fold — the chat
+  // top bar (model picker) slid underneath the sticky banner and "vanished".
   return (
-    <div className="grain min-h-[100svh] bg-stone-950 text-stone-200">
+    <div className="grain flex h-[100svh] flex-col bg-stone-950 text-stone-200">
       <DesktopOverrideBanner />
-      {children}
+      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
   )
 }
