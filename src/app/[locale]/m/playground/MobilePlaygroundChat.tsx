@@ -206,6 +206,13 @@ export function MobilePlaygroundChat({ locale }: MobilePlaygroundChatProps) {
           >
             {upload.isPending ? '…' : '＋'}
           </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handlePickRef}
+          />
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
