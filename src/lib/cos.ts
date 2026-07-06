@@ -180,6 +180,35 @@ export function getCOSClient() {
   return cos!
 }
 
+// Key 副檔名 → MIME 映射。雲端模式（R2/COS）上傳時必須顯式標注,
+// 否則物件以 application/octet-stream 供應 — Safari/iOS 的 <video> 對
+// MIME 嚴格,octet-stream 的 mp4 直接拒播（圖片因瀏覽器 sniffing 倖存,
+// 所以症狀是「圖片看得到、影片看不到」）。本地模式不受影響:
+// /api/files/[...path] 回應時已按副檔名補 MIME,這也是 bug 只在雲端
+// 環境出現、本地開發抓不到的原因。
+const UPLOAD_MIME_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.json': 'application/json',
+  '.txt': 'text/plain; charset=utf-8',
+  '.srt': 'text/plain; charset=utf-8',
+  '.zip': 'application/zip',
+}
+
+export function contentTypeForKey(key: string): string {
+  const ext = path.extname(key).toLowerCase()
+  return UPLOAD_MIME_TYPES[ext] || 'application/octet-stream'
+}
+
 /**
  * 上传文件到存储（COS或本地文件系统）
  * @param buffer 文件Buffer
@@ -219,6 +248,7 @@ export async function uploadToCOS(buffer: Buffer, key: string, maxRetries: numbe
           Bucket: R2_BUCKET,
           Key: key,
           Body: buffer,
+          ContentType: contentTypeForKey(key),
         }))
 
         if (attempt > 1) {
@@ -267,6 +297,7 @@ export async function uploadToCOS(buffer: Buffer, key: string, maxRetries: numbe
             Region: REGION,
             Key: key,
             Body: buffer,
+            ContentType: contentTypeForKey(key),
             // 不设置ACL，保持私有（默认）
           },
           (err) => {

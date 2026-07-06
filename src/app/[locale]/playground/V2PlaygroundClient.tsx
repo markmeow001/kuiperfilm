@@ -745,6 +745,22 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
                   {run.resultUrls?.[0] && run.outputType === 'image' ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={run.resultUrls[0]} alt="history" className="h-full w-full object-cover" />
+                  ) : run.resultUrls?.[0] && run.outputType === 'video' ? (
+                    // preload=metadata 只抓 moov+首幀當縮圖,不會下載整支
+                    // 影片;▶ overlay 標示這格是影片。修「歷史列影片永遠
+                    // 只有 ▶ 灰格沒縮圖」。
+                    <>
+                      <video
+                        src={run.resultUrls[0]}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="pointer-events-none h-full w-full object-cover"
+                      />
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[12px] text-white/80">
+                        ▶
+                      </div>
+                    </>
                   ) : (
                     <div className="flex h-full w-full items-center justify-center font-mono text-[10px] text-stone-500">
                       {run.status === 'failed' ? '✕' : run.outputType === 'video' ? '▶' : '…'}
