@@ -85,6 +85,8 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
 
   // Output state
   const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
+  // 描述詞面板「已複製」的短暫回饋(1.5s 後自動復原)。
+  const [promptCopied, setPromptCopied] = useState(false)
   const [compressing, setCompressing] = useState(false)
   // 参考图用途 (video): 'image' = first frame (i2v), 'omni' = style/identity
   // reference (r2v). Defaults to first frame — the semantics users expected
@@ -313,6 +315,28 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
 
   function handlePickHistoryRun(run: PlaygroundRunRow) {
     setLatestRun(run)
+  }
+
+  /** 描述詞面板 — 複製當前結果的原始 prompt 到剪貼簿。 */
+  async function handleCopyPrompt() {
+    if (!latestRun?.prompt) return
+    try {
+      await navigator.clipboard.writeText(latestRun.prompt)
+      setPromptCopied(true)
+      setTimeout(() => setPromptCopied(false), 1500)
+    } catch (err) {
+      alert(`複製失敗:${(err as Error)?.message ?? '瀏覽器不允許存取剪貼簿'}`)
+    }
+  }
+
+  /** 描述詞面板 — 把原始 prompt 帶回左側輸入框修改後重新生成。 */
+  function handleEditPrompt() {
+    if (!latestRun?.prompt) return
+    setPrompt(latestRun.prompt)
+    setTimeout(() => {
+      promptRef.current?.focus()
+      promptRef.current?.setSelectionRange(latestRun.prompt.length, latestRun.prompt.length)
+    }, 0)
   }
 
   const isBusy = upload.isPending || submit.isPending || compressing
@@ -696,6 +720,40 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
           </div>
             )
           })()}
+
+          {/* 描述詞面板 — 每筆結果(含歷史列點選)附上原始 prompt,
+              可複製、可帶回輸入框修改後重生成。 */}
+          {latestRun?.prompt ? (
+            <div className="mb-3 rounded-sm border border-stone-800 bg-stone-900/30 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                  描述詞
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyPrompt}
+                    className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 transition-colors hover:border-amber-500/60 hover:text-amber-300"
+                    title="複製描述詞到剪貼簿"
+                  >
+                    {promptCopied ? '✓ 已複製' : '複製'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEditPrompt}
+                    disabled={isBusy}
+                    className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 transition-colors hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="帶回左側輸入框修改後重新生成"
+                  >
+                    修改
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words font-serif-cn text-[12px] leading-relaxed text-stone-400">
+                {latestRun.prompt}
+              </div>
+            </div>
+          ) : null}
 
           {/* Phase T-3 — cross-model chip strip. After a run completes,
               show 2-3 OTHER user-enabled models of the same outputType
