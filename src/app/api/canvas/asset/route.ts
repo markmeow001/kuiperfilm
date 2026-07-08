@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { logError as _ulogError } from '@/lib/logging/core'
-import { getSignedUrl } from '@/lib/cos'
+import { getSignedUrl, contentTypeForKey } from '@/lib/cos'
 import { isSafeReference } from '@/lib/playground/reference-guard'
 
 export const GET = apiHandler(async (request: NextRequest) => {
@@ -53,10 +53,19 @@ export const GET = apiHandler(async (request: NextRequest) => {
     throw new ApiError('NOT_FOUND', { code: 'ASSET_NOT_FOUND' })
   }
 
-  // Only serve images — never reflect an error page / octet-stream verbatim.
-  const contentType = (upstream.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
-  if (!ALLOWED_TYPES.includes(contentType)) {
-    _ulogError(`[canvas.asset] rejected content-type="${contentType}" key=${key}`)
+  // Only serve images — never reflect an error page verbatim. R2/COS 上的
+  // 舊物件(2026-07-08 ContentType 修復前上傳的)一律回 octet-stream,
+  // 不能只信上游 header:上游型別不合法時退回用 key 副檔名推斷,推得出
+  // 合法圖片型別才放行。否則導演台的既有背景圖全被這裡 403 擋死。
+  const upstreamType = (upstream.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
+  const inferredType = contentTypeForKey(key)
+  const contentType = ALLOWED_TYPES.includes(upstreamType)
+    ? upstreamType
+    : ALLOWED_TYPES.includes(inferredType)
+      ? inferredType
+      : null
+  if (!contentType) {
+    _ulogError(`[canvas.asset] rejected content-type upstream="${upstreamType}" inferred="${inferredType}" key=${key}`)
     throw new ApiError('FORBIDDEN', { code: 'ASSET_NOT_IMAGE' })
   }
   // Reject early when the upstream advertises an oversized body.
