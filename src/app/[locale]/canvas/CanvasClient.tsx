@@ -295,12 +295,25 @@ function CanvasInner() {
     [menu, setNodes, setEdges],
   )
 
-  const openDockMenu = useCallback(() => {
+  const openDockMenu = useCallback((e?: React.MouseEvent) => {
     const rect = wrapperRef.current?.getBoundingClientRect()
     const cx = (rect?.width ?? 800) / 2
     const cy = (rect?.height ?? 600) / 2
+    // 节点仍生成在画布中心(视野内可见);但菜单本身要锚定在触发它的
+    // 「添加节点」按钮正上方 — 出现在画布中央会让菜单和按钮看起来毫无
+    // 关系(2026-07-08 用户反馈)。Tab 快捷键没有按钮锚点,退回画布中心。
     const flow = rf.screenToFlowPosition({ x: (rect?.left ?? 0) + cx, y: (rect?.top ?? 0) + cy })
-    setMenu({ screenX: cx, screenY: cy, flowX: flow.x, flowY: flow.y, fromNodeId: null })
+    let screenX = cx
+    let screenY = cy
+    const btn = e?.currentTarget as HTMLElement | undefined
+    if (btn && rect) {
+      const b = btn.getBoundingClientRect()
+      const MENU_W = 192 // w-48
+      const MENU_H = 36 + ADD_ORDER.length * 41 // header + item rows(与实际渲染同步量测)
+      screenX = Math.max(8, b.left - rect.left + b.width / 2 - MENU_W / 2)
+      screenY = Math.max(8, b.top - rect.top - MENU_H - 10)
+    }
+    setMenu({ screenX, screenY, flowX: flow.x, flowY: flow.y, fromNodeId: null })
   }, [rf])
 
   // ── Node ops (context menu + keyboard) ──
