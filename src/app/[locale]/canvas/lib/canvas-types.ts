@@ -161,6 +161,9 @@ export const DEFAULT_NODE_DATA = {
   ttsTaskId: null as string | null,
   runId: null as string | null,
   resultUrl: null as string | null,
+  // 视频生成结果的尾帧(worker ffmpeg 抽出、签名后的 URL)— 供下游节点
+  // 做首尾帧续镜接力(video → 下游连线时由 canvas-refs 采集)。
+  tailFrameUrl: null as string | null,
   referenceKey: null as string | null,
   anchorKey: null as string | null,
   anchorUrl: null as string | null,

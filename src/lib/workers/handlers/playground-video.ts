@@ -16,6 +16,7 @@ import type { Job } from 'bullmq'
 import { generateVideo } from '@/lib/generator-api'
 import type { TaskJobData } from '@/lib/task/types'
 import { uploadVideoSourceToCos, waitExternalResult, toSignedUrlIfCos } from '../utils'
+import { extractVideoTailFrameToCos } from '@/lib/video-tail-frame'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 function parseStringArray(value: unknown): string[] {
@@ -115,7 +116,17 @@ export async function handlePlaygroundVideoTask(
     polled.downloadHeaders,
   )
 
-  _ulogInfo(`[playground-video] success taskId=${taskId} cosKey=${cosKey}`)
+  // 尾帧抽取(画布续镜链用)— 非致命:视频本体已成功,抽帧挂了只损失
+  // 首尾帧接力便利,记 log 不抛。
+  let tailFrameKey: string | null = null
+  try {
+    tailFrameKey = await extractVideoTailFrameToCos(cosKey, taskId)
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    _ulogError(`[playground-video] tail-frame extract failed (non-fatal) taskId=${taskId} err=${errMsg}`)
+  }
 
-  return { resultUrls: [cosKey] }
+  _ulogInfo(`[playground-video] success taskId=${taskId} cosKey=${cosKey} tailFrame=${tailFrameKey ?? 'none'}`)
+
+  return { resultUrls: [cosKey], ...(tailFrameKey ? { tailFrameKey } : {}) }
 }

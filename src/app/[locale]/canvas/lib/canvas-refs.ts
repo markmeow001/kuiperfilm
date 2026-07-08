@@ -9,9 +9,14 @@
  * fresh — survives signed-URL expiry) and fall back to `resultUrl` (a signed
  * URL, fine within a session) for run-result nodes that don't expose a key.
  *
- * Only image/character/director nodes contribute (they hold a frame);
- * text/video upstreams are ignored. Order follows connection order so the user
- * controls which frame leads by wiring order.
+ * Contributions by node type:
+ *  - image/character/director → referenceKey / resultUrl (they hold a frame)
+ *  - video → tailFrameUrl(生成结果的尾帧,worker 用 ffmpeg 抽出) — 让
+ *    「上一镜视频 → 下一镜」连线成为真正的首尾帧接力(续镜链)。没有
+ *    tailFrameUrl 的视频节点(旧结果/抽帧失败)不贡献,静默跳过。
+ *  - text upstreams are ignored (they feed prompts, not frames).
+ * Order follows connection order so the user controls which frame leads by
+ * wiring order.
  */
 
 const REF_BEARING_TYPES = new Set(['image', 'character', 'director'])
@@ -19,7 +24,7 @@ const REF_BEARING_TYPES = new Set(['image', 'character', 'director'])
 export interface UpstreamNodeLike {
   id?: string
   type?: string | null
-  data?: { resultUrl?: string | null; referenceKey?: string | null } | Record<string, unknown> | null
+  data?: { resultUrl?: string | null; referenceKey?: string | null; tailFrameUrl?: string | null } | Record<string, unknown> | null
 }
 
 /**
@@ -46,8 +51,16 @@ export function pickUpstreamReferenceUrls(
 ): string[] {
   const out: string[] = []
   for (const n of upstream) {
-    if (!n || !n.type || !REF_BEARING_TYPES.has(n.type)) continue
+    if (!n || !n.type) continue
     if (selfId && n.id === selfId) continue // never feed a node its own output (self-loop)
+    // 视频上游 → 尾帧接力:贡献 worker 抽出的尾帧(签名/公开 URL,直接过
+    // reference-guard 的 https 白名单)。
+    if (n.type === 'video') {
+      const tail = (n.data as { tailFrameUrl?: unknown } | null | undefined)?.tailFrameUrl
+      if (typeof tail === 'string' && tail.length > 0) out.push(tail)
+      continue
+    }
+    if (!REF_BEARING_TYPES.has(n.type)) continue
     const data = n.data as { resultUrl?: unknown; referenceKey?: unknown } | null | undefined
     const key = data?.referenceKey
     const url = data?.resultUrl

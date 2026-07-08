@@ -100,6 +100,8 @@ export interface PlaygroundRunRow {
   modelKey: string
   status: 'pending' | 'running' | 'succeeded' | 'failed'
   resultUrls: string[] | null
+  /** 视频结果尾帧(签名 URL)— 画布续镜链用;非视频/未抽出为 null/缺省。 */
+  tailFrameUrl?: string | null
   errorMessage: string | null
   createdAt: string
   completedAt: string | null

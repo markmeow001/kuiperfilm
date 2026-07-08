@@ -20,6 +20,11 @@ vi.mock('@/lib/logging/core', () => ({
   logInfo: vi.fn(),
   logError: vi.fn(),
 }))
+// 尾帧抽取走真实 ffmpeg + @/lib/cos(其 import 链会拉进未 mock 的模块),
+// 单测里直接 mock 掉;续镜链行为由 canvas-refs 单测覆盖。
+vi.mock('@/lib/video-tail-frame', () => ({
+  extractVideoTailFrameToCos: vi.fn(async () => 'cos/tail-frame-key'),
+}))
 
 import { handlePlaygroundImageTask } from '@/lib/workers/handlers/playground-image'
 import { handlePlaygroundVideoTask } from '@/lib/workers/handlers/playground-video'
@@ -119,7 +124,9 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
       makeJob({ prompt: 'a chase', modelKey: 'fal::seedance', duration: 5, resolution: '720p' }),
     )
 
-    expect(result).toEqual({ resultUrls: ['cos/video-key'] })
+    // tailFrameKey: 视频结果尾帧(2026-07-08 续镜链)— worker 抽帧成功时
+    // 一并写进 result,供画布 video→下游 连线做首尾帧接力。
+    expect(result).toEqual({ resultUrls: ['cos/video-key'], tailFrameKey: 'cos/tail-frame-key' })
     expect(generatorMock.generateVideo).toHaveBeenCalledOnce()
     expect(utilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
       'https://prov/clip.mp4',

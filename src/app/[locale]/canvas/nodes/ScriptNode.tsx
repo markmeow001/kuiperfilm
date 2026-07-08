@@ -9,17 +9,19 @@
  * LLM call from the client (CLAUDE.md §3).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '@xyflow/react'
+import { useNodeConnections, useNodesData, useReactFlow, type Edge, type NodeProps } from '@xyflow/react'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import { type CanvasNodeData, type CanvasStoryboardShot, DEFAULT_NODE_DATA } from '../lib/canvas-types'
-import { pickUpstreamText } from '../lib/canvas-refs'
+import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
+import { useCanvasGeneration } from '../lib/canvas-generation'
 import { NodeShell } from './node-shell'
 
 type Phase = 'idle' | 'submitting' | 'running' | 'done' | 'failed'
 
 export function ScriptNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
-  const { updateNodeData, addNodes, getNode } = useReactFlow()
+  const { updateNodeData, addNodes, addEdges, getNode } = useReactFlow()
+  const gen = useCanvasGeneration()
   const [phase, setPhase] = useState<Phase>(d.shots && d.shots.length > 0 ? 'done' : 'idle')
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -29,6 +31,17 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const incoming = useMemo(() => connections.filter((c) => c.target === id).map((c) => c.source), [connections, id])
   const upstream = useNodesData(incoming)
   const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
+  // 接进脚本节点的角色/图片/导演台上游 — fan-out 时自动转接到每个镜头节点,
+  // 角色一致性随连线传递(LibTV「@资产自动连线」的等价物)。
+  const refSourceIds = useMemo(
+    () =>
+      upstream
+        .filter((n): n is NonNullable<typeof n> =>
+          Boolean(n) && (n!.type === 'character' || n!.type === 'image' || n!.type === 'director'))
+        .map((n) => n.id),
+    [upstream],
+  )
+  const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
 
   const script = (upstreamText || d.prompt || '').trim()
   const shots = d.shots ?? []
@@ -145,18 +158,24 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   }
   const pickedShots = shots.filter((_, i) => isPicked(i))
 
-  // Fan the picked shots out into a row of image OR video nodes below.
-  function handleFanOut(target: 'image' | 'video') {
-    if (pickedShots.length === 0) return
+  // Fan the picked shots out into a row of image OR video nodes below, WIRED:
+  // 脚本→镜头(出处可追溯)+ 每个上游参考(角色/图片/导演台)→镜头(一致
+  // 性参考真实流入生成)。以前只撒节点不连线,镜头节点和角色完全脱钩,是
+  // 「每个区块都独立」观感的元凶(2026-07-08 用户反馈)。Returns spawned ids
+  // so 批量生成 can submit them right after.
+  function spawnShotNodes(target: 'image' | 'video'): string[] {
+    if (pickedShots.length === 0) return []
     const self = getNode(id)
     const baseX = self?.position.x ?? 0
     const baseY = (self?.position.y ?? 0) + 360
     const COL_W = target === 'image' ? 300 : 320
+    const stamp = Date.now()
+    const ids = pickedShots.map((_, i) => `n_${stamp}_${target}_${i}`)
     addNodes(
       pickedShots.map((s, i) => {
         const framed = s.shotSize ? `${s.description}（${s.shotSize}）` : s.description
         return {
-          id: `n_${Date.now()}_${target}_${i}`,
+          id: ids[i],
           type: target,
           position: { x: baseX + i * COL_W, y: baseY + (target === 'video' ? 40 : 0) },
           data: {
@@ -174,6 +193,55 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
         }
       }),
     )
+    const edges: Edge[] = []
+    ids.forEach((nid, i) => {
+      edges.push({ id: `e_${stamp}_s_${i}`, source: id, target: nid, animated: true })
+      refSourceIds.forEach((rid, j) => {
+        edges.push({ id: `e_${stamp}_r_${j}_${i}`, source: rid, target: nid, animated: true })
+      })
+    })
+    if (edges.length > 0) addEdges(edges)
+    return ids
+  }
+
+  // 批量生图:铺节点 + 接线 + 逐个提交生成(LibTV「批量生分镜图」等价)。
+  // 顺序提交而非并发:避免瞬间打爆队列/余额;单发失败立即停,后续镜头
+  // 不再扣费。
+  const [batch, setBatch] = useState<{ done: number; total: number; running: boolean; error: string | null }>(
+    { done: 0, total: 0, running: false, error: null },
+  )
+  async function handleBatchGenerate() {
+    if (pickedShots.length === 0 || batch.running) return
+    const modelKey = gen.imageModels[0]?.value
+    if (!modelKey) {
+      setBatch({ done: 0, total: 0, running: false, error: '无可用图片模型 — 请到 /profile 启用' })
+      return
+    }
+    const ids = spawnShotNodes('image')
+    setBatch({ done: 0, total: ids.length, running: true, error: null })
+    for (let i = 0; i < ids.length; i++) {
+      const s = pickedShots[i]
+      const framed = s.shotSize ? `${s.description}（${s.shotSize}）` : s.description
+      try {
+        const runId = await gen.submitNode({
+          prompt: framed,
+          referenceImages: upstreamRefs,
+          outputType: 'image',
+          modelKey,
+          aspectRatio: DEFAULT_NODE_DATA.aspectRatio,
+        })
+        updateNodeData(ids[i], { runId, modelKey })
+        setBatch((b) => ({ ...b, done: i + 1 }))
+      } catch (err) {
+        setBatch((b) => ({
+          ...b,
+          running: false,
+          error: `镜 ${s.shotNumber} 提交失败：${(err as Error)?.message ?? '未知错误'}（其余已停止）`,
+        }))
+        return
+      }
+    }
+    setBatch((b) => ({ ...b, running: false }))
   }
 
   const meta = NODE_META.script
@@ -253,24 +321,39 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
             <button type="button" onClick={addShot} className="nodrag w-full rounded-md py-1 text-[11px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
               ＋ 添加镜头
             </button>
+            {refSourceIds.length > 0 ? (
+              <div className="rounded-md px-2 py-1 text-[10px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
+                参考 ← 上游（{refSourceIds.length}）：铺出的每个镜头会自动连上这些参考
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleBatchGenerate}
+              disabled={pickedShots.length === 0 || batch.running}
+              className="nodrag w-full rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40"
+              style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}
+            >
+              {batch.running ? `批量生图中… ${batch.done}/${batch.total}` : `⚡ 批量生图（${pickedShots.length}）`}
+            </button>
+            {batch.error ? <div className="text-[10px]" style={{ color: '#FF8A8A' }}>{batch.error}</div> : null}
             <div className="flex gap-1.5">
               <button
                 type="button"
-                onClick={() => handleFanOut('image')}
-                disabled={pickedShots.length === 0}
-                className="nodrag flex-1 rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40"
-                style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}
-              >
-                生成分镜图（{pickedShots.length}）
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFanOut('video')}
-                disabled={pickedShots.length === 0}
+                onClick={() => spawnShotNodes('image')}
+                disabled={pickedShots.length === 0 || batch.running}
                 className="nodrag flex-1 rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40"
                 style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
               >
-                生成视频（{pickedShots.length}）
+                仅铺图节点（{pickedShots.length}）
+              </button>
+              <button
+                type="button"
+                onClick={() => spawnShotNodes('video')}
+                disabled={pickedShots.length === 0 || batch.running}
+                className="nodrag flex-1 rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40"
+                style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                仅铺视频节点（{pickedShots.length}）
               </button>
             </div>
           </>

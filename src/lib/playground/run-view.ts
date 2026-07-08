@@ -37,6 +37,8 @@ export interface PlaygroundRunView {
   modelKey: string
   status: PlaygroundViewStatus
   resultUrls: string[] | null
+  /** 视频结果尾帧(签名 URL)— 画布续镜链首尾帧接力用;非视频/未抽出为 null。 */
+  tailFrameUrl: string | null
   errorMessage: string | null
   createdAt: Date
   completedAt: Date | null
@@ -58,6 +60,13 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+/** 尾帧 key → 签名 URL(worker 写 result.tailFrameKey;没有就 null)。 */
+function signTailFrameUrl(result: unknown): string | null {
+  const key = asRecord(result).tailFrameKey
+  if (typeof key !== 'string' || key.length === 0) return null
+  return key.startsWith('http') ? key : getSignedUrl(key, 3600)
+}
+
 /** Sign COS keys for browser playback; pass through anything already a URL. */
 function signResultUrls(result: unknown): string[] | null {
   const urls = asRecord(result).resultUrls
@@ -77,6 +86,7 @@ export function taskToPlaygroundRunView(task: TaskLike): PlaygroundRunView {
     modelKey: typeof payload.modelKey === 'string' ? payload.modelKey : '',
     status: mapTaskStatusToPlayground(task.status),
     resultUrls: signResultUrls(task.result),
+    tailFrameUrl: signTailFrameUrl(task.result),
     errorMessage: task.errorMessage,
     createdAt: task.createdAt,
     completedAt: task.finishedAt,

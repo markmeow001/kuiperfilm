@@ -166,7 +166,11 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     const resultUrl = run?.resultUrls?.[0] ?? d.resultUrl ?? null
     useEffect(() => {
       if (run?.status === 'succeeded' && run.resultUrls?.[0] && run.resultUrls[0] !== d.resultUrl) {
-        updateNodeData(id, { resultUrl: run.resultUrls[0] })
+        updateNodeData(id, {
+          resultUrl: run.resultUrls[0],
+          // 视频结果带回尾帧 URL,供下游连线做首尾帧续镜(canvas-refs 采集)。
+          ...(run.tailFrameUrl ? { tailFrameUrl: run.tailFrameUrl } : {}),
+        })
       }
     }, [run, d.resultUrl, id, updateNodeData])
 

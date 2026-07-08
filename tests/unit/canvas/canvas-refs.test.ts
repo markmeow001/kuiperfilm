@@ -54,3 +54,30 @@ describe('pickUpstreamReferenceUrls', () => {
     ])
   })
 })
+
+describe('pickUpstreamReferenceUrls — 视频尾帧续镜链 (2026-07-08)', () => {
+  it('video upstream contributes its tailFrameUrl (首尾帧接力)', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'video', data: { tailFrameUrl: 'https://pub.example/tail.jpg', resultUrl: 'https://pub.example/clip.mp4' } },
+      ]),
+    ).toEqual(['https://pub.example/tail.jpg'])
+  })
+
+  it('video without tailFrameUrl contributes nothing (旧结果/抽帧失败静默跳过)', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'video', data: { resultUrl: 'https://pub.example/clip.mp4' } },
+      ]),
+    ).toEqual([])
+  })
+
+  it('video never contributes its mp4 resultUrl as an image ref', () => {
+    expect(
+      pickUpstreamReferenceUrls([
+        { type: 'video', data: { tailFrameUrl: '', resultUrl: 'https://pub.example/clip.mp4' } },
+        { type: 'image', data: { resultUrl: 'https://pub.example/frame.png' } },
+      ]),
+    ).toEqual(['https://pub.example/frame.png'])
+  })
+})
