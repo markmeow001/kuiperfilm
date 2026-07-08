@@ -17,7 +17,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Cinematic Realism',
     category: 'A',
     categoryNameZh: '寫實影視',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/cinematic_realism.jpg',
     styleAnchor:
       'Cinematic photorealistic style, 35mm anamorphic lens, professional film production quality, Arri Alexa color grading, natural skin texture with realistic pores and micro-details',
     visualModifiers:
@@ -37,7 +37,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'American Vertical Drama',
     category: 'A',
     categoryNameZh: '寫實影視',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/american_vertical_drama.png',
     styleAnchor:
       'ReelShort vertical drama style, contemporary American photorealism, bright clean cinematography, soap opera production aesthetic with cinematic polish',
     visualModifiers:
@@ -61,7 +61,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'K-Drama Cinematic',
     category: 'A',
     categoryNameZh: '寫實影視',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/kdrama_cinematic.jpg',
     styleAnchor:
       'Korean drama cinematic style, soft luminous photorealism, premium K-content production value, modern Korean cinematography',
     visualModifiers:
@@ -81,7 +81,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'HK Cinema',
     category: 'A',
     categoryNameZh: '寫實影視',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/hk_cinema.jpg',
     styleAnchor:
       'Hong Kong cinema aesthetic, Wong Kar-wai inspired, 1990s-2000s HK film stock look, expired film color shift, smoky neon-lit urban Asia',
     visualModifiers:
@@ -101,7 +101,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Documentary',
     category: 'A',
     categoryNameZh: '寫實影視',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/documentary.jpg',
     styleAnchor:
       'Documentary film style, handheld camera realism, natural unposed compositions, observational cinema verite aesthetic',
     visualModifiers:
@@ -125,7 +125,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'KyoAni Slice-of-Life',
     category: 'B',
     categoryNameZh: '日系動漫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/kyoani_school.png',
     styleAnchor:
       'Kyoto Animation anime style, modern slice-of-life anime aesthetic, crisp precise line art, expressive subtle character animation, A-1 Pictures level background quality',
     visualModifiers:
@@ -145,7 +145,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Shinkai Urban',
     category: 'B',
     categoryNameZh: '日系動漫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/shinkai_urban.jpg',
     styleAnchor:
       'Makoto Shinkai anime style, hyper-detailed photorealistic anime backgrounds with stylized characters, CoMix Wave Films aesthetic',
     visualModifiers:
@@ -165,7 +165,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Ghibli Fantasy',
     category: 'B',
     categoryNameZh: '日系動漫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/ghibli_fantasy.png',
     styleAnchor:
       'Studio Ghibli anime style, hand-painted watercolor backgrounds, Hayao Miyazaki aesthetic, traditional 2D cel animation, painterly natural environments',
     visualModifiers:
@@ -197,7 +197,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: '90s Cel Anime',
     category: 'B',
     categoryNameZh: '日系動漫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/90s_cel_anime.jpg',
     styleAnchor:
       '1990s anime style, traditional cel animation, retro Japanese animation aesthetic, Akira and Ghost in the Shell era, analog film transfer look',
     visualModifiers:
@@ -217,7 +217,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Isekai Light Novel',
     category: 'B',
     categoryNameZh: '日系動漫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/isekai_light_novel.jpg',
     styleAnchor:
       'Japanese isekai light novel illustration style, modern light novel cover aesthetic, RPG fantasy world with magic particles, glowing runes and skill auras',
     visualModifiers:
@@ -237,7 +237,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Modern Painterly Anime',
     category: 'B',
     categoryNameZh: '日系動漫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/modern_painterly_anime.jpg',
     styleAnchor:
       'Modern semi-realistic anime illustration style, thick painted rendering, digital painting with anime sensibilities, key visual quality artwork',
     visualModifiers:
@@ -261,7 +261,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Marvel Action Comic',
     category: 'C',
     categoryNameZh: '美漫與西方插畫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/marvel_action_comic.png',
     styleAnchor:
       'Marvel comic book style, bold ink outlines (3-5px confident black lines), dynamic action compositions, classic American superhero comic aesthetic, halftone Ben-Day dots shading',
     visualModifiers:
@@ -281,7 +281,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Multiverse Comic',
     category: 'C',
     categoryNameZh: '美漫與西方插畫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/spider_verse.png',
     styleAnchor:
       'Spider-Verse animation style, mixed-media comic aesthetic, halftone print texture overlay, dimensional shift visual language, contemporary American animated comic',
     visualModifiers:
@@ -305,7 +305,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Arcane Painterly',
     category: 'C',
     categoryNameZh: '美漫與西方插畫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/arcane_painterly.jpg',
     styleAnchor:
       'Arcane animation style, Fortiche Studio aesthetic, painterly 3D animation with 2D illustration overlay, gritty stylized fantasy',
     visualModifiers:
@@ -331,7 +331,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'DC Dark Heroic',
     category: 'C',
     categoryNameZh: '美漫與西方插畫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/dc_dark_heroic.jpg',
     styleAnchor:
       'DC Comics dark heroic style, Frank Miller / Jim Lee aesthetic, noir-influenced American comic art, mature comic book illustration',
     visualModifiers:
@@ -351,7 +351,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'American Storybook',
     category: 'C',
     categoryNameZh: '美漫與西方插畫',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/american_storybook.jpg',
     styleAnchor:
       "American children's storybook illustration style, Cartoon Saloon meets contemporary picture book aesthetic, hand-drawn warmth",
     visualModifiers:
@@ -381,7 +381,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Webtoon Premium',
     category: 'D',
     categoryNameZh: '韓系',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/webtoon_premium.jpg',
     styleAnchor:
       'Premium Korean webtoon style (Manhwa aesthetic), ultra-clean digital illustration, vertical scroll comic art, idealized beauty rendering',
     visualModifiers:
@@ -401,7 +401,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Webtoon Modern Urban',
     category: 'D',
     categoryNameZh: '韓系',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/webtoon_urban.jpg',
     styleAnchor:
       'Contemporary Korean webtoon urban style, modern fashion-forward webtoon aesthetic, commercial illustration polish',
     visualModifiers:
@@ -421,7 +421,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'K-Drama Romance',
     category: 'D',
     categoryNameZh: '韓系',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/kdrama_romance.jpg',
     styleAnchor:
       'K-drama romance cinematic style, soft luminous Korean photography aesthetic, optimized for emotional close-ups',
     visualModifiers:
@@ -451,7 +451,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Xianxia Animation',
     category: 'E',
     categoryNameZh: '國風',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/xianxia_animation.png',
     styleAnchor:
       'Chinese xianxia animation style (国漫仙侠), cultivation immortal aesthetic, modern Chinese animation production quality',
     visualModifiers:
@@ -477,7 +477,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Ink Wash Wuxia',
     category: 'E',
     categoryNameZh: '國風',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/ink_wash_wuxia.png',
     styleAnchor:
       'Traditional Chinese ink wash painting style (国画 / 水墨), full ink gradation spectrum, rice paper texture visible, wuxia aesthetic',
     visualModifiers:
@@ -503,7 +503,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Modern Chinese CG',
     category: 'E',
     categoryNameZh: '國風',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/modern_chinese_cg.jpg',
     styleAnchor:
       'Modern Chinese CG animation style, contemporary mainland Chinese 3D animation aesthetic, AAA cinematic CG quality',
     visualModifiers:
@@ -533,7 +533,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Pixar 3D',
     category: 'F',
     categoryNameZh: 'CG 與 3D',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/pixar_3d.jpg',
     styleAnchor:
       'Pixar 3D animation style, Disney/Pixar production quality, stylized 3D characters with subsurface scattering skin, family-friendly polished CG',
     visualModifiers:
@@ -553,7 +553,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Plush Chibi Hero',
     category: 'F',
     categoryNameZh: 'CG 與 3D',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/plush_chibi.jpg',
     styleAnchor:
       'Plush toy IP style, Q-version 3-4 head-body ratio chibi characters, visible knit / felt fiber texture with subsurface scattering',
     visualModifiers:
@@ -573,7 +573,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Unreal Cinematic',
     category: 'F',
     categoryNameZh: 'CG 與 3D',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/ue5_cinematic.png',
     styleAnchor:
       'Unreal Engine 5 cinematic quality, AAA game cinematic CG, photorealistic 3D rendering, Lumen + Nanite quality',
     visualModifiers:
@@ -593,7 +593,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Game Cinematic',
     category: 'F',
     categoryNameZh: 'CG 與 3D',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/game_cg.jpg',
     styleAnchor:
       'AAA game cinematic CG style, pre-rendered game cutscene aesthetic, console game promotional video quality (Blizzard / Square Enix / miHoYo)',
     visualModifiers:
@@ -623,7 +623,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Cyberpunk',
     category: 'G',
     categoryNameZh: '復古與概念',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/cyberpunk.jpg',
     styleAnchor:
       'Cyberpunk neon-noir aesthetic, Blade Runner 2049 + Cyberpunk 2077 visual language, high-tech low-life atmosphere',
     visualModifiers:
@@ -643,7 +643,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Synthwave 80s',
     category: 'G',
     categoryNameZh: '復古與概念',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/synthwave_80s.jpg',
     styleAnchor:
       'Synthwave 1980s retro-futurism aesthetic, neon sunset visual language, VHS analog video texture',
     visualModifiers:
@@ -663,7 +663,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Steampunk',
     category: 'G',
     categoryNameZh: '復古與概念',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/steampunk.jpg',
     styleAnchor:
       'Victorian steampunk industrial aesthetic, brass / copper / dark iron primary materials, mechanical Victorian fantasy',
     visualModifiers:
@@ -695,7 +695,7 @@ export const visualStyles: VisualStyle[] = [
     nameEn: 'Atomic-Punk Apocalypse',
     category: 'G',
     categoryNameZh: '復古與概念',
-    thumbnailUrl: null,
+    thumbnailUrl: 'https://pub-7b176b4aa63e4a0b8e7c6b1ae5c3d1d2.r2.dev/style-thumbs/atomic_punk_apocalypse.jpg',
     styleAnchor:
       'Atomic-punk post-apocalypse cinematic style, 1960s retro-futurism, anamorphic widescreen on IMAX film stock with Panavision C-series lenses, ultra-photorealistic live-action capture, dynamic motion blur, NOT video game CG, NOT animation',
     visualModifiers:
