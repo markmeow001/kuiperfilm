@@ -225,6 +225,14 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ...(normalizedDuration ? { duration: normalizedDuration } : {}),
     generationCount: 1,
     ...(wsId ? { workspaceId: wsId } : {}),
+    // meta.* 是 payload 里唯一在 worker 进度更新时会被合并保留的命名空间
+    //(tryUpdateTaskProgress → mergePayloadMetaWithExisting;顶层字段会被
+    // 进度 payload 整包覆写)。原始描述词/模型放这里,历史记录的「描述
+    // 词面板 / tooltip」才能在任务跑起来之后仍然读到。
+    meta: {
+      originPrompt: prompt.trim(),
+      originModelKey: trimmedModelKey,
+    },
   }
 
   // submitTask owns billing freeze (402), createRun, enqueue + rollback.

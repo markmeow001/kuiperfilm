@@ -79,11 +79,28 @@ function signResultUrls(result: unknown): string[] | null {
 
 export function taskToPlaygroundRunView(task: TaskLike): PlaygroundRunView {
   const payload = asRecord(task.payload)
+  // worker 进度更新会整包覆写 payload 顶层(只有 meta.* 被合并保留),
+  // 所以 prompt/modelKey 在任务开跑后就从顶层消失了 — 回退读 submit 时
+  // 写进 meta 的 originPrompt/originModelKey(2026-07-08 修「描述词面板
+  // 不显示」)。更早的旧任务两处都没有,退回空串。
+  const meta = asRecord(payload.meta)
+  const prompt =
+    typeof payload.prompt === 'string' && payload.prompt
+      ? payload.prompt
+      : typeof meta.originPrompt === 'string'
+        ? meta.originPrompt
+        : ''
+  const modelKey =
+    typeof payload.modelKey === 'string' && payload.modelKey
+      ? payload.modelKey
+      : typeof meta.originModelKey === 'string'
+        ? meta.originModelKey
+        : ''
   return {
     id: task.id,
-    prompt: typeof payload.prompt === 'string' ? payload.prompt : '',
+    prompt,
     outputType: task.type === TASK_TYPE.PLAYGROUND_VIDEO ? 'video' : 'image',
-    modelKey: typeof payload.modelKey === 'string' ? payload.modelKey : '',
+    modelKey,
     status: mapTaskStatusToPlayground(task.status),
     resultUrls: signResultUrls(task.result),
     tailFrameUrl: signTailFrameUrl(task.result),
