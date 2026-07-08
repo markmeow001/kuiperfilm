@@ -371,7 +371,9 @@ export function makeMediaNode(outputType: 'image' | 'video') {
         <div
           className="nodrag absolute left-0 top-full z-20 mt-2 space-y-2 rounded-xl p-3"
           style={{
-            width: Math.max(nodeWidth, 340),
+            // 面板最窄 420:340 时中文描述词一行只有十几个字,阅读体验差
+            //(2026-07-08 用户反馈)。
+            width: Math.max(nodeWidth, 420),
             background: CANVAS_TOKENS.bg.panel,
             border: `1px solid ${CANVAS_TOKENS.hairline}`,
             boxShadow: CANVAS_TOKENS.shadowPopover,
@@ -583,9 +585,11 @@ export function makeMediaNode(outputType: 'image' | 'video') {
               }
             }}
             placeholder={outputType === 'image' ? (upstreamText ? '补充画面细节，输入 / 唤起预设配方' : '描述画面，输入 / 唤起预设配方…') : (upstreamText ? '补充运动 / 镜头（可留空）' : '描述运动 / 镜头…')}
-            rows={2}
-            className="nodrag w-full resize-none rounded-md px-2 py-1.5 text-[12px] outline-none"
-            style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            rows={5}
+            // resize-y + nowheel:描述词可以上下拉高慢慢看,滚轮在框内滚文字
+            // 而不是缩放画布(2026-07-08 用户反馈「方块太小很难看描述词」)。
+            className="nodrag nowheel w-full resize-y rounded-md px-2 py-1.5 text-[12px] leading-relaxed outline-none"
+            style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}`, minHeight: 72, maxHeight: 360 }}
           />
 
           <div className="flex items-center gap-1.5">
