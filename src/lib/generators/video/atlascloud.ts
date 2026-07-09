@@ -149,33 +149,43 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
 
         // Mode-specific media inputs
         if (r2vMode) {
-            // reference-to-video: 1-9 reference_images, optional reference_videos/audios.
-            // If caller only passed a single imageUrl, fall back to that as ref[0].
+            // reference-to-video: optional reference_images (1-9), optional
+            // reference_videos (1-3), optional reference_audios (1-3).
+            // Per the OpenAPI schema only `model` is strictly required — a
+            // pure motion-reference call (reference_videos, no images) is
+            // valid. We previously hard-required ≥1 image, which rejected the
+            // Playground「參考影片生成」flow (0 images + 1 video) with an
+            // opaque error the client scrubbed into "系统内部错误". Only
+            // enforce the real constraint: at least one VISUAL reference
+            // (image or video); reference_audios alone is not valid.
+            // (2026-07-09 playground r2v video-only fix)
             const refImages = referenceImages?.length
                 ? referenceImages
                 : (imageUrl ? [imageUrl] : [])
-            if (refImages.length === 0) {
-                throw new Error(
-                    `AtlasCloud ${atlasModel} (reference-to-video) 需要至少 1 張 reference_images，` +
-                    `但 params.referenceImages 與 imageUrl 都為空`,
-                )
-            }
             if (refImages.length > 9) {
                 throw new Error(
                     `AtlasCloud ${atlasModel} reference_images 最多 9 張，收到 ${refImages.length}`,
                 )
             }
-            body.reference_images = refImages
+            if (referenceVideos && referenceVideos.length > 3) {
+                throw new Error(`AtlasCloud reference_videos 最多 3 個`)
+            }
+            if (referenceAudios && referenceAudios.length > 3) {
+                throw new Error(`AtlasCloud reference_audios 最多 3 個`)
+            }
+            if (refImages.length === 0 && !referenceVideos?.length) {
+                throw new Error(
+                    `AtlasCloud ${atlasModel} (reference-to-video) 需要至少 1 張 reference_images ` +
+                    `或 1 支 reference_videos，但兩者都為空`,
+                )
+            }
+            if (refImages.length > 0) {
+                body.reference_images = refImages
+            }
             if (referenceVideos?.length) {
-                if (referenceVideos.length > 3) {
-                    throw new Error(`AtlasCloud reference_videos 最多 3 個`)
-                }
                 body.reference_videos = referenceVideos
             }
             if (referenceAudios?.length) {
-                if (referenceAudios.length > 3) {
-                    throw new Error(`AtlasCloud reference_audios 最多 3 個`)
-                }
                 body.reference_audios = referenceAudios
             }
         } else if (!t2vMode) {
