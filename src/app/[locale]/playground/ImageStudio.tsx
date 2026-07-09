@@ -5,30 +5,34 @@
  * Midjourney model): an aspect-preserving masonry gallery of past image runs
  * (newest-first, in-progress = placeholder tile in the newest slot) with a
  * single bottom composer. Clicking a tile opens the shared ResultLightbox.
- * No permanent "current result" block — that pattern has ~zero market use and
- * gets buried as history grows (2026-07-08 competitor survey).
+ *
+ * References are shown as inline thumbnails in the composer (Higgsfield model):
+ * the image tile IS the reference — no @image text tokens. A ＋ tile adds more
+ * via a direct file picker. (Reference video/text stay in the Video studio,
+ * where they actually apply.)
  */
 
-import { useState } from 'react'
+import { useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
-import { ReferencePanel } from './ReferencePanel'
-import { ASPECT_RATIO_OPTIONS, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
+import { ASPECT_RATIO_OPTIONS, MAX_REF_IMAGES, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
 
 interface ImageStudioProps {
   ctrl: PlaygroundController
 }
 
 export function ImageStudio({ ctrl }: ImageStudioProps) {
-  const [refsOpen, setRefsOpen] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
   const {
-    prompt, setPrompt, promptRef, refImages, refVideo, refCount,
+    prompt, setPrompt, promptRef, refImages,
     modelKey, setModelKey, activeModels, aspectRatio, setAspectRatio,
     isBusy, isGenerating, compressing, submit, costEstimate,
-    imageRuns, latestRun, handleRun, insertReferenceToken, resetForm, setLightboxRun,
+    imageRuns, latestRun, handleRun, resetForm, setLightboxRun,
+    handleImagePick, removeRefImage,
   } = ctrl
 
   const showPlaceholder =
     submit.isPending || (isGenerating && latestRun?.outputType === 'image')
+  const atMaxRefs = refImages.length >= MAX_REF_IMAGES
 
   function onPromptKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -74,73 +78,63 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
       </main>
 
       {/* Composer */}
-      <footer className="relative border-t border-stone-800 bg-stone-950/95 px-4 py-3 backdrop-blur">
-        {refsOpen ? (
-          <button type="button" aria-hidden tabIndex={-1} onClick={() => setRefsOpen(false)} className="fixed inset-0 z-30 cursor-default" />
-        ) : null}
-
+      <footer className="border-t border-stone-800 bg-stone-950/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto w-full max-w-6xl">
-          {refsOpen ? (
-            <div className="absolute bottom-full left-4 right-4 z-40 mb-2 max-h-[60vh] overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-4 shadow-2xl">
-              <div className="mx-auto w-full max-w-6xl">
-                <ReferencePanel ctrl={ctrl} />
-              </div>
-            </div>
-          ) : null}
-
-          {/* @-token quick insert */}
-          {(refImages.length > 0 || refVideo) ? (
-            <div className="relative z-40 mb-2 flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-stone-600">引用</span>
-              {refImages.map((_, idx) => {
-                const token = `@image${idx + 1}`
-                return (
+          <div className="rounded-2xl border border-stone-800 bg-gradient-to-b from-stone-800/50 to-stone-950/40 p-3 shadow-xl">
+            {/* Reference thumbnails (Higgsfield-style: the image IS the reference) */}
+            <div className="mb-2.5 flex flex-wrap items-center gap-2">
+              {refImages.map((ref, idx) => (
+                <div
+                  key={ref.key}
+                  className="group relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-stone-700"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={ref.signedUrl} alt={`參考 ${idx + 1}`} className="h-full w-full object-cover" />
                   <button
                     type="button"
-                    key={token}
-                    onClick={() => insertReferenceToken(token)}
-                    className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+                    onClick={() => removeRefImage(idx)}
+                    title="移除參考圖"
+                    className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-md bg-stone-950/80 text-[12px] text-stone-200 opacity-0 transition-opacity hover:bg-rose-500/90 hover:text-white group-hover:opacity-100"
                   >
-                    {token}
+                    ✕
                   </button>
-                )
-              })}
-              {refVideo ? (
-                <button
-                  type="button"
-                  onClick={() => insertReferenceToken('@video1')}
-                  className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
-                >
-                  @video1
-                </button>
-              ) : null}
-            </div>
-          ) : null}
+                </div>
+              ))}
 
-          <div className="relative z-40 rounded-xl border border-stone-800 bg-stone-900/60 p-2.5">
-            <div className="flex items-end gap-2">
               <button
                 type="button"
-                onClick={() => setRefsOpen((v) => !v)}
-                disabled={isBusy}
-                title="加入參考素材(圖片 / 影片 / 文字)"
-                className={`relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border text-lg transition-colors disabled:opacity-40 ${
-                  refsOpen ? 'border-violet-500/60 bg-violet-500/10 text-violet-300' : 'border-stone-700 text-stone-400 hover:border-violet-500/50 hover:text-violet-300'
-                }`}
+                onClick={() => fileRef.current?.click()}
+                disabled={isBusy || atMaxRefs}
+                title={atMaxRefs ? `參考圖最多 ${MAX_REF_IMAGES} 張` : '加入參考圖'}
+                className="flex h-14 w-14 flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-dashed border-stone-700 text-stone-500 transition-colors hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                ＋
-                {refCount > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 font-mono text-[10px] text-white">{refCount}</span>
-                ) : null}
+                <AppIcon name="image" className="h-5 w-5" />
+                <span className="font-mono text-[9px] uppercase tracking-wider">參考</span>
               </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleImagePick}
+              />
 
+              {refImages.length > 0 ? (
+                <span className="ml-1 font-mono text-[10px] uppercase tracking-wider text-stone-600">
+                  {refImages.length}/{MAX_REF_IMAGES} 參考圖
+                </span>
+              ) : null}
+            </div>
+
+            {/* Prompt + generate */}
+            <div className="flex items-end gap-2">
               <textarea
                 ref={promptRef}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={onPromptKeyDown}
                 rows={2}
-                placeholder="描述你想生成的畫面... 譬如「賽博龐克城市夜景, 巨型廣告牌特寫, 雨夜霓虹倒映」　　💡 加了參考素材後可點上方 @image1 插入引用"
+                placeholder="描述你想生成的畫面... 譬如「賽博龐克城市夜景, 巨型廣告牌特寫, 雨夜霓虹倒映」"
                 className="max-h-40 min-h-[44px] flex-1 resize-none rounded-lg border border-stone-800 bg-stone-950/60 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
               />
 
@@ -155,6 +149,7 @@ export function ImageStudio({ ctrl }: ImageStudioProps) {
               </button>
             </div>
 
+            {/* Controls */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
