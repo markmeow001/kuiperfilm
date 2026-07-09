@@ -176,13 +176,16 @@ export function usePlaygroundController() {
     setRefVideo(null)
   }
 
-  async function handleRun(overrideModelKey?: string) {
-    if (!prompt.trim()) {
+  async function handleRun(overrideModelKey?: string, promptOverride?: string) {
+    // promptOverride lets the lightbox re-run a finished run's OWN prompt
+    // without waiting for a setPrompt() state commit (the stale-closure bug).
+    const basePrompt = (promptOverride ?? prompt).trim()
+    if (!basePrompt) {
       alert('請先輸入提示詞')
       return
     }
-    if (outputType === 'image' && prompt.trim().length > 4000) {
-      alert(`提示詞過長（${prompt.trim().length}/4000 字符），請精簡後再生成`)
+    if (outputType === 'image' && basePrompt.length > 4000) {
+      alert(`提示詞過長（${basePrompt.length}/4000 字符），請精簡後再生成`)
       return
     }
     const useModelKey = overrideModelKey ?? modelKey
@@ -190,13 +193,13 @@ export function usePlaygroundController() {
       alert('請先選擇模型')
       return
     }
-    let effectivePrompt = prompt.trim()
+    let effectivePrompt = basePrompt
     if (outputType === 'video' && effectivePrompt.length > VIDEO_PROMPT_SOFT_LIMIT) {
       setCompressing(true)
       try {
         effectivePrompt = await compressVideoPrompt(effectivePrompt)
       } catch (err) {
-        alert(`提示詞過長（${prompt.trim().length} 字符）且自動壓縮失敗：${(err as Error)?.message ?? '未知錯誤'}`)
+        alert(`提示詞過長（${basePrompt.length} 字符）且自動壓縮失敗：${(err as Error)?.message ?? '未知錯誤'}`)
         return
       } finally {
         setCompressing(false)
@@ -272,6 +275,28 @@ export function usePlaygroundController() {
     setRefVideo(null)
   }
 
+  /**
+   * Reuse a finished run's image output as the reference for the next
+   * generation. The run route accepts an https storage URL as a reference
+   * (see reference-guard: signatures can't be forged, so it's read-safe), so
+   * we pass the result URL straight through — no re-upload, no CORS, no key.
+   * `asVideo` flips to the Video studio for image-to-video (i2v).
+   */
+  function applyRunAsReference(run: PlaygroundRunRow, opts?: { asVideo?: boolean }) {
+    const url = run.resultUrls?.[0]
+    if (!url) {
+      alert('此結果沒有可用的圖片,無法作為參考')
+      return
+    }
+    setRefImages([{ key: url, signedUrl: url }])
+    setRefVideo(null)
+    if (opts?.asVideo) {
+      setOutputType('video')
+      setVideoRefMode('image')
+    }
+    setLightboxRun(null)
+  }
+
   const isBusy = upload.isPending || submit.isPending || compressing
   const refCount = refImages.length + (refVideo ? 1 : 0)
   const isGenerating = latestRun?.status === 'pending' || latestRun?.status === 'running'
@@ -313,7 +338,7 @@ export function usePlaygroundController() {
     // handlers
     insertReferenceToken,
     handleImagePick, handleVideoPick, removeRefImage, removeRefVideo,
-    handleRun, copyPrompt, editPrompt, resetForm,
+    handleRun, copyPrompt, editPrompt, resetForm, applyRunAsReference,
   }
 }
 
