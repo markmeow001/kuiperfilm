@@ -108,6 +108,11 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   // Without this, "insert @image1" would have to append at end-of-text and
   // users couldn't position the reference mid-sentence.
   const promptRef = useRef<HTMLTextAreaElement | null>(null)
+  // Results feed scroll container — auto-scrolled to the focused result when
+  // a new run starts or a history item is picked, so the active generation is
+  // never rendered off-screen above a long history grid (2026-07-08 feedback:
+  // 「生成越來越多會一直頂上去,看不到生成的樣子」).
+  const feedRef = useRef<HTMLElement | null>(null)
 
   /**
    * Phase T-3 — insert a reference token (@image1 / @video1 etc) at the
@@ -196,6 +201,17 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
       setLatestRun(updated)
     }
   }, [runsQuery.data, latestRun])
+
+  // Bring the focused result into view whenever it changes (new generation
+  // submitted, or a history thumbnail picked). Keyed on the run id (not the
+  // object) + submit.isPending so poll-refreshes of the same run don't yank
+  // the scroll while the user is reading.
+  useEffect(() => {
+    if (latestRun || submit.isPending) {
+      feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestRun?.id, submit.isPending])
 
   // ── Handlers ──────────────────────────────────────────────────────
 
@@ -382,7 +398,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
       </header>
 
       {/* BODY — results-forward feed (scrolls). Composer is docked below. */}
-      <main className="flex-1 overflow-y-auto">
+      <main ref={feedRef} className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-5xl px-6 py-6">
           {/* ── Focused result: the active/selected run, large ── */}
           {(latestRun || submit.isPending) ? (
