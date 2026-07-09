@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from 'react'
 import { resolveErrorDisplay } from '@/lib/errors/display'
-import type { PlaygroundController } from './usePlaygroundController'
+import { playgroundDownloadHref, type PlaygroundController } from './usePlaygroundController'
 
 interface ResultLightboxProps {
   ctrl: PlaygroundController
@@ -255,9 +255,7 @@ export function ResultLightbox({ ctrl }: ResultLightboxProps) {
             <div className="flex items-center gap-2">
               {url ? (
                 <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={playgroundDownloadHref(url, `kuiperai-${run.id}`)}
                   download
                   className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-stone-800 py-2 font-mono text-[11px] uppercase tracking-wider text-stone-400 hover:border-stone-600 hover:text-stone-200"
                 >

@@ -13,7 +13,7 @@
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import { ReferencePanel } from './ReferencePanel'
-import { ASPECT_RATIO_OPTIONS, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
+import { ASPECT_RATIO_OPTIONS, playgroundDownloadHref, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
 
 interface VideoStudioProps {
   ctrl: PlaygroundController
@@ -249,7 +249,7 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
 
             <div className="mt-auto space-y-2">
               {stageUrl ? (
-                <a href={stageUrl} target="_blank" rel="noopener noreferrer" download className="flex w-full items-center justify-center gap-2 rounded-sm border border-stone-700 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-300 hover:border-amber-500/60 hover:text-amber-300">↓ 下載</a>
+                <a href={playgroundDownloadHref(stageUrl, `kuiperai-${staged.id}`)} download className="flex w-full items-center justify-center gap-2 rounded-sm border border-stone-700 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-300 hover:border-amber-500/60 hover:text-amber-300">↓ 下載</a>
               ) : null}
               <button
                 type="button"

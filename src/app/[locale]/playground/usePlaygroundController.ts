@@ -36,6 +36,18 @@ export const MAX_REF_VIDEOS = 1 // ARK parity — see Phase S decision memory
 
 export type OutputType = 'image' | 'video'
 
+/**
+ * Build a same-origin download URL for a result. A direct `<a download>` to the
+ * R2/COS URL is ignored cross-origin (the file just opens in a new tab), so we
+ * route through /api/playground/download, which re-streams with
+ * Content-Disposition: attachment → a real save-to-disk.
+ */
+export function playgroundDownloadHref(url: string, filename?: string): string {
+  const params = new URLSearchParams({ url })
+  if (filename) params.set('filename', filename)
+  return `/api/playground/download?${params.toString()}`
+}
+
 export function usePlaygroundController() {
   const userModelsQuery = useUserModels()
   const upload = useUploadPlaygroundReference()
