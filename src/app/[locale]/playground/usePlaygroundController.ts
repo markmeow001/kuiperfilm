@@ -1,0 +1,321 @@
+'use client'
+
+/**
+ * Playground controller — all form state, derived model/resolution data, and
+ * handlers for the Freedom-Mode playground, extracted so the Image and Video
+ * studios (two distinct layouts, 2026-07-08 redesign) can share one source of
+ * truth without prop-drilling 20+ values.
+ *
+ * V2PlaygroundClient calls this once and passes the returned object down as a
+ * single `ctrl` prop; ImageStudio / VideoStudio / ResultLightbox consume it.
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
+import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
+import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
+import {
+  useUploadPlaygroundReference,
+  useSubmitPlaygroundRun,
+  usePlaygroundRuns,
+  usePlaygroundCostEstimate,
+  type PlaygroundRunRow,
+} from '@/lib/query/mutations/playground-mutations'
+
+export const ASPECT_RATIO_OPTIONS = [
+  { value: '9:16', label: '9:16 直屏' },
+  { value: '16:9', label: '16:9 橫屏' },
+  { value: '1:1', label: '1:1 方形' },
+  { value: '4:3', label: '4:3 經典' },
+  { value: '3:4', label: '3:4 直幅' },
+  { value: '4:5', label: '4:5 IG' },
+]
+
+export const MAX_REF_IMAGES = 9
+export const MAX_REF_VIDEOS = 1 // ARK parity — see Phase S decision memory
+
+export type OutputType = 'image' | 'video'
+
+export function usePlaygroundController() {
+  const userModelsQuery = useUserModels()
+  const upload = useUploadPlaygroundReference()
+  const submit = useSubmitPlaygroundRun()
+  const runsQuery = usePlaygroundRuns(null)
+
+  // Form state
+  const [prompt, setPrompt] = useState('')
+  const [refText, setRefText] = useState('')
+  const [refImages, setRefImages] = useState<Array<{ key: string; signedUrl: string }>>([])
+  const [refVideo, setRefVideo] = useState<{ key: string; signedUrl: string } | null>(null)
+  const [outputType, setOutputType] = useState<OutputType>('image')
+  const [modelKey, setModelKey] = useState<string>('')
+  const [aspectRatio, setAspectRatio] = useState('9:16')
+  const [durationSec, setDurationSec] = useState<number>(5)
+  const [resolution, setResolution] = useState<string>('720p')
+
+  // Output / view state
+  const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
+  // Image studio: which run's detail modal is open (null = closed).
+  const [lightboxRun, setLightboxRun] = useState<PlaygroundRunRow | null>(null)
+  // Video studio: which run occupies the centre stage (null = newest).
+  const [stageRun, setStageRun] = useState<PlaygroundRunRow | null>(null)
+  const [promptCopied, setPromptCopied] = useState(false)
+  const [compressing, setCompressing] = useState(false)
+  const [videoRefMode, setVideoRefMode] = useState<Extract<VideoRefMode, 'image' | 'omni'>>('image')
+
+  const costEstimate = usePlaygroundCostEstimate({
+    modelKey,
+    outputType,
+    ...(outputType === 'video' ? { durationSec, resolution } : {}),
+  })
+
+  // File picker + textarea refs
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const videoInputRef = useRef<HTMLInputElement | null>(null)
+  const promptRef = useRef<HTMLTextAreaElement | null>(null)
+
+  function insertReferenceToken(token: string) {
+    const ta = promptRef.current
+    if (!ta) {
+      setPrompt((prev) => (prev ? `${prev} ${token}` : token))
+      return
+    }
+    const start = ta.selectionStart ?? prompt.length
+    const end = ta.selectionEnd ?? prompt.length
+    const before = prompt.slice(0, start)
+    const after = prompt.slice(end)
+    const needLeadingSpace = before.length > 0 && !/\s$/.test(before)
+    const needTrailingSpace = after.length > 0 && !/^\s/.test(after)
+    const insert = `${needLeadingSpace ? ' ' : ''}${token}${needTrailingSpace ? ' ' : ''}`
+    setPrompt(before + insert + after)
+    setTimeout(() => {
+      ta.focus()
+      const caretPos = start + insert.length
+      ta.setSelectionRange(caretPos, caretPos)
+    }, 0)
+  }
+
+  const imageModels = useMemo<UserModelOption[]>(() => userModelsQuery.data?.image ?? [], [userModelsQuery.data])
+  const videoModels = useMemo<UserModelOption[]>(() => userModelsQuery.data?.video ?? [], [userModelsQuery.data])
+  const activeModels = outputType === 'image' ? imageModels : videoModels
+
+  useEffect(() => {
+    if (activeModels.length === 0) {
+      if (modelKey) setModelKey('')
+      return
+    }
+    const found = activeModels.find((m) => m.value === modelKey)
+    if (!found) setModelKey(activeModels[0].value)
+  }, [activeModels, modelKey])
+
+  const selectedVideoModel = activeModels.find((m) => m.value === modelKey)
+  const resolutionOptions: string[] =
+    (outputType === 'video' && selectedVideoModel?.capabilities?.video?.resolutionOptions) || []
+  const showResolutionPicker = resolutionOptions.length > 1
+  useEffect(() => {
+    if (resolutionOptions.length > 0 && !resolutionOptions.includes(resolution)) {
+      setResolution(resolutionOptions.includes('720p') ? '720p' : resolutionOptions[0])
+    }
+  }, [resolutionOptions, resolution])
+
+  // Promote worker status changes into the tracked run (poll every 3s while
+  // pending/running rows exist). Keeps the in-progress placeholder + video
+  // stage live without a manual refresh.
+  useEffect(() => {
+    if (!latestRun) return
+    if (latestRun.status === 'succeeded' || latestRun.status === 'failed') return
+    const updated = runsQuery.data?.runs?.find((r) => r.id === latestRun.id)
+    if (updated && updated.status !== latestRun.status) {
+      setLatestRun(updated)
+      if (updated.outputType === 'video') setStageRun(updated)
+    } else if (updated && updated.status === 'succeeded' && (!latestRun.resultUrls?.[0] || latestRun.resultUrls?.[0] !== updated.resultUrls?.[0])) {
+      setLatestRun(updated)
+      if (updated.outputType === 'video') setStageRun(updated)
+    }
+  }, [runsQuery.data, latestRun])
+
+  // ── Handlers ──────────────────────────────────────────────────────
+
+  async function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (refImages.length >= MAX_REF_IMAGES) {
+      alert(`參考圖最多 ${MAX_REF_IMAGES} 張`)
+      return
+    }
+    try {
+      const result = await upload.mutateAsync({ file, type: 'image' })
+      setRefImages((prev) => [...prev, { key: result.key, signedUrl: result.signedUrl }])
+    } catch (err) {
+      alert(`圖片上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    }
+  }
+
+  async function handleVideoPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (refVideo) {
+      alert('參考影片只能 1 支（ARK 上限對齊）。請先移除再上傳新的。')
+      return
+    }
+    try {
+      const result = await upload.mutateAsync({ file, type: 'video' })
+      setRefVideo({ key: result.key, signedUrl: result.signedUrl })
+    } catch (err) {
+      alert(`影片上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    }
+  }
+
+  function removeRefImage(idx: number) {
+    setRefImages((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  function removeRefVideo() {
+    setRefVideo(null)
+  }
+
+  async function handleRun(overrideModelKey?: string) {
+    if (!prompt.trim()) {
+      alert('請先輸入提示詞')
+      return
+    }
+    if (outputType === 'image' && prompt.trim().length > 4000) {
+      alert(`提示詞過長（${prompt.trim().length}/4000 字符），請精簡後再生成`)
+      return
+    }
+    const useModelKey = overrideModelKey ?? modelKey
+    if (!useModelKey) {
+      alert('請先選擇模型')
+      return
+    }
+    let effectivePrompt = prompt.trim()
+    if (outputType === 'video' && effectivePrompt.length > VIDEO_PROMPT_SOFT_LIMIT) {
+      setCompressing(true)
+      try {
+        effectivePrompt = await compressVideoPrompt(effectivePrompt)
+      } catch (err) {
+        alert(`提示詞過長（${prompt.trim().length} 字符）且自動壓縮失敗：${(err as Error)?.message ?? '未知錯誤'}`)
+        return
+      } finally {
+        setCompressing(false)
+      }
+    }
+    if (overrideModelKey && overrideModelKey !== modelKey) {
+      setModelKey(overrideModelKey)
+    }
+    const effectiveModelKey = outputType === 'video' && refImages.length > 0
+      ? variantKeyForMode(useModelKey, videoRefMode, videoModels.map((m) => m.value))
+      : useModelKey
+    try {
+      const result = await submit.mutateAsync({
+        prompt: effectivePrompt,
+        referenceImages: refImages.map((r) => r.key),
+        referenceVideos: refVideo ? [refVideo.key] : [],
+        referenceText: refText.trim() || undefined,
+        outputType,
+        modelKey: effectiveModelKey,
+        aspectRatio,
+        ...(outputType === 'video' ? { durationSec } : {}),
+        ...(showResolutionPicker ? { resolution } : {}),
+      })
+      const row: PlaygroundRunRow = {
+        id: result.run.id,
+        prompt: effectivePrompt,
+        outputType: result.run.outputType as OutputType,
+        modelKey: result.run.modelKey,
+        status: result.run.status as PlaygroundRunRow['status'],
+        resultUrls: [result.run.resultUrl],
+        errorMessage: null,
+        createdAt: result.run.createdAt,
+        completedAt: result.run.completedAt,
+      }
+      setLatestRun(row)
+      // Video: fresh run takes the centre stage immediately so the user
+      // watches it generate. Image: close any open lightbox; the placeholder
+      // appears in the gallery.
+      if (row.outputType === 'video') setStageRun(row)
+      else setLightboxRun(null)
+    } catch (err) {
+      alert(`生成失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    }
+  }
+
+  /** Copy a run's prompt to the clipboard (used by the lightbox / detail rail). */
+  async function copyPrompt(text: string | undefined | null) {
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      setPromptCopied(true)
+      setTimeout(() => setPromptCopied(false), 1500)
+    } catch (err) {
+      alert(`複製失敗:${(err as Error)?.message ?? '瀏覽器不允許存取剪貼簿'}`)
+    }
+  }
+
+  /** Pull a run's prompt back into the composer for editing + re-run. */
+  function editPrompt(text: string | undefined | null) {
+    if (!text) return
+    setPrompt(text)
+    setLightboxRun(null)
+    setTimeout(() => {
+      promptRef.current?.focus()
+      promptRef.current?.setSelectionRange(text.length, text.length)
+    }, 0)
+  }
+
+  function resetForm() {
+    setPrompt('')
+    setRefText('')
+    setRefImages([])
+    setRefVideo(null)
+  }
+
+  const isBusy = upload.isPending || submit.isPending || compressing
+  const refCount = refImages.length + (refVideo ? 1 : 0)
+  const isGenerating = latestRun?.status === 'pending' || latestRun?.status === 'running'
+  const allRuns = runsQuery.data?.runs ?? []
+  const imageRuns = allRuns.filter((r) => r.outputType === 'image')
+  const videoRuns = allRuns.filter((r) => r.outputType === 'video')
+  // Video centre stage: explicit selection, else the tracked run, else newest.
+  const effectiveStageRun: PlaygroundRunRow | null =
+    stageRun ?? (latestRun?.outputType === 'video' ? latestRun : null) ?? videoRuns[0] ?? null
+
+  return {
+    // queries / mutations
+    submit,
+    upload,
+    costEstimate,
+    // form state
+    prompt, setPrompt,
+    refText, setRefText,
+    refImages, refVideo,
+    outputType, setOutputType,
+    modelKey, setModelKey,
+    aspectRatio, setAspectRatio,
+    durationSec, setDurationSec,
+    resolution, setResolution,
+    videoRefMode, setVideoRefMode,
+    // view state
+    latestRun,
+    lightboxRun, setLightboxRun,
+    stageRun: effectiveStageRun, setStageRun,
+    promptCopied,
+    compressing,
+    // refs
+    imageInputRef, videoInputRef, promptRef,
+    // derived
+    imageModels, videoModels, activeModels, selectedVideoModel,
+    resolutionOptions, showResolutionPicker,
+    isBusy, refCount, isGenerating,
+    allRuns, imageRuns, videoRuns,
+    // handlers
+    insertReferenceToken,
+    handleImagePick, handleVideoPick, removeRefImage, removeRefVideo,
+    handleRun, copyPrompt, editPrompt, resetForm,
+  }
+}
+
+export type PlaygroundController = ReturnType<typeof usePlaygroundController>
+export type PlaygroundRun = PlaygroundRunRow
