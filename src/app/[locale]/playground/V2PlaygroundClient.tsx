@@ -1,30 +1,24 @@
 'use client'
 
 /**
- * Phase T-1 (2026-05-27) — V2 Playground / Freedom Mode client.
+ * Playground / Freedom Mode client.
  *
- * Variant A "fal-faithful" layout (approved 2026-05-27, user comment:
- * "中規中矩, 大部分使用者能很快上手"):
- *   - Top tab strip
- *   - 50/50 split: input (left) / output (right)
- *   - Bottom toolbar with model picker + cost estimate + RUN button
+ * Layout — "composer over feed" (2026-07-08 redesign, approved direction:
+ * 底部 composer + 結果 feed, 對標 Krea / Sora / Midjourney):
+ *   - Slim top tab strip (brand + 體驗/API/範例)
+ *   - RESULTS-FORWARD main area (scrolls): the focused/active run shown large
+ *     with its 描述詞 panel + cross-model chips, above a "最近生成" grid that
+ *     doubles as history and is never a blank void.
+ *   - Bottom COMPOSER = the single persistent surface: prompt + a 「＋素材」
+ *     popover (reference images/video/text, revealed on demand) + inline
+ *     圖片/影片 toggle + model + ratio + a 「進階」 popover (video 時長/解析度)
+ *     + live cost + Generate. Generate is glued to the prompt (⌘+↵), not
+ *     marooned in a detached bar.
  *
- * T-1 scope (image-only):
- *   - Prompt textarea
- *   - Reference images grid (up to 9, multipart upload to /api/playground/upload-reference)
- *   - Reference video slot (capped at 1 per ARK lowest common denominator; see
- *     feedback_kuiperfilm_ref_video_lowest_common_denominator memory)
- *   - Reference text input
- *   - Output preview (large <img> when result lands)
- *   - Model picker (filtered to image-only models from useUserModels)
- *   - Aspect ratio dropdown
- *   - Run history rail (top-right, scrollable, last 20)
- *
- * Not in T-1 (deferred to T-2/T-3):
- *   - @imageN inline chip tokens in textarea (placeholder for now — just text)
- *   - Video output (returns VIDEO_NOT_YET_SUPPORTED from API)
- *   - "You can also try with..." model swap chip strip
- *   - Cost estimate (TODO once image pricing table is plumbed)
+ * Prior layout was a 50/50 input|output split with a separate bottom action
+ * bar; the competitor survey showed that pattern makes three avoided
+ * mistakes (Generate detached from prompt, always-expanded reference grid,
+ * large empty output pane). This redesign fixes all three.
  */
 
 import Link from 'next/link'
@@ -92,6 +86,9 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   // reference (r2v). Defaults to first frame — the semantics users expected
   // when they reported refs "only following the style" (2026-07-02).
   const [videoRefMode, setVideoRefMode] = useState<Extract<VideoRefMode, 'image' | 'omni'>>('image')
+  // 底部 composer 的展開面板:'refs' = 參考素材(圖/影片/文字),'advanced' =
+  // 影片進階(時長/解析度)。null = 都收起。漸進式揭露,對標 Krea composer。
+  const [composerPanel, setComposerPanel] = useState<null | 'refs' | 'advanced'>(null)
 
   // T-3 cost estimate (live) — refetches when model/outputType/duration changes.
   // Resolution isn't currently a user-controlled state in Playground T-1/T-2
@@ -308,6 +305,8 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
         createdAt: result.run.createdAt,
         completedAt: result.run.completedAt,
       })
+      // Collapse any open composer panel so the fresh result is unobstructed.
+      setComposerPanel(null)
     } catch (err) {
       alert(`生成失敗:${(err as Error)?.message ?? '未知錯誤'}`)
     }
@@ -329,7 +328,7 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
     }
   }
 
-  /** 描述詞面板 — 把原始 prompt 帶回左側輸入框修改後重新生成。 */
+  /** 描述詞面板 — 把原始 prompt 帶回輸入框修改後重新生成。 */
   function handleEditPrompt() {
     if (!latestRun?.prompt) return
     setPrompt(latestRun.prompt)
@@ -340,12 +339,23 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   }
 
   const isBusy = upload.isPending || submit.isPending || compressing
+  const refCount = refImages.length + (refVideo ? 1 : 0)
+  const isGenerating = latestRun?.status === 'pending' || latestRun?.status === 'running'
+  const runs = runsQuery.data?.runs ?? []
+
+  // ⌘/Ctrl + Enter to generate from the prompt box (matches the button hint).
+  function handlePromptKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      if (!isBusy && modelKey && prompt.trim() && !isGenerating) handleRun()
+    }
+  }
 
   // ── Render ────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-screen flex-col bg-stone-950 text-stone-300">
-      {/* TOP — tab strip + brand */}
+      {/* TOP — slim brand + tab strip */}
       <header className="flex items-center justify-between border-b border-stone-800 px-8 py-3">
         <div className="flex items-center gap-6">
           <Link
@@ -371,626 +381,622 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
         </div>
       </header>
 
-      {/* BODY — 50/50 split */}
-      <div className="grid flex-1 grid-cols-2 overflow-hidden">
-        {/* ─── LEFT: input ─── */}
-        <div className="flex flex-col overflow-y-auto border-r border-stone-800 p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="font-mono text-[12px] uppercase tracking-wider text-stone-500">輸入</div>
-          </div>
-
-          {/* Prompt */}
-          <div className="mb-5">
-            <textarea
-              ref={promptRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={6}
-              placeholder="描述你想生成的畫面... 譬如「賽博龐克城市夜景, 巨型廣告牌特寫, 雨夜霓虹倒映」&#10;&#10;💡 上傳參考素材後可點下方紫色 chip 插入 @image1 / @video1 引用"
-              className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
-            />
-            {/* Phase T-3 — @-token quick-insert toolbar.
-                Shows up only when there's at least one uploaded ref. Click
-                inserts @imageN / @videoN at the prompt's caret position. */}
-            {(refImages.length > 0 || refVideo) ? (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-stone-600">引用</span>
-                {refImages.map((_, idx) => {
-                  const token = `@image${idx + 1}`
-                  return (
-                    <button
-                      type="button"
-                      key={`tok-${token}`}
-                      onClick={() => insertReferenceToken(token)}
-                      title={`插入 ${token} 引用第 ${idx + 1} 張參考圖`}
-                      className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
-                    >
-                      {token}
-                    </button>
-                  )
-                })}
-                {refVideo ? (
-                  <button
-                    type="button"
-                    onClick={() => insertReferenceToken('@video1')}
-                    title="插入 @video1 引用參考影片"
-                    className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+      {/* BODY — results-forward feed (scrolls). Composer is docked below. */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-5xl px-6 py-6">
+          {/* ── Focused result: the active/selected run, large ── */}
+          {(latestRun || submit.isPending) ? (
+            <section className="mb-8">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="font-mono text-[12px] uppercase tracking-wider text-stone-500">當前結果</div>
+                  <div className="font-mono text-[11px] text-stone-600">
+                    {submit.isPending
+                      ? '提交中…'
+                      : latestRun?.status === 'pending'
+                        ? '排隊中'
+                        : latestRun?.status === 'running'
+                          ? '生成中'
+                          : latestRun?.status === 'succeeded'
+                            ? '已完成'
+                            : latestRun?.status === 'failed'
+                              ? '失敗'
+                              : '閒置'}
+                  </div>
+                </div>
+                {latestRun?.resultUrls?.[0] ? (
+                  <a
+                    href={latestRun.resultUrls[0]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] uppercase text-stone-400 hover:border-amber-500/60 hover:text-amber-300"
+                    download
                   >
-                    @video1
-                  </button>
+                    ↓ 下載
+                  </a>
                 ) : null}
               </div>
-            ) : null}
-          </div>
 
-          {/* Reference images grid */}
-          <div className="mb-5">
-            <div className="mb-2 flex items-center justify-between font-mono text-[12px] uppercase tracking-wider">
-              <span className="text-stone-500">
-                參考圖片 <span className="text-violet-400">({refImages.length}/{MAX_REF_IMAGES})</span>
-              </span>
-            </div>
-            {/* 参考图用途 — video only. Seedance-class endpoints give the image
-                different SEMANTICS per variant (i2v = first frame, r2v = style/
-                identity ref); the submit swaps to the sibling variant that
-                implements the chosen mode. */}
-            {outputType === 'video' && refImages.length > 0 ? (
-              <div className="mb-2">
-                <div className="flex gap-1">
-                  {([
-                    { key: 'image', label: '首幀（畫面從這張圖開始）' },
-                    { key: 'omni', label: '風格 / 角色參考' },
-                  ] as const).map((m) => (
-                    <button
-                      key={m.key}
-                      type="button"
-                      onClick={() => setVideoRefMode(m.key)}
-                      className={`flex-1 rounded-sm border px-2 py-1.5 font-mono text-[11px] transition-colors ${
-                        videoRefMode === m.key
-                          ? 'border-violet-500/60 bg-violet-500/10 text-violet-300'
-                          : 'border-stone-700 text-stone-500 hover:text-stone-300'
-                      }`}
+              {/* Preview — height-driven for portrait ratios, width-driven for
+                  landscape, so 9:16 doesn't overflow the viewport. */}
+              {(() => {
+                const [aw, ah] = aspectRatio.split(':').map(Number)
+                const isPortrait = ah > aw
+                const previewStyle: React.CSSProperties = isPortrait
+                  ? { aspectRatio: `${aw} / ${ah}`, height: 'min(60vh, 620px)', width: 'auto', maxWidth: '100%' }
+                  : { aspectRatio: `${aw} / ${ah}`, width: '100%', height: 'auto', maxHeight: 'min(60vh, 620px)' }
+                return (
+                  <div className="flex justify-center">
+                    <div
+                      className="relative overflow-hidden rounded-md border border-stone-800 bg-stone-900/40"
+                      style={previewStyle}
                     >
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-                {/* Endpoint status — ALWAYS shown so "nothing happened" is
-                    never ambiguous (2026-07-03 report: silence on an already-
-                    matching / non-variant model read as "feature not working"). */}
-                {(() => {
-                  const keys = videoModels.map((m) => m.value)
-                  const eff = variantKeyForMode(modelKey, videoRefMode, keys)
-                  const notes: string[] = []
-                  if (videoRefMode === 'image' && refImages.length > 1) {
-                    notes.push('首幀模式僅使用第 1 張參考圖')
-                  }
-                  if (eff !== modelKey) {
-                    const label = videoModels.find((m) => m.value === eff)?.label ?? eff
-                    notes.push(`已自動匹配端點：${label}`)
-                  } else if (variantModeMismatch(modelKey, videoRefMode)) {
-                    const want = videoRefMode === 'image' ? 'I2V' : 'R2V'
-                    return <div className="mt-1 font-mono text-[10px] text-amber-400">此模式需要 {want} 端點變體 — 請到 /profile 啟用對應模型</div>
-                  } else if (isVariantSuffixedKey(modelKey)) {
-                    notes.push(`✓ 當前模型已是${videoRefMode === 'image' ? ' I2V 首幀' : ' R2V 參考'}端點`)
-                  } else {
-                    notes.push('⚠ 此模型不分首幀/參考端點，參考圖語義由模型自身決定（要確保首幀請改用 Seedance I2V）')
-                  }
-                  return <div className="mt-1 font-mono text-[10px] text-stone-500">{notes.join(' · ')}</div>
-                })()}
-              </div>
-            ) : null}
-            <div className="grid grid-cols-5 gap-2">
-              {/* Upload slot */}
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={isBusy || refImages.length >= MAX_REF_IMAGES}
-                className="aspect-square rounded-sm border border-dashed border-stone-700 text-xl text-stone-500 transition-all hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                ＋
-              </button>
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={handleImagePick}
-              />
-              {/* Existing refs */}
-              {refImages.map((ref, idx) => (
-                <div
-                  key={ref.key}
-                  className="group relative aspect-square overflow-hidden rounded-sm border border-violet-500/40"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={ref.signedUrl} alt={`ref ${idx + 1}`} className="h-full w-full object-cover" />
-                  <div className="absolute left-1 top-1 rounded-sm bg-stone-950/80 px-1 font-mono text-[10px] text-amber-300">
-                    {idx + 1}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeRefImage(idx)}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-stone-950/80 text-stone-300 opacity-0 transition-opacity hover:bg-rose-500/80 hover:text-white group-hover:opacity-100"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-              {/* Empty slot placeholders */}
-              {Array.from({ length: Math.max(0, MAX_REF_IMAGES - refImages.length - 1) }).map((_, i) => (
-                <div key={`empty-${i}`} className="aspect-square rounded-sm border border-dashed border-stone-800/60"></div>
-              ))}
-            </div>
-            <div className="mt-1 text-right font-mono text-[10px] text-stone-600">
-              MAX:{MAX_REF_IMAGES} · jpg/png/webp · ≤10MB
-            </div>
-          </div>
-
-          {/* Reference video */}
-          <div className="mb-5">
-            <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-stone-500">
-              參考影片 <span className="text-violet-400">({refVideo ? 1 : 0}/{MAX_REF_VIDEOS})</span>
-            </div>
-            {refVideo ? (
-              <div className="flex items-center gap-3 rounded-sm border border-violet-500/30 bg-violet-500/5 p-2">
-                <video
-                  src={refVideo.signedUrl}
-                  controls
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="h-16 w-28 rounded-sm object-cover"
-                />
-                <div className="flex-1 font-mono text-[11px] uppercase tracking-wider text-violet-300">
-                  動作參考已綁
-                </div>
-                <button
-                  type="button"
-                  onClick={removeRefVideo}
-                  disabled={isBusy}
-                  className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 hover:border-rose-500/60 hover:text-rose-300"
-                >
-                  ×
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => videoInputRef.current?.click()}
-                disabled={isBusy}
-                className="flex w-full flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-stone-700 bg-stone-900/30 p-6 text-stone-500 transition-all hover:border-violet-500/40 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <AppIcon name="upload" className="h-6 w-6" />
-                <div className="text-[12px]">可拖曳檔案至此，或點擊上傳</div>
-                <div className="font-mono text-[10px] text-stone-600">mp4/mov/webm · ≤50MB · 建議 ≤15s</div>
-              </button>
-            )}
-            <input
-              ref={videoInputRef}
-              type="file"
-              accept="video/mp4,video/quicktime,video/webm"
-              className="hidden"
-              onChange={handleVideoPick}
-            />
-          </div>
-
-          {/* Reference text */}
-          <div className="mb-2">
-            <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-stone-500">
-              參考文字 <span className="text-stone-600">(選填)</span>
-            </div>
-            <input
-              type="text"
-              value={refText}
-              onChange={(e) => setRefText(e.target.value)}
-              placeholder="風格 / 旁白 / 隱喻 等補充..."
-              className="w-full rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 text-[13px] text-stone-300 placeholder:text-stone-600 outline-none focus:border-amber-500/40"
-            />
-          </div>
-        </div>
-
-        {/* ─── RIGHT: output + history ─── */}
-        <div className="flex flex-col overflow-y-auto p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="font-mono text-[12px] uppercase tracking-wider text-stone-500">輸出</div>
-              <div className="font-mono text-[11px] text-stone-600">
-                {submit.isPending
-                  ? '提交中…'
-                  : latestRun?.status === 'pending'
-                    ? '排隊中'
-                    : latestRun?.status === 'running'
-                      ? '生成中'
-                      : latestRun?.status === 'succeeded'
-                        ? '已完成'
-                        : latestRun?.status === 'failed'
-                          ? '失敗'
-                          : '閒置'}
-              </div>
-            </div>
-            {latestRun?.resultUrls?.[0] ? (
-              <a
-                href={latestRun.resultUrls[0]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] uppercase text-stone-400 hover:border-amber-500/60 hover:text-amber-300"
-                download
-              >
-                ↓ 下載
-              </a>
-            ) : null}
-          </div>
-
-          {/* Preview — height-driven for portrait ratios, width-driven for
-              landscape. CSS aspect-ratio alone gives runaway height on
-              9:16 because the right column is ~700px wide → 700×1244px
-              overflows the viewport. Picking the right driver per ratio
-              keeps the preview frame snug. */}
-          {(() => {
-            const [aw, ah] = aspectRatio.split(':').map(Number)
-            const isPortrait = ah > aw
-            const previewStyle: React.CSSProperties = isPortrait
-              ? {
-                  aspectRatio: `${aw} / ${ah}`,
-                  height: 'min(64vh, 640px)',
-                  width: 'auto',
-                  maxWidth: '100%',
-                }
-              : {
-                  aspectRatio: `${aw} / ${ah}`,
-                  width: '100%',
-                  height: 'auto',
-                  maxHeight: 'min(64vh, 640px)',
-                }
-            return (
-          <div className="mb-3 flex justify-center">
-          <div
-            className="relative overflow-hidden rounded-sm border border-stone-800 bg-stone-900/40"
-            style={previewStyle}
-          >
-            {submit.isPending ? (
-              <div className="flex h-full w-full items-center justify-center text-stone-500">
-                <div className="flex items-center gap-3">
-                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                  <div className="font-mono text-[12px] uppercase tracking-wider">提交中…</div>
-                </div>
-              </div>
-            ) : latestRun?.status === 'failed' ? (
-              <div className="flex h-full w-full items-center justify-center p-8 text-center">
-                <div>
-                  <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-rose-400">生成失敗</div>
-                  {/* Normalize provider errors (e.g. AtlasCloud 402 → "余额不足，请先充值")
-                      instead of dumping raw "提交失败 (402): {...}". Raw stays in the
-                      title tooltip for ops. (2026-06-03 audit) */}
-                  <div
-                    className="font-mono text-[11px] text-stone-500"
-                    title={latestRun.errorMessage ?? undefined}
-                  >
-                    {resolveErrorDisplay({ message: latestRun.errorMessage })?.message
-                      ?? latestRun.errorMessage
-                      ?? '未知錯誤'}
-                  </div>
-                </div>
-              </div>
-            ) : latestRun?.status === 'pending' || latestRun?.status === 'running' ? (
-              // Phase V (2026-05-28) — explicit async-progress state.
-              // For video, the POST returns in ~100ms with status='pending'
-              // but the worker takes 1-3 minutes to actually produce the
-              // mp4. Without this branch, the UI fell through to the
-              // 「尚未生成」 placeholder for the entire wait window, making
-              // the user think nothing was happening (it was — they just
-              // couldn't see it). usePlaygroundRuns auto-polls every 3s
-              // while pending/running rows exist, so this banner flips to
-              // the video automatically when the worker finishes.
-              <div className="flex h-full w-full items-center justify-center p-6 text-center">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500/30 border-t-amber-400" />
-                    <div className="font-mono text-[14px] uppercase tracking-wider text-amber-300">
-                      {latestRun.status === 'pending' ? '排隊中' : '生成中'}
+                      {submit.isPending ? (
+                        <div className="flex h-full w-full items-center justify-center text-stone-500">
+                          <div className="flex items-center gap-3">
+                            <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
+                            <div className="font-mono text-[12px] uppercase tracking-wider">提交中…</div>
+                          </div>
+                        </div>
+                      ) : latestRun?.status === 'failed' ? (
+                        <div className="flex h-full w-full items-center justify-center p-8 text-center">
+                          <div>
+                            <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-rose-400">生成失敗</div>
+                            <div
+                              className="font-mono text-[11px] text-stone-500"
+                              title={latestRun.errorMessage ?? undefined}
+                            >
+                              {resolveErrorDisplay({ message: latestRun.errorMessage })?.message
+                                ?? latestRun.errorMessage
+                                ?? '未知錯誤'}
+                            </div>
+                          </div>
+                        </div>
+                      ) : isGenerating ? (
+                        <div className="flex h-full w-full items-center justify-center p-6 text-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500/30 border-t-amber-400" />
+                              <div className="font-mono text-[14px] uppercase tracking-wider text-amber-300">
+                                {latestRun?.status === 'pending' ? '排隊中' : '生成中'}
+                              </div>
+                            </div>
+                            <div className="max-w-md font-serif-cn text-[12px] leading-relaxed text-stone-400">
+                              {latestRun?.outputType === 'video'
+                                ? '影片生成大約需要 1-3 分鐘，可保持此頁面開啟。完成後會自動顯示，也會出現在下方最近生成中。'
+                                : '處理中…'}
+                            </div>
+                            <div className="font-mono text-[10px] uppercase tracking-wider text-stone-600">
+                              Run ID · {latestRun?.id.slice(0, 8)}…
+                            </div>
+                          </div>
+                        </div>
+                      ) : latestRun?.resultUrls?.[0] ? (
+                        latestRun.outputType === 'image' ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={latestRun.resultUrls[0]} alt="output" className="h-full w-full object-contain" />
+                        ) : (
+                          <video src={latestRun.resultUrls[0]} controls playsInline className="h-full w-full object-contain" />
+                        )
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-stone-600">
+                          <div className="text-center">
+                            <AppIcon name="image" className="mx-auto h-12 w-12 opacity-30" />
+                            <div className="mt-3 font-mono text-[11px] uppercase tracking-wider">比例 {aspectRatio}</div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="max-w-md font-serif-cn text-[12px] leading-relaxed text-stone-400">
-                    {latestRun.outputType === 'video'
-                      ? '影片生成大約需要 1-3 分鐘，可保持此頁面開啟。完成後會自動顯示，也會出現在下方歷史紀錄中。'
-                      : '處理中…'}
+                )
+              })()}
+
+              {/* 描述詞面板 — 每筆結果附上原始 prompt,可複製、可帶回輸入框修改。 */}
+              {latestRun?.prompt ? (
+                <div className="mx-auto mt-3 max-w-2xl rounded-sm border border-stone-800 bg-stone-900/30 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-mono text-[11px] uppercase tracking-wider text-stone-500">描述詞</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyPrompt}
+                        className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 transition-colors hover:border-amber-500/60 hover:text-amber-300"
+                        title="複製描述詞到剪貼簿"
+                      >
+                        {promptCopied ? '✓ 已複製' : '複製'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleEditPrompt}
+                        disabled={isBusy}
+                        className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 transition-colors hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        title="帶回輸入框修改後重新生成"
+                      >
+                        修改
+                      </button>
+                    </div>
                   </div>
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-stone-600">
-                    Run ID · {latestRun.id.slice(0, 8)}…
+                  <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words font-serif-cn text-[12px] leading-relaxed text-stone-400">
+                    {latestRun.prompt}
                   </div>
                 </div>
+              ) : null}
+
+              {/* Cross-model chips — after a run completes, offer other enabled
+                  models of the same outputType for one-click re-run. */}
+              {latestRun?.status === 'succeeded' && activeModels.length > 1 ? (
+                <div className="mx-auto mt-3 max-w-2xl rounded-sm border border-stone-800 bg-stone-900/30 p-3">
+                  <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                    您可以繼續：用其他模型試同一 prompt
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeModels
+                      .filter((m) => m.value !== modelKey)
+                      .slice(0, 4)
+                      .map((m) => (
+                        <button
+                          type="button"
+                          key={m.value}
+                          onClick={() => handleRun(m.value)}
+                          disabled={isBusy}
+                          className="rounded-sm border border-stone-700 bg-stone-900/40 px-3 py-1.5 font-mono text-[11px] text-stone-300 hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                          title={`用 ${m.label} 重跑同一 prompt + refs`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {/* ── History feed — never-empty landing surface ── */}
+          <section>
+            <div className="mb-3 font-mono text-[12px] uppercase tracking-wider text-stone-500">
+              最近生成 ({runs.length})
+            </div>
+            {runs.length > 0 ? (
+              <div className="grid grid-cols-4 gap-3 sm:grid-cols-6 md:grid-cols-8">
+                {runs.map((run) => (
+                  <button
+                    type="button"
+                    key={run.id}
+                    onClick={() => handlePickHistoryRun(run)}
+                    title={run.prompt.slice(0, 80)}
+                    className={`relative aspect-square overflow-hidden rounded-sm border bg-stone-900 transition-all ${
+                      latestRun?.id === run.id ? 'border-amber-500/60' : 'border-stone-800 hover:border-violet-500/40'
+                    }`}
+                  >
+                    {run.resultUrls?.[0] && run.outputType === 'image' ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={run.resultUrls[0]} alt="history" className="h-full w-full object-cover" />
+                    ) : run.resultUrls?.[0] && run.outputType === 'video' ? (
+                      <>
+                        {/* preload=metadata 只抓 moov+首幀當縮圖,不下載整支影片 */}
+                        <video
+                          src={run.resultUrls[0]}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="pointer-events-none h-full w-full object-cover"
+                        />
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[12px] text-white/80">
+                          ▶
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center font-mono text-[10px] text-stone-500">
+                        {run.status === 'failed' ? '✕' : run.outputType === 'video' ? '▶' : '…'}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
-            ) : latestRun?.resultUrls?.[0] ? (
-              latestRun.outputType === 'image' ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={latestRun.resultUrls[0]} alt="output" className="h-full w-full object-contain" />
-              ) : (
-                <video src={latestRun.resultUrls[0]} controls playsInline className="h-full w-full object-contain" />
-              )
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-stone-600">
-                <div className="text-center">
-                  <AppIcon name="image" className="mx-auto h-12 w-12 opacity-30" />
-                  <div className="mt-3 font-mono text-[11px] uppercase tracking-wider">尚未生成 · 比例 {aspectRatio}</div>
-                </div>
+              <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-stone-800 px-6 py-16 text-center">
+                <AppIcon name="sparklesAlt" className="h-10 w-10 text-stone-700" />
+                <div className="mt-4 font-mono text-[12px] uppercase tracking-wider text-stone-500">還沒有作品</div>
+                <div className="mt-1 font-serif-cn text-[13px] text-stone-600">在下方輸入描述詞,按「生成」開始創作</div>
               </div>
             )}
-          </div>
-          </div>
-            )
-          })()}
+          </section>
+        </div>
+      </main>
 
-          {/* 描述詞面板 — 每筆結果(含歷史列點選)附上原始 prompt,
-              可複製、可帶回輸入框修改後重生成。 */}
-          {latestRun?.prompt ? (
-            <div className="mb-3 rounded-sm border border-stone-800 bg-stone-900/30 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="font-mono text-[11px] uppercase tracking-wider text-stone-500">
-                  描述詞
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCopyPrompt}
-                    className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 transition-colors hover:border-amber-500/60 hover:text-amber-300"
-                    title="複製描述詞到剪貼簿"
-                  >
-                    {promptCopied ? '✓ 已複製' : '複製'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleEditPrompt}
-                    disabled={isBusy}
-                    className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 transition-colors hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
-                    title="帶回左側輸入框修改後重新生成"
-                  >
-                    修改
-                  </button>
-                </div>
-              </div>
-              <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words font-serif-cn text-[12px] leading-relaxed text-stone-400">
-                {latestRun.prompt}
-              </div>
-            </div>
-          ) : null}
+      {/* COMPOSER — the single persistent surface: prompt + media + settings + RUN */}
+      <footer className="relative border-t border-stone-800 bg-stone-950/95 px-4 py-3 backdrop-blur">
+        {/* Click-catcher: closes an open panel when clicking elsewhere. */}
+        {composerPanel ? (
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => setComposerPanel(null)}
+            className="fixed inset-0 z-30 cursor-default"
+          />
+        ) : null}
 
-          {/* Phase T-3 — cross-model chip strip. After a run completes,
-              show 2-3 OTHER user-enabled models of the same outputType
-              for one-click re-execute with the same prompt + refs.
-              Encourages comparison shopping without re-typing. */}
-          {latestRun?.status === 'succeeded' && activeModels.length > 1 ? (
-            <div className="mb-3 rounded-sm border border-stone-800 bg-stone-900/30 p-3">
-              <div className="mb-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
-                您可以繼續：用其他模型試同一 prompt
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {activeModels
-                  .filter((m) => m.value !== modelKey)
-                  .slice(0, 4)
-                  .map((m) => (
+        <div className="mx-auto w-full max-w-5xl">
+          {/* ── Popover: 參考素材 (images / video / text) ── */}
+          {composerPanel === 'refs' ? (
+            <div className="absolute bottom-full left-4 right-4 z-40 mb-2 max-h-[60vh] overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-4 shadow-2xl">
+              <div className="mx-auto w-full max-w-5xl">
+                {/* Reference images */}
+                <div className="mb-4">
+                  <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-stone-500">
+                    參考圖片 <span className="text-violet-400">({refImages.length}/{MAX_REF_IMAGES})</span>
+                    <span className="ml-2 text-stone-600">jpg/png/webp · ≤10MB</span>
+                  </div>
+                  {/* 参考图用途 — video only. i2v = first frame, r2v = style ref. */}
+                  {outputType === 'video' && refImages.length > 0 ? (
+                    <div className="mb-2">
+                      <div className="flex gap-1">
+                        {([
+                          { key: 'image', label: '首幀（畫面從這張圖開始）' },
+                          { key: 'omni', label: '風格 / 角色參考' },
+                        ] as const).map((m) => (
+                          <button
+                            key={m.key}
+                            type="button"
+                            onClick={() => setVideoRefMode(m.key)}
+                            className={`flex-1 rounded-sm border px-2 py-1.5 font-mono text-[11px] transition-colors ${
+                              videoRefMode === m.key
+                                ? 'border-violet-500/60 bg-violet-500/10 text-violet-300'
+                                : 'border-stone-700 text-stone-500 hover:text-stone-300'
+                            }`}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                      {(() => {
+                        const keys = videoModels.map((m) => m.value)
+                        const eff = variantKeyForMode(modelKey, videoRefMode, keys)
+                        const notes: string[] = []
+                        if (videoRefMode === 'image' && refImages.length > 1) {
+                          notes.push('首幀模式僅使用第 1 張參考圖')
+                        }
+                        if (eff !== modelKey) {
+                          const label = videoModels.find((m) => m.value === eff)?.label ?? eff
+                          notes.push(`已自動匹配端點：${label}`)
+                        } else if (variantModeMismatch(modelKey, videoRefMode)) {
+                          const want = videoRefMode === 'image' ? 'I2V' : 'R2V'
+                          return <div className="mt-1 font-mono text-[10px] text-amber-400">此模式需要 {want} 端點變體 — 請到 /profile 啟用對應模型</div>
+                        } else if (isVariantSuffixedKey(modelKey)) {
+                          notes.push(`✓ 當前模型已是${videoRefMode === 'image' ? ' I2V 首幀' : ' R2V 參考'}端點`)
+                        } else {
+                          notes.push('⚠ 此模型不分首幀/參考端點，參考圖語義由模型自身決定（要確保首幀請改用 Seedance I2V）')
+                        }
+                        return <div className="mt-1 font-mono text-[10px] text-stone-500">{notes.join(' · ')}</div>
+                      })()}
+                    </div>
+                  ) : null}
+                  <div className="grid grid-cols-6 gap-2 sm:grid-cols-9">
                     <button
                       type="button"
-                      key={m.value}
-                      onClick={() => handleRun(m.value)}
-                      disabled={isBusy}
-                      className="rounded-sm border border-stone-700 bg-stone-900/40 px-3 py-1.5 font-mono text-[11px] text-stone-300 hover:border-violet-400/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
-                      title={`用 ${m.label} 重跑同一 prompt + refs`}
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={isBusy || refImages.length >= MAX_REF_IMAGES}
+                      className="aspect-square rounded-sm border border-dashed border-stone-700 text-xl text-stone-500 transition-all hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {m.label}
+                      ＋
                     </button>
-                  ))}
-              </div>
-            </div>
-          ) : null}
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleImagePick}
+                    />
+                    {refImages.map((ref, idx) => (
+                      <div
+                        key={ref.key}
+                        className="group relative aspect-square overflow-hidden rounded-sm border border-violet-500/40"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={ref.signedUrl} alt={`ref ${idx + 1}`} className="h-full w-full object-cover" />
+                        <div className="absolute left-1 top-1 rounded-sm bg-stone-950/80 px-1 font-mono text-[10px] text-amber-300">
+                          {idx + 1}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeRefImage(idx)}
+                          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-stone-950/80 text-stone-300 opacity-0 transition-opacity hover:bg-rose-500/80 hover:text-white group-hover:opacity-100"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-          {/* History rail */}
-          <div className="mt-2">
-            <div className="mb-2 flex items-center justify-between font-mono text-[12px] uppercase tracking-wider">
-              <span className="text-stone-500">最近生成 ({runsQuery.data?.runs?.length ?? 0})</span>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {(runsQuery.data?.runs ?? []).slice(0, 12).map((run) => (
-                <button
-                  type="button"
-                  key={run.id}
-                  onClick={() => handlePickHistoryRun(run)}
-                  title={run.prompt.slice(0, 80)}
-                  className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border bg-stone-900 transition-all ${
-                    latestRun?.id === run.id ? 'border-amber-500/60' : 'border-stone-800 hover:border-violet-500/40'
-                  }`}
-                >
-                  {run.resultUrls?.[0] && run.outputType === 'image' ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={run.resultUrls[0]} alt="history" className="h-full w-full object-cover" />
-                  ) : run.resultUrls?.[0] && run.outputType === 'video' ? (
-                    // preload=metadata 只抓 moov+首幀當縮圖,不會下載整支
-                    // 影片;▶ overlay 標示這格是影片。修「歷史列影片永遠
-                    // 只有 ▶ 灰格沒縮圖」。
-                    <>
+                {/* Reference video */}
+                <div className="mb-4">
+                  <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-stone-500">
+                    參考影片 <span className="text-violet-400">({refVideo ? 1 : 0}/{MAX_REF_VIDEOS})</span>
+                  </div>
+                  {refVideo ? (
+                    <div className="flex items-center gap-3 rounded-sm border border-violet-500/30 bg-violet-500/5 p-2">
                       <video
-                        src={run.resultUrls[0]}
+                        src={refVideo.signedUrl}
+                        controls
                         muted
                         playsInline
                         preload="metadata"
-                        className="pointer-events-none h-full w-full object-cover"
+                        className="h-16 w-28 rounded-sm object-cover"
                       />
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[12px] text-white/80">
-                        ▶
+                      <div className="flex-1 font-mono text-[11px] uppercase tracking-wider text-violet-300">
+                        動作參考已綁
                       </div>
-                    </>
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center font-mono text-[10px] text-stone-500">
-                      {run.status === 'failed' ? '✕' : run.outputType === 'video' ? '▶' : '…'}
+                      <button
+                        type="button"
+                        onClick={removeRefVideo}
+                        disabled={isBusy}
+                        className="rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-400 hover:border-rose-500/60 hover:text-rose-300"
+                      >
+                        ×
+                      </button>
                     </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      disabled={isBusy}
+                      className="flex w-full flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-stone-700 bg-stone-900/30 p-5 text-stone-500 transition-all hover:border-violet-500/40 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <AppIcon name="upload" className="h-6 w-6" />
+                      <div className="text-[12px]">可拖曳檔案至此，或點擊上傳</div>
+                      <div className="font-mono text-[10px] text-stone-600">mp4/mov/webm · ≤50MB · 建議 ≤15s</div>
+                    </button>
                   )}
-                </button>
-              ))}
-              {(runsQuery.data?.runs ?? []).length === 0 ? (
-                <div className="rounded-sm border border-dashed border-stone-800 px-3 py-3 font-mono text-[10px] uppercase tracking-wider text-stone-600">
-                  尚無生成記錄
+                  <input
+                    ref={videoInputRef}
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/webm"
+                    className="hidden"
+                    onChange={handleVideoPick}
+                  />
                 </div>
-              ) : null}
+
+                {/* Reference text */}
+                <div>
+                  <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-stone-500">
+                    參考文字 <span className="text-stone-600">(選填)</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={refText}
+                    onChange={(e) => setRefText(e.target.value)}
+                    placeholder="風格 / 旁白 / 隱喻 等補充..."
+                    className="w-full rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 text-[13px] text-stone-300 placeholder:text-stone-600 outline-none focus:border-amber-500/40"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* BOTTOM toolbar — output / model / params / RUN */}
-      <footer className="flex items-center justify-between border-t border-stone-800 bg-stone-950 px-8 py-3">
-        <div className="flex items-center gap-4">
-          {/* Phase T-2 (2026-05-27) — output toggle. Image stays synchronous;
-              video enqueues + polls (see usePlaygroundRuns auto-refetch). */}
-          <div className="inline-flex items-center gap-0 rounded-sm border border-stone-800 bg-stone-900 p-0.5">
-            <button
-              type="button"
-              onClick={() => setOutputType('image')}
-              disabled={isBusy}
-              className={`rounded-sm px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                outputType === 'image'
-                  ? 'bg-amber-500/15 text-amber-400'
-                  : 'text-stone-500 hover:text-stone-300'
-              }`}
-            >
-              圖片
-            </button>
-            <button
-              type="button"
-              onClick={() => setOutputType('video')}
-              disabled={isBusy}
-              className={`rounded-sm px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                outputType === 'video'
-                  ? 'bg-amber-500/15 text-amber-400'
-                  : 'text-stone-500 hover:text-stone-300'
-              }`}
-            >
-              影片
-            </button>
-          </div>
-
-          <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
-            <AppIcon name="sparklesAlt" className="h-3 w-3" />
-            <span>模型</span>
-            <select
-              value={modelKey}
-              onChange={(e) => setModelKey(e.target.value)}
-              disabled={isBusy || activeModels.length === 0}
-              className="max-w-[260px] truncate rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
-            >
-              {activeModels.length === 0 ? (
-                <option value="">尚無啟用的{outputType === 'image' ? '圖片' : '影片'}模型 — 請到 /profile 啟用</option>
-              ) : null}
-              {activeModels.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
-            <span>比例</span>
-            <select
-              value={aspectRatio}
-              onChange={(e) => setAspectRatio(e.target.value)}
-              disabled={isBusy}
-              className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
-            >
-              {ASPECT_RATIO_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* Video-only: duration. Mirrors GroupCard 5-15s integer dropdown. */}
-          {outputType === 'video' ? (
-            <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
-              <AppIcon name="play" className="h-3 w-3" />
-              <span>時長</span>
-              <select
-                value={durationSec}
-                onChange={(e) => setDurationSec(Number.parseInt(e.target.value, 10) || 5)}
-                disabled={isBusy}
-                className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
-              >
-                {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (
-                  <option key={sec} value={sec}>{sec}s</option>
-                ))}
-              </select>
-            </label>
           ) : null}
 
-          {/* Video-only: resolution. Rendered only when the selected model's
-              capability catalog exposes >1 option (e.g. AtlasCloud Seedance R2V
-              480p/720p/1080p). Mirrors the 比例/時長 control style. */}
-          {showResolutionPicker ? (
-            <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
-              <span>解析度</span>
-              <select
-                value={resolution}
-                onChange={(e) => setResolution(e.target.value)}
-                disabled={isBusy}
-                className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
-              >
-                {resolutionOptions.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </label>
+          {/* ── Popover: 影片進階 (duration / resolution) ── */}
+          {composerPanel === 'advanced' ? (
+            <div className="absolute bottom-full right-4 z-40 mb-2 w-72 rounded-lg border border-stone-800 bg-stone-900 p-4 shadow-2xl">
+              <div className="mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                <AppIcon name="play" className="h-3 w-3" />
+                影片進階
+              </div>
+              <label className="mb-3 flex items-center justify-between gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                <span>時長</span>
+                <select
+                  value={durationSec}
+                  onChange={(e) => setDurationSec(Number.parseInt(e.target.value, 10) || 5)}
+                  disabled={isBusy}
+                  className="rounded-sm border border-stone-800 bg-stone-950 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+                >
+                  {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (
+                    <option key={sec} value={sec}>{sec}s</option>
+                  ))}
+                </select>
+              </label>
+              {showResolutionPicker ? (
+                <label className="flex items-center justify-between gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                  <span>解析度</span>
+                  <select
+                    value={resolution}
+                    onChange={(e) => setResolution(e.target.value)}
+                    disabled={isBusy}
+                    className="rounded-sm border border-stone-800 bg-stone-950 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+                  >
+                    {resolutionOptions.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <div className="font-mono text-[10px] text-stone-600">此模型無額外解析度選項</div>
+              )}
+            </div>
           ) : null}
-        </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setPrompt('')
-              setRefText('')
-              setRefImages([])
-              setRefVideo(null)
-            }}
-            disabled={isBusy}
-            className="rounded-sm border border-stone-700 px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-300 hover:border-stone-500 disabled:opacity-40"
-          >
-            重置
-          </button>
-          {/* Phase T-3 — live cost estimate next to RUN.
-              "—" when pricing entry doesn't exist or capability tier didn't
-              match. Hover for the detail string ("0.0960/秒 × 5s" etc). */}
-          <div
-            className="text-right"
-            title={costEstimate.data?.detail ?? '尚無計費資訊'}
-          >
-            <div className="font-mono text-[10px] uppercase tracking-wider text-stone-600">估算成本</div>
-            <div className="font-mono text-[14px] text-amber-300">
-              {typeof costEstimate.data?.amountUsd === 'number'
-                ? `≈ $${costEstimate.data.amountUsd.toFixed(costEstimate.data.amountUsd < 1 ? 4 : 2)}`
-                : '—'}
+          {/* @-token quick-insert row (only when a ref exists). */}
+          {(refImages.length > 0 || refVideo) ? (
+            <div className="relative z-40 mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-stone-600">引用</span>
+              {refImages.map((_, idx) => {
+                const token = `@image${idx + 1}`
+                return (
+                  <button
+                    type="button"
+                    key={`tok-${token}`}
+                    onClick={() => insertReferenceToken(token)}
+                    title={`插入 ${token} 引用第 ${idx + 1} 張參考圖`}
+                    className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+                  >
+                    {token}
+                  </button>
+                )
+              })}
+              {refVideo ? (
+                <button
+                  type="button"
+                  onClick={() => insertReferenceToken('@video1')}
+                  title="插入 @video1 引用參考影片"
+                  className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+                >
+                  @video1
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Composer card */}
+          <div className="relative z-40 rounded-xl border border-stone-800 bg-stone-900/60 p-2.5">
+            {/* Row 1 — media / prompt / RUN */}
+            <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => setComposerPanel((p) => (p === 'refs' ? null : 'refs'))}
+                disabled={isBusy}
+                title="加入參考素材(圖片 / 影片 / 文字)"
+                className={`relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border text-lg transition-colors disabled:opacity-40 ${
+                  composerPanel === 'refs'
+                    ? 'border-violet-500/60 bg-violet-500/10 text-violet-300'
+                    : 'border-stone-700 text-stone-400 hover:border-violet-500/50 hover:text-violet-300'
+                }`}
+              >
+                ＋
+                {refCount > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 font-mono text-[10px] text-white">
+                    {refCount}
+                  </span>
+                ) : null}
+              </button>
+
+              <textarea
+                ref={promptRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handlePromptKeyDown}
+                rows={2}
+                placeholder="描述你想生成的畫面... 譬如「賽博龐克城市夜景, 巨型廣告牌特寫, 雨夜霓虹倒映」　　💡 加了參考素材後可點上方 @image1 插入引用"
+                className="max-h-40 min-h-[44px] flex-1 resize-none rounded-lg border border-stone-800 bg-stone-950/60 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
+              />
+
+              <button
+                type="button"
+                onClick={() => handleRun()}
+                disabled={isBusy || !modelKey || !prompt.trim() || isGenerating}
+                className="flex h-11 flex-shrink-0 items-center gap-2 rounded-lg bg-amber-500 px-6 font-mono text-[13px] font-semibold uppercase tracking-wider text-stone-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {compressing
+                  ? '壓縮提示詞…'
+                  : submit.isPending
+                    ? '提交中…'
+                    : isGenerating
+                      ? '生成中…'
+                      : '生成'}
+                <span className="rounded-sm border border-stone-950/30 px-1 font-mono text-[10px] opacity-70">⌘+↵</span>
+              </button>
+            </div>
+
+            {/* Row 2 — mode / model / ratio / advanced / cost */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* Output toggle */}
+              <div className="inline-flex items-center gap-0 rounded-sm border border-stone-800 bg-stone-900 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setOutputType('image')}
+                  disabled={isBusy}
+                  className={`rounded-sm px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                    outputType === 'image' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
+                  }`}
+                >
+                  圖片
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOutputType('video')}
+                  disabled={isBusy}
+                  className={`rounded-sm px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                    outputType === 'video' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
+                  }`}
+                >
+                  影片
+                </button>
+              </div>
+
+              {/* Model */}
+              <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                <AppIcon name="sparklesAlt" className="h-3 w-3" />
+                <select
+                  value={modelKey}
+                  onChange={(e) => setModelKey(e.target.value)}
+                  disabled={isBusy || activeModels.length === 0}
+                  className="max-w-[240px] truncate rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+                >
+                  {activeModels.length === 0 ? (
+                    <option value="">尚無啟用的{outputType === 'image' ? '圖片' : '影片'}模型 — 請到 /profile 啟用</option>
+                  ) : null}
+                  {activeModels.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              {/* Aspect ratio */}
+              <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500">
+                <span>比例</span>
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.target.value)}
+                  disabled={isBusy}
+                  className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-1 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+                >
+                  {ASPECT_RATIO_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              {/* Advanced (video-only) */}
+              {outputType === 'video' ? (
+                <button
+                  type="button"
+                  onClick={() => setComposerPanel((p) => (p === 'advanced' ? null : 'advanced'))}
+                  disabled={isBusy}
+                  className={`rounded-sm border px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors disabled:opacity-40 ${
+                    composerPanel === 'advanced'
+                      ? 'border-amber-500/60 text-amber-300'
+                      : 'border-stone-800 text-stone-500 hover:text-stone-300'
+                  }`}
+                >
+                  進階 · {durationSec}s{showResolutionPicker ? ` · ${resolution}` : ''} ▾
+                </button>
+              ) : null}
+
+              {/* Reset */}
+              <button
+                type="button"
+                onClick={() => {
+                  setPrompt('')
+                  setRefText('')
+                  setRefImages([])
+                  setRefVideo(null)
+                }}
+                disabled={isBusy}
+                className="rounded-sm border border-stone-800 px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-stone-500 hover:border-stone-600 hover:text-stone-300 disabled:opacity-40"
+              >
+                重置
+              </button>
+
+              {/* Live cost */}
+              <div className="ml-auto text-right" title={costEstimate.data?.detail ?? '尚無計費資訊'}>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-stone-600">估算成本 </span>
+                <span className="font-mono text-[13px] text-amber-300">
+                  {typeof costEstimate.data?.amountUsd === 'number'
+                    ? `≈ $${costEstimate.data.amountUsd.toFixed(costEstimate.data.amountUsd < 1 ? 4 : 2)}`
+                    : '—'}
+                </span>
+              </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => handleRun()}
-            disabled={
-              isBusy
-              || !modelKey
-              || !prompt.trim()
-              || latestRun?.status === 'pending'
-              || latestRun?.status === 'running'
-            }
-            className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-2.5 font-mono text-[13px] font-semibold uppercase tracking-wider text-stone-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {compressing
-              ? '壓縮提示詞…'
-              : submit.isPending
-                ? '提交中…'
-                : latestRun?.status === 'pending' || latestRun?.status === 'running'
-                  ? '生成中…'
-                  : '生成'}
-            <span className="rounded-sm border border-stone-950/30 px-1 font-mono text-[10px] opacity-70">⌘+↵</span>
-          </button>
         </div>
       </footer>
     </div>
