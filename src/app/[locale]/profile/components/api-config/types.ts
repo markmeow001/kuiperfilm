@@ -179,6 +179,11 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'seedance-2.0-fast-t2v', name: 'Seedance 2.0 Fast T2V (AtlasCloud · audio)', type: 'video', provider: 'atlascloud' },
     { modelId: 'seedance-2.0-fast-i2v', name: 'Seedance 2.0 Fast I2V (AtlasCloud · audio)', type: 'video', provider: 'atlascloud' },
     { modelId: 'seedance-2.0-fast-r2v', name: 'Seedance 2.0 Fast R2V (AtlasCloud · 9-ref cheap)', type: 'video', provider: 'atlascloud' },
+    // 2026-07-10 — Kling Video O3 reference-to-video（具名主体绑定 ≤6 ×
+    // 1-4 图 + 文字生片，prompt 打名字自动换 <<<element_N>>> token）。
+    // 付费 slug（不带 -test），走用户 AtlasCloud key，per-run 计费。
+    { modelId: 'kling-o3-std-r2v', name: 'Kling O3 Std R2V (AtlasCloud · 主体绑定)', type: 'video', provider: 'atlascloud' },
+    { modelId: 'kling-o3-pro-r2v', name: 'Kling O3 Pro R2V (AtlasCloud · 主体绑定)', type: 'video', provider: 'atlascloud' },
 
     // Vidu 视频模型
     { modelId: 'viduq3-pro', name: 'Vidu Q3 Pro', type: 'video', provider: 'vidu' },

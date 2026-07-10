@@ -63,6 +63,12 @@ interface AtlasCloudOptions {
     referenceVideos?: string[]
     /** r2v only — reference audio URLs (1-3, requires ≥1 image/video). */
     referenceAudios?: string[]
+    /**
+     * Kling O3 r2v only — named subject bindings (人物/場景). ≤6 subjects,
+     * each 1-4 image URLs (first = frontal_image, all = refer_images).
+     * The prompt references subjects as <<<element_N>>> (1-based order).
+     */
+    klingElements?: Array<{ name: string; imageUrls: string[] }>
 }
 
 const ATLASCLOUD_MODEL_MAP: Record<string, string> = {
@@ -74,10 +80,83 @@ const ATLASCLOUD_MODEL_MAP: Record<string, string> = {
     'seedance-2.0-fast-i2v': 'bytedance/seedance-2.0-fast/image-to-video',
     'seedance-2.0-r2v': 'bytedance/seedance-2.0/reference-to-video',
     'seedance-2.0-fast-r2v': 'bytedance/seedance-2.0-fast/reference-to-video',
+    // 2026-07-10 — Kling Video O3 reference-to-video (named-subject binding
+    // + text-to-video). PAID slugs from the model detail page — the schema
+    // CDN default carries a "-test" suffix which is AtlasCloud's sandbox
+    // deployment, NOT the billable model (Seedance schemas have no such
+    // suffix, so it's O3-specific, verified 2026-07-10).
+    'kling-o3-std-r2v': 'kwaivgi/kling-video-o3-std/reference-to-video',
+    'kling-o3-pro-r2v': 'kwaivgi/kling-video-o3-pro/reference-to-video',
 }
 
 function isSeedance2Slug(slug: string): boolean {
     return slug.startsWith('bytedance/seedance-2.0')
+}
+
+function isKlingO3Slug(slug: string): boolean {
+    return slug.startsWith('kwaivgi/kling-video-o3')
+}
+
+/**
+ * Kling O3 body builder — schema is DISJOINT from Seedance 2.0:
+ * `aspect_ratio` (not `ratio`), `sound` (not `generate_audio`), `images`
+ * (not `reference_images`), named `elements`, and NO resolution /
+ * watermark / return_last_frame / camera_fixed / seed. Guards mirror the
+ * OpenAPI schema limits only (bug-#1 lesson: never guard stricter than
+ * the provider).
+ */
+function buildKlingO3Body(args: {
+    atlasModel: string
+    prompt: string
+    duration: number
+    aspectRatio: string
+    sound: boolean
+    elements?: Array<{ name: string; imageUrls: string[] }>
+    images?: string[]
+}): Record<string, unknown> {
+    const { atlasModel, prompt, duration, aspectRatio, sound, elements, images } = args
+
+    if (!prompt) {
+        throw new Error(`AtlasCloud ${atlasModel} (Kling O3) 需要 prompt 但為空`)
+    }
+    if (duration < 3 || duration > 15) {
+        throw new Error(`AtlasCloud ${atlasModel} duration 需在 3-15 秒，收到 ${duration}`)
+    }
+    if (elements && elements.length > 6) {
+        throw new Error(`AtlasCloud ${atlasModel} elements 最多 6 個主體，收到 ${elements.length}`)
+    }
+    for (const el of elements ?? []) {
+        if (el.imageUrls.length < 1 || el.imageUrls.length > 4) {
+            throw new Error(
+                `AtlasCloud ${atlasModel} element「${el.name}」需要 1-4 張參考圖，收到 ${el.imageUrls.length}`,
+            )
+        }
+    }
+    if (images && images.length > 7) {
+        throw new Error(`AtlasCloud ${atlasModel} images 最多 7 張，收到 ${images.length}`)
+    }
+
+    return {
+        model: atlasModel,
+        prompt,
+        duration,
+        aspect_ratio: aspectRatio,
+        sound,
+        // Schema requires BOTH frontal_image and refer_images for
+        // image_refer — refer_images = the full set (frontal included)
+        // so a single-image subject still satisfies both fields.
+        ...(elements?.length
+            ? {
+                elements: elements.map((el) => ({
+                    element_name: el.name,
+                    reference_type: 'image_refer',
+                    frontal_image: el.imageUrls[0],
+                    refer_images: el.imageUrls,
+                })),
+            }
+            : {}),
+        ...(images?.length ? { images } : {}),
+    }
 }
 
 function isTextToVideoSlug(slug: string): boolean {
@@ -113,12 +192,14 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
             referenceImages,
             referenceVideos,
             referenceAudios,
+            klingElements,
         } = options as AtlasCloudOptions
 
         const atlasModel = resolveAtlasCloudModel(modelId)
+        const klingO3Mode = isKlingO3Slug(atlasModel)
         const isV2 = isSeedance2Slug(atlasModel)
         const t2vMode = isTextToVideoSlug(atlasModel)
-        const r2vMode = isReferenceToVideoSlug(atlasModel)
+        const r2vMode = isReferenceToVideoSlug(atlasModel) && !klingO3Mode
 
         const logger = createScopedLogger({
             module: 'worker.atlascloud-video',
@@ -126,7 +207,26 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
         })
 
         // FLAT body — top-level keys, no `input:{}` wrapper.
-        const body: Record<string, unknown> = {
+        let body: Record<string, unknown>
+        if (klingO3Mode) {
+            // Kling O3 r2v — fully disjoint schema; built + guarded in
+            // buildKlingO3Body. `sound` defaults false per the Kling schema
+            // (read raw off options — the destructured generateAudio
+            // defaults true for Seedance, which is wrong here and would
+            // silently opt users into audio surcharges).
+            body = buildKlingO3Body({
+                atlasModel,
+                prompt: paramPrompt,
+                duration,
+                aspectRatio,
+                sound: (options as AtlasCloudOptions).generateAudio === true,
+                elements: klingElements,
+                images: referenceImages?.length
+                    ? referenceImages
+                    : (imageUrl ? [imageUrl] : undefined),
+            })
+        } else {
+        body = {
             model: atlasModel,
             duration,
             resolution,
@@ -207,19 +307,22 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
                 `AtlasCloud ${atlasModel} (text-to-video) 需要 prompt 但為空`,
             )
         }
+        } // end non-Kling (Seedance / legacy) body builder
 
         logger.info({
-            message: 'AtlasCloud Seedance video generation request',
+            message: 'AtlasCloud video generation request',
             details: {
                 model: atlasModel,
-                mode: r2vMode ? 'r2v' : t2vMode ? 't2v' : 'i2v',
-                schemaGen: isV2 ? 'v2' : 'legacy',
+                mode: klingO3Mode ? 'kling-o3-r2v' : r2vMode ? 'r2v' : t2vMode ? 't2v' : 'i2v',
+                schemaGen: klingO3Mode ? 'kling-o3' : isV2 ? 'v2' : 'legacy',
                 duration,
                 aspectRatio,
                 generateAudio,
                 hasImage: !t2vMode && !!imageUrl,
                 hasPrompt: !!paramPrompt,
                 hasLastFrame: !t2vMode && !r2vMode && !!lastFrameImageUrl,
+                elementsCount: klingO3Mode ? (body.elements as unknown[] | undefined)?.length ?? 0 : undefined,
+                imagesCount: klingO3Mode ? (body.images as string[] | undefined)?.length ?? 0 : undefined,
                 refImagesCount: r2vMode ? (body.reference_images as string[] | undefined)?.length ?? 0 : undefined,
                 refVideosCount: r2vMode ? (body.reference_videos as string[] | undefined)?.length ?? 0 : undefined,
                 refAudiosCount: r2vMode ? (body.reference_audios as string[] | undefined)?.length ?? 0 : undefined,

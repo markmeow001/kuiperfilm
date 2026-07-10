@@ -92,6 +92,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     durationSec,
     workspaceId,
     locale: rawLocale,
+    elements: rawElements,
   } = body as {
     prompt?: unknown
     referenceImages?: unknown
@@ -105,6 +106,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     durationSec?: unknown
     workspaceId?: unknown
     locale?: unknown
+    elements?: unknown
   }
 
   // Validate. Every reject carries a human-readable `message` — ApiError falls
@@ -171,6 +173,69 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const referenceImages = imgGuard.safe
   const lastFrameSafe = lastFrameGuard.safe[0] ?? null
   const referenceVideos = vidGuard.safe
+
+  // Kling O3 named-subject bindings (2026-07-10). Shape:
+  //   elements: [{ name: string, imageKeys: string[] (1-4) }]  ≤6 items
+  // Only the Kling O3 models consume these — any other model getting an
+  // elements payload is a client bug; reject explicitly rather than
+  // silently dropping the binding (CLAUDE.md §3 不静默吞错).
+  const KLING_ELEMENTS_MAX = 6
+  const KLING_ELEMENT_IMAGES_MAX = 4
+  let elements: Array<{ name: string; imageKeys: string[] }> = []
+  if (rawElements !== undefined && rawElements !== null) {
+    if (!Array.isArray(rawElements) || rawElements.length > KLING_ELEMENTS_MAX) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'ELEMENTS_INVALID',
+        message: `主体绑定最多 ${KLING_ELEMENTS_MAX} 个`,
+      })
+    }
+    const seenNames = new Set<string>()
+    for (const entry of rawElements) {
+      const name = typeof (entry as { name?: unknown })?.name === 'string'
+        ? ((entry as { name: string }).name).trim()
+        : ''
+      const imageKeys = parseStringArray(
+        (entry as { imageKeys?: unknown })?.imageKeys, 'elementImageKeys', KLING_ELEMENT_IMAGES_MAX,
+      )
+      if (!name || name.length > 80) {
+        throw new ApiError('INVALID_PARAMS', {
+          code: 'ELEMENT_NAME_INVALID',
+          message: '每个主体需要 1-80 字符的名称',
+        })
+      }
+      if (seenNames.has(name)) {
+        throw new ApiError('INVALID_PARAMS', {
+          code: 'ELEMENT_NAME_DUPLICATE',
+          message: `主体名称重复：${name}`,
+        })
+      }
+      seenNames.add(name)
+      if (imageKeys.length < 1) {
+        throw new ApiError('INVALID_PARAMS', {
+          code: 'ELEMENT_IMAGES_REQUIRED',
+          message: `主体「${name}」需要 1-${KLING_ELEMENT_IMAGES_MAX} 张参考图`,
+        })
+      }
+      const elGuard = filterSafeReferences(imageKeys, userId)
+      if (elGuard.rejected.length > 0) {
+        _ulogError(
+          `[playground.run] rejected unsafe element refs userId=${userId} element=${name} rejected=${JSON.stringify(elGuard.rejected)}`,
+        )
+        throw new ApiError('FORBIDDEN', {
+          code: 'REFERENCE_NOT_ALLOWED',
+          details: { message: 'element reference must be your own uploaded key or an https storage URL' },
+        })
+      }
+      elements = [...elements, { name, imageKeys: elGuard.safe }]
+    }
+    if (elements.length > 0 && !/^kling-o3-/.test(resolvedModelId)) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'ELEMENTS_MODEL_MISMATCH',
+        message: '主体绑定目前仅 Kling O3 模型支持，请切换模型或移除主体',
+        details: { modelId: resolvedModelId },
+      })
+    }
+  }
   const refText = typeof referenceText === 'string' ? referenceText.trim() : ''
   const wsId = typeof workspaceId === 'string' && workspaceId.length > 0 ? workspaceId : null
   const locale = (typeof rawLocale === 'string' && rawLocale ? rawLocale : 'zh') as Locale
@@ -220,6 +285,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceVideos,
     ...(refText ? { referenceText: refText } : {}),
     ...(lastFrameSafe ? { lastFrameUrl: lastFrameSafe } : {}),
+    ...(elements.length > 0 ? { elements } : {}),
     ...(normalizedResolution ? { resolution: normalizedResolution } : {}),
     ...(typeof aspectRatio === 'string' ? { aspectRatio } : {}),
     ...(normalizedDuration ? { duration: normalizedDuration } : {}),

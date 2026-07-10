@@ -17,6 +17,7 @@ import { generateVideo } from '@/lib/generator-api'
 import type { TaskJobData } from '@/lib/task/types'
 import { uploadVideoSourceToCos, waitExternalResult, toSignedUrlIfCos } from '../utils'
 import { extractVideoTailFrameToCos } from '@/lib/video-tail-frame'
+import { replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 function parseStringArray(value: unknown): string[] {
@@ -61,15 +62,39 @@ export async function handlePlaygroundVideoTask(
     .map((k) => toSignedUrlIfCos(k, 7200))
     .filter((u): u is string => Boolean(u))
 
-  const effectivePrompt = referenceText
+  // Kling O3 named-subject bindings (2026-07-10) — payload.elements:
+  // [{ name, imageKeys[] }] (validated by the route). Sign each element's
+  // image keys; the user typed subject NAMES in the prompt, so replace
+  // them with the <<<element_N>>> tokens the Kling API binds on.
+  const rawElements = Array.isArray(payload.elements) ? payload.elements : []
+  const klingElements = rawElements
+    .map((entry) => {
+      const name = typeof (entry as { name?: unknown })?.name === 'string'
+        ? (entry as { name: string }).name
+        : ''
+      const imageUrls = parseStringArray((entry as { imageKeys?: unknown })?.imageKeys)
+        .map((k) => toSignedUrlIfCos(k, 7200) ?? k)
+      return { name, imageUrls }
+    })
+    .filter((el) => el.name && el.imageUrls.length > 0)
+
+  let effectivePrompt = referenceText
     ? `${prompt}\n\n[參考文字 / Style hint] ${referenceText}`
     : prompt
+  if (klingElements.length > 0) {
+    effectivePrompt = replaceElementNamesWithTokens(
+      effectivePrompt,
+      klingElements.map((el) => el.name),
+    )
+  }
 
   // i2v / r2v vendors take a leading image; pure t2v generators ignore it.
   const leadImageUrl = signedImageUrls[0] ?? ''
+  // modelKey format: provider::modelId (e.g. atlascloud::kling-o3-pro-r2v)
+  const isKlingO3ModelKey = /::kling-o3-/.test(modelKey)
 
   _ulogInfo(
-    `[playground-video] start taskId=${taskId} model=${modelKey} refImages=${refImageKeys.length} refVideos=${refVideoKeys.length}`,
+    `[playground-video] start taskId=${taskId} model=${modelKey} refImages=${refImageKeys.length} refVideos=${refVideoKeys.length} elements=${klingElements.length}`,
   )
 
   // generateVideo's options interface is typed for scalar values but the
@@ -85,8 +110,19 @@ export async function handlePlaygroundVideoTask(
     // Generators that support it (fal / Minimax / BobAPI) read lastFrameImageUrl
     // and switch to first-last-frame mode; others ignore the extra option.
     ...(signedLastFrameUrl ? { lastFrameImageUrl: signedLastFrameUrl } : {}),
-    ...(signedImageUrls.length > 1
-      ? { referenceImages: signedImageUrls.slice(1) as unknown as string }
+    // Kling O3 consumes the FULL image set via `images` (its generator
+    // ignores the imageUrl arg when referenceImages is present), so pass
+    // everything — the slice(1) below exists for vendors whose lead image
+    // rides the imageUrl arg and would otherwise be duplicated.
+    ...(isKlingO3ModelKey
+      ? (signedImageUrls.length > 0
+        ? { referenceImages: signedImageUrls as unknown as string }
+        : {})
+      : (signedImageUrls.length > 1
+        ? { referenceImages: signedImageUrls.slice(1) as unknown as string }
+        : {})),
+    ...(klingElements.length > 0
+      ? { klingElements: klingElements as unknown as string }
       : {}),
     ...(signedVideoUrls.length > 0
       ? { referenceVideos: signedVideoUrls as unknown as string }

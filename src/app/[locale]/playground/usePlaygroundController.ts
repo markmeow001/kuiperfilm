@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
 import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
+import { useKlingElements, validateKlingElements } from './useKlingElements'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   useUploadPlaygroundReference,
@@ -79,6 +80,9 @@ export function usePlaygroundController() {
   const upload = useUploadPlaygroundReference()
   const submit = useSubmitPlaygroundRun()
   const runsQuery = usePlaygroundRuns(null)
+  // Kling O3 named subjects (人物/場景) — state + handlers live in their own
+  // hook; kept across model switches so a switch doesn't wipe uploads.
+  const kling = useKlingElements(upload)
 
   // Form state
   const [prompt, setPrompt] = useState('')
@@ -147,6 +151,8 @@ export function usePlaygroundController() {
   }, [activeModels, modelKey])
 
   const selectedVideoModel = activeModels.find((m) => m.value === modelKey)
+  // Kling O3 = the only family with named-subject (elements) binding.
+  const isKlingO3Model = outputType === 'video' && /::kling-o3-/.test(modelKey)
   const resolutionOptions: string[] =
     (outputType === 'video' && selectedVideoModel?.capabilities?.video?.resolutionOptions) || []
   const showResolutionPicker = resolutionOptions.length > 1
@@ -262,7 +268,29 @@ export function usePlaygroundController() {
     if (overrideModelKey && overrideModelKey !== modelKey) {
       setModelKey(overrideModelKey)
     }
-    const effectiveModelKey = outputType === 'video' && refImages.length > 0
+    // Kling O3 named subjects — validate before submit so failures are
+    // instant + actionable (route re-validates server-side).
+    const submitKlingElements = /::kling-o3-/.test(useModelKey) && kling.elements.length > 0
+    if (submitKlingElements) {
+      const { error, unmentioned } = validateKlingElements(kling.elements, effectivePrompt)
+      if (error) {
+        alert(error)
+        return
+      }
+      // Soft nudge: unreferenced subjects still bind, just weaker — confirm
+      // rather than block.
+      if (unmentioned.length > 0) {
+        const ok = confirm(
+          `提示詞裡沒有提到：${unmentioned.join('、')}。\n` +
+          '在 prompt 裡直接打主體名字綁定效果最好。仍要送出嗎？',
+        )
+        if (!ok) return
+      }
+    }
+    // Kling O3 keys skip the t2v/i2v/r2v sibling remap — the family has a
+    // single r2v endpoint and the dash regex would otherwise hunt for a
+    // nonexistent kling-o3-*-i2v sibling.
+    const effectiveModelKey = outputType === 'video' && refImages.length > 0 && !/::kling-o3-/.test(useModelKey)
       ? variantKeyForMode(useModelKey, videoRefMode, videoModels.map((m) => m.value))
       : useModelKey
     try {
@@ -276,6 +304,9 @@ export function usePlaygroundController() {
         aspectRatio,
         ...(outputType === 'video' ? { durationSec } : {}),
         ...(showResolutionPicker ? { resolution } : {}),
+        ...(submitKlingElements
+          ? { elements: kling.elements.map((el) => ({ name: el.name.trim(), imageKeys: el.images.map((im) => im.key) })) }
+          : {}),
       })
       const row: PlaygroundRunRow = {
         id: result.run.id,
@@ -327,6 +358,7 @@ export function usePlaygroundController() {
     setRefText('')
     setRefImages([])
     setRefVideo(null)
+    kling.clearElements()
   }
 
   /**
@@ -370,6 +402,7 @@ export function usePlaygroundController() {
     prompt, setPrompt,
     refText, setRefText,
     refImages, refVideo,
+    elements: kling.elements, isKlingO3Model,
     outputType, setOutputType,
     modelKey, setModelKey,
     aspectRatio, setAspectRatio,
@@ -392,6 +425,11 @@ export function usePlaygroundController() {
     // handlers
     insertReferenceToken,
     handleImagePick, handleVideoPick, removeRefImage, removeRefVideo,
+    addElement: kling.addElement,
+    removeElement: kling.removeElement,
+    setElementName: kling.setElementName,
+    handleElementImagePick: kling.handleElementImagePick,
+    removeElementImage: kling.removeElementImage,
     handleRun, copyPrompt, editPrompt, resetForm, applyRunAsReference,
   }
 }

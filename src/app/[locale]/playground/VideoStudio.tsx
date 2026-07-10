@@ -12,6 +12,7 @@
 
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
+import { ElementBindingsPanel } from './ElementBindingsPanel'
 import { ReferencePanel } from './ReferencePanel'
 import { ASPECT_RATIO_OPTIONS, playgroundDownloadHref, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
 
@@ -61,6 +62,12 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
         <div className="mb-4">
           <ReferencePanel ctrl={ctrl} />
         </div>
+
+        {ctrl.isKlingO3Model ? (
+          <div className="mb-4">
+            <ElementBindingsPanel ctrl={ctrl} />
+          </div>
+        ) : null}
 
         {/* Model */}
         <label className="mb-3 block">

@@ -48,6 +48,8 @@ export interface PlaygroundRunSubmission {
   referenceText?: string
   /** 首尾帧: last-frame image (own COS key or https URL). First frame = referenceImages[0]. */
   lastFrameUrl?: string
+  /** Kling O3 具名主体绑定（≤6 × 1-4 图）；prompt 打名字，worker 换 <<<element_N>>>。 */
+  elements?: Array<{ name: string; imageKeys: string[] }>
   outputType: 'image' | 'video'
   modelKey: string
   resolution?: string
