@@ -19,6 +19,8 @@ export const USER_ERROR_MESSAGES_ZH: Record<UnifiedErrorCode, string> = {
   SENSITIVE_CONTENT: '内容被供应商的内容审核挡下（可能含敏感信息）。请调整叙事 / 角色 / 场景内容后重试；若是「输出音频」被挡，可关闭「音频」后重新生成。',
   ARK_FACE_DETECTED: '火山 Seedance 2.0 不接受未报备的真人臉参考图。請到該角色 / 場景 / 道具的編輯面板按「报备火山」，等狀態變綠後再重新生成。',
   ARK_SUBSCRIPTION_REQUIRED: '火山方舟素材庫 API 需先購買「Seedance 2.0 高级创作权益包」才能使用。請至火山控制台訂閱後再試。',
+  REFERENCE_VIDEO_TOO_LONG: '參考影片長度需介於 1.8–15 秒之間。請換一支較短的參考影片,或先裁剪到 15 秒內再上傳。',
+  MODEL_NO_REFERENCE_IMAGE: '此模型不支援參考圖。請移除參考圖,或改用支援參考圖的模型(如 Nano Banana / GPT Image 2 / Grok Imagine)。',
   GENERATION_TIMEOUT: '生成超时，请重试。',
   GENERATION_FAILED: '生成失败，请稍后重试。',
   WATCHDOG_TIMEOUT: '任务执行超时，系统已终止该任务。',

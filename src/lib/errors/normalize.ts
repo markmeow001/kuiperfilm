@@ -84,6 +84,17 @@ function inferCodeFromMessage(message: string): UnifiedErrorCode | null {
   if (containsAny(message, ['unauthorized', 'not authenticated', 'need login', '401'])) return 'UNAUTHORIZED'
   if (containsAny(message, ['forbidden', 'permission denied', '403'])) return 'FORBIDDEN'
   if (containsAny(message, ['not found', '不存在', 'missing record'])) return 'NOT_FOUND'
+  // 2026-07-09 — AtlasCloud Seedance R2V rejects a reference video whose OWN
+  // length is out of range with `InvalidParameter.DurationTooLong: Duration
+  // must be between 1.8s and 15.2s`. Matched BEFORE the generic 'invalid'
+  // rule (the message contains "invalidparameter") so the user sees the
+  // actionable 「參考影片太長」 instead of opaque INVALID_PARAMS.
+  if (containsAny(message, ['durationtoolong', 'duration must be between'])) return 'REFERENCE_VIDEO_TOO_LONG'
+  // 2026-07-09 — image model without an img2img/edit variant rejects an
+  // attached reference image (e.g. z-image-turbo). The generator's message
+  // contains 「不支持参考图」/「img2img」; surface it before the generic rules
+  // so the user sees 「換支援參考圖的模型」 not opaque INTERNAL_ERROR.
+  if (containsAny(message, ['不支持参考图', 'img2img', '無 img2img', '无 img2img'])) return 'MODEL_NO_REFERENCE_IMAGE'
   if (containsAny(message, ['invalid', 'missing', 'required', 'bad request', 'fieldinvalid'])) return 'INVALID_PARAMS'
   if (containsAny(message, ['quota', 'rate limit', 'resource_exhausted', 'throttle', '429', 'requestlimitexceeded', 'maximum concurrency', 'reached the maximum'])) return 'RATE_LIMIT'
   if (containsAny(message, ['insufficient balance', 'creditinsufficient', 'balance is not enough', '402', 'insufficient credits', '余额不足', '余额不够', '请充值'])) return 'INSUFFICIENT_BALANCE'

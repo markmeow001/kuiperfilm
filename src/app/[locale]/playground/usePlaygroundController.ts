@@ -36,6 +36,32 @@ export const MAX_REF_VIDEOS = 1 // ARK parity — see Phase S decision memory
 
 export type OutputType = 'image' | 'video'
 
+// AtlasCloud Seedance R2V accepts a reference video only when its own length
+// is within [1.8s, 15.2s]; outside that it 400s with DurationTooLong. We use
+// a slightly tighter [1.8, 15] window client-side so anything that passes here
+// is safely inside the provider bound. See project memory (2026-07-09 r2v fix).
+export const REF_VIDEO_MIN_SEC = 1.8
+export const REF_VIDEO_MAX_SEC = 15
+
+/** Read a local video File's duration (seconds) via a throwaway <video>. */
+function readVideoDurationSec(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const d = video.duration
+      URL.revokeObjectURL(url)
+      resolve(d)
+    }
+    video.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('無法讀取影片時長'))
+    }
+    video.src = url
+  })
+}
+
 /**
  * Build a same-origin download URL for a result. A direct `<a download>` to the
  * R2/COS URL is ignored cross-origin (the file just opens in a new tab), so we
@@ -169,8 +195,24 @@ export function usePlaygroundController() {
     e.target.value = ''
     if (!file) return
     if (refVideo) {
-      alert('參考影片只能 1 支（ARK 上限對齊）。請先移除再上傳新的。')
+      alert('參考影片目前只能 1 支。請先移除再上傳新的。')
       return
+    }
+    // Guard the reference video's own length up-front — AtlasCloud R2V rejects
+    // clips outside 1.8–15s with a 400, wasting an upload + a billing freeze.
+    // Fail fast with a clear message instead. Unreadable metadata → let it
+    // through; the worker-side REFERENCE_VIDEO_TOO_LONG normalize is the backstop.
+    try {
+      const dur = await readVideoDurationSec(file)
+      if (Number.isFinite(dur) && (dur > REF_VIDEO_MAX_SEC || dur < REF_VIDEO_MIN_SEC)) {
+        alert(
+          `參考影片長度為 ${dur.toFixed(1)} 秒,需介於 ${REF_VIDEO_MIN_SEC}–${REF_VIDEO_MAX_SEC} 秒之間` +
+          `(R2V 動作參考限制)。請換一支較短的影片,或先裁剪到 ${REF_VIDEO_MAX_SEC} 秒內再上傳。`,
+        )
+        return
+      }
+    } catch {
+      // metadata unreadable — proceed; provider + worker normalize will catch it
     }
     try {
       const result = await upload.mutateAsync({ file, type: 'video' })

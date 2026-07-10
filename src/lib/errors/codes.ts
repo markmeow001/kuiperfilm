@@ -160,6 +160,31 @@ export const ERROR_CATALOG = {
     userMessageKey: 'errors.ARK_SUBSCRIPTION_REQUIRED',
     defaultMessage: 'ARK asset API requires Seedance 2.0 advanced/premium subscription',
   },
+  // 2026-07-09 — AtlasCloud Seedance R2V rejects a reference video whose
+  // OWN length is outside [1.8s, 15.2s] with
+  // `InvalidParameter.DurationTooLong` (400). Without this, the message
+  // matched the generic 'invalid' rule → INVALID_PARAMS → opaque
+  // 「请求参数不正确」, hiding that the fix is "use a shorter reference clip".
+  // Note: this is about the REFERENCE video's duration, not the output
+  // `duration` param (which we already clamp to the model's range).
+  REFERENCE_VIDEO_TOO_LONG: {
+    httpStatus: 400,
+    retryable: false,
+    category: ERROR_CATEGORY.VALIDATION,
+    userMessageKey: 'errors.REFERENCE_VIDEO_TOO_LONG',
+    defaultMessage: 'Reference video length must be between 1.8s and 15s',
+  },
+  // 2026-07-09 — user attached a reference image to an image model that has
+  // no img2img / edit variant (e.g. AtlasCloud z-image-turbo). The generator
+  // throws「不支持参考图（无 img2img 变体）」which fell through to
+  // INTERNAL_ERROR → opaque「系统内部错误」. Surface the real, actionable cause.
+  MODEL_NO_REFERENCE_IMAGE: {
+    httpStatus: 400,
+    retryable: false,
+    category: ERROR_CATEGORY.VALIDATION,
+    userMessageKey: 'errors.MODEL_NO_REFERENCE_IMAGE',
+    defaultMessage: 'This image model does not support reference images (no img2img variant)',
+  },
   GENERATION_TIMEOUT: {
     httpStatus: 504,
     retryable: true,
