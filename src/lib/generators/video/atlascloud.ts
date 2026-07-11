@@ -242,16 +242,16 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
         let body: Record<string, unknown>
         if (klingO3Mode) {
             // Kling O3 r2v — fully disjoint schema; built + guarded in
-            // buildKlingO3Body. `sound` defaults false per the Kling schema
-            // (read raw off options — the destructured generateAudio
-            // defaults true for Seedance, which is wrong here and would
-            // silently opt users into audio surcharges).
+            // buildKlingO3Body. `sound` defaults ON (2026-07-11): the API
+            // schema default is false, but the Kling product ships audible
+            // videos by default and users expect it — silent output read as
+            // a bug (user report). Explicit generateAudio:false still mutes.
             body = buildKlingO3Body({
                 atlasModel,
                 prompt: paramPrompt,
                 duration,
                 aspectRatio,
-                sound: (options as AtlasCloudOptions).generateAudio === true,
+                sound: (options as AtlasCloudOptions).generateAudio !== false,
                 elements: klingElements,
                 images: referenceImages?.length
                     ? referenceImages

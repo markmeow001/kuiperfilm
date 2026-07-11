@@ -135,7 +135,9 @@ describe('AtlasCloud Kling O3 R2V', () => {
     if (!body) throw new Error('fetch not called')
     expect(body.aspect_ratio).toBe('9:16')
     expect(body.duration).toBe(10)
-    expect(body.sound).toBe(false)
+    // 2026-07-11 — sound defaults ON: the Kling product defaults to audible
+    // output and users expect it; only an explicit generateAudio:false mutes.
+    expect(body.sound).toBe(true)
     for (const leaked of [
       'ratio', 'generate_audio', 'resolution', 'watermark',
       'return_last_frame', 'reference_images', 'reference_videos',
@@ -239,16 +241,16 @@ describe('AtlasCloud Kling O3 R2V', () => {
     expect(result.error).toMatch(/未知.*modelId|unknown/i)
   })
 
-  it('sound option forwards as `sound: true`', async () => {
+  it('explicit generateAudio:false forwards as `sound: false` (mute opt-out)', async () => {
     const { bodies } = stubFetchCapturing()
     const generator = new AtlasCloudSeedanceVideoGenerator()
     await generator.generate({
       userId: 'user-1',
       imageUrl: '',
       prompt: 'p',
-      options: { modelId: 'kling-o3-std-r2v', klingElements: ELEMENTS, generateAudio: true },
+      options: { modelId: 'kling-o3-std-r2v', klingElements: ELEMENTS, generateAudio: false },
     })
-    expect(bodies.at(0)?.sound).toBe(true)
+    expect(bodies.at(0)?.sound).toBe(false)
   })
 
   it.each([
