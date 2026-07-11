@@ -329,6 +329,19 @@ export function usePlaygroundController() {
         }
       }
     }
+    // Kling + ZERO bindings + a prompt full of @tokens = a storyboard-carried
+    // prompt the user expects to bind (2026-07-11 user report: elements=0
+    // silently shipped as loose images). Warn before wasting a paid run —
+    // @tokens mean nothing to Kling; only named subjects bind.
+    if (isKlingKey && klingSubmitElements.length === 0 && /@[^\s@，、。.,]{1,20}/.test(effectivePrompt)) {
+      const ok = confirm(
+        '提示詞裡有 @名字，但目前沒有綁定任何主體 —— Kling 不認 @token，' +
+        '參考圖只會當「鬆散參考」使用。\n\n' +
+        '建議：在參考圖下方「命名」欄填上名字（或用主體綁定區建主體）再送出。\n\n' +
+        '仍要直接送出嗎？',
+      )
+      if (!ok) return
+    }
     const submitKlingElements = isKlingKey && klingSubmitElements.length > 0
     // Non-Kling video with named images → worker prepends the 參考圖對應
     // textual map (Seedance-class has no API-level named binding).
