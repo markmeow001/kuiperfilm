@@ -24,12 +24,13 @@ export function ElementBindingsPanel({ ctrl }: ElementBindingsPanelProps) {
     elements, isBusy,
     addElement, removeElement, setElementName, handleElementImagePick, removeElementImage,
   } = ctrl
-  // One hidden file input shared by all cards; targetIdx routes the pick.
+  // One hidden file input shared by all cards; the target element's stable
+  // id routes the pick (index would mis-target after a mid-flight removal).
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const targetIdxRef = useRef<number>(0)
+  const targetIdRef = useRef<string>('')
 
-  function pickImageFor(idx: number) {
-    targetIdxRef.current = idx
+  function pickImageFor(id: string) {
+    targetIdRef.current = id
     fileInputRef.current?.click()
   }
 
@@ -40,7 +41,7 @@ export function ElementBindingsPanel({ ctrl }: ElementBindingsPanelProps) {
         type="file"
         accept="image/jpeg,image/png,image/webp"
         className="hidden"
-        onChange={(e) => handleElementImagePick(targetIdxRef.current, e)}
+        onChange={(e) => handleElementImagePick(targetIdRef.current, e)}
       />
 
       <div className="mb-1 flex items-center justify-between">
@@ -72,12 +73,12 @@ export function ElementBindingsPanel({ ctrl }: ElementBindingsPanelProps) {
       ) : (
         <div className="space-y-2">
           {elements.map((el, idx) => (
-            <div key={idx} className="rounded-sm border border-stone-800 bg-stone-900/40 p-2">
+            <div key={el.id} className="rounded-sm border border-stone-800 bg-stone-900/40 p-2">
               <div className="mb-2 flex items-center gap-2">
                 <input
                   type="text"
                   value={el.name}
-                  onChange={(e) => setElementName(idx, e.target.value)}
+                  onChange={(e) => setElementName(el.id, e.target.value)}
                   disabled={isBusy}
                   placeholder={`主體名稱（例：${idx % 2 === 0 ? 'Vera' : '古宅'}）`}
                   maxLength={80}
@@ -85,7 +86,7 @@ export function ElementBindingsPanel({ ctrl }: ElementBindingsPanelProps) {
                 />
                 <button
                   type="button"
-                  onClick={() => removeElement(idx)}
+                  onClick={() => removeElement(el.id)}
                   disabled={isBusy}
                   title="移除主體"
                   className="rounded-sm border border-stone-800 px-1.5 py-1 font-mono text-[10px] text-stone-500 hover:border-rose-500/60 hover:text-rose-400 disabled:opacity-40"
@@ -103,7 +104,7 @@ export function ElementBindingsPanel({ ctrl }: ElementBindingsPanelProps) {
                     ) : null}
                     <button
                       type="button"
-                      onClick={() => removeElementImage(idx, imgIdx)}
+                      onClick={() => removeElementImage(el.id, img.key)}
                       disabled={isBusy}
                       className="absolute inset-0 hidden items-center justify-center bg-stone-950/70 font-mono text-[11px] text-rose-300 group-hover:flex"
                     >
@@ -114,7 +115,7 @@ export function ElementBindingsPanel({ ctrl }: ElementBindingsPanelProps) {
                 {el.images.length < MAX_KLING_ELEMENT_IMAGES ? (
                   <button
                     type="button"
-                    onClick={() => pickImageFor(idx)}
+                    onClick={() => pickImageFor(el.id)}
                     disabled={isBusy}
                     title={`上傳參考圖（${el.images.length}/${MAX_KLING_ELEMENT_IMAGES}，第 1 張為正面照）`}
                     className="flex h-12 w-12 items-center justify-center rounded-sm border border-dashed border-stone-700 text-stone-500 hover:border-amber-500/40 hover:text-amber-300 disabled:opacity-40"

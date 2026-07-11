@@ -13,7 +13,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
 import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
-import { useKlingElements, validateKlingElements } from './useKlingElements'
+import {
+  KLING_O3_ASPECT_RATIO_VALUES, MAX_KLING_IMAGES, MAX_KLING_IMAGES_WITH_VIDEO,
+  useKlingElements, validateKlingElements,
+} from './useKlingElements'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   useUploadPlaygroundReference,
@@ -153,6 +156,19 @@ export function usePlaygroundController() {
   const selectedVideoModel = activeModels.find((m) => m.value === modelKey)
   // Kling O3 = the only family with named-subject (elements) binding.
   const isKlingO3Model = outputType === 'video' && /::kling-o3-/.test(modelKey)
+  // Kling O3 schema: plain images ≤7 (≤4 with a reference video); other
+  // models keep the global 9 cap. Enforced at pick-time so the failure is
+  // pre-submit, not an async worker error. (2026-07-10 review MEDIUM-4)
+  const refImagesCap = isKlingO3Model
+    ? (refVideo ? MAX_KLING_IMAGES_WITH_VIDEO : MAX_KLING_IMAGES)
+    : MAX_REF_IMAGES
+  // Clamp aspect ratio to the Kling enum when switching onto a Kling model
+  // with a non-supported pick (e.g. 4:3) still selected.
+  useEffect(() => {
+    if (isKlingO3Model && !(KLING_O3_ASPECT_RATIO_VALUES as readonly string[]).includes(aspectRatio)) {
+      setAspectRatio('16:9')
+    }
+  }, [isKlingO3Model, aspectRatio])
   const resolutionOptions: string[] =
     (outputType === 'video' && selectedVideoModel?.capabilities?.video?.resolutionOptions) || []
   const showResolutionPicker = resolutionOptions.length > 1
@@ -184,8 +200,8 @@ export function usePlaygroundController() {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (refImages.length >= MAX_REF_IMAGES) {
-      alert(`參考圖最多 ${MAX_REF_IMAGES} 張`)
+    if (refImages.length >= refImagesCap) {
+      alert(`參考圖最多 ${refImagesCap} 張${isKlingO3Model && refVideo ? '（Kling O3 有參考影片時上限 4）' : ''}`)
       return
     }
     try {
@@ -419,7 +435,7 @@ export function usePlaygroundController() {
     imageInputRef, videoInputRef, promptRef,
     // derived
     imageModels, videoModels, activeModels, selectedVideoModel,
-    resolutionOptions, showResolutionPicker,
+    resolutionOptions, showResolutionPicker, refImagesCap,
     isBusy, refCount, isGenerating,
     allRuns, imageRuns, videoRuns,
     // handlers

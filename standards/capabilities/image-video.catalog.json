@@ -1766,6 +1766,74 @@
   },
   {
     "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "kling-o3-std-r2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "atlascloud",
+    "modelId": "kling-o3-pro-r2v",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal"
+        ],
+        "durationOptions": [
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
     "provider": "tencent-vod",
     "modelId": "Kling-1.6",
     "capabilities": {

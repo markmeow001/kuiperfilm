@@ -13,6 +13,7 @@
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import { ElementBindingsPanel } from './ElementBindingsPanel'
+import { KLING_O3_ASPECT_RATIO_VALUES } from './useKlingElements'
 import { ReferencePanel } from './ReferencePanel'
 import { ASPECT_RATIO_OPTIONS, playgroundDownloadHref, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
 
@@ -95,7 +96,12 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
               disabled={isBusy}
               className="w-full rounded-sm border border-stone-800 bg-stone-900 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
             >
-              {ASPECT_RATIO_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+              {/* Kling O3 schema enum is 16:9/9:16/1:1 only — offering 4:3
+                  etc. produced a provider 400. (2026-07-10 review HIGH-2) */}
+              {(ctrl.isKlingO3Model
+                ? ASPECT_RATIO_OPTIONS.filter((opt) => (KLING_O3_ASPECT_RATIO_VALUES as readonly string[]).includes(opt.value))
+                : ASPECT_RATIO_OPTIONS
+              ).map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
             </select>
           </label>
           <label className="block">

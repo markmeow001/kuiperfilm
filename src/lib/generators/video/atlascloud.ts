@@ -113,14 +113,23 @@ function buildKlingO3Body(args: {
     sound: boolean
     elements?: Array<{ name: string; imageUrls: string[] }>
     images?: string[]
+    /** Optional single reference video → schema `video`; caps images at 4. */
+    referenceVideos?: string[]
 }): Record<string, unknown> {
-    const { atlasModel, prompt, duration, aspectRatio, sound, elements, images } = args
+    const { atlasModel, prompt, duration, aspectRatio, sound, elements, images, referenceVideos } = args
 
     if (!prompt) {
         throw new Error(`AtlasCloud ${atlasModel} (Kling O3) 需要 prompt 但為空`)
     }
     if (duration < 3 || duration > 15) {
         throw new Error(`AtlasCloud ${atlasModel} duration 需在 3-15 秒，收到 ${duration}`)
+    }
+    if (!KLING_O3_ASPECT_RATIOS.has(aspectRatio)) {
+        // Schema enum is exactly 16:9 / 9:16 / 1:1 — the shared UI offers
+        // more (4:3 etc.) which AtlasCloud 400s on. (2026-07-10 review HIGH-2)
+        throw new Error(
+            `AtlasCloud ${atlasModel} 比例僅支援 16:9 / 9:16 / 1:1，收到 ${aspectRatio}`,
+        )
     }
     if (elements && elements.length > 6) {
         throw new Error(`AtlasCloud ${atlasModel} elements 最多 6 個主體，收到 ${elements.length}`)
@@ -132,8 +141,16 @@ function buildKlingO3Body(args: {
             )
         }
     }
-    if (images && images.length > 7) {
-        throw new Error(`AtlasCloud ${atlasModel} images 最多 7 張，收到 ${images.length}`)
+    if (referenceVideos && referenceVideos.length > 1) {
+        throw new Error(`AtlasCloud ${atlasModel} 參考影片最多 1 支，收到 ${referenceVideos.length}`)
+    }
+    const referenceVideo = referenceVideos?.[0]
+    // Schema: images ≤7, or ≤4 when a reference video is supplied.
+    const imagesCap = referenceVideo ? 4 : 7
+    if (images && images.length > imagesCap) {
+        throw new Error(
+            `AtlasCloud ${atlasModel} images 最多 ${imagesCap} 張${referenceVideo ? '（有參考影片時）' : ''}，收到 ${images.length}`,
+        )
     }
 
     return {
@@ -142,6 +159,10 @@ function buildKlingO3Body(args: {
         duration,
         aspect_ratio: aspectRatio,
         sound,
+        // Reference video rides the schema's `video` field — previously the
+        // worker forwarded it but this builder never read it, silently
+        // dropping the user's upload. (2026-07-10 review HIGH-1)
+        ...(referenceVideo ? { video: referenceVideo } : {}),
         // Schema requires BOTH frontal_image and refer_images for
         // image_refer — refer_images = the full set (frontal included)
         // so a single-image subject still satisfies both fields.
@@ -169,8 +190,19 @@ function isReferenceToVideoSlug(slug: string): boolean {
 
 function resolveAtlasCloudModel(modelId?: string): string {
     if (modelId && ATLASCLOUD_MODEL_MAP[modelId]) return ATLASCLOUD_MODEL_MAP[modelId]
+    // 2026-07-10 — a PROVIDED but unknown modelId used to silently fall back
+    // to v1.5-pro: a typo generated on the wrong (billable) model with no
+    // signal. Explicit failure per CLAUDE.md 不隱式回退. Absent modelId keeps
+    // the legacy default for old call sites that predate model routing.
+    if (modelId) {
+        throw new Error(
+            `AtlasCloud 未知 modelId「${modelId}」— 不在 ATLASCLOUD_MODEL_MAP（可用: ${Object.keys(ATLASCLOUD_MODEL_MAP).join(', ')}）`,
+        )
+    }
     return ATLASCLOUD_MODEL_MAP['seedance-v1.5-pro']
 }
+
+const KLING_O3_ASPECT_RATIOS = new Set(['16:9', '9:16', '1:1'])
 
 export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
     protected async doGenerate(params: VideoGenerateParams): Promise<GenerateResult> {
@@ -224,6 +256,7 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
                 images: referenceImages?.length
                     ? referenceImages
                     : (imageUrl ? [imageUrl] : undefined),
+                referenceVideos,
             })
         } else {
         body = {

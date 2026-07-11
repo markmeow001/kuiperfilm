@@ -11,7 +11,7 @@ import { AppIcon } from '@/components/ui/icons'
 import {
   variantKeyForMode, variantModeMismatch, isVariantSuffixedKey,
 } from '@/lib/video-models/variant-for-mode'
-import { MAX_REF_IMAGES, MAX_REF_VIDEOS, type PlaygroundController } from './usePlaygroundController'
+import { MAX_REF_VIDEOS, type PlaygroundController } from './usePlaygroundController'
 
 interface ReferencePanelProps {
   ctrl: PlaygroundController
@@ -23,7 +23,7 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
     videoRefMode, setVideoRefMode, modelKey, videoModels,
     isBusy, imageInputRef, videoInputRef,
     handleImagePick, handleVideoPick, removeRefImage, removeRefVideo,
-    insertReferenceToken,
+    insertReferenceToken, isKlingO3Model, refImagesCap,
   } = ctrl
 
   return (
@@ -31,11 +31,14 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
       {/* Reference images */}
       <div>
         <div className="mb-2 font-mono text-[12px] uppercase tracking-wider text-stone-500">
-          參考圖片 <span className="text-violet-400">({refImages.length}/{MAX_REF_IMAGES})</span>
+          參考圖片 <span className="text-violet-400">({refImages.length}/{refImagesCap})</span>
           <span className="ml-2 text-stone-600">jpg/png/webp · ≤10MB</span>
         </div>
 
-        {outputType === 'video' && refImages.length > 0 ? (
+        {/* 首幀/風格 mode toggle — Kling O3 has a single r2v endpoint, the
+            toggle drives nothing there (handleRun skips variantKeyForMode);
+            hide it to avoid a dead control. (2026-07-10 review LOW) */}
+        {outputType === 'video' && refImages.length > 0 && !isKlingO3Model ? (
           <div className="mb-2">
             <div className="flex gap-1">
               {([
@@ -81,7 +84,7 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
           <button
             type="button"
             onClick={() => imageInputRef.current?.click()}
-            disabled={isBusy || refImages.length >= MAX_REF_IMAGES}
+            disabled={isBusy || refImages.length >= refImagesCap}
             className="aspect-square rounded-sm border border-dashed border-stone-700 text-xl text-stone-500 transition-all hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             ＋

@@ -16,8 +16,20 @@ import type { useUploadPlaygroundReference } from '@/lib/query/mutations/playgro
 
 export const MAX_KLING_ELEMENTS = 6
 export const MAX_KLING_ELEMENT_IMAGES = 4
+/** Kling O3 schema enum — the shared aspect picker offers more (4:3 …) which 400s. */
+export const KLING_O3_ASPECT_RATIO_VALUES = ['16:9', '9:16', '1:1'] as const
+/** Kling O3 plain-images cap: 7, or 4 when a reference video is bound. */
+export const MAX_KLING_IMAGES = 7
+export const MAX_KLING_IMAGES_WITH_VIDEO = 4
 
 export interface KlingElementDraft {
+  /**
+   * Stable identity for updates + React keys. Array INDEX must not be used
+   * to target async updates: an upload resolving after another subject was
+   * removed would re-index and attach the image to the wrong subject.
+   * (2026-07-10 review HIGH-3)
+   */
+  id: string
   name: string
   images: Array<{ key: string; signedUrl: string }>
 }
@@ -55,22 +67,22 @@ export function useKlingElements(upload: ReturnType<typeof useUploadPlaygroundRe
       alert(`主體最多 ${MAX_KLING_ELEMENTS} 個`)
       return
     }
-    setElements((prev) => [...prev, { name: '', images: [] }])
+    setElements((prev) => [...prev, { id: crypto.randomUUID(), name: '', images: [] }])
   }
 
-  function removeElement(idx: number) {
-    setElements((prev) => prev.filter((_, i) => i !== idx))
+  function removeElement(id: string) {
+    setElements((prev) => prev.filter((el) => el.id !== id))
   }
 
-  function setElementName(idx: number, name: string) {
-    setElements((prev) => prev.map((el, i) => (i === idx ? { ...el, name } : el)))
+  function setElementName(id: string, name: string) {
+    setElements((prev) => prev.map((el) => (el.id === id ? { ...el, name } : el)))
   }
 
-  async function handleElementImagePick(idx: number, e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleElementImagePick(id: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    const el = elements[idx]
+    const el = elements.find((entry) => entry.id === id)
     if (!el) return
     if (el.images.length >= MAX_KLING_ELEMENT_IMAGES) {
       alert(`每個主體最多 ${MAX_KLING_ELEMENT_IMAGES} 張參考圖`)
@@ -78,8 +90,10 @@ export function useKlingElements(upload: ReturnType<typeof useUploadPlaygroundRe
     }
     try {
       const result = await upload.mutateAsync({ file, type: 'image' })
-      setElements((prev) => prev.map((entry, i) => (
-        i === idx
+      // Match by id, NOT index — the array may have re-indexed while the
+      // upload was in flight (subject removed mid-upload).
+      setElements((prev) => prev.map((entry) => (
+        entry.id === id
           ? { ...entry, images: [...entry.images, { key: result.key, signedUrl: result.signedUrl }] }
           : entry
       )))
@@ -88,10 +102,10 @@ export function useKlingElements(upload: ReturnType<typeof useUploadPlaygroundRe
     }
   }
 
-  function removeElementImage(elIdx: number, imgIdx: number) {
-    setElements((prev) => prev.map((entry, i) => (
-      i === elIdx
-        ? { ...entry, images: entry.images.filter((_, j) => j !== imgIdx) }
+  function removeElementImage(id: string, imgKey: string) {
+    setElements((prev) => prev.map((entry) => (
+      entry.id === id
+        ? { ...entry, images: entry.images.filter((img) => img.key !== imgKey) }
         : entry
     )))
   }

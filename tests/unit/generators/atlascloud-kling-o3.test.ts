@@ -165,6 +165,80 @@ describe('AtlasCloud Kling O3 R2V', () => {
     expect(body.elements).toBeUndefined()
   })
 
+  it('wires a reference video into the `video` field (with keep_original_sound default)', async () => {
+    // 2026-07-10 review HIGH-1: reference videos were silently dropped for
+    // Kling O3 (the UI collects one, the schema HAS a `video` field, but the
+    // body builder never read it). Silent drops violate CLAUDE.md §3 — and
+    // the schema supports it, so wire it through instead of rejecting.
+    const { bodies } = stubFetchCapturing()
+    const generator = new AtlasCloudSeedanceVideoGenerator()
+
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: '',
+      prompt: 'p',
+      options: {
+        modelId: 'kling-o3-pro-r2v',
+        klingElements: ELEMENTS,
+        referenceVideos: ['https://r2.example.com/video/motion.mp4?sig=fake'],
+      },
+    })
+
+    const body = bodies.at(0)
+    if (!body) throw new Error('fetch not called')
+    expect(body.video).toBe('https://r2.example.com/video/motion.mp4?sig=fake')
+  })
+
+  it('with a reference video, plain images cap drops to 4 (schema rule)', async () => {
+    stubFetchCapturing()
+    const generator = new AtlasCloudSeedanceVideoGenerator()
+    const result = await generator.generate({
+      userId: 'user-1',
+      imageUrl: '',
+      prompt: 'p',
+      options: {
+        modelId: 'kling-o3-std-r2v',
+        referenceVideos: ['https://x/v.mp4'],
+        referenceImages: ['a', 'b', 'c', 'd', 'e'].map((s) => `https://x/${s}.png`),
+      },
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/4 張/)
+  })
+
+  it('rejects aspect ratios outside the Kling enum (16:9 / 9:16 / 1:1)', async () => {
+    // 2026-07-10 review HIGH-2: the shared UI offers 4:3/3:4/4:5 which the
+    // Kling schema enum does not accept — fail fast with a clear message
+    // instead of a raw provider 400.
+    stubFetchCapturing()
+    const generator = new AtlasCloudSeedanceVideoGenerator()
+    const result = await generator.generate({
+      userId: 'user-1',
+      imageUrl: '',
+      prompt: 'p',
+      options: { modelId: 'kling-o3-pro-r2v', klingElements: ELEMENTS, aspectRatio: '4:3' },
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/16:9|9:16|1:1/)
+  })
+
+  it('unknown non-empty modelId throws instead of silently falling back to v1.5-pro', async () => {
+    // Pre-existing hazard surfaced by the chain-trace review: a typo'd
+    // modelId used to silently generate on seedance-v1.5-pro and bill for
+    // it. Explicit failure per CLAUDE.md 不隱式回退. (Absent modelId keeps
+    // the legacy default for old callers.)
+    stubFetchCapturing()
+    const generator = new AtlasCloudSeedanceVideoGenerator()
+    const result = await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://x/lead.png',
+      prompt: 'p',
+      options: { modelId: 'kling-o3-typo-r2v' },
+    })
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/未知.*modelId|unknown/i)
+  })
+
   it('sound option forwards as `sound: true`', async () => {
     const { bodies } = stubFetchCapturing()
     const generator = new AtlasCloudSeedanceVideoGenerator()
