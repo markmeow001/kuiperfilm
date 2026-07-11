@@ -46,7 +46,10 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* ── LEFT: params ── */}
-      <div className="flex w-[340px] flex-shrink-0 flex-col overflow-y-auto border-r border-stone-800 p-4">
+      {/* 2026-07-10 — column widens on large screens + the prompt textarea
+          grew (rows 5→9) and is user-resizable; at rows=5 long prompts were
+          unreadably cramped on common resolutions (user report). */}
+      <div className="flex w-[340px] flex-shrink-0 flex-col overflow-y-auto border-r border-stone-800 p-4 xl:w-[400px] 2xl:w-[440px]">
         <div className="mb-3 font-mono text-[12px] uppercase tracking-wider text-stone-500">生成設定</div>
 
         <textarea
@@ -54,9 +57,9 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={onPromptKeyDown}
-          rows={5}
+          rows={9}
           placeholder="描述你想生成的影片場景與動作... 用 @image1 引用參考素材"
-          className="mb-4 w-full resize-none rounded-lg border border-stone-800 bg-stone-950/60 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
+          className="mb-4 min-h-[140px] w-full resize-y rounded-lg border border-stone-800 bg-stone-950/60 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
         />
 
         <div className="mb-4">

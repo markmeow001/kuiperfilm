@@ -23,6 +23,7 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
     videoRefMode, setVideoRefMode, modelKey, videoModels,
     isBusy, imageInputRef, videoInputRef,
     handleImagePick, handleVideoPick, removeRefImage, removeRefVideo,
+    insertReferenceToken,
   } = ctrl
 
   return (
@@ -107,6 +108,40 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
             </div>
           ))}
         </div>
+
+        {/* @-token quick-insert row — dropped in the 2026-07-08 studio split
+            (insertReferenceToken kept working in the controller but nothing
+            rendered the chips); restored 2026-07-10 per user report. Click a
+            chip → the token lands at the prompt caret. */}
+        {(refImages.length > 0 || refVideo) ? (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-stone-600">引用</span>
+            {refImages.map((_, idx) => {
+              const token = `@image${idx + 1}`
+              return (
+                <button
+                  type="button"
+                  key={`tok-${token}`}
+                  onClick={() => insertReferenceToken(token)}
+                  title={`插入 ${token} 引用第 ${idx + 1} 張參考圖`}
+                  className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+                >
+                  {token}
+                </button>
+              )
+            })}
+            {refVideo ? (
+              <button
+                type="button"
+                onClick={() => insertReferenceToken('@video1')}
+                title="插入 @video1 引用參考影片"
+                className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
+              >
+                @video1
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* Reference video */}
