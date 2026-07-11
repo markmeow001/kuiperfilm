@@ -17,7 +17,7 @@ import { generateVideo } from '@/lib/generator-api'
 import type { TaskJobData } from '@/lib/task/types'
 import { uploadVideoSourceToCos, waitExternalResult, toSignedUrlIfCos } from '../utils'
 import { extractVideoTailFrameToCos } from '@/lib/video-tail-frame'
-import { replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
+import { buildRefImageMapSection, replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 function parseStringArray(value: unknown): string[] {
@@ -86,6 +86,18 @@ export async function handlePlaygroundVideoTask(
       effectivePrompt,
       klingElements.map((el) => el.name),
     )
+  } else {
+    // 參考圖命名 (2026-07-10) — Seedance-class r2v has no API-level named
+    // binding, so named plain images get the storyboard-pipeline treatment:
+    // a textual 參考圖對應 map prepended to the prompt (same convention as
+    // buildR2vRefMapSection on the multi-shot path).
+    const refImageNames = Array.isArray(payload.referenceImageNames)
+      ? (payload.referenceImageNames as Array<string | null>)
+      : []
+    const mapSection = buildRefImageMapSection(refImageNames)
+    if (mapSection) {
+      effectivePrompt = `${mapSection}\n\n${effectivePrompt}`
+    }
   }
 
   // i2v / r2v vendors take a leading image; pure t2v generators ignore it.

@@ -31,6 +31,25 @@ function isAsciiWordName(name: string): boolean {
  * 1-based). Names absent from the prompt are left alone — Kling
  * accepts unreferenced elements, binding is just weaker.
  */
+/**
+ * Build the 參考圖對應 mapping section for named plain reference images
+ * (2026-07-10). Seedance-class r2v has no API-level named binding — the
+ * storyboard pipeline binds names to images TEXTUALLY via a mapping table
+ * (see buildR2vRefMapSection in multi-shot-video-atlascloud-path); this is
+ * the playground twin. `names[i]` labels image i+1; blank/null entries are
+ * skipped. Returns '' when nothing is named.
+ */
+export function buildRefImageMapSection(names: ReadonlyArray<string | null | undefined>): string {
+  const lines = names
+    .map((name, i) => {
+      const trimmed = typeof name === 'string' ? name.trim() : ''
+      return trimmed ? `image ${i + 1} = 「${trimmed}」` : null
+    })
+    .filter((l): l is string => Boolean(l))
+  if (lines.length === 0) return ''
+  return `參考圖對應：\n${lines.join('\n')}`
+}
+
 export function replaceElementNamesWithTokens(prompt: string, names: readonly string[]): string {
   // Longest-first so overlapping names resolve to the most specific one.
   const ordered = names

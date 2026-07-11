@@ -59,6 +59,36 @@ export function validateKlingElements(
   return { error: null, unmentioned: names.filter((n) => !effectivePrompt.includes(n)) }
 }
 
+/**
+ * Merge NAMED plain reference images into the Kling elements payload
+ * (2026-07-10 shared naming UI). A named reference image becomes a
+ * single-image subject appended AFTER the explicit 主體 cards; unnamed
+ * images stay plain `images`. Returns an error string on conflicts
+ * (combined cap, duplicate names) instead of silently dropping.
+ */
+export function mergeNamedRefImagesIntoElements(
+  elements: ReadonlyArray<{ name: string; imageKeys: string[] }>,
+  refImages: ReadonlyArray<{ key: string; name?: string }>,
+): { elements: Array<{ name: string; imageKeys: string[] }>; plainImageKeys: string[]; error: string | null } {
+  const named = refImages.filter((r) => r.name?.trim())
+  const plainImageKeys = refImages.filter((r) => !r.name?.trim()).map((r) => r.key)
+  const merged = [
+    ...elements.map((el) => ({ name: el.name.trim(), imageKeys: [...el.imageKeys] })),
+    ...named.map((r) => ({ name: (r.name as string).trim(), imageKeys: [r.key] })),
+  ]
+  if (merged.length > MAX_KLING_ELEMENTS) {
+    return {
+      elements: [], plainImageKeys,
+      error: `主體 + 已命名參考圖合計最多 ${MAX_KLING_ELEMENTS} 個（目前 ${merged.length}）`,
+    }
+  }
+  const names = merged.map((el) => el.name)
+  if (new Set(names).size !== names.length) {
+    return { elements: [], plainImageKeys, error: '主體名稱與參考圖命名重複，請改名' }
+  }
+  return { elements: merged, plainImageKeys, error: null }
+}
+
 export function useKlingElements(upload: ReturnType<typeof useUploadPlaygroundReference>) {
   const [elements, setElements] = useState<KlingElementDraft[]>([])
 

@@ -93,6 +93,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     workspaceId,
     locale: rawLocale,
     elements: rawElements,
+    referenceImageNames: rawRefImageNames,
   } = body as {
     prompt?: unknown
     referenceImages?: unknown
@@ -107,6 +108,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     workspaceId?: unknown
     locale?: unknown
     elements?: unknown
+    referenceImageNames?: unknown
   }
 
   // Validate. Every reject carries a human-readable `message` — ApiError falls
@@ -236,6 +238,33 @@ export const POST = apiHandler(async (request: NextRequest) => {
       })
     }
   }
+
+  // Named plain reference images（參考圖命名 → 參考圖對應 textual map，
+  // 2026-07-10). Aligned with referenceImages by index; null = unnamed.
+  let referenceImageNames: Array<string | null> = []
+  if (rawRefImageNames !== undefined && rawRefImageNames !== null) {
+    if (!Array.isArray(rawRefImageNames) || rawRefImageNames.length > MAX_REFERENCE_IMAGES) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'REFERENCE_IMAGE_NAMES_INVALID',
+        message: '参考图命名格式不正确',
+      })
+    }
+    referenceImageNames = rawRefImageNames.map((v) => {
+      if (v === null || v === undefined) return null
+      if (typeof v !== 'string' || v.trim().length === 0) return null
+      if (v.trim().length > 80) {
+        throw new ApiError('INVALID_PARAMS', {
+          code: 'REFERENCE_IMAGE_NAME_TOO_LONG',
+          message: '参考图命名最长 80 字符',
+        })
+      }
+      return v.trim()
+    })
+    if (referenceImageNames.length > referenceImages.length) {
+      // trailing names for images that no longer exist — truncate to align.
+      referenceImageNames = referenceImageNames.slice(0, referenceImages.length)
+    }
+  }
   const refText = typeof referenceText === 'string' ? referenceText.trim() : ''
   const wsId = typeof workspaceId === 'string' && workspaceId.length > 0 ? workspaceId : null
   const locale = (typeof rawLocale === 'string' && rawLocale ? rawLocale : 'zh') as Locale
@@ -286,6 +315,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ...(refText ? { referenceText: refText } : {}),
     ...(lastFrameSafe ? { lastFrameUrl: lastFrameSafe } : {}),
     ...(elements.length > 0 ? { elements } : {}),
+    ...(referenceImageNames.some(Boolean) ? { referenceImageNames } : {}),
     ...(normalizedResolution ? { resolution: normalizedResolution } : {}),
     ...(typeof aspectRatio === 'string' ? { aspectRatio } : {}),
     ...(normalizedDuration ? { duration: normalizedDuration } : {}),

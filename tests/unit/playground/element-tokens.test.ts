@@ -16,7 +16,24 @@
  *  - every occurrence is replaced, not just the first
  */
 import { describe, expect, it } from 'vitest'
-import { replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
+import { buildRefImageMapSection, replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
+
+describe('buildRefImageMapSection', () => {
+  it('maps named images by 1-based position, skipping unnamed', () => {
+    expect(buildRefImageMapSection([null, '客厅', 'Hayes'])).toBe(
+      '參考圖對應：\nimage 2 = 「客厅」\nimage 3 = 「Hayes」',
+    )
+  })
+
+  it('returns empty string when nothing is named', () => {
+    expect(buildRefImageMapSection([null, undefined, '  '])).toBe('')
+    expect(buildRefImageMapSection([])).toBe('')
+  })
+
+  it('trims names', () => {
+    expect(buildRefImageMapSection([' Vera '])).toBe('參考圖對應：\nimage 1 = 「Vera」')
+  })
+})
 
 describe('replaceElementNamesWithTokens', () => {
   it('replaces a single name with its 1-based token', () => {

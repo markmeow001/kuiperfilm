@@ -15,7 +15,7 @@ import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/v
 import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
 import {
   KLING_O3_ASPECT_RATIO_VALUES, MAX_KLING_IMAGES, MAX_KLING_IMAGES_WITH_VIDEO,
-  useKlingElements, validateKlingElements,
+  mergeNamedRefImagesIntoElements, useKlingElements, validateKlingElements,
 } from './useKlingElements'
 import { useUserModels, type UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
@@ -90,7 +90,10 @@ export function usePlaygroundController() {
   // Form state
   const [prompt, setPrompt] = useState('')
   const [refText, setRefText] = useState('')
-  const [refImages, setRefImages] = useState<Array<{ key: string; signedUrl: string }>>([])
+  // Reference images may carry an optional NAME（命名）: non-Kling video
+  // models get a textual 參考圖對應 map prepended by the worker; Kling O3
+  // converts named images into single-image subjects. (2026-07-10)
+  const [refImages, setRefImages] = useState<Array<{ key: string; signedUrl: string; name?: string }>>([])
   const [refVideo, setRefVideo] = useState<{ key: string; signedUrl: string } | null>(null)
   const [outputType, setOutputType] = useState<OutputType>('image')
   const [modelKey, setModelKey] = useState<string>('')
@@ -248,6 +251,10 @@ export function usePlaygroundController() {
     setRefImages((prev) => prev.filter((_, i) => i !== idx))
   }
 
+  function setRefImageName(key: string, name: string) {
+    setRefImages((prev) => prev.map((r) => (r.key === key ? { ...r, name } : r)))
+  }
+
   function removeRefVideo() {
     setRefVideo(null)
   }
@@ -284,35 +291,61 @@ export function usePlaygroundController() {
     if (overrideModelKey && overrideModelKey !== modelKey) {
       setModelKey(overrideModelKey)
     }
-    // Kling O3 named subjects — validate before submit so failures are
-    // instant + actionable (route re-validates server-side).
-    const submitKlingElements = /::kling-o3-/.test(useModelKey) && kling.elements.length > 0
-    if (submitKlingElements) {
-      const { error, unmentioned } = validateKlingElements(kling.elements, effectivePrompt)
-      if (error) {
-        alert(error)
+    // Kling O3 named subjects — explicit 主體 cards merged with NAMED plain
+    // reference images (each becomes a single-image subject). Validate
+    // before submit so failures are instant (route re-validates).
+    const isKlingKey = /::kling-o3-/.test(useModelKey)
+    let klingSubmitElements: Array<{ name: string; imageKeys: string[] }> = []
+    let klingPlainImageKeys: string[] = refImages.map((r) => r.key)
+    if (isKlingKey) {
+      const merged = mergeNamedRefImagesIntoElements(
+        kling.elements.map((el) => ({ name: el.name, imageKeys: el.images.map((im) => im.key) })),
+        refImages,
+      )
+      if (merged.error) {
+        alert(merged.error)
         return
       }
-      // Soft nudge: unreferenced subjects still bind, just weaker — confirm
-      // rather than block.
-      if (unmentioned.length > 0) {
-        const ok = confirm(
-          `提示詞裡沒有提到：${unmentioned.join('、')}。\n` +
-          '在 prompt 裡直接打主體名字綁定效果最好。仍要送出嗎？',
-        )
-        if (!ok) return
+      klingSubmitElements = merged.elements
+      klingPlainImageKeys = merged.plainImageKeys
+      if (klingSubmitElements.length > 0) {
+        const drafts = klingSubmitElements.map((el) => ({
+          id: el.name, name: el.name,
+          images: el.imageKeys.map((k) => ({ key: k, signedUrl: '' })),
+        }))
+        const { error, unmentioned } = validateKlingElements(drafts, effectivePrompt)
+        if (error) {
+          alert(error)
+          return
+        }
+        // Soft nudge: unreferenced subjects still bind, just weaker —
+        // confirm rather than block.
+        if (unmentioned.length > 0) {
+          const ok = confirm(
+            `提示詞裡沒有提到：${unmentioned.join('、')}。\n` +
+            '在 prompt 裡直接打主體名字綁定效果最好。仍要送出嗎？',
+          )
+          if (!ok) return
+        }
       }
     }
+    const submitKlingElements = isKlingKey && klingSubmitElements.length > 0
+    // Non-Kling video with named images → worker prepends the 參考圖對應
+    // textual map (Seedance-class has no API-level named binding).
+    const referenceImageNames = refImages.map((r) => r.name?.trim() || null)
+    const hasNamedImages = referenceImageNames.some(Boolean)
     // Kling O3 keys skip the t2v/i2v/r2v sibling remap — the family has a
     // single r2v endpoint and the dash regex would otherwise hunt for a
     // nonexistent kling-o3-*-i2v sibling.
-    const effectiveModelKey = outputType === 'video' && refImages.length > 0 && !/::kling-o3-/.test(useModelKey)
+    const effectiveModelKey = outputType === 'video' && refImages.length > 0 && !isKlingKey
       ? variantKeyForMode(useModelKey, videoRefMode, videoModels.map((m) => m.value))
       : useModelKey
     try {
       const result = await submit.mutateAsync({
         prompt: effectivePrompt,
-        referenceImages: refImages.map((r) => r.key),
+        // Kling: named images ride the elements payload instead (else the
+        // same image would count twice — once bound, once plain).
+        referenceImages: isKlingKey ? klingPlainImageKeys : refImages.map((r) => r.key),
         referenceVideos: refVideo ? [refVideo.key] : [],
         referenceText: refText.trim() || undefined,
         outputType,
@@ -320,8 +353,9 @@ export function usePlaygroundController() {
         aspectRatio,
         ...(outputType === 'video' ? { durationSec } : {}),
         ...(showResolutionPicker ? { resolution } : {}),
-        ...(submitKlingElements
-          ? { elements: kling.elements.map((el) => ({ name: el.name.trim(), imageKeys: el.images.map((im) => im.key) })) }
+        ...(submitKlingElements ? { elements: klingSubmitElements } : {}),
+        ...(!isKlingKey && outputType === 'video' && hasNamedImages
+          ? { referenceImageNames }
           : {}),
       })
       const row: PlaygroundRunRow = {
@@ -440,7 +474,7 @@ export function usePlaygroundController() {
     allRuns, imageRuns, videoRuns,
     // handlers
     insertReferenceToken,
-    handleImagePick, handleVideoPick, removeRefImage, removeRefVideo,
+    handleImagePick, handleVideoPick, removeRefImage, removeRefVideo, setRefImageName,
     addElement: kling.addElement,
     removeElement: kling.removeElement,
     setElementName: kling.setElementName,

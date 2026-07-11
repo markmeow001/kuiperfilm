@@ -23,7 +23,7 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
     videoRefMode, setVideoRefMode, modelKey, videoModels,
     isBusy, imageInputRef, videoInputRef,
     handleImagePick, handleVideoPick, removeRefImage, removeRefVideo,
-    insertReferenceToken, isKlingO3Model, refImagesCap,
+    insertReferenceToken, isKlingO3Model, refImagesCap, setRefImageName,
   } = ctrl
 
   return (
@@ -97,17 +97,36 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
             onChange={handleImagePick}
           />
           {refImages.map((ref, idx) => (
-            <div key={ref.key} className="group relative aspect-square overflow-hidden rounded-sm border border-violet-500/40">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={ref.signedUrl} alt={`ref ${idx + 1}`} className="h-full w-full object-cover" />
-              <div className="absolute left-1 top-1 rounded-sm bg-stone-950/80 px-1 font-mono text-[10px] text-amber-300">{idx + 1}</div>
-              <button
-                type="button"
-                onClick={() => removeRefImage(idx)}
-                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-stone-950/80 text-stone-300 opacity-0 transition-opacity hover:bg-rose-500/80 hover:text-white group-hover:opacity-100"
-              >
-                ×
-              </button>
+            <div key={ref.key} className="min-w-0">
+              <div className="group relative aspect-square overflow-hidden rounded-sm border border-violet-500/40">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ref.signedUrl} alt={`ref ${idx + 1}`} className="h-full w-full object-cover" />
+                <div className="absolute left-1 top-1 rounded-sm bg-stone-950/80 px-1 font-mono text-[10px] text-amber-300">{idx + 1}</div>
+                <button
+                  type="button"
+                  onClick={() => removeRefImage(idx)}
+                  className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-stone-950/80 text-stone-300 opacity-0 transition-opacity hover:bg-rose-500/80 hover:text-white group-hover:opacity-100"
+                >
+                  ×
+                </button>
+              </div>
+              {/* 命名（選填）— video only. Non-Kling: the worker prepends a
+                  參考圖對應 map binding this name to image N; Kling O3: a
+                  named image becomes a single-image bound subject. */}
+              {outputType === 'video' ? (
+                <input
+                  type="text"
+                  value={ref.name ?? ''}
+                  onChange={(e) => setRefImageName(ref.key, e.target.value)}
+                  disabled={isBusy}
+                  placeholder="命名"
+                  maxLength={80}
+                  title={isKlingO3Model
+                    ? '命名後此圖成為具名主體，prompt 打名字即綁定'
+                    : '命名後送出時自動附「參考圖對應」表，模型才知道 @名字 對應哪張圖'}
+                  className="mt-1 w-full rounded-sm border border-stone-800 bg-stone-950/60 px-1 py-0.5 text-center font-mono text-[10px] text-stone-300 outline-none placeholder:text-stone-700 focus:border-violet-500/40"
+                />
+              ) : null}
             </div>
           ))}
         </div>
@@ -119,17 +138,22 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
         {(refImages.length > 0 || refVideo) ? (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="mr-1 font-mono text-[10px] uppercase tracking-wider text-stone-600">引用</span>
-            {refImages.map((_, idx) => {
-              const token = `@image${idx + 1}`
+            {refImages.map((ref, idx) => {
+              // Named image: insert the NAME (that's what the 參考圖對應 map /
+              // Kling element binds on); unnamed: positional @imageN.
+              const named = ref.name?.trim()
+              const token = named || `@image${idx + 1}`
               return (
                 <button
                   type="button"
-                  key={`tok-${token}`}
+                  key={`tok-${ref.key}`}
                   onClick={() => insertReferenceToken(token)}
-                  title={`插入 ${token} 引用第 ${idx + 1} 張參考圖`}
+                  title={named
+                    ? `插入「${named}」（已綁定第 ${idx + 1} 張參考圖）`
+                    : `插入 @image${idx + 1} 引用第 ${idx + 1} 張參考圖`}
                   className="rounded-sm border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[11px] text-violet-300 hover:bg-violet-500/20"
                 >
-                  {token}
+                  {named ? `${idx + 1}·${named}` : token}
                 </button>
               )
             })}

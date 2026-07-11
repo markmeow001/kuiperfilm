@@ -50,6 +50,8 @@ export interface PlaygroundRunSubmission {
   lastFrameUrl?: string
   /** Kling O3 具名主体绑定（≤6 × 1-4 图）；prompt 打名字，worker 换 <<<element_N>>>。 */
   elements?: Array<{ name: string; imageKeys: string[] }>
+  /** 非 Kling video：與 referenceImages 對齊的命名陣列，worker 前置「參考圖對應」映射表。 */
+  referenceImageNames?: Array<string | null>
   outputType: 'image' | 'video'
   modelKey: string
   resolution?: string
