@@ -6331,6 +6331,24 @@
     }
   },
   {
+    "apiType": "video",
+    "provider": "atlascloud",
+    "modelId": "kling-o3-std-r2v",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.56
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "atlascloud",
+    "modelId": "kling-o3-pro-r2v",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.75
+    }
+  },
+  {
     "apiType": "image",
     "provider": "tencent-vod",
     "modelId": "GEM-3.1",
