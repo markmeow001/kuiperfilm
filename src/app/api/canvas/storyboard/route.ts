@@ -50,7 +50,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (!model) {
     throw new ApiError('FORBIDDEN', {
       code: 'ANALYSIS_MODEL_NOT_CONFIGURED',
-      details: { message: '请先在 /profile 配置文本分析模型' },
+      // message 顶层放置——ApiError 从 details.message 提取用户可读文案，
+      // 嵌套进 details.details 会显示裸 'Forbidden'（2026-07-13 画布实测发现）
+      message: '请先在 /profile 配置文本分析模型',
     })
   }
 

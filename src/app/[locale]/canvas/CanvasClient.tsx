@@ -590,6 +590,10 @@ function CanvasInner() {
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
         onDoubleClick={onPaneDoubleClick}
+        // RF 默认 zoomOnDoubleClick 会让 d3-zoom 吃掉双击——「双击画布添加
+        // 节点」菜单从未真正触发过（2026-07-13 画布功能实测发现）。缩放走
+        // 滚轮/±按钮，双击专职建节点。
+        zoomOnDoubleClick={false}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={() => { setCtxMenu(null); setMenu(null) }}
         onInit={(inst) => {
