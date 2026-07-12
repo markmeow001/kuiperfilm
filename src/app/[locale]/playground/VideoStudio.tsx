@@ -10,10 +10,12 @@
  * Keeps KuiperAI's amber-on-stone identity.
  */
 
+import { useMemo, useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
 import { ElementBindingsPanel } from './ElementBindingsPanel'
 import { KLING_O3_ASPECT_RATIO_VALUES } from './useKlingElements'
+import { PromptHighlightBackdrop } from './PromptHighlight'
 import { ReferencePanel } from './ReferencePanel'
 import { ASPECT_RATIO_OPTIONS, playgroundDownloadHref, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
 
@@ -37,6 +39,24 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
     }
   }
 
+  // Bound subject names in BINDING ORDER — Kling: 主體 cards first, then
+  // NAMED reference images (mirrors mergeNamedRefImagesIntoElements);
+  // non-Kling video: named images bind via the 參考圖對應 map. Drives the
+  // in-prompt highlight so users see exactly what will bind on submit.
+  const highlightRef = useRef<HTMLDivElement | null>(null)
+  const boundNames = useMemo(() => {
+    const named = ctrl.refImages.filter((r) => r.name?.trim()).map((r) => (r.name as string).trim())
+    return ctrl.isKlingO3Model
+      ? [...ctrl.elements.map((el) => el.name.trim()).filter(Boolean), ...named]
+      : named
+  }, [ctrl.refImages, ctrl.elements, ctrl.isKlingO3Model])
+  function syncHighlightScroll(e: React.UIEvent<HTMLTextAreaElement>) {
+    if (highlightRef.current) highlightRef.current.scrollTop = e.currentTarget.scrollTop
+  }
+  // Backdrop box metrics MUST mirror the textarea's (padding/border/font/
+  // wrapping) or the marks drift off the words.
+  const PROMPT_TYPO = 'p-3 text-[14px] leading-relaxed whitespace-pre-wrap break-words'
+
   // The staged run — its live status comes from latestRun when it's the same id.
   const staged: PlaygroundRun | null =
     stageRun && latestRun && stageRun.id === latestRun.id ? latestRun : stageRun
@@ -53,15 +73,26 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
       <div className="flex w-[340px] flex-shrink-0 flex-col overflow-y-auto border-r border-stone-800 p-4 xl:w-[400px] 2xl:w-[440px]">
         <div className="mb-3 font-mono text-[12px] uppercase tracking-wider text-stone-500">生成設定</div>
 
-        <textarea
-          ref={promptRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={onPromptKeyDown}
-          rows={9}
-          placeholder="描述你想生成的影片場景與動作... 用 @image1 引用參考素材"
-          className="mb-4 min-h-[140px] w-full resize-y rounded-lg border border-stone-800 bg-stone-950/60 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
-        />
+        <div className="relative mb-4 rounded-lg bg-stone-950/60">
+          {boundNames.length > 0 ? (
+            <PromptHighlightBackdrop
+              prompt={prompt}
+              names={boundNames}
+              backdropRef={highlightRef}
+              className={`pointer-events-none absolute inset-0 overflow-hidden rounded-lg border border-transparent text-transparent ${PROMPT_TYPO}`}
+            />
+          ) : null}
+          <textarea
+            ref={promptRef}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={onPromptKeyDown}
+            onScroll={syncHighlightScroll}
+            rows={9}
+            placeholder="描述你想生成的影片場景與動作... 用 @image1 引用參考素材"
+            className={`relative min-h-[140px] w-full resize-y rounded-lg border border-stone-800 bg-transparent text-stone-200 outline-none focus:border-amber-500/40 ${PROMPT_TYPO}`}
+          />
+        </div>
 
         <div className="mb-4">
           <ReferencePanel ctrl={ctrl} />

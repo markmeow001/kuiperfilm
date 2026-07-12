@@ -16,7 +16,53 @@
  *  - every occurrence is replaced, not just the first
  */
 import { describe, expect, it } from 'vitest'
-import { buildRefImageMapSection, replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
+import {
+  buildRefImageMapSection,
+  findElementNameMatches,
+  replaceElementNamesWithTokens,
+} from '@/lib/playground/element-tokens'
+
+describe('findElementNameMatches (prompt highlight ranges)', () => {
+  it('returns ranges with the ORIGINAL name index (for per-subject colors)', () => {
+    const m = findElementNameMatches('Bob greets Alice', ['Alice', 'Bob'])
+    expect(m).toEqual([
+      { start: 0, end: 3, nameIndex: 1 },
+      { start: 11, end: 16, nameIndex: 0 },
+    ])
+  })
+
+  it('includes the leading @ in the range (it is consumed on submit)', () => {
+    const m = findElementNameMatches('看 @Maeve 走', ['Maeve'])
+    expect(m).toEqual([{ start: 2, end: 8, nameIndex: 0 }])
+  })
+
+  it('longer names claim overlapping text first', () => {
+    const m = findElementNameMatches('VeraMom hugs Vera', ['Vera', 'VeraMom'])
+    expect(m).toEqual([
+      { start: 0, end: 7, nameIndex: 1 },
+      { start: 13, end: 17, nameIndex: 0 },
+    ])
+  })
+
+  it('ASCII names respect word boundaries; CJK substring-matches', () => {
+    expect(findElementNameMatches('Vera on the Veranda', ['Vera'])).toEqual([
+      { start: 0, end: 4, nameIndex: 0 },
+    ])
+    expect(findElementNameMatches('小美在古宅前', ['古宅'])).toEqual([
+      { start: 3, end: 5, nameIndex: 0 },
+    ])
+  })
+
+  it('every occurrence is returned, sorted by start', () => {
+    const m = findElementNameMatches('Vera 說 Vera 好', ['Vera'])
+    expect(m.map((x) => x.start)).toEqual([0, 7])
+  })
+
+  it('empty names / no hits → empty array', () => {
+    expect(findElementNameMatches('nothing here', ['Vera'])).toEqual([])
+    expect(findElementNameMatches('x', [])).toEqual([])
+  })
+})
 
 describe('buildRefImageMapSection', () => {
   it('maps named images by 1-based position, skipping unnamed', () => {
