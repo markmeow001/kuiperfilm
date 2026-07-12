@@ -127,6 +127,8 @@ export async function handlePlaygroundVideoTask(
     ...(duration ? { duration } : {}),
     ...(aspectRatio ? { aspectRatio } : {}),
     ...(resolution ? { resolution } : {}),
+    // 🔊 audio toggle (2026-07-12) — absent = generator default (on).
+    ...(typeof payload.generateAudio === 'boolean' ? { generateAudio: payload.generateAudio } : {}),
     // 首尾帧: the leading image is the first frame; this is the last frame.
     // Generators that support it (fal / Minimax / BobAPI) read lastFrameImageUrl
     // and switch to first-last-frame mode; others ignore the extra option.

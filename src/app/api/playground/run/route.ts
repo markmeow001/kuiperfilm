@@ -94,6 +94,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     locale: rawLocale,
     elements: rawElements,
     referenceImageNames: rawRefImageNames,
+    generateAudio: rawGenerateAudio,
   } = body as {
     prompt?: unknown
     referenceImages?: unknown
@@ -109,6 +110,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     locale?: unknown
     elements?: unknown
     referenceImageNames?: unknown
+    generateAudio?: unknown
   }
 
   // Validate. Every reject carries a human-readable `message` — ApiError falls
@@ -330,6 +332,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ...(lastFrameSafe ? { lastFrameUrl: lastFrameSafe } : {}),
     ...(elements.length > 0 ? { elements } : {}),
     ...(referenceImageNames.some(Boolean) ? { referenceImageNames } : {}),
+    // 🔊 audio toggle (2026-07-12) — only a literal boolean passes through;
+    // anything else falls back to the generator default (on).
+    ...(typeof rawGenerateAudio === 'boolean' ? { generateAudio: rawGenerateAudio } : {}),
     ...(normalizedResolution ? { resolution: normalizedResolution } : {}),
     ...(typeof aspectRatio === 'string' ? { aspectRatio } : {}),
     ...(normalizedDuration ? { duration: normalizedDuration } : {}),
