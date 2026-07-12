@@ -647,7 +647,14 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
     const next = clampShots([...state.shots, shot])
     setState((s) => ({ ...s, shots: next }))
     setSelectedShotId(shot.id)
+    setSelectedId(null) // 清掉场景对象选中——否则对象检查器压住镜头检查器（smoke 发现）
   }, [currentCameraPose, currentActorPlacements, state.shots])
+
+  /** 时间轴选镜头：同时取消场景对象选中，让镜头检查器出得来。 */
+  const selectShot = useCallback((id: string | null) => {
+    setSelectedShotId(id)
+    if (id) setSelectedId(null)
+  }, [])
 
   const patchShot = useCallback((id: string, patch: Partial<StageShot>) => {
     setState((s) => ({ ...s, shots: clampShots(s.shots.map((x) => (x.id === id ? { ...x, ...patch } : x))) }))
@@ -1126,7 +1133,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         shots={state.shots}
         selectedShotId={selectedShotId}
         playback={playback}
-        onSelectShot={setSelectedShotId}
+        onSelectShot={selectShot}
         onAddShot={addShot}
         onToggleRoutes={onGenerateRoutes ? () => setRoutesOpen((v) => !v) : undefined}
         routesOpen={routesOpen}
