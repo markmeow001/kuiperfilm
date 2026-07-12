@@ -32,6 +32,7 @@ import { useCanvasGeneration } from '../lib/canvas-generation'
 import { NodeShell } from './node-shell'
 import { DEFAULT_STAGE, normalizeStage, type DirectorStageState } from '../director/stage-types'
 import type { PrevizExportPayload } from '../director/DirectorStage'
+import type { DirectorRoutePlan } from '@/lib/canvas/director-routes-schema'
 
 const DirectorStage = dynamic(() => import('../director/DirectorStage').then((m) => m.DirectorStage), {
   ssr: false,
@@ -169,6 +170,34 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
     return { videoUrl: json.videoUrl ?? '' }
   }
 
+  /**
+   * AI 导演路线（S4）：提交 CANVAS_DIRECTOR_ROUTES → 轮询 /api/tasks/[id]
+   * 到完成 → 返回方案列表（generateImage 的同款 await-loop 轮询）。
+   */
+  async function handleGenerateRoutes(description: string, castNames: string[], propNames: string[]): Promise<DirectorRoutePlan[]> {
+    const res = await fetch('/api/canvas/director-routes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description, cast: castNames, props: propNames }),
+    })
+    const json = await res.json().catch(() => null) as { taskId?: string; error?: { message?: string } } | null
+    if (!res.ok || !json?.taskId) throw new Error(json?.error?.message ?? `提交失败（${res.status}）`)
+    const deadline = Date.now() + 3 * 60 * 1000
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2000))
+      const poll = await fetch(`/api/tasks/${json.taskId}`)
+      if (!poll.ok) continue
+      const { task } = (await poll.json()) as { task?: { status: string; result?: { plans?: DirectorRoutePlan[] }; error?: { message?: string } } }
+      if (task?.status === 'completed') {
+        const plans = task.result?.plans ?? []
+        if (plans.length === 0) throw new Error('模型没有产出可用方案，请换个描述重试')
+        return plans
+      }
+      if (task?.status === 'failed') throw new Error(task?.error?.message ?? '方案生成失败')
+    }
+    throw new Error('方案生成超时，请重试')
+  }
+
   return (
     <>
       <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={240}>
@@ -202,6 +231,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
               onSendShot={handleSendShot}
               onExportPreviz={handleExportPreviz}
               onPersistState={(s) => updateNodeData(id, { stage: s })}
+              onGenerateRoutes={handleGenerateRoutes}
               saving={upload.isPending}
               uploadImage={async (file) => {
                 const res = await upload.mutateAsync({ file, type: 'image' })

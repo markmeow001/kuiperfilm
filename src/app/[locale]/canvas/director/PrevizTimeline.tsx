@@ -31,9 +31,12 @@ export interface PrevizTimelineProps {
   onExportAspect?: (a: '9:16' | '16:9') => void
   downloadAfterExport?: boolean
   onDownloadAfterExport?: (v: boolean) => void
+  /** AI 导演路线面板开关（S4）。 */
+  onToggleRoutes?: () => void
+  routesOpen?: boolean
 }
 
-export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, onAddShot, onExport, exporting, exportAspect = '9:16', onExportAspect, downloadAfterExport, onDownloadAfterExport }: PrevizTimelineProps) {
+export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, onAddShot, onExport, exporting, exportAspect = '9:16', onExportAspect, downloadAfterExport, onDownloadAfterExport, onToggleRoutes, routesOpen }: PrevizTimelineProps) {
   const total = totalDurationSec(shots)
   const remaining = MAX_SCENE_SEC - total
   const selectedIndex = shots.findIndex((s) => s.id === selectedShotId)
@@ -72,6 +75,9 @@ export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, 
     >
       {/* transport + 全局进度 */}
       <div className="mb-1.5 flex items-center gap-1.5">
+        {onToggleRoutes ? (
+          <button type="button" className={btn} onClick={onToggleRoutes} title="AI 生成 2-3 套导演路线方案" style={{ background: routesOpen ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: routesOpen ? CANVAS_TOKENS.accentText : CANVAS_TOKENS.accent }}>✨ AI 路线</button>
+        ) : null}
         <button type="button" className={btn} disabled={shots.length === 0} onClick={() => step(-1)} style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary }}>上一镜</button>
         <button
           type="button"

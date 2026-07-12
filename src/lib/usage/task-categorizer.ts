@@ -78,6 +78,7 @@ const ANALYZE_TYPES = new Set<string>([
   'ai_modify_shot_prompt',
   'regenerate_storyboard_text',
   'canvas_storyboard',
+  'canvas_director_routes',
   'canvas_text',
 ])
 

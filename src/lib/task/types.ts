@@ -93,6 +93,7 @@ export const TASK_TYPE = {
   // storyboard shots (text-only). Rides the text worker; result JSON is read
   // back via /api/tasks/[taskId]. Uses the 'playground' virtual project id.
   CANVAS_STORYBOARD: 'canvas_storyboard',
+  CANVAS_DIRECTOR_ROUTES: 'canvas_director_routes',
   // Canvas 无限画布 text node writing assistant (扩写/改写/润色/续写) — text-only,
   // rides the text worker; plain-text result read back via /api/tasks/[taskId].
   CANVAS_TEXT: 'canvas_text',

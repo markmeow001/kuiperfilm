@@ -23,6 +23,7 @@ import { reportTaskProgress, reportTaskStreamChunk, withTaskLifecycle } from './
 import { assertTaskActive } from './utils'
 import { handleStoryToScriptTask } from './handlers/story-to-script'
 import { handleCanvasStoryboardTask } from './handlers/canvas-storyboard'
+import { handleCanvasDirectorRoutesTask } from '@/lib/workers/handlers/canvas-director-routes'
 import { handleCanvasTextTask } from './handlers/canvas-text'
 import { handleScriptToStoryboardTask } from './handlers/script-to-storyboard'
 import { handleVoiceAnalyzeTask } from './handlers/voice-analyze'
@@ -678,6 +679,8 @@ async function processTextTask(job: Job<TaskJobData>) {
       return await handleRegisterArkAssetTask(job)
     case TASK_TYPE.CANVAS_STORYBOARD:
       return await handleCanvasStoryboardTask(job)
+    case TASK_TYPE.CANVAS_DIRECTOR_ROUTES:
+      return await handleCanvasDirectorRoutesTask(job)
     case TASK_TYPE.CANVAS_TEXT:
       return await handleCanvasTextTask(job)
     default:

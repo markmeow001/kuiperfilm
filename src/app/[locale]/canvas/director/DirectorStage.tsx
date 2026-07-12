@@ -53,7 +53,10 @@ import { RigPanel } from './RigPanel'
 import { CameraPanel } from './CameraPanel'
 import { buildPrevizDirectorText } from './previz-director-text'
 import { computeExportCrop, recordPrevizClip } from './previz-record'
+import { RoutePlansPanel } from './RoutePlansPanel'
+import { materializeRoutePlan } from './route-materialize'
 import type { PrevizCrop } from '@/lib/canvas/previz-transcode'
+import type { DirectorRoutePlan } from '@/lib/canvas/director-routes-schema'
 
 const DEG2RAD = Math.PI / 180
 const uid = () =>
@@ -473,6 +476,8 @@ interface DirectorStageProps {
    * 全部排练不可接受（review 2026-07-13 HIGH#4）。
    */
   onPersistState?: (state: DirectorStageState) => void
+  /** AI 导演路线：提交 CANVAS_DIRECTOR_ROUTES 任务并轮询到完成（S4）。 */
+  onGenerateRoutes?: (description: string, cast: string[], props: string[]) => Promise<DirectorRoutePlan[]>
   /** Names of character nodes wired into the director (the cast), for display. */
   castLabels?: string[]
   saving?: boolean
@@ -488,7 +493,7 @@ interface DirectorStageProps {
 
 const PANORAMA_PROMPT = '将这张场景图转换为无缝衔接的 360° 等距圆柱全景图（equirectangular panorama，2:1），左右边缘可平滑环绕拼接，保持原场景的风格、光线与氛围，适合作为环境背景球贴图'
 
-export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, onPersistState, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
+export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, onPersistState, onGenerateRoutes, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -521,6 +526,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
   const [downloadAfterExport, setDownloadAfterExport] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [recording, setRecording] = useState(false)
+  const [routesOpen, setRoutesOpen] = useState(false)
   const selectedShotIndex = state.shots.findIndex((s) => s.id === selectedShotId)
   const selectedShot = selectedShotIndex >= 0 ? state.shots[selectedShotIndex] : null
   const playback = usePrevizPlayback(state.shots, selectedShotIndex)
@@ -721,6 +727,18 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
       patchShot(selectedShot.id, { movePaths: { ...(selectedShot.movePaths ?? {}), [desc.actorId]: list } })
     }
   }, [selectedShot, patchShot])
+
+  /** 应用 AI 导演路线方案 → 物化成镜头序列（覆盖已有序列前确认）。 */
+  const applyRoutePlan = useCallback((plan: DirectorRoutePlan) => {
+    if (state.shots.length > 0 && !window.confirm(`应用「${plan.name}」将替换现有 ${state.shots.length} 个镜头，确定？`)) return
+    const shots = materializeRoutePlan(plan, state.mannequins, state.props)
+    if (shots.length === 0) { setToast('方案没有可用镜头'); return }
+    setState((s) => ({ ...s, shots }))
+    setSelectedShotId(shots[0].id)
+    playback.exit()
+    setRoutesOpen(false)
+    setToast(`✓ 已应用「${plan.name}」：${shots.length} 个镜头，可逐镜微调起幅/落幅`)
+  }, [state.shots.length, state.mannequins, state.props, playback])
 
   /** 导出预演：锁 1x 实时播放 + 录制画布 → 交给 onExportPreviz 上传转码。 */
   const exportPreviz = useCallback(async (scope: 'shot' | 'scene') => {
@@ -1093,6 +1111,16 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
 
       <input ref={bgInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPickBackground} />
 
+      {/* AI 导演路线方案面板 */}
+      {routesOpen && onGenerateRoutes ? (
+        <RoutePlansPanel
+          onClose={() => setRoutesOpen(false)}
+          castLabels={state.mannequins.map((m) => m.label)}
+          onGenerate={(description) => onGenerateRoutes(description, state.mannequins.map((m) => m.label), state.props.map((p) => p.label))}
+          onApply={applyRoutePlan}
+        />
+      ) : null}
+
       {/* previz 时间轴 — 有镜头或选中镜头时常驻；空序列只显示「+」入口 */}
       <PrevizTimeline
         shots={state.shots}
@@ -1100,6 +1128,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         playback={playback}
         onSelectShot={setSelectedShotId}
         onAddShot={addShot}
+        onToggleRoutes={onGenerateRoutes ? () => setRoutesOpen((v) => !v) : undefined}
+        routesOpen={routesOpen}
         exporting={exporting}
         exportAspect={exportAspect}
         onExportAspect={setExportAspect}
