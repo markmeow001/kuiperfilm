@@ -77,6 +77,15 @@ describe('replaceElementNamesWithTokens', () => {
     ).toBe('a cat sleeps')
   })
 
+  it('swallows a leading @ before the name (storyboard-carried @Name prompts)', () => {
+    // Storyboard prompts arrive as @Maeve / @客廳; the @ is not part of the
+    // subject name, so replacement should consume it instead of leaving a
+    // stray "@<<<element_1>>>" in the prompt. (2026-07-12)
+    expect(
+      replaceElementNamesWithTokens('@Maeve 走向 @客廳，Maeve 回頭', ['Maeve', '客廳']),
+    ).toBe('<<<element_1>>> 走向 <<<element_2>>>，<<<element_1>>> 回頭')
+  })
+
   it('escapes regex-special characters in names', () => {
     expect(
       replaceElementNamesWithTokens('Mr. X (agent) appears', ['Mr. X (agent)']),

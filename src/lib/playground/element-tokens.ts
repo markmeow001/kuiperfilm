@@ -60,9 +60,12 @@ export function replaceElementNamesWithTokens(prompt: string, names: readonly st
   let out = prompt
   for (const { name, token } of ordered) {
     const escaped = escapeRegExp(name)
+    // `@?` swallows the storyboard-carried @Name prefix — the @ is prompt
+    // sugar, not part of the subject name; leaving it produced a stray
+    // "@<<<element_N>>>". (2026-07-12)
     const pattern = isAsciiWordName(name)
-      ? new RegExp(`\\b${escaped}\\b`, 'g')
-      : new RegExp(escaped, 'g')
+      ? new RegExp(`@?\\b${escaped}\\b`, 'g')
+      : new RegExp(`@?${escaped}`, 'g')
     out = out.replace(pattern, token)
   }
   return out
