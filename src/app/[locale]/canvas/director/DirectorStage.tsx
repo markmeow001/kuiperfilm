@@ -38,6 +38,11 @@ import {
   makeCamera,
   makeMannequin,
 } from './stage-types'
+import { MAX_SCENE_SEC, SHOT_MIN_SEC, clampShots, makeShot, totalDurationSec, type ShotKeyframe, type StageShot } from './previz-types'
+import { usePrevizPlayback } from './use-previz-playback'
+import { PrevizDriver } from './PrevizDriver'
+import { PrevizTimeline } from './PrevizTimeline'
+import { PrevizShotPanel } from './PrevizShotPanel'
 
 const RAD2DEG = 180 / Math.PI
 const DEG2RAD = Math.PI / 180
@@ -129,6 +134,8 @@ interface SceneProps {
   showGrid: boolean
   showGround: boolean
   showLabels: boolean
+  /** previz 播放驱动（激活时命令式接管相机+人偶，锁 orbit/gizmo）。 */
+  previz: { active: boolean; getTimeSec: () => number }
   onSelect: (id: string | null) => void
   onCommitMannequin: (id: string, patch: Partial<StageMannequin>) => void
   onCommitCamera: (id: string, patch: Partial<StageCamera>) => void
@@ -138,7 +145,7 @@ interface SceneProps {
   onBgError?: () => void
 }
 
-function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
+function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, previz, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
   const { gl, scene, camera: viewCamera } = useThree()
   const helpersRef = useRef<THREE.Group>(null)
   const backdropRef = useRef<THREE.Mesh>(null)
@@ -244,12 +251,13 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
     }
   }, [activeShot, viewCamera, state.mannequins])
 
-  // SINGLE owner of orbit.enabled: free in 导演视角, locked in 机位视角.
-  // Re-runs on selection change too, so an interrupted gizmo drag can't leave
-  // orbit stuck disabled.
+  // SINGLE owner of orbit.enabled: free in 导演视角, locked in 机位视角 and
+  // during previz playback (the driver owns the camera then). Re-runs on
+  // selection change too, so an interrupted gizmo drag can't leave orbit
+  // stuck disabled.
   useEffect(() => {
-    if (orbitRef.current) orbitRef.current.enabled = view === 'director'
-  }, [view, selectedId])
+    if (orbitRef.current) orbitRef.current.enabled = view === 'director' && !previz.active
+  }, [view, selectedId, previz.active])
 
   const selectedObject: THREE.Object3D | null = selectedId
     ? selectedId.startsWith('cam:')
@@ -272,6 +280,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
   return (
     <>
       <SceneBackground bg={state.background ?? DEFAULT_BACKGROUND} onError={onBgError} backdropRef={backdropRef} key={state.background?.url ?? 'none'} />
+      <PrevizDriver active={previz.active} shots={state.shots} getTimeSec={previz.getTimeSec} mannequinRefs={mannequinRefs} mannequins={state.mannequins} />
       <hemisphereLight args={['#ffffff', '#2a2a30', 0.85]} />
       <directionalLight position={[4, 8, 5]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
 
@@ -347,8 +356,8 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
         </group>
       ))}
 
-      {/* transform gizmo — not on locked objects, not in 机位视角 */}
-      {selectedObject && view === 'director' && !(selectedId && lockedIds[selectedId.replace(/^(cam|tgt):/, '')]) ? (
+      {/* transform gizmo — not on locked objects, not in 机位视角, not during previz */}
+      {selectedObject && view === 'director' && !previz.active && !(selectedId && lockedIds[selectedId.replace(/^(cam|tgt):/, '')]) ? (
         <TransformControls
           ref={transformRef}
           object={selectedObject}
@@ -411,6 +420,12 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
 
   // Active shot camera for 机位视角 = selected camera, else first.
   const activeShotCamId = (selectedCamIdFromSel(selectedId) ?? state.cameras[0]?.id) ?? null
+
+  // ---- previz (镜头预演) ----
+  const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
+  const selectedShotIndex = state.shots.findIndex((s) => s.id === selectedShotId)
+  const selectedShot = selectedShotIndex >= 0 ? state.shots[selectedShotIndex] : null
+  const playback = usePrevizPlayback(state.shots, selectedShotIndex)
 
   // Measure the stage so the framing overlay matches capture()'s centered
   // max-fit crop exactly (same cw/ch ratio the crop uses).
@@ -489,6 +504,72 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
       }),
     }))
   }, [])
+
+  // ---- previz handlers ----
+
+  /** 当前「摄影机视角」：优先选中的机位（含荷兰角），否则实时 orbit 视角。 */
+  const currentCameraPose = useCallback((): ShotKeyframe['camera'] | null => {
+    const camId = selectedCamIdFromSel(selectedId)
+    const cam = camId ? state.cameras.find((c) => c.id === camId) : null
+    if (cam) return { position: [...cam.position], target: effectiveTarget(cam, state.mannequins), fov: cam.fov, ...(cam.roll ? { roll: cam.roll } : {}) }
+    const live = getViewRef.current?.()
+    if (!live) return null
+    return { position: live.position, target: live.target, fov: live.fov }
+  }, [selectedId, state.cameras, state.mannequins])
+
+  const currentActorPlacements = useCallback((): ShotKeyframe['actors'] => {
+    return Object.fromEntries(state.mannequins.map((m) => [m.id, { position: [...m.position] as Vec3, rotation: [...m.rotation] as Vec3 }]))
+  }, [state.mannequins])
+
+  const addShot = useCallback(() => {
+    const camera = currentCameraPose()
+    if (!camera) { setToast('视角未就绪，请稍候'); return }
+    const remaining = MAX_SCENE_SEC - totalDurationSec(state.shots)
+    if (remaining < SHOT_MIN_SEC) { setToast(`全片已满 ${MAX_SCENE_SEC} 秒（R2V 参考视频上限）`); return }
+    const shot = makeShot(uid(), state.shots.length, camera, currentActorPlacements())
+    const next = clampShots([...state.shots, shot])
+    setState((s) => ({ ...s, shots: next }))
+    setSelectedShotId(shot.id)
+  }, [currentCameraPose, currentActorPlacements, state.shots])
+
+  const patchShot = useCallback((id: string, patch: Partial<StageShot>) => {
+    setState((s) => ({ ...s, shots: clampShots(s.shots.map((x) => (x.id === id ? { ...x, ...patch } : x))) }))
+  }, [])
+
+  const deleteShot = useCallback((id: string) => {
+    setState((s) => ({ ...s, shots: s.shots.filter((x) => x.id !== id) }))
+    setSelectedShotId((cur) => (cur === id ? null : cur))
+  }, [])
+
+  const setShotCamera = useCallback((end: 'start' | 'end') => {
+    if (!selectedShot) return
+    const camera = currentCameraPose()
+    if (!camera) { setToast('视角未就绪，请稍候'); return }
+    patchShot(selectedShot.id, { [end]: { ...selectedShot[end], camera } } as Partial<StageShot>)
+    setToast(`✓ 摄影机已设为${end === 'start' ? '起幅' : '落幅'}`)
+  }, [selectedShot, currentCameraPose, patchShot])
+
+  const setShotActors = useCallback((end: 'start' | 'end') => {
+    if (!selectedShot) return
+    patchShot(selectedShot.id, { [end]: { ...selectedShot[end], actors: currentActorPlacements() } } as Partial<StageShot>)
+    setToast(`✓ 全体摆位已设为${end === 'start' ? '起幅' : '落幅'}`)
+  }, [selectedShot, currentActorPlacements, patchShot])
+
+  const jumpToShotEnd = useCallback((end: 'start' | 'end') => {
+    if (selectedShotIndex < 0) return
+    let acc = 0
+    for (let i = 0; i < selectedShotIndex; i++) acc += state.shots[i].durationSec
+    playback.enter('shot')
+    playback.seek(end === 'start' ? acc : acc + state.shots[selectedShotIndex].durationSec)
+  }, [selectedShotIndex, state.shots, playback])
+
+  const addCameraWaypoint = useCallback(() => {
+    if (!selectedShot) return
+    const camera = currentCameraPose()
+    if (!camera) { setToast('视角未就绪，请稍候'); return }
+    patchShot(selectedShot.id, { cameraWaypoints: [...(selectedShot.cameraWaypoints ?? []), camera.position] })
+    setToast('✓ 已加运镜关键点')
+  }, [selectedShot, currentCameraPose, patchShot])
 
   const sendShot = useCallback(async (cameraId: string) => {
     const cam = state.cameras.find((c) => c.id === cameraId)
@@ -616,6 +697,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           showGrid={showGrid}
           showGround={showGround}
           showLabels={showLabels}
+          previz={{ active: playback.active, getTimeSec: playback.getTimeSec }}
           onSelect={setSelectedId}
           onCommitMannequin={commitMannequin}
           onCommitCamera={commitCamera}
@@ -691,6 +773,20 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
 
       {/* ViewCube reset (top-right, below the gizmo) */}
       <button type="button" onClick={() => resetViewRef.current?.()} className="absolute right-5 top-28 rounded-md px-2 py-1 font-mono text-[11px]" style={{ background: `${CANVAS_TOKENS.bg.card}e6`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>重置视角</button>
+
+      {/* previz 镜头检查器 — 选中镜头且没选中场景对象时显示 */}
+      {selectedShot && !selectedMannequin && !selectedCamera ? (
+        <PrevizShotPanel
+          shot={selectedShot}
+          shots={state.shots}
+          onPatch={patchShot}
+          onDelete={deleteShot}
+          onSetCamera={setShotCamera}
+          onSetActors={setShotActors}
+          onJump={jumpToShotEnd}
+          onAddCameraWaypoint={addCameraWaypoint}
+        />
+      ) : null}
 
       {/* Rig panel — pose presets + per-joint sliders, shown on mannequin select */}
       {selectedMannequin ? (
@@ -781,7 +877,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
       ) : null}
 
       {/* 3D场景 props — shown when nothing is selected */}
-      {!selectedMannequin && !selectedCamera ? (
+      {!selectedMannequin && !selectedCamera && !selectedShot ? (
         <div className="absolute right-4 top-16 bottom-16 w-60 overflow-y-auto rounded-xl p-3" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
           <div className="mb-2 font-mono text-[12px]" style={{ color: CANVAS_TOKENS.text.primary }}>3D场景</div>
           {([['角色标签', showLabels, setShowLabels], ['网格', showGrid, setShowGrid], ['地面', showGround, setShowGround]] as const).map(([label, val, set]) => (
@@ -843,6 +939,15 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
       ) : null}
 
       <input ref={bgInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPickBackground} />
+
+      {/* previz 时间轴 — 有镜头或选中镜头时常驻；空序列只显示「+」入口 */}
+      <PrevizTimeline
+        shots={state.shots}
+        selectedShotId={selectedShotId}
+        playback={playback}
+        onSelectShot={setSelectedShotId}
+        onAddShot={addShot}
+      />
 
       {/* close dock dropdowns on outside click */}
       {addMenu || aspectMenu ? <div className="absolute inset-0 z-[9]" onClick={() => { setAddMenu(false); setAspectMenu(false) }} /> : null}
