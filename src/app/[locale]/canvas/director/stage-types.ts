@@ -11,6 +11,7 @@
  * Pure data (no three.js) so it serializes into the Canvas DB via data.stage.
  */
 import { REST_POSE, type Pose } from './pose-presets'
+import { normalizeShots, type StageShot } from './previz-types'
 
 export type Vec3 = [number, number, number]
 
@@ -90,6 +91,8 @@ export interface DirectorStageState {
   cameras: StageCamera[]
   aspect?: StageAspect
   background?: StageBackground
+  /** previz 镜头序列 (v3) — see previz-types.ts. */
+  shots: StageShot[]
 }
 
 export type TransformMode = 'translate' | 'rotate' | 'scale'
@@ -99,6 +102,7 @@ const MANNEQUIN_COLORS = ['#6FA8FF', '#FF9E6F', '#7BE3A4', '#C8A2FF', '#F4C44E',
 export const DEFAULT_STAGE: DirectorStageState = {
   mannequins: [],
   cameras: [{ id: 'cam-1', label: '机位1', position: [0, 1.6, 4.5], target: [0, 1, 0], fov: 45 }],
+  shots: [],
 }
 
 export function makeMannequin(id: string, index: number, bodyType: BodyType = 'male'): StageMannequin {
@@ -182,5 +186,6 @@ export function normalizeStage(raw: unknown): DirectorStageState {
   const background: StageBackground = rawBg && typeof rawBg === 'object'
     ? { ...DEFAULT_BACKGROUND, ...rawBg, mode: (['none', 'flat', 'sphere'] as const).includes(rawBg.mode as BackgroundMode) ? (rawBg.mode as BackgroundMode) : 'none' }
     : { ...DEFAULT_BACKGROUND }
-  return { mannequins, cameras, aspect, background }
+  const shots = normalizeShots((r as { shots?: unknown }).shots)
+  return { mannequins, cameras, aspect, background, shots }
 }

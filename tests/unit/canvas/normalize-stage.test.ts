@@ -52,6 +52,14 @@ describe('normalizeStage', () => {
     expect(bg.radius).toBe(40)
   })
 
+  it('carries previz shots through (v3), defaulting to [] for old saves', () => {
+    expect(normalizeStage({ mannequins: [] }).shots).toEqual([])
+    const kf = { camera: { position: [0, 1.6, 4], target: [0, 1, 0], fov: 45 }, actors: {} }
+    const out = normalizeStage({ mannequins: [], shots: [{ id: 's1', durationSec: 4, start: kf, end: kf }, 'garbage'] })
+    expect(out.shots).toHaveLength(1)
+    expect(out.shots[0]).toMatchObject({ id: 's1', durationSec: 4, easing: 'easeInOut' })
+  })
+
   it('never throws on garbage / null elements', () => {
     expect(() => normalizeStage(null)).not.toThrow()
     expect(() => normalizeStage(undefined)).not.toThrow()
