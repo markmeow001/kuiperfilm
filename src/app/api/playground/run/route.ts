@@ -239,6 +239,20 @@ export const POST = apiHandler(async (request: NextRequest) => {
     }
   }
 
+  // Kling O3 plain-image caps (schema: ≤7, ≤4 with a reference video) —
+  // enforced here so an API-direct call fails fast instead of async in the
+  // worker. (2026-07-12 review MEDIUM; UI blocks this pre-submit already.)
+  if (/^kling-o3-/.test(resolvedModelId)) {
+    const klingImagesCap = referenceVideos.length > 0 ? 4 : 7
+    if (referenceImages.length > klingImagesCap) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'KLING_IMAGES_OVER_LIMIT',
+        message: `Kling O3 参考图最多 ${klingImagesCap} 张${referenceVideos.length > 0 ? '（绑参考影片时）' : ''}，当前 ${referenceImages.length} 张`,
+        details: { got: referenceImages.length, max: klingImagesCap },
+      })
+    }
+  }
+
   // Named plain reference images（參考圖命名 → 參考圖對應 textual map，
   // 2026-07-10). Aligned with referenceImages by index; null = unnamed.
   let referenceImageNames: Array<string | null> = []

@@ -223,6 +223,17 @@ export function usePlaygroundController() {
       alert('參考影片目前只能 1 支。請先移除再上傳新的。')
       return
     }
+    // Kling O3: binding a reference video drops the plain-image cap to 4
+    // (schema rule). Adding the video AFTER 5-7 images used to slip past
+    // the reactive cap and fail async in the worker — block up front.
+    // (2026-07-12 review MEDIUM)
+    if (isKlingO3Model && refImages.length > MAX_KLING_IMAGES_WITH_VIDEO) {
+      alert(
+        `Kling O3 綁參考影片時參考圖最多 ${MAX_KLING_IMAGES_WITH_VIDEO} 張（目前 ${refImages.length} 張）。` +
+        '請先移除多的參考圖再上傳影片。',
+      )
+      return
+    }
     // Guard the reference video's own length up-front — AtlasCloud R2V rejects
     // clips outside 1.8–15s with a 400, wasting an upload + a billing freeze.
     // Fail fast with a clear message instead. Unreadable metadata → let it
@@ -333,7 +344,10 @@ export function usePlaygroundController() {
     // prompt the user expects to bind (2026-07-11 user report: elements=0
     // silently shipped as loose images). Warn before wasting a paid run —
     // @tokens mean nothing to Kling; only named subjects bind.
-    if (isKlingKey && klingSubmitElements.length === 0 && /@[^\s@，、。.,]{1,20}/.test(effectivePrompt)) {
+    // Boundary-anchored so emails/handles mid-word don't false-positive
+    // (2026-07-12 review LOW): @ must follow start-of-string, whitespace,
+    // or CJK punctuation to count as a subject token.
+    if (isKlingKey && klingSubmitElements.length === 0 && /(^|[\s，、。：:；;（(「【])@[^\s@，、。.,]{1,20}/.test(effectivePrompt)) {
       const ok = confirm(
         '提示詞裡有 @名字，但目前沒有綁定任何主體 —— Kling 不認 @token，' +
         '參考圖只會當「鬆散參考」使用。\n\n' +

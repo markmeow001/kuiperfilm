@@ -1389,7 +1389,7 @@
     "modelId": "bytedance/seedance-2.0/image-to-video",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.096
+      "flatAmount": 0.48
     }
   },
   {
@@ -1398,7 +1398,7 @@
     "modelId": "bytedance/seedance-2.0/reference-to-video",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.096
+      "flatAmount": 0.48
     }
   },
   {
@@ -1407,7 +1407,7 @@
     "modelId": "bytedance/seedance-2.0/fast/image-to-video",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.076
+      "flatAmount": 0.38
     }
   },
   {
@@ -1416,7 +1416,7 @@
     "modelId": "bytedance/seedance-2.0/fast/reference-to-video",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.076
+      "flatAmount": 0.38
     }
   },
   {
@@ -6264,7 +6264,7 @@
     "modelId": "seedance-v1.5-pro",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.018
+      "flatAmount": 0.09
     }
   },
   {
@@ -6273,7 +6273,7 @@
     "modelId": "wan-2.6",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.012
+      "flatAmount": 0.06
     }
   },
   {
@@ -6282,7 +6282,7 @@
     "modelId": "seedance-2.0-t2v",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.096
+      "flatAmount": 0.48
     }
   },
   {
@@ -6291,7 +6291,7 @@
     "modelId": "seedance-2.0-i2v",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.096
+      "flatAmount": 0.48
     }
   },
   {
@@ -6300,7 +6300,7 @@
     "modelId": "seedance-2.0-fast-t2v",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.076
+      "flatAmount": 0.38
     }
   },
   {
@@ -6309,7 +6309,7 @@
     "modelId": "seedance-2.0-fast-i2v",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.076
+      "flatAmount": 0.38
     }
   },
   {
@@ -6318,7 +6318,7 @@
     "modelId": "seedance-2.0-r2v",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.096
+      "flatAmount": 0.48
     }
   },
   {
@@ -6327,7 +6327,7 @@
     "modelId": "seedance-2.0-fast-r2v",
     "pricing": {
       "mode": "flat",
-      "flatAmount": 0.076
+      "flatAmount": 0.38
     }
   },
   {
