@@ -29,10 +29,11 @@ vi.mock('@/lib/canvas/previz-transcode', () => transcodeMock)
 
 // vi.doMock（installAuthMocks）不做 hoist —— route 必须在其后动态 import
 type RouteModule = typeof import('@/app/api/canvas/previz-export/route')
-let POST: RouteModule['POST']
+let routePost: RouteModule['POST']
 beforeAll(async () => {
-  ;({ POST } = await import('@/app/api/canvas/previz-export/route'))
+  ;({ POST: routePost } = await import('@/app/api/canvas/previz-export/route'))
 })
+const POST = (req: NextRequest) => routePost(req, {} as never)
 
 const META = { aspect: '9:16', durationSec: 10, crop: { x: 100, y: 0, w: 607, h: 1080 } }
 
