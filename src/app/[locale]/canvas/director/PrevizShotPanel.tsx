@@ -11,6 +11,8 @@ import { MAX_SCENE_SEC, SHOT_MIN_SEC, totalDurationSec, type StageShot } from '.
 export interface PrevizShotPanelProps {
   shot: StageShot
   shots: StageShot[]
+  /** 舞台上的人偶+道具（调度线按 id 对应）。 */
+  actorInfos: { id: string; label: string }[]
   onPatch: (id: string, patch: Partial<StageShot>) => void
   onDelete: (id: string) => void
   /** 把「当前摄影机视角」写进起幅/落幅的 camera。 */
@@ -21,9 +23,11 @@ export interface PrevizShotPanelProps {
   onJump: (end: 'start' | 'end') => void
   /** 以当前视角位置追加一个运镜关键点。 */
   onAddCameraWaypoint: () => void
+  onAddActorWaypoint: (actorId: string) => void
+  onClearActorWaypoints: (actorId: string) => void
 }
 
-export function PrevizShotPanel({ shot, shots, onPatch, onDelete, onSetCamera, onSetActors, onJump, onAddCameraWaypoint }: PrevizShotPanelProps) {
+export function PrevizShotPanel({ shot, shots, actorInfos, onPatch, onDelete, onSetCamera, onSetActors, onJump, onAddCameraWaypoint, onAddActorWaypoint, onClearActorWaypoints }: PrevizShotPanelProps) {
   const othersTotal = totalDurationSec(shots) - shot.durationSec
   const maxDur = Math.min(MAX_SCENE_SEC, MAX_SCENE_SEC - othersTotal)
   const waypointCount = shot.cameraWaypoints?.length ?? 0
@@ -93,6 +97,25 @@ export function PrevizShotPanel({ shot, shots, onPatch, onDelete, onSetCamera, o
             <button type="button" onClick={() => onPatch(shot.id, { cameraWaypoints: undefined })} className="rounded px-2 py-0.5 text-[10px]" style={{ color: '#FF8A8A', background: CANVAS_TOKENS.bg.hover }}>清空</button>
           ) : null}
         </div>
+        <div className={section} style={{ color: CANVAS_TOKENS.text.muted }}>调度线（人物/道具走位路径）</div>
+        {actorInfos.length === 0 ? (
+          <div className="px-1 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>舞台上还没有人偶/道具</div>
+        ) : (
+          actorInfos.map((a) => {
+            const inShot = Boolean(shot.start.actors[a.id] && shot.end.actors[a.id])
+            const count = shot.movePaths?.[a.id]?.length ?? 0
+            return (
+              <div key={a.id} className="mb-1 flex items-center gap-1">
+                <span className="min-w-0 flex-1 truncate text-[11px]" style={{ color: inShot ? CANVAS_TOKENS.text.primary : CANVAS_TOKENS.text.muted }}>{a.label}{count > 0 ? ` · ${count} 点` : ''}</span>
+                <button type="button" disabled={!inShot} title={inShot ? '加一个调度点' : '缺起幅/落幅摆位'} onClick={() => onAddActorWaypoint(a.id)} className="rounded px-2 py-0.5 text-[10px] disabled:opacity-40" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>+点</button>
+                {count > 0 ? (
+                  <button type="button" onClick={() => onClearActorWaypoints(a.id)} className="rounded px-2 py-0.5 text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: '#FF8A8A' }}>清空</button>
+                ) : null}
+              </div>
+            )
+          })
+        )}
+
         <div className="mt-2 px-1 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>
           流程：摆好人物机位 →「设为起幅」→ 移动到结束状态 →「设为落幅」→ 预演。人物在两幅间自动走位。
         </div>

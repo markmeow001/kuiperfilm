@@ -52,6 +52,22 @@ describe('normalizeStage', () => {
     expect(bg.radius).toBe(40)
   })
 
+  it('carries 道具 props through (v3), defaulting to [] and sanitizing kind', () => {
+    expect(normalizeStage({ mannequins: [] }).props).toEqual([])
+    const out = normalizeStage({
+      mannequins: [],
+      props: [
+        { id: 'p1', label: '车', kind: 'car', position: [2, 0, 1], rotation: [0, 1, 0], scale: [1, 1, 2], color: '#ccc' },
+        { id: 'p2', kind: 'bogus', position: [0, 0, 0] },
+        'garbage',
+      ],
+    })
+    expect(out.props).toHaveLength(2)
+    expect(out.props[0]).toMatchObject({ id: 'p1', kind: 'car', scale: [1, 1, 2] })
+    expect(out.props[1].kind).toBe('box') // unknown kind → box
+    expect(out.props[1].scale).toEqual([1, 1, 1])
+  })
+
   it('carries previz shots through (v3), defaulting to [] for old saves', () => {
     expect(normalizeStage({ mannequins: [] }).shots).toEqual([])
     const kf = { camera: { position: [0, 1.6, 4], target: [0, 1, 0], fov: 45 }, actors: {} }

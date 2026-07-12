@@ -52,6 +52,39 @@ export interface StageMannequin {
   pose?: Pose
 }
 
+/** 道具几何类型（'car' 是低模组合体，其余为基础几何）。 */
+export type PropKind = 'box' | 'sphere' | 'cylinder' | 'car'
+export const PROP_KINDS: { key: PropKind; label: string }[] = [
+  { key: 'box', label: '方块' },
+  { key: 'sphere', label: '球体' },
+  { key: 'cylinder', label: '圆柱' },
+  { key: 'car', label: '车（低模）' },
+]
+
+export interface StageProp {
+  id: string
+  label: string
+  kind: PropKind
+  position: Vec3
+  rotation: Vec3
+  /** 道具允许非等比缩放。 */
+  scale: Vec3
+  color: string
+}
+
+export function makeProp(id: string, index: number, kind: PropKind = 'box'): StageProp {
+  const def = PROP_KINDS.find((k) => k.key === kind) ?? PROP_KINDS[0]
+  return {
+    id,
+    label: `${def.label}${index + 1}`,
+    kind: def.key,
+    position: [((index % 4) - 1.5) * 1.5, 0, -1.5],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    color: '#B84A39',
+  }
+}
+
 export interface StageCamera {
   id: string
   label: string
@@ -91,6 +124,8 @@ export interface DirectorStageState {
   cameras: StageCamera[]
   aspect?: StageAspect
   background?: StageBackground
+  /** 道具 (v3)。 */
+  props: StageProp[]
   /** previz 镜头序列 (v3) — see previz-types.ts. */
   shots: StageShot[]
 }
@@ -102,6 +137,7 @@ const MANNEQUIN_COLORS = ['#6FA8FF', '#FF9E6F', '#7BE3A4', '#C8A2FF', '#F4C44E',
 export const DEFAULT_STAGE: DirectorStageState = {
   mannequins: [],
   cameras: [{ id: 'cam-1', label: '机位1', position: [0, 1.6, 4.5], target: [0, 1, 0], fov: 45 }],
+  props: [],
   shots: [],
 }
 
@@ -186,6 +222,18 @@ export function normalizeStage(raw: unknown): DirectorStageState {
   const background: StageBackground = rawBg && typeof rawBg === 'object'
     ? { ...DEFAULT_BACKGROUND, ...rawBg, mode: (['none', 'flat', 'sphere'] as const).includes(rawBg.mode as BackgroundMode) ? (rawBg.mode as BackgroundMode) : 'none' }
     : { ...DEFAULT_BACKGROUND }
+  const rawProps = (r as { props?: unknown }).props
+  const props: StageProp[] = (Array.isArray(rawProps) ? rawProps : [])
+    .filter(isObj)
+    .map((p, i) => ({
+      id: typeof p.id === 'string' ? p.id : `p_restored_${i}`,
+      label: typeof p.label === 'string' && p.label ? p.label : `道具${i + 1}`,
+      kind: PROP_KINDS.some((k) => k.key === p.kind) ? (p.kind as PropKind) : 'box',
+      position: vec3(p.position, [0, 0, 0]),
+      rotation: vec3(p.rotation, [0, 0, 0]),
+      scale: vec3(p.scale, [1, 1, 1]),
+      color: typeof p.color === 'string' ? p.color : '#B84A39',
+    }))
   const shots = normalizeShots((r as { shots?: unknown }).shots)
-  return { mannequins, cameras, aspect, background, shots }
+  return { mannequins, cameras, aspect, background, props, shots }
 }

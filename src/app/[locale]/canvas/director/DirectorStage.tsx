@@ -19,8 +19,7 @@ import * as THREE from 'three'
 import { CANVAS_TOKENS } from '../lib/canvas-tokens'
 import { Mannequin } from './Mannequin'
 import { SliderRow } from './SliderRow'
-import { Vec3Field } from './Vec3Field'
-import { POSE_PRESETS, REST_POSE, RIG_SLIDER_GROUPS, type Joint, type Pose } from './pose-presets'
+import { REST_POSE, type Joint, type Pose } from './pose-presets'
 import { CAMERA_PRESETS, aspectRatio, computePreset } from './camera-presets'
 import { SceneBackground, orientBackdrop } from './SceneBackground'
 import {
@@ -32,19 +31,27 @@ import {
   type StageMannequin,
   type TransformMode,
   type Vec3,
+  type PropKind,
+  type StageProp,
   BODY_TYPES,
   DEFAULT_BACKGROUND,
+  PROP_KINDS,
   STAGE_ASPECTS,
   makeCamera,
   makeMannequin,
+  makeProp,
 } from './stage-types'
 import { MAX_SCENE_SEC, SHOT_MIN_SEC, clampShots, makeShot, totalDurationSec, type ShotKeyframe, type StageShot } from './previz-types'
 import { usePrevizPlayback } from './use-previz-playback'
 import { PrevizDriver } from './PrevizDriver'
 import { PrevizTimeline } from './PrevizTimeline'
 import { PrevizShotPanel } from './PrevizShotPanel'
+import { PathVisuals, parseWpKey, type WpDesc } from './PathVisuals'
+import { StagePropMesh } from './StagePropMesh'
+import { PropPanel } from './PropPanel'
+import { RigPanel } from './RigPanel'
+import { CameraPanel } from './CameraPanel'
 
-const RAD2DEG = 180 / Math.PI
 const DEG2RAD = Math.PI / 180
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `id_${Date.now()}_${Math.round(Math.random() * 1e6)}`
@@ -134,26 +141,36 @@ interface SceneProps {
   showGrid: boolean
   showGround: boolean
   showLabels: boolean
-  /** previz 播放驱动（激活时命令式接管相机+人偶，锁 orbit/gizmo）。 */
-  previz: { active: boolean; getTimeSec: () => number }
+  /** previz 播放驱动（激活时命令式接管相机+actor，锁 orbit/gizmo）+ 路径层。 */
+  previz: {
+    active: boolean
+    getTimeSec: () => number
+    selectedShot: StageShot | null
+    showCameraPath: boolean
+    showActorPaths: boolean
+  }
   onSelect: (id: string | null) => void
   onCommitMannequin: (id: string, patch: Partial<StageMannequin>) => void
   onCommitCamera: (id: string, patch: Partial<StageCamera>) => void
+  onCommitProp: (id: string, patch: Partial<StageProp>) => void
+  onCommitWaypoint: (desc: WpDesc, position: Vec3) => void
   registerCapture: (fn: (cameraId: string) => string | null) => void
   registerGetView: (fn: () => { position: Vec3; target: Vec3; fov: number }) => void
   registerReset: (fn: () => void) => void
   onBgError?: () => void
 }
 
-function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, previz, onSelect, onCommitMannequin, onCommitCamera, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
+function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, previz, onSelect, onCommitMannequin, onCommitCamera, onCommitProp, onCommitWaypoint, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
   const { gl, scene, camera: viewCamera } = useThree()
   const helpersRef = useRef<THREE.Group>(null)
   const backdropRef = useRef<THREE.Mesh>(null)
   const orbitRef = useRef<React.ComponentRef<typeof OrbitControls>>(null)
   const transformRef = useRef<React.ComponentRef<typeof TransformControls>>(null)
-  const mannequinRefs = useRef<Record<string, THREE.Group | null>>({})
+  // 人偶 + 道具共用一本 actor refs（id 均为 uid，previz 驱动按 id 找 group）。
+  const actorRefs = useRef<Record<string, THREE.Group | null>>({})
   const camGizmoRefs = useRef<Record<string, THREE.Group | null>>({})
   const tgtGizmoRefs = useRef<Record<string, THREE.Mesh | null>>({})
+  const wpRefs = useRef<Record<string, THREE.Mesh | null>>({})
 
   // Live state in refs so the stable capture closure reads current values.
   const stateRef = useRef(state)
@@ -259,12 +276,16 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
     if (orbitRef.current) orbitRef.current.enabled = view === 'director' && !previz.active
   }, [view, selectedId, previz.active])
 
+  const isProp = useCallback((id: string) => state.props.some((p) => p.id === id), [state.props])
+
   const selectedObject: THREE.Object3D | null = selectedId
     ? selectedId.startsWith('cam:')
       ? camGizmoRefs.current[selectedId.slice(4)] ?? null
       : selectedId.startsWith('tgt:')
         ? tgtGizmoRefs.current[selectedId.slice(4)] ?? null
-        : mannequinRefs.current[selectedId] ?? null
+        : selectedId.startsWith('wp:')
+          ? wpRefs.current[selectedId] ?? null
+          : actorRefs.current[selectedId] ?? null
     : null
 
   const commitSelected = useCallback(() => {
@@ -272,15 +293,21 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
     if (!obj || !selectedId) return
     if (selectedId.startsWith('cam:')) onCommitCamera(selectedId.slice(4), { position: obj.position.toArray() as Vec3 })
     else if (selectedId.startsWith('tgt:')) onCommitCamera(selectedId.slice(4), { target: obj.position.toArray() as Vec3 })
-    else onCommitMannequin(selectedId, { position: obj.position.toArray() as Vec3, rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z], scale: obj.scale.x })
-  }, [selectedObject, selectedId, onCommitCamera, onCommitMannequin])
+    else if (selectedId.startsWith('wp:')) {
+      const desc = parseWpKey(selectedId)
+      if (desc) onCommitWaypoint(desc, obj.position.toArray() as Vec3)
+    } else if (isProp(selectedId)) {
+      onCommitProp(selectedId, { position: obj.position.toArray() as Vec3, rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z], scale: obj.scale.toArray() as Vec3 })
+    } else onCommitMannequin(selectedId, { position: obj.position.toArray() as Vec3, rotation: [obj.rotation.x, obj.rotation.y, obj.rotation.z], scale: obj.scale.x })
+  }, [selectedObject, selectedId, onCommitCamera, onCommitMannequin, onCommitProp, onCommitWaypoint, isProp])
 
-  const isCamOrTarget = Boolean(selectedId && (selectedId.startsWith('cam:') || selectedId.startsWith('tgt:')))
+  // cam/tgt/waypoint gizmos are position-only handles → force translate mode.
+  const isCamOrTarget = Boolean(selectedId && (selectedId.startsWith('cam:') || selectedId.startsWith('tgt:') || selectedId.startsWith('wp:')))
 
   return (
     <>
       <SceneBackground bg={state.background ?? DEFAULT_BACKGROUND} onError={onBgError} backdropRef={backdropRef} key={state.background?.url ?? 'none'} />
-      <PrevizDriver active={previz.active} shots={state.shots} getTimeSec={previz.getTimeSec} mannequinRefs={mannequinRefs} mannequins={state.mannequins} />
+      <PrevizDriver active={previz.active} shots={state.shots} getTimeSec={previz.getTimeSec} actorRefs={actorRefs} restActors={[...state.mannequins, ...state.props]} />
       <hemisphereLight args={['#ffffff', '#2a2a30', 0.85]} />
       <directionalLight position={[4, 8, 5]} intensity={1.1} castShadow shadow-mapSize={[1024, 1024]} />
 
@@ -301,6 +328,17 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
       {/* Helpers — hidden during capture */}
       <group ref={helpersRef}>
         {showGrid ? <Grid args={[40, 40]} cellSize={0.5} cellColor="#2a2a32" sectionSize={2} sectionColor="#3a3a46" fadeDistance={28} infiniteGrid position={[0, 0.001, 0]} /> : null}
+        {/* 调度线/运镜线 — 选中镜头的路径层（预演播放时也显示，capture 时随 helpers 隐藏） */}
+        {previz.selectedShot ? (
+          <PathVisuals
+            shot={previz.selectedShot}
+            showCameraPath={previz.showCameraPath}
+            showActorPaths={previz.showActorPaths}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            registerWp={(key, el) => { if (el) wpRefs.current[key] = el; else delete wpRefs.current[key] }}
+          />
+        ) : null}
         {state.cameras.filter((cam) => !hiddenIds[cam.id]).map((cam) => (
           <group key={cam.id}>
             <group
@@ -341,7 +379,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
       {state.mannequins.filter((m) => !hiddenIds[m.id]).map((m) => (
         <group
           key={m.id}
-          ref={(el) => { if (el) mannequinRefs.current[m.id] = el; else delete mannequinRefs.current[m.id] }}
+          ref={(el) => { if (el) actorRefs.current[m.id] = el; else delete actorRefs.current[m.id] }}
           position={m.position}
           rotation={m.rotation}
           scale={m.scale}
@@ -351,6 +389,25 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
           {showLabels ? (
             <Html position={[0, 2.05, 0]} center distanceFactor={9} zIndexRange={[10, 0]}>
               <div style={{ background: 'rgba(10,10,11,0.82)', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none' }}>{m.label}</div>
+            </Html>
+          ) : null}
+        </group>
+      ))}
+
+      {/* 道具 — 与人偶同款 transform/选中通道，注册进同一本 actorRefs */}
+      {state.props.filter((p) => !hiddenIds[p.id]).map((p) => (
+        <group
+          key={p.id}
+          ref={(el) => { if (el) actorRefs.current[p.id] = el; else delete actorRefs.current[p.id] }}
+          position={p.position}
+          rotation={p.rotation}
+          scale={p.scale}
+          onClick={(e) => { e.stopPropagation(); onSelect(p.id) }}
+        >
+          <StagePropMesh data={p} selected={selectedId === p.id} />
+          {showLabels ? (
+            <Html position={[0, 1.6, 0]} center distanceFactor={9} zIndexRange={[10, 0]}>
+              <div style={{ background: 'rgba(10,10,11,0.82)', color: '#fff', padding: '2px 8px', borderRadius: 6, fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none' }}>{p.label}</div>
             </Html>
           ) : null}
         </group>
@@ -423,6 +480,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
 
   // ---- previz (镜头预演) ----
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
+  const [showCameraPath, setShowCameraPath] = useState(true)
+  const [showActorPaths, setShowActorPaths] = useState(true)
   const selectedShotIndex = state.shots.findIndex((s) => s.id === selectedShotId)
   const selectedShot = selectedShotIndex >= 0 ? state.shots[selectedShotIndex] : null
   const playback = usePrevizPlayback(state.shots, selectedShotIndex)
@@ -455,6 +514,15 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
     setState((s) => ({ ...s, cameras: [...s.cameras, makeCamera(nid, s.cameras.length)] }))
     setSelectedId(camKey(nid))
   }, [])
+  const addProp = useCallback((kind: PropKind) => {
+    const nid = uid()
+    setState((s) => ({ ...s, props: [...s.props, makeProp(nid, s.props.length, kind)] }))
+    setSelectedId(nid)
+    setAddMenu(false)
+  }, [])
+  const commitProp = useCallback((id: string, patch: Partial<StageProp>) => {
+    setState((s) => ({ ...s, props: s.props.map((p) => (p.id === id ? { ...p, ...patch } : p)) }))
+  }, [])
 
   const toggleHidden = useCallback((id: string) => setHiddenIds((h) => ({ ...h, [id]: !h[id] })), [])
   const toggleLocked = useCallback((id: string) => setLockedIds((l) => ({ ...l, [id]: !l[id] })), [])
@@ -468,6 +536,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
 
   const removeSelected = useCallback(() => {
     if (!selectedId) return
+    if (selectedId.startsWith('wp:')) return // waypoint 删除走镜头检查器的清空
     if (selectedId.startsWith('cam:') || selectedId.startsWith('tgt:')) {
       const cid = selectedId.slice(4)
       setState((s) => (s.cameras.length <= 1 ? s : { ...s, cameras: s.cameras.filter((c) => c.id !== cid) }))
@@ -475,6 +544,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
       setState((s) => ({
         ...s,
         mannequins: s.mannequins.filter((m) => m.id !== selectedId),
+        props: s.props.filter((p) => p.id !== selectedId),
         // drop any camera's follow binding to the deleted mannequin
         cameras: s.cameras.map((c) => (c.lookAtMannequinId === selectedId ? { ...c, lookAtMannequinId: null } : c)),
       }))
@@ -518,8 +588,10 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   }, [selectedId, state.cameras, state.mannequins])
 
   const currentActorPlacements = useCallback((): ShotKeyframe['actors'] => {
-    return Object.fromEntries(state.mannequins.map((m) => [m.id, { position: [...m.position] as Vec3, rotation: [...m.rotation] as Vec3 }]))
-  }, [state.mannequins])
+    return Object.fromEntries(
+      [...state.mannequins, ...state.props].map((a) => [a.id, { position: [...a.position] as Vec3, rotation: [...a.rotation] as Vec3 }]),
+    )
+  }, [state.mannequins, state.props])
 
   const addShot = useCallback(() => {
     const camera = currentCameraPose()
@@ -571,6 +643,41 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
     setToast('✓ 已加运镜关键点')
   }, [selectedShot, currentCameraPose, patchShot])
 
+  /** 在 actor 起幅→落幅中点上方加一个调度点（拖动小球细调）。 */
+  const addActorWaypoint = useCallback((actorId: string) => {
+    if (!selectedShot) return
+    const a = selectedShot.start.actors[actorId]
+    const b = selectedShot.end.actors[actorId]
+    if (!a || !b) { setToast('该对象缺起幅或落幅摆位，先「摆位设为起幅/落幅」'); return }
+    const existing = selectedShot.movePaths?.[actorId] ?? []
+    const mid: Vec3 = [(a.position[0] + b.position[0]) / 2, (a.position[1] + b.position[1]) / 2, (a.position[2] + b.position[2]) / 2 + 0.8]
+    patchShot(selectedShot.id, { movePaths: { ...(selectedShot.movePaths ?? {}), [actorId]: [...existing, mid] } })
+    setToast('✓ 已加调度点（拖动橙色小球调整）')
+  }, [selectedShot, patchShot])
+
+  const clearActorWaypoints = useCallback((actorId: string) => {
+    if (!selectedShot?.movePaths?.[actorId]) return
+    const next = { ...selectedShot.movePaths }
+    delete next[actorId]
+    patchShot(selectedShot.id, { movePaths: Object.keys(next).length > 0 ? next : undefined })
+  }, [selectedShot, patchShot])
+
+  /** waypoint 小球拖动 commit（来自 SceneContents 的 TransformControls）。 */
+  const commitWaypoint = useCallback((desc: { kind: 'cam'; index: number } | { kind: 'act'; actorId: string; index: number }, position: Vec3) => {
+    if (!selectedShot) return
+    if (desc.kind === 'cam') {
+      const wps = [...(selectedShot.cameraWaypoints ?? [])]
+      if (desc.index < 0 || desc.index >= wps.length) return
+      wps[desc.index] = position
+      patchShot(selectedShot.id, { cameraWaypoints: wps })
+    } else {
+      const list = [...(selectedShot.movePaths?.[desc.actorId] ?? [])]
+      if (desc.index < 0 || desc.index >= list.length) return
+      list[desc.index] = position
+      patchShot(selectedShot.id, { movePaths: { ...(selectedShot.movePaths ?? {}), [desc.actorId]: list } })
+    }
+  }, [selectedShot, patchShot])
+
   const sendShot = useCallback(async (cameraId: string) => {
     const cam = state.cameras.find((c) => c.id === cameraId)
     if (!cam) return
@@ -588,6 +695,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   }, [onSendShot, state])
 
   const selectedMannequin = state.mannequins.find((m) => m.id === selectedId) ?? null
+  const selectedProp = state.props.find((p) => p.id === selectedId) ?? null
   const selectedCamId = selectedId && (selectedId.startsWith('cam:') || selectedId.startsWith('tgt:')) ? selectedId.slice(4) : null
   const selectedCamera = selectedCamId ? state.cameras.find((c) => c.id === selectedCamId) ?? null : null
 
@@ -697,10 +805,12 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           showGrid={showGrid}
           showGround={showGround}
           showLabels={showLabels}
-          previz={{ active: playback.active, getTimeSec: playback.getTimeSec }}
+          previz={{ active: playback.active, getTimeSec: playback.getTimeSec, selectedShot, showCameraPath, showActorPaths }}
           onSelect={setSelectedId}
           onCommitMannequin={commitMannequin}
           onCommitCamera={commitCamera}
+          onCommitProp={commitProp}
+          onCommitWaypoint={commitWaypoint}
           registerCapture={(fn) => { captureRef.current = fn }}
           registerGetView={(fn) => { getViewRef.current = fn }}
           registerReset={(fn) => { resetViewRef.current = fn }}
@@ -749,6 +859,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           {[
             ...state.cameras.map((c) => ({ id: c.id, key: camKey(c.id), label: c.label, glyph: '◢', accent: CANVAS_TOKENS.accent })),
             ...state.mannequins.map((m) => ({ id: m.id, key: m.id, label: m.label, glyph: '人', accent: m.color })),
+            ...state.props.map((p) => ({ id: p.id, key: p.id, label: p.label, glyph: '◫', accent: p.color })),
           ]
             .filter((o) => !search || o.label.toLowerCase().includes(search.toLowerCase()))
             .map((o) => {
@@ -775,112 +886,50 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
       <button type="button" onClick={() => resetViewRef.current?.()} className="absolute right-5 top-28 rounded-md px-2 py-1 font-mono text-[11px]" style={{ background: `${CANVAS_TOKENS.bg.card}e6`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>重置视角</button>
 
       {/* previz 镜头检查器 — 选中镜头且没选中场景对象时显示 */}
-      {selectedShot && !selectedMannequin && !selectedCamera ? (
+      {selectedShot && !selectedMannequin && !selectedCamera && !selectedProp ? (
         <PrevizShotPanel
           shot={selectedShot}
           shots={state.shots}
+          actorInfos={[...state.mannequins, ...state.props].map((a) => ({ id: a.id, label: a.label }))}
           onPatch={patchShot}
           onDelete={deleteShot}
           onSetCamera={setShotCamera}
           onSetActors={setShotActors}
           onJump={jumpToShotEnd}
           onAddCameraWaypoint={addCameraWaypoint}
+          onAddActorWaypoint={addActorWaypoint}
+          onClearActorWaypoints={clearActorWaypoints}
         />
       ) : null}
 
+      {/* 道具检查器 */}
+      {selectedProp ? <PropPanel prop={selectedProp} mode={mode} onMode={setMode} onPatch={commitProp} /> : null}
+
       {/* Rig panel — pose presets + per-joint sliders, shown on mannequin select */}
       {selectedMannequin ? (
-        <div className="absolute right-4 top-16 bottom-16 flex w-64 flex-col overflow-hidden rounded-xl" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
-          <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-            <span className="font-mono text-[12px]" style={{ color: selectedMannequin.color }}>{selectedMannequin.label}</span>
-            <button type="button" onClick={() => applyPose(selectedMannequin.id, REST_POSE)} className="rounded px-2 py-0.5 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>重置姿势</button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {/* transform mode + body type */}
-            <div className="mb-2 flex gap-1">
-              {(['translate', 'rotate', 'scale'] as TransformMode[]).map((m) => (
-                <button key={m} type="button" onClick={() => setMode(m)} className="flex-1 rounded py-1 text-[11px]" style={{ color: mode === m ? CANVAS_TOKENS.accentText : CANVAS_TOKENS.text.secondary, background: mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover }}>
-                  {m === 'translate' ? '移动' : m === 'rotate' ? '旋转' : '缩放'}
-                </button>
-              ))}
-            </div>
-            <label className="mb-2 block">
-              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>素体类型</span>
-              <select value={selectedMannequin.bodyType ?? 'male'} onChange={(e) => commitMannequin(selectedMannequin.id, { bodyType: e.target.value as BodyType })} className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-                {BODY_TYPES.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
-              </select>
-            </label>
-            <div className="mb-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>预设姿势</div>
-            <div className="mb-3 grid grid-cols-3 gap-1">
-              {POSE_PRESETS.map((preset) => (
-                <button key={preset.name} type="button" onClick={() => applyPose(selectedMannequin.id, preset.pose)} className="rounded py-1 text-[11px] transition-colors hover:opacity-80" style={{ color: CANVAS_TOKENS.text.primary, background: CANVAS_TOKENS.bg.hover }}>{preset.name}</button>
-              ))}
-            </div>
-            {RIG_SLIDER_GROUPS.map((g) => (
-              <div key={g.group} className="mb-2">
-                <div className="mb-0.5 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{g.group}</div>
-                {g.rows.map((row) => (
-                  <SliderRow key={`${row.joint}-${row.axis}`} label={row.label} value={(selectedMannequin.pose ?? REST_POSE).joints[row.joint][row.axis] * RAD2DEG} min={-180} max={180} onChange={(deg) => setJointAxis(selectedMannequin.id, row.joint, row.axis, deg * DEG2RAD)} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
+        <RigPanel mannequin={selectedMannequin} mode={mode} onMode={setMode} onCommit={commitMannequin} onApplyPose={applyPose} onSetJointAxis={setJointAxis} />
       ) : null}
 
       {/* Camera inspector — shown when a camera/target is selected */}
       {selectedCamera && selectedCamId ? (
-        <div className="absolute right-4 top-16 bottom-16 flex w-64 flex-col overflow-hidden rounded-xl" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
-          <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-            <span className="font-mono text-[12px]" style={{ color: CANVAS_TOKENS.accent }}>摄像机 · {selectedCamera.label}</span>
-            <button type="button" onClick={() => sendShot(selectedCamId)} disabled={saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>发送</button>
-          </div>
-          <div className="flex-1 space-y-2 overflow-y-auto p-2">
-            <label className="block">
-              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>名称</span>
-              <input value={selectedCamera.label} onChange={(e) => commitCamera(selectedCamId, { label: e.target.value })} className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }} />
-            </label>
-            <label className="block">
-              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>切换机位</span>
-              <select value={selectedCamId} onChange={(e) => setSelectedId(camKey(e.target.value))} className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
-                {state.cameras.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-              </select>
-            </label>
-            <Vec3Field label="位置" value={selectedCamera.position} onChange={(v) => commitCamera(selectedCamId, { position: v })} />
-            <label className="block">
-              <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>注视目标</span>
-              <select
-                value={selectedCamera.lookAtMannequinId ?? 'manual'}
-                onChange={(e) => commitCamera(selectedCamId, { lookAtMannequinId: e.target.value === 'manual' ? null : e.target.value })}
-                className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none"
-                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
-              >
-                <option value="manual">手动坐标</option>
-                {state.mannequins.map((m) => <option key={m.id} value={m.id}>追踪：{m.label}</option>)}
-              </select>
-            </label>
-            {selectedCamera.lookAtMannequinId ? null : (
-              <Vec3Field label="注视坐标" value={selectedCamera.target} onChange={(v) => commitCamera(selectedCamId, { target: v })} />
-            )}
-            <SliderRow label="FOV" value={selectedCamera.fov} min={18} max={90} unit="°" onChange={(v) => commitCamera(selectedCamId, { fov: v })} />
-            <SliderRow label="荷兰角" value={selectedCamera.roll ?? 0} min={-45} max={45} unit="°" onChange={(v) => commitCamera(selectedCamId, { roll: v })} />
-            <div className="pt-1">
-              <div className="mb-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>机位视角预设</div>
-              <div className="grid grid-cols-2 gap-1">
-                {CAMERA_PRESETS.map((preset) => (
-                  <button key={preset.name} type="button" onClick={() => applyCameraPreset(selectedCamId, preset)} className="rounded py-1 text-[11px] transition-colors hover:opacity-80" style={{ color: CANVAS_TOKENS.text.primary, background: CANVAS_TOKENS.bg.hover }}>{preset.name}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+        <CameraPanel
+          camera={selectedCamera}
+          cameraId={selectedCamId}
+          cameras={state.cameras}
+          mannequins={state.mannequins}
+          saving={saving}
+          onCommit={commitCamera}
+          onSwitch={(cid) => setSelectedId(camKey(cid))}
+          onSend={sendShot}
+          onApplyPreset={applyCameraPreset}
+        />
       ) : null}
 
       {/* 3D场景 props — shown when nothing is selected */}
-      {!selectedMannequin && !selectedCamera && !selectedShot ? (
+      {!selectedMannequin && !selectedCamera && !selectedShot && !selectedProp ? (
         <div className="absolute right-4 top-16 bottom-16 w-60 overflow-y-auto rounded-xl p-3" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
           <div className="mb-2 font-mono text-[12px]" style={{ color: CANVAS_TOKENS.text.primary }}>3D场景</div>
-          {([['角色标签', showLabels, setShowLabels], ['网格', showGrid, setShowGrid], ['地面', showGround, setShowGround]] as const).map(([label, val, set]) => (
+          {([['角色标签', showLabels, setShowLabels], ['网格', showGrid, setShowGrid], ['地面', showGround, setShowGround], ['运镜线', showCameraPath, setShowCameraPath], ['调度线', showActorPaths, setShowActorPaths]] as const).map(([label, val, set]) => (
             <button key={label} type="button" onClick={() => set(!val)} className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[12px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>
               <span>{label}</span>
               <span style={{ color: val ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.muted }}>{val ? '● 开' : '○ 关'}</span>
@@ -958,9 +1007,13 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
         <div className="relative">
           <DockBtn label="添加角色" active={addMenu} onClick={() => { setAddMenu((v) => !v); setAspectMenu(false) }}><Glyph name="person" /></DockBtn>
           {addMenu ? (
-            <div className="absolute bottom-12 left-0 w-40 overflow-hidden rounded-xl" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
+            <div className="absolute bottom-12 left-0 max-h-80 w-40 overflow-y-auto rounded-xl" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}>
               {BODY_TYPES.map((b) => (
                 <button key={b.key} type="button" onClick={() => addMannequin(b.key)} className="block w-full px-3 py-2 text-left text-[12px] hover:bg-white/5" style={{ color: CANVAS_TOKENS.text.primary }}>{b.label}</button>
+              ))}
+              <div className="px-3 py-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted, borderTop: `1px solid ${CANVAS_TOKENS.hairline}` }}>道具</div>
+              {PROP_KINDS.map((k) => (
+                <button key={k.key} type="button" onClick={() => { addProp(k.key); setAddMenu(false) }} className="block w-full px-3 py-2 text-left text-[12px] hover:bg-white/5" style={{ color: CANVAS_TOKENS.text.primary }}>{k.label}</button>
               ))}
             </div>
           ) : null}

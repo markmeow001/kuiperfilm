@@ -11,30 +11,32 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import type { StageMannequin, Vec3 } from './stage-types'
+import type { Vec3 } from './stage-types'
 import type { StageShot } from './previz-types'
 import { evalShot, locateInSequence } from './previz-eval'
 
 const DEG2RAD = Math.PI / 180
 
+/** 恢复用的舞台常驻摆位（人偶 + 道具统一按 id）。 */
+export interface RestActor { id: string; position: Vec3; rotation: Vec3 }
+
 export interface PrevizDriverProps {
   active: boolean
   shots: StageShot[]
   getTimeSec: () => number
-  /** SceneContents 的人偶 group refs（id → group）。 */
-  mannequinRefs: React.MutableRefObject<Record<string, THREE.Group | null>>
-  /** 恢复用的舞台常驻摆位。 */
-  mannequins: StageMannequin[]
+  /** SceneContents 的 actor group refs（人偶+道具共用一本，id → group）。 */
+  actorRefs: React.MutableRefObject<Record<string, THREE.Group | null>>
+  restActors: RestActor[]
 }
 
 function applyVec3(target: THREE.Vector3, v: Vec3) {
   target.set(v[0], v[1], v[2])
 }
 
-export function PrevizDriver({ active, shots, getTimeSec, mannequinRefs, mannequins }: PrevizDriverProps) {
+export function PrevizDriver({ active, shots, getTimeSec, actorRefs, restActors }: PrevizDriverProps) {
   const { camera } = useThree()
-  const mannequinsRef = useRef(mannequins)
-  mannequinsRef.current = mannequins
+  const restRef = useRef(restActors)
+  restRef.current = restActors
 
   useFrame(() => {
     if (!active) return
@@ -50,28 +52,28 @@ export function PrevizDriver({ active, shots, getTimeSec, mannequinRefs, mannequ
       cam.updateProjectionMatrix()
     }
     for (const [id, actor] of Object.entries(ev.actors)) {
-      const group = mannequinRefs.current[id]
+      const group = actorRefs.current[id]
       if (!group) continue
       applyVec3(group.position, actor.position)
       group.rotation.set(actor.rotation[0], actor.rotation[1], actor.rotation[2])
     }
   })
 
-  // 退出预演 → 人偶 group 恢复舞台常驻摆位 + 相机 fov 复位。
+  // 退出预演 → actor group 恢复舞台常驻摆位 + 相机 fov 复位。
   useEffect(() => {
     if (active) return
-    for (const m of mannequinsRef.current) {
-      const group = mannequinRefs.current[m.id]
+    for (const a of restRef.current) {
+      const group = actorRefs.current[a.id]
       if (!group) continue
-      applyVec3(group.position, m.position)
-      group.rotation.set(m.rotation[0], m.rotation[1], m.rotation[2])
+      applyVec3(group.position, a.position)
+      group.rotation.set(a.rotation[0], a.rotation[1], a.rotation[2])
     }
     const cam = camera as THREE.PerspectiveCamera
     if (cam.fov !== 45) {
       cam.fov = 45
       cam.updateProjectionMatrix()
     }
-  }, [active, camera, mannequinRefs])
+  }, [active, camera, actorRefs])
 
   return null
 }
