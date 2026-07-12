@@ -15,7 +15,14 @@ import type { Vec3 } from './stage-types'
 import type { ShotKeyframe, StageShot } from './previz-types'
 
 export interface EvalCamera { position: Vec3; target: Vec3; fov: number; roll: number }
-export interface EvalActor { position: Vec3; rotation: Vec3 }
+export interface EvalActor {
+  position: Vec3
+  rotation: Vec3
+  /** 该时刻是否在移动（走路循环开关）。 */
+  moving: boolean
+  /** 沿路径已走距离（米，喂 walk-cycle 相位）。 */
+  travelDist: number
+}
 export interface ShotEval {
   camera: EvalCamera
   actors: Record<string, EvalActor>
@@ -35,13 +42,14 @@ const toV = (v: Vec3) => new THREE.Vector3(v[0], v[1], v[2])
  * with waypoints → centripetal CatmullRom through [from, ...waypoints, to].
  * Returns position + unit tangent (zero vector when the path has no length).
  */
-function evalPath(from: Vec3, to: Vec3, waypoints: Vec3[] | undefined, t: number): { position: Vec3; tangent: Vec3 } {
+function evalPath(from: Vec3, to: Vec3, waypoints: Vec3[] | undefined, t: number): { position: Vec3; tangent: Vec3; length: number } {
   if (!waypoints || waypoints.length === 0) {
     const dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2]
     const len = Math.hypot(dx, dy, dz)
     return {
       position: lerpVec3(from, to, t),
       tangent: len < 1e-6 ? [0, 0, 0] : [dx / len, dy / len, dz / len],
+      length: len,
     }
   }
   const curve = new THREE.CatmullRomCurve3([toV(from), ...waypoints.map(toV), toV(to)], false, 'centripetal')
@@ -51,6 +59,7 @@ function evalPath(from: Vec3, to: Vec3, waypoints: Vec3[] | undefined, t: number
   return {
     position: [p.x, p.y, p.z],
     tangent: tanLen < 1e-6 ? [0, 0, 0] : [tan.x / tanLen, tan.y / tanLen, tan.z / tanLen],
+    length: curve.getLength(),
   }
 }
 
@@ -60,14 +69,14 @@ function evalActor(id: string, start: ShotKeyframe, end: ShotKeyframe, movePath:
   // present in only one keyframe → parked at that placement for the whole shot
   if (!a || !b) {
     const only = (a ?? b)!
-    return { position: [...only.position], rotation: [...only.rotation] }
+    return { position: [...only.position], rotation: [...only.rotation], moving: false, travelDist: 0 }
   }
-  const { position, tangent } = evalPath(a.position, b.position, movePath, t)
+  const { position, tangent, length } = evalPath(a.position, b.position, movePath, t)
   const moving = tangent[0] !== 0 || tangent[1] !== 0 || tangent[2] !== 0
   const rotation: Vec3 = moving
     ? [lerp(a.rotation[0], b.rotation[0], t), Math.atan2(tangent[0], tangent[2]), lerp(a.rotation[2], b.rotation[2], t)]
     : lerpVec3(a.rotation, b.rotation, t)
-  return { position, rotation }
+  return { position, rotation, moving, travelDist: moving ? length * t : 0 }
 }
 
 /** t∈[0,1] (clamped) → camera pose + keyframed actors' placements. */

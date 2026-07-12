@@ -52,7 +52,7 @@ export const Mannequin = memo(function Mannequin({ data, selected }: MannequinPr
   return (
     // outer group scales total height by body type; pelvis lowers for sit/crouch
     <group scale={[1, bt.height, 1]}>
-    <group position={[pose.root[0], 0.9 + pose.root[1], pose.root[2]]}>
+    <group name="bone:pelvis" position={[pose.root[0], 0.9 + pose.root[1], pose.root[2]]}>
       {ball([0, 0, 0], 0.12, [1.25, 0.95, 0.74])}
 
       {/* spine → torso (tapered) → head, shoulders */}
@@ -72,20 +72,20 @@ export const Mannequin = memo(function Mannequin({ data, selected }: MannequinPr
         </group>
 
         {/* left arm */}
-        <group position={[-0.23, 0.46, 0]} rotation={j.shoulderL}>
+        <group name="bone:shoulderL" position={[-0.23, 0.46, 0]} rotation={j.shoulderL}>
           {ball([0, 0, 0], 0.065)}
           {seg([0, -0.15, 0], 0.05, 0.18)}
-          <group position={[0, -0.3, 0]} rotation={j.elbowL}>
+          <group name="bone:elbowL" position={[0, -0.3, 0]} rotation={j.elbowL}>
             {ball([0, 0, 0], 0.05)}
             {seg([0, -0.14, 0], 0.045, 0.18)}
             {ball([0, -0.29, 0], 0.052, [1, 0.9, 0.8])}
           </group>
         </group>
         {/* right arm */}
-        <group position={[0.23, 0.46, 0]} rotation={j.shoulderR}>
+        <group name="bone:shoulderR" position={[0.23, 0.46, 0]} rotation={j.shoulderR}>
           {ball([0, 0, 0], 0.065)}
           {seg([0, -0.15, 0], 0.05, 0.18)}
-          <group position={[0, -0.3, 0]} rotation={j.elbowR}>
+          <group name="bone:elbowR" position={[0, -0.3, 0]} rotation={j.elbowR}>
             {ball([0, 0, 0], 0.05)}
             {seg([0, -0.14, 0], 0.045, 0.18)}
             {ball([0, -0.29, 0], 0.052, [1, 0.9, 0.8])}
@@ -94,10 +94,10 @@ export const Mannequin = memo(function Mannequin({ data, selected }: MannequinPr
       </group>
 
       {/* left leg */}
-      <group position={[-0.12, -0.02, 0]} rotation={j.hipL}>
+      <group name="bone:hipL" position={[-0.12, -0.02, 0]} rotation={j.hipL}>
         {ball([0, 0, 0], 0.08)}
         {seg([0, -0.2, 0], 0.075, 0.26)}
-        <group position={[0, -0.4, 0]} rotation={j.kneeL}>
+        <group name="bone:kneeL" position={[0, -0.4, 0]} rotation={j.kneeL}>
           {ball([0, 0, 0], 0.07)}
           {seg([0, -0.2, 0], 0.06, 0.28)}
           {/* foot */}
@@ -105,10 +105,10 @@ export const Mannequin = memo(function Mannequin({ data, selected }: MannequinPr
         </group>
       </group>
       {/* right leg */}
-      <group position={[0.12, -0.02, 0]} rotation={j.hipR}>
+      <group name="bone:hipR" position={[0.12, -0.02, 0]} rotation={j.hipR}>
         {ball([0, 0, 0], 0.08)}
         {seg([0, -0.2, 0], 0.075, 0.26)}
-        <group position={[0, -0.4, 0]} rotation={j.kneeR}>
+        <group name="bone:kneeR" position={[0, -0.4, 0]} rotation={j.kneeR}>
           {ball([0, 0, 0], 0.07)}
           {seg([0, -0.2, 0], 0.06, 0.28)}
           {ball([0, -0.4, 0.05], 0.08, [0.95, 0.55, 1.7])}
