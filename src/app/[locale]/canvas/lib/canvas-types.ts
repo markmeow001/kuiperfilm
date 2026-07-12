@@ -46,6 +46,13 @@ export interface CanvasNodeData extends Record<string, unknown> {
    */
   lastFrameKey?: string | null
   lastFramePreview?: string | null
+  /**
+   * Video-only: 导演台预演导出的参考视频（R2V）。referenceVideoKey = 存储 key，
+   * 提交时进 referenceVideos；referenceVideoUrl = 签名 URL 供节点预览。带此
+   * 字段的节点默认走 omni（R2V）模式。
+   */
+  referenceVideoKey?: string | null
+  referenceVideoUrl?: string | null
   /** Video-only: camera-movement preset key (运镜), appended to the prompt. */
   cameraMove?: string
   /**
@@ -151,6 +158,8 @@ export const DEFAULT_NODE_DATA = {
   batchCount: 1,
   lastFrameKey: null as string | null,
   lastFramePreview: null as string | null,
+  referenceVideoKey: null as string | null,
+  referenceVideoUrl: null as string | null,
   shots: null as CanvasStoryboardShot[] | null,
   storyboardTaskId: null as string | null,
   referenceAudioKey: null as string | null,

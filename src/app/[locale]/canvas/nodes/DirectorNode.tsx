@@ -31,6 +31,7 @@ import { DEFAULT_NODE_DATA, type CanvasNodeData } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { NodeShell } from './node-shell'
 import { DEFAULT_STAGE, normalizeStage, type DirectorStageState } from '../director/stage-types'
+import type { PrevizExportPayload } from '../director/DirectorStage'
 
 const DirectorStage = dynamic(() => import('../director/DirectorStage').then((m) => m.DirectorStage), {
   ssr: false,
@@ -117,6 +118,52 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
     updateNodeData(id, { stage: newStage, sentCount: sentCount + 1 })
   }
 
+  /**
+   * previz 导出（S3）：webm → /api/canvas/previz-export（ffmpeg 转 MP4 + 抽
+   * 首尾帧）→ 生成一个已绑参考视频的 video 节点（prompt 预填导演指令，
+   * anchor=首帧），卡司 refs 照 handleSendShot 惯例接线。
+   */
+  async function handleExportPreviz(payload: PrevizExportPayload): Promise<{ videoUrl: string }> {
+    const fd = new FormData()
+    fd.append('file', new File([payload.blob], `previz.${payload.mimeType === 'video/mp4' ? 'mp4' : 'webm'}`, { type: payload.mimeType }))
+    fd.append('meta', JSON.stringify({ aspect: payload.aspect, durationSec: payload.durationSec, crop: payload.crop }))
+    const res = await fetch('/api/canvas/previz-export', { method: 'POST', body: fd })
+    const json = await res.json().catch(() => null) as
+      | { success?: boolean; videoKey?: string; videoUrl?: string; firstFrameKey?: string; firstFrameUrl?: string; error?: { message?: string } }
+      | null
+    if (!res.ok || !json?.success || !json.videoKey) {
+      throw new Error(json?.error?.message ?? `导出失败（${res.status}）`)
+    }
+
+    const self = getNode(id)
+    const base = self?.position ?? { x: 0, y: 0 }
+    const sentCount = Number.isFinite(d.sentCount) ? (d.sentCount as number) : 0
+    const frameId = uid()
+    // R2V 时长选项是整数秒（5-15），预演片长向上取整对齐
+    const durationSec = Math.min(Math.max(Math.ceil(payload.durationSec), 5), 15)
+    addNodes({
+      id: frameId,
+      type: 'video',
+      position: { x: base.x + 360, y: base.y + sentCount * 200 },
+      data: {
+        ...DEFAULT_NODE_DATA,
+        title: payload.title,
+        prompt: payload.directorText,
+        genMode: 'omni',
+        aspectRatio: payload.aspect,
+        durationSec,
+        referenceVideoKey: json.videoKey,
+        referenceVideoUrl: json.videoUrl ?? null,
+        anchorKey: json.firstFrameKey ?? null,
+        anchorUrl: json.firstFrameUrl ?? null,
+      },
+    } satisfies Node<CanvasNodeData>)
+    const castEdges: Edge[] = cast.map((n) => ({ id: uid(), source: n.id, target: frameId, animated: true }))
+    if (castEdges.length > 0) addEdges(castEdges)
+    updateNodeData(id, { stage: payload.state, sentCount: sentCount + 1 })
+    return { videoUrl: json.videoUrl ?? '' }
+  }
+
   return (
     <>
       <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={240}>
@@ -148,6 +195,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
               castLabels={castLabels}
               onClose={() => setOpen(false)}
               onSendShot={handleSendShot}
+              onExportPreviz={handleExportPreviz}
               saving={upload.isPending}
               uploadImage={async (file) => {
                 const res = await upload.mutateAsync({ file, type: 'image' })

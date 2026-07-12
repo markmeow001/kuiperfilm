@@ -181,7 +181,8 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     // Video generation mode gates ref usage: 文生=ignore upstream refs, 图生/全能参考=use them.
     // The director blocking anchor (d.anchorKey) is a hard blocking constraint, NOT an
     // optional ref — it's always sent (and always shown), so display matches submission.
-    const genMode = outputType === 'video' ? d.genMode ?? (allRefs.length > 0 ? 'image' : 'text') : 'image'
+    // 预演参考视频（导演台导出）→ 默认 omni（R2V）端点。
+    const genMode = outputType === 'video' ? d.genMode ?? (d.referenceVideoKey ? 'omni' : allRefs.length > 0 ? 'image' : 'text') : 'image'
     const refsForSubmit = outputType === 'video' && genMode === 'text'
       ? (d.anchorKey ? [d.anchorKey] : [])
       : allRefs
@@ -241,6 +242,10 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           // 首尾帧: send the tail frame; first frame = referenceImages[0].
           ...(outputType === 'video' && genMode === 'firstlast' && d.lastFrameKey
             ? { lastFrameUrl: d.lastFrameKey }
+            : {}),
+          // 导演台预演参考视频（R2V 机位运动+人物调度锚）。
+          ...(outputType === 'video' && d.referenceVideoKey
+            ? { referenceVideos: [d.referenceVideoKey] }
             : {}),
           ...(outputType === 'video' ? { durationSec: d.durationSec ?? 5, resolution: d.resolution ?? '720p' } : {}),
           ...(outputType === 'image' && effectiveImageResolution
@@ -459,6 +464,14 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             }
             return null
           })() : null}
+
+          {/* 预演参考视频（导演台导出）badge + 移除 */}
+          {outputType === 'video' && d.referenceVideoKey ? (
+            <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[10px]" style={{ background: `${CANVAS_TOKENS.accent}14`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.accent}33` }}>
+              <span style={{ color: CANVAS_TOKENS.accent }}>🎬 预演参考视频已绑定（跟随机位运动+调度）</span>
+              <button type="button" onClick={() => updateNodeData(id, { referenceVideoKey: null, referenceVideoUrl: null })} className="nodrag shrink-0" style={{ color: '#FF8A8A' }}>移除</button>
+            </div>
+          ) : null}
 
           {/* 首尾帧: last-frame upload (first frame comes from the upstream ref) */}
           {outputType === 'video' && genMode === 'firstlast' ? (

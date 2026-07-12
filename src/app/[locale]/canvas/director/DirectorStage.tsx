@@ -51,6 +51,9 @@ import { StagePropMesh } from './StagePropMesh'
 import { PropPanel } from './PropPanel'
 import { RigPanel } from './RigPanel'
 import { CameraPanel } from './CameraPanel'
+import { buildPrevizDirectorText } from './previz-director-text'
+import { computeExportCrop, recordPrevizClip } from './previz-record'
+import type { PrevizCrop } from '@/lib/canvas/previz-transcode'
 
 const DEG2RAD = Math.PI / 180
 const uid = () =>
@@ -148,6 +151,8 @@ interface SceneProps {
     selectedShot: StageShot | null
     showCameraPath: boolean
     showActorPaths: boolean
+    /** 录制导出中 — 隐藏 helpers（网格/路径/机位锥），画面只留正片内容。 */
+    recording: boolean
   }
   onSelect: (id: string | null) => void
   onCommitMannequin: (id: string, patch: Partial<StageMannequin>) => void
@@ -275,6 +280,11 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
   useEffect(() => {
     if (orbitRef.current) orbitRef.current.enabled = view === 'director' && !previz.active
   }, [view, selectedId, previz.active])
+
+  // 录制导出中隐藏 helpers 组（capture() 是瞬时隐藏，录制要持续整段）。
+  useEffect(() => {
+    if (helpersRef.current) helpersRef.current.visible = !previz.recording
+  }, [previz.recording])
 
   const isProp = useCallback((id: string) => state.props.some((p) => p.id === id), [state.props])
 
@@ -433,11 +443,26 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
   )
 }
 
+/** previz 导出载荷 — DirectorNode 拿去上传/转码/生成视频节点。 */
+export interface PrevizExportPayload {
+  blob: Blob
+  mimeType: string
+  aspect: '9:16' | '16:9'
+  durationSec: number
+  crop: PrevizCrop
+  scope: 'shot' | 'scene'
+  title: string
+  directorText: string
+  state: DirectorStageState
+}
+
 interface DirectorStageProps {
   initialState: DirectorStageState
   onClose: () => void
   /** Capture cameraId's POV → spawn a frame on the canvas (label = camera label). */
   onSendShot: (dataUrl: string, label: string, state: DirectorStageState) => void | Promise<void>
+  /** 导出预演 → 上传转码 → 生成带参考视频的视频节点；返回可预览/下载的 MP4 URL。 */
+  onExportPreviz?: (payload: PrevizExportPayload) => Promise<{ videoUrl: string }>
   /** Names of character nodes wired into the director (the cast), for display. */
   castLabels?: string[]
   saving?: boolean
@@ -453,7 +478,7 @@ interface DirectorStageProps {
 
 const PANORAMA_PROMPT = '将这张场景图转换为无缝衔接的 360° 等距圆柱全景图（equirectangular panorama，2:1），左右边缘可平滑环绕拼接，保持原场景的风格、光线与氛围，适合作为环境背景球贴图'
 
-export function DirectorStage({ initialState, onClose, onSendShot, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
+export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -482,6 +507,10 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
   const [showCameraPath, setShowCameraPath] = useState(true)
   const [showActorPaths, setShowActorPaths] = useState(true)
+  const [exportAspect, setExportAspect] = useState<'9:16' | '16:9'>('9:16')
+  const [downloadAfterExport, setDownloadAfterExport] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [recording, setRecording] = useState(false)
   const selectedShotIndex = state.shots.findIndex((s) => s.id === selectedShotId)
   const selectedShot = selectedShotIndex >= 0 ? state.shots[selectedShotIndex] : null
   const playback = usePrevizPlayback(state.shots, selectedShotIndex)
@@ -678,6 +707,66 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
     }
   }, [selectedShot, patchShot])
 
+  /** 导出预演：锁 1x 实时播放 + 录制画布 → 交给 onExportPreviz 上传转码。 */
+  const exportPreviz = useCallback(async (scope: 'shot' | 'scene') => {
+    if (!onExportPreviz) { setToast('导出未就绪'); return }
+    if (exporting) return
+    if (state.shots.length === 0) { setToast('先建至少一个镜头（时间轴「+」）'); return }
+    if (scope === 'shot' && selectedShotIndex < 0) { setToast('先在时间轴选中要导出的镜头'); return }
+    const canvasEl = rootRef.current?.querySelector('canvas')
+    if (!(canvasEl instanceof HTMLCanvasElement)) { setToast('画布未就绪'); return }
+
+    // 导出区间（全片时间轴上的秒）
+    let rangeStart = 0
+    let rangeEnd = totalDurationSec(state.shots)
+    if (scope === 'shot') {
+      rangeStart = state.shots.slice(0, selectedShotIndex).reduce((s, x) => s + x.durationSec, 0)
+      rangeEnd = rangeStart + state.shots[selectedShotIndex].durationSec
+    }
+    const durationSec = rangeEnd - rangeStart
+    const title = scope === 'shot' ? `预演·${state.shots[selectedShotIndex].label}` : '预演·完整一幕'
+
+    setExporting(true)
+    try {
+      playback.setRate(1) // 录制是实时的，非 1x 会导致片长错位
+      playback.enter(scope === 'shot' ? 'shot' : 'scene')
+      const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+      await nextFrame(); await nextFrame() // 让 range 状态提交，seek 才不会被旧区间钳制
+      playback.seek(rangeStart)
+      setRecording(true)
+      await nextFrame(); await nextFrame() // helpers 隐藏 + 首帧就位
+      setToast(`录制中…（${durationSec.toFixed(1)}s 实时预演）`)
+      const clip = await recordPrevizClip({
+        canvas: canvasEl,
+        start: playback.toggle,
+        isDone: () => playback.getTimeSec() >= rangeEnd - 0.02,
+        maxMs: (durationSec + 5) * 1000,
+      })
+      setRecording(false)
+      playback.exit()
+      setToast('转码上传中…')
+      const actorLabels = Object.fromEntries([...state.mannequins, ...state.props].map((a) => [a.id, a.label]))
+      const { videoUrl } = await onExportPreviz({
+        blob: clip.blob,
+        mimeType: clip.mimeType,
+        aspect: exportAspect,
+        durationSec,
+        crop: computeExportCrop(canvasEl.width, canvasEl.height, exportAspect),
+        scope,
+        title,
+        directorText: buildPrevizDirectorText(state.shots, actorLabels, scope === 'shot' ? { shotId: state.shots[selectedShotIndex].id } : {}),
+        state,
+      })
+      setToast('✓ 预演已导出：视频节点已带参考视频生成（关闭导演台可见）')
+      if (downloadAfterExport && videoUrl) window.open(videoUrl, '_blank', 'noopener')
+    } catch (e) {
+      setToast(`导出失败：${(e as Error)?.message ?? '未知错误'}`)
+    } finally {
+      setRecording(false)
+      setExporting(false)
+    }
+  }, [onExportPreviz, exporting, state, selectedShotIndex, playback, exportAspect, downloadAfterExport])
+
   const sendShot = useCallback(async (cameraId: string) => {
     const cam = state.cameras.find((c) => c.id === cameraId)
     if (!cam) return
@@ -805,7 +894,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
           showGrid={showGrid}
           showGround={showGround}
           showLabels={showLabels}
-          previz={{ active: playback.active, getTimeSec: playback.getTimeSec, selectedShot, showCameraPath, showActorPaths }}
+          previz={{ active: playback.active, getTimeSec: playback.getTimeSec, selectedShot, showCameraPath, showActorPaths, recording }}
           onSelect={setSelectedId}
           onCommitMannequin={commitMannequin}
           onCommitCamera={commitCamera}
@@ -996,6 +1085,12 @@ export function DirectorStage({ initialState, onClose, onSendShot, castLabels = 
         playback={playback}
         onSelectShot={setSelectedShotId}
         onAddShot={addShot}
+        exporting={exporting}
+        exportAspect={exportAspect}
+        onExportAspect={setExportAspect}
+        onExport={onExportPreviz ? exportPreviz : undefined}
+        downloadAfterExport={downloadAfterExport}
+        onDownloadAfterExport={setDownloadAfterExport}
       />
 
       {/* close dock dropdowns on outside click */}

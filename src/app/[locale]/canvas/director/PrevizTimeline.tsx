@@ -24,9 +24,16 @@ export interface PrevizTimelineProps {
   playback: PrevizPlayback
   onSelectShot: (id: string | null) => void
   onAddShot: () => void
+  /** 导出（S3）：undefined = 宿主没接导出（隐藏导出区）。 */
+  onExport?: (scope: 'shot' | 'scene') => void
+  exporting?: boolean
+  exportAspect?: '9:16' | '16:9'
+  onExportAspect?: (a: '9:16' | '16:9') => void
+  downloadAfterExport?: boolean
+  onDownloadAfterExport?: (v: boolean) => void
 }
 
-export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, onAddShot }: PrevizTimelineProps) {
+export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, onAddShot, onExport, exporting, exportAspect = '9:16', onExportAspect, downloadAfterExport, onDownloadAfterExport }: PrevizTimelineProps) {
   const total = totalDurationSec(shots)
   const remaining = MAX_SCENE_SEC - total
   const selectedIndex = shots.findIndex((s) => s.id === selectedShotId)
@@ -100,7 +107,34 @@ export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, 
         {playback.active ? (
           <button type="button" className={btn} onClick={playback.exit} style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.gold }}>退出预演</button>
         ) : null}
-        <span className="ml-auto font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
+
+        {/* 导出区（右侧）：画幅 + 导出镜头/全片 + 同时下载 */}
+        {onExport ? (
+          <div className="ml-auto flex items-center gap-1.5">
+            <select
+              value={exportAspect}
+              onChange={(e) => onExportAspect?.(e.target.value as '9:16' | '16:9')}
+              disabled={exporting}
+              title="导出画幅"
+              className="rounded-md px-1.5 py-1 font-mono text-[11px] outline-none"
+              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            >
+              <option value="9:16">竖 9:16</option>
+              <option value="16:9">横 16:9</option>
+            </select>
+            <button type="button" className={btn} disabled={exporting || !selectedShotId} onClick={() => onExport('shot')} title="导出选中镜头为 MP4 并生成带参考视频的节点" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>
+              {exporting ? '导出中…' : '导出镜头'}
+            </button>
+            <button type="button" className={btn} disabled={exporting || shots.length === 0} onClick={() => onExport('scene')} style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>
+              {exporting ? '导出中…' : `导出全片 ${total.toFixed(1)}s`}
+            </button>
+            <label className="flex cursor-pointer items-center gap-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }} title="导出完成后在新分页打开 MP4">
+              <input type="checkbox" checked={Boolean(downloadAfterExport)} onChange={(e) => onDownloadAfterExport?.(e.target.checked)} />
+              下载
+            </label>
+          </div>
+        ) : null}
+        <span className={onExport ? 'font-mono text-[11px]' : 'ml-auto font-mono text-[11px]'} style={{ color: CANVAS_TOKENS.text.secondary }}>
           {fmt(playback.timeSec)} / {fmt(total)}
           <span className="ml-2" style={{ color: remaining < SHOT_MIN_SEC ? '#FF8A8A' : CANVAS_TOKENS.text.muted }}>余 {remaining.toFixed(1)}s</span>
         </span>
