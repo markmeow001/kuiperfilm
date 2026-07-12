@@ -46,7 +46,7 @@ import { usePrevizPlayback } from './use-previz-playback'
 import { PrevizDriver } from './PrevizDriver'
 import { PrevizTimeline } from './PrevizTimeline'
 import { PrevizShotPanel } from './PrevizShotPanel'
-import { PathVisuals, parseWpKey, type WpDesc } from './PathVisuals'
+import { ACTOR_PATH_LIFT_Y, PathVisuals, parseWpKey, type WpDesc } from './PathVisuals'
 import { StagePropMesh } from './StagePropMesh'
 import { PropPanel } from './PropPanel'
 import { RigPanel } from './RigPanel'
@@ -258,8 +258,12 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
   // 机位视角: drive the orbit camera to look through the active shot camera.
   // Only positions the camera — orbit.enabled is owned by the single effect
   // below (so there's exactly one writer, no lockout race).
+  // previz 播放期间跳过（PrevizDriver 每帧接管相机）；depends on previz.active
+  // 所以退出预演时会重跑，把 机位视角 的相机位置/FOV 从预演残留状态拉回
+  // 机位本身（review 2026-07-13 HIGH#2 —— 否则退出后卡在预演末帧 + fov 45）。
   const activeShot = view === 'shot' && activeShotCamId ? state.cameras.find((c) => c.id === activeShotCamId) ?? null : null
   useEffect(() => {
+    if (previz.active) return
     const orbit = orbitRef.current
     if (activeShot) {
       const tgt = effectiveTarget(activeShot, state.mannequins)
@@ -271,7 +275,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
       ;(viewCamera as THREE.PerspectiveCamera).fov = 45
       ;(viewCamera as THREE.PerspectiveCamera).updateProjectionMatrix()
     }
-  }, [activeShot, viewCamera, state.mannequins])
+  }, [activeShot, viewCamera, state.mannequins, previz.active])
 
   // SINGLE owner of orbit.enabled: free in 导演视角, locked in 机位视角 and
   // during previz playback (the driver owns the camera then). Re-runs on
@@ -463,6 +467,12 @@ interface DirectorStageProps {
   onSendShot: (dataUrl: string, label: string, state: DirectorStageState) => void | Promise<void>
   /** 导出预演 → 上传转码 → 生成带参考视频的视频节点；返回可预览/下载的 MP4 URL。 */
   onExportPreviz?: (payload: PrevizExportPayload) => Promise<{ videoUrl: string }>
+  /**
+   * 关闭导演台时把最终舞台状态（含 previz 镜头序列/道具）持久化回节点。
+   * v2 只在「发送」时存——previz 的时间轴工作量大得多，直接 ✕ 关掉丢
+   * 全部排练不可接受（review 2026-07-13 HIGH#4）。
+   */
+  onPersistState?: (state: DirectorStageState) => void
   /** Names of character nodes wired into the director (the cast), for display. */
   castLabels?: string[]
   saving?: boolean
@@ -478,7 +488,7 @@ interface DirectorStageProps {
 
 const PANORAMA_PROMPT = '将这张场景图转换为无缝衔接的 360° 等距圆柱全景图（equirectangular panorama，2:1），左右边缘可平滑环绕拼接，保持原场景的风格、光线与氛围，适合作为环境背景球贴图'
 
-export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
+export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, onPersistState, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -691,9 +701,14 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
     patchShot(selectedShot.id, { movePaths: Object.keys(next).length > 0 ? next : undefined })
   }, [selectedShot, patchShot])
 
-  /** waypoint 小球拖动 commit（来自 SceneContents 的 TransformControls）。 */
-  const commitWaypoint = useCallback((desc: { kind: 'cam'; index: number } | { kind: 'act'; actorId: string; index: number }, position: Vec3) => {
+  /**
+   * waypoint 小球拖动 commit（来自 SceneContents 的 TransformControls）。
+   * 调度点 mesh 是抬高 ACTOR_PATH_LIFT_Y 渲染的，存回去要减掉，否则每次
+   * 拖动 Y 累积漂移。
+   */
+  const commitWaypoint = useCallback((desc: { kind: 'cam'; index: number } | { kind: 'act'; actorId: string; index: number }, rawPosition: Vec3) => {
     if (!selectedShot) return
+    const position: Vec3 = desc.kind === 'act' ? [rawPosition[0], rawPosition[1] - ACTOR_PATH_LIFT_Y, rawPosition[2]] : rawPosition
     if (desc.kind === 'cam') {
       const wps = [...(selectedShot.cameraWaypoints ?? [])]
       if (desc.index < 0 || desc.index >= wps.length) return
@@ -935,7 +950,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
             </button>
           ))}
         </div>
-        <button type="button" onClick={onClose} className={btn} style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>✕</button>
+        <button type="button" onClick={() => { onPersistState?.(state); onClose() }} className={btn} style={{ color: CANVAS_TOKENS.text.secondary, background: CANVAS_TOKENS.bg.hover }}>✕</button>
       </div>
 
       {/* Left 场景 panel — scene tree (cameras + mannequins) with hide/lock/select */}

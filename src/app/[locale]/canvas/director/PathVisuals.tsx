@@ -19,6 +19,12 @@ import type { Vec3 } from './stage-types'
 
 export const CAM_PATH_COLOR = '#4F8EF7'
 export const ACTOR_PATH_COLOR = '#F4A93E'
+/**
+ * 调度线贴地略抬高的渲染偏移。waypoint mesh 也在抬高后的位置渲染，所以
+ * TransformControls 拖完 commit 回存储时必须减掉它（DirectorStage
+ * commitWaypoint）——否则每拖一次 Y 就累积 +0.04（review 2026-07-13 HIGH#3）。
+ */
+export const ACTOR_PATH_LIFT_Y = 0.04
 
 export const camWpKey = (i: number) => `wp:cam:${i}`
 export const actWpKey = (actorId: string, i: number) => `wp:act:${actorId}:${i}`
@@ -132,7 +138,7 @@ export function PathVisuals({ shot, showCameraPath, showActorPaths, selectedId, 
               keyFor={(i) => actWpKey(id, i)}
               onSelect={onSelect}
               registerWp={registerWp}
-              liftY={0.04}
+              liftY={ACTOR_PATH_LIFT_Y}
             />
           ))
         : null}

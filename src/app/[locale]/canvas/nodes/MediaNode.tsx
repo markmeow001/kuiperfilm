@@ -469,7 +469,8 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           {outputType === 'video' && d.referenceVideoKey ? (
             <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-[10px]" style={{ background: `${CANVAS_TOKENS.accent}14`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.accent}33` }}>
               <span style={{ color: CANVAS_TOKENS.accent }}>🎬 预演参考视频已绑定（跟随机位运动+调度）</span>
-              <button type="button" onClick={() => updateNodeData(id, { referenceVideoKey: null, referenceVideoUrl: null })} className="nodrag shrink-0" style={{ color: '#FF8A8A' }}>移除</button>
+              {/* genMode 一并清空：否则节点留在 omni(R2V) 却没参考视频，生成莫名失败 */}
+              <button type="button" onClick={() => updateNodeData(id, { referenceVideoKey: null, referenceVideoUrl: null, genMode: undefined })} className="nodrag shrink-0" style={{ color: '#FF8A8A' }}>移除</button>
             </div>
           ) : null}
 

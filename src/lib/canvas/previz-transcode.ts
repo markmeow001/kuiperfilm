@@ -31,9 +31,12 @@ export async function transcodePrevizClip(opts: {
 }): Promise<void> {
   const { inputPath, outPath, crop, outWidth, outHeight } = opts
   const vf = `crop=${crop.w}:${crop.h}:${crop.x}:${crop.y},scale=${outWidth}:${outHeight},fps=30`
+  // -t 16: 输出时长硬顶。meta.durationSec 只是客户端声明——恶意/异常 webm
+  // 实际可长达数小时，没有这个 cap ffmpeg 会全量转码到 120s timeout 才被杀
+  //（security review 2026-07-13 MEDIUM#1）。16s > R2V 上限 15.2s，正常导出不受影响。
   await execFileAsync(
     'ffmpeg',
-    ['-y', '-i', inputPath, '-vf', vf, '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outPath],
+    ['-y', '-i', inputPath, '-t', '16', '-vf', vf, '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outPath],
     { timeout: TRANSCODE_TIMEOUT_MS },
   )
 }

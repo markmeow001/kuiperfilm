@@ -141,6 +141,11 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
     const frameId = uid()
     // R2V 时长选项是整数秒（5-15），预演片长向上取整对齐
     const durationSec = Math.min(Math.max(Math.ceil(payload.durationSec), 5), 15)
+    // 预演短于 5s 时输出被抬到 5s——导演指令里默认有「保持时长」的要求，
+    // 会跟实际请求矛盾；补一句让模型按参考节奏自然延展（review MEDIUM）。
+    const durationNote = payload.durationSec < durationSec - 0.01
+      ? `\n（参考视频实际 ${payload.durationSec.toFixed(1)} 秒、输出 ${durationSec} 秒：以参考视频的运动节奏为基准自然延展，勿加速。）`
+      : ''
     addNodes({
       id: frameId,
       type: 'video',
@@ -148,7 +153,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
       data: {
         ...DEFAULT_NODE_DATA,
         title: payload.title,
-        prompt: payload.directorText,
+        prompt: payload.directorText + durationNote,
         genMode: 'omni',
         aspectRatio: payload.aspect,
         durationSec,
@@ -196,6 +201,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
               onClose={() => setOpen(false)}
               onSendShot={handleSendShot}
               onExportPreviz={handleExportPreviz}
+              onPersistState={(s) => updateNodeData(id, { stage: s })}
               saving={upload.isPending}
               uploadImage={async (file) => {
                 const res = await upload.mutateAsync({ file, type: 'image' })

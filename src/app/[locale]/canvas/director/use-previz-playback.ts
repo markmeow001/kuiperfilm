@@ -65,10 +65,26 @@ export function usePrevizPlayback(shots: StageShot[], selectedShotIndex: number)
   )
   const rangeRef = useRef<[number, number]>([rangeStartSec, rangeEndSec])
   rangeRef.current = [rangeStartSec, rangeEndSec]
+  const sceneEndRef = useRef(sceneEnd)
+  sceneEndRef.current = sceneEnd
 
+  /** 模式区间内钳制（播放 tick / 区间变更效应用）。 */
   const setTime = useCallback((sec: number) => {
     const [lo, hi] = rangeRef.current
     const clamped = Math.min(Math.max(sec, lo), hi)
+    timeRef.current = clamped
+    setTimeSec(clamped)
+  }, [])
+
+  /**
+   * seek 只对全片边界钳制，不对当前模式区间钳制 —— seek 常与
+   * onSelectShot 同一个事件里连发（时间轴「上一镜/下一镜」），此时
+   * rangeRef 还是旧镜头的区间；用旧区间钳会把目标秒数拉去错误的位置
+   * （review 2026-07-13 HIGH#1）。渲染提交后，下方的区间变更 effect 会
+   * 再按新区间收一次口。
+   */
+  const setTimeSceneClamped = useCallback((sec: number) => {
+    const clamped = Math.min(Math.max(sec, 0), sceneEndRef.current)
     timeRef.current = clamped
     setTimeSec(clamped)
   }, [])
@@ -134,8 +150,8 @@ export function usePrevizPlayback(shots: StageShot[], selectedShotIndex: number)
 
   const seek = useCallback((sec: number) => {
     setActive(true)
-    setTime(sec)
-  }, [setTime])
+    setTimeSceneClamped(sec)
+  }, [setTimeSceneClamped])
 
   const getTimeSec = useCallback(() => timeRef.current, [])
 

@@ -62,7 +62,8 @@ function parseMeta(raw: unknown): ExportMeta {
     })
   }
   const c = m.crop as Partial<PrevizCrop> | undefined
-  const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0
+  // 上限 8192：远超任何真实画布尺寸；挡掉喂给 ffmpeg 的天文数字 crop。
+  const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 8192
   if (!c || !num(c.x) || !num(c.y) || !num(c.w) || !num(c.h) || c.w === 0 || c.h === 0) {
     throw new ApiError('INVALID_PARAMS', { code: 'CROP_INVALID', details: { got: m.crop } })
   }
@@ -102,9 +103,19 @@ export const POST = apiHandler(async (request: NextRequest) => {
     const lastPath = path.join(dir, 'last.jpg')
     await writeFile(inPath, Buffer.from(await file.arrayBuffer()))
 
-    await transcodePrevizClip({ inputPath: inPath, outPath, crop: meta.crop, outWidth: out.w, outHeight: out.h })
-    await extractPrevizFrame(outPath, firstPath, 'first')
-    await extractPrevizFrame(outPath, lastPath, 'last')
+    // ffmpeg 失败的原始 Error 带完整命令行（/tmp 路径、build 信息），不能
+    // 透传给客户端 —— 记服务端 log，回统一的 FFMPEG_FAILED。
+    try {
+      await transcodePrevizClip({ inputPath: inPath, outPath, crop: meta.crop, outWidth: out.w, outHeight: out.h })
+      await extractPrevizFrame(outPath, firstPath, 'first')
+      await extractPrevizFrame(outPath, lastPath, 'last')
+    } catch (err) {
+      logError(`[canvas.previz-export] ffmpeg failed userId=${userId} aspect=${meta.aspect} err=${err instanceof Error ? err.message : String(err)}`)
+      throw new ApiError('EXTERNAL_ERROR', {
+        code: 'FFMPEG_FAILED',
+        message: '预演转码失败：录制文件可能损坏，请重试导出',
+      })
+    }
 
     const videoKey = generateUniqueKey(`video/playground-ref/${userId}/previz`, 'mp4')
     const firstFrameKey = generateUniqueKey(`images/playground-ref/${userId}/previz-first`, 'jpg')

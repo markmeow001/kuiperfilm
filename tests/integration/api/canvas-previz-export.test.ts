@@ -83,6 +83,26 @@ describe('POST /api/canvas/previz-export', () => {
     expect(JSON.stringify(await res.json())).toContain('CROP_INVALID')
   })
 
+  it('rejects an absurdly large crop (ffmpeg arg hardening)', async () => {
+    const res = await POST(makeRequest({ file: webmFile(), meta: { ...META, crop: { x: 0, y: 0, w: 1e9, h: 1080 } } }))
+    expect(res.status).toBe(400)
+    expect(JSON.stringify(await res.json())).toContain('CROP_INVALID')
+    expect(transcodeMock.transcodePrevizClip).not.toHaveBeenCalled()
+  })
+
+  it('sanitizes ffmpeg failures — no command line / tmp path leaks to the client', async () => {
+    transcodeMock.transcodePrevizClip.mockRejectedValueOnce(
+      new Error('Command failed: ffmpeg -y -i /tmp/previz-abc123/in.webm ...\nffmpeg version 8.1.2 stderr blah'),
+    )
+    const res = await POST(makeRequest({ file: webmFile(), meta: META }))
+    expect(res.status).toBeGreaterThanOrEqual(500)
+    const raw = JSON.stringify(await res.json())
+    expect(raw).toContain('FFMPEG_FAILED')
+    expect(raw).not.toContain('/tmp/')
+    expect(raw).not.toContain('Command failed')
+    expect(cosMock.uploadToCOS).not.toHaveBeenCalled()
+  })
+
   it('happy path: transcodes 9:16 → 1080x1920, uploads video + 2 frames, returns keys', async () => {
     const res = await POST(makeRequest({ file: webmFile(), meta: META }))
     expect(res.status).toBe(200)
