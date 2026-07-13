@@ -103,6 +103,7 @@ export const TASK_TYPE = {
   // Canvas composition is CPU-only and free in v1. Routed to VIDEO queue but
   // executed behind a global concurrency=1 guard and replaceable executor.
   CANVAS_COMPOSE_VIDEO: 'canvas_compose_video',
+  CANVAS_STORYBOARD_EXPORT: 'canvas_storyboard_export',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

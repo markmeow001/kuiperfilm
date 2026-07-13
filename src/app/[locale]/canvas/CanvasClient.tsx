@@ -415,12 +415,13 @@ function CanvasInner() {
     const gid = uid()
     const gx = b.x - PAD
     const gy = b.y - PAD - HEADER
+    const isStoryboard = sel.every((node) => node.type === 'image' || node.type === 'video')
     const group: Node<CanvasNodeData> = {
       id: gid,
       type: 'group',
       position: { x: gx, y: gy },
       style: { width: b.width + PAD * 2, height: b.height + PAD * 2 + HEADER },
-      data: { ...DEFAULT_NODE_DATA, title: '分组' },
+      data: { ...DEFAULT_NODE_DATA, title: isStoryboard ? '分镜组' : '分组', ...(isStoryboard ? { groupKind: 'storyboard' as const, orderedChildIds: sel.map((node) => node.id), storyboardColumns: 4 as const, showShotNumber: true } : {}) },
       selected: true,
     }
     const selIds = new Set(sel.map((n) => n.id))

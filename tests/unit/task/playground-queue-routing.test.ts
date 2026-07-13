@@ -44,4 +44,8 @@ describe('Phase 9.1 — playground task queue routing', () => {
   it('routes CANVAS_COMPOSE_VIDEO to the video queue (never text)', () => {
     expect(getQueueTypeByTaskType(TASK_TYPE.CANVAS_COMPOSE_VIDEO)).toBe('video')
   })
+
+  it('routes CANVAS_STORYBOARD_EXPORT to the video queue (never text)', () => {
+    expect(getQueueTypeByTaskType(TASK_TYPE.CANVAS_STORYBOARD_EXPORT)).toBe('video')
+  })
 })

@@ -217,6 +217,11 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 
 交付：Group 从视觉容器升级为可重排、可导出、可送合成的分镜组。
 
+> **完成 2026-07-13**：4K `renderStill` spike（12 镜）实测 24.8s、输出 178KB、
+> Node max RSS 661MB。正式实现限制 ≤25 镜、90s timeout、默认 RSS 预算 1.5GB；
+> 与视频合成共用 Redis NX 重资源锁（两者不并跑），bundle Promise 跨任务复用；
+> 渲染期间每 100ms 采样 RSS，成功／失败均记 peak，超预算主动 cancel 并显式失败。
+
 - 多选图片／视频 →「建立分镜组」。
 - 组内独立顺序条，不以 x/y 坐标推断顺序。
 - 图片组：导出带镜号、标题的 4K 故事板 JPEG；可选 PDF。

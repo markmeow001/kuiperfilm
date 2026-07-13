@@ -132,6 +132,13 @@ export interface CanvasNodeData extends Record<string, unknown> {
   ttsTaskId?: string | null
   /** Text node: in-flight CANVAS_TEXT (writing assistant) task id. */
   textTaskId?: string | null
+  groupKind?: 'storyboard'
+  orderedChildIds?: string[]
+  storyboardColumns?: 2 | 3 | 4
+  showShotNumber?: boolean
+  storyboardExportTaskId?: string | null
+  storyboardExportKey?: string | null
+  storyboardExportUrl?: string | null
   /** Composition node: bounded CPU-only canvas video assembly. */
   clipOrder?: string[]
   transition?: 'cut' | 'crossfade'
@@ -214,6 +221,12 @@ export const DEFAULT_NODE_DATA = {
   composeTaskId: null as string | null,
   resultTaskId: null as string | null,
   resultKey: null as string | null,
+  orderedChildIds: [] as string[],
+  storyboardColumns: 4 as 2 | 3 | 4,
+  showShotNumber: true,
+  storyboardExportTaskId: null as string | null,
+  storyboardExportKey: null as string | null,
+  storyboardExportUrl: null as string | null,
   runId: null as string | null,
   resultUrl: null as string | null,
   // 视频生成结果的尾帧(worker ffmpeg 抽出、签名后的 URL)— 供下游节点

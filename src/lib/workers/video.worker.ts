@@ -21,6 +21,7 @@ import { handleVideoEditorRenderTask } from './handlers/video-editor-render'
 import { handleEpisodePackageZipTask } from './handlers/episode-package-zip'
 import { handlePlaygroundVideoTask } from './handlers/playground-video'
 import { handleCanvasComposeVideoTask } from './handlers/canvas-compose-video'
+import { handleCanvasStoryboardExportTask } from './handlers/canvas-storyboard-export'
 import { loadStyleProfile } from '@/lib/style-profile/loader'
 
 type AnyObj = Record<string, unknown>
@@ -326,6 +327,8 @@ async function processVideoTask(job: Job<TaskJobData>) {
       return await handlePlaygroundVideoTask(job)
     case TASK_TYPE.CANVAS_COMPOSE_VIDEO:
       return await handleCanvasComposeVideoTask(job)
+    case TASK_TYPE.CANVAS_STORYBOARD_EXPORT:
+      return await handleCanvasStoryboardExportTask(job)
     default:
       throw new Error(`Unsupported video task type: ${job.data.type}`)
   }

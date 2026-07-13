@@ -40,7 +40,7 @@ describe('canvas compose worker', () => {
 
   it('global lock occupied -> retryable rate-limit failure, no second compose execution', async () => {
     redisMock.set.mockResolvedValue(null)
-    await expect(handleCanvasComposeVideoTask(job())).rejects.toMatchObject({ message: 'CANVAS_COMPOSE_BUSY', code: 'RATE_LIMIT' })
+    await expect(handleCanvasComposeVideoTask(job())).rejects.toMatchObject({ message: 'CANVAS_HEAVY_RENDER_BUSY', code: 'RATE_LIMIT' })
     expect(executorMock.execute).not.toHaveBeenCalled()
   })
 

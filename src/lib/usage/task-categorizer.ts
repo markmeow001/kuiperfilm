@@ -37,6 +37,7 @@ const VIDEO_TYPES = new Set<string>([
   // other video gen so usage stats + the rate-limit gate apply.
   'playground_video',
   'canvas_compose_video',
+  'canvas_storyboard_export',
 ])
 
 const IMAGE_TYPES = new Set<string>([

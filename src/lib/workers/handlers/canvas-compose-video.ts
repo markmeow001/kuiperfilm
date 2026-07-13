@@ -1,14 +1,11 @@
 import type { Job } from 'bullmq'
 import { prisma } from '@/lib/prisma'
-import { queueRedis } from '@/lib/redis'
+import { acquireCanvasHeavyRenderLock } from '@/lib/canvas/heavy-render-lock'
 import { canvasComposeExecutor } from '@/lib/canvas/ffmpeg-compose-executor'
 import { CANVAS_COMPOSE_LIMITS } from '@/lib/canvas/compose-contract'
 import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
 import { assertTaskActive } from '../utils'
-
-const LOCK_KEY = 'canvas:compose:global-lock'
-const LOCK_TTL_MS = 20 * 60 * 1000
 
 function resultKeys(result: unknown): string[] {
   if (!result || typeof result !== 'object') return []
@@ -20,10 +17,6 @@ function audioKey(result: unknown): string | null {
   if (!result || typeof result !== 'object') return null
   const value = (result as { audioKey?: unknown }).audioKey
   return typeof value === 'string' && value ? value : null
-}
-
-async function releaseLock(token: string) {
-  await queueRedis.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", 1, LOCK_KEY, token)
 }
 
 export async function handleCanvasComposeVideoTask(job: Job<TaskJobData>) {
@@ -67,13 +60,7 @@ export async function handleCanvasComposeVideoTask(job: Job<TaskJobData>) {
   const voiceKey = resolveAudioKey(voiceTaskId, 'voice')
   const musicKey = resolveAudioKey(musicTaskId, 'music')
 
-  const lockToken = `${job.id}:${crypto.randomUUID()}`
-  const acquired = await queueRedis.set(LOCK_KEY, lockToken, 'PX', LOCK_TTL_MS, 'NX')
-  if (acquired !== 'OK') {
-    const error = new Error('CANVAS_COMPOSE_BUSY') as Error & { code?: string }
-    error.code = 'RATE_LIMIT'
-    throw error
-  }
+  const releaseLock = await acquireCanvasHeavyRenderLock(`compose:${job.id}`)
   try {
     await reportTaskProgress(job, 10, { stage: 'canvas_compose_prepare' })
     await assertTaskActive(job, 'canvas_compose_prepare')
@@ -92,6 +79,6 @@ export async function handleCanvasComposeVideoTask(job: Job<TaskJobData>) {
     await reportTaskProgress(job, 95, { stage: 'canvas_compose_done' })
     return { success: true, resultUrls: [result.resultKey], resultKey: result.resultKey, durationSec: result.durationSec }
   } finally {
-    await releaseLock(lockToken)
+    await releaseLock()
   }
 }
