@@ -18,6 +18,7 @@ import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { isSafeReference } from '@/lib/playground/reference-guard'
 import { getSignedUrl, toFetchableUrl } from '@/lib/cos'
+import { contentDispositionAttachment } from '@/lib/http/content-disposition'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
 
 export const GET = apiHandler(async (request: NextRequest) => {
@@ -85,7 +86,9 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const headers: HeadersInit = {
     'Content-Type': contentType,
     'Cache-Control': 'no-cache',
-    'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    // MUST ASCII-sanitize the quoted filename — a CJK char here is > 255 and
+    // makes the Response constructor throw (users saw the 500 as download.json).
+    'Content-Disposition': contentDispositionAttachment(filename),
   }
   if (contentLength) headers['Content-Length'] = contentLength
 

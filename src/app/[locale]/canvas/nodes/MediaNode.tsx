@@ -176,6 +176,10 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
     // Cache the result URL into node data so a reload shows it before polling.
     const resultUrl = run?.resultUrls?.[0] ?? d.resultUrl ?? null
+    // Download basename: node title (镜 3 / 图片…) + short run suffix so a page
+    // full of same-titled nodes still saves as distinct, ordered files (not the
+    // browser's generic「download」). The route appends the real extension.
+    const downloadName = `${d.title || (outputType === 'image' ? '图片' : '视频')}${d.runId ? `_${d.runId.slice(-6)}` : ''}`
     useEffect(() => {
       if (run?.status === 'succeeded' && run.resultUrls?.[0] && run.resultUrls[0] !== d.resultUrl) {
         updateNodeData(id, {
@@ -398,7 +402,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                   ⤢ 放大
                 </button>
                 <a
-                  href={canvasDownloadHref(resultUrl, d.title || (outputType === 'image' ? '图片' : '视频'))}
+                  href={canvasDownloadHref(resultUrl, downloadName)}
                   download
                   title="下载到本地"
                   className="nodrag pointer-events-auto rounded-md px-2 py-1 text-[11px]"
@@ -429,7 +433,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
         <CanvasMediaLightbox
           url={resultUrl}
           kind={outputType}
-          filename={d.title || (outputType === 'image' ? '图片' : '视频')}
+          filename={downloadName}
           onClose={() => setLightboxOpen(false)}
         />
       ) : null}
