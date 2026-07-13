@@ -322,6 +322,53 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 > 36 tests、`test:guards`、production build 全绿；真实 DB browser smoke 须在目标环境
 > 先依 runbook 套用 migration 后执行，本切片按「不要部署、不要动 prod」未套 migration。
 
+### S5 审查结果（2026-07-13 深夜，双 agent——开工 S6 前必须修完）
+
+**CRITICAL — workspace 资产归属检查读了一个会被运行时抹掉的字段（本仓库已知坑复发）：**
+`canvas-assets.ts resolvePrimaryKey` 从 `task.payload.workspaceId` 证明 scope，但
+`task/service.ts mergePayloadMetaWithExisting` 在每次 progress 上报时**整个替换
+payload 顶层、只保留 meta**——`waitExternalResult` 的轮询必然触发 → 真实异步生成
+完成时 workspaceId 已被抹掉。后果：①workspace 画布里「保存生成结果到资产库」
+几乎必失败（SCOPE_MISMATCH）②同一个坏读反向放行：workspace 生成的内容可以
+被静默存进**个人** scope（归属泄漏）③CANVAS_COMPOSE_VIDEO 的 schema 根本没有
+workspaceId，合成资产 100% 存不进 workspace。这正是项目记忆
+`task.payload 会被 runtime 覆写、反查业务参数不走 task.payload` 的教训复发。
+修法：workspaceId 写进 `payload.meta`（merge 明确保留 meta）——提交点两处：
+playground run route 与 compose route（后者从 canvasId 服务端解析）；读取端
+meta 优先。**必须加回归测试：任务经过至少一次 reportTaskProgress 后再断言
+资产保存的 scope 判定**（现测试用手工对象，给了假信心）。
+
+**HIGH — 「存入→拖回→再生成」闭环在生成端 403：**
+任务来源资产的 storageKey 是 `images/playground-runs/…`，拖回节点后提交生成，
+run route 的 reference-guard 只放行 `/playground-ref/<userId>/` → 显式 403，
+S5 主卖点对生成结果类资产不成立；workspace 成员用共享资产同样全灭。
+修法二选一（Codex 拍板并写理由进本节）：
+ a) 保存资产时服务端把对象 COS copy 进中性资产命名空间（如
+    `images/canvas-assets/<scopeKey>/…`）并以副本 key 入库——下游 guard 加这一个
+    namespace 白名单（按 scope 成员资格 DB 验证），workspace 成员共用同一副本
+ b) reference-guard 增加「key 在 canvas_assets 且请求者可读该 scope」的 DB 验证
+    通道（沿 assertDirectKeyAllowed 的已证所有权模式）
+验收测试必须走全链：存资产 → 拖回 → 提交 /api/playground/run **通过 guard**。
+
+**MEDIUM ×2：**
+- 视频资产拖回丢首帧：canvas-asset-drop 只接 lastFrameUrl→tailFrameUrl，
+  firstFrameUrl 全客户端零读取。补 anchorKey/anchorUrl 映射
+- 新引入 tsc 错误 CanvasClient.tsx(609) TS2322（Partial spread 进 required title）
+  ——next.config `ignoreBuildErrors:true` 让 build 假绿，修掉并留意这个 gate 缺口
+
+**LOW（修便宜的三个，其余登记接受）：**
+- 保存弹窗重开不 reset mutation 错误与 folder/description 字段
+- 手动 SQL 的 type CHECK 比 prisma schema 严——加注释说明须与
+  CANVAS_ASSET_TYPES 同步（prod 走 db push 无此约束）
+- POST 的 admin bypass 与 GET 的 isAdmin:false 不对称——加一行注释确认故意
+- 接受不修：assetStorageKey 死字段（删掉或接线，若删同步删镜像断言）、
+  canvasAssetSourceSchema 无外部引用 export、mime mismatch 留 MediaObject 孤儿行
+
+**做对的（保持）**：assertDirectKeyAllowed 的已证所有权模式、P2002 race-safe 去重、
+.strict() 防 workspaceId 走私、fixtures 用真实 key 形状（惯性毛病已改）。
+
+修完标准：全链验收测试绿 + canvas/worker 测试与 guards 绿 + tsc 无新错。
+
 ### S6 — 字幕闭环（后置）
 
 字幕擦除属于独立 AI/视频编辑能力，不与合成首版混做：
