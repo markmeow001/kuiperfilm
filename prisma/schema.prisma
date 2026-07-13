@@ -846,6 +846,8 @@ model Canvas {
   userId      String
   workspaceId String?
   title       String   @default("未命名画布")
+  // canvas = editable workspace; workflow = reusable, read-only template.
+  kind        String   @default("canvas") @db.VarChar(20)
   // JSON.stringify(SerializedNode[]) — see app/[locale]/canvas/lib/canvas-types.
   // MediumText (16MB): a canvas with stage blobs/keys can exceed Text's 64KB,
   // which would truncate → corrupt JSON → silent canvas wipe.
@@ -859,7 +861,7 @@ model Canvas {
 
   user User @relation("CanvasUser", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, updatedAt(sort: Desc)])
+  @@index([userId, kind, updatedAt(sort: Desc)])
   @@map("canvas")
 }
 

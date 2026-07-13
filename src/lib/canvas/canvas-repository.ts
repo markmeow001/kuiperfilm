@@ -13,6 +13,7 @@ import type { CanvasSaveInput } from './canvas-validation'
 export interface CanvasRecord {
   id: string
   title: string
+  kind: 'canvas' | 'workflow'
   nodes: unknown
   edges: unknown
   viewport: unknown
@@ -31,6 +32,7 @@ function safeParse(value: string | null, fallback: unknown): unknown {
 function toRecord(row: {
   id: string
   title: string
+  kind: string
   nodes: string
   edges: string
   viewport: string | null
@@ -39,6 +41,7 @@ function toRecord(row: {
   return {
     id: row.id,
     title: row.title,
+    kind: row.kind === 'workflow' ? 'workflow' : 'canvas',
     nodes: safeParse(row.nodes, []),
     edges: safeParse(row.edges, []),
     viewport: safeParse(row.viewport, { x: 0, y: 0, zoom: 1 }),
@@ -49,10 +52,19 @@ function toRecord(row: {
 /** The user's most-recently-updated canvas, or null if they have none. */
 export async function getLatestCanvasForUser(userId: string): Promise<CanvasRecord | null> {
   const row = await prisma.canvas.findFirst({
-    where: { userId },
+    where: { userId, kind: 'canvas' },
     orderBy: { updatedAt: 'desc' },
   })
   return row ? toRecord(row) : null
+}
+
+/** All user-owned canvases and workflow templates, newest first. */
+export async function listCanvasResourcesForUser(userId: string): Promise<CanvasRecord[]> {
+  const rows = await prisma.canvas.findMany({
+    where: { userId },
+    orderBy: { updatedAt: 'desc' },
+  })
+  return rows.map(toRecord)
 }
 
 /**
@@ -66,6 +78,7 @@ export async function upsertCanvasForUser(
 ): Promise<CanvasRecord> {
   const data = {
     title: input.title ?? '未命名画布',
+    kind: input.kind,
     nodes: JSON.stringify(input.nodes),
     edges: JSON.stringify(input.edges),
     viewport: JSON.stringify(input.viewport),
@@ -85,4 +98,11 @@ export async function upsertCanvasForUser(
 
   const row = await prisma.canvas.create({ data: { ...data, userId } })
   return toRecord(row)
+}
+
+
+/** Delete exactly one owned canvas/workflow. Missing or foreign ids fail explicitly. */
+export async function deleteCanvasResourceForUser(userId: string, id: string): Promise<void> {
+  const result = await prisma.canvas.deleteMany({ where: { id, userId } })
+  if (result.count !== 1) throw new Error('CANVAS_NOT_FOUND')
 }

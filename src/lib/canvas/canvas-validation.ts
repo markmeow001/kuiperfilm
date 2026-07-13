@@ -46,9 +46,14 @@ const serializedViewportSchema = z.object({
 export const canvasSaveSchema = z.object({
   id: z.string().min(1).max(64).optional(),
   title: z.string().max(200).optional(),
+  kind: z.enum(['canvas', 'workflow']).default('canvas'),
   nodes: z.array(serializedNodeSchema).max(MAX_NODES),
   edges: z.array(serializedEdgeSchema).max(MAX_EDGES),
   viewport: serializedViewportSchema,
+})
+
+export const canvasDeleteSchema = z.object({
+  id: z.string().min(1).max(64),
 })
 
 export type CanvasSaveInput = z.infer<typeof canvasSaveSchema>

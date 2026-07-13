@@ -11,16 +11,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { logError as _ulogError } from '@/lib/logging/core'
-import { getLatestCanvasForUser, upsertCanvasForUser } from '@/lib/canvas/canvas-repository'
-import { canvasSaveSchema, MAX_CANVAS_BYTES } from '@/lib/canvas/canvas-validation'
+import { deleteCanvasResourceForUser, getLatestCanvasForUser, listCanvasResourcesForUser, upsertCanvasForUser } from '@/lib/canvas/canvas-repository'
+import { canvasDeleteSchema, canvasSaveSchema, MAX_CANVAS_BYTES } from '@/lib/canvas/canvas-validation'
 
 export const GET = apiHandler(async () => {
   const authResult = await requireUserAuth()
   if (isErrorResponse(authResult)) return authResult
   const { session } = authResult
 
-  const canvas = await getLatestCanvasForUser(session.user.id)
-  return NextResponse.json({ canvas })
+  const [canvas, resources] = await Promise.all([
+    getLatestCanvasForUser(session.user.id),
+    listCanvasResourcesForUser(session.user.id),
+  ])
+  return NextResponse.json({ canvas, resources })
+})
+
+export const DELETE = apiHandler(async (request: NextRequest) => {
+  const authResult = await requireUserAuth()
+  if (isErrorResponse(authResult)) return authResult
+  const parsed = canvasDeleteSchema.safeParse({ id: new URL(request.url).searchParams.get('id') })
+  if (!parsed.success) throw new ApiError('INVALID_PARAMS', { code: 'CANVAS_ID_INVALID' })
+  try {
+    await deleteCanvasResourceForUser(authResult.session.user.id, parsed.data.id)
+    return NextResponse.json({ deletedId: parsed.data.id })
+  } catch (err) {
+    if (err instanceof Error && err.message === 'CANVAS_NOT_FOUND') {
+      throw new ApiError('NOT_FOUND', { code: 'CANVAS_NOT_FOUND' })
+    }
+    throw err
+  }
 })
 
 export const POST = apiHandler(async (request: NextRequest) => {

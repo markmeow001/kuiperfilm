@@ -38,7 +38,7 @@ import { serializeCanvas, deserializeCanvas } from './lib/canvas-serialize'
 import { CanvasGenerationProvider, useCanvasGeneration } from './lib/canvas-generation'
 import { TOOLBOX_PRESETS } from './lib/canvas-toolbox'
 import { useCharacterLibrary } from './lib/use-character-library'
-import { useCanvas, useSaveCanvas } from '@/lib/query/mutations/canvas-mutations'
+import { useCanvas, useDeleteCanvas, useSaveCanvas, type CanvasRecordView } from '@/lib/query/mutations/canvas-mutations'
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { makeMediaNode } from './nodes/MediaNode'
 import { TextNode } from './nodes/TextNode'
@@ -47,6 +47,7 @@ import { DirectorNode } from './nodes/DirectorNode'
 import { ScriptNode } from './nodes/ScriptNode'
 import { AudioNode } from './nodes/AudioNode'
 import { GroupNode } from './nodes/GroupNode'
+import { CanvasResourceMenu } from './CanvasResourceMenu'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -94,6 +95,9 @@ function CanvasInner() {
   const [charLib, setCharLib] = useState(false)
   const [showMinimap, setShowMinimap] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [resourcesOpen, setResourcesOpen] = useState(false)
+  const [resourceError, setResourceError] = useState<string | null>(null)
+  const [canvasTitle, setCanvasTitle] = useState('未命名画布')
   const [zoom, setZoom] = useState(1)
   const rf = useReactFlow()
   const instanceRef = useRef<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null)
@@ -106,6 +110,7 @@ function CanvasInner() {
 
   const canvasQuery = useCanvas()
   const save = useSaveCanvas()
+  const deleteCanvas = useDeleteCanvas()
   const gen = useCanvasGeneration()
   const upload = useUploadPlaygroundReference()
   const [dropError, setDropError] = useState<string | null>(null)
@@ -186,6 +191,7 @@ function CanvasInner() {
     const canvas = canvasQuery.data?.canvas
     if (!canvas) return
     canvasIdRef.current = canvas.id
+    setCanvasTitle(canvas.title)
     const { nodes: n, edges: e, viewport } = deserializeCanvas({
       nodes: canvas.nodes,
       edges: canvas.edges,
@@ -213,13 +219,15 @@ function CanvasInner() {
       save.mutate(
         {
           ...(canvasIdRef.current ? { id: canvasIdRef.current } : {}),
+          title: canvasTitle,
+          kind: 'canvas',
           nodes: serialized.nodes,
           edges: serialized.edges,
           viewport: serialized.viewport,
         },
         {
           onSuccess: ({ canvas }) => {
-            canvasIdRef.current = canvas.id
+            if (!canvasIdRef.current) canvasIdRef.current = canvas.id
           },
           onSettled: () => {
             creatingRef.current = false
@@ -230,7 +238,7 @@ function CanvasInner() {
     return () => clearTimeout(t)
     // save is stable from react-query; intentionally excluded to avoid re-arming.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges])
+  }, [nodes, edges, canvasTitle])
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -573,6 +581,99 @@ function CanvasInner() {
     })
   }, [setNodes, setEdges])
 
+  const loadCanvasRecord = useCallback((record: CanvasRecordView) => {
+    const next = deserializeCanvas({ nodes: record.nodes, edges: record.edges, viewport: record.viewport })
+    canvasIdRef.current = record.id
+    setCanvasTitle(record.title)
+    setNodes(next.nodes)
+    setEdges(next.edges)
+    instanceRef.current?.setViewport(next.viewport)
+    setResourcesOpen(false)
+  }, [setNodes, setEdges])
+
+  const saveCurrentNow = useCallback(async () => {
+    const currentId = canvasIdRef.current
+    if (!currentId && nodes.length === 0) return
+    const serialized = serializeCanvas(nodes, edges, instanceRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 })
+    const result = await save.mutateAsync({
+      ...(currentId ? { id: currentId } : {}),
+      title: canvasTitle,
+      kind: 'canvas',
+      ...serialized,
+    })
+    if (!currentId && canvasIdRef.current === null) canvasIdRef.current = result.canvas.id
+  }, [nodes, edges, canvasTitle, save])
+
+  const runResourceAction = useCallback(async (action: () => Promise<void>) => {
+    setResourceError(null)
+    try {
+      await action()
+    } catch (err) {
+      setResourceError(err instanceof Error ? err.message : '操作失败')
+    }
+  }, [])
+
+  const createBlankCanvas = useCallback(() => runResourceAction(async () => {
+    await saveCurrentNow()
+    const ordinal = (canvasQuery.data?.resources.filter((item) => item.kind === 'canvas').length ?? 0) + 1
+    const result = await save.mutateAsync({ title: `未命名画布 ${ordinal}`, kind: 'canvas', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
+    loadCanvasRecord(result.canvas)
+  }), [runResourceAction, saveCurrentNow, canvasQuery.data?.resources, save, loadCanvasRecord])
+
+  const openCanvasRecord = useCallback((record: CanvasRecordView) => runResourceAction(async () => {
+    if (record.id === canvasIdRef.current) {
+      setResourcesOpen(false)
+      return
+    }
+    await saveCurrentNow()
+    loadCanvasRecord(record)
+  }), [runResourceAction, saveCurrentNow, loadCanvasRecord])
+
+  const saveAsWorkflow = useCallback(() => runResourceAction(async () => {
+    const title = window.prompt('工作流名称', `${canvasTitle} 工作流`)?.trim()
+    if (!title) return
+    const serialized = serializeCanvas(nodes, edges, instanceRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 })
+    await save.mutateAsync({ title, kind: 'workflow', ...serialized })
+  }), [runResourceAction, canvasTitle, nodes, edges, save])
+
+  const useWorkflow = useCallback((workflow: CanvasRecordView) => runResourceAction(async () => {
+    await saveCurrentNow()
+    const result = await save.mutateAsync({
+      title: `${workflow.title} 副本`,
+      kind: 'canvas',
+      nodes: Array.isArray(workflow.nodes) ? workflow.nodes : [],
+      edges: Array.isArray(workflow.edges) ? workflow.edges : [],
+      viewport: deserializeCanvas({ nodes: workflow.nodes, edges: workflow.edges, viewport: workflow.viewport }).viewport,
+    })
+    loadCanvasRecord(result.canvas)
+  }), [runResourceAction, saveCurrentNow, save, loadCanvasRecord])
+
+  const renameResource = useCallback((resource: CanvasRecordView) => runResourceAction(async () => {
+    const title = window.prompt(resource.kind === 'canvas' ? '画布名称' : '工作流名称', resource.title)?.trim()
+    if (!title || title === resource.title) return
+    const result = await save.mutateAsync({
+      id: resource.id,
+      title,
+      kind: resource.kind,
+      nodes: Array.isArray(resource.nodes) ? resource.nodes : [],
+      edges: Array.isArray(resource.edges) ? resource.edges : [],
+      viewport: deserializeCanvas({ nodes: resource.nodes, edges: resource.edges, viewport: resource.viewport }).viewport,
+    })
+    if (resource.id === canvasIdRef.current) setCanvasTitle(result.canvas.title)
+  }), [runResourceAction, save])
+
+  const removeResource = useCallback((resource: CanvasRecordView) => runResourceAction(async () => {
+    if (!window.confirm(`删除${resource.kind === 'canvas' ? '画布' : '工作流'}「${resource.title}」？此操作无法恢复。`)) return
+    await deleteCanvas.mutateAsync(resource.id)
+    if (resource.id !== canvasIdRef.current) return
+    const next = canvasQuery.data?.resources.find((item) => item.kind === 'canvas' && item.id !== resource.id)
+    if (next) loadCanvasRecord(next)
+    else {
+      const result = await save.mutateAsync({ title: '未命名画布 1', kind: 'canvas', nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
+      loadCanvasRecord(result.canvas)
+    }
+  }), [runResourceAction, deleteCanvas, canvasQuery.data?.resources, loadCanvasRecord, save])
+
   const dockButtons = useMemo(
     () => [
       { key: 'add', label: '添加节点', onClick: openDockMenu },
@@ -656,10 +757,26 @@ function CanvasInner() {
           style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
         >
           <Link href="/zh/v2" className="text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>‹ 返回</Link>
-          <span style={{ color: CANVAS_TOKENS.text.primary }}>无限画布</span>
-          <span style={{ color: CANVAS_TOKENS.text.muted }}>· 未命名</span>
+          <button type="button" onClick={() => setResourcesOpen((value) => !value)} className="rounded-md px-1.5 py-1 hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>无限画布 ▾</button>
+          <span style={{ color: CANVAS_TOKENS.text.muted }}>· {canvasTitle}</span>
         </div>
       </div>
+
+      {resourcesOpen ? (
+        <CanvasResourceMenu
+          currentId={canvasIdRef.current}
+          resources={canvasQuery.data?.resources ?? []}
+          busy={save.isPending || deleteCanvas.isPending}
+          error={resourceError}
+          onClose={() => setResourcesOpen(false)}
+          onCreateCanvas={createBlankCanvas}
+          onOpenCanvas={openCanvasRecord}
+          onRename={renameResource}
+          onDelete={removeResource}
+          onSaveWorkflow={saveAsWorkflow}
+          onUseWorkflow={useWorkflow}
+        />
+      ) : null}
 
       {/* Bottom-left control strip — 资产/整理/小地图/缩放 (LibTV layout) */}
       <div

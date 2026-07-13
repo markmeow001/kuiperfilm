@@ -13,6 +13,7 @@ import { requestJsonWithError } from './mutation-shared'
 export interface CanvasRecordView {
   id: string
   title: string
+  kind: 'canvas' | 'workflow'
   nodes: unknown
   edges: unknown
   viewport: unknown
@@ -22,22 +23,28 @@ export interface CanvasRecordView {
 export interface CanvasSavePayload {
   id?: string
   title?: string
+  kind?: 'canvas' | 'workflow'
   nodes: unknown[]
   edges: unknown[]
   viewport: { x: number; y: number; zoom: number }
 }
 
-const CANVAS_QUERY_KEY = ['canvas', 'default']
+const CANVAS_QUERY_KEY = ['canvas', 'resources']
+
+export interface CanvasResourcesResponse {
+  canvas: CanvasRecordView | null
+  resources: CanvasRecordView[]
+}
 
 export function useCanvas() {
   return useQuery({
     queryKey: CANVAS_QUERY_KEY,
-    queryFn: async (): Promise<{ canvas: CanvasRecordView | null }> => {
+    queryFn: async (): Promise<CanvasResourcesResponse> => {
       return (await requestJsonWithError(
         '/api/canvas',
         { method: 'GET' },
         '加载画布失败',
-      )) as { canvas: CanvasRecordView | null }
+      )) as CanvasResourcesResponse
     },
     // Load once on mount; autosave owns the durable copy after that.
     staleTime: Infinity,
@@ -60,8 +67,37 @@ export function useSaveCanvas() {
       )) as { canvas: CanvasRecordView }
     },
     onSuccess: ({ canvas }) => {
-      // Keep the cached canvas id fresh without refetching the whole blob.
-      queryClient.setQueryData(CANVAS_QUERY_KEY, { canvas })
+      queryClient.setQueryData<CanvasResourcesResponse>(CANVAS_QUERY_KEY, (current) => {
+        const resources = current?.resources ?? []
+        const next = [canvas, ...resources.filter((item) => item.id !== canvas.id)]
+        return {
+          canvas: canvas.kind === 'canvas' ? canvas : (current?.canvas ?? null),
+          resources: next,
+        }
+      })
+    },
+  })
+}
+
+export function useDeleteCanvas() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string): Promise<{ deletedId: string }> => {
+      return (await requestJsonWithError(
+        `/api/canvas?id=${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+        '删除失败',
+      )) as { deletedId: string }
+    },
+    onSuccess: ({ deletedId }) => {
+      queryClient.setQueryData<CanvasResourcesResponse>(CANVAS_QUERY_KEY, (current) => {
+        if (!current) return current
+        const resources = current.resources.filter((item) => item.id !== deletedId)
+        const canvas = current.canvas?.id === deletedId
+          ? (resources.find((item) => item.kind === 'canvas') ?? null)
+          : current.canvas
+        return { canvas, resources }
+      })
     },
   })
 }
