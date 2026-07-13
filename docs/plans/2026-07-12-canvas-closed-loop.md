@@ -90,7 +90,6 @@ source/target 类型做一次确定性推导，无法推导的旧边明确标记
 
 ```ts
 interface CanvasCompositionData {
-  clipOrder: string[]
   transition: 'cut' | 'crossfade'
   crossfadeSec: number
   voiceVolume: number
@@ -102,6 +101,9 @@ interface CanvasCompositionData {
   durationSec?: number | null
 }
 ```
+
+片段顺序的唯一事实来源是进入 composition 的 `edge.data.order`；节点 data 不再另存
+`clipOrder`。Composition UI 显示与提交均按 edge order 排序，重排直接回写 edge order。
 
 限制：首版 1–60 个片段、总时长 ≤20 分钟、单文件与输出尺寸使用服务器硬限制。
 
@@ -217,10 +219,13 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 
 交付：Group 从视觉容器升级为可重排、可导出、可送合成的分镜组。
 
-> **完成 2026-07-13**：4K `renderStill` spike（12 镜）实测 24.8s、输出 178KB、
-> Node max RSS 661MB。正式实现限制 ≤25 镜、90s timeout、默认 RSS 预算 1.5GB；
+> **完成 2026-07-13，并于 S4 审查后重测**：25 张不同真实图片均预处理为本地
+> 3840×2160 JPEG 后送入 4K `renderStill`，实测 6.708s、输出 1,248,518 bytes、
+> Chromium 整棵进程树 peak RSS 2,044,067,840 bytes（1.904 GiB）。以 M1 Max 的
+> 2–3 倍估计 droplet 约 13.4–20.1s，正式 timeout 仍为 90s。默认 RSS 预算因此从
+> 无效的 1.5GiB 调整为 2.25GiB（约 18% 实测余量），超预算主动 cancel 并显式失败；
 > 与视频合成共用 Redis NX 重资源锁（两者不并跑），bundle Promise 跨任务复用；
-> 渲染期间每 100ms 采样 RSS，成功／失败均记 peak，超预算主动 cancel 并显式失败。
+> 渲染期间每 100ms 采样 Chromium PID 全进程树 RSS，成功／失败均记 peak。
 
 - 多选图片／视频 →「建立分镜组」。
 - 组内独立顺序条，不以 x/y 坐标推断顺序。
@@ -268,6 +273,13 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 服务端任务）登记接受，不修。
 
 修完标准：上述全部落地 + canvas/worker 测试与 test:guards 绿 + spike 新数字回填。
+
+> **审查修复完成 2026-07-13**：`openBrowser()` 由 executor 持有，select/render 共用
+> 同一实例并在 finally 关闭；Linux `/proc` 与 Darwin `ps` 均递归计算 browser tree
+> RSS。上述 25 张真实 4K JPEG spike 已视觉核对，编号、标题与图片均正确。Group 网络
+> 失败／dismissed、输入签名过期徽章与纯函数边界测试已补；worker 仅接受
+> `PLAYGROUND_IMAGE` + `images/playground-runs/`；Composition 已以 edge order 为唯一顺序
+> 来源；handler 在渲染前与持久化前均调用 `assertTaskActive`。
 
 ### S5 — 画布资产入库
 

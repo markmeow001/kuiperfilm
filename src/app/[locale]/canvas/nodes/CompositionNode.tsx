@@ -1,35 +1,42 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '@xyflow/react'
+import { useEdges, useNodeConnections, useNodesData, useReactFlow, type Edge, type NodeProps } from '@xyflow/react'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
+import { orderCompositionInputs, writeCompositionEdgeOrder } from '../lib/composition-order'
 import { NodeShell } from './node-shell'
 
 export function CompositionNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
-  const { updateNodeData } = useReactFlow()
+  const { updateNodeData, setEdges } = useReactFlow()
+  const edges = useEdges<Edge>()
   const connections = useNodeConnections()
   const incomingIds = useMemo(() => connections.filter((connection) => connection.target === id).map((connection) => connection.source), [connections, id])
   const upstream = useNodesData(incomingIds)
-  const available = useMemo(() => upstream.filter((node): node is NonNullable<typeof node> => Boolean(node && ((node.type === 'video' && (node.data as CanvasNodeData).runId) || (node.type === 'composition' && (node.data as CanvasNodeData).resultTaskId)))), [upstream])
+  const available = useMemo(() => upstream
+    .filter((node): node is NonNullable<typeof node> => Boolean(
+      node && (
+        (node.type === 'video' && (node.data as CanvasNodeData).runId)
+        || (node.type === 'composition' && (node.data as CanvasNodeData).resultTaskId)
+      ),
+    ))
+    .map((node) => ({ ...node, data: node.data as CanvasNodeData })), [upstream])
   const audioNodes = useMemo(() => upstream.filter((node): node is NonNullable<typeof node> => Boolean(node && node.type === 'audio' && (node.data as CanvasNodeData).audioTaskId)), [upstream])
   const voiceNode = audioNodes.find((node) => ((node.data as CanvasNodeData).audioTrackRole ?? 'voice') === 'voice')
   const musicNode = audioNodes.find((node) => (node.data as CanvasNodeData).audioTrackRole === 'music')
   const ordered = useMemo(() => {
-    const byId = new Map(available.map((node) => [node.id, node]))
-    const preferred = (d.clipOrder ?? []).map((nodeId) => byId.get(nodeId)).filter((node): node is NonNullable<typeof node> => Boolean(node))
-    const seen = new Set(preferred.map((node) => node.id))
-    return [...preferred, ...available.filter((node) => !seen.has(node.id))]
-  }, [available, d.clipOrder])
+    return orderCompositionInputs(available, edges, id)
+  }, [available, edges, id])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    const nextIds = ordered.map((node) => node.id)
-    if (JSON.stringify(nextIds) !== JSON.stringify(d.clipOrder ?? [])) updateNodeData(id, { clipOrder: nextIds })
-  }, [ordered, d.clipOrder, id, updateNodeData])
+    const orderBySource = new Map(ordered.map((node, index) => [node.id, index]))
+    const needsNormalization = edges.some((edge) => edge.target === id && orderBySource.has(edge.source) && edge.data?.order !== orderBySource.get(edge.source))
+    if (needsNormalization) setEdges((current) => writeCompositionEdgeOrder(current, id, ordered.map((node) => node.id)))
+  }, [edges, id, ordered, setEdges])
 
   useEffect(() => {
     if (!d.composeTaskId) return
@@ -63,7 +70,7 @@ export function CompositionNode({ id, data, selected }: NodeProps) {
     if (target < 0 || target >= ordered.length) return
     const next = ordered.map((node) => node.id)
     ;[next[index], next[target]] = [next[target], next[index]]
-    updateNodeData(id, { clipOrder: next })
+    setEdges((current) => writeCompositionEdgeOrder(current, id, next))
   }
 
   const submit = async () => {

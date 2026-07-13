@@ -139,8 +139,8 @@ export interface CanvasNodeData extends Record<string, unknown> {
   storyboardExportTaskId?: string | null
   storyboardExportKey?: string | null
   storyboardExportUrl?: string | null
+  storyboardExportInputsSig?: string | null
   /** Composition node: bounded CPU-only canvas video assembly. */
-  clipOrder?: string[]
   transition?: 'cut' | 'crossfade'
   crossfadeSec?: number
   voiceVolume?: number
@@ -212,7 +212,6 @@ export const DEFAULT_NODE_DATA = {
   audioTaskId: null as string | null,
   audioTrackRole: 'voice' as 'voice' | 'music',
   ttsTaskId: null as string | null,
-  clipOrder: [] as string[],
   transition: 'cut' as 'cut' | 'crossfade',
   crossfadeSec: 0.5,
   voiceVolume: 1,
@@ -227,6 +226,7 @@ export const DEFAULT_NODE_DATA = {
   storyboardExportTaskId: null as string | null,
   storyboardExportKey: null as string | null,
   storyboardExportUrl: null as string | null,
+  storyboardExportInputsSig: null as string | null,
   runId: null as string | null,
   resultUrl: null as string | null,
   // 视频生成结果的尾帧(worker ffmpeg 抽出、签名后的 URL)— 供下游节点

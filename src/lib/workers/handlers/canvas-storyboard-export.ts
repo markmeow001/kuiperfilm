@@ -4,8 +4,9 @@ import { getSignedUrl } from '@/lib/cos'
 import { acquireCanvasHeavyRenderLock } from '@/lib/canvas/heavy-render-lock'
 import { renderCanvasStoryboard } from '@/lib/canvas/remotion-storyboard-executor'
 import { STORYBOARD_EXPORT_LIMITS } from '@/lib/canvas/storyboard-export-contract'
-import type { TaskJobData } from '@/lib/task/types'
+import { TASK_TYPE, type TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '../shared'
+import { assertTaskActive } from '../utils'
 
 function firstResultKey(result: unknown): string | null {
   if (!result || typeof result !== 'object') return null
@@ -23,13 +24,15 @@ export async function handleCanvasStoryboardExportTask(job: Job<TaskJobData>) {
   const items = taskIds.map((id, index) => {
     const task = byId.get(id)
     const key = task?.status === 'completed' ? firstResultKey(task.result) : null
-    if (!key || /^[a-z]+:\/\//i.test(key) || key.includes('..') || !key.startsWith('images/')) throw new Error(`STORYBOARD_SOURCE_NOT_READY:${id}`)
+    if (task?.type !== TASK_TYPE.PLAYGROUND_IMAGE || !key || /^[a-z]+:\/\//i.test(key) || key.includes('..') || !key.startsWith('images/playground-runs/')) throw new Error(`STORYBOARD_SOURCE_NOT_READY:${id}`)
     return { title: titles[index], imageUrl: getSignedUrl(key, 3600) }
   })
   const release = await acquireCanvasHeavyRenderLock(`storyboard:${job.id}`)
   try {
+    await assertTaskActive(job, 'canvas_storyboard_export_prepare')
     await reportTaskProgress(job, 10, { stage: 'storyboard_render_prepare' })
     const result = await renderCanvasStoryboard({ userId: job.data.userId, taskId: job.data.taskId, items, columns: payload.columns === 2 || payload.columns === 3 ? payload.columns : 4, showShotNumber: payload.showShotNumber !== false })
+    await assertTaskActive(job, 'canvas_storyboard_export_persist')
     await reportTaskProgress(job, 95, { stage: 'storyboard_render_done', peakRssBytes: result.peakRssBytes })
     return { success: true, resultKey: result.resultKey, resultUrls: [result.resultKey], peakRssBytes: result.peakRssBytes, outputBytes: result.outputBytes }
   } finally { await release() }

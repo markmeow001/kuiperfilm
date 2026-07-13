@@ -10,8 +10,8 @@ import { getCanvasStoryboardBundle, resetCanvasStoryboardBundleForTest } from '@
 beforeEach(() => { resetCanvasStoryboardBundleForTest(); bundleMock.mockReset(); bundleMock.mockResolvedValue('/tmp/remotion-bundle') })
 
 describe('storyboard export limits and bundle cache', () => {
-  it('hard limits -> max 25, 90s timeout, 4K, 1.5GB RSS default', () => {
-    expect(STORYBOARD_EXPORT_LIMITS).toEqual(expect.objectContaining({ maxItems: 25, timeoutMs: 90_000, width: 3840, height: 2160, defaultMaxRssBytes: 1536 * 1024 * 1024 }))
+  it('hard limits -> max 25, 90s timeout, 4K, 2.25GiB RSS default', () => {
+    expect(STORYBOARD_EXPORT_LIMITS).toEqual(expect.objectContaining({ maxItems: 25, timeoutMs: 90_000, width: 3840, height: 2160, defaultMaxRssBytes: 2304 * 1024 * 1024 }))
     expect(storyboardExportRequestSchema.safeParse({ taskIds: Array.from({ length: 26 }, () => crypto.randomUUID()), titles: Array.from({ length: 26 }, () => 'x') }).success).toBe(false)
   })
 
