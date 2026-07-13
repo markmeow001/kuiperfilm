@@ -140,6 +140,9 @@ interface CanvasStoryboardGroupData {
 
 交付：多个视频节点按明确顺序合成一条可下载、可继续连接的成片。
 
+> **完成 2026-07-13**：`composition` 节点、免费 task、video queue 显式路由、
+> 全域并发锁、可替换 executor、cut/xfade、720p 资源硬顶、结果签名查询与行为测试已落地。
+
 #### S2 技术选型：ffmpeg vs Remotion（开工前结论）
 
 | 维度 | ffmpeg concat/xfade | 现有 Remotion `video-editor-render` |
@@ -187,6 +190,11 @@ Remotion 的 bundle＋Chromium 逐帧渲染更轻、更容易施加资源上限�
 
 验收：3 个不同尺寸片段可按 UI 顺序合成；切换顺序后输出顺序改变；任何输入失败时整
 个任务显式失败，不跳过坏片段。
+
+实现资源预算（S2 完成态）：输入逐文件 stream 到 tmp，不把 clips 整包放内存；输入总量
+硬顶 2GB、输出文件硬顶 512MB，故 tmp 峰值硬顶约 2.5GB。上传接口当前需要读取最终输出
+Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、threads=2、720p、
+`veryfast`、输出 `-t 180`。迁外部 executor 后可消除本机最终输出 Buffer 峰值。
 
 ### S3 — Audio → Composition 混音
 

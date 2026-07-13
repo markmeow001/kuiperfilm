@@ -129,6 +129,13 @@ export interface CanvasNodeData extends Record<string, unknown> {
   ttsTaskId?: string | null
   /** Text node: in-flight CANVAS_TEXT (writing assistant) task id. */
   textTaskId?: string | null
+  /** Composition node: bounded CPU-only canvas video assembly. */
+  clipOrder?: string[]
+  transition?: 'cut' | 'crossfade'
+  crossfadeSec?: number
+  composeTaskId?: string | null
+  resultTaskId?: string | null
+  resultKey?: string | null
 }
 
 /** Minimal serializable node (what we store in the Canvas DB row / localStorage). */
@@ -189,6 +196,12 @@ export const DEFAULT_NODE_DATA = {
   emotionStrength: 0.4,
   audioUrl: null as string | null,
   ttsTaskId: null as string | null,
+  clipOrder: [] as string[],
+  transition: 'cut' as 'cut' | 'crossfade',
+  crossfadeSec: 0.5,
+  composeTaskId: null as string | null,
+  resultTaskId: null as string | null,
+  resultKey: null as string | null,
   runId: null as string | null,
   resultUrl: null as string | null,
   // 视频生成结果的尾帧(worker ffmpeg 抽出、签名后的 URL)— 供下游节点

@@ -40,4 +40,8 @@ describe('Phase 9.1 — playground task queue routing', () => {
   it('routes CANVAS_TTS to the voice queue (not text)', () => {
     expect(getQueueTypeByTaskType(TASK_TYPE.CANVAS_TTS)).toBe('voice')
   })
+
+  it('routes CANVAS_COMPOSE_VIDEO to the video queue (never text)', () => {
+    expect(getQueueTypeByTaskType(TASK_TYPE.CANVAS_COMPOSE_VIDEO)).toBe('video')
+  })
 })

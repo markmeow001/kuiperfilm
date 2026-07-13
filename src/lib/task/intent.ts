@@ -72,6 +72,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   [TASK_TYPE.CANVAS_DIRECTOR_ROUTES]: 'build',
   [TASK_TYPE.CANVAS_TEXT]: 'build',
   [TASK_TYPE.CANVAS_TTS]: 'generate',
+  [TASK_TYPE.CANVAS_COMPOSE_VIDEO]: 'process',
 }
 
 export function resolveTaskIntent(taskType: string | null | undefined): TaskIntent {

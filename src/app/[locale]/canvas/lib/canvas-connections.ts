@@ -20,6 +20,7 @@ const ACCEPTS: Record<CanvasNodeType, readonly CanvasNodeType[]> = {
   image: ['text', 'script', 'character', 'image', 'video'],
   video: ['text', 'script', 'character', 'image', 'video'],
   audio: ['text', 'script'],
+  composition: ['video', 'composition'],
   director: ['character', 'image'],
   character: [],
   group: [],
@@ -44,6 +45,7 @@ function portTypeForSource(source: CanvasNodeType): CanvasPortType | null {
     case 'image': return 'frame-image'
     case 'video': return 'video-clip'
     case 'audio': return 'audio-voice'
+    case 'composition': return 'video-clip'
     case 'group': return 'storyboard-group'
     case 'director': return null
   }

@@ -100,6 +100,9 @@ export const TASK_TYPE = {
   // Canvas 无限画布 audio node — text + a reference voice clip → cloned TTS
   // (FAL IndexTTS2). Rides the VOICE worker; result audio url in Task.result.
   CANVAS_TTS: 'canvas_tts',
+  // Canvas composition is CPU-only and free in v1. Routed to VIDEO queue but
+  // executed behind a global concurrency=1 guard and replaceable executor.
+  CANVAS_COMPOSE_VIDEO: 'canvas_compose_video',
 } as const
 
 export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE]

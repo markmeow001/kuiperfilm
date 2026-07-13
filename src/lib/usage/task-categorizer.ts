@@ -36,6 +36,7 @@ const VIDEO_TYPES = new Set<string>([
   // Phase 9.1 — Playground video rides the Task spine; categorize like any
   // other video gen so usage stats + the rate-limit gate apply.
   'playground_video',
+  'canvas_compose_video',
 ])
 
 const IMAGE_TYPES = new Set<string>([

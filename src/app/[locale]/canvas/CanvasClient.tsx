@@ -47,6 +47,7 @@ import { DirectorNode } from './nodes/DirectorNode'
 import { ScriptNode } from './nodes/ScriptNode'
 import { AudioNode } from './nodes/AudioNode'
 import { GroupNode } from './nodes/GroupNode'
+import { CompositionNode } from './nodes/CompositionNode'
 import { CanvasResourceMenu } from './CanvasResourceMenu'
 import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, canConnectCanvasNodes, canvasConnectionHint, inferCanvasEdgeData } from './lib/canvas-connections'
 
@@ -64,9 +65,10 @@ const nodeTypes: NodeTypes = {
   script: ScriptNode,
   audio: AudioNode,
   group: GroupNode,
+  composition: CompositionNode,
 }
 
-const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'audio', 'director', 'character', 'text']
+const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'audio', 'composition', 'director', 'character', 'text']
 
 function makeNode(type: CanvasNodeType, x: number, y: number): Node<CanvasNodeData> {
   return {
