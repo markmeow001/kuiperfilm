@@ -15,6 +15,11 @@ export const canvasComposeRequestSchema = z.object({
   taskIds: z.array(z.string().uuid()).min(1).max(CANVAS_COMPOSE_LIMITS.maxClips),
   transition: z.enum(['cut', 'crossfade']).default('cut'),
   crossfadeSec: z.number().min(0.1).max(2).default(0.5),
+  voiceTaskId: z.string().uuid().optional(),
+  musicTaskId: z.string().uuid().optional(),
+  voiceVolume: z.number().min(0).max(2).default(1),
+  musicVolume: z.number().min(0).max(2).default(0.25),
+  preserveOriginalAudio: z.boolean().default(true),
 })
 
 export type CanvasComposeRequest = z.infer<typeof canvasComposeRequestSchema>
@@ -25,6 +30,11 @@ export interface CanvasComposeExecutorInput {
   sourceKeys: string[]
   transition: 'cut' | 'crossfade'
   crossfadeSec: number
+  voiceKey?: string
+  musicKey?: string
+  voiceVolume: number
+  musicVolume: number
+  preserveOriginalAudio: boolean
 }
 
 export interface CanvasComposeExecutorResult {

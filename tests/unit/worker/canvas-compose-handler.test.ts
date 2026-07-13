@@ -49,4 +49,15 @@ describe('canvas compose worker', () => {
     await expect(handleCanvasComposeVideoTask(job())).rejects.toThrow('CANVAS_COMPOSE_SOURCE_NOT_READY:source-2')
     expect(executorMock.execute).not.toHaveBeenCalled()
   })
+
+  it('voice and music tasks -> validates owned audio keys and passes mix controls', async () => {
+    prismaMock.task.findMany.mockResolvedValue([
+      { id: 'source-1', status: 'completed', result: { resultUrls: ['video/playground-ref/user-1/a.mp4'] } },
+      { id: 'voice-1', status: 'completed', result: { audioKey: 'voice/playground-ref/user-1/voice.wav' } },
+      { id: 'music-1', status: 'completed', result: { audioKey: 'voice/playground-ref/user-1/music.wav' } },
+    ])
+    const mixedJob = { id: 'job-1', data: { taskId: 'compose-1', userId: 'user-1', payload: { taskIds: ['source-1'], voiceTaskId: 'voice-1', musicTaskId: 'music-1', voiceVolume: 1.1, musicVolume: 0.2, preserveOriginalAudio: false } } } as never
+    await handleCanvasComposeVideoTask(mixedJob)
+    expect(executorMock.execute).toHaveBeenCalledWith(expect.objectContaining({ voiceKey: 'voice/playground-ref/user-1/voice.wav', musicKey: 'voice/playground-ref/user-1/music.wav', voiceVolume: 1.1, musicVolume: 0.2, preserveOriginalAudio: false }))
+  })
 })

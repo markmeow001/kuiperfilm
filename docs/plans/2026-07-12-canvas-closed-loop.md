@@ -200,6 +200,9 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 
 交付：TTS 语音或音乐节点可接入成片，而不是停在孤立播放器。
 
+> **完成 2026-07-13**：Audio 节点可声明配音／音乐角色；Composition 支持原片音轨开关、
+> 两轨音量、配音补静音／裁切、音乐循环与尾部 fade-out；所有 key 在 worker 重验所有权。
+
 - Audio 节点增加轨道角色：`voice` / `music`。
 - Composition 接收最多一条 voice + 一条 music。
 - voice 长度不足：尾部静音；超过成片：明确裁切并在 UI 显示。

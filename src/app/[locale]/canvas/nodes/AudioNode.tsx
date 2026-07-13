@@ -50,7 +50,7 @@ export function AudioNode({ id, data, selected }: NodeProps) {
         const task = json?.task
         if (cancelled) return
         if (task?.status === 'completed') {
-          updateNodeData(id, { audioUrl: task.result?.audioUrl ?? null, ttsTaskId: null })
+          updateNodeData(id, { audioUrl: task.result?.audioUrl ?? null, audioKey: task.result?.audioKey ?? null, audioTaskId: d.ttsTaskId, ttsTaskId: null })
           setPhase('done')
           return
         }
@@ -103,7 +103,7 @@ export function AudioNode({ id, data, selected }: NodeProps) {
       if (!res.ok || !json?.taskId) {
         throw new Error(json?.error?.message ?? json?.error ?? '提交失败')
       }
-      updateNodeData(id, { ttsTaskId: json.taskId, audioUrl: null })
+      updateNodeData(id, { ttsTaskId: json.taskId, audioTaskId: null, audioKey: null, audioUrl: null })
     } catch (err) {
       setError((err as Error)?.message ?? '提交失败')
       setPhase('failed')
@@ -116,6 +116,13 @@ export function AudioNode({ id, data, selected }: NodeProps) {
   return (
     <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={300}>
       <div className="space-y-2 p-3">
+        <div className="flex gap-1">
+          {(['voice', 'music'] as const).map((role) => (
+            <button key={role} type="button" onClick={() => updateNodeData(id, { audioTrackRole: role })} className="nodrag flex-1 rounded-md py-1 text-[10px]" style={{ background: (d.audioTrackRole ?? 'voice') === role ? CANVAS_TOKENS.bg.active : CANVAS_TOKENS.bg.input }}>
+              {role === 'voice' ? '配音轨' : '音乐轨'}
+            </button>
+          ))}
+        </div>
         {upstreamText ? (
           <div className="rounded-md px-2 py-1 text-[10px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
             文字 ← 上游：{upstreamText.length > 40 ? upstreamText.slice(0, 40) + '…' : upstreamText}

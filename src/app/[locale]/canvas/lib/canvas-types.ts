@@ -126,6 +126,9 @@ export interface CanvasNodeData extends Record<string, unknown> {
   emotionStrength?: number
   /** Audio node: generated speech url + in-flight CANVAS_TTS task id. */
   audioUrl?: string | null
+  audioKey?: string | null
+  audioTaskId?: string | null
+  audioTrackRole?: 'voice' | 'music'
   ttsTaskId?: string | null
   /** Text node: in-flight CANVAS_TEXT (writing assistant) task id. */
   textTaskId?: string | null
@@ -133,6 +136,9 @@ export interface CanvasNodeData extends Record<string, unknown> {
   clipOrder?: string[]
   transition?: 'cut' | 'crossfade'
   crossfadeSec?: number
+  voiceVolume?: number
+  musicVolume?: number
+  preserveOriginalAudio?: boolean
   composeTaskId?: string | null
   resultTaskId?: string | null
   resultKey?: string | null
@@ -195,10 +201,16 @@ export const DEFAULT_NODE_DATA = {
   emotionPrompt: null as string | null,
   emotionStrength: 0.4,
   audioUrl: null as string | null,
+  audioKey: null as string | null,
+  audioTaskId: null as string | null,
+  audioTrackRole: 'voice' as 'voice' | 'music',
   ttsTaskId: null as string | null,
   clipOrder: [] as string[],
   transition: 'cut' as 'cut' | 'crossfade',
   crossfadeSec: 0.5,
+  voiceVolume: 1,
+  musicVolume: 0.25,
+  preserveOriginalAudio: true,
   composeTaskId: null as string | null,
   resultTaskId: null as string | null,
   resultKey: null as string | null,

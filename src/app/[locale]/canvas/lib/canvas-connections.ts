@@ -20,7 +20,7 @@ const ACCEPTS: Record<CanvasNodeType, readonly CanvasNodeType[]> = {
   image: ['text', 'script', 'character', 'image', 'video'],
   video: ['text', 'script', 'character', 'image', 'video'],
   audio: ['text', 'script'],
-  composition: ['video', 'composition'],
+  composition: ['video', 'composition', 'audio'],
   director: ['character', 'image'],
   character: [],
   group: [],
@@ -72,6 +72,7 @@ export function inferCanvasEdgeData(
     const order = options.frameIndex ?? 0
     return { portType, order, role: order === 0 ? 'first-frame' : order === 1 ? 'last-frame' : 'reference' }
   }
+  if (source === 'audio' && target === 'composition') return { portType, role: options.targetMode === 'music' ? 'music' : 'voice' }
   if (source === 'character') return { portType, role: 'reference' }
   if ((source === 'image' || source === 'video') && (target === 'image' || target === 'video')) {
     return { portType, role: 'reference' }
