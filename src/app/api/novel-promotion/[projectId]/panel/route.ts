@@ -279,6 +279,7 @@ export const PATCH = apiHandler(async (
     location,    // V2 storyboard editor — scene name (used by 場景 chip × remove)
     groupNarrative, // V2 narrative editor 保存敘事 — group draft on the FIRST
                     // panel (string = save, null = clear via 重生敘事, 2026-07-13)
+    groupDurationSec, // V2 narrative editor 時長 pick — number = save, null = Auto
   } = body
 
   // 🔥 方式1：通过 panelId 直接更新（优先）
@@ -304,7 +305,17 @@ export const PATCH = apiHandler(async (
       characters?: string | null
       location?: string | null
       groupNarrative?: string | null
+      groupDurationSec?: number | null
     } = {}
+    if (groupDurationSec !== undefined) {
+      if (groupDurationSec === null) {
+        updateData.groupDurationSec = null
+      } else if (typeof groupDurationSec === 'number' && Number.isInteger(groupDurationSec) && groupDurationSec > 0 && groupDurationSec <= 600) {
+        updateData.groupDurationSec = groupDurationSec
+      } else {
+        throw new ApiError('INVALID_PARAMS', { message: 'groupDurationSec must be null or an integer 1-600' })
+      }
+    }
     if (groupNarrative !== undefined) {
       if (groupNarrative === null) {
         updateData.groupNarrative = null

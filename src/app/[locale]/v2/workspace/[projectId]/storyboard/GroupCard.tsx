@@ -100,6 +100,8 @@ type UpdatePanelTextMutation = UseMutationResult<
     location?: string | null
     /** Group narrative draft on the FIRST panel — 保存敘事 real persistence (2026-07-13). */
     groupNarrative?: string | null
+    /** 時長 pick for the group (null = Auto, 2026-07-13). */
+    groupDurationSec?: number | null
   }
 >
 
@@ -476,6 +478,19 @@ export function GroupCard({
   // 秒數做切組」. Falls back to 15s in the narrative preview math when
   // AUTO so the time tags shown in the textarea aren't 0-0/0-0/0-0.
   const [totalDurationDraft, setTotalDurationDraft] = useState<number>(0)
+  // 2026-07-13 — hydrate the 時長 pick from the persisted first-panel value
+  // (user report: narrative survived a refresh but 13s reverted to Auto).
+  // `durationTouched` stops the server echo from overwriting an in-session
+  // change while its own save is still in flight.
+  const durationTouchedRef = useRef<boolean>(false)
+  useEffect(() => {
+    if (durationTouchedRef.current) return
+    const saved = panels[0]?.groupDurationSec
+    if (typeof saved === 'number' && saved > 0) {
+      setTotalDurationDraft(saved)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panels])
 
   // 2026-05-13 — ReelShort 8-second cold-open hook (Phase 1).
   //
@@ -1988,7 +2003,20 @@ export function GroupCard({
                     // 0 = AUTO (worker dialogue-driven);
                     // 5/10/15 = explicit total seconds.
                     const next = Number.parseInt(e.target.value, 10)
-                    setTotalDurationDraft(Number.isFinite(next) ? next : 0)
+                    const normalized = Number.isFinite(next) ? next : 0
+                    setTotalDurationDraft(normalized)
+                    // 2026-07-13 — persist the pick alongside the narrative
+                    // (first-panel anchor) so a refresh keeps it. Auto (0)
+                    // clears back to null. Fire-and-forget: a failed save
+                    // only loses the persistence, not the in-session value.
+                    durationTouchedRef.current = true
+                    const firstPanelId = panels[0]?.id
+                    if (firstPanelId && canEdit) {
+                      updatePanelText.mutate({
+                        panelId: firstPanelId,
+                        groupDurationSec: normalized > 0 ? normalized : null,
+                      })
+                    }
                     // Re-seed narrative so the time slices match the
                     // new total. Skipped when the user has dirty edits
                     // — protected by buildInitialNarrative guard.

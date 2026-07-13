@@ -51,6 +51,8 @@ export interface PanelLike {
   multiShotGroupOrder?: number | null
   /** Group narrative draft persisted on the group's FIRST panel (2026-07-13). */
   groupNarrative?: string | null
+  /** Group 時長 pick persisted on the FIRST panel (null = Auto, 2026-07-13). */
+  groupDurationSec?: number | null
 }
 
 export interface StoryboardLike {

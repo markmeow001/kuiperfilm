@@ -51,6 +51,8 @@ export type UpdatePanelTextMutation = UseMutationResult<
     location?: string | null
     /** Group narrative draft on the FIRST panel — 保存敘事 real persistence (2026-07-13). */
     groupNarrative?: string | null
+    /** 時長 pick for the group (null = Auto, 2026-07-13). */
+    groupDurationSec?: number | null
   }
 >
 

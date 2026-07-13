@@ -368,6 +368,8 @@ export function useUpdatePanelText(projectId: string | null, episodeId: string |
              * component state and a refresh reverted the edit.
              */
             groupNarrative?: string | null
+            /** 時長 pick for the group (null = Auto). Same first-panel anchor. */
+            groupDurationSec?: number | null
         }) => {
             if (!projectId) throw new Error('Project ID is required')
             const res = await fetch(`/api/novel-promotion/${projectId}/panel`, {

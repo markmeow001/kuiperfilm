@@ -361,6 +361,10 @@ model NovelPromotionPanel {
   // their own). Pre-fix the save button only wrote component state, so a
   // refresh / duration change reverted the user's edit to the auto-seed.
   groupNarrative       String?                   @db.Text
+  // 2026-07-13 — user's 時長 pick for the group (null = Auto). Same
+  // first-panel anchor convention as groupNarrative; pre-fix the dropdown
+  // reverted to Auto on every refresh.
+  groupDurationSec     Int?
   perShotProvider      String?                   @db.VarChar(128) // per-shot model override, e.g. "ark::seedance-2.0-r2v"
   storyboard           NovelPromotionStoryboard  @relation(fields: [storyboardId], references: [id], onDelete: Cascade)
   matchedVoiceLines    NovelPromotionVoiceLine[]
