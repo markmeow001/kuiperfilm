@@ -9,6 +9,7 @@ const rendererMock = vi.hoisted(() => ({
 }))
 const rssMock = vi.hoisted(() => ({ capture: vi.fn(), findPid: vi.fn(), read: vi.fn() }))
 const cosMock = vi.hoisted(() => ({ upload: vi.fn(), key: vi.fn() }))
+const stageMock = vi.hoisted(() => ({ stage: vi.fn(), cleanup: vi.fn() }))
 
 vi.mock('@remotion/renderer', () => ({
   makeCancelSignal: () => ({ cancelSignal: { cancel: rendererMock.cancel }, cancel: rendererMock.cancel }),
@@ -18,6 +19,7 @@ vi.mock('@remotion/renderer', () => ({
 }))
 vi.mock('@/lib/canvas/process-tree-rss', () => ({ captureDirectChildPids: rssMock.capture, findNewChromiumChildPid: rssMock.findPid, readProcessTreeRssBytes: rssMock.read }))
 vi.mock('@/lib/canvas/storyboard-bundle-cache', () => ({ getCanvasStoryboardBundle: vi.fn(async () => '/tmp/bundle') }))
+vi.mock('@/lib/canvas/storyboard-image-stage', () => ({ stageStoryboardImages: stageMock.stage }))
 vi.mock('@/lib/cos', () => ({ uploadToCOS: cosMock.upload, generateUniqueKey: cosMock.key }))
 vi.mock('@/lib/logging/core', () => ({ logInfo: vi.fn(), logError: vi.fn() }))
 vi.mock('node:fs/promises', () => ({ readFile: vi.fn(async () => Buffer.from('jpeg')), rm: vi.fn(async () => undefined), stat: vi.fn(async () => ({ size: 4 })) }))
@@ -36,6 +38,8 @@ beforeEach(() => {
   rssMock.findPid.mockResolvedValue(20)
   rssMock.read.mockResolvedValue(700_000_000)
   cosMock.key.mockReturnValue('images/canvas/storyboard/result.jpg')
+  stageMock.cleanup.mockResolvedValue(undefined)
+  stageMock.stage.mockResolvedValue({ items: [{ title: '镜一', imageUrl: 'http://127.0.0.1:1234/0' }], totalBytes: 1024, cleanup: stageMock.cleanup })
 })
 
 describe('Remotion storyboard executor resource guard', () => {
@@ -45,7 +49,9 @@ describe('Remotion storyboard executor resource guard', () => {
     expect(rendererMock.renderStill).toHaveBeenCalledWith(expect.objectContaining({ puppeteerInstance: rendererMock.browser, imageFormat: 'jpeg' }))
     expect(rssMock.findPid).toHaveBeenCalledWith(new Set([10]))
     expect(rssMock.read).toHaveBeenCalledWith(20)
+    expect(rendererMock.selectComposition).toHaveBeenCalledWith(expect.objectContaining({ inputProps: expect.objectContaining({ items: [{ title: '镜一', imageUrl: 'http://127.0.0.1:1234/0' }] }) }))
     expect(rendererMock.browser.close).toHaveBeenCalledWith({ silent: false })
+    expect(stageMock.cleanup).toHaveBeenCalled()
   })
 
   it('Chromium tree exceeds budget -> cancels before selection and fails explicitly', async () => {
@@ -55,6 +61,7 @@ describe('Remotion storyboard executor resource guard', () => {
     expect(rendererMock.cancel).toHaveBeenCalled()
     expect(rendererMock.selectComposition).not.toHaveBeenCalled()
     expect(rendererMock.browser.close).toHaveBeenCalledWith({ silent: false })
+    expect(stageMock.cleanup).toHaveBeenCalled()
   })
 
   it('RSS monitor cannot resolve process -> cancels and refuses unguarded render', async () => {

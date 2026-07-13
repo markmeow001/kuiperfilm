@@ -220,10 +220,11 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 交付：Group 从视觉容器升级为可重排、可导出、可送合成的分镜组。
 
 > **完成 2026-07-13，并于 S4 审查后重测**：25 张不同真实图片均预处理为本地
-> 3840×2160 JPEG 后送入 4K `renderStill`，实测 6.708s、输出 1,248,518 bytes、
-> Chromium 整棵进程树 peak RSS 2,044,067,840 bytes（1.904 GiB）。以 M1 Max 的
-> 2–3 倍估计 droplet 约 13.4–20.1s，正式 timeout 仍为 90s。默认 RSS 预算因此从
-> 无效的 1.5GiB 调整为 2.25GiB（约 18% 实测余量），超预算主动 cancel 并显式失败；
+> 3840×2160 JPEG，以 250ms/图模拟慢 signed URL；Node 先完整 stage 到 tmp，再由本机
+> HTTP 交给 Remotion `Img`。4K `renderStill` 实测 7.042s、输出 1,248,518 bytes、
+> Chromium 整棵进程树 peak RSS 2,117,369,856 bytes（1.972 GiB）。以 M1 Max 的
+> 2–3 倍估计 droplet 约 14.1–21.1s，正式 timeout 仍为 90s。默认 RSS 预算因此从
+> 无效的 1.5GiB 调整为 2.5GiB（约 27% 实测余量），超预算主动 cancel 并显式失败；
 > 与视频合成共用 Redis NX 重资源锁（两者不并跑），bundle Promise 跨任务复用；
 > 渲染期间每 100ms 采样 Chromium PID 全进程树 RSS，成功／失败均记 peak。
 
@@ -279,7 +280,9 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 > RSS。上述 25 张真实 4K JPEG spike 已视觉核对，编号、标题与图片均正确。Group 网络
 > 失败／dismissed、输入签名过期徽章与纯函数边界测试已补；worker 仅接受
 > `PLAYGROUND_IMAGE` + `images/playground-runs/`；Composition 已以 edge order 为唯一顺序
-> 来源；handler 在渲染前与持久化前均调用 `assertTaskActive`。
+> 来源；handler 在渲染前与持久化前均调用 `assertTaskActive`。独立复审发现远端图片
+> 载入竞态后，正式路径新增 Node 端限额预下载（单图 32MiB、总量 512MiB、30s timeout）
+> 与本机 staging server，Remotion 组件改用 `Img`；250ms 慢源 spike 仍 25/25 完整出图。
 
 ### S5 — 画布资产入库
 

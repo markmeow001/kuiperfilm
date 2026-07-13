@@ -4,6 +4,7 @@ import { makeCancelSignal, openBrowser, renderStill, selectComposition, type Hea
 import { generateUniqueKey, uploadToCOS } from '@/lib/cos'
 import { logError, logInfo } from '@/lib/logging/core'
 import { captureDirectChildPids, findNewChromiumChildPid, readProcessTreeRssBytes } from './process-tree-rss'
+import { stageStoryboardImages } from './storyboard-image-stage'
 import { getCanvasStoryboardBundle } from './storyboard-bundle-cache'
 import { STORYBOARD_EXPORT_LIMITS } from './storyboard-export-contract'
 
@@ -28,16 +29,17 @@ function configuredMaxRssBytes(): number {
 export async function renderCanvasStoryboard(input: StoryboardRenderInput): Promise<StoryboardRenderResult> {
   if (input.items.length < 1 || input.items.length > STORYBOARD_EXPORT_LIMITS.maxItems) throw new Error('STORYBOARD_ITEM_COUNT_INVALID')
   const serveUrl = await getCanvasStoryboardBundle()
-  const inputProps = { items: input.items, columns: input.columns, showShotNumber: input.showShotNumber }
-  const output = path.resolve('/tmp', `canvas-storyboard-${input.taskId}.jpg`)
   const maxRssBytes = configuredMaxRssBytes()
+  const stagedImages = await stageStoryboardImages(input.items, input.taskId)
+  const inputProps = { items: stagedImages.items, columns: input.columns, showShotNumber: input.showShotNumber }
+  const output = path.resolve('/tmp', `canvas-storyboard-${input.taskId}.jpg`)
   const startedAt = Date.now()
   const deadlineAt = startedAt + STORYBOARD_EXPORT_LIMITS.timeoutMs
   const { cancelSignal, cancel } = makeCancelSignal()
-  const previousChildren = await captureDirectChildPids()
   let browser: HeadlessBrowser | null = null
   let monitorTimer: ReturnType<typeof setTimeout> | null = null
   let activeSample: Promise<void> | null = null
+  let monitoringStopped = false
   let peakRssBytes = 0
   let budgetExceeded = false
   let timedOut = false
@@ -52,6 +54,7 @@ export async function renderCanvasStoryboard(input: StoryboardRenderInput): Prom
   }
 
   try {
+    const previousChildren = await captureDirectChildPids()
     browser = await openBrowser('chrome', { chromiumOptions: { gl: 'swangle' } })
     const browserPid = await findNewChromiumChildPid(previousChildren)
     const sampleOnce = async () => {
@@ -73,7 +76,7 @@ export async function renderCanvasStoryboard(input: StoryboardRenderInput): Prom
     }
     const scheduleSample = () => {
       monitorTimer = setTimeout(() => {
-        void sample().then(() => { if (!monitorState.error && !budgetExceeded) scheduleSample() })
+        void sample().then(() => { if (!monitoringStopped && !monitorState.error && !budgetExceeded) scheduleSample() })
       }, 100)
     }
     await sample()
@@ -86,6 +89,7 @@ export async function renderCanvasStoryboard(input: StoryboardRenderInput): Prom
     if (selectMonitorError) throw new Error(`STORYBOARD_RSS_MONITOR_FAILED:${selectMonitorError.message}`)
     if (budgetExceeded) throw new Error(`STORYBOARD_RSS_BUDGET_EXCEEDED:${peakRssBytes}:${maxRssBytes}`)
     await renderStill({ composition, serveUrl, inputProps, output, imageFormat: 'jpeg', jpegQuality: 90, puppeteerInstance: browser, cancelSignal, timeoutInMilliseconds: remainingMs() })
+    monitoringStopped = true
     if (monitorTimer) { clearTimeout(monitorTimer); monitorTimer = null }
     await sample()
     const renderMonitorError = currentMonitorError()
@@ -95,7 +99,7 @@ export async function renderCanvasStoryboard(input: StoryboardRenderInput): Prom
     const file = await stat(output)
     const resultKey = generateUniqueKey(`canvas/storyboard/${input.userId}`, 'jpg')
     await uploadToCOS(await readFile(output), resultKey)
-    logInfo(`[canvas.storyboard] taskId=${input.taskId} items=${input.items.length} browserPid=${browserPid} peakRssBytes=${peakRssBytes} maxRssBytes=${maxRssBytes} outputBytes=${file.size}`)
+    logInfo(`[canvas.storyboard] taskId=${input.taskId} items=${input.items.length} stagedInputBytes=${stagedImages.totalBytes} browserPid=${browserPid} peakRssBytes=${peakRssBytes} maxRssBytes=${maxRssBytes} outputBytes=${file.size}`)
     return { resultKey, peakRssBytes, outputBytes: file.size }
   } catch (error) {
     logError(`[canvas.storyboard] taskId=${input.taskId} failed peakRssBytes=${peakRssBytes} maxRssBytes=${maxRssBytes} budgetExceeded=${budgetExceeded} timedOut=${timedOut} monitorFailed=${Boolean(monitorState.error)}`)
@@ -105,9 +109,13 @@ export async function renderCanvasStoryboard(input: StoryboardRenderInput): Prom
     throw error
   } finally {
     clearTimeout(timeout)
+    monitoringStopped = true
     if (monitorTimer) clearTimeout(monitorTimer)
     if (activeSample) await activeSample
-    if (browser) await browser.close({ silent: false })
-    await rm(output, { force: true })
+    try {
+      if (browser) await browser.close({ silent: false })
+    } finally {
+      try { await rm(output, { force: true }) } finally { await stagedImages.cleanup() }
+    }
   }
 }

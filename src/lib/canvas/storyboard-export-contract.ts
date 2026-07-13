@@ -3,7 +3,10 @@ import { z } from 'zod'
 export const STORYBOARD_EXPORT_LIMITS = {
   maxItems: 25,
   timeoutMs: 90_000,
-  defaultMaxRssBytes: 2304 * 1024 * 1024,
+  defaultMaxRssBytes: 2560 * 1024 * 1024,
+  maxSingleImageBytes: 32 * 1024 * 1024,
+  maxInputBytes: 512 * 1024 * 1024,
+  imageDownloadTimeoutMs: 30_000,
   width: 3840,
   height: 2160,
 } as const
