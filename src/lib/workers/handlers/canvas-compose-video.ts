@@ -36,15 +36,25 @@ export async function handleCanvasComposeVideoTask(job: Job<TaskJobData>) {
   if (taskIds.length < 1 || taskIds.length > CANVAS_COMPOSE_LIMITS.maxClips) throw new Error('CANVAS_COMPOSE_CLIP_COUNT_INVALID')
 
   const allTaskIds = [...taskIds, ...(voiceTaskId ? [voiceTaskId] : []), ...(musicTaskId ? [musicTaskId] : [])]
+  // 所有权由这条 userId 过滤的查询保证（key 本身不一定嵌 userId）。
   const sourceTasks = await prisma.task.findMany({ where: { id: { in: allTaskIds }, userId: job.data.userId } })
   const byId = new Map(sourceTasks.map((task) => [task.id, task]))
+  // 视频结果 key 的合法命名空间：
+  //  - images/playground-runs/…                 画布/playground 生成的视频
+  //  - images/video/playground-ref/<userId>/…   previz 导出的参考视频
+  // generateUniqueKey 会统一加 images/ 前缀——原实作写成裸 video/playground-ref/
+  // 前缀,导致**所有**合法视频输入都被拒,合成对主用例完全跑不通
+  // (review 2026-07-13 HIGH)。
+  const VIDEO_KEY_NAMESPACES = ['images/playground-runs/', `images/video/playground-ref/${job.data.userId}/`]
+  const isPlausibleVideoKey = (key: string) =>
+    !/^[a-z]+:\/\//i.test(key) && !key.includes('..') && VIDEO_KEY_NAMESPACES.some((ns) => key.startsWith(ns))
   const sourceKeys = taskIds.map((id) => {
     const task = byId.get(id)
     if (!task || task.status !== 'completed') throw new Error(`CANVAS_COMPOSE_SOURCE_NOT_READY:${id}`)
     const keys = resultKeys(task.result)
     if (keys.length === 0) throw new Error(`CANVAS_COMPOSE_SOURCE_MISSING:${id}`)
     const key = keys[0]
-    if (!key.startsWith(`video/playground-ref/${job.data.userId}/`)) throw new Error(`CANVAS_COMPOSE_SOURCE_NOT_OWNED:${id}`)
+    if (!isPlausibleVideoKey(key)) throw new Error(`CANVAS_COMPOSE_SOURCE_NOT_OWNED:${id}`)
     return key
   })
   const resolveAudioKey = (id: string | null, role: 'voice' | 'music') => {

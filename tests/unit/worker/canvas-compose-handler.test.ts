@@ -18,22 +18,22 @@ beforeEach(() => {
   redisMock.set.mockResolvedValue('OK')
   redisMock.eval.mockResolvedValue(1)
   prismaMock.task.findMany.mockResolvedValue([
-    { id: 'source-1', status: 'completed', result: { resultUrls: ['video/playground-ref/user-1/a.mp4'] } },
-    { id: 'source-2', status: 'completed', result: { resultUrls: ['video/playground-ref/user-1/b.mp4'] } },
+    { id: 'source-1', status: 'completed', result: { resultUrls: ['images/playground-runs/task-a-123.mp4'] } },
+    { id: 'source-2', status: 'completed', result: { resultUrls: ['images/video/playground-ref/user-1/previz-b.mp4'] } },
   ])
-  executorMock.execute.mockResolvedValue({ resultKey: 'video/playground-ref/user-1/composition-out.mp4', durationSec: 12 })
+  executorMock.execute.mockResolvedValue({ resultKey: 'images/video/playground-ref/user-1/composition-out.mp4', durationSec: 12 })
 })
 
 describe('canvas compose worker', () => {
   it('ordered owned sources -> invokes replaceable executor and returns durable result', async () => {
     const result = await handleCanvasComposeVideoTask(job())
-    expect(executorMock.execute).toHaveBeenCalledWith(expect.objectContaining({ sourceKeys: ['video/playground-ref/user-1/a.mp4', 'video/playground-ref/user-1/b.mp4'], transition: 'cut' }))
-    expect(result).toEqual({ success: true, resultUrls: ['video/playground-ref/user-1/composition-out.mp4'], resultKey: 'video/playground-ref/user-1/composition-out.mp4', durationSec: 12 })
+    expect(executorMock.execute).toHaveBeenCalledWith(expect.objectContaining({ sourceKeys: ['images/playground-runs/task-a-123.mp4', 'images/video/playground-ref/user-1/previz-b.mp4'], transition: 'cut' }))
+    expect(result).toEqual({ success: true, resultUrls: ['images/video/playground-ref/user-1/composition-out.mp4'], resultKey: 'images/video/playground-ref/user-1/composition-out.mp4', durationSec: 12 })
     expect(redisMock.eval).toHaveBeenCalled()
   })
 
   it('foreign source key -> explicit failure before executor', async () => {
-    prismaMock.task.findMany.mockResolvedValue([{ id: 'source-1', status: 'completed', result: { resultUrls: ['video/playground-ref/other/a.mp4'] } }])
+    prismaMock.task.findMany.mockResolvedValue([{ id: 'source-1', status: 'completed', result: { resultUrls: ['images/video/playground-ref/other-user/a.mp4'] } }])
     await expect(handleCanvasComposeVideoTask(job(['source-1']))).rejects.toThrow('CANVAS_COMPOSE_SOURCE_NOT_OWNED')
     expect(executorMock.execute).not.toHaveBeenCalled()
   })
@@ -45,14 +45,33 @@ describe('canvas compose worker', () => {
   })
 
   it('middle source missing -> whole task fails instead of silently skipping clip', async () => {
-    prismaMock.task.findMany.mockResolvedValue([{ id: 'source-1', status: 'completed', result: { resultUrls: ['video/playground-ref/user-1/a.mp4'] } }])
+    prismaMock.task.findMany.mockResolvedValue([{ id: 'source-1', status: 'completed', result: { resultUrls: ['images/playground-runs/task-a-123.mp4'] } }])
     await expect(handleCanvasComposeVideoTask(job())).rejects.toThrow('CANVAS_COMPOSE_SOURCE_NOT_READY:source-2')
     expect(executorMock.execute).not.toHaveBeenCalled()
   })
 
+  it('回归:真实 playground 生成 key(images/playground-runs/…)必须被接受 — 原实作要求裸 video/playground-ref 前缀导致全部合法输入被拒', async () => {
+    prismaMock.task.findMany.mockResolvedValue([
+      { id: 'source-1', status: 'completed', result: { resultUrls: ['images/playground-runs/task-xyz-999.mp4'] } },
+    ])
+    await handleCanvasComposeVideoTask(job(['source-1']))
+    expect(executorMock.execute).toHaveBeenCalledWith(expect.objectContaining({ sourceKeys: ['images/playground-runs/task-xyz-999.mp4'] }))
+  })
+
+  it('URL 或路径穿越值伪装成 key -> 显式拒绝', async () => {
+    prismaMock.task.findMany.mockResolvedValue([
+      { id: 'source-1', status: 'completed', result: { resultUrls: ['https://evil.example/x.mp4'] } },
+    ])
+    await expect(handleCanvasComposeVideoTask(job(['source-1']))).rejects.toThrow('CANVAS_COMPOSE_SOURCE_NOT_OWNED')
+    prismaMock.task.findMany.mockResolvedValue([
+      { id: 'source-1', status: 'completed', result: { resultUrls: ['images/playground-runs/../../etc/passwd'] } },
+    ])
+    await expect(handleCanvasComposeVideoTask(job(['source-1']))).rejects.toThrow('CANVAS_COMPOSE_SOURCE_NOT_OWNED')
+  })
+
   it('voice and music tasks -> validates owned audio keys and passes mix controls', async () => {
     prismaMock.task.findMany.mockResolvedValue([
-      { id: 'source-1', status: 'completed', result: { resultUrls: ['video/playground-ref/user-1/a.mp4'] } },
+      { id: 'source-1', status: 'completed', result: { resultUrls: ['images/playground-runs/task-a-123.mp4'] } },
       { id: 'voice-1', status: 'completed', result: { audioKey: 'voice/playground-ref/user-1/voice.wav' } },
       { id: 'music-1', status: 'completed', result: { audioKey: 'voice/playground-ref/user-1/music.wav' } },
     ])

@@ -35,6 +35,9 @@ async function probeMedia(inputPath: string): Promise<{ duration: number; hasAud
   const parsed = JSON.parse(stdout) as { format?: { duration?: string }; streams?: Array<{ codec_type?: string }> }
   const duration = Number.parseFloat(parsed.format?.duration ?? '')
   if (!Number.isFinite(duration) || duration <= 0) throw new Error('CANVAS_COMPOSE_INPUT_DURATION_INVALID')
+  // 计画红线：无 video stream 的输入（纯音频/坏档）显式失败——否则要到
+  // ffmpeg filter 引用 [N:v] 才炸出难懂错误（review 2026-07-13）
+  if (!parsed.streams?.some((stream) => stream.codec_type === 'video')) throw new Error('CANVAS_COMPOSE_INPUT_NO_VIDEO_STREAM')
   return { duration, hasAudio: parsed.streams?.some((stream) => stream.codec_type === 'audio') ?? false }
 }
 
