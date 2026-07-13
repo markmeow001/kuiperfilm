@@ -23,6 +23,40 @@ export interface AtMenuCandidate {
 // Backdrop box metrics MUST mirror the textarea's or the marks drift.
 const PROMPT_TYPO = 'p-3 text-[14px] leading-relaxed whitespace-pre-wrap break-words'
 
+/**
+ * Measure the pixel position of a caret offset inside a textarea via a
+ * throwaway mirror div (the standard textarea-caret-position technique):
+ * clone the typography-affecting computed styles, fill text up to the
+ * caret, and read a marker span's offset. Returns coordinates relative to
+ * the textarea's border box (scroll NOT yet subtracted).
+ */
+function measureCaret(ta: HTMLTextAreaElement, caret: number): { top: number; left: number; lineHeight: number } {
+  const mirror = document.createElement('div')
+  const style = window.getComputedStyle(ta)
+  for (const prop of [
+    'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
+    'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+    'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    'boxSizing', 'textIndent', 'wordBreak', 'overflowWrap',
+  ] as const) {
+    mirror.style[prop] = style[prop]
+  }
+  mirror.style.position = 'absolute'
+  mirror.style.visibility = 'hidden'
+  mirror.style.whiteSpace = 'pre-wrap'
+  mirror.style.width = `${ta.clientWidth + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth)}px`
+  mirror.textContent = ta.value.slice(0, caret)
+  const marker = document.createElement('span')
+  marker.textContent = '​'
+  mirror.appendChild(marker)
+  document.body.appendChild(mirror)
+  const top = marker.offsetTop
+  const left = marker.offsetLeft
+  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5
+  document.body.removeChild(mirror)
+  return { top, left, lineHeight }
+}
+
 interface PromptComposerProps {
   ctrl: PlaygroundController
   candidates: AtMenuCandidate[]
@@ -34,6 +68,9 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
   const { prompt, setPrompt, promptRef, refText, setRefText, isBusy } = ctrl
   const highlightRef = useRef<HTMLDivElement | null>(null)
   const [atMenuOpen, setAtMenuOpen] = useState(false)
+  // Caret-anchored menu position (px, relative to the wrapper). null while
+  // closed; recomputed on every open so it tracks wherever @ was typed.
+  const [atMenuPos, setAtMenuPos] = useState<{ top: number; left: number } | null>(null)
   const [refTextOpen, setRefTextOpen] = useState(false)
 
   const showRefText = refTextOpen || refText.trim().length > 0
@@ -48,10 +85,21 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
   }
 
   function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const next = e.target.value
+    const ta = e.target
+    const next = ta.value
     // Open the menu when the char just typed at the caret is '@'.
-    const caret = e.target.selectionStart ?? next.length
+    const caret = ta.selectionStart ?? next.length
     if (candidates.length > 0 && caret > 0 && next[caret - 1] === '@' && next.length > prompt.length) {
+      // Anchor the menu right under the caret (2026-07-13 fix — it used to
+      // dock under the whole textarea, far from where @ was typed). Mirror
+      // measurement is border-box relative; subtract scrollTop for the
+      // visible position and clamp inside the wrapper width.
+      const { top, left, lineHeight } = measureCaret(ta, caret)
+      const menuWidth = 240
+      setAtMenuPos({
+        top: Math.max(0, top - ta.scrollTop + lineHeight + 4),
+        left: Math.min(Math.max(0, left - 8), Math.max(0, ta.clientWidth - menuWidth)),
+      })
       setAtMenuOpen(true)
     } else if (atMenuOpen && !next.includes('@')) {
       setAtMenuOpen(false)
@@ -113,7 +161,10 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
           className={`relative min-h-[140px] w-full resize-y rounded-lg border border-stone-800 bg-transparent text-stone-200 outline-none focus:border-amber-500/40 ${PROMPT_TYPO}`}
         />
         {atMenuOpen && candidates.length > 0 ? (
-          <div className="absolute inset-x-0 top-full z-30 mt-1 flex flex-wrap gap-1.5 rounded-md border border-stone-700 bg-stone-900 p-2 shadow-xl">
+          <div
+            className="absolute z-30 flex w-[240px] flex-wrap gap-1.5 rounded-md border border-stone-700 bg-stone-900 p-2 shadow-xl"
+            style={atMenuPos ? { top: atMenuPos.top, left: atMenuPos.left } : { top: '100%', left: 0 }}
+          >
             {candidates.map((c) => (
               <button
                 type="button"
