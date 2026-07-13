@@ -231,6 +231,44 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 
 验收：移动节点位置不改变镜头顺序；重排顺序会改变故事板编号和 composition 顺序。
 
+### S4 审查结果（2026-07-13，Claude 双 agent 审查——开工 S5 前必须先修完这批）
+
+**CRITICAAL — 约束④记忆体防线是摆设，必须重做：**
+`remotion-storyboard-executor.ts` 的 RSS 监控采样的是 Node worker 自身
+`process.memoryUsage().rss`，但真正吃记忆体的是 renderStill 启动的 **Chromium 子进程**
+——监控永远看不到它，1.5GB 预算/主动 cancel 对目标 OOM 场景永不触发。且 spike 渲染的
+12 格**没有任何真实图片**（纯文字 tile），661MB 数字不能背书生产路径。修法：
+1. 自己 `openBrowser()` 拿 `puppeteerInstance`，**同一实例传给 selectComposition 与
+   renderStill**（顺带修掉双 Chromium 启动 + timeout 只盖一半的 MEDIUM）
+2. 从 browser 进程 PID 量**整棵进程树** RSS：Linux 读 /proc/<pid>/status(VmRSS)+
+   children 递归；darwin fallback `ps -o pid,ppid,rss -A` 走树。禁止引新依赖
+3. finally 里自己 close browser
+4. spike 用 25 张真实图片（signed URL 或本地 4K jpg）重跑，把新的 peak 数字写回本节
+
+**HIGH ×4（GroupNode 前端）：**
+1. 导出轮询与提交 fetch 均无 try/catch——网络抖动即静默死循环/按钮永久禁用。
+   照 ScriptNode/CompositionNode 的模式包 try/catch + setError + 清 taskId
+2. 轮询不处理 `dismissed` 状态 → 无限轮询。补 CompositionNode 同款分支
+3. 计画要求的「故事板已过期」未实作：导出时记 `ordered` 子节点 runId 序列的签名
+   （复用 inputsSig 思路），渲染时比对，漂移即显示过期徽章
+4. GroupNode 新逻辑零测试：把 move/内容过滤/staleness 签名抽成纯函数放
+   lib（照 previz 慣例），行为测试覆盖边界
+
+**MEDIUM ×2：**
+- storyboard-export handler 的图片 key 校验只查裸 `images/` 前缀——视频 key 同样
+  以 images/ 开头（generateUniqueKey 通加），视频 task 混进图片槽会烧掉整个重渲染
+  预算才失败。改成校验 `byId.get(id)?.type === TASK_TYPE.PLAYGROUND_IMAGE` +
+  namespace `images/playground-runs/`（compose 修复 bfdec89 同款）
+- edge.data.order 写了但 CompositionNode 从不读（本计画 L56 说它是 canonical）。
+  拍板二选一并落地：要么 CompositionNode 以 edge.data.order 为准（含重排回写），
+  要么改本计画数据契约、GroupNode 不再写 order。不许两套并存漂移
+
+**LOW（顺手修）**：storyboard-export handler 补 `assertTaskActive`（compose 有它没有）。
+其余 LOW（锁 busy 讯息不分来源/混合组语义/orderedChildIds 陈旧累积/unmount 不取消
+服务端任务）登记接受，不修。
+
+修完标准：上述全部落地 + canvas/worker 测试与 test:guards 绿 + spike 新数字回填。
+
 ### S5 — 画布资产入库
 
 交付：生成结果不再只存在画布节点，可沉淀并跨画布复用。
