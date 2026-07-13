@@ -24,6 +24,8 @@ import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/v
 import { variantKeyForMode, variantModeMismatch } from '@/lib/video-models/variant-for-mode'
 import { NodeShell } from './node-shell'
 import { SaveCanvasAssetButton, type CanvasAssetSource } from '../lib/canvas-assets-client'
+import { CanvasMediaLightbox } from './CanvasMediaLightbox'
+import { canvasDownloadHref } from '../lib/canvas-download'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '2:1', '21:9', '1:1', '4:3', '3:4', '4:5']
 const RESOLUTION_OPTIONS = ['480p', '720p', '1080p']
@@ -51,6 +53,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     const [error, setError] = useState<string | null>(null)
     const [recipeMenu, setRecipeMenu] = useState(false)
     const [styleMenu, setStyleMenu] = useState(false)
+    const [lightboxOpen, setLightboxOpen] = useState(false)
     const selectedStyle = useMemo(
       () => (d.styleId ? STYLE_OPTIONS.find((s) => s.id === d.styleId) ?? null : null),
       [d.styleId],
@@ -320,7 +323,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
         {/* Preview body — the card itself is preview-only (LibTV) */}
         <div className="p-3">
           <div
-            className="relative w-full overflow-hidden rounded-md"
+            className="group relative w-full overflow-hidden rounded-md"
             style={{
               aspectRatio: `${aw} / ${ah}`,
               maxHeight: 300,
@@ -379,10 +382,57 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                 {upstreamRefs.length > 0 ? `+卡司(${upstreamRefs.length})` : ` ←上游(${allRefs.length})`}
               </div>
             ) : null}
+            {/* Result actions — appear on hover so the preview stays clean (LibTV).
+                放大/下载 are the genuinely-missing capabilities; 存资产（默认角色）
+                is the discoverable path for「生成图 → 角色图」(save as 角色 →
+                从资产库拖回即成角色节点)。*/}
+            {resultUrl && !busy ? (
+              <div className="pointer-events-none absolute right-1.5 top-1.5 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  title="放大预览"
+                  className="nodrag pointer-events-auto rounded-md px-2 py-1 text-[11px]"
+                  style={{ background: `${CANVAS_TOKENS.bg.canvas}e6`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                >
+                  ⤢ 放大
+                </button>
+                <a
+                  href={canvasDownloadHref(resultUrl, d.title || (outputType === 'image' ? '图片' : '视频'))}
+                  download
+                  title="下载到本地"
+                  className="nodrag pointer-events-auto rounded-md px-2 py-1 text-[11px]"
+                  style={{ background: `${CANVAS_TOKENS.bg.canvas}e6`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                >
+                  ↓ 下载
+                </a>
+                {assetSource ? (
+                  <span className="pointer-events-auto">
+                    <SaveCanvasAssetButton
+                      source={assetSource}
+                      defaultName={d.title || (outputType === 'image' ? '图片' : '视频')}
+                      allowedTypes={outputType === 'image' ? ['character', 'scene', 'image'] : ['video']}
+                      firstFrameKey={outputType === 'video' ? d.anchorKey : null}
+                      lastFrameKey={outputType === 'video' ? d.lastFrameKey : null}
+                      variant="chip"
+                    />
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
 
       </NodeShell>
+
+      {lightboxOpen && resultUrl ? (
+        <CanvasMediaLightbox
+          url={resultUrl}
+          kind={outputType}
+          filename={d.title || (outputType === 'image' ? '图片' : '视频')}
+          onClose={() => setLightboxOpen(false)}
+        />
+      ) : null}
 
       {/* Floating config panel — LibTV node-floating-ui: appears below the
           card while the node is selected. Part of the node's DOM, so clicking

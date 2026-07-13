@@ -59,6 +59,8 @@ interface SaveButtonProps {
   allowedTypes: CanvasAssetType[]
   firstFrameKey?: string | null
   lastFrameKey?: string | null
+  /** 'full' = panel full-width button; 'chip' = compact result-hover trigger. */
+  variant?: 'full' | 'chip'
 }
 
 const TYPE_LABEL: Record<CanvasAssetType, string> = {
@@ -68,7 +70,7 @@ const TYPE_LABEL: Record<CanvasAssetType, string> = {
   video: '视频',
 }
 
-export function SaveCanvasAssetButton({ source, defaultName, allowedTypes, firstFrameKey, lastFrameKey }: SaveButtonProps) {
+export function SaveCanvasAssetButton({ source, defaultName, allowedTypes, firstFrameKey, lastFrameKey, variant = 'full' }: SaveButtonProps) {
   const canvasId = useContext(CanvasIdContext)
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -104,24 +106,39 @@ export function SaveCanvasAssetButton({ source, defaultName, allowedTypes, first
     if (!disabled && name.trim()) mutation.mutate()
   }
 
+  const openDialog = () => {
+    mutation.reset()
+    setName(defaultName)
+    setType(allowedTypes[0])
+    setFolder('')
+    setDescription('')
+    setOpen(true)
+  }
+
   return <>
-    <button
-      type="button"
-      disabled={disabled}
-      title={disabled ? '画布保存完成后才能入库' : '保存到资产库'}
-      onClick={() => {
-        mutation.reset()
-        setName(defaultName)
-        setType(allowedTypes[0])
-        setFolder('')
-        setDescription('')
-        setOpen(true)
-      }}
-      className="nodrag w-full rounded-md px-2 py-1 text-[11px] disabled:opacity-40"
-      style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
-    >
-      保存到资产库
-    </button>
+    {variant === 'chip' ? (
+      <button
+        type="button"
+        disabled={disabled}
+        title={disabled ? '画布保存完成后才能入库' : '存资产（角色 / 场景 / 图片）'}
+        onClick={openDialog}
+        className="nodrag rounded-md px-2 py-1 text-[11px] disabled:opacity-40"
+        style={{ background: `${CANVAS_TOKENS.bg.canvas}e6`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+      >
+        ＋ 存资产
+      </button>
+    ) : (
+      <button
+        type="button"
+        disabled={disabled}
+        title={disabled ? '画布保存完成后才能入库' : '保存到资产库'}
+        onClick={openDialog}
+        className="nodrag w-full rounded-md px-2 py-1 text-[11px] disabled:opacity-40"
+        style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+      >
+        保存到资产库
+      </button>
+    )}
     {open && typeof document !== 'undefined' ? createPortal(
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onMouseDown={() => setOpen(false)}>
         <form onSubmit={submit} onMouseDown={(event) => event.stopPropagation()} className="w-[380px] space-y-3 rounded-xl p-4" style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, color: CANVAS_TOKENS.text.primary }}>
