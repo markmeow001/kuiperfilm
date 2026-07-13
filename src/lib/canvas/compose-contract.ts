@@ -12,6 +12,7 @@ export const CANVAS_COMPOSE_LIMITS = {
 } as const
 
 export const canvasComposeRequestSchema = z.object({
+  canvasId: z.string().uuid(),
   taskIds: z.array(z.string().uuid()).min(1).max(CANVAS_COMPOSE_LIMITS.maxClips),
   transition: z.enum(['cut', 'crossfade']).default('cut'),
   crossfadeSec: z.number().min(0.1).max(2).default(0.5),

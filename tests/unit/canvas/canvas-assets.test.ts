@@ -58,7 +58,7 @@ describe('canvas asset contract', () => {
     expect(readTaskResultStorageKey({ resultUrls: ['images/playground-runs/a/out.jpg'] })).toBe('images/playground-runs/a/out.jpg')
     expect(readTaskResultStorageKey({ resultKey: 'images/playground-runs/a/out.mp4' })).toBe('images/playground-runs/a/out.mp4')
     expect(readTaskResultStorageKey({ resultUrls: [''] })).toBeNull()
-    expect(readTaskWorkspaceId({ workspaceId: 'ws-1' })).toBe('ws-1')
+    expect(readTaskWorkspaceId({ workspaceId: 'legacy-ws', meta: { workspaceId: 'ws-1' } })).toBe('ws-1')
     expect(isAssetMimeCompatible('scene', 'image/jpeg')).toBe(true)
     expect(isAssetMimeCompatible('video', 'image/jpeg')).toBe(false)
     expect(isAssetMimeCompatible('video', 'video/mp4')).toBe(true)
@@ -98,13 +98,30 @@ describe('canvas asset contract', () => {
     const asset = {
       id: 'asset-1', type: 'scene' as const, name: '码头', folder: null, description: null,
       storageKey: 'images/playground-runs/task-1/out.jpg', mediaUrl: '/m/public-1', mimeType: 'image/jpeg',
-      firstFrameUrl: null, lastFrameUrl: null, createdAt: '2026-07-13T00:00:00.000Z',
+      firstFrameKey: null, firstFrameUrl: null, lastFrameKey: null, lastFrameUrl: null,
+      createdAt: '2026-07-13T00:00:00.000Z',
     }
     expect(canvasAssetNodeType(asset)).toBe('image')
     expect(canvasAssetNodeData(asset)).toMatchObject({
       resultUrl: '/m/public-1',
       referenceKey: 'images/playground-runs/task-1/out.jpg',
       assetStorageKey: 'images/playground-runs/task-1/out.jpg',
+    })
+  })
+
+  it('video asset with first and last frames -> restores generation anchors', () => {
+    const asset = {
+      id: 'asset-video', type: 'video' as const, name: '预演', folder: null, description: null,
+      storageKey: 'video/playground-runs/task-1/out.mp4', mediaUrl: '/m/video-public', mimeType: 'video/mp4',
+      firstFrameKey: 'images/playground-ref/user-1/first.jpg', firstFrameUrl: '/m/first-public',
+      lastFrameKey: 'images/playground-ref/user-1/last.jpg', lastFrameUrl: '/m/last-public',
+      createdAt: '2026-07-13T00:00:00.000Z',
+    }
+    expect(canvasAssetNodeData(asset)).toMatchObject({
+      anchorKey: 'images/playground-ref/user-1/first.jpg',
+      anchorUrl: '/m/first-public',
+      lastFrameKey: 'images/playground-ref/user-1/last.jpg',
+      tailFrameUrl: '/m/last-public',
     })
   })
 })

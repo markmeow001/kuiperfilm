@@ -26,7 +26,7 @@ import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/l
 import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { mapTaskStatusToPlayground } from '@/lib/playground/run-view'
-import { filterSafeReferences } from '@/lib/playground/reference-guard'
+import { filterAuthorizedReferences } from '@/lib/playground/reference-guard'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
@@ -162,9 +162,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
     : []
   // Reject foreign COS keys (cross-user read) + internal/non-https URLs (SSRF).
   // Fail explicitly rather than silently drop (CLAUDE.md §3 不静默吞错).
-  const imgGuard = filterSafeReferences(rawRefImages, userId)
-  const vidGuard = filterSafeReferences(rawRefVideos, userId)
-  const lastFrameGuard = filterSafeReferences(rawLastFrameArr, userId)
+  const [imgGuard, vidGuard, lastFrameGuard] = await Promise.all([
+    filterAuthorizedReferences(rawRefImages, userId),
+    filterAuthorizedReferences(rawRefVideos, userId),
+    filterAuthorizedReferences(rawLastFrameArr, userId),
+  ])
   if (imgGuard.rejected.length > 0 || vidGuard.rejected.length > 0 || lastFrameGuard.rejected.length > 0) {
     _ulogError(
       `[playground.run] rejected unsafe references userId=${userId} images=${JSON.stringify(imgGuard.rejected)} videos=${JSON.stringify(vidGuard.rejected)} lastFrame=${JSON.stringify(lastFrameGuard.rejected)}`,
@@ -220,7 +222,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
           message: `主体「${name}」需要 1-${KLING_ELEMENT_IMAGES_MAX} 张参考图`,
         })
       }
-      const elGuard = filterSafeReferences(imageKeys, userId)
+      const elGuard = await filterAuthorizedReferences(imageKeys, userId)
       if (elGuard.rejected.length > 0) {
         _ulogError(
           `[playground.run] rejected unsafe element refs userId=${userId} element=${name} rejected=${JSON.stringify(elGuard.rejected)}`,
@@ -339,7 +341,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ...(typeof aspectRatio === 'string' ? { aspectRatio } : {}),
     ...(normalizedDuration ? { duration: normalizedDuration } : {}),
     generationCount: 1,
-    ...(wsId ? { workspaceId: wsId } : {}),
     // meta.* 是 payload 里唯一在 worker 进度更新时会被合并保留的命名空间
     //(tryUpdateTaskProgress → mergePayloadMetaWithExisting;顶层字段会被
     // 进度 payload 整包覆写)。原始描述词/模型放这里,历史记录的「描述
@@ -347,6 +348,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     meta: {
       originPrompt: prompt.trim(),
       originModelKey: trimmedModelKey,
+      ...(wsId ? { workspaceId: wsId } : {}),
     },
   }
 

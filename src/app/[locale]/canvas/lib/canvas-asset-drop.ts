@@ -9,7 +9,7 @@ export function canvasAssetNodeType(asset: CanvasAssetLibraryItem): CanvasNodeTy
 }
 
 /** Map a library item back to a node without degrading its durable storage key. */
-export function canvasAssetNodeData(asset: CanvasAssetLibraryItem): Partial<CanvasNodeData> {
+export function canvasAssetNodeData(asset: CanvasAssetLibraryItem): Partial<CanvasNodeData> & Pick<CanvasNodeData, 'title'> {
   const type = canvasAssetNodeType(asset)
   if (type === 'video') {
     return {
@@ -18,6 +18,9 @@ export function canvasAssetNodeData(asset: CanvasAssetLibraryItem): Partial<Canv
       assetStorageKey: asset.storageKey,
       referenceVideoKey: asset.storageKey,
       referenceVideoUrl: asset.mediaUrl,
+      anchorKey: asset.firstFrameKey,
+      anchorUrl: asset.firstFrameUrl,
+      lastFrameKey: asset.lastFrameKey,
       tailFrameUrl: asset.lastFrameUrl,
     }
   }

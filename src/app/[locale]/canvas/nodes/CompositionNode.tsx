@@ -6,10 +6,11 @@ import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
 import { orderCompositionInputs, writeCompositionEdgeOrder } from '../lib/composition-order'
 import { NodeShell } from './node-shell'
-import { SaveCanvasAssetButton } from '../lib/canvas-assets-client'
+import { SaveCanvasAssetButton, useActiveCanvasId } from '../lib/canvas-assets-client'
 
 export function CompositionNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
+  const canvasId = useActiveCanvasId()
   const { updateNodeData, setEdges } = useReactFlow()
   const edges = useEdges<Edge>()
   const connections = useNodeConnections()
@@ -79,10 +80,12 @@ export function CompositionNode({ id, data, selected }: NodeProps) {
       const nodeData = node.data as CanvasNodeData
       return node.type === 'composition' ? nodeData.resultTaskId : nodeData.runId
     }).filter((value): value is string => typeof value === 'string' && Boolean(value))
+    if (!canvasId) { setError('请先保存画布再合成'); return }
     if (taskIds.length === 0) { setError('请先连接已完成的视频节点'); return }
     setSubmitting(true); setError(null)
     try {
       const response = await fetch('/api/canvas/compose', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        canvasId,
         taskIds,
         transition: d.transition ?? 'cut',
         crossfadeSec: d.crossfadeSec ?? 0.5,

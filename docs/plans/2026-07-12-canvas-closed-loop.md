@@ -348,6 +348,10 @@ S5 主卖点对生成结果类资产不成立；workspace 成员用共享资产�
     namespace 白名单（按 scope 成员资格 DB 验证），workspace 成员共用同一副本
  b) reference-guard 增加「key 在 canvas_assets 且请求者可读该 scope」的 DB 验证
     通道（沿 assertDirectKeyAllowed 的已证所有权模式）
+
+> **拍板：采用 b。** `CanvasAsset` 已是 durable key 与 scope 的唯一 registry，在生成
+> 边界逐 key 验证个人 owner 或 workspace owner/member 即可闭合授权；不复制 COS 对象，
+> 因而不会新增副本去重、删除生命周期、额外存储成本，也不需要维护第二套 key 真相来源。
 验收测试必须走全链：存资产 → 拖回 → 提交 /api/playground/run **通过 guard**。
 
 **MEDIUM ×2：**

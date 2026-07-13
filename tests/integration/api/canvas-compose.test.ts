@@ -4,7 +4,13 @@ import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../h
 
 installAuthMocks()
 const submitMock = vi.hoisted(() => ({ submitTask: vi.fn() }))
-const prismaMock = vi.hoisted(() => ({ task: { findFirst: vi.fn() } }))
+const prismaMock = vi.hoisted(() => ({
+  task: { findFirst: vi.fn() },
+  canvas: { findUnique: vi.fn() },
+  workspace: { findUnique: vi.fn() },
+  workspaceMember: { findUnique: vi.fn() },
+  canvasAsset: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+}))
 vi.mock('@/lib/task/submitter', () => submitMock)
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/cos', () => ({ getSignedUrl: vi.fn((key: string) => `https://signed.example/${key}`) }))
@@ -17,17 +23,31 @@ describe('/api/canvas/compose', () => {
   beforeEach(() => {
     vi.clearAllMocks(); resetAuthMockState(); mockAuthenticated('user-1')
     submitMock.submitTask.mockResolvedValue({ taskId: 'compose-task', status: 'queued' })
+    prismaMock.canvas.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', userId: 'user-1', workspaceId: null })
   })
 
   it('POST valid clips -> submits free canvas composition task', async () => {
-    const request = new NextRequest('http://localhost/api/canvas/compose', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ taskIds: [crypto.randomUUID(), crypto.randomUUID()], transition: 'cut' }) })
+    const request = new NextRequest('http://localhost/api/canvas/compose', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ canvasId: '11111111-1111-4111-8111-111111111111', taskIds: [crypto.randomUUID(), crypto.randomUUID()], transition: 'cut' }) })
     const response = await route.POST(request, {} as never)
     expect(response.status).toBe(200)
-    expect(submitMock.submitTask).toHaveBeenCalledWith(expect.objectContaining({ type: 'canvas_compose_video', billingInfo: { billable: false, source: 'task', status: 'skipped' }, payload: expect.objectContaining({ transition: 'cut' }) }))
+    expect(submitMock.submitTask).toHaveBeenCalledWith(expect.objectContaining({ type: 'canvas_compose_video', billingInfo: { billable: false, source: 'task', status: 'skipped' }, payload: expect.objectContaining({ canvasId: '11111111-1111-4111-8111-111111111111', transition: 'cut', meta: {} }) }))
+  })
+
+  it('POST workspace canvas -> resolves workspaceId server-side into durable payload meta', async () => {
+    prismaMock.canvas.findUnique.mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111', userId: 'creator', workspaceId: 'ws-1' })
+    prismaMock.workspace.findUnique.mockResolvedValue({ ownerEditorId: 'user-1' })
+    const request = new NextRequest('http://localhost/api/canvas/compose', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ canvasId: '11111111-1111-4111-8111-111111111111', taskIds: [crypto.randomUUID()], transition: 'cut' }) })
+
+    const response = await route.POST(request, {} as never)
+
+    expect(response.status).toBe(200)
+    expect(submitMock.submitTask.mock.calls.at(-1)?.[0]).toMatchObject({
+      payload: { meta: { workspaceId: 'ws-1' } },
+    })
   })
 
   it('POST 11 clips -> 400 and no task submission', async () => {
-    const request = new NextRequest('http://localhost/api/canvas/compose', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ taskIds: Array.from({ length: 11 }, () => crypto.randomUUID()) }) })
+    const request = new NextRequest('http://localhost/api/canvas/compose', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ canvasId: '11111111-1111-4111-8111-111111111111', taskIds: Array.from({ length: 11 }, () => crypto.randomUUID()) }) })
     const response = await route.POST(request, {} as never)
     expect(response.status).toBe(400)
     expect(submitMock.submitTask).not.toHaveBeenCalled()

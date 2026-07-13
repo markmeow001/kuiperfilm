@@ -14,7 +14,20 @@
  *    cross-user read), arbitrary external https is harmless (same as any ref).
  */
 
+import { prisma } from '@/lib/prisma'
+
 const KEY_PREFIXES = ['images/', 'video/', 'voice/']
+
+interface CanvasAssetReferenceRow {
+  ownerUserId: string
+  workspaceId: string | null
+}
+
+type CanvasAssetReferenceModel = {
+  findMany(args: unknown): Promise<CanvasAssetReferenceRow[]>
+}
+
+const canvasAssetModel = (prisma as unknown as { canvasAsset: CanvasAssetReferenceModel }).canvasAsset
 
 function isPrivateOrInternalHost(host: string): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, '') // strip IPv6 brackets
@@ -64,6 +77,62 @@ export function filterSafeReferences(
   for (const e of entries) {
     if (isSafeReference(e, userId)) safe.push(e)
     else rejected.push(e)
+  }
+  return { safe, rejected }
+}
+
+function isBareStorageKey(entry: string): boolean {
+  return KEY_PREFIXES.some((prefix) => entry.startsWith(prefix))
+}
+
+async function canReadRegisteredCanvasAsset(storageKey: string, userId: string): Promise<boolean> {
+  const assets = await canvasAssetModel.findMany({
+    where: { storageKey },
+    select: { ownerUserId: true, workspaceId: true },
+  })
+  if (assets.some((asset) => asset.workspaceId === null && asset.ownerUserId === userId)) return true
+
+  const workspaceIds = [...new Set(
+    assets
+      .map((asset) => asset.workspaceId)
+      .filter((workspaceId): workspaceId is string => typeof workspaceId === 'string' && workspaceId.length > 0),
+  )]
+  if (workspaceIds.length === 0) return false
+  const workspace = await prisma.workspace.findFirst({
+    where: {
+      id: { in: workspaceIds },
+      OR: [
+        { ownerEditorId: userId },
+        { members: { some: { userId } } },
+      ],
+    },
+    select: { id: true },
+  })
+  return Boolean(workspace)
+}
+
+/**
+ * Playground boundary authorization. Normal safe references keep the cheap
+ * synchronous path; otherwise a bare durable key is accepted only when it is
+ * registered in CanvasAsset and the caller can read that exact asset scope.
+ */
+export async function filterAuthorizedReferences(
+  entries: string[],
+  userId: string,
+): Promise<{ safe: string[]; rejected: string[] }> {
+  const safe: string[] = []
+  const rejected: string[] = []
+  for (const entry of entries) {
+    if (isSafeReference(entry, userId)) {
+      safe.push(entry)
+      continue
+    }
+    const normalized = entry.trim()
+    if (isBareStorageKey(normalized) && await canReadRegisteredCanvasAsset(normalized, userId)) {
+      safe.push(normalized)
+      continue
+    }
+    rejected.push(entry)
   }
   return { safe, rejected }
 }

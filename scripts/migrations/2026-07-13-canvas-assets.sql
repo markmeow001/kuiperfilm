@@ -1,5 +1,7 @@
 -- S5 canvas durable asset registry. Apply through the normal migration runbook;
 -- this file is intentionally not executed by the implementation task.
+-- Keep canvas_assets_type_check synchronized with CANVAS_ASSET_TYPES in
+-- src/lib/canvas/canvas-assets-contract.ts whenever asset types change.
 CREATE TABLE `canvas_assets` (
   `id` VARCHAR(191) NOT NULL,
   `scopeKey` VARCHAR(80) NOT NULL,

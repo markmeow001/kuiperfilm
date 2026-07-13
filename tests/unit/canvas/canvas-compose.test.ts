@@ -5,7 +5,7 @@ import { CANVAS_COMPOSE_LIMITS, canvasComposeRequestSchema } from '@/lib/canvas/
 describe('canvas compose contract', () => {
   it('hard limits -> 10 clips, 3 minutes, 720p, two ffmpeg threads', () => {
     expect(CANVAS_COMPOSE_LIMITS).toMatchObject({ maxClips: 10, maxDurationSec: 180, width: 1280, height: 720, threads: 2, maxInputBytes: 2 * 1024 * 1024 * 1024, maxOutputBytes: 512 * 1024 * 1024 })
-    expect(canvasComposeRequestSchema.safeParse({ taskIds: Array.from({ length: 11 }, () => crypto.randomUUID()), transition: 'cut' }).success).toBe(false)
+    expect(canvasComposeRequestSchema.safeParse({ canvasId: crypto.randomUUID(), taskIds: Array.from({ length: 11 }, () => crypto.randomUUID()), transition: 'cut' }).success).toBe(false)
   })
 
   it('cut -> normalizes every clip and concatenates in input order', () => {

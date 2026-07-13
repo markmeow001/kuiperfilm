@@ -20,7 +20,9 @@ export interface CanvasAssetLibraryItem {
   storageKey: string
   mediaUrl: string
   mimeType: string | null
+  firstFrameKey: string | null
   firstFrameUrl: string | null
+  lastFrameKey: string | null
   lastFrameUrl: string | null
   createdAt: string
 }
@@ -29,6 +31,10 @@ const CanvasIdContext = createContext<string | null>(null)
 
 export function CanvasAssetsProvider({ canvasId, children }: { canvasId: string | null; children: ReactNode }) {
   return <CanvasIdContext.Provider value={canvasId}>{children}</CanvasIdContext.Provider>
+}
+
+export function useActiveCanvasId(): string | null {
+  return useContext(CanvasIdContext)
 }
 
 export function useCanvasAssetLibrary(canvasId: string | null, enabled: boolean) {
@@ -103,7 +109,14 @@ export function SaveCanvasAssetButton({ source, defaultName, allowedTypes, first
       type="button"
       disabled={disabled}
       title={disabled ? '画布保存完成后才能入库' : '保存到资产库'}
-      onClick={() => { setName(defaultName); setType(allowedTypes[0]); setOpen(true) }}
+      onClick={() => {
+        mutation.reset()
+        setName(defaultName)
+        setType(allowedTypes[0])
+        setFolder('')
+        setDescription('')
+        setOpen(true)
+      }}
       className="nodrag w-full rounded-md px-2 py-1 text-[11px] disabled:opacity-40"
       style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
     >

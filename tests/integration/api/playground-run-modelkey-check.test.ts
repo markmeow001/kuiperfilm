@@ -14,7 +14,9 @@ import {
 // with projectId='playground' and the matching playground task type.
 
 const prismaMock = vi.hoisted(() => ({
-  workspaceMember: { findFirst: vi.fn(async (..._args: unknown[]) => null) },
+  workspaceMember: {
+    findFirst: vi.fn<(...args: unknown[]) => Promise<{ workspaceId: string } | null>>(async (..._args: unknown[]) => null),
+  },
   workspace: { findFirst: vi.fn(async (..._args: unknown[]) => null) },
 }))
 
@@ -156,6 +158,23 @@ describe('POST /api/playground/run — modelKey enablement gate (Phase 9.1 spine
     expect(arg.type).toBe('playground_video')
     const payload = arg.payload as Record<string, unknown>
     expect(payload.duration).toBe(5)
+  })
+
+  it('workspace run -> writes workspaceId into progress-safe payload meta', async () => {
+    prismaMock.workspaceMember.findFirst.mockResolvedValueOnce({ workspaceId: 'ws-1' })
+    const { POST } = await loadRoute()
+    const req = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: { prompt: 'shared scene', outputType: 'image', modelKey: 'atlascloud::nano-banana-pro', workspaceId: 'ws-1' },
+    })
+
+    const res = await POST(req, { params: Promise.resolve({}) })
+
+    expect(res.status).toBe(200)
+    const arg = submitterMock.submitTask.mock.calls.at(-1)?.[0] as { payload?: Record<string, unknown> } | undefined
+    expect(arg?.payload).not.toHaveProperty('workspaceId')
+    expect(arg?.payload?.meta).toMatchObject({ workspaceId: 'ws-1' })
   })
 
   it('malformed JSON body → 400 INVALID_JSON_BODY (not silent {} coercion)', async () => {

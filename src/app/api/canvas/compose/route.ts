@@ -7,6 +7,7 @@ import { TASK_TYPE } from '@/lib/task/types'
 import type { Locale } from '@/i18n/routing'
 import { prisma } from '@/lib/prisma'
 import { getSignedUrl } from '@/lib/cos'
+import { resolveCanvasAssetScope } from '@/lib/canvas/canvas-assets'
 
 function resultRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -28,6 +29,10 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (isErrorResponse(authResult)) return authResult
   const parsed = canvasComposeRequestSchema.safeParse(await request.json())
   if (!parsed.success) throw new ApiError('INVALID_PARAMS', { code: 'COMPOSE_PAYLOAD_INVALID', details: { issues: parsed.error.issues.slice(0, 5) } })
+  const scope = await resolveCanvasAssetScope(parsed.data.canvasId, authResult.session.user.id, {
+    write: true,
+    isAdmin: false,
+  })
   const targetId = crypto.randomUUID()
   const submitted = await submitTask({
     userId: authResult.session.user.id,
@@ -36,7 +41,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
     type: TASK_TYPE.CANVAS_COMPOSE_VIDEO,
     targetType: 'canvas-composition',
     targetId,
-    payload: parsed.data,
+    payload: {
+      ...parsed.data,
+      meta: {
+        ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+      },
+    },
     // Explicit free CPU task. No billing freeze is created.
     billingInfo: { billable: false, source: 'task', status: 'skipped' },
     maxAttempts: 3,

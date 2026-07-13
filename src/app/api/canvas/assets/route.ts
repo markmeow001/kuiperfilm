@@ -37,6 +37,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
   }
   const scope = await resolveCanvasAssetScope(parsed.data.canvasId, auth.session.user.id, {
     write: true,
+    // Deliberately asymmetric with GET: only editor auth returns a freshly
+    // loaded trusted role, so admin bypass exists solely on this mutation path.
     isAdmin: auth.role === 'admin',
   })
   return NextResponse.json({ asset: await createCanvasAsset(parsed.data, auth.session.user.id, scope) })

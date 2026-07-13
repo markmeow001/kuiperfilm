@@ -27,8 +27,8 @@ interface CanvasAssetRow {
   description: string | null
   createdAt: Date
   primaryMedia: { publicId: string; mimeType: string | null }
-  firstFrameMedia: { publicId: string } | null
-  lastFrameMedia: { publicId: string } | null
+  firstFrameMedia: { publicId: string; storageKey: string } | null
+  lastFrameMedia: { publicId: string; storageKey: string } | null
 }
 
 type CanvasAssetModel = {
@@ -71,7 +71,9 @@ function assetView(row: CanvasAssetRow) {
     storageKey: row.storageKey,
     mediaUrl: mediaRoute(row.primaryMedia.publicId),
     mimeType: row.primaryMedia.mimeType,
+    firstFrameKey: row.firstFrameMedia?.storageKey ?? null,
     firstFrameUrl: row.firstFrameMedia ? mediaRoute(row.firstFrameMedia.publicId) : null,
+    lastFrameKey: row.lastFrameMedia?.storageKey ?? null,
     lastFrameUrl: row.lastFrameMedia ? mediaRoute(row.lastFrameMedia.publicId) : null,
     createdAt: row.createdAt.toISOString(),
   }

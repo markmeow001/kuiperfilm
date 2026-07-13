@@ -35,6 +35,10 @@ export function readTaskResultStorageKey(result: unknown): string | null {
 
 export function readTaskWorkspaceId(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
-  const value = (payload as Record<string, unknown>).workspaceId
+  const record = payload as Record<string, unknown>
+  const meta = record.meta && typeof record.meta === 'object' && !Array.isArray(record.meta)
+    ? record.meta as Record<string, unknown>
+    : {}
+  const value = meta.workspaceId ?? record.workspaceId
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
