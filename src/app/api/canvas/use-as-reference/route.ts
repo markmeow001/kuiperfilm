@@ -1,15 +1,18 @@
 /**
- * Use a canvas image node's generated result (e.g. a 720全景图) as a 导演台
- * background. (2026-06-29)
+ * Turn a canvas image node's generated result into a durable reference the
+ * caller owns — used by 角色 nodes to ingest an upstream 图片 node ("把生成图
+ * 变成角色参考图"). (2026-07-13)
  *
- * The run-result COS key lives in `images/playground-runs/<taskId>/…` — NOT the
- * caller's `/playground-ref/<userId>/` namespace, so it can't pass the canvas
- * asset proxy / reference guard, and the client only holds a signed URL anyway.
- * This endpoint takes the runId, verifies the caller owns that task, and copies
- * the result into the caller's own ref namespace server-side (no CORS) → returns
- * a durable key + signed URL the 全景球 can load via /api/canvas/asset.
+ * Same shape as /api/canvas/use-as-background: the run-result COS key lives in
+ * `images/playground-runs/<taskId>/…` (NOT the caller's `/playground-ref/…`
+ * namespace), so it can't pass the reference guard when fed downstream as a
+ * cast reference, and the client only holds a signed URL. This endpoint takes
+ * the runId, verifies the caller owns that completed task, and copies the
+ * result into the caller's own ref namespace server-side (no CORS) → returns a
+ * durable key + signed URL. The only difference from use-as-background is the
+ * key prefix (`ref` vs `bg`), so downstream/debugging can tell them apart.
  *
- * POST /api/canvas/use-as-background { runId } → { key, url }
+ * POST /api/canvas/use-as-reference { runId } → { key, url }
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -20,6 +23,7 @@ import { getSignedUrl, uploadToCOS, generateUniqueKey } from '@/lib/cos'
 import { pickRunResultKey } from '@/lib/canvas/run-result-key'
 
 const PLAYGROUND_PROJECT_ID = 'playground'
+const MAX_BYTES = 25 * 1024 * 1024
 
 export const POST = apiHandler(async (request: NextRequest) => {
   const authResult = await requireUserAuth()
@@ -48,9 +52,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (!resultKey) throw new ApiError('NOT_FOUND', { code: 'RUN_RESULT_MISSING' })
 
   // Copy the result into the caller's ref namespace (server-side fetch → upload,
-  // no CORS, no compression so the equirect aspect is preserved).
-  const newKey = generateUniqueKey(`playground-ref/${userId}/bg`)
-  const MAX_BYTES = 25 * 1024 * 1024
+  // no CORS). The copied key lives under `/playground-ref/<userId>/` so it later
+  // passes isSafeReference when the 角色 node feeds it downstream as a cast ref.
+  const newKey = generateUniqueKey(`playground-ref/${userId}/ref`)
   try {
     const ac = new AbortController()
     const timer = setTimeout(() => ac.abort(), 60_000)
@@ -67,8 +71,8 @@ export const POST = apiHandler(async (request: NextRequest) => {
     if (buf.length > MAX_BYTES) throw new Error(`too large (${buf.length})`)
     await uploadToCOS(buf, newKey)
   } catch (err) {
-    _ulogError(`[canvas.use-as-background] copy failed runId=${runId} err=${err instanceof Error ? err.message : String(err)}`)
-    throw new ApiError('INTERNAL_ERROR', { code: 'BACKGROUND_COPY_FAILED' })
+    _ulogError(`[canvas.use-as-reference] copy failed runId=${runId} err=${err instanceof Error ? err.message : String(err)}`)
+    throw new ApiError('INTERNAL_ERROR', { code: 'REFERENCE_COPY_FAILED' })
   }
 
   return NextResponse.json({ key: newKey, url: getSignedUrl(newKey, 3600) })

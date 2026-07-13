@@ -6,6 +6,7 @@ describe('canvas connection contract', () => {
     ['text', 'script'], ['text', 'image'], ['text', 'video'], ['text', 'audio'],
     ['script', 'image'], ['script', 'video'], ['script', 'audio'],
     ['character', 'image'], ['character', 'video'], ['character', 'director'],
+    ['image', 'character'],
     ['image', 'image'], ['image', 'video'], ['image', 'director'],
     ['video', 'image'], ['video', 'video'],
     ['video', 'composition'],
@@ -32,6 +33,10 @@ describe('inferCanvasEdgeData', () => {
 
   it('character edge -> identity reference, never a blocking frame', () => {
     expect(inferCanvasEdgeData('character', 'video', { targetMode: 'firstlast', frameIndex: 0 })).toEqual({ portType: 'identity-image', role: 'reference' })
+  })
+
+  it('image -> character edge -> reference (角色节点吃上游生成图作参考)', () => {
+    expect(inferCanvasEdgeData('image', 'character')).toEqual({ portType: 'frame-image', role: 'reference' })
   })
 
   it('unsupported legacy pair -> explicit invalid metadata', () => {

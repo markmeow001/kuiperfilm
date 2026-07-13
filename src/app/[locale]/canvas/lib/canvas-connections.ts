@@ -22,7 +22,9 @@ const ACCEPTS: Record<CanvasNodeType, readonly CanvasNodeType[]> = {
   audio: ['text', 'script'],
   composition: ['video', 'composition', 'audio'],
   director: ['character', 'image'],
-  character: [],
+  // 角色节点吃「上游生成图」作参考图——用户把 图片→角色 连线,角色节点把该
+  // 图 copy 进自己的 ref 命名空间(use-as-reference),消费在 CharacterNode。
+  character: ['image'],
   group: [],
 }
 
@@ -74,6 +76,7 @@ export function inferCanvasEdgeData(
   }
   if (source === 'audio' && target === 'composition') return { portType, role: options.targetMode === 'music' ? 'music' : 'voice' }
   if (source === 'character') return { portType, role: 'reference' }
+  if (source === 'image' && target === 'character') return { portType, role: 'reference' }
   if ((source === 'image' || source === 'video') && (target === 'image' || target === 'video')) {
     return { portType, role: 'reference' }
   }
