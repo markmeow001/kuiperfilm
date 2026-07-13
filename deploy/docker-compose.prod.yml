@@ -121,6 +121,8 @@ services:
       CRON_SECRET: ${CRON_SECRET:?CRON_SECRET must be set; openssl rand -hex 16}
       INTERNAL_TASK_TOKEN: ${INTERNAL_TASK_TOKEN:?INTERNAL_TASK_TOKEN must be set; openssl rand -hex 16}
       LLM_USAGE_SNAPSHOT_TOKEN: ${LLM_USAGE_SNAPSHOT_TOKEN:-}
+      # 故事板渲染记忆体预算(bytes)——droplet 3.8G RAM 场景要调低于默认 2.5GiB
+      CANVAS_STORYBOARD_MAX_RSS_BYTES: ${CANVAS_STORYBOARD_MAX_RSS_BYTES:-}
       API_ENCRYPTION_KEY: ${API_ENCRYPTION_KEY:?API_ENCRYPTION_KEY must be 64-hex; openssl rand -hex 32}
       # Multi-user bootstrap (consumed by scripts/bootstrap-admin.ts at first start)
       ADMIN_USERNAME: ${ADMIN_USERNAME:?ADMIN_USERNAME must be set for first-run bootstrap}
