@@ -45,4 +45,15 @@ describe('pickUpstreamText', () => {
     expect(pickUpstreamText([{ type: 'text', data: { prompt: '   ' } }, null, undefined])).toBe('')
     expect(pickUpstreamText([{ type: 'character', data: {} }])).toBe('')
   })
+
+  it('script node with storyboard shots -> feeds concrete shot text downstream', () => {
+    expect(pickUpstreamText([{
+      type: 'script',
+      data: { prompt: '旧剧本', shots: [{ description: '远景建立城市', dialogue: '开始吧' }, { description: '角色推门' }] },
+    }])).toBe('远景建立城市；开始吧\n角色推门')
+  })
+
+  it('script node without shots -> feeds its source prompt downstream', () => {
+    expect(pickUpstreamText([{ type: 'script', data: { prompt: '第一场：雨夜' } }])).toBe('第一场：雨夜')
+  })
 })

@@ -24,7 +24,7 @@ const REF_BEARING_TYPES = new Set(['image', 'character', 'director'])
 export interface UpstreamNodeLike {
   id?: string
   type?: string | null
-  data?: { resultUrl?: string | null; referenceKey?: string | null; tailFrameUrl?: string | null } | Record<string, unknown> | null
+  data?: { resultUrl?: string | null; referenceKey?: string | null; tailFrameUrl?: string | null; prompt?: string | null; shots?: Array<{ description?: string; dialogue?: string }> | null } | Record<string, unknown> | null
 }
 
 /**
@@ -38,11 +38,63 @@ export function pickUpstreamText(
 ): string {
   const out: string[] = []
   for (const n of upstream) {
-    if (!n || n.type !== 'text') continue
-    const prompt = (n.data as { prompt?: unknown } | null | undefined)?.prompt
+    if (!n || (n.type !== 'text' && n.type !== 'script')) continue
+    const data = n.data as { prompt?: unknown; shots?: unknown } | null | undefined
+    if (n.type === 'script' && Array.isArray(data?.shots) && data.shots.length > 0) {
+      const shotText = data.shots
+        .map((shot) => {
+          if (!shot || typeof shot !== 'object') return ''
+          const value = shot as { description?: unknown; dialogue?: unknown }
+          return [value.description, value.dialogue].filter((part): part is string => typeof part === 'string' && Boolean(part.trim())).join('；')
+        })
+        .filter(Boolean)
+        .join('\n')
+      if (shotText) out.push(shotText)
+      continue
+    }
+    const prompt = data?.prompt
     if (typeof prompt === 'string' && prompt.trim()) out.push(prompt.trim())
   }
   return out.join('\n')
+}
+
+/** Frame-bearing upstreams in connection order. Characters are identity refs,
+ * not blocking frames, so they must never accidentally become an I2V first or
+ * last frame. */
+export function pickUpstreamFrameUrls(
+  upstream: ReadonlyArray<UpstreamNodeLike | null | undefined>,
+): string[] {
+  const out: string[] = []
+  for (const node of upstream) {
+    if (!node) continue
+    const data = node.data as { resultUrl?: unknown; referenceKey?: unknown; tailFrameUrl?: unknown } | null | undefined
+    if (node.type === 'video') {
+      if (typeof data?.tailFrameUrl === 'string' && data.tailFrameUrl) out.push(data.tailFrameUrl)
+      continue
+    }
+    if (node.type !== 'image') continue
+    if (typeof data?.referenceKey === 'string' && data.referenceKey) out.push(data.referenceKey)
+    else if (typeof data?.resultUrl === 'string' && data.resultUrl) out.push(data.resultUrl)
+  }
+  return out
+}
+
+/**
+ * 首尾帧模式的帧来源解析（纯函数，行为测试覆盖）：
+ * - 首帧：本节点参考图（anchorKey）优先，否则第 1 条连线的帧
+ * - 尾帧：显式上传（lastFrameKey）优先；有 anchor 时第 1 条连线当尾帧，
+ *   否则第 2 条连线
+ * upstreamFrames 的顺序 = 连线建立顺序（不是画面位置）——UI 必须把这点
+ * 标示给用户（MediaNode 首尾帧区）。
+ */
+export function resolveFirstLastFrames(opts: {
+  anchorKey?: string | null
+  lastFrameKey?: string | null
+  upstreamFrames: readonly string[]
+}): { firstFrame: string | null; lastFrame: string | null } {
+  const firstFrame = opts.anchorKey ?? opts.upstreamFrames[0] ?? null
+  const lastFrame = opts.lastFrameKey ?? (opts.anchorKey ? opts.upstreamFrames[0] : opts.upstreamFrames[1]) ?? null
+  return { firstFrame, lastFrame }
 }
 
 export function pickUpstreamReferenceUrls(

@@ -16,7 +16,7 @@ import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-m
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import { type CanvasNodeData, DEFAULT_NODE_DATA } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
-import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
+import { pickUpstreamFrameUrls, pickUpstreamReferenceUrls, pickUpstreamText, resolveFirstLastFrames } from '../lib/canvas-refs'
 import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { IMAGE_RECIPES } from '../lib/canvas-recipes'
 import { visualStyles } from '@/lib/style-library'
@@ -121,6 +121,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     )
     const upstream = useNodesData(incomingSourceIds)
     const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
+    const upstreamFrames = useMemo(() => pickUpstreamFrameUrls(upstream), [upstream])
     // Upstream 文本/脚本 nodes drive this shot's prompt (script → 分镜 chain).
     const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
     // Own input anchor (e.g. a 导演台 blocking screenshot) leads the reference
@@ -183,9 +184,16 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     // optional ref — it's always sent (and always shown), so display matches submission.
     // 预演参考视频（导演台导出）→ 默认 omni（R2V）端点。
     const genMode = outputType === 'video' ? d.genMode ?? (d.referenceVideoKey ? 'omni' : allRefs.length > 0 ? 'image' : 'text') : 'image'
+    const { firstFrame: connectedFirstFrame, lastFrame: connectedLastFrame } = resolveFirstLastFrames({
+      anchorKey: d.anchorKey,
+      lastFrameKey: d.lastFrameKey,
+      upstreamFrames,
+    })
     const refsForSubmit = outputType === 'video' && genMode === 'text'
       ? (d.anchorKey ? [d.anchorKey] : [])
-      : allRefs
+      : outputType === 'video' && genMode === 'firstlast'
+        ? (connectedFirstFrame ? [connectedFirstFrame] : [])
+        : allRefs
 
     async function handleGenerate() {
       if (!canGenerate) return
@@ -201,7 +209,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
       }
       if (outputType === 'video' && genMode === 'firstlast') {
         if (refsForSubmit.length === 0) { setError('首尾帧：请先连入或设定首帧图'); return }
-        if (!d.lastFrameKey) { setError('首尾帧：请上传尾帧图'); return }
+        if (!connectedLastFrame) { setError('首尾帧：请连接第二张图片或上传尾帧图'); return }
       }
       setError(null)
       setSubmitting(true)
@@ -240,8 +248,8 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           // For video, refsForSubmit[0] is the i2v first frame (gated by mode).
           ...(refsForSubmit.length > 0 ? { referenceImages: refsForSubmit } : {}),
           // 首尾帧: send the tail frame; first frame = referenceImages[0].
-          ...(outputType === 'video' && genMode === 'firstlast' && d.lastFrameKey
-            ? { lastFrameUrl: d.lastFrameKey }
+          ...(outputType === 'video' && genMode === 'firstlast' && connectedLastFrame
+            ? { lastFrameUrl: connectedLastFrame }
             : {}),
           // 导演台预演参考视频（R2V 机位运动+人物调度锚）。
           ...(outputType === 'video' && d.referenceVideoKey
@@ -476,6 +484,14 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
           {/* 首尾帧: last-frame upload (first frame comes from the upstream ref) */}
           {outputType === 'video' && genMode === 'firstlast' ? (
+            <>
+            {/* 自动配对的顺序语义必须讲明白：帧序 = 连线先后，不是画面左右
+                （review 2026-07-13 MEDIUM：两张图静默对调首尾帧用户毫无感知） */}
+            <div className="rounded-md px-2 py-1 text-[10px]" style={{ background: `${CANVAS_TOKENS.accent}10`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.accent}30` }}>
+              首帧：{d.anchorKey ? '本节点参考图' : connectedFirstFrame ? '第 1 条连线的图' : '未设定'} ·
+              尾帧：{d.lastFrameKey ? '已上传的尾帧图' : connectedLastFrame ? (d.anchorKey ? '第 1 条连线的图' : '第 2 条连线的图') : '未设定'}
+              <span style={{ color: CANVAS_TOKENS.text.muted }}>（按连线先后顺序，非画面位置；顺序不对就断线重连）</span>
+            </div>
             <div className="flex items-center gap-1.5">
               {d.lastFramePreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -496,6 +512,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
               <input ref={lastFrameInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleLastFrameUpload} />
               <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>仅 fal/Minimax/BobAPI 支持</span>
             </div>
+            </>
           ) : null}
 
           {/* 风格 picker — inject a visual-style anchor into the prompt (both

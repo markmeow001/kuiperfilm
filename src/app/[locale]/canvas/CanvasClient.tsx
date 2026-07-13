@@ -48,6 +48,7 @@ import { ScriptNode } from './nodes/ScriptNode'
 import { AudioNode } from './nodes/AudioNode'
 import { GroupNode } from './nodes/GroupNode'
 import { CanvasResourceMenu } from './CanvasResourceMenu'
+import { canConnectCanvasNodes, canvasConnectionHint } from './lib/canvas-connections'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -249,10 +250,27 @@ function CanvasInner() {
       if (params.source && params.target && rf.getNode(params.source)?.type === 'director') {
         p = { source: params.target, target: params.source, sourceHandle: params.targetHandle ?? null, targetHandle: params.sourceHandle ?? null }
       }
+      const sourceType = p.source ? rf.getNode(p.source)?.type as CanvasNodeType | undefined : undefined
+      const targetType = p.target ? rf.getNode(p.target)?.type as CanvasNodeType | undefined : undefined
+      if (!sourceType || !targetType || !canConnectCanvasNodes(sourceType, targetType)) {
+        flashDropError(
+          sourceType && targetType ? canvasConnectionHint(sourceType, targetType) : '这两个节点没有可传递的数据类型',
+          3000,
+        )
+        return
+      }
       setEdges((eds) => addEdge(p, eds))
     },
-    [setEdges, rf],
+    [setEdges, rf, flashDropError],
   )
+
+  const isValidConnection = useCallback((connection: Connection | Edge) => {
+    if (!connection.source || !connection.target) return false
+    let source = rf.getNode(connection.source)?.type as CanvasNodeType | undefined
+    let target = rf.getNode(connection.target)?.type as CanvasNodeType | undefined
+    if (source === 'director') [source, target] = [target, source]
+    return Boolean(source && target && canConnectCanvasNodes(source, target))
+  }, [rf])
 
   // Drag from a handle, release on empty canvas → open add-menu wired to source.
   const onConnectEnd = useCallback(
@@ -703,6 +721,7 @@ function CanvasInner() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        isValidConnection={isValidConnection}
         onConnectEnd={onConnectEnd}
         onDoubleClick={onPaneDoubleClick}
         // RF 默认 zoomOnDoubleClick 会让 d3-zoom 吃掉双击——「双击画布添加
