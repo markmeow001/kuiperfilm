@@ -42,6 +42,20 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
     [upstream],
   )
   const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
+  // Human-readable labels for the bound refs (角色/场景/道具 = character/image
+  // nodes wired in) so the user can see WHAT is bound, not just a count.
+  const boundRefLabels = useMemo(
+    () =>
+      upstream
+        .filter((n): n is NonNullable<typeof n> =>
+          Boolean(n) && (n!.type === 'character' || n!.type === 'image' || n!.type === 'director'))
+        .map((n) => {
+          const kind = n.type === 'character' ? '角色' : n.type === 'director' ? '导演台' : '图片/场景'
+          const title = (n.data as CanvasNodeData)?.title
+          return title ? `${kind}·${title}` : kind
+        }),
+    [upstream],
+  )
 
   const script = (upstreamText || d.prompt || '').trim()
   const shots = d.shots ?? []
@@ -163,7 +177,7 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   // 性参考真实流入生成)。以前只撒节点不连线,镜头节点和角色完全脱钩,是
   // 「每个区块都独立」观感的元凶(2026-07-08 用户反馈)。Returns spawned ids
   // so 批量生成 can submit them right after.
-  function spawnShotNodes(target: 'image' | 'video'): string[] {
+  function spawnShotNodes(target: 'image' | 'video', imageModelKey?: string): string[] {
     if (pickedShots.length === 0) return []
     const self = getNode(id)
     const baseX = self?.position.x ?? 0
@@ -183,6 +197,9 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
             title: `镜 ${s.shotNumber}`,
             // Video shots carry the LLM's camera move + duration into the node.
             prompt: target === 'video' && s.cameraMove ? `${framed}，运镜：${s.cameraMove}` : framed,
+            // Spawned image nodes inherit the script node's chosen 生图模型 so
+            // 仅铺图 / 后续手动重生都用同一个模型(而非各自的默认)。
+            ...(target === 'image' && imageModelKey ? { modelKey: imageModelKey } : {}),
             // genMode intentionally NOT pinned: MediaNode's heuristic picks
             // 图生 when the user later wires in refs (pinning 'text' would
             // silently drop them).
@@ -210,14 +227,22 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const [batch, setBatch] = useState<{ done: number; total: number; running: boolean; error: string | null }>(
     { done: 0, total: 0, running: false, error: null },
   )
+  // Effective 生图模型: the node's chosen model if it's still enabled, else the
+  // first available (picker must never render a disabled/stale model — feedback
+  // 「picker 必过滤启用清单」).
+  const effectiveImageModel = useMemo(() => {
+    if (d.modelKey && gen.imageModels.some((m) => m.value === d.modelKey)) return d.modelKey
+    return gen.imageModels[0]?.value ?? ''
+  }, [d.modelKey, gen.imageModels])
+
   async function handleBatchGenerate() {
     if (pickedShots.length === 0 || batch.running) return
-    const modelKey = gen.imageModels[0]?.value
+    const modelKey = effectiveImageModel
     if (!modelKey) {
       setBatch({ done: 0, total: 0, running: false, error: '无可用图片模型 — 请到 /profile 启用' })
       return
     }
-    const ids = spawnShotNodes('image')
+    const ids = spawnShotNodes('image', modelKey)
     setBatch({ done: 0, total: ids.length, running: true, error: null })
     for (let i = 0; i < ids.length; i++) {
       const s = pickedShots[i]
@@ -248,20 +273,20 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const busy = phase === 'submitting' || phase === 'running'
 
   return (
-    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={380}>
-      <div className="space-y-2 p-3">
+    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={520}>
+      <div className="space-y-2 p-4">
         {upstreamText ? (
-          <div className="rounded-md px-2 py-1 text-[10px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
-            剧本 ← 上游：{upstreamText.length > 40 ? upstreamText.slice(0, 40) + '…' : upstreamText}
+          <div className="rounded-md px-2 py-1.5 text-[12px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
+            剧本 ← 上游：{upstreamText.length > 60 ? upstreamText.slice(0, 60) + '…' : upstreamText}
           </div>
         ) : (
           <textarea
             value={d.prompt}
             onChange={(e) => updateNodeData(id, { prompt: e.target.value })}
             placeholder="粘贴剧本 / 故事梗概，或连入一个「文本」节点…"
-            rows={5}
-            className="nodrag w-full resize-none rounded-md px-2 py-1.5 text-[12px] leading-relaxed outline-none"
-            style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+            rows={8}
+            className="nodrag nowheel w-full resize-y rounded-md px-2.5 py-2 text-[13px] leading-relaxed outline-none"
+            style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}`, minHeight: 140, maxHeight: 420 }}
           />
         )}
 
@@ -279,22 +304,22 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
 
         {shots.length > 0 ? (
           <>
-            <div className="flex items-center justify-between text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>
+            <div className="flex items-center justify-between text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>
               <span>勾选要批量生成的镜头（{pickedShots.length}/{shots.length}）</span>
               <button type="button" className="nodrag underline" onClick={() => setPicked(picked === null ? new Set() : null)}>
                 {picked === null ? '取消全选' : '全选'}
               </button>
             </div>
-            <div className="max-h-[260px] space-y-1 overflow-y-auto nowheel">
+            <div className="max-h-[460px] space-y-1.5 overflow-y-auto nowheel">
               {shots.map((s, i) => (
-                <div key={`${s.shotNumber}-${i}`} className="rounded-md px-2 py-1.5 text-[11px]" style={{ background: CANVAS_TOKENS.bg.input, border: `1px solid ${isPicked(i) ? `${meta.accent}66` : CANVAS_TOKENS.hairline}` }}>
+                <div key={`${s.shotNumber}-${i}`} className="rounded-md px-2.5 py-2 text-[12px]" style={{ background: CANVAS_TOKENS.bg.input, border: `1px solid ${isPicked(i) ? `${meta.accent}66` : CANVAS_TOKENS.hairline}` }}>
                   <div className="flex items-center gap-1.5">
-                    <input type="checkbox" checked={isPicked(i)} onChange={() => togglePick(i)} className="nodrag h-3 w-3 accent-current" style={{ color: meta.accent }} />
-                    <span className="font-mono" style={{ color: meta.accent }}>#{s.shotNumber}</span>
-                    {s.shotSize ? <span className="rounded px-1 text-[9px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted }}>{s.shotSize}</span> : null}
-                    {s.cameraMove ? <span className="rounded px-1 text-[9px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted }}>{s.cameraMove}</span> : null}
-                    {typeof s.durationSec === 'number' ? <span className="text-[9px]" style={{ color: CANVAS_TOKENS.text.muted }}>{s.durationSec}s</span> : null}
-                    <span className="ml-auto flex items-center gap-1">
+                    <input type="checkbox" checked={isPicked(i)} onChange={() => togglePick(i)} className="nodrag h-3.5 w-3.5 accent-current" style={{ color: meta.accent }} />
+                    <span className="font-mono text-[12px]" style={{ color: meta.accent }}>#{s.shotNumber}</span>
+                    {s.shotSize ? <span className="rounded px-1 text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted }}>{s.shotSize}</span> : null}
+                    {s.cameraMove ? <span className="rounded px-1 text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted }}>{s.cameraMove}</span> : null}
+                    {typeof s.durationSec === 'number' ? <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{s.durationSec}s</span> : null}
+                    <span className="ml-auto flex items-center gap-1.5">
                       <button type="button" title="上移" onClick={() => moveShot(i, -1)} disabled={i === 0} className="nodrag disabled:opacity-25" style={{ color: CANVAS_TOKENS.text.muted }}>↑</button>
                       <button type="button" title="下移" onClick={() => moveShot(i, 1)} disabled={i === shots.length - 1} className="nodrag disabled:opacity-25" style={{ color: CANVAS_TOKENS.text.muted }}>↓</button>
                       <button type="button" title="删除镜头" onClick={() => deleteShot(i)} className="nodrag" style={{ color: '#FF8A8A' }}>×</button>
@@ -303,16 +328,16 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
                   <textarea
                     value={s.description}
                     onChange={(e) => editShot(i, { description: e.target.value })}
-                    rows={2}
+                    rows={3}
                     placeholder="画面描述…"
-                    className="nodrag mt-1 w-full resize-none rounded px-1.5 py-1 text-[11px] leading-snug outline-none"
-                    style={{ background: CANVAS_TOKENS.bg.panel, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                    className="nodrag nowheel mt-1.5 w-full resize-y rounded px-2 py-1.5 text-[12px] leading-relaxed outline-none"
+                    style={{ background: CANVAS_TOKENS.bg.panel, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}`, minHeight: 56 }}
                   />
                   <input
                     value={s.dialogue ?? ''}
                     onChange={(e) => editShot(i, { dialogue: e.target.value })}
                     placeholder="对白 / 旁白（可空）"
-                    className="nodrag mt-1 w-full rounded px-1.5 py-0.5 text-[10px] italic outline-none"
+                    className="nodrag mt-1 w-full rounded px-2 py-1 text-[11px] italic outline-none"
                     style={{ background: CANVAS_TOKENS.bg.panel, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
                   />
                 </div>
@@ -321,27 +346,47 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
             <button type="button" onClick={addShot} className="nodrag w-full rounded-md py-1 text-[11px]" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
               ＋ 添加镜头
             </button>
+            {/* 生图模型 picker — 只列已启用的模型（feedback「picker 必过滤启用清单」）。
+                批量生图 + 铺出的镜头节点都用这个模型。 */}
+            <div className="flex items-center gap-1.5">
+              <span className="shrink-0 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>生图模型</span>
+              <select
+                value={effectiveImageModel}
+                onChange={(e) => updateNodeData(id, { modelKey: e.target.value })}
+                className="nodrag min-w-0 flex-1 truncate rounded-md px-2 py-1.5 font-mono text-[12px] outline-none"
+                style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+              >
+                {gen.imageModels.length === 0 ? <option value="">无可用模型 · 去 /profile 启用</option> : null}
+                {gen.imageModels.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+            {/* 参考绑定 — 始终可见的引导。角色/场景/道具 = 把「角色」或「图片」
+                节点连进本脚本节点,参考会自动带入每个镜头(角色一致性的关键)。 */}
             {refSourceIds.length > 0 ? (
-              <div className="rounded-md px-2 py-1 text-[10px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
-                参考 ← 上游（{refSourceIds.length}）：铺出的每个镜头会自动连上这些参考
+              <div className="rounded-md px-2 py-1.5 text-[12px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>
+                ✅ 已绑参考（{refSourceIds.length}）：{boundRefLabels.join('、')} — 批量生图会带入每个镜头
               </div>
-            ) : null}
+            ) : (
+              <div className="rounded-md px-2 py-1.5 text-[12px] leading-relaxed" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.muted, border: `1px solid ${CANVAS_TOKENS.hairline}` }}>
+                💡 想让人物 / 场景 / 道具一致？把「角色」或「图片」节点连到本脚本节点左侧的 <span style={{ color: meta.accent }}>＋</span> 口，参考会自动带入每个镜头。<span style={{ color: '#FF8A8A' }}>没绑参考时生成的是通用画面（人物会不一致）。</span>
+              </div>
+            )}
             <button
               type="button"
               onClick={handleBatchGenerate}
               disabled={pickedShots.length === 0 || batch.running}
-              className="nodrag w-full rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40"
+              className="nodrag w-full rounded-lg py-2 text-[13px] font-semibold disabled:opacity-40"
               style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}
             >
               {batch.running ? `批量生图中… ${batch.done}/${batch.total}` : `⚡ 批量生图（${pickedShots.length}）`}
             </button>
-            {batch.error ? <div className="text-[10px]" style={{ color: '#FF8A8A' }}>{batch.error}</div> : null}
+            {batch.error ? <div className="text-[12px]" style={{ color: '#FF8A8A' }}>{batch.error}</div> : null}
             <div className="flex gap-1.5">
               <button
                 type="button"
-                onClick={() => spawnShotNodes('image')}
+                onClick={() => spawnShotNodes('image', effectiveImageModel)}
                 disabled={pickedShots.length === 0 || batch.running}
-                className="nodrag flex-1 rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40"
+                className="nodrag flex-1 rounded-lg py-2 text-[13px] font-semibold disabled:opacity-40"
                 style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
               >
                 仅铺图节点（{pickedShots.length}）
@@ -350,7 +395,7 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
                 type="button"
                 onClick={() => spawnShotNodes('video')}
                 disabled={pickedShots.length === 0 || batch.running}
-                className="nodrag flex-1 rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40"
+                className="nodrag flex-1 rounded-lg py-2 text-[13px] font-semibold disabled:opacity-40"
                 style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
               >
                 仅铺视频节点（{pickedShots.length}）
