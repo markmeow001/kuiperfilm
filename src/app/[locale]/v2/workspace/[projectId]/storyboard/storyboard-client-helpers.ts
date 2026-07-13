@@ -49,6 +49,8 @@ export interface PanelLike {
   voiceLines?: PanelVoiceLine[]
   multiShotGroupId?: string | null
   multiShotGroupOrder?: number | null
+  /** Group narrative draft persisted on the group's FIRST panel (2026-07-13). */
+  groupNarrative?: string | null
 }
 
 export interface StoryboardLike {

@@ -49,6 +49,8 @@ export type UpdatePanelTextMutation = UseMutationResult<
     characters?: Array<{ name: string; appearance?: string }> | string | null
     /** Used by the 場景 chip × remove flow. */
     location?: string | null
+    /** Group narrative draft on the FIRST panel — 保存敘事 real persistence (2026-07-13). */
+    groupNarrative?: string | null
   }
 >
 

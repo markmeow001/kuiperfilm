@@ -356,6 +356,11 @@ model NovelPromotionPanel {
   // convention on this model (panels have no native Json columns).
   keyframeCandidates   String?                   @db.Text // T2I->I2V: 4 candidate thumbs (originals live in object storage)
   r2vMotionRefUrl      String?                   @db.Text // R2V+motion: reference camera-motion clip
+  // 2026-07-13 — GROUP-level narrative draft (叙事提示词「保存敘事」), stored on
+  // the group's FIRST panel (groups are derived from panels and have no row of
+  // their own). Pre-fix the save button only wrote component state, so a
+  // refresh / duration change reverted the user's edit to the auto-seed.
+  groupNarrative       String?                   @db.Text
   perShotProvider      String?                   @db.VarChar(128) // per-shot model override, e.g. "ark::seedance-2.0-r2v"
   storyboard           NovelPromotionStoryboard  @relation(fields: [storyboardId], references: [id], onDelete: Cascade)
   matchedVoiceLines    NovelPromotionVoiceLine[]

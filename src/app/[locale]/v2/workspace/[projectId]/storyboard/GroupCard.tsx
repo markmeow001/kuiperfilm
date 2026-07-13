@@ -98,6 +98,8 @@ type UpdatePanelTextMutation = UseMutationResult<
     characters?: Array<{ name: string; appearance?: string }> | string | null
     /** Updated panel.location (scene name). Used by the 場景 chip × remove. */
     location?: string | null
+    /** Group narrative draft on the FIRST panel — 保存敘事 real persistence (2026-07-13). */
+    groupNarrative?: string | null
   }
 >
 
@@ -1148,18 +1150,34 @@ export function GroupCard({
     () => computeGroupRecommendedDurationSec(panels, { targetSecPerGroup }),
     [panels, targetSecPerGroup],
   )
+  // 2026-07-13 — server-persisted narrative draft (stored on the group's
+  // FIRST panel). When present it wins over the auto-seed: a refresh or a
+  // duration change no longer reverts the user's saved edit (user report:
+  // 「保存敘事會在當下的頁面儲存, 改了秒數或重新整理之後會整個還原」).
+  const savedGroupNarrative = useMemo<string | null>(() => {
+    const raw = panels[0]?.groupNarrative
+    const trimmed = typeof raw === 'string' ? raw.trim() : ''
+    return trimmed.length > 0 ? trimmed : null
+  }, [panels])
   // Re-seed the narrative when panels, duration, cast, or scenes change AND
   // the user hasn't edited it locally — avoids clobbering an in-progress edit.
   // groupCast/groupScenes are included so chip overrides re-trigger seed.
   useEffect(() => {
     if (narrativeDirty) return
+    if (savedGroupNarrative) {
+      // Persisted draft wins. Snapshot = saved text so the button reads
+      // clean; 重生敘事 is the explicit path back to the auto-seed.
+      setNarrativeDraft(savedGroupNarrative)
+      setNarrativeSavedSnapshot(savedGroupNarrative)
+      return
+    }
     setNarrativeDraft(buildInitialNarrativeForFamily())
     // Phase V (2026-05-28) — re-seed wipes the saved snapshot too,
     // otherwise the "✓ 已保存" banner would falsely claim a previous
     // saved version covers the new auto-seeded text.
     setNarrativeSavedSnapshot(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panels, totalDurationDraft, groupCast, groupScenes, coldOpenMode, videoFamily])
+  }, [panels, totalDurationDraft, groupCast, groupScenes, coldOpenMode, videoFamily, savedGroupNarrative])
 
   // Local drafts keyed by panel id. Re-seeded whenever the panel's
   // server-side description / dialogue changes (e.g. analyze
@@ -1484,8 +1502,14 @@ export function GroupCard({
     // rawPrompt (sendRaw=true), so an active coldOpenMode forces the
     // auto-seeded cold-open narrative through even when the user has
     // not manually edited the textarea.
+    // 2026-07-13 — third trigger: a PERSISTED narrative (保存敘事 now writes
+    // the group's first panel). After a refresh narrativeDirty is false but
+    // the loaded draft IS the user's explicit override — without this the
+    // saved narrative silently fell back to auto mode at generation.
+    const savedNarrativeActive =
+      !!savedGroupNarrative && trimmedNarrative === savedGroupNarrative
     const sendRaw =
-      (narrativeDirty || coldOpenMode !== 'off') && trimmedNarrative.length > 0
+      (narrativeDirty || coldOpenMode !== 'off' || savedNarrativeActive) && trimmedNarrative.length > 0
     // 2026-05-13 — Option B 首幀鎖定. When user enabled the lock, pull
     // the first panel's image as FirstFrame and (when first_last_frame
     // mode) the last panel's image as LastFrame. Worker switches to
@@ -1809,20 +1833,33 @@ export function GroupCard({
             <div className="flex items-center gap-1.5">
               {/* 保存 — disabled when there's nothing new to confirm
                   (snapshot matches current text). Flashes "✓ 已保存" for
-                  2.5s after click, then settles into "✓ 已套用" idle state
-                  so the user keeps seeing the system acknowledges the
-                  edit. The narrative is plumbed into worker rawPrompt
-                  on next 生成視頻 click — saving doesn't write DB (the
-                  edit lives in component state until regen). */}
+                  2.5s after click. 2026-07-13 — now a REAL save: the draft
+                  persists to the group's first panel (groupNarrative), so a
+                  refresh / duration change no longer reverts the edit. The
+                  narrative still rides worker rawPrompt on 生成視頻. */}
               <button
                 type="button"
-                disabled={!canEdit || (narrativeSavedSnapshot === narrativeDraft && !narrativeDirty)}
+                disabled={!canEdit || updatePanelText.isPending || (narrativeSavedSnapshot === narrativeDraft && !narrativeDirty)}
                 onClick={() => {
-                  setNarrativeSavedSnapshot(narrativeDraft)
-                  setNarrativeSavedFlash(true)
-                  window.setTimeout(() => setNarrativeSavedFlash(false), 2500)
+                  const firstPanelId = panels[0]?.id
+                  if (!firstPanelId) return
+                  const text = narrativeDraft
+                  updatePanelText.mutate(
+                    { panelId: firstPanelId, groupNarrative: text },
+                    {
+                      onSuccess: () => {
+                        setNarrativeSavedSnapshot(text)
+                        setNarrativeDirty(false)
+                        setNarrativeSavedFlash(true)
+                        window.setTimeout(() => setNarrativeSavedFlash(false), 2500)
+                      },
+                      onError: (err) => {
+                        alert(`保存敘事失敗:${err instanceof Error ? err.message : '未知錯誤'}`)
+                      },
+                    },
+                  )
                 }}
-                title="保存敘事草稿 — 下次「生成視頻」會以這段為主 prompt"
+                title="保存敘事 — 存入專案（重新整理 / 改時長都會保留），下次「生成視頻」以這段為主 prompt"
                 className={`whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[12px] tracking-wider transition-colors disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 ${
                   narrativeSavedFlash
                     ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-200'
@@ -1846,6 +1883,16 @@ export function GroupCard({
                 // harmless no-op.
                 disabled={!canEdit}
                 onClick={() => {
+                  // 2026-07-13 — clear the PERSISTED draft too; without this
+                  // the refetch would restore the old saved text over the
+                  // freshly rebuilt seed.
+                  const firstPanelId = panels[0]?.id
+                  if (savedGroupNarrative && firstPanelId) {
+                    updatePanelText.mutate(
+                      { panelId: firstPanelId, groupNarrative: null },
+                      { onError: (err) => alert(`清除已存敘事失敗:${err instanceof Error ? err.message : '未知錯誤'}`) },
+                    )
+                  }
                   const fresh = buildInitialNarrativeForFamily()
                   setNarrativeDraft('')
                   setNarrativeDirty(false)
@@ -2044,7 +2091,7 @@ export function GroupCard({
               the edit. */}
           {narrativeDirty && narrativeSavedSnapshot !== narrativeDraft ? (
             <div className="rounded-sm border border-violet-500/30 bg-violet-500/5 px-2 py-1 font-mono text-[12px] tracking-wider text-violet-300">
-              ✏ 未保存修改 — 點「保存敘事」確認此版本，下次「{taskId ? '重新生成' : '生成視頻'}」會以這段為主 prompt
+              ✏ 未保存修改 — 點「保存敘事」存入專案（重整 / 改時長都保留），下次「{taskId ? '重新生成' : '生成視頻'}」會以這段為主 prompt
             </div>
           ) : narrativeSavedSnapshot !== null ? (
             <div className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-1 font-mono text-[12px] tracking-wider text-emerald-300">

@@ -361,6 +361,13 @@ export function useUpdatePanelText(projectId: string | null, episodeId: string |
              * to clear. Used by the 場景 chip × remove flow (2026-05-13).
              */
             location?: string | null
+            /**
+             * Group-level narrative draft (叙事提示词「保存敘事」), stored on
+             * the group's FIRST panel. String to save, null to clear
+             * (重生敘事). 2026-07-13 — pre-fix the save button only wrote
+             * component state and a refresh reverted the edit.
+             */
+            groupNarrative?: string | null
         }) => {
             if (!projectId) throw new Error('Project ID is required')
             const res = await fetch(`/api/novel-promotion/${projectId}/panel`, {

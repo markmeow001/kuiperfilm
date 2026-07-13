@@ -277,6 +277,8 @@ export const PATCH = apiHandler(async (
     characters,  // V2 storyboard editor — JSON string of panel.characters
                  // (used by 出場角色 chip × remove flow, 2026-05-13)
     location,    // V2 storyboard editor — scene name (used by 場景 chip × remove)
+    groupNarrative, // V2 narrative editor 保存敘事 — group draft on the FIRST
+                    // panel (string = save, null = clear via 重生敘事, 2026-07-13)
   } = body
 
   // 🔥 方式1：通过 panelId 直接更新（优先）
@@ -301,7 +303,17 @@ export const PATCH = apiHandler(async (
       srtSegment?: string | null
       characters?: string | null
       location?: string | null
+      groupNarrative?: string | null
     } = {}
+    if (groupNarrative !== undefined) {
+      if (groupNarrative === null) {
+        updateData.groupNarrative = null
+      } else if (typeof groupNarrative === 'string') {
+        updateData.groupNarrative = groupNarrative.trim() || null
+      } else {
+        throw new ApiError('INVALID_PARAMS', { message: 'groupNarrative must be null or string' })
+      }
+    }
     if (videoPrompt !== undefined) updateData.videoPrompt = videoPrompt
     if (firstLastFramePrompt !== undefined) updateData.firstLastFramePrompt = firstLastFramePrompt
     if (description !== undefined) {
