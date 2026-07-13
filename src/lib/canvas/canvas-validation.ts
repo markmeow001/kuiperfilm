@@ -35,6 +35,15 @@ const serializedEdgeSchema = z.object({
   id: z.string().min(1).max(128),
   source: z.string().min(1).max(128),
   target: z.string().min(1).max(128),
+  sourceHandle: z.string().max(128).nullable().optional(),
+  targetHandle: z.string().max(128).nullable().optional(),
+  data: z.object({
+    portType: z.enum(['text', 'script', 'identity-image', 'frame-image', 'video-clip', 'audio-voice', 'audio-music', 'storyboard-group']),
+    order: z.number().int().nonnegative().optional(),
+    role: z.enum(['first-frame', 'last-frame', 'reference', 'clip', 'voice', 'music']).optional(),
+    invalid: z.boolean().optional(),
+    invalidReason: z.string().max(300).optional(),
+  }).passthrough().optional(),
 })
 
 const serializedViewportSchema = z.object({

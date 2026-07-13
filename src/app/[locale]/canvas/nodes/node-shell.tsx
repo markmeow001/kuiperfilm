@@ -13,6 +13,7 @@
 import { Handle, Position } from '@xyflow/react'
 import type { ReactNode } from 'react'
 import { CANVAS_TOKENS } from '../lib/canvas-tokens'
+import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE } from '../lib/canvas-connections'
 
 interface NodeShellProps {
   accent: string
@@ -84,13 +85,13 @@ export function NodeShell({
         }}
       >
         {!noTarget && (
-          <Handle type="target" position={Position.Left} style={handleStyle}>
+          <Handle id={CANVAS_TARGET_HANDLE} type="target" position={Position.Left} style={handleStyle}>
             <span className="pointer-events-none block" aria-hidden>＋</span>
           </Handle>
         )}
         {children}
         {!noSource && (
-          <Handle type="source" position={Position.Right} style={handleStyle}>
+          <Handle id={CANVAS_SOURCE_HANDLE} type="source" position={Position.Right} style={handleStyle}>
             <span className="pointer-events-none block" aria-hidden>＋</span>
           </Handle>
         )}

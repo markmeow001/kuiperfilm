@@ -48,7 +48,7 @@ import { ScriptNode } from './nodes/ScriptNode'
 import { AudioNode } from './nodes/AudioNode'
 import { GroupNode } from './nodes/GroupNode'
 import { CanvasResourceMenu } from './CanvasResourceMenu'
-import { canConnectCanvasNodes, canvasConnectionHint } from './lib/canvas-connections'
+import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, canConnectCanvasNodes, canvasConnectionHint, inferCanvasEdgeData } from './lib/canvas-connections'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -173,6 +173,9 @@ function CanvasInner() {
   const displayEdges = useMemo(
     () =>
       edges.map((e) => {
+        if ((e.data as { invalid?: boolean } | undefined)?.invalid) {
+          return { ...e, animated: false, style: { stroke: '#D85C5C', strokeWidth: 2, strokeDasharray: '5 4' }, label: '无效连线' }
+        }
         const working = workingNodeIds.has(e.target) || workingNodeIds.has(e.source)
         return {
           ...e,
@@ -259,9 +262,24 @@ function CanvasInner() {
         )
         return
       }
-      setEdges((eds) => addEdge(p, eds))
+      const targetNode = rf.getNode(p.target)
+      const frameIndex = edges.filter((edge) => {
+        if (edge.target !== p.target) return false
+        const type = rf.getNode(edge.source)?.type
+        return type === 'image' || type === 'video'
+      }).length
+      const data = inferCanvasEdgeData(sourceType, targetType, {
+        frameIndex,
+        targetMode: typeof targetNode?.data?.genMode === 'string' ? targetNode.data.genMode : undefined,
+      })
+      setEdges((eds) => addEdge({
+        ...p,
+        sourceHandle: p.sourceHandle ?? CANVAS_SOURCE_HANDLE,
+        targetHandle: p.targetHandle ?? CANVAS_TARGET_HANDLE,
+        data,
+      }, eds))
     },
-    [setEdges, rf, flashDropError],
+    [setEdges, rf, flashDropError, edges],
   )
 
   const isValidConnection = useCallback((connection: Connection | Edge) => {

@@ -6,6 +6,7 @@
 import type { Edge, Node, Viewport } from '@xyflow/react'
 import type { CanvasNodeType } from './canvas-tokens'
 import {
+  type CanvasEdgeData,
   type CanvasNodeData,
   type SerializedCanvas,
   type SerializedEdge,
@@ -13,6 +14,7 @@ import {
   DEFAULT_NODE_DATA,
   EMPTY_CANVAS,
 } from './canvas-types'
+import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, inferCanvasEdgeData } from './canvas-connections'
 
 const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'group']
 
@@ -26,6 +28,8 @@ export function serializeCanvas(
   edges: Edge[],
   viewport: Viewport,
 ): SerializedCanvas {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const frameCounts = new Map<string, number>()
   return {
     nodes: nodes.map((n) => ({
       id: n.id,
@@ -43,7 +47,32 @@ export function serializeCanvas(
           }
         : {}),
     })),
-    edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+    edges: edges.map((e) => {
+      const sourceType = nodeById.get(e.source)?.type as CanvasNodeType
+      const targetNode = nodeById.get(e.target)
+      const targetType = targetNode?.type as CanvasNodeType
+      let frameIndex: number | undefined
+      if (!e.data && targetType === 'video' && (sourceType === 'image' || sourceType === 'video')) {
+        frameIndex = frameCounts.get(e.target) ?? 0
+        frameCounts.set(e.target, frameIndex + 1)
+      }
+      const data = e.data as CanvasEdgeData | undefined ?? (
+        sourceType && targetType
+          ? inferCanvasEdgeData(sourceType, targetType, {
+              frameIndex,
+              targetMode: typeof targetNode?.data?.genMode === 'string' ? targetNode.data.genMode : undefined,
+            })
+          : { portType: 'frame-image', invalid: true, invalidReason: '连线端点不存在' }
+      )
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? CANVAS_SOURCE_HANDLE,
+        targetHandle: e.targetHandle ?? CANVAS_TARGET_HANDLE,
+        data,
+      }
+    }),
     viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom },
   }
 }
@@ -97,10 +126,37 @@ export function deserializeCanvas(raw: unknown): {
     })
 
   const nodeIds = new Set(nodes.map((n) => n.id))
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
+  const frameCounts = new Map<string, number>()
   const edges: Edge[] = srcEdges
     .filter((e): e is SerializedEdge => Boolean(e) && Boolean((e as SerializedEdge).source) && Boolean((e as SerializedEdge).target))
     .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
-    .map((e) => ({ id: String(e.id), source: String(e.source), target: String(e.target) }))
+    .map((e) => {
+      const source = String(e.source)
+      const target = String(e.target)
+      const sourceType = nodeById.get(source)?.type as CanvasNodeType
+      const targetNode = nodeById.get(target)
+      const targetType = targetNode?.type as CanvasNodeType
+      const existingData = e.data && typeof e.data === 'object' ? e.data as CanvasEdgeData : null
+      let frameIndex: number | undefined
+      if (!existingData && targetType === 'video' && (sourceType === 'image' || sourceType === 'video')) {
+        frameIndex = frameCounts.get(target) ?? 0
+        frameCounts.set(target, frameIndex + 1)
+      }
+      const data = existingData ?? inferCanvasEdgeData(sourceType, targetType, {
+        frameIndex,
+        targetMode: typeof targetNode?.data?.genMode === 'string' ? targetNode.data.genMode : undefined,
+      })
+      return {
+        id: String(e.id),
+        source,
+        target,
+        sourceHandle: e.sourceHandle ?? CANVAS_SOURCE_HANDLE,
+        targetHandle: e.targetHandle ?? CANVAS_TARGET_HANDLE,
+        data,
+        ...(data.invalid ? { style: { stroke: '#D85C5C', strokeDasharray: '5 4' }, label: '无效连线' } : {}),
+      }
+    })
 
   const vp = parsed.viewport
   const viewport: Viewport =

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canConnectCanvasNodes } from '@/app/[locale]/canvas/lib/canvas-connections'
+import { canConnectCanvasNodes, inferCanvasEdgeData } from '@/app/[locale]/canvas/lib/canvas-connections'
 
 describe('canvas connection contract', () => {
   it.each([
@@ -17,5 +17,20 @@ describe('canvas connection contract', () => {
     ['video', 'audio'], ['script', 'director'], ['text', 'character'],
   ] as const)('%s -> %s is rejected instead of drawing a fake wire', (source, target) => {
     expect(canConnectCanvasNodes(source, target)).toBe(false)
+  })
+})
+
+describe('inferCanvasEdgeData', () => {
+  it('firstlast image edges -> deterministic first/last roles by connection order', () => {
+    expect(inferCanvasEdgeData('image', 'video', { targetMode: 'firstlast', frameIndex: 0 })).toEqual({ portType: 'frame-image', order: 0, role: 'first-frame' })
+    expect(inferCanvasEdgeData('image', 'video', { targetMode: 'firstlast', frameIndex: 1 })).toEqual({ portType: 'frame-image', order: 1, role: 'last-frame' })
+  })
+
+  it('character edge -> identity reference, never a blocking frame', () => {
+    expect(inferCanvasEdgeData('character', 'video', { targetMode: 'firstlast', frameIndex: 0 })).toEqual({ portType: 'identity-image', role: 'reference' })
+  })
+
+  it('unsupported legacy pair -> explicit invalid metadata', () => {
+    expect(inferCanvasEdgeData('audio', 'video')).toMatchObject({ portType: 'audio-voice', invalid: true })
   })
 })

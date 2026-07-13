@@ -129,9 +129,9 @@ interface CanvasStoryboardGroupData {
 - [x] `onConnect` 与 `isValidConnection` 双层验证。
 - [x] Script 下游文本解析。
 - [x] 双图片首尾帧映射。
-- [ ] edge data 序列化与 stable handle id。
-- [ ] 连接错误显示具体原因，而不是统一「不能连接」。
-- [ ] 已存在旧画布 invalid edge 审计与 UI 标记。
+- [x] edge data 序列化与 stable handle id。
+- [x] 连接错误显示具体原因，而不是统一「不能连接」。
+- [x] 已存在旧画布 invalid edge 审计与 UI 标记：合法旧边静默推导，只有真无语义边显示红色虚线。
 
 测试：所有允许组合逐项断言；所有拒绝组合逐项断言；serialize round-trip 保留
 `portType/order/role`。
@@ -318,4 +318,3 @@ S1 typed ports 收尾
 
 S2+S3 是最先兑现「一条成片」价值的切片；S4+S5 解决团队整理与长期资产沉淀。字幕擦除
 技术风险独立，后置不会阻塞主闭环。
-

@@ -21,7 +21,10 @@ describe('serializeCanvas', () => {
 
     expect(out.nodes[0]).toMatchObject({ id: 'a', type: 'image', x: 10, y: 20 })
     expect(out.nodes[0].data.prompt).toBe('cat')
-    expect(out.edges[0]).toEqual({ id: 'e1', source: 'a', target: 'b' })
+    expect(out.edges[0]).toMatchObject({
+      id: 'e1', source: 'a', target: 'b', sourceHandle: 'canvas-output', targetHandle: 'canvas-input',
+      data: { portType: 'frame-image', invalid: true },
+    })
     expect(out.viewport).toEqual({ x: 5, y: 6, zoom: 1.5 })
   })
 
@@ -42,8 +45,40 @@ describe('deserializeCanvas', () => {
     expect(back.nodes).toHaveLength(2)
     expect(back.nodes[0]).toMatchObject({ id: 'a', type: 'image', position: { x: 10, y: 20 } })
     expect(back.nodes[0].data.prompt).toBe('cat')
-    expect(back.edges[0]).toMatchObject({ source: 'a', target: 'b' })
+    expect(back.edges[0]).toMatchObject({ source: 'a', target: 'b', sourceHandle: 'canvas-output', targetHandle: 'canvas-input', data: { portType: 'frame-image', role: 'reference' } })
     expect(back.viewport).toEqual({ x: 1, y: 2, zoom: 1.2 })
+  })
+
+  it('round-trips edge portType/order/role without losing metadata', () => {
+    const nodes = [node('a', 'image', 0, 0), node('b', 'video', 0, 0, { genMode: 'firstlast' })]
+    const edges: Edge[] = [{ id: 'e1', source: 'a', target: 'b', sourceHandle: 'frame-out', targetHandle: 'first-frame', data: { portType: 'frame-image', order: 0, role: 'first-frame' } }]
+    const serialized = serializeCanvas(nodes, edges, { x: 0, y: 0, zoom: 1 })
+    expect(serialized.edges[0]).toMatchObject({ sourceHandle: 'frame-out', targetHandle: 'first-frame', data: { portType: 'frame-image', order: 0, role: 'first-frame' } })
+    expect(deserializeCanvas(serialized).edges[0]).toMatchObject({ sourceHandle: 'frame-out', targetHandle: 'first-frame', data: { portType: 'frame-image', order: 0, role: 'first-frame' } })
+  })
+
+  it('legacy legal edges -> silently infer metadata and stable handles', () => {
+    const back = deserializeCanvas({
+      nodes: [
+        { id: 'a', type: 'image', x: 0, y: 0, data: {} },
+        { id: 'b', type: 'video', x: 0, y: 0, data: { genMode: 'firstlast' } },
+        { id: 'c', type: 'image', x: 0, y: 0, data: {} },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b' }, { id: 'e2', source: 'c', target: 'b' }],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    })
+    expect(back.edges[0]).toMatchObject({ data: { portType: 'frame-image', order: 0, role: 'first-frame' }, sourceHandle: 'canvas-output', targetHandle: 'canvas-input' })
+    expect(back.edges[1]).toMatchObject({ data: { portType: 'frame-image', order: 1, role: 'last-frame' } })
+    expect(back.edges.every((edge) => !(edge.data as { invalid?: boolean }).invalid)).toBe(true)
+  })
+
+  it('legacy truly unsupported edge -> keeps it visibly marked invalid', () => {
+    const back = deserializeCanvas({
+      nodes: [{ id: 'a', type: 'audio', x: 0, y: 0, data: {} }, { id: 'b', type: 'video', x: 0, y: 0, data: {} }],
+      edges: [{ id: 'e1', source: 'a', target: 'b' }],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    })
+    expect(back.edges[0]).toMatchObject({ data: { portType: 'audio-voice', invalid: true }, label: '无效连线' })
   })
 
   it('fills DEFAULT_NODE_DATA for partial node data', () => {

@@ -7,6 +7,24 @@
  */
 import type { CanvasNodeType } from './canvas-tokens'
 
+export type CanvasPortType =
+  | 'text'
+  | 'script'
+  | 'identity-image'
+  | 'frame-image'
+  | 'video-clip'
+  | 'audio-voice'
+  | 'audio-music'
+  | 'storyboard-group'
+
+export interface CanvasEdgeData extends Record<string, unknown> {
+  portType: CanvasPortType
+  order?: number
+  role?: 'first-frame' | 'last-frame' | 'reference' | 'clip' | 'voice' | 'music'
+  invalid?: boolean
+  invalidReason?: string
+}
+
 /**
  * Persisted per-node data (the `data` payload React Flow carries).
  * Extends Record<string, unknown> because React Flow v12 constrains a custom
@@ -131,6 +149,9 @@ export interface SerializedEdge {
   id: string
   source: string
   target: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
+  data?: CanvasEdgeData
 }
 
 export interface SerializedViewport {
