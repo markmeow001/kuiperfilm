@@ -294,8 +294,10 @@ S2 修正（必须）：
 5. **队列路由写死**：`CANVAS_COMPOSE_VIDEO` 必须显式加入 `src/lib/task/queues.ts`
    的 `VIDEO_TYPES`——默认 fallback 是 **text queue**，合成会把文本 worker 卡死
    （新 TASK_TYPE 六+1 登记点见 previz S4 的 commit a41ab11 为模板）。
-6. **计费拍板（问 user，别自行决定）**：合成不调外部 API、烧的是自家 CPU——
-   免点数 / 固定小额，需 user 决定后再登记 billing policy。
+6. **计费已拍板（user 2026-07-13）**：合成首版**免点数**（自家 CPU），之后会
+   迁到外部服务再定价。实作要求：billing policy 登记为零成本任务；worker 里
+   ffmpeg 调用收敛在一个可替换的执行层后面（如 compose-executor 接口），迁外部
+   时只换实现不动 task/UI 契约。
 7. **S4 故事板 renderer 选型**：优先评估已在依赖里的 **Remotion renderStill**；
    禁止为此新引入 Puppeteer（重依赖）。开工前 spike 一张 4K 网格出图验证内存。
 8. **S5 资产归属**：明确资产挂 user 还是 workspace（多租户 Org→Workspace→Member
