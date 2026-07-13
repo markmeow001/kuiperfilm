@@ -140,6 +140,26 @@ interface CanvasStoryboardGroupData {
 
 交付：多个视频节点按明确顺序合成一条可下载、可继续连接的成片。
 
+#### S2 技术选型：ffmpeg vs Remotion（开工前结论）
+
+| 维度 | ffmpeg concat/xfade | 现有 Remotion `video-editor-render` |
+|---|---|---|
+| 执行模型 | 单进程原生转码；可用 `threads/preset/t` 硬限制 | 每任务先 webpack bundle，再启动 Chromium 按帧渲染 |
+| 纯片段拼接 | 直接 concat；格式不同时一次 normalize | 每帧经 React/Chromium 合成，纯拼接成本明显更高 |
+| crossfade／混音 | `xfade` / `acrossfade` / `amix` 原生支持 | React 时间线表达较直观，但仍由 Chromium 逐帧输出 |
+| 字幕／复杂图层 | filter graph 可做基础字幕，复杂排版维护成本高 | 复杂字幕、图层、动画更适合 Remotion 组件 |
+| 本仓库现况 | previz 已验证 `execFile`、`veryfast`、时长硬顶 | 管线可用，但当前每次任务重复 bundle，默认 1080p，资源较重 |
+| droplet 风险 | 可收紧到 720p、≤10 clips、≤3min、threads=2、并发=1 | Chromium + bundle + 编码同时占 CPU/内存，更容易重现 OOM／worker 饥饿 |
+
+**结论：S2/S3 首版采用 ffmpeg executor。** 这不是恢复旧的无上限整集 concat：首版只做
+≤10 clips、≤3 分钟、720p、并发 1，并强制 `-preset veryfast -threads 2` 与输出时长硬顶。
+选择理由是当前交付仅需 clip normalize、cut/xfade 与音轨混合，ffmpeg 在这个范围内比
+Remotion 的 bundle＋Chromium 逐帧渲染更轻、更容易施加资源上限。
+
+执行层必须收敛为 `CanvasComposeExecutor` 接口；task、API、UI 只依赖接口返回。未来迁外部
+合成服务只替换 executor。若后续字幕／复杂图层成为主需求，可新增 Remotion executor，
+而不是改动 task 契约。S4 的 4K 静态故事板仍优先 spike `renderStill`，不受本结论影响。
+
 1. 注册 `composition` node type：tokens、types、validation、serialize、nodeTypes。
 2. 新增 `CompositionNode.tsx`：
    - 展示已连接 clips；
