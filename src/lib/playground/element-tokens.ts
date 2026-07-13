@@ -31,6 +31,49 @@ function isAsciiWordName(name: string): boolean {
  * 1-based). Names absent from the prompt are left alone — Kling
  * accepts unreferenced elements, binding is just weaker.
  */
+export interface ElementNameMatch {
+  /** UTF-16 offset of the match start (includes a leading @ if present). */
+  start: number
+  /** Exclusive end offset. */
+  end: number
+  /** Index into the ORIGINAL names array (drives per-subject colors). */
+  nameIndex: number
+}
+
+/**
+ * Locate every bound-subject-name occurrence in the prompt (2026-07-12
+ * prompt-highlight feature). Mirrors replaceElementNamesWithTokens'
+ * matching exactly — optional @ prefix, ASCII word boundaries, CJK
+ * substring, longest-name-first claiming — so what lights up in the UI is
+ * precisely what binds on submit. Returns ranges sorted by start.
+ */
+export function findElementNameMatches(
+  prompt: string,
+  names: readonly string[],
+): ElementNameMatch[] {
+  const ordered = names
+    .map((name, nameIndex) => ({ name: name.trim(), nameIndex }))
+    .filter((entry) => entry.name.length > 0)
+    .sort((a, b) => b.name.length - a.name.length)
+
+  const matches: ElementNameMatch[] = []
+  const claimed: Array<[number, number]> = []
+  for (const { name, nameIndex } of ordered) {
+    const escaped = escapeRegExp(name)
+    const pattern = isAsciiWordName(name)
+      ? new RegExp(`@?\\b${escaped}\\b`, 'g')
+      : new RegExp(`@?${escaped}`, 'g')
+    for (const hit of prompt.matchAll(pattern)) {
+      const start = hit.index ?? 0
+      const end = start + hit[0].length
+      if (claimed.some(([s, e]) => start < e && end > s)) continue
+      claimed.push([start, end])
+      matches.push({ start, end, nameIndex })
+    }
+  }
+  return matches.sort((a, b) => a.start - b.start)
+}
+
 /**
  * Build the 參考圖對應 mapping section for named plain reference images
  * (2026-07-10). Seedance-class r2v has no API-level named binding — the
@@ -60,9 +103,12 @@ export function replaceElementNamesWithTokens(prompt: string, names: readonly st
   let out = prompt
   for (const { name, token } of ordered) {
     const escaped = escapeRegExp(name)
+    // `@?` swallows the storyboard-carried @Name prefix — the @ is prompt
+    // sugar, not part of the subject name; leaving it produced a stray
+    // "@<<<element_N>>>". (2026-07-12)
     const pattern = isAsciiWordName(name)
-      ? new RegExp(`\\b${escaped}\\b`, 'g')
-      : new RegExp(escaped, 'g')
+      ? new RegExp(`@?\\b${escaped}\\b`, 'g')
+      : new RegExp(`@?${escaped}`, 'g')
     out = out.replace(pattern, token)
   }
   return out

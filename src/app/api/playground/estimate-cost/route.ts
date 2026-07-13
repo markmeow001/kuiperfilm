@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler } from '@/lib/api-errors'
+import { calcVideo } from '@/lib/billing/cost'
 import {
   findBuiltinPricingCatalogEntry,
   type BuiltinPricingCatalogEntry,
@@ -78,17 +79,8 @@ function computeEstimate(
     if (typeof flat !== 'number') {
       return { amountUsd: null, unit: 'unknown', detail: 'flat mode but no flatAmount' }
     }
-    if (outputType === 'video') {
-      // Video flat amounts in the catalog are per-second (verified against
-      // bytedance/seedance-2.0/* entries: 0.096/sec etc).
-      const dur = typeof durationSec === 'number' && durationSec > 0 ? durationSec : 5
-      return {
-        amountUsd: flat * dur,
-        unit: 'per_second',
-        perSecond: flat,
-        detail: `${flat.toFixed(4)}/秒 × ${dur}s`,
-      }
-    }
+    // (video estimates no longer flow through here — see the calcVideo
+    // call in the GET handler; this function now serves image only)
     // Image flat = per generation.
     return {
       amountUsd: flat,
@@ -172,6 +164,35 @@ export const GET = apiHandler(async (request: NextRequest) => {
       detail: `no pricing entry for ${apiType}::${parsed.provider}::${parsed.modelId}`,
     }
     return NextResponse.json(empty)
+  }
+
+  // Video estimates call the MONEY layer directly (2026-07-12). The old
+  // local math treated flat as a per-second rate while calcVideo treats it
+  // as a base-duration (5s) package scaled by duration/5 — a constant 5x
+  // drift surfaced by the kling-o3 entries. Delegating to calcVideo makes
+  // estimate ≡ freeze quote by construction (same entry resolution, same
+  // capability validation, same duration scaling).
+  if (outputType === 'video') {
+    try {
+      const amountUsd = calcVideo(parsed.modelId, resolution || '720p', 1, {
+        ...(typeof durationSec === 'number' && durationSec > 0 ? { duration: durationSec } : {}),
+        ...(generationMode ? { generationMode } : {}),
+      })
+      const result: EstimateResult = {
+        amountUsd,
+        unit: 'capability',
+        detail: `與凍結計價同源 (calcVideo${typeof durationSec === 'number' ? ` · ${durationSec}s` : ''})`,
+      }
+      return NextResponse.json(result)
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      const result: EstimateResult = {
+        amountUsd: null,
+        unit: 'unknown',
+        detail: `估價失敗: ${errMsg.slice(0, 160)}`,
+      }
+      return NextResponse.json(result)
+    }
   }
 
   return NextResponse.json(

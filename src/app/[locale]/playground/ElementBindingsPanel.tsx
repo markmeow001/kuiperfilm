@@ -12,6 +12,7 @@
 
 import { useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import { elementDotClass } from './PromptHighlight'
 import { MAX_KLING_ELEMENTS, MAX_KLING_ELEMENT_IMAGES } from './useKlingElements'
 import type { PlaygroundController } from './usePlaygroundController'
 
@@ -75,6 +76,8 @@ export function ElementBindingsPanel({ ctrl }: ElementBindingsPanelProps) {
           {elements.map((el, idx) => (
             <div key={el.id} className="rounded-sm border border-stone-800 bg-stone-900/40 p-2">
               <div className="mb-2 flex items-center gap-2">
+                {/* Color dot matches this subject's in-prompt highlight. */}
+                <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${elementDotClass(idx)}`} title="prompt 中此主體名字會以同色標示" />
                 <input
                   type="text"
                   value={el.name}

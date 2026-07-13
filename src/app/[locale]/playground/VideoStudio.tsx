@@ -10,11 +10,13 @@
  * Keeps KuiperAI's amber-on-stone identity.
  */
 
+import { useMemo, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { resolveErrorDisplay } from '@/lib/errors/display'
-import { ElementBindingsPanel } from './ElementBindingsPanel'
+import { ElementsModal } from './ElementsModal'
 import { KLING_O3_ASPECT_RATIO_VALUES } from './useKlingElements'
-import { ReferencePanel } from './ReferencePanel'
+import { PromptComposer, type AtMenuCandidate } from './PromptComposer'
+import { FramesMediaModule, RefVideoSlot, SeedanceMediaModule } from './VideoMediaModules'
 import { ASPECT_RATIO_OPTIONS, playgroundDownloadHref, type PlaygroundController, type PlaygroundRun } from './usePlaygroundController'
 
 interface VideoStudioProps {
@@ -23,19 +25,39 @@ interface VideoStudioProps {
 
 export function VideoStudio({ ctrl }: VideoStudioProps) {
   const {
-    prompt, setPrompt, promptRef,
+    prompt,
     modelKey, setModelKey, activeModels, aspectRatio, setAspectRatio,
     durationSec, setDurationSec, resolution, setResolution, resolutionOptions, showResolutionPicker,
+    soundOn, setSoundOn,
     isBusy, isGenerating, compressing, submit, costEstimate,
     videoRuns, latestRun, stageRun, setStageRun, handleRun, resetForm,
   } = ctrl
 
-  function onPromptKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault()
-      if (!isBusy && modelKey && prompt.trim() && !isGenerating) handleRun()
+  // Bound subject names in BINDING ORDER — Kling: 主體 cards first, then
+  // NAMED reference images (mirrors mergeNamedRefImagesIntoElements);
+  // non-Kling video: named images bind via the 參考圖對應 map. Drives the
+  // in-prompt highlight so users see exactly what will bind on submit.
+  const boundNames = useMemo(() => {
+    const named = ctrl.refImages.filter((r) => r.name?.trim()).map((r) => (r.name as string).trim())
+    return ctrl.isKlingO3Model
+      ? [...ctrl.elements.map((el) => el.name.trim()).filter(Boolean), ...named]
+      : named
+  }, [ctrl.refImages, ctrl.elements, ctrl.isKlingO3Model])
+  // @-menu candidates per family: subjects insert their NAME (the typed @
+  // gets swallowed on submit); seedance also offers positional tokens.
+  const atCandidates = useMemo<AtMenuCandidate[]>(() => {
+    if (ctrl.modelFamily === 'kling-o3') {
+      return boundNames.map((name, i) => ({ label: name, insert: name, colorIndex: i }))
     }
-  }
+    if (ctrl.modelFamily === 'seedance') {
+      const named = boundNames.map((name, i) => ({ label: name, insert: name, colorIndex: i as number | null }))
+      const imageTokens = ctrl.refImages.map((_, i) => ({ label: `@image${i + 1}`, insert: `image${i + 1}`, colorIndex: null }))
+      const videoToken = ctrl.refVideo ? [{ label: '@video1', insert: 'video1', colorIndex: null }] : []
+      return [...named, ...imageTokens, ...videoToken]
+    }
+    return []
+  }, [ctrl.modelFamily, boundNames, ctrl.refImages, ctrl.refVideo])
+  const [elementsOpen, setElementsOpen] = useState(false)
 
   // The staged run — its live status comes from latestRun when it's the same id.
   const staged: PlaygroundRun | null =
@@ -53,25 +75,45 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
       <div className="flex w-[340px] flex-shrink-0 flex-col overflow-y-auto border-r border-stone-800 p-4 xl:w-[400px] 2xl:w-[440px]">
         <div className="mb-3 font-mono text-[12px] uppercase tracking-wider text-stone-500">生成設定</div>
 
-        <textarea
-          ref={promptRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={onPromptKeyDown}
-          rows={9}
-          placeholder="描述你想生成的影片場景與動作... 用 @image1 引用參考素材"
-          className="mb-4 min-h-[140px] w-full resize-y rounded-lg border border-stone-800 bg-stone-950/60 p-3 text-[14px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
+        <PromptComposer
+          ctrl={ctrl}
+          candidates={atCandidates}
+          boundNames={boundNames}
+          onSubmitShortcut={() => {
+            if (!isBusy && modelKey && prompt.trim() && !isGenerating) handleRun()
+          }}
         />
 
-        <div className="mb-4">
-          <ReferencePanel ctrl={ctrl} />
-        </div>
-
-        {ctrl.isKlingO3Model ? (
-          <div className="mb-4">
-            <ElementBindingsPanel ctrl={ctrl} />
+        {/* ── per-family media module ── */}
+        {ctrl.modelFamily === 'kling-o3' ? (
+          <div className="mb-4 space-y-3">
+            <button
+              type="button"
+              onClick={() => setElementsOpen(true)}
+              className="flex w-full items-center justify-between rounded-md border border-stone-700 bg-stone-900/40 px-3 py-2 hover:border-amber-500/50"
+            >
+              <span className="flex items-center gap-2 font-mono text-[12px] text-stone-300">
+                <span className="text-amber-400">@</span> Elements
+                <span className="text-stone-500">主體綁定</span>
+              </span>
+              <span className="font-mono text-[11px] text-amber-300">{ctrl.elements.length}/6</span>
+            </button>
+            {ctrl.elements.length === 0 ? (
+              <div className="font-serif-cn text-[11px] leading-relaxed text-stone-600">
+                人物 / 場景各建一個主體，prompt 打 @ 或直接打名字即可綁定
+              </div>
+            ) : null}
+            <RefVideoSlot ctrl={ctrl} />
           </div>
-        ) : null}
+        ) : ctrl.modelFamily === 'seedance' ? (
+          <div className="mb-4">
+            <SeedanceMediaModule ctrl={ctrl} />
+          </div>
+        ) : (
+          <div className="mb-4">
+            <FramesMediaModule ctrl={ctrl} />
+          </div>
+        )}
 
         {/* Model */}
         <label className="mb-3 block">
@@ -87,49 +129,55 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
           </select>
         </label>
 
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="mb-1 block font-mono text-[11px] uppercase tracking-wider text-stone-500">比例</span>
-            <select
-              value={aspectRatio}
-              onChange={(e) => setAspectRatio(e.target.value)}
-              disabled={isBusy}
-              className="w-full rounded-sm border border-stone-800 bg-stone-900 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
-            >
-              {/* Kling O3 schema enum is 16:9/9:16/1:1 only — offering 4:3
-                  etc. produced a provider 400. (2026-07-10 review HIGH-2) */}
-              {(ctrl.isKlingO3Model
-                ? ASPECT_RATIO_OPTIONS.filter((opt) => (KLING_O3_ASPECT_RATIO_VALUES as readonly string[]).includes(opt.value))
-                : ASPECT_RATIO_OPTIONS
-              ).map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block font-mono text-[11px] uppercase tracking-wider text-stone-500">時長</span>
-            <select
-              value={durationSec}
-              onChange={(e) => setDurationSec(Number.parseInt(e.target.value, 10) || 5)}
-              disabled={isBusy}
-              className="w-full rounded-sm border border-stone-800 bg-stone-900 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
-            >
-              {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (<option key={sec} value={sec}>{sec}s</option>))}
-            </select>
-          </label>
-        </div>
-
-        {showResolutionPicker ? (
-          <label className="mb-3 block">
-            <span className="mb-1 block font-mono text-[11px] uppercase tracking-wider text-stone-500">解析度</span>
+        {/* ── compact chips row: 時長 / 比例 / 解析度 / 🔊 ── */}
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <select
+            value={durationSec}
+            onChange={(e) => setDurationSec(Number.parseInt(e.target.value, 10) || 5)}
+            disabled={isBusy}
+            title="時長"
+            className="rounded-md border border-stone-700 bg-stone-900 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none hover:border-stone-500 focus:border-amber-500/40"
+          >
+            {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (<option key={sec} value={sec}>{sec}s</option>))}
+          </select>
+          <select
+            value={aspectRatio}
+            onChange={(e) => setAspectRatio(e.target.value)}
+            disabled={isBusy}
+            title="比例"
+            className="rounded-md border border-stone-700 bg-stone-900 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none hover:border-stone-500 focus:border-amber-500/40"
+          >
+            {/* Kling O3 schema enum is 16:9/9:16/1:1 only (2026-07-10 HIGH-2) */}
+            {(ctrl.isKlingO3Model
+              ? ASPECT_RATIO_OPTIONS.filter((opt) => (KLING_O3_ASPECT_RATIO_VALUES as readonly string[]).includes(opt.value))
+              : ASPECT_RATIO_OPTIONS
+            ).map((opt) => (<option key={opt.value} value={opt.value}>{opt.value}</option>))}
+          </select>
+          {showResolutionPicker ? (
             <select
               value={resolution}
               onChange={(e) => setResolution(e.target.value)}
               disabled={isBusy}
-              className="w-full rounded-sm border border-stone-800 bg-stone-900 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40"
+              title="解析度"
+              className="rounded-md border border-stone-700 bg-stone-900 px-2 py-1.5 font-mono text-[12px] text-stone-200 outline-none hover:border-stone-500 focus:border-amber-500/40"
             >
               {resolutionOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
             </select>
-          </label>
-        ) : null}
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setSoundOn(!soundOn)}
+            disabled={isBusy}
+            title={soundOn ? '音效：開（點擊關閉）' : '音效：關（點擊開啟）'}
+            className={`rounded-md border px-2 py-1.5 font-mono text-[12px] transition-colors ${
+              soundOn
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                : 'border-stone-700 text-stone-500 hover:text-stone-300'
+            }`}
+          >
+            🔊 {soundOn ? 'On' : 'Off'}
+          </button>
+        </div>
 
         <div className="mt-auto space-y-2 pt-3">
           <div className="flex items-center justify-between" title={costEstimate.data?.detail ?? '尚無計費資訊'}>
@@ -161,6 +209,8 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
           </div>
         </div>
       </div>
+
+      <ElementsModal ctrl={ctrl} open={elementsOpen} onClose={() => setElementsOpen(false)} />
 
       {/* ── CENTRE: stage + history ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6">

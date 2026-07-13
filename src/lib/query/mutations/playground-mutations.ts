@@ -52,6 +52,8 @@ export interface PlaygroundRunSubmission {
   elements?: Array<{ name: string; imageKeys: string[] }>
   /** 非 Kling video：與 referenceImages 對齊的命名陣列，worker 前置「參考圖對應」映射表。 */
   referenceImageNames?: Array<string | null>
+  /** video 音效開關（🔊 chip，2026-07-12）。缺省 = 各 generator 預設（開）。 */
+  generateAudio?: boolean
   outputType: 'image' | 'video'
   modelKey: string
   resolution?: string

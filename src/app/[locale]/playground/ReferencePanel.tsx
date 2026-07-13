@@ -11,6 +11,7 @@ import { AppIcon } from '@/components/ui/icons'
 import {
   variantKeyForMode, variantModeMismatch, isVariantSuffixedKey,
 } from '@/lib/video-models/variant-for-mode'
+import { elementDotClass } from './PromptHighlight'
 import { MAX_REF_VIDEOS, type PlaygroundController } from './usePlaygroundController'
 
 interface ReferencePanelProps {
@@ -114,18 +115,29 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
                   參考圖對應 map binding this name to image N; Kling O3: a
                   named image becomes a single-image bound subject. */}
               {outputType === 'video' ? (
-                <input
-                  type="text"
-                  value={ref.name ?? ''}
-                  onChange={(e) => setRefImageName(ref.key, e.target.value)}
-                  disabled={isBusy}
-                  placeholder="命名"
-                  maxLength={80}
-                  title={isKlingO3Model
-                    ? '命名後此圖成為具名主體，prompt 打名字即綁定'
-                    : '命名後送出時自動附「參考圖對應」表，模型才知道 @名字 對應哪張圖'}
-                  className="mt-1 w-full rounded-sm border border-stone-800 bg-stone-950/60 px-1 py-0.5 text-center font-mono text-[10px] text-stone-300 outline-none placeholder:text-stone-700 focus:border-violet-500/40"
-                />
+                <div className="mt-1 flex items-center gap-1">
+                  {ref.name?.trim() ? (
+                    <span
+                      className={`h-2 w-2 flex-shrink-0 rounded-full ${elementDotClass(
+                        (isKlingO3Model ? ctrl.elements.length : 0)
+                        + refImages.slice(0, idx).filter((r) => r.name?.trim()).length,
+                      )}`}
+                      title="prompt 中此名字會以同色標示"
+                    />
+                  ) : null}
+                  <input
+                    type="text"
+                    value={ref.name ?? ''}
+                    onChange={(e) => setRefImageName(ref.key, e.target.value)}
+                    disabled={isBusy}
+                    placeholder="命名"
+                    maxLength={80}
+                    title={isKlingO3Model
+                      ? '命名後此圖成為具名主體，prompt 打名字即綁定'
+                      : '命名後送出時自動附「參考圖對應」表，模型才知道 @名字 對應哪張圖'}
+                    className="min-w-0 flex-1 rounded-sm border border-stone-800 bg-stone-950/60 px-1 py-0.5 text-center font-mono text-[10px] text-stone-300 outline-none placeholder:text-stone-700 focus:border-violet-500/40"
+                  />
+                </div>
               ) : null}
             </div>
           ))}

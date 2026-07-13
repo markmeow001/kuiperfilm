@@ -104,6 +104,15 @@ export async function handlePlaygroundVideoTask(
   const leadImageUrl = signedImageUrls[0] ?? ''
   // modelKey format: provider::modelId (e.g. atlascloud::kling-o3-pro-r2v)
   const isKlingO3ModelKey = /::kling-o3-/.test(modelKey)
+  // Vendors whose r2v endpoints consume the FULL ordered list via
+  // referenceImages and NEVER merge the imageUrl arg back in (AtlasCloud
+  // seedance r2v uses imageUrl only as an empty-list fallback; fal seedance
+  // r2v reads image_urls exclusively). For them the slice(1) below silently
+  // DROPPED the user's first upload AND shifted the 參考圖對應 map by one
+  // (2026-07-12 review HIGH-A). taijiai/BobAPI re-adds imageUrl as slot 1,
+  // so it keeps the lead-split. Their i2v endpoints read imageUrl only and
+  // ignore referenceImages, so the full list is harmless there.
+  const passFullImageList = /^(atlascloud|fal)::/.test(modelKey)
 
   _ulogInfo(
     `[playground-video] start taskId=${taskId} model=${modelKey} refImages=${refImageKeys.length} refVideos=${refVideoKeys.length} elements=${klingElements.length}`,
@@ -118,15 +127,16 @@ export async function handlePlaygroundVideoTask(
     ...(duration ? { duration } : {}),
     ...(aspectRatio ? { aspectRatio } : {}),
     ...(resolution ? { resolution } : {}),
+    // 🔊 audio toggle (2026-07-12) — absent = generator default (on).
+    ...(typeof payload.generateAudio === 'boolean' ? { generateAudio: payload.generateAudio } : {}),
     // 首尾帧: the leading image is the first frame; this is the last frame.
     // Generators that support it (fal / Minimax / BobAPI) read lastFrameImageUrl
     // and switch to first-last-frame mode; others ignore the extra option.
     ...(signedLastFrameUrl ? { lastFrameImageUrl: signedLastFrameUrl } : {}),
-    // Kling O3 consumes the FULL image set via `images` (its generator
-    // ignores the imageUrl arg when referenceImages is present), so pass
-    // everything — the slice(1) below exists for vendors whose lead image
-    // rides the imageUrl arg and would otherwise be duplicated.
-    ...(isKlingO3ModelKey
+    // Full ordered list for full-list vendors (incl. Kling O3); the
+    // slice(1) branch remains for vendors whose lead image rides the
+    // imageUrl arg and would otherwise be duplicated (taijiai/BobAPI).
+    ...(passFullImageList
       ? (signedImageUrls.length > 0
         ? { referenceImages: signedImageUrls as unknown as string }
         : {})

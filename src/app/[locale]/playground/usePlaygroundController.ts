@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
 import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
+import { videoModelFamily } from '@/lib/playground/video-model-family'
 import {
   KLING_O3_ASPECT_RATIO_VALUES, MAX_KLING_IMAGES, MAX_KLING_IMAGES_WITH_VIDEO,
   mergeNamedRefImagesIntoElements, useKlingElements, validateKlingElements,
@@ -95,6 +96,10 @@ export function usePlaygroundController() {
   // converts named images into single-image subjects. (2026-07-10)
   const [refImages, setRefImages] = useState<Array<{ key: string; signedUrl: string; name?: string }>>([])
   const [refVideo, setRefVideo] = useState<{ key: string; signedUrl: string } | null>(null)
+  // 🔊 audio toggle (2026-07-12 adaptive column) — default ON.
+  const [soundOn, setSoundOn] = useState(true)
+  // 尾幀 (frames-family models) — submitted as lastFrameUrl.
+  const [endFrame, setEndFrame] = useState<{ key: string; signedUrl: string } | null>(null)
   const [outputType, setOutputType] = useState<OutputType>('image')
   const [modelKey, setModelKey] = useState<string>('')
   const [aspectRatio, setAspectRatio] = useState('9:16')
@@ -157,8 +162,10 @@ export function usePlaygroundController() {
   }, [activeModels, modelKey])
 
   const selectedVideoModel = activeModels.find((m) => m.value === modelKey)
+  // Per-family adaptive left column (2026-07-12).
+  const modelFamily = videoModelFamily(modelKey)
   // Kling O3 = the only family with named-subject (elements) binding.
-  const isKlingO3Model = outputType === 'video' && /::kling-o3-/.test(modelKey)
+  const isKlingO3Model = outputType === 'video' && modelFamily === 'kling-o3'
   // Kling O3 schema: plain images ≤7 (≤4 with a reference video); other
   // models keep the global 9 cap. Enforced at pick-time so the failure is
   // pre-submit, not an async worker error. (2026-07-10 review MEDIUM-4)
@@ -223,6 +230,17 @@ export function usePlaygroundController() {
       alert('參考影片目前只能 1 支。請先移除再上傳新的。')
       return
     }
+    // Kling O3: binding a reference video drops the plain-image cap to 4
+    // (schema rule). Adding the video AFTER 5-7 images used to slip past
+    // the reactive cap and fail async in the worker — block up front.
+    // (2026-07-12 review MEDIUM)
+    if (isKlingO3Model && refImages.length > MAX_KLING_IMAGES_WITH_VIDEO) {
+      alert(
+        `Kling O3 綁參考影片時參考圖最多 ${MAX_KLING_IMAGES_WITH_VIDEO} 張（目前 ${refImages.length} 張）。` +
+        '請先移除多的參考圖再上傳影片。',
+      )
+      return
+    }
     // Guard the reference video's own length up-front — AtlasCloud R2V rejects
     // clips outside 1.8–15s with a 400, wasting an upload + a billing freeze.
     // Fail fast with a clear message instead. Unreadable metadata → let it
@@ -257,6 +275,23 @@ export function usePlaygroundController() {
 
   function removeRefVideo() {
     setRefVideo(null)
+  }
+
+  // 尾幀 (frames-family) — reuses the image upload path.
+  async function handleEndFramePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const result = await upload.mutateAsync({ file, type: 'image' })
+      setEndFrame({ key: result.key, signedUrl: result.signedUrl })
+    } catch (err) {
+      alert(`尾幀上傳失敗:${(err as Error)?.message ?? '未知錯誤'}`)
+    }
+  }
+
+  function removeEndFrame() {
+    setEndFrame(null)
   }
 
   async function handleRun(overrideModelKey?: string, promptOverride?: string) {
@@ -333,7 +368,10 @@ export function usePlaygroundController() {
     // prompt the user expects to bind (2026-07-11 user report: elements=0
     // silently shipped as loose images). Warn before wasting a paid run —
     // @tokens mean nothing to Kling; only named subjects bind.
-    if (isKlingKey && klingSubmitElements.length === 0 && /@[^\s@，、。.,]{1,20}/.test(effectivePrompt)) {
+    // Boundary-anchored so emails/handles mid-word don't false-positive
+    // (2026-07-12 review LOW): @ must follow start-of-string, whitespace,
+    // or CJK punctuation to count as a subject token.
+    if (isKlingKey && klingSubmitElements.length === 0 && /(^|[\s，、。：:；;（(「【])@[^\s@，、。.,]{1,20}/.test(effectivePrompt)) {
       const ok = confirm(
         '提示詞裡有 @名字，但目前沒有綁定任何主體 —— Kling 不認 @token，' +
         '參考圖只會當「鬆散參考」使用。\n\n' +
@@ -364,8 +402,11 @@ export function usePlaygroundController() {
         outputType,
         modelKey: effectiveModelKey,
         aspectRatio,
-        ...(outputType === 'video' ? { durationSec } : {}),
+        ...(outputType === 'video' ? { durationSec, generateAudio: soundOn } : {}),
         ...(showResolutionPicker ? { resolution } : {}),
+        ...(outputType === 'video' && modelFamily === 'frames' && endFrame
+          ? { lastFrameUrl: endFrame.key }
+          : {}),
         ...(submitKlingElements ? { elements: klingSubmitElements } : {}),
         ...(!isKlingKey && outputType === 'video' && hasNamedImages
           ? { referenceImageNames }
@@ -421,6 +462,7 @@ export function usePlaygroundController() {
     setRefText('')
     setRefImages([])
     setRefVideo(null)
+    setEndFrame(null)
     kling.clearElements()
   }
 
@@ -465,6 +507,9 @@ export function usePlaygroundController() {
     prompt, setPrompt,
     refText, setRefText,
     refImages, refVideo,
+    soundOn, setSoundOn,
+    endFrame,
+    modelFamily,
     elements: kling.elements, isKlingO3Model,
     outputType, setOutputType,
     modelKey, setModelKey,
@@ -488,6 +533,7 @@ export function usePlaygroundController() {
     // handlers
     insertReferenceToken,
     handleImagePick, handleVideoPick, removeRefImage, removeRefVideo, setRefImageName,
+    handleEndFramePick, removeEndFrame,
     addElement: kling.addElement,
     removeElement: kling.removeElement,
     setElementName: kling.setElementName,
