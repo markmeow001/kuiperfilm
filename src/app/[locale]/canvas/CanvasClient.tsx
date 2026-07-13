@@ -498,11 +498,14 @@ function CanvasInner() {
       else if (e.key === 'Tab' && !meta && !e.altKey && !e.shiftKey) { openDockMenu(); e.preventDefault() }
       else if ((e.key === 'g' || e.key === 'G') && !meta && !e.altKey && !e.repeat) { if (e.shiftKey) ungroupSelected(); else groupSelected(); e.preventDefault() }
       else if ((e.key === 'd' || e.key === 'D') && !meta && !e.altKey && !e.repeat && sel) { duplicateNode(sel.id); e.preventDefault() }
+      // ⌘A 全选 — 配合 Del 一次清掉批量生成/测试残留（2026-07-13 用户反馈：
+      // 节点太多没法一次删。框选 Shift+拖曳 早就在，但全图清空还是 ⌘A 快）
+      else if (meta && (e.key === 'a' || e.key === 'A')) { setNodes((ns) => ns.map((n) => ({ ...n, selected: true }))); e.preventDefault() }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) { selected.forEach((n) => deleteNode(n.id)); e.preventDefault() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode, optimizeLayout, openDockMenu, groupSelected, ungroupSelected])
+  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode, optimizeLayout, openDockMenu, groupSelected, ungroupSelected, setNodes])
 
   // Shot sequence = image/video nodes ordered left→right, top→bottom (the
   // storyboard reading order) — the drama as an ordered list of shots.
@@ -560,15 +563,26 @@ function CanvasInner() {
 
   const minimapColor = useCallback((n: Node) => NODE_META[(n.type as CanvasNodeType) ?? 'text']?.accent ?? CANVAS_TOKENS.text.muted, [])
 
+  /** 清空画布 — 批量生成/测试残留一键清（确认后全删，含连线）。 */
+  const clearCanvas = useCallback(() => {
+    setNodes((ns) => {
+      if (ns.length === 0) return ns
+      if (!window.confirm(`清空画布：将删除全部 ${ns.length} 个节点与连线，且无法恢复。确定？`)) return ns
+      setEdges([])
+      return []
+    })
+  }, [setNodes, setEdges])
+
   const dockButtons = useMemo(
     () => [
       { key: 'add', label: '添加节点', onClick: openDockMenu },
       { key: 'toolbox', label: '工具箱', onClick: () => setToolbox((v) => !v) },
       { key: 'sequence', label: '镜头序列', onClick: () => setShowSequence((v) => !v) },
       { key: 'character', label: '角色库', onClick: () => setCharLib((v) => !v) },
+      { key: 'clear', label: '清空画布', onClick: clearCanvas },
       { key: 'shortcuts', label: '快捷键', onClick: () => setShortcutsOpen((v) => !v) },
     ],
-    [openDockMenu],
+    [openDockMenu, clearCanvas],
   )
 
   const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes])
@@ -921,7 +935,9 @@ function CanvasInner() {
               ['成组 / 解组', 'G / ⇧G'],
               ['创建副本', 'D / ⌘D'],
               ['复制 / 粘贴', '⌘C / ⌘V'],
-              ['删除', 'Del'],
+              ['框选多个节点', '⇧ 拖曳'],
+              ['全选', '⌘A'],
+              ['删除选中', 'Del'],
               ['整理画布', '⌥⇧F'],
               ['添加节点', '双击空白'],
               ['导演台 移动/旋转/缩放', 'V / R / S'],
