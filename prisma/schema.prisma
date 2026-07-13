@@ -273,9 +273,9 @@ model NovelPromotionClip {
 // R2V-first 4-mode architecture: worker routing lands in Phase 1.5C;
 // until then these fields are dormant (written but not read).
 enum PanelGenerationMode {
-  direct_t2v          // T2V, no reference — current/legacy behavior
-  r2v_with_subjects   // R2V, auto-inject character/location/prop refs (new-panel default from 1.5C)
-  t2i_then_i2v        // T2I 4 candidates -> user picks keyframe -> I2V
+  direct_t2v // T2V, no reference — current/legacy behavior
+  r2v_with_subjects // R2V, auto-inject character/location/prop refs (new-panel default from 1.5C)
+  t2i_then_i2v // T2I 4 candidates -> user picks keyframe -> I2V
   r2v_with_motion_ref // R2V + reference camera-motion clip
 }
 
@@ -699,13 +699,14 @@ model User {
   playgroundRuns PlaygroundRun[] @relation("PlaygroundRunUser")
 
   // 2026-06-27 — 无限画布 rows owned by this user.
-  canvases Canvas[] @relation("CanvasUser")
+  canvases     Canvas[]      @relation("CanvasUser")
+  canvasAssets CanvasAsset[] @relation("CanvasAssetOwner")
 
   // Phase 2.5 (2026-06-10) — Skill primitive. Community-authored Skills
   // owned by this user + per-user installed Skill records (我的 Skill).
   // See IMPL_PREP/R-skill-primitive.md for the full spec.
-  authoredSkills      Skill[]             @relation("SkillAuthor")
-  skillInstallations  SkillInstallation[]
+  authoredSkills     Skill[]             @relation("SkillAuthor")
+  skillInstallations SkillInstallation[]
 
   @@map("user")
 }
@@ -761,6 +762,7 @@ model Workspace {
   apiKeys        ApiKey[]
   // Phase T (2026-05-27) — Playground freedom-mode runs (independent of projects).
   playgroundRuns PlaygroundRun[]
+  canvasAssets   CanvasAsset[]
 
   @@index([organizationId])
   @@index([ownerEditorId])
@@ -859,10 +861,47 @@ model Canvas {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user User @relation("CanvasUser", fields: [userId], references: [id], onDelete: Cascade)
+  user   User          @relation("CanvasUser", fields: [userId], references: [id], onDelete: Cascade)
+  assets CanvasAsset[]
 
   @@index([userId, kind, updatedAt(sort: Desc)])
   @@map("canvas")
+}
+
+// S5 — durable assets saved from canvas nodes. Unlike the legacy global asset
+// tables, this registry has an explicit personal/workspace scope and supports
+// generic images + videos in addition to characters/locations.
+model CanvasAsset {
+  id                String   @id @default(uuid())
+  scopeKey          String   @db.VarChar(80)
+  ownerUserId       String
+  workspaceId       String?
+  sourceCanvasId    String?
+  storageKey        String   @db.VarChar(512)
+  primaryMediaId    String
+  firstFrameMediaId String?
+  lastFrameMediaId  String?
+  type              String   @db.VarChar(20)
+  name              String   @db.VarChar(120)
+  folder            String?  @db.VarChar(120)
+  description       String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+
+  owner           User         @relation("CanvasAssetOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  workspace       Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceCanvas    Canvas?      @relation(fields: [sourceCanvasId], references: [id], onDelete: SetNull)
+  primaryMedia    MediaObject  @relation("CanvasAssetPrimaryMedia", fields: [primaryMediaId], references: [id], onDelete: Restrict)
+  firstFrameMedia MediaObject? @relation("CanvasAssetFirstFrameMedia", fields: [firstFrameMediaId], references: [id], onDelete: SetNull)
+  lastFrameMedia  MediaObject? @relation("CanvasAssetLastFrameMedia", fields: [lastFrameMediaId], references: [id], onDelete: SetNull)
+
+  @@unique([scopeKey, storageKey])
+  @@index([scopeKey, type, createdAt(sort: Desc)])
+  @@index([ownerUserId])
+  @@index([workspaceId])
+  @@index([sourceCanvasId])
+  @@index([primaryMediaId])
+  @@map("canvas_assets")
 }
 
 // Phase 5 (2026-05-25) — Public API key for external automation (AI agents,
@@ -1644,6 +1683,10 @@ model MediaObject {
   uploadedByUserId String? @db.VarChar(36)
   uploader         User?   @relation("MediaObjectUploader", fields: [uploadedByUserId], references: [id])
 
+  canvasAssetPrimaryMedia    CanvasAsset[] @relation("CanvasAssetPrimaryMedia")
+  canvasAssetFirstFrameMedia CanvasAsset[] @relation("CanvasAssetFirstFrameMedia")
+  canvasAssetLastFrameMedia  CanvasAsset[] @relation("CanvasAssetLastFrameMedia")
+
   characterAppearanceImages             CharacterAppearance[]       @relation("CharacterAppearanceImageMedia")
   locationImages                        LocationImage[]             @relation("LocationImageMedia")
   novelPromotionCharacterVoices         NovelPromotionCharacter[]   @relation("NovelPromotionCharacterVoiceMedia")
@@ -1800,30 +1843,30 @@ model LightingPreset {
 // workspace; global Skills (workspaceId null) are visible to everyone.
 
 enum SkillAuthorType {
-  official  // 我的 Skill default set, attribution = @Flova / @KuiperAI
+  official // 我的 Skill default set, attribution = @Flova / @KuiperAI
   community // 精選 + user-created, attribution = creator username
 }
 
 enum SkillStatus {
-  draft     // author still editing
+  draft // author still editing
   published // visible in marketplace + installable
-  archived  // hidden but existing installations keep working
+  archived // hidden but existing installations keep working
 }
 
 model Skill {
-  id           String @id @default(uuid())
+  id            String  @id @default(uuid())
   /// url-safe — e.g. "drama-short-seedance-voice".
-  slug         String @unique @db.VarChar(128)
+  slug          String  @unique @db.VarChar(128)
   /// Display name, primary language. e.g. "劇情短片視頻".
-  name         String @db.VarChar(128)
+  name          String  @db.VarChar(128)
   /// Optional bilingual name for the EN locale.
-  nameEn       String? @db.VarChar(128)
+  nameEn        String? @db.VarChar(128)
   /// Multi-paragraph spec — what the Skill does, what pipeline it runs,
   /// what user must supply. Markdown allowed.
-  description     String  @db.Text
-  descriptionEn   String? @db.Text
+  description   String  @db.Text
+  descriptionEn String? @db.Text
   /// Hero image. Optional. Auto-rendered preview placeholder when null.
-  thumbnailUrl    String? @db.Text
+  thumbnailUrl  String? @db.Text
 
   // ── Attribution ─────────────────────────────────────────
   authorType    SkillAuthorType
@@ -1849,22 +1892,22 @@ model Skill {
   /// Contains: input requirements, pipeline stages + model chain,
   /// default settings, optional prompt templates, optional
   /// constraints/guardrails. Versioned via top-level `version: 1`.
-  config        Json
+  config Json
 
   // ── Multi-tenant scope ──────────────────────────────────
   /// Null = global. Set = workspace-scoped (only visible to that
   /// workspace's members). Workspace-private Skills don't appear in
   /// the public marketplace.
-  workspaceId   String?
+  workspaceId String?
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  installations SkillInstallation[]
+  installations      SkillInstallation[]
   /// Phase 2.5 (2026-06-10) — projects created via this Skill. Set via
   /// V2NewProjectClient picker; workers read this at submit time to
   /// resolve the active Skill config.
-  originatedProjects Project[] @relation("SkillOriginatedProjects")
+  originatedProjects Project[]           @relation("SkillOriginatedProjects")
 
   @@index([authorType, status, isFeatured, popularityScore])
   @@index([slug])
@@ -1873,19 +1916,19 @@ model Skill {
 }
 
 model SkillInstallation {
-  id          String  @id @default(uuid())
+  id          String    @id @default(uuid())
   userId      String
   skillId     String
   /// User can toggle a Skill off without uninstalling — keeps it in
   /// "我的 Skill" list but hides it from picker dropdowns.
-  enabled     Boolean @default(true)
+  enabled     Boolean   @default(true)
   installedAt DateTime  @default(now())
   /// Last time the Skill was used to start a project. Drives "recently
   /// used" sort in the picker.
   lastUsedAt  DateTime?
 
-  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  skill  Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@unique([userId, skillId])
   @@index([userId, enabled])

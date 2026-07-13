@@ -104,6 +104,8 @@ export interface CanvasNodeData extends Record<string, unknown> {
    * underlying key isn't exposed to the client.
    */
   referenceKey?: string | null
+  /** Durable primary key for an asset-library node (including video assets). */
+  assetStorageKey?: string | null
   /**
    * INPUT anchor for a generative node — a durable COS key fed as the node's own
    * reference/first-frame (distinct from referenceKey, which is a node's OUTPUT

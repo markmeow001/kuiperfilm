@@ -11,6 +11,7 @@ import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-m
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
 import { NodeShell } from './node-shell'
+import { SaveCanvasAssetButton } from '../lib/canvas-assets-client'
 
 export function CharacterNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
@@ -56,6 +57,13 @@ export function CharacterNode({ id, data, selected }: NodeProps) {
         </button>
         <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePick} />
         {error ? <div className="mt-1 text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
+        <div className="mt-2">
+          <SaveCanvasAssetButton
+            source={d.referenceKey ? { kind: 'storage-key', storageKey: d.referenceKey } : null}
+            defaultName={d.title || '角色'}
+            allowedTypes={['character']}
+          />
+        </div>
       </div>
     </NodeShell>
   )

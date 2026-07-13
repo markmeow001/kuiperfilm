@@ -6,6 +6,7 @@ import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import type { CanvasNodeData } from '../lib/canvas-types'
 import { orderCompositionInputs, writeCompositionEdgeOrder } from '../lib/composition-order'
 import { NodeShell } from './node-shell'
+import { SaveCanvasAssetButton } from '../lib/canvas-assets-client'
 
 export function CompositionNode({ id, data, selected }: NodeProps) {
   const d = data as CanvasNodeData
@@ -110,6 +111,7 @@ export function CompositionNode({ id, data, selected }: NodeProps) {
       {error ? <div className="text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
       <button type="button" disabled={busy || ordered.length === 0} onClick={submit} className="w-full rounded-lg py-1.5 text-[12px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}>{busy ? '合成中…' : d.resultKey ? '重新合成' : '合成视频（免点数）'}</button>
       {d.resultUrl ? <video src={d.resultUrl} controls className="w-full rounded-md" /> : null}
+      <SaveCanvasAssetButton source={d.resultTaskId ? { kind: 'task', taskId: d.resultTaskId } : null} defaultName={d.title || '合成视频'} allowedTypes={['video']} />
     </div>
   </NodeShell>
 }

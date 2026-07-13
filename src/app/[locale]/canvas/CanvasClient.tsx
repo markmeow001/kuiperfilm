@@ -37,7 +37,8 @@ import { DEFAULT_NODE_DATA, type CanvasNodeData } from './lib/canvas-types'
 import { serializeCanvas, deserializeCanvas } from './lib/canvas-serialize'
 import { CanvasGenerationProvider, useCanvasGeneration } from './lib/canvas-generation'
 import { TOOLBOX_PRESETS } from './lib/canvas-toolbox'
-import { useCharacterLibrary } from './lib/use-character-library'
+import { CanvasAssetsProvider, useCanvasAssetLibrary, type CanvasAssetLibraryItem } from './lib/canvas-assets-client'
+import { canvasAssetNodeData, canvasAssetNodeType } from './lib/canvas-asset-drop'
 import { useCanvas, useDeleteCanvas, useSaveCanvas, type CanvasRecordView } from '@/lib/query/mutations/canvas-mutations'
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { makeMediaNode } from './nodes/MediaNode'
@@ -101,6 +102,7 @@ function CanvasInner() {
   const [resourcesOpen, setResourcesOpen] = useState(false)
   const [resourceError, setResourceError] = useState<string | null>(null)
   const [canvasTitle, setCanvasTitle] = useState('未命名画布')
+  const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(1)
   const rf = useReactFlow()
   const instanceRef = useRef<ReactFlowInstance<Node<CanvasNodeData>, Edge> | null>(null)
@@ -197,6 +199,7 @@ function CanvasInner() {
     const canvas = canvasQuery.data?.canvas
     if (!canvas) return
     canvasIdRef.current = canvas.id
+    setActiveCanvasId(canvas.id)
     setCanvasTitle(canvas.title)
     const { nodes: n, edges: e, viewport } = deserializeCanvas({
       nodes: canvas.nodes,
@@ -233,7 +236,10 @@ function CanvasInner() {
         },
         {
           onSuccess: ({ canvas }) => {
-            if (!canvasIdRef.current) canvasIdRef.current = canvas.id
+            if (!canvasIdRef.current) {
+              canvasIdRef.current = canvas.id
+              setActiveCanvasId(canvas.id)
+            }
           },
           onSettled: () => {
             creatingRef.current = false
@@ -591,18 +597,16 @@ function CanvasInner() {
     setToolbox(false)
   }, [centerFlow, setNodes, setEdges])
 
-  const characterLibQuery = useCharacterLibrary(charLib)
-  const dropCharacter = useCallback((name: string, imageUrl: string | null) => {
+  const assetLibraryQuery = useCanvasAssetLibrary(activeCanvasId, charLib)
+  const [assetType, setAssetType] = useState<CanvasAssetLibraryItem['type']>('character')
+  const dropAsset = useCallback((asset: CanvasAssetLibraryItem) => {
     const c = centerFlow()
+    const type = canvasAssetNodeType(asset)
     const node: Node<CanvasNodeData> = {
       id: uid(),
-      type: 'character',
+      type,
       position: { x: c.x - 120, y: c.y - 80 },
-      // imageUrl is a signed asset-hub URL (not in the playground-ref namespace,
-      // so it can't be a durable referenceKey — the ref guard only accepts URLs,
-      // not foreign keys). Store it as resultUrl; downstream falls back to it.
-      // In-session it works; re-pick if the signed URL expires.
-      data: { ...DEFAULT_NODE_DATA, title: name, resultUrl: imageUrl, referenceKey: null },
+      data: { ...DEFAULT_NODE_DATA, ...canvasAssetNodeData(asset) },
     }
     setNodes((ns) => [...ns, node])
     setCharLib(false)
@@ -623,6 +627,7 @@ function CanvasInner() {
   const loadCanvasRecord = useCallback((record: CanvasRecordView) => {
     const next = deserializeCanvas({ nodes: record.nodes, edges: record.edges, viewport: record.viewport })
     canvasIdRef.current = record.id
+    setActiveCanvasId(record.id)
     setCanvasTitle(record.title)
     setNodes(next.nodes)
     setEdges(next.edges)
@@ -640,7 +645,10 @@ function CanvasInner() {
       kind: 'canvas',
       ...serialized,
     })
-    if (!currentId && canvasIdRef.current === null) canvasIdRef.current = result.canvas.id
+    if (!currentId && canvasIdRef.current === null) {
+      canvasIdRef.current = result.canvas.id
+      setActiveCanvasId(result.canvas.id)
+    }
   }, [nodes, edges, canvasTitle, save])
 
   const runResourceAction = useCallback(async (action: () => Promise<void>) => {
@@ -718,7 +726,7 @@ function CanvasInner() {
       { key: 'add', label: '添加节点', onClick: openDockMenu },
       { key: 'toolbox', label: '工具箱', onClick: () => setToolbox((v) => !v) },
       { key: 'sequence', label: '镜头序列', onClick: () => setShowSequence((v) => !v) },
-      { key: 'character', label: '角色库', onClick: () => setCharLib((v) => !v) },
+      { key: 'character', label: '资产库', onClick: () => setCharLib((v) => !v) },
       { key: 'clear', label: '清空画布', onClick: clearCanvas },
       { key: 'shortcuts', label: '快捷键', onClick: () => setShortcutsOpen((v) => !v) },
     ],
@@ -728,6 +736,7 @@ function CanvasInner() {
   const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes])
 
   return (
+    <CanvasAssetsProvider canvasId={activeCanvasId}>
     <div
       ref={wrapperRef}
       className="fixed inset-0 overflow-hidden"
@@ -996,23 +1005,24 @@ function CanvasInner() {
         </>
       ) : null}
 
-      {/* 角色库 — drop a saved character (CharacterAppearance) as a node */}
+      {/* 资产库 — durable canvas assets, scoped to this canvas' user/workspace. */}
       {charLib ? (
         <>
           <div className="absolute inset-0 z-20" onClick={() => setCharLib(false)} />
           <div className="absolute bottom-20 left-1/2 z-30 max-h-[50vh] w-96 -translate-x-1/2 overflow-y-auto rounded-xl p-2" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 16px 40px rgba(0,0,0,0.55)' }}>
-            <div className="mb-1 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>角色库 · 点选放入画布</div>
-            {characterLibQuery.isLoading ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>加载中…</div> : null}
-            {characterLibQuery.isError ? <div className="px-2 py-3 text-[11px]" style={{ color: '#FF8A8A' }}>加载角色库失败 · <button type="button" className="underline" onClick={() => characterLibQuery.refetch()}>重试</button></div> : null}
-            {characterLibQuery.data && characterLibQuery.data.length === 0 ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>暂无角色 · 可在资产库创建</div> : null}
+            <div className="mb-2 px-1 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>资产库 · 点选放入画布</div>
+            <div className="mb-2 grid grid-cols-4 gap-1">{(['character', 'scene', 'image', 'video'] as const).map((value) => <button key={value} type="button" onClick={() => setAssetType(value)} className="rounded-md py-1 text-[11px]" style={{ background: assetType === value ? CANVAS_TOKENS.bg.active : CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.secondary }}>{value === 'character' ? '角色' : value === 'scene' ? '场景' : value === 'image' ? '图片' : '视频'}</button>)}</div>
+            {assetLibraryQuery.isLoading ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>加载中…</div> : null}
+            {assetLibraryQuery.isError ? <div className="px-2 py-3 text-[11px]" style={{ color: '#FF8A8A' }}>加载资产库失败 · <button type="button" className="underline" onClick={() => assetLibraryQuery.refetch()}>重试</button></div> : null}
+            {assetLibraryQuery.data && assetLibraryQuery.data.filter((asset) => asset.type === assetType).length === 0 ? <div className="px-2 py-3 text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>此分类暂无资产</div> : null}
             <div className="grid grid-cols-3 gap-2">
-              {(characterLibQuery.data ?? []).map((c) => (
-                <button key={`${c.characterId}-${c.appearanceId}`} type="button" onClick={() => dropCharacter(c.name, c.imageUrl)} title={c.name} className="overflow-hidden rounded-md" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}`, background: CANVAS_TOKENS.bg.app }}>
-                  {c.imageUrl ? (
+              {(assetLibraryQuery.data ?? []).filter((asset) => asset.type === assetType).map((asset) => (
+                <button key={asset.id} type="button" onClick={() => dropAsset(asset)} title={asset.name} className="overflow-hidden rounded-md" style={{ border: `1px solid ${CANVAS_TOKENS.hairline}`, background: CANVAS_TOKENS.bg.app }}>
+                  {asset.type === 'video' ? <video src={asset.mediaUrl} muted className="h-20 w-full object-cover" /> : asset.mediaUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.imageUrl} alt={c.name} className="h-20 w-full object-cover" />
+                    <img src={asset.mediaUrl} alt={asset.name} className="h-20 w-full object-cover" />
                   ) : null}
-                  <div className="truncate px-1 py-0.5 text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary }}>{c.name}</div>
+                  <div className="truncate px-1 py-0.5 text-[10px]" style={{ color: CANVAS_TOKENS.text.secondary }}>{asset.name}</div>
                 </button>
               ))}
             </div>
@@ -1126,6 +1136,7 @@ function CanvasInner() {
         ))}
       </div>
     </div>
+    </CanvasAssetsProvider>
   )
 }
 

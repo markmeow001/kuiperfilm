@@ -23,6 +23,7 @@ import { visualStyles } from '@/lib/style-library'
 import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
 import { variantKeyForMode, variantModeMismatch } from '@/lib/video-models/variant-for-mode'
 import { NodeShell } from './node-shell'
+import { SaveCanvasAssetButton, type CanvasAssetSource } from '../lib/canvas-assets-client'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '2:1', '21:9', '1:1', '4:3', '3:4', '4:5']
 const RESOLUTION_OPTIONS = ['480p', '720p', '1080p']
@@ -162,6 +163,13 @@ export function makeMediaNode(outputType: 'image' | 'video') {
               ? '失败'
               : '闲置'
     const busy = submitting || run?.status === 'pending' || run?.status === 'running'
+    const assetSource: CanvasAssetSource | null = d.runId
+      ? { kind: 'task', taskId: d.runId }
+      : outputType === 'video' && d.referenceVideoKey
+        ? { kind: 'storage-key', storageKey: d.referenceVideoKey }
+        : outputType === 'image' && d.anchorKey
+          ? { kind: 'storage-key', storageKey: d.anchorKey }
+          : null
 
     // Cache the result URL into node data so a reload shows it before polling.
     const resultUrl = run?.resultUrls?.[0] ?? d.resultUrl ?? null
@@ -721,6 +729,13 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           >
             {busy ? status : '↑ 生成'}
           </button>
+          <SaveCanvasAssetButton
+            source={assetSource}
+            defaultName={d.title || (outputType === 'image' ? '图片' : '视频')}
+            allowedTypes={outputType === 'image' ? ['character', 'scene', 'image'] : ['video']}
+            firstFrameKey={outputType === 'video' ? d.anchorKey : null}
+            lastFrameKey={outputType === 'video' ? d.lastFrameKey : null}
+          />
         </div>
       ) : null}
       </div>

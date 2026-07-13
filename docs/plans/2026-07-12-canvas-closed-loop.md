@@ -288,6 +288,16 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 
 交付：生成结果不再只存在画布节点，可沉淀并跨画布复用。
 
+> **资产归属拍板（S5 开工前硬约束）**：资产 scope 由服务端读取 `canvasId`
+> 后推导，客户端不得提交／覆盖 `workspaceId`。个人画布（`workspaceId = null`）
+> 生成 `user:<userId>` scope，仅创建者可读写；workspace 画布生成
+> `workspace:<workspaceId>` scope，workspace owner/editor 可写、viewer 只读。
+> `MediaObject.uploadedByUserId` 只记录原始上传者与稽核来源；真正控制跨画布复用
+> 权限的是新的 `CanvasAsset.scopeKey`，因此 workspace 共享不会被错误收窄成
+> user-only，也不会沿用旧 asset-hub 未分 workspace 的全局查询造成越权。facade
+> 必须先验证调用者能访问来源画布，再验证 durable key 属于同一 scope 的 run/task、
+> 调用者自己的上传 namespace，或既有同 scope 资产；不允许相信 URL 或静默复制。
+
 - Character/Image 节点：保存为角色主体。
 - Image 节点：保存为场景图或普通参考素材。
 - Video/Composition 节点：保存为视频素材。
@@ -301,6 +311,16 @@ Buffer，应用层额外内存峰值硬顶 512MB；ffmpeg stderr buffer 2MB、th
 - 资产库面板从「角色库」扩展为角色／场景／图片／视频四类，拖入时保留 durable key。
 
 验收：画布生成图片保存入库后，新画布能从资产库拖回，并作为下游 reference 正常生成。
+
+> **S5 实作结果（2026-07-13）**：新增 workspace-aware `CanvasAsset` registry
+> 与未执行的 migration（不动 prod）；`/api/canvas/assets` 由 `canvasId` 推导 scope，
+> 对 task／上传 key 做所有权与媒体类型校验，重复 key 回
+> `CANVAS_ASSET_ALREADY_EXISTS`。Character、Image、Video、Composition 与导演预演
+> 节点均可打开名称／类型／分类文件夹／说明弹窗，预演同时登记首尾帧；资产库已扩成
+> 角色／场景／图片／视频四类。跨画布拖回的纯函数验收确认 `referenceKey`／
+> `assetStorageKey` 不降级成 signed URL。验证：canvas 175 tests、canvas worker
+> 36 tests、`test:guards`、production build 全绿；真实 DB browser smoke 须在目标环境
+> 先依 runbook 套用 migration 后执行，本切片按「不要部署、不要动 prod」未套 migration。
 
 ### S6 — 字幕闭环（后置）
 

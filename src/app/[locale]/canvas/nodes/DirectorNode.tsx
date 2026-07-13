@@ -130,7 +130,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
     fd.append('meta', JSON.stringify({ aspect: payload.aspect, durationSec: payload.durationSec, crop: payload.crop }))
     const res = await fetch('/api/canvas/previz-export', { method: 'POST', body: fd })
     const json = await res.json().catch(() => null) as
-      | { success?: boolean; videoKey?: string; videoUrl?: string; firstFrameKey?: string; firstFrameUrl?: string; error?: { message?: string } }
+      | { success?: boolean; videoKey?: string; videoUrl?: string; firstFrameKey?: string; firstFrameUrl?: string; lastFrameKey?: string; lastFrameUrl?: string; error?: { message?: string } }
       | null
     if (!res.ok || !json?.success || !json.videoKey) {
       throw new Error(json?.error?.message ?? `导出失败（${res.status}）`)
@@ -162,6 +162,8 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
         referenceVideoUrl: json.videoUrl ?? null,
         anchorKey: json.firstFrameKey ?? null,
         anchorUrl: json.firstFrameUrl ?? null,
+        lastFrameKey: json.lastFrameKey ?? null,
+        lastFramePreview: json.lastFrameUrl ?? null,
       },
     } satisfies Node<CanvasNodeData>)
     const castEdges: Edge[] = cast.map((n) => ({ id: uid(), source: n.id, target: frameId, animated: true }))
