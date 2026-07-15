@@ -781,9 +781,9 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
     setHiddenIds({})
     setLockedIds({})
     playback.exit()
-    setView('shot')
+    setView('director')
     setBlockingOpen(false)
-    setToast(`✓ 已套用「${draft.title}」，当前为 ${draft.camera.focalLengthMm}mm 机位视角`)
+    setToast(`✓ 已套用「${draft.title}」，已选中 ${draft.camera.focalLengthMm}mm 生成机位，可自由调整；需要时再进入机位视角检查构图`)
   }, [state, playback])
 
   const undoBlocking = useCallback(() => {
