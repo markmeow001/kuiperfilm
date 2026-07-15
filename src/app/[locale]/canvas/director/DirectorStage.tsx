@@ -58,7 +58,7 @@ import { RoutePlansPanel } from './RoutePlansPanel'
 import { BlockingPanel } from './BlockingPanel'
 import { materializeRoutePlan } from './route-materialize'
 import type { PrevizCrop } from '@/lib/canvas/previz-transcode'
-import type { DirectorRoutePlan } from '@/lib/canvas/director-routes-schema'
+import type { DirectorRouteInputMode, DirectorRoutePlan, DirectorRouteSegment } from '@/lib/canvas/director-routes-schema'
 import { materializeDirectorBlocking, type DirectorBlockingDraft } from '@/lib/canvas/director-blocking-schema'
 
 const DEG2RAD = Math.PI / 180
@@ -485,7 +485,7 @@ interface DirectorStageProps {
    */
   onPersistState?: (state: DirectorStageState) => void
   /** AI 导演路线：提交 CANVAS_DIRECTOR_ROUTES 任务并轮询到完成（S4）。 */
-  onGenerateRoutes?: (description: string, cast: string[], props: string[]) => Promise<DirectorRoutePlan[]>
+  onGenerateRoutes?: (description: string, mode: DirectorRouteInputMode, cast: string[], props: string[]) => Promise<DirectorRouteSegment[]>
   /** AI 排戏：把自然语言转换为待确认的可编辑 3D 场景草稿。 */
   onGenerateBlocking?: (description: string) => Promise<DirectorBlockingDraft>
   /** Names of character nodes wired into the director (the cast), for display. */
@@ -758,15 +758,15 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
   }, [selectedShot, patchShot])
 
   /** 应用 AI 导演路线方案 → 物化成镜头序列（覆盖已有序列前确认）。 */
-  const applyRoutePlan = useCallback((plan: DirectorRoutePlan) => {
+  const applyRoutePlan = useCallback((plan: DirectorRoutePlan, segment: DirectorRouteSegment, keepPanelOpen: boolean) => {
     if (state.shots.length > 0 && !window.confirm(`应用「${plan.name}」将替换现有 ${state.shots.length} 个镜头，确定？`)) return
     const shots = materializeRoutePlan(plan, state.mannequins, state.props)
     if (shots.length === 0) { setToast('方案没有可用镜头'); return }
     setState((s) => ({ ...s, shots }))
     setSelectedShotId(shots[0].id)
     playback.exit()
-    setRoutesOpen(false)
-    setToast(`✓ 已应用「${plan.name}」：${shots.length} 个镜头，可逐镜微调起幅/落幅`)
+    if (!keepPanelOpen) setRoutesOpen(false)
+    setToast(`✓ 已套用「${segment.title} / ${plan.name}」：${shots.length} 个镜头，可逐镜微调起幅/落幅`)
   }, [state.shots.length, state.mannequins, state.props, playback])
 
   const applyBlockingDraft = useCallback((draft: DirectorBlockingDraft) => {
@@ -1178,7 +1178,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         <RoutePlansPanel
           onClose={() => setRoutesOpen(false)}
           castLabels={state.mannequins.map((m) => m.label)}
-          onGenerate={(description) => onGenerateRoutes(description, state.mannequins.map((m) => m.label), state.props.map((p) => p.label))}
+          onGenerate={(description, inputMode) => onGenerateRoutes(description, inputMode, state.mannequins.map((m) => m.label), state.props.map((p) => p.label))}
           onApply={applyRoutePlan}
         />
       ) : null}

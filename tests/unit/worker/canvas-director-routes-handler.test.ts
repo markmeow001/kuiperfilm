@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskJobData } from '@/lib/task/types'
 
 const aiMock = vi.hoisted(() => ({
-  executeAiTextStep: vi.fn(async () => ({ text: '[]', reasoning: '' })),
+  executeAiTextStep: vi.fn(async () => ({ text: '{"segments":[]}', reasoning: '' })),
 }))
 const workerMock = vi.hoisted(() => ({
   reportTaskProgress: vi.fn(async () => undefined),
@@ -25,6 +25,8 @@ const PLAN = {
   ],
 }
 
+const SEGMENT = { title: '对峙', sourceSummary: '角色A 与角色B 在车旁对峙。', plans: [PLAN] }
+
 function makeJob(payload: Record<string, unknown>): Job<TaskJobData> {
   return {
     data: { userId: 'user-1', projectId: 'playground', type: 'canvas_director_routes', targetId: 't-1', payload },
@@ -38,28 +40,34 @@ describe('handleCanvasDirectorRoutesTask', () => {
     workerMock.assertTaskActive.mockReset()
   })
 
-  it('returns whitelisted plans parsed from fenced model output', async () => {
-    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '方案如下：\n```json\n' + JSON.stringify([PLAN]) + '\n```', reasoning: '' })
-    const res = await handleCanvasDirectorRoutesTask(makeJob({ description: '两人对峙', cast: ['角色A', '角色B'], props: ['车'], model: 'gpt-x' }))
+  it('短描述 -> 返回白名单收敛后的单段多方案结果', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '方案如下：\n```json\n' + JSON.stringify({ segments: [SEGMENT] }) + '\n```', reasoning: '' })
+    const res = await handleCanvasDirectorRoutesTask(makeJob({ description: '两人对峙', mode: 'brief', cast: ['角色A', '角色B'], props: ['车'], model: 'gpt-x' }))
     expect(res.success).toBe(true)
     expect(res.count).toBe(1)
-    expect(res.plans[0].shots[0]).toMatchObject({ cameraPreset: '正面全景', movement: '推近', durationSec: 7.5 })
+    expect(res.planCount).toBe(1)
+    expect(res.segments[0]).toMatchObject({ order: 1, title: '对峙', sourceSummary: '角色A 与角色B 在车旁对峙。' })
+    expect(res.segments[0].plans[0].shots[0]).toMatchObject({ cameraPreset: '正面全景', movement: '推近', durationSec: 7.5 })
   })
 
-  it('feeds cast/props into the prompt', async () => {
-    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: JSON.stringify([PLAN]), reasoning: '' })
-    await handleCanvasDirectorRoutesTask(makeJob({ description: 'd', cast: ['角色A'], props: ['车'], model: 'm' }))
+  it('完整分镜 -> prompt 要求依序拆段、保留硬性限制且每段只产一套方案', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: JSON.stringify({ segments: [SEGMENT] }), reasoning: '' })
+    await handleCanvasDirectorRoutesTask(makeJob({ description: 'd', mode: 'storyboard', cast: ['角色A'], props: ['车'], model: 'm' }))
     const firstCall = aiMock.executeAiTextStep.mock.calls[0] as unknown as [{ messages: { content: string }[] }]
     const content = firstCall[0].messages[0]!.content
     expect(content).toContain('角色A')
     expect(content).toContain('车')
-    expect(content).toContain('15 秒')
+    expect(content).toContain('按原文顺序拆成')
+    expect(content).toContain('硬性限制')
+    expect(content).toContain('每个段落只给 1 套')
+    expect(content).toContain('15 秒内')
   })
 
-  it('throws explicitly on missing description / model, and on unparseable output', async () => {
-    await expect(handleCanvasDirectorRoutesTask(makeJob({ model: 'm' }))).rejects.toThrow('description is required')
-    await expect(handleCanvasDirectorRoutesTask(makeJob({ description: 'd' }))).rejects.toThrow('model not resolved')
+  it('缺少 description、mode、model 或模型输出不可解析 -> 显式失败', async () => {
+    await expect(handleCanvasDirectorRoutesTask(makeJob({ mode: 'brief', model: 'm' }))).rejects.toThrow('description is required')
+    await expect(handleCanvasDirectorRoutesTask(makeJob({ description: 'd', model: 'm' }))).rejects.toThrow('mode is required')
+    await expect(handleCanvasDirectorRoutesTask(makeJob({ description: 'd', mode: 'brief' }))).rejects.toThrow('model not resolved')
     aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '抱歉，无法生成。', reasoning: '' })
-    await expect(handleCanvasDirectorRoutesTask(makeJob({ description: 'd', model: 'm' }))).rejects.toThrow('no JSON array')
+    await expect(handleCanvasDirectorRoutesTask(makeJob({ description: 'd', mode: 'brief', model: 'm' }))).rejects.toThrow('no JSON object')
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRoutePlans } from '@/lib/canvas/director-routes-schema'
+import { parseDirectorRouteSegments, parseRoutePlans } from '@/lib/canvas/director-routes-schema'
 import { materializeRoutePlan } from '@/app/[locale]/canvas/director/route-materialize'
 import { MAX_SCENE_SEC, totalDurationSec } from '@/app/[locale]/canvas/director/previz-types'
 import type { StageMannequin } from '@/app/[locale]/canvas/director/stage-types'
@@ -50,6 +50,36 @@ describe('parseRoutePlans — LLM 输出容错解析', () => {
 
   it('throws on output with no JSON array', () => {
     expect(() => parseRoutePlans('抱歉，我无法生成。')).toThrow()
+  })
+})
+
+describe('parseDirectorRouteSegments — 完整分镜自动拆段', () => {
+  it('完整分镜 -> 保留原始顺序与摘要，每段只接受第一套精选方案', () => {
+    const alternate = { ...VALID_PLAN, name: '不应保留的第二方案' }
+    const text = JSON.stringify({ segments: [
+      { title: '进入餐厅', sourceSummary: '角色A 推门进入餐厅。', plans: [VALID_PLAN, alternate] },
+      { title: '桌边对峙', sourceSummary: '角色A 与角色B 隔桌对峙。', plans: [{ ...VALID_PLAN, name: '压迫式对峙' }] },
+    ] })
+    const segments = parseDirectorRouteSegments(text, 'storyboard')
+    expect(segments.map((segment) => ({ order: segment.order, title: segment.title, plans: segment.plans.map((plan) => plan.name) }))).toEqual([
+      { order: 1, title: '进入餐厅', plans: ['01 一镜到底·情绪沉淀'] },
+      { order: 2, title: '桌边对峙', plans: ['压迫式对峙'] },
+    ])
+    expect(segments[1].sourceSummary).toBe('角色A 与角色B 隔桌对峙。')
+  })
+
+  it('短描述 -> 只接受一个段落，但保留该段最多三套方案', () => {
+    const variants = [0, 1, 2, 3].map((index) => ({ ...VALID_PLAN, name: `方案 ${index + 1}` }))
+    const segments = parseDirectorRouteSegments(JSON.stringify({ segments: [
+      { title: '场景', sourceSummary: '摘要', plans: variants },
+      { title: '不应保留', sourceSummary: '', plans: [VALID_PLAN] },
+    ] }), 'brief')
+    expect(segments).toHaveLength(1)
+    expect(segments[0].plans.map((plan) => plan.name)).toEqual(['方案 1', '方案 2', '方案 3'])
+  })
+
+  it('没有有效 segments -> 显式失败', () => {
+    expect(() => parseDirectorRouteSegments('{"segments":[]}', 'storyboard')).toThrow('no valid segments')
   })
 })
 

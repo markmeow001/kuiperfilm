@@ -68,16 +68,34 @@ export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, 
 
   const btn = 'rounded-md px-2.5 py-1 font-mono text-[11px] transition-colors disabled:opacity-40'
 
-  return (
-    <div
-      className="absolute bottom-[72px] left-1/2 z-10 w-[min(860px,calc(100%-32px))] -translate-x-1/2 rounded-xl px-3 pb-2 pt-1.5"
-      style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
-    >
-      {/* transport + 全局进度 */}
-      <div className="mb-1.5 flex items-center gap-1.5">
+  if (shots.length === 0) {
+    return (
+      <div
+        className="absolute bottom-[72px] left-1/2 z-10 flex w-[min(560px,calc(100%-32px))] -translate-x-1/2 items-center gap-2 rounded-xl px-3 py-2"
+        style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+      >
         {onToggleRoutes ? (
           <button type="button" className={btn} onClick={onToggleRoutes} title="AI 生成 2-3 套导演路线方案" style={{ background: routesOpen ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: routesOpen ? CANVAS_TOKENS.accentText : CANVAS_TOKENS.accent }}>✨ AI 路线</button>
         ) : null}
+        <button type="button" onClick={onAddShot} className={`${btn} font-semibold`} style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>
+          ＋ 建立第一镜
+        </button>
+        <span className="ml-auto hidden text-[11px] sm:inline" style={{ color: CANVAS_TOKENS.text.muted }}>建立镜头后可预演与导出</span>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="absolute bottom-[72px] left-1/2 z-10 w-[min(960px,calc(100%-32px))] -translate-x-1/2 rounded-xl px-3 pb-2 pt-1.5"
+      style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+    >
+      {/* transport + 全局进度 */}
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+        {onToggleRoutes ? (
+          <button type="button" className={btn} onClick={onToggleRoutes} title="AI 生成 2-3 套导演路线方案" style={{ background: routesOpen ? CANVAS_TOKENS.accent : CANVAS_TOKENS.bg.hover, color: routesOpen ? CANVAS_TOKENS.accentText : CANVAS_TOKENS.accent }}>✨ AI 路线</button>
+        ) : null}
+        {onToggleRoutes ? <div className="mx-0.5 h-5 w-px" style={{ background: CANVAS_TOKENS.hairline }} /> : null}
         <button type="button" className={btn} disabled={shots.length === 0} onClick={() => step(-1)} style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.secondary }}>上一镜</button>
         <button
           type="button"
@@ -106,7 +124,7 @@ export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, 
               onClick={() => playback.enter(m)}
               style={{ background: playback.active && playback.mode === m ? CANVAS_TOKENS.bg.card : 'transparent', color: playback.active && playback.mode === m ? CANVAS_TOKENS.accent : CANVAS_TOKENS.text.muted }}
             >
-              {m === 'shot' ? '播放镜头' : '播放全片'}
+              {m === 'shot' ? '单镜' : '全片'}
             </button>
           ))}
         </div>
@@ -114,36 +132,42 @@ export function PrevizTimeline({ shots, selectedShotId, playback, onSelectShot, 
           <button type="button" className={btn} onClick={playback.exit} style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.gold }}>退出预演</button>
         ) : null}
 
-        {/* 导出区（右侧）：画幅 + 导出镜头/全片 + 同时下载 */}
-        {onExport ? (
-          <div className="ml-auto flex items-center gap-1.5">
-            <select
-              value={exportAspect}
-              onChange={(e) => onExportAspect?.(e.target.value as '9:16' | '16:9')}
-              disabled={exporting}
-              title="导出画幅"
-              className="rounded-md px-1.5 py-1 font-mono text-[11px] outline-none"
-              style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
-            >
-              <option value="9:16">竖 9:16</option>
-              <option value="16:9">横 16:9</option>
-            </select>
-            <button type="button" className={btn} disabled={exporting || !selectedShotId} onClick={() => onExport('shot')} title="导出选中镜头为 MP4 并生成带参考视频的节点" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>
-              {exporting ? '导出中…' : '导出镜头'}
-            </button>
-            <button type="button" className={btn} disabled={exporting || shots.length === 0} onClick={() => onExport('scene')} style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>
-              {exporting ? '导出中…' : `导出全片 ${total.toFixed(1)}s`}
-            </button>
-            <label className="flex cursor-pointer items-center gap-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }} title="导出完成后在新分页打开 MP4">
-              <input type="checkbox" checked={Boolean(downloadAfterExport)} onChange={(e) => onDownloadAfterExport?.(e.target.checked)} />
-              下载
-            </label>
-          </div>
-        ) : null}
-        <span className={onExport ? 'font-mono text-[11px]' : 'ml-auto font-mono text-[11px]'} style={{ color: CANVAS_TOKENS.text.secondary }}>
+        <span className="ml-auto whitespace-nowrap font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
           {fmt(playback.timeSec)} / {fmt(total)}
           <span className="ml-2" style={{ color: remaining < SHOT_MIN_SEC ? '#FF8A8A' : CANVAS_TOKENS.text.muted }}>余 {remaining.toFixed(1)}s</span>
         </span>
+
+        {/* 导出选项收进单一菜单，避免与 transport 争抢横向空间。 */}
+        {onExport ? (
+          <details className="group relative">
+            <summary className={`${btn} cursor-pointer list-none`} style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>
+              {exporting ? '导出中…' : '导出 ▾'}
+            </summary>
+            <div className="absolute bottom-full right-0 z-20 mb-2 w-60 rounded-xl p-3" style={{ background: CANVAS_TOKENS.bg.popover, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: '0 12px 32px rgba(0,0,0,0.55)' }}>
+              <label className="mb-2 flex items-center justify-between gap-3 font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>
+                <span>导出画幅</span>
+                <select
+                  value={exportAspect}
+                  onChange={(e) => onExportAspect?.(e.target.value as '9:16' | '16:9')}
+                  disabled={exporting}
+                  className="rounded-md px-2 py-1 font-mono text-[11px] outline-none"
+                  style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }}
+                >
+                  <option value="9:16">竖 9:16</option>
+                  <option value="16:9">横 16:9</option>
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button type="button" className={btn} disabled={exporting || !selectedShotId} onClick={() => onExport('shot')} title="导出选中镜头为 MP4 并生成带参考视频的节点" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>导出选中镜头</button>
+                <button type="button" className={btn} disabled={exporting} onClick={() => onExport('scene')} style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>导出全片 {total.toFixed(1)}s</button>
+              </div>
+              <label className="mt-2 flex cursor-pointer items-center gap-1.5 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }} title="导出完成后在新分页打开 MP4">
+                <input type="checkbox" checked={Boolean(downloadAfterExport)} onChange={(e) => onDownloadAfterExport?.(e.target.checked)} />
+                导出后同时下载 MP4
+              </label>
+            </div>
+          </details>
+        ) : null}
       </div>
 
       {/* 全局 scrub 条（按镜头分段着色） */}

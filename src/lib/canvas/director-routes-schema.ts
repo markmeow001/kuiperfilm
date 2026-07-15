@@ -27,7 +27,23 @@ export interface DirectorRoutePlan {
   shots: DirectorRoutePlanShot[]
 }
 
+export type DirectorRouteInputMode = 'brief' | 'storyboard'
+
+export const DIRECTOR_ROUTE_DESCRIPTION_LIMITS: Record<DirectorRouteInputMode, number> = {
+  brief: 500,
+  storyboard: 5000,
+}
+
+export interface DirectorRouteSegment {
+  order: number
+  title: string
+  /** AI 从原始分镜抽出的可拍摄事件摘要，方便用户核对是否遗漏。 */
+  sourceSummary: string
+  plans: DirectorRoutePlan[]
+}
+
 const MAX_PLANS = 3
+export const MAX_STORYBOARD_SEGMENTS = 24
 export const MAX_SHOTS_PER_PLAN = 6
 /** 与 previz-types MAX_SCENE_SEC 一致（R2V 参考视频上限）。 */
 export const MAX_SCENE_SEC = 15
@@ -88,3 +104,54 @@ export function parseRoutePlans(text: string): DirectorRoutePlan[] {
   return plans
 }
 
+function extractJsonObject(text: string): Record<string, unknown> {
+  const trimmed = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim()
+  const start = trimmed.indexOf('{')
+  const end = trimmed.lastIndexOf('}')
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error('CANVAS_DIRECTOR_ROUTES_PARSE: no JSON object in model output')
+  }
+  const parsed: unknown = JSON.parse(trimmed.slice(start, end + 1))
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('CANVAS_DIRECTOR_ROUTES_PARSE: result is not an object')
+  }
+  return parsed as Record<string, unknown>
+}
+
+/**
+ * 新版统一输出：短描述只有一个 segment（2-3 套方案）；完整分镜会依剧情顺序
+ * 拆成多个 segment（每段一套精选方案）。所有 plan 仍经过 parseRoutePlans 的
+ * 镜位、运镜、镜头数与 15 秒白名单收敛。
+ */
+export function parseDirectorRouteSegments(text: string, mode: DirectorRouteInputMode): DirectorRouteSegment[] {
+  const root = extractJsonObject(text)
+  if (!Array.isArray(root.segments)) {
+    throw new Error('CANVAS_DIRECTOR_ROUTES_PARSE: segments is not an array')
+  }
+  const maxSegments = mode === 'storyboard' ? MAX_STORYBOARD_SEGMENTS : 1
+  const maxPlans = mode === 'storyboard' ? 1 : MAX_PLANS
+  const segments: DirectorRouteSegment[] = []
+  for (const raw of root.segments) {
+    if (segments.length >= maxSegments) break
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    const segment = raw as Record<string, unknown>
+    const rawPlans = Array.isArray(segment.plans) ? segment.plans.slice(0, maxPlans) : []
+    let plans: DirectorRoutePlan[]
+    try {
+      plans = parseRoutePlans(JSON.stringify(rawPlans))
+    } catch {
+      continue
+    }
+    const order = segments.length + 1
+    segments.push({
+      order,
+      title: typeof segment.title === 'string' && segment.title.trim() ? segment.title.trim() : `段落 ${order}`,
+      sourceSummary: typeof segment.sourceSummary === 'string' ? segment.sourceSummary.trim().slice(0, 600) : '',
+      plans,
+    })
+  }
+  if (segments.length === 0) {
+    throw new Error('CANVAS_DIRECTOR_ROUTES_PARSE: no valid segments parsed')
+  }
+  return segments
+}
