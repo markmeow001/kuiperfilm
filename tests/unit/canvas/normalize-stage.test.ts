@@ -3,6 +3,16 @@ import { normalizeStage, DEFAULT_STAGE } from '@/app/[locale]/canvas/director/st
 import { REST_POSE } from '@/app/[locale]/canvas/director/pose-presets'
 
 describe('normalizeStage', () => {
+  it('摄像机锁定道具 -> 保留统一场景物件目标', () => {
+    const out = normalizeStage({ cameras: [{ id: 'c1', label: '机位1', position: [0, 1, 4], target: [0, 1, 0], fov: 45, lookAtObjectId: 'prop-1' }] })
+    expect(out.cameras[0].lookAtObjectId).toBe('prop-1')
+  })
+
+  it('旧人物追踪字段 -> 正规化为统一场景物件目标', () => {
+    const out = normalizeStage({ cameras: [{ id: 'c1', label: '机位1', position: [0, 1, 4], target: [0, 1, 0], fov: 45, lookAtMannequinId: 'person-1' }] })
+    expect(out.cameras[0]).toMatchObject({ lookAtObjectId: 'person-1' })
+    expect('lookAtMannequinId' in out.cameras[0]).toBe(false)
+  })
   it('migrates a v1 single `camera` into cameras[]', () => {
     const v1 = { mannequins: [], camera: { position: [1, 2, 3], target: [0, 1, 0], fov: 50 } }
     const out = normalizeStage(v1)

@@ -93,8 +93,8 @@ export interface StageCamera {
   fov: number
   /** Dutch-angle roll in degrees (0 = level). */
   roll?: number
-  /** When set, the camera's look-at follows this mannequin (overrides target). */
-  lookAtMannequinId?: string | null
+  /** When set, the camera's look-at follows this mannequin or prop (overrides target). */
+  lookAtObjectId?: string | null
 }
 
 /** Output framing aspect for screenshots. 'auto' = the live viewport ratio. */
@@ -210,7 +210,11 @@ export function normalizeStage(raw: unknown): DirectorStageState {
       target: vec3(c.target, [0, 1, 0]),
       fov: typeof c.fov === 'number' && Number.isFinite(c.fov) ? c.fov : 45,
       roll: typeof c.roll === 'number' && Number.isFinite(c.roll) ? c.roll : undefined,
-      lookAtMannequinId: typeof c.lookAtMannequinId === 'string' ? c.lookAtMannequinId : null,
+      // Persist only lookAtObjectId from now on; consume the former mannequin-only
+      // key once here so existing saved stages keep their tracking target.
+      lookAtObjectId: typeof c.lookAtObjectId === 'string'
+        ? c.lookAtObjectId
+        : typeof c.lookAtMannequinId === 'string' ? c.lookAtMannequinId : null,
     }))
   if (cameras.length === 0 && r.camera) {
     cameras = [{ id: 'cam-1', label: '机位1', position: r.camera.position ?? [0, 1.6, 4.5], target: r.camera.target ?? [0, 1, 0], fov: r.camera.fov ?? 45 }]

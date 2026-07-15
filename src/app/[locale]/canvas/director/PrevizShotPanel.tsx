@@ -7,6 +7,7 @@
  */
 import { CANVAS_TOKENS } from '../lib/canvas-tokens'
 import { MAX_SCENE_SEC, SHOT_MIN_SEC, totalDurationSec, type StageShot } from './previz-types'
+import { CAMERA_MOVE_PRESETS, type CameraMoveKey } from './camera-motion-presets'
 
 export interface PrevizShotPanelProps {
   shot: StageShot
@@ -25,9 +26,11 @@ export interface PrevizShotPanelProps {
   onAddCameraWaypoint: () => void
   onAddActorWaypoint: (actorId: string) => void
   onClearActorWaypoints: (actorId: string) => void
+  onApplyCameraMove: (key: CameraMoveKey) => void
+  trackingTargetLabel?: string | null
 }
 
-export function PrevizShotPanel({ shot, shots, actorInfos, onPatch, onDelete, onSetCamera, onSetActors, onJump, onAddCameraWaypoint, onAddActorWaypoint, onClearActorWaypoints }: PrevizShotPanelProps) {
+export function PrevizShotPanel({ shot, shots, actorInfos, onPatch, onDelete, onSetCamera, onSetActors, onJump, onAddCameraWaypoint, onAddActorWaypoint, onClearActorWaypoints, onApplyCameraMove, trackingTargetLabel }: PrevizShotPanelProps) {
   const othersTotal = totalDurationSec(shots) - shot.durationSec
   const maxDur = Math.min(MAX_SCENE_SEC, MAX_SCENE_SEC - othersTotal)
   const waypointCount = shot.cameraWaypoints?.length ?? 0
@@ -71,6 +74,16 @@ export function PrevizShotPanel({ shot, shots, actorInfos, onPatch, onDelete, on
               {e === 'easeInOut' ? '缓入缓出' : '匀速'}
             </button>
           ))}
+        </div>
+
+        <div className={section} style={{ color: CANVAS_TOKENS.text.muted }}>一键运镜</div>
+        <div className="grid grid-cols-3 gap-1">
+          {CAMERA_MOVE_PRESETS.map((preset) => (
+            <button key={preset.key} type="button" disabled={preset.key === 'follow' && !trackingTargetLabel} title={preset.key === 'follow' && !trackingTargetLabel ? '先在摄像机面板锁定人物或道具' : preset.description} onClick={() => onApplyCameraMove(preset.key)} className="rounded py-1 text-[11px] transition-colors hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-35" style={{ background: CANVAS_TOKENS.bg.hover, color: CANVAS_TOKENS.text.primary }}>{preset.label}</button>
+          ))}
+        </div>
+        <div className="mt-1 px-1 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>
+          {trackingTargetLabel ? `跟拍目标：${trackingTargetLabel}` : '跟拍需先在摄像机面板锁定人物或道具'}
         </div>
 
         <div className={section} style={{ color: CANVAS_TOKENS.text.muted }}>起幅（镜头开始）</div>

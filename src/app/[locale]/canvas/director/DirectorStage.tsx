@@ -51,6 +51,8 @@ import { StagePropMesh } from './StagePropMesh'
 import { PropPanel } from './PropPanel'
 import { RigPanel } from './RigPanel'
 import { CameraPanel } from './CameraPanel'
+import { applyCameraMovePreset, CAMERA_MOVE_PRESETS, type CameraMoveKey } from './camera-motion-presets'
+import { frameCameraAtDistance } from './camera-lens'
 import { buildPrevizDirectorText } from './previz-director-text'
 import { applyShotCameraView } from './shot-camera-view'
 import { computeExportCrop, recordPrevizClip } from './previz-record'
@@ -71,12 +73,14 @@ const tgtKey = (id: string) => `tgt:${id}`
 const selectedCamIdFromSel = (sel: string | null): string | null =>
   sel && (sel.startsWith('cam:') || sel.startsWith('tgt:')) ? sel.slice(4) : null
 
-/** Effective look-at: follow a mannequin (chest height) if bound, else manual target. */
-function effectiveTarget(cam: StageCamera, mannequins: StageMannequin[]): Vec3 {
+/** Effective look-at: follow a mannequin or prop if bound, else manual target. */
+function effectiveTarget(cam: StageCamera, mannequins: StageMannequin[], props: StageProp[]): Vec3 {
   let t: Vec3 = cam.target
-  if (cam.lookAtMannequinId) {
-    const m = mannequins.find((x) => x.id === cam.lookAtMannequinId)
-    if (m) t = [m.position[0], m.position[1] + 1.0, m.position[2]]
+  if (cam.lookAtObjectId) {
+    const mannequin = mannequins.find((item) => item.id === cam.lookAtObjectId)
+    const prop = props.find((item) => item.id === cam.lookAtObjectId)
+    if (mannequin) t = [mannequin.position[0], mannequin.position[1] + 1.0, mannequin.position[2]]
+    else if (prop) t = [...prop.position]
   }
   // Guard the degenerate eye==target case (lookAt → NaN quaternion): nudge +Z.
   const dx = t[0] - cam.position[0], dy = t[1] - cam.position[1], dz = t[2] - cam.position[2]
@@ -85,24 +89,29 @@ function effectiveTarget(cam: StageCamera, mannequins: StageMannequin[]): Vec3 {
 }
 
 /** Camera gizmo orientation = lookAt(target) + dutch roll about the view axis. */
-function camQuat(cam: StageCamera, mannequins: StageMannequin[]): THREE.Quaternion {
-  const target = effectiveTarget(cam, mannequins)
+function camQuat(cam: StageCamera, mannequins: StageMannequin[], props: StageProp[]): THREE.Quaternion {
+  const target = effectiveTarget(cam, mannequins, props)
   const m = new THREE.Matrix4().lookAt(new THREE.Vector3(...cam.position), new THREE.Vector3(...target), new THREE.Vector3(0, 1, 0))
   const q = new THREE.Quaternion().setFromRotationMatrix(m)
   if (cam.roll) q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), cam.roll * DEG2RAD))
   return q
 }
 
-/** Focus point = selected mannequin (or centroid, or origin) at mid-height. */
-function focusPoint(mannequins: StageMannequin[], selectedMannequinId: string | null): Vec3 {
-  const m = selectedMannequinId ? mannequins.find((x) => x.id === selectedMannequinId) : null
-  const subj = m ?? mannequins[0]
-  if (subj) return [subj.position[0], subj.position[1] + 1.0, subj.position[2]]
+/** Focus point = selected scene object (or first mannequin, or origin). */
+function focusPoint(mannequins: StageMannequin[], props: StageProp[], selectedObjectId: string | null): Vec3 {
+  const mannequin = selectedObjectId ? mannequins.find((item) => item.id === selectedObjectId) : null
+  const prop = selectedObjectId ? props.find((item) => item.id === selectedObjectId) : null
+  const fallback = mannequins[0]
+  if (mannequin) return [mannequin.position[0], mannequin.position[1] + 1.0, mannequin.position[2]]
+  if (prop) return [...prop.position]
+  if (fallback) return [fallback.position[0], fallback.position[1] + 1.0, fallback.position[2]]
   return [0, 1, 0]
 }
-function facingOf(mannequins: StageMannequin[], selectedMannequinId: string | null): number {
-  const m = selectedMannequinId ? mannequins.find((x) => x.id === selectedMannequinId) : null
-  return (m ?? mannequins[0])?.rotation[1] ?? 0
+function facingOf(mannequins: StageMannequin[], props: StageProp[], selectedObjectId: string | null): number {
+  const object = selectedObjectId
+    ? [...mannequins, ...props].find((item) => item.id === selectedObjectId)
+    : null
+  return (object ?? mannequins[0])?.rotation[1] ?? 0
 }
 
 /** Bottom-dock icon button with hover tooltip. */
@@ -193,7 +202,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
     const s = stateRef.current
     const sc = s.cameras.find((c) => c.id === cameraId)
     if (!sc) return null
-    const target = effectiveTarget(sc, s.mannequins)
+    const target = effectiveTarget(sc, s.mannequins, s.props)
     const canvas = gl.domElement
     // Render full viewport at the canvas aspect (no distortion); for a fixed
     // output ratio we crop the CANVAS (already sRGB/tone-mapped) — avoids the
@@ -274,13 +283,13 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
     if (previz.active) return
     const orbit = orbitRef.current
     if (activeShot) {
-      const tgt = effectiveTarget(activeShot, state.mannequins)
+      const tgt = effectiveTarget(activeShot, state.mannequins, state.props)
       applyShotCameraView(viewCamera as THREE.PerspectiveCamera, orbit, activeShot, tgt)
     } else {
       ;(viewCamera as THREE.PerspectiveCamera).fov = 45
       ;(viewCamera as THREE.PerspectiveCamera).updateProjectionMatrix()
     }
-  }, [activeShot, viewCamera, state.mannequins, previz.active])
+  }, [activeShot, viewCamera, state.mannequins, state.props, previz.active])
 
   // SINGLE owner of orbit.enabled: free in 导演视角, locked in 机位视角 and
   // during previz playback (the driver owns the camera then). Re-runs on
@@ -363,7 +372,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
             <group
               ref={(el) => { if (el) camGizmoRefs.current[cam.id] = el; else delete camGizmoRefs.current[cam.id] }}
               position={cam.position}
-              quaternion={camQuat(cam, state.mannequins)}
+              quaternion={camQuat(cam, state.mannequins, state.props)}
               onClick={(e) => { e.stopPropagation(); onSelect(camKey(cam.id)) }}
               onDoubleClick={(e) => { e.stopPropagation(); onEnterCameraView(cam.id) }}
             >
@@ -377,7 +386,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
                 <meshStandardMaterial color={CANVAS_TOKENS.accent} emissive={CANVAS_TOKENS.accent} emissiveIntensity={0.22} />
               </mesh>
             </group>
-            {cam.lookAtMannequinId ? null : (
+            {cam.lookAtObjectId ? null : (
               <mesh
                 ref={(el) => { if (el) tgtGizmoRefs.current[cam.id] = el; else delete tgtGizmoRefs.current[cam.id] }}
                 position={cam.target}
@@ -612,8 +621,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         ...s,
         mannequins: s.mannequins.filter((m) => m.id !== selectedId),
         props: s.props.filter((p) => p.id !== selectedId),
-        // drop any camera's follow binding to the deleted mannequin
-        cameras: s.cameras.map((c) => (c.lookAtMannequinId === selectedId ? { ...c, lookAtMannequinId: null } : c)),
+        // drop any camera's follow binding to the deleted scene object
+        cameras: s.cameras.map((c) => (c.lookAtObjectId === selectedId ? { ...c, lookAtObjectId: null } : c)),
       }))
     }
     setSelectedId(null)
@@ -648,11 +657,11 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
   const currentCameraPose = useCallback((): ShotKeyframe['camera'] | null => {
     const camId = selectedCamIdFromSel(selectedId)
     const cam = camId ? state.cameras.find((c) => c.id === camId) : null
-    if (cam) return { position: [...cam.position], target: effectiveTarget(cam, state.mannequins), fov: cam.fov, ...(cam.roll ? { roll: cam.roll } : {}) }
+    if (cam) return { position: [...cam.position], target: effectiveTarget(cam, state.mannequins, state.props), fov: cam.fov, ...(cam.roll ? { roll: cam.roll } : {}) }
     const live = getViewRef.current?.()
     if (!live) return null
     return { position: live.position, target: live.target, fov: live.fov }
-  }, [selectedId, state.cameras, state.mannequins])
+  }, [selectedId, state.cameras, state.mannequins, state.props])
 
   const currentActorPlacements = useCallback((): ShotKeyframe['actors'] => {
     return Object.fromEntries(
@@ -681,6 +690,20 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
   const patchShot = useCallback((id: string, patch: Partial<StageShot>) => {
     setState((s) => ({ ...s, shots: clampShots(s.shots.map((x) => (x.id === id ? { ...x, ...patch } : x))) }))
   }, [])
+
+  const applyShotCameraMove = useCallback((key: CameraMoveKey) => {
+    if (!selectedShot) return
+    const activeCamera = state.cameras.find((camera) => camera.id === activeShotCamId)
+    const next = applyCameraMovePreset(selectedShot, key, activeCamera?.lookAtObjectId)
+    if (!next) {
+      setToast('跟拍需要先在摄像机面板锁定人物或道具，并设置其起幅与落幅位置')
+      return
+    }
+    patchShot(selectedShot.id, next)
+    const label = CAMERA_MOVE_PRESETS.find((preset) => preset.key === key)?.label
+    if (!label) throw new Error(`未知运镜预设：${key}`)
+    setToast(`✓ 已套用${label}运镜，可继续拖动关键点微调`)
+  }, [activeShotCamId, patchShot, selectedShot, state.cameras])
 
   const deleteShot = useCallback((id: string) => {
     setState((s) => ({ ...s, shots: s.shots.filter((x) => x.id !== id) }))
@@ -879,6 +902,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
   const selectedProp = state.props.find((p) => p.id === selectedId) ?? null
   const selectedCamId = selectedId && (selectedId.startsWith('cam:') || selectedId.startsWith('tgt:')) ? selectedId.slice(4) : null
   const selectedCamera = selectedCamId ? state.cameras.find((c) => c.id === selectedCamId) ?? null : null
+  const activeTrackingTargetId = state.cameras.find((camera) => camera.id === activeShotCamId)?.lookAtObjectId
+  const activeTrackingTargetLabel = [...state.mannequins, ...state.props].find((item) => item.id === activeTrackingTargetId)?.label ?? null
 
   const applyCameraPreset = useCallback((camId: string, preset: typeof CAMERA_PRESETS[number]) => {
     // 当前视角 needs the live view; bail if not registered yet (avoids a
@@ -887,12 +912,22 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
     if (preset.current && !liveView) { setToast('视角未就绪，请稍候'); return }
     setState((s) => {
       const cam = s.cameras.find((c) => c.id === camId)
-      const focusId = cam?.lookAtMannequinId ?? null
-      const shot = computePreset(preset, focusPoint(s.mannequins, focusId), facingOf(s.mannequins, focusId), liveView)
+      const focusId = cam?.lookAtObjectId ?? null
+      const shot = computePreset(preset, focusPoint(s.mannequins, s.props, focusId), facingOf(s.mannequins, s.props, focusId), liveView)
       // A preset sets an explicit position+target, so clear follow — otherwise
       // effectiveTarget would override the preset's framing.
-      return { ...s, cameras: s.cameras.map((c) => (c.id === camId ? { ...c, position: shot.position, target: shot.target, fov: shot.fov, roll: shot.roll, lookAtMannequinId: null } : c)) }
+      return { ...s, cameras: s.cameras.map((c) => (c.id === camId ? { ...c, position: shot.position, target: shot.target, fov: shot.fov, roll: shot.roll, lookAtObjectId: null } : c)) }
     })
+  }, [])
+  const applyCameraFraming = useCallback((camId: string, distance: number, fov: number) => {
+    setState((s) => ({
+      ...s,
+      cameras: s.cameras.map((camera) => {
+        if (camera.id !== camId) return camera
+        const target = effectiveTarget(camera, s.mannequins, s.props)
+        return { ...camera, position: frameCameraAtDistance(camera.position, target, distance), target, fov }
+      }),
+    }))
   }, [])
   const setAspect = useCallback((a: StageAspect) => setState((s) => ({ ...s, aspect: a })), [])
 
@@ -1082,6 +1117,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
           onAddCameraWaypoint={addCameraWaypoint}
           onAddActorWaypoint={addActorWaypoint}
           onClearActorWaypoints={clearActorWaypoints}
+          onApplyCameraMove={applyShotCameraMove}
+          trackingTargetLabel={activeTrackingTargetLabel}
         />
       ) : null}
 
@@ -1100,12 +1137,14 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
           cameraId={selectedCamId}
           cameras={state.cameras}
           mannequins={state.mannequins}
+          props={state.props}
           saving={saving}
           onCommit={commitCamera}
           onSwitch={(cid) => setSelectedId(camKey(cid))}
           onView={enterCameraView}
           onSend={sendShot}
           onApplyPreset={applyCameraPreset}
+          onApplyFraming={applyCameraFraming}
         />
       ) : null}
 
