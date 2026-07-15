@@ -182,6 +182,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/voice-lines/route.ts',
   'src/app/api/organizations/[organizationId]/route.ts',
   'src/app/api/organizations/route.ts',
+  'src/app/api/playground/discussion/route.ts',
   'src/app/api/playground/download/route.ts',
   'src/app/api/playground/estimate-cost/route.ts',
   'src/app/api/playground/run/route.ts',
@@ -278,6 +279,7 @@ function resolveContractGroup(routeFile: string): RouteContractGroup {
     || routeFile.endsWith('/episodes/split/route.ts')
     || routeFile.endsWith('/voice-analyze/route.ts')
     || routeFile.endsWith('/safe-rewrite/route.ts')
+    || routeFile.endsWith('/playground/discussion/route.ts')
   ) {
     return 'llm-observe-routes'
   }

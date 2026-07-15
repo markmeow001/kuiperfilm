@@ -22,6 +22,8 @@ import { usePlaygroundController } from './usePlaygroundController'
 import { ImageStudio } from './ImageStudio'
 import { VideoStudio } from './VideoStudio'
 import { ResultLightbox } from './ResultLightbox'
+import { DiscussionStudio } from './DiscussionStudio'
+import { useState } from 'react'
 
 interface V2PlaygroundClientProps {
   locale: string
@@ -30,6 +32,12 @@ interface V2PlaygroundClientProps {
 export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   const ctrl = usePlaygroundController()
   const { outputType, setOutputType, isBusy } = ctrl
+  const [mode, setMode] = useState<'generation' | 'discussion'>('generation')
+
+  function selectGenerationMode(nextOutputType: 'image' | 'video') {
+    setMode('generation')
+    setOutputType(nextOutputType)
+  }
 
   return (
     <div className="flex h-screen flex-col bg-stone-950 text-stone-300">
@@ -48,23 +56,33 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
           <div className="inline-flex items-center gap-0 rounded-sm border border-stone-800 bg-stone-900 p-0.5">
             <button
               type="button"
-              onClick={() => setOutputType('image')}
+              onClick={() => selectGenerationMode('image')}
               disabled={isBusy}
               className={`rounded-sm px-4 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                outputType === 'image' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
+                mode === 'generation' && outputType === 'image' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
               }`}
             >
               圖片
             </button>
             <button
               type="button"
-              onClick={() => setOutputType('video')}
+              onClick={() => selectGenerationMode('video')}
               disabled={isBusy}
               className={`rounded-sm px-4 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                outputType === 'video' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
+                mode === 'generation' && outputType === 'video' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
               }`}
             >
               影片
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('discussion')}
+              disabled={isBusy}
+              className={`rounded-sm px-4 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
+                mode === 'discussion' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
+              }`}
+            >
+              劇本討論
             </button>
           </div>
         </div>
@@ -76,10 +94,14 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
       </header>
 
       {/* BODY — the active studio */}
-      {outputType === 'image' ? <ImageStudio ctrl={ctrl} /> : <VideoStudio ctrl={ctrl} />}
+      {mode === 'discussion'
+        ? <DiscussionStudio />
+        : outputType === 'image'
+          ? <ImageStudio ctrl={ctrl} />
+          : <VideoStudio ctrl={ctrl} />}
 
       {/* Shared detail lightbox (Image studio) */}
-      <ResultLightbox ctrl={ctrl} />
+      {mode === 'generation' ? <ResultLightbox ctrl={ctrl} /> : null}
     </div>
   )
 }
