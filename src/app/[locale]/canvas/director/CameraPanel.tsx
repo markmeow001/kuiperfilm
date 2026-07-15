@@ -18,11 +18,12 @@ export interface CameraPanelProps {
   saving?: boolean
   onCommit: (id: string, patch: Partial<StageCamera>) => void
   onSwitch: (cameraId: string) => void
+  onView: (cameraId: string) => void
   onSend: (cameraId: string) => void
   onApplyPreset: (cameraId: string, preset: (typeof CAMERA_PRESETS)[number]) => void
 }
 
-export function CameraPanel({ camera, cameraId, cameras, mannequins, saving, onCommit, onSwitch, onSend, onApplyPreset }: CameraPanelProps) {
+export function CameraPanel({ camera, cameraId, cameras, mannequins, saving, onCommit, onSwitch, onView, onSend, onApplyPreset }: CameraPanelProps) {
   return (
     <div className="absolute right-4 top-16 bottom-16 flex w-64 flex-col overflow-hidden rounded-xl" style={{ background: `${CANVAS_TOKENS.bg.card}f0`, border: `1px solid ${CANVAS_TOKENS.hairline}`, backdropFilter: 'blur(8px)' }}>
       <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: `1px solid ${CANVAS_TOKENS.hairline}` }}>
@@ -30,6 +31,7 @@ export function CameraPanel({ camera, cameraId, cameras, mannequins, saving, onC
         <button type="button" onClick={() => onSend(cameraId)} disabled={saving} className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold disabled:opacity-40" style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>发送</button>
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-2">
+        <button type="button" onClick={() => onView(cameraId)} className="w-full rounded-md py-2 font-mono text-[12px] font-semibold" style={{ background: CANVAS_TOKENS.accent, color: CANVAS_TOKENS.accentText }}>◉ 进入该摄像机视角</button>
         <label className="block">
           <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>名称</span>
           <input value={camera.label} onChange={(e) => onCommit(cameraId, { label: e.target.value })} className="mt-0.5 w-full rounded px-2 py-1 text-[12px] outline-none" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.primary, border: `1px solid ${CANVAS_TOKENS.hairline}` }} />

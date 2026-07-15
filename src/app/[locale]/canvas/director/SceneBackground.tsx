@@ -8,18 +8,17 @@
  *               BOTTOM edge sits on the ground (y=0). Characters at y=0 share the
  *               same floor line as the backdrop → they read as grounded, not
  *               floating. The backdrop billboards to face the camera (yaw only).
- *  - 'sphere' → inverted equirect sphere around the stage (real 360° panorama).
+ *  - 'sphere' → bounded 2D texture on an inside-view sphere (real 360° panorama).
  *  - 'none'   → solid sky colour.
  *
  * Both bake into screenshots (real scene content). capture() in DirectorStage
  * orients the flat backdrop to the shot camera before rendering.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { StageBackground } from './stage-types'
-
-const DEG2RAD = Math.PI / 180
+import { applySceneBackground, configureStageTexture, createPanoramaGeometry, downsampleStageTexture } from './scene-background-mode'
 
 // 场景幕布 geometry: backdrop height (world units ≈ metres) + distance behind the
 // scene centre. Bottom edge at y=0 so characters (feet at y=0) share the floor.
@@ -37,6 +36,16 @@ export function orientBackdrop(mesh: THREE.Object3D, camX: number, camZ: number)
   const dz = camZ / len
   mesh.position.set(-dx * BACKDROP_D, BACKDROP_H / 2, -dz * BACKDROP_D)
   mesh.rotation.set(0, Math.atan2(dx, dz), 0)
+}
+
+function PanoramaSphere({ texture, radius, rotationDeg }: { texture: THREE.Texture; radius: number; rotationDeg: number }) {
+  const geometry = useMemo(() => createPanoramaGeometry(radius), [radius])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  return (
+    <mesh geometry={geometry} rotation={[0, rotationDeg * (Math.PI / 180), 0]}>
+      <meshBasicMaterial map={texture} side={THREE.BackSide} toneMapped={false} />
+    </mesh>
+  )
 }
 
 export function SceneBackground({
@@ -66,6 +75,8 @@ export function SceneBackground({
       (t) => {
         if (cancelled) { t.dispose(); return }
         t.colorSpace = THREE.SRGBColorSpace
+        downsampleStageTexture(t)
+        configureStageTexture(t)
         setTex((old) => { if (old !== t) old?.dispose(); return t })
       },
       undefined,
@@ -74,28 +85,12 @@ export function SceneBackground({
     return () => { cancelled = true }
   }, [src, onError])
 
-  // Un-mirror the equirect on the BackSide sphere (招牌字会反). Flat backdrop uses
-  // the texture normally.
+  // Keep scene.background a colour. The panorama is a bounded 2D mesh, avoiding
+  // both NPOT RepeatWrapping black frames and equirect→cubemap GPU amplification.
   useEffect(() => {
-    if (!tex) return
-    if (bg.mode === 'sphere') {
-      tex.wrapS = THREE.RepeatWrapping
-      tex.repeat.x = -1
-      tex.offset.x = 1
-    } else {
-      tex.repeat.x = 1
-      tex.offset.x = 0
-    }
-    tex.needsUpdate = true
-  }, [tex, bg.mode])
-
-  // Background = solid sky colour for ALL modes now (flat uses a mesh backdrop,
-  // sphere uses its own mesh). Sole writer; reset on unmount.
-  useEffect(() => {
-    scene.background = new THREE.Color(bg.skyColor ?? '#0A0A0B')
-    scene.backgroundRotation = new THREE.Euler(0, (bg.rotationDeg ?? 0) * DEG2RAD, 0)
+    applySceneBackground(scene, bg, tex)
     return () => { scene.background = new THREE.Color(bg.skyColor ?? '#0A0A0B') }
-  }, [scene, bg.skyColor, bg.rotationDeg])
+  }, [scene, bg, tex])
 
   // Live billboard: orient the flat backdrop toward the orbit/active camera.
   useFrame(() => {
@@ -105,12 +100,7 @@ export function SceneBackground({
   })
 
   if (bg.mode === 'sphere' && tex) {
-    return (
-      <mesh rotation={[0, (bg.rotationDeg ?? 0) * DEG2RAD, 0]}>
-        <sphereGeometry args={[bg.radius ?? 60, 48, 32]} />
-        <meshBasicMaterial map={tex} side={THREE.BackSide} toneMapped={false} />
-      </mesh>
-    )
+    return <PanoramaSphere texture={tex} radius={bg.radius ?? 60} rotationDeg={bg.rotationDeg ?? 0} />
   }
 
   if (bg.mode === 'flat' && tex) {

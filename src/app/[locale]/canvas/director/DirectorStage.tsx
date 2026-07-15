@@ -52,6 +52,7 @@ import { PropPanel } from './PropPanel'
 import { RigPanel } from './RigPanel'
 import { CameraPanel } from './CameraPanel'
 import { buildPrevizDirectorText } from './previz-director-text'
+import { applyShotCameraView } from './shot-camera-view'
 import { computeExportCrop, recordPrevizClip } from './previz-record'
 import { RoutePlansPanel } from './RoutePlansPanel'
 import { materializeRoutePlan } from './route-materialize'
@@ -158,6 +159,7 @@ interface SceneProps {
     recording: boolean
   }
   onSelect: (id: string | null) => void
+  onEnterCameraView: (id: string) => void
   onCommitMannequin: (id: string, patch: Partial<StageMannequin>) => void
   onCommitCamera: (id: string, patch: Partial<StageCamera>) => void
   onCommitProp: (id: string, patch: Partial<StageProp>) => void
@@ -168,7 +170,7 @@ interface SceneProps {
   onBgError?: () => void
 }
 
-function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, previz, onSelect, onCommitMannequin, onCommitCamera, onCommitProp, onCommitWaypoint, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
+function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenIds, lockedIds, showGrid, showGround, showLabels, previz, onSelect, onEnterCameraView, onCommitMannequin, onCommitCamera, onCommitProp, onCommitWaypoint, registerCapture, registerGetView, registerReset, onBgError }: SceneProps) {
   const { gl, scene, camera: viewCamera } = useThree()
   const helpersRef = useRef<THREE.Group>(null)
   const backdropRef = useRef<THREE.Mesh>(null)
@@ -270,10 +272,7 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
     const orbit = orbitRef.current
     if (activeShot) {
       const tgt = effectiveTarget(activeShot, state.mannequins)
-      viewCamera.position.set(...activeShot.position)
-      ;(viewCamera as THREE.PerspectiveCamera).fov = activeShot.fov
-      ;(viewCamera as THREE.PerspectiveCamera).updateProjectionMatrix()
-      if (orbit) { orbit.target.set(...tgt); orbit.update() }
+      applyShotCameraView(viewCamera as THREE.PerspectiveCamera, orbit, activeShot, tgt)
     } else {
       ;(viewCamera as THREE.PerspectiveCamera).fov = 45
       ;(viewCamera as THREE.PerspectiveCamera).updateProjectionMatrix()
@@ -363,10 +362,16 @@ function SceneContents({ state, selectedId, mode, view, activeShotCamId, hiddenI
               position={cam.position}
               quaternion={camQuat(cam, state.mannequins)}
               onClick={(e) => { e.stopPropagation(); onSelect(camKey(cam.id)) }}
+              onDoubleClick={(e) => { e.stopPropagation(); onEnterCameraView(cam.id) }}
             >
-              <mesh rotation={[Math.PI / 2, 0, 0]}>
-                <coneGeometry args={[0.12, 0.28, 4]} />
+              {/* Recognisable camera body; double-click looks through its lens. */}
+              <mesh>
+                <boxGeometry args={[0.28, 0.18, 0.2]} />
                 <meshStandardMaterial color={CANVAS_TOKENS.accent} emissive={CANVAS_TOKENS.accent} emissiveIntensity={selectedId === camKey(cam.id) ? 0.55 : 0.18} />
+              </mesh>
+              <mesh position={[0, 0, -0.16]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.07, 0.09, 0.12, 16]} />
+                <meshStandardMaterial color={CANVAS_TOKENS.accent} emissive={CANVAS_TOKENS.accent} emissiveIntensity={0.22} />
               </mesh>
             </group>
             {cam.lookAtMannequinId ? null : (
@@ -517,6 +522,16 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
 
   // Active shot camera for 机位视角 = selected camera, else first.
   const activeShotCamId = (selectedCamIdFromSel(selectedId) ?? state.cameras[0]?.id) ?? null
+
+  const enterCameraView = useCallback((cameraId: string) => {
+    setSelectedId(camKey(cameraId))
+    setView('shot')
+  }, [])
+
+  const selectSceneObject = useCallback((selectionKey: string) => {
+    setSelectedId(selectionKey)
+    setView('director')
+  }, [])
 
   // ---- previz (镜头预演) ----
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null)
@@ -936,6 +951,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
           showLabels={showLabels}
           previz={{ active: playback.active, getTimeSec: playback.getTimeSec, selectedShot, showCameraPath, showActorPaths, recording }}
           onSelect={setSelectedId}
+          onEnterCameraView={enterCameraView}
           onCommitMannequin={commitMannequin}
           onCommitCamera={commitCamera}
           onCommitProp={commitProp}
@@ -986,19 +1002,20 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           {[
-            ...state.cameras.map((c) => ({ id: c.id, key: camKey(c.id), label: c.label, glyph: '◢', accent: CANVAS_TOKENS.accent })),
-            ...state.mannequins.map((m) => ({ id: m.id, key: m.id, label: m.label, glyph: '人', accent: m.color })),
-            ...state.props.map((p) => ({ id: p.id, key: p.id, label: p.label, glyph: '◫', accent: p.color })),
+            ...state.cameras.map((c) => ({ id: c.id, key: camKey(c.id), label: c.label, glyph: '▣', accent: CANVAS_TOKENS.accent, camera: true })),
+            ...state.mannequins.map((m) => ({ id: m.id, key: m.id, label: m.label, glyph: '人', accent: m.color, camera: false })),
+            ...state.props.map((p) => ({ id: p.id, key: p.id, label: p.label, glyph: '◫', accent: p.color, camera: false })),
           ]
             .filter((o) => !search || o.label.toLowerCase().includes(search.toLowerCase()))
             .map((o) => {
               const sel = selectedId === o.key || selectedId === tgtKey(o.id)
               return (
                 <div key={o.key} className="group flex items-center gap-1 rounded-md px-1.5 py-1" style={{ background: sel ? CANVAS_TOKENS.bg.hover : 'transparent' }}>
-                  <button type="button" onClick={() => setSelectedId(o.key)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12px]" style={{ color: sel ? o.accent : CANVAS_TOKENS.text.primary, opacity: hiddenIds[o.id] ? 0.4 : 1 }}>
+                  <button type="button" onClick={() => selectSceneObject(o.key)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[12px]" style={{ color: sel ? o.accent : CANVAS_TOKENS.text.primary, opacity: hiddenIds[o.id] ? 0.4 : 1 }}>
                     <span style={{ color: o.accent }}>{o.glyph}</span>
                     <span className="truncate">{o.label}</span>
                   </button>
+                  {o.camera ? <button type="button" title="进入机位视角" onClick={() => enterCameraView(o.id)} className="px-1 text-[11px]" style={{ color: CANVAS_TOKENS.accent }}>◎</button> : null}
                   <button type="button" title="隐藏" onClick={() => toggleHidden(o.id)} className="px-1 text-[11px]" style={{ color: hiddenIds[o.id] ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.muted }}>{hiddenIds[o.id] ? '◌' : '◉'}</button>
                   <button type="button" title="锁定" onClick={() => toggleLocked(o.id)} className="px-1 text-[11px]" style={{ color: lockedIds[o.id] ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.muted }}>{lockedIds[o.id] ? '🔒' : '🔓'}</button>
                 </div>
@@ -1049,6 +1066,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
           saving={saving}
           onCommit={commitCamera}
           onSwitch={(cid) => setSelectedId(camKey(cid))}
+          onView={enterCameraView}
           onSend={sendShot}
           onApplyPreset={applyCameraPreset}
         />
