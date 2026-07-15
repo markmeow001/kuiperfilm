@@ -33,6 +33,7 @@ import { NodeShell } from './node-shell'
 import { DEFAULT_STAGE, normalizeStage, type DirectorStageState } from '../director/stage-types'
 import type { PrevizExportPayload } from '../director/DirectorStage'
 import type { DirectorRoutePlan } from '@/lib/canvas/director-routes-schema'
+import type { DirectorBlockingDraft } from '@/lib/canvas/director-blocking-schema'
 
 const DirectorStage = dynamic(() => import('../director/DirectorStage').then((m) => m.DirectorStage), {
   ssr: false,
@@ -200,6 +201,29 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
     throw new Error('方案生成超时，请重试')
   }
 
+  async function handleGenerateBlocking(description: string): Promise<DirectorBlockingDraft> {
+    const res = await fetch('/api/canvas/director-blocking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description }),
+    })
+    const json = await res.json().catch(() => null) as { taskId?: string; error?: { message?: string } } | null
+    if (!res.ok || !json?.taskId) throw new Error(json?.error?.message ?? `提交失败（${res.status}）`)
+    const deadline = Date.now() + 3 * 60 * 1000
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const poll = await fetch(`/api/tasks/${json.taskId}`)
+      if (!poll.ok) continue
+      const { task } = (await poll.json()) as { task?: { status: string; result?: { draft?: DirectorBlockingDraft }; error?: { message?: string } } }
+      if (task?.status === 'completed') {
+        if (!task.result?.draft) throw new Error('模型没有产出可用排戏草稿，请换个描述重试')
+        return task.result.draft
+      }
+      if (task?.status === 'failed') throw new Error(task.error?.message ?? '排戏草稿生成失败')
+    }
+    throw new Error('排戏草稿生成超时，请重试')
+  }
+
   return (
     <>
       <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={240}>
@@ -234,6 +258,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
               onExportPreviz={handleExportPreviz}
               onPersistState={(s) => updateNodeData(id, { stage: s })}
               onGenerateRoutes={handleGenerateRoutes}
+              onGenerateBlocking={handleGenerateBlocking}
               saving={upload.isPending}
               uploadImage={async (file) => {
                 const res = await upload.mutateAsync({ file, type: 'image' })

@@ -81,6 +81,7 @@ const ANALYZE_TYPES = new Set<string>([
   'regenerate_storyboard_text',
   'canvas_storyboard',
   'canvas_director_routes',
+  'canvas_director_blocking',
   'canvas_text',
 ])
 

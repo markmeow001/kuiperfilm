@@ -24,6 +24,7 @@ import { assertTaskActive } from './utils'
 import { handleStoryToScriptTask } from './handlers/story-to-script'
 import { handleCanvasStoryboardTask } from './handlers/canvas-storyboard'
 import { handleCanvasDirectorRoutesTask } from '@/lib/workers/handlers/canvas-director-routes'
+import { handleCanvasDirectorBlockingTask } from '@/lib/workers/handlers/canvas-director-blocking'
 import { handleCanvasTextTask } from './handlers/canvas-text'
 import { handleScriptToStoryboardTask } from './handlers/script-to-storyboard'
 import { handleVoiceAnalyzeTask } from './handlers/voice-analyze'
@@ -681,6 +682,8 @@ async function processTextTask(job: Job<TaskJobData>) {
       return await handleCanvasStoryboardTask(job)
     case TASK_TYPE.CANVAS_DIRECTOR_ROUTES:
       return await handleCanvasDirectorRoutesTask(job)
+    case TASK_TYPE.CANVAS_DIRECTOR_BLOCKING:
+      return await handleCanvasDirectorBlockingTask(job)
     case TASK_TYPE.CANVAS_TEXT:
       return await handleCanvasTextTask(job)
     default:

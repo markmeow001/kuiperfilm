@@ -47,6 +47,7 @@ describe('categorizeTaskType', () => {
       TASK_TYPE.EPISODE_SPLIT_LLM,
       TASK_TYPE.CHARACTER_PROFILE_CONFIRM,
       TASK_TYPE.CHARACTER_PROFILE_BATCH_CONFIRM,
+      TASK_TYPE.CANVAS_DIRECTOR_BLOCKING,
     ]
     for (const t of analyzeTasks) {
       expect(categorizeTaskType(t)).toBe('analyze')

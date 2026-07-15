@@ -55,9 +55,11 @@ import { buildPrevizDirectorText } from './previz-director-text'
 import { applyShotCameraView } from './shot-camera-view'
 import { computeExportCrop, recordPrevizClip } from './previz-record'
 import { RoutePlansPanel } from './RoutePlansPanel'
+import { BlockingPanel } from './BlockingPanel'
 import { materializeRoutePlan } from './route-materialize'
 import type { PrevizCrop } from '@/lib/canvas/previz-transcode'
 import type { DirectorRoutePlan } from '@/lib/canvas/director-routes-schema'
+import { materializeDirectorBlocking, type DirectorBlockingDraft } from '@/lib/canvas/director-blocking-schema'
 
 const DEG2RAD = Math.PI / 180
 const uid = () =>
@@ -132,6 +134,7 @@ function Glyph({ name }: { name: string }) {
     case 'photo': return <svg {...p}><circle cx="12" cy="13" r="3.4" /><path d="M4 9a2 2 0 012-2h1l1.2-1.6h6.6L20 7a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z" /></svg>
     case 'aiimport': return <svg {...p}><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M3 14l5-4 4 3 3-2 6 5" /><path d="M12 2v4M10 4h4" /></svg>
     case 'fullscreen': return <svg {...p}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+    case 'blocking': return <svg {...p}><path d="M4 18h16M7 18v-5h4v5M15 18v-8h4v8" /><circle cx="9" cy="7" r="2" /><circle cx="17" cy="5" r="2" /><path d="M12 9l2-2" /></svg>
     default: return null
   }
 }
@@ -483,6 +486,8 @@ interface DirectorStageProps {
   onPersistState?: (state: DirectorStageState) => void
   /** AI 导演路线：提交 CANVAS_DIRECTOR_ROUTES 任务并轮询到完成（S4）。 */
   onGenerateRoutes?: (description: string, cast: string[], props: string[]) => Promise<DirectorRoutePlan[]>
+  /** AI 排戏：把自然语言转换为待确认的可编辑 3D 场景草稿。 */
+  onGenerateBlocking?: (description: string) => Promise<DirectorBlockingDraft>
   /** Names of character nodes wired into the director (the cast), for display. */
   castLabels?: string[]
   saving?: boolean
@@ -498,7 +503,7 @@ interface DirectorStageProps {
 
 const PANORAMA_PROMPT = '将这张场景图转换为无缝衔接的 360° 等距圆柱全景图（equirectangular panorama，2:1），左右边缘可平滑环绕拼接，保持原场景的风格、光线与氛围，适合作为环境背景球贴图'
 
-export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, onPersistState, onGenerateRoutes, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
+export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, onPersistState, onGenerateRoutes, onGenerateBlocking, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -542,6 +547,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
   const [exporting, setExporting] = useState(false)
   const [recording, setRecording] = useState(false)
   const [routesOpen, setRoutesOpen] = useState(false)
+  const [blockingOpen, setBlockingOpen] = useState(false)
+  const [blockingUndoState, setBlockingUndoState] = useState<DirectorStageState | null>(null)
   const selectedShotIndex = state.shots.findIndex((s) => s.id === selectedShotId)
   const selectedShot = selectedShotIndex >= 0 ? state.shots[selectedShotIndex] : null
   const playback = usePrevizPlayback(state.shots, selectedShotIndex)
@@ -761,6 +768,36 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
     setRoutesOpen(false)
     setToast(`✓ 已应用「${plan.name}」：${shots.length} 个镜头，可逐镜微调起幅/落幅`)
   }, [state.shots.length, state.mannequins, state.props, playback])
+
+  const applyBlockingDraft = useCallback((draft: DirectorBlockingDraft) => {
+    const affected = state.mannequins.length + state.props.length + state.cameras.length + state.shots.length
+    if (affected > 1 && !window.confirm('套用 AI 排戏会替换当前人物、道具与机位，并清空旧镜头时间轴。确定继续？')) return
+    const previous = structuredClone(state)
+    const next = materializeDirectorBlocking(draft, state, (kind, index) => `${kind}_${index}_${uid()}`)
+    setBlockingUndoState(previous)
+    setState(next)
+    setSelectedId(camKey(next.cameras[0].id))
+    setSelectedShotId(null)
+    setHiddenIds({})
+    setLockedIds({})
+    playback.exit()
+    setView('shot')
+    setBlockingOpen(false)
+    setToast(`✓ 已套用「${draft.title}」，当前为 ${draft.camera.focalLengthMm}mm 机位视角`)
+  }, [state, playback])
+
+  const undoBlocking = useCallback(() => {
+    if (!blockingUndoState) return
+    setState(blockingUndoState)
+    setBlockingUndoState(null)
+    setSelectedId(null)
+    setSelectedShotId(null)
+    setHiddenIds({})
+    setLockedIds({})
+    playback.exit()
+    setView('director')
+    setToast('✓ 已复原 AI 排戏前的舞台')
+  }, [blockingUndoState, playback])
 
   /** 导出预演：锁 1x 实时播放 + 录制画布 → 交给 onExportPreviz 上传转码。 */
   const exportPreviz = useCallback(async (scope: 'shot' | 'scene') => {
@@ -1146,6 +1183,10 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         />
       ) : null}
 
+      {blockingOpen && onGenerateBlocking ? (
+        <BlockingPanel onClose={() => setBlockingOpen(false)} onGenerate={onGenerateBlocking} onApply={applyBlockingDraft} />
+      ) : null}
+
       {/* previz 时间轴 — 有镜头或选中镜头时常驻；空序列只显示「+」入口 */}
       <PrevizTimeline
         shots={state.shots}
@@ -1197,6 +1238,8 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         </div>
         <DockBtn label="截图发送当前机位" onClick={() => activeShotCamId && sendShot(activeShotCamId)}><Glyph name="photo" /></DockBtn>
         <DockBtn label="AI识图导入（上传场景图 → 转全景）" onClick={() => (bg.key ? convertToPanorama() : bgInputRef.current?.click())}><Glyph name="aiimport" /></DockBtn>
+        {onGenerateBlocking ? <DockBtn label="AI 排戏（描述生成角色、遮挡与机位）" active={blockingOpen} onClick={() => { setBlockingOpen((value) => !value); setRoutesOpen(false) }}><Glyph name="blocking" /></DockBtn> : null}
+        {blockingUndoState ? <button type="button" onClick={undoBlocking} className="rounded-md px-2 py-1 font-mono text-[10px]" style={{ background: CANVAS_TOKENS.bg.hover, color: '#F4C44E', border: `1px solid #F4C44E55` }}>撤销 AI 排戏</button> : null}
         <DockBtn label={fullscreen ? '退出全屏' : '全屏'} onClick={toggleFullscreen}><Glyph name="fullscreen" /></DockBtn>
         {sentTotal > 0 ? <span className="ml-1 px-1 font-mono text-[10px]" style={{ color: CANVAS_TOKENS.accent }}>已发送 {sentTotal} 帧</span> : null}
       </div>

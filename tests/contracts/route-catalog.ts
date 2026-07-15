@@ -77,6 +77,7 @@ const ROUTE_FILES = [
   'src/app/api/canvas/asset/route.ts',
   'src/app/api/canvas/assets/route.ts',
   'src/app/api/canvas/director-routes/route.ts',
+  'src/app/api/canvas/director-blocking/route.ts',
   'src/app/api/canvas/previz-export/route.ts',
   'src/app/api/canvas/route.ts',
   'src/app/api/canvas/storyboard/route.ts',
