@@ -1,0 +1,42 @@
+{
+  "header": {
+    "back": "Back to projects",
+    "eyebrow": "FREEDOM MODE",
+    "title": "Creative Playground",
+    "image": "Image",
+    "video": "Video",
+    "discussion": "Script room",
+    "imageHint": "Fast visual exploration",
+    "videoHint": "Controlled motion generation",
+    "discussionHint": "Story and character development"
+  },
+  "image": {
+    "history": "Recent generations ({count})",
+    "emptyKicker": "START WITH AN IDEA",
+    "emptyTitle": "Describe a frame or begin with a production task",
+    "emptyDescription": "Paste visual references, describe the shot, then choose a model and ratio. Advanced controls appear only when needed.",
+    "templatePortrait": "Character design",
+    "templateScene": "Scene atmosphere",
+    "templateShot": "Cinematic shot",
+    "templateProduct": "Product campaign",
+    "templatePortraitPrompt": "Cinematic character design with a clear silhouette and layered wardrobe, soft side lighting, medium shot, minimal background, realistic cinematography",
+    "templateScenePrompt": "A cinematic environment with clear spatial depth, practical lighting and tactile materials, wide establishing shot, rich detail, realistic cinematography",
+    "templateShotPrompt": "A cinematic storyboard frame with a clear subject and foreground, midground and background, purposeful camera placement, natural lighting and visual storytelling",
+    "templateProductPrompt": "Premium product campaign image with a clear hero object, precise studio lighting, clean background, commercial composition and refined material detail",
+    "addReference": "Add reference image",
+    "reference": "Reference",
+    "referenceCount": "{count}/{max} references",
+    "removeReference": "Remove reference image",
+    "promptPlaceholder": "Describe the frame, camera, lighting, and emotion…",
+    "generate": "Generate",
+    "compressing": "Refining prompt…",
+    "submitting": "Submitting…",
+    "generating": "Generating…",
+    "queued": "Queued",
+    "model": "Model",
+    "ratio": "Ratio",
+    "reset": "Reset",
+    "estimatedCost": "Estimated cost",
+    "noModel": "No image model enabled — enable one in Settings"
+  }
+}

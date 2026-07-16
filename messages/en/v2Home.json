@@ -12,6 +12,21 @@
     "logout": "Sign out"
   },
   "loading": "Loading…",
+  "rail": {
+    "projects": "Projects",
+    "projectsLabel": "Project overview",
+    "new": "New",
+    "newLabel": "Create a project",
+    "canvas": "Canvas",
+    "canvasLabel": "Infinite Canvas",
+    "playground": "Create",
+    "playgroundLabel": "Creative Playground",
+    "composite": "Composite",
+    "compositeLabel": "AI Live Composite",
+    "skills": "Skills",
+    "skillsLabel": "Skill library",
+    "studio": "STUDIO"
+  },
   "title": {
     "kicker": "MY PROJECTS",
     "heading": "My projects",
@@ -22,7 +37,33 @@
     "clear": "Clear",
     "search": "Search"
   },
+  "workflows": {
+    "kicker": "START WITH INTENT",
+    "heading": "What do you want to make today?",
+    "hint": "Choose an outcome first. Kuiper will open the production space that fits it.",
+    "storyboard": {
+      "title": "AI storyboard planning",
+      "description": "Paste a long script, split it into scenes, identify subjects, and build an editable shot flow.",
+      "meta": "SCRIPT → SHOTS"
+    },
+    "director": {
+      "title": "Director blocking",
+      "description": "Arrange performers, cameras, and paths to create shot references and previs.",
+      "meta": "3D PREVIS"
+    },
+    "composite": {
+      "title": "Live background and character composite",
+      "description": "Upload footage, refine an AI mask, replace the background, and place virtual characters.",
+      "meta": "LIVE COMPOSITE"
+    },
+    "playground": {
+      "title": "Creative Playground",
+      "description": "Experiment quickly with images, video, and references without setting up a full project.",
+      "meta": "QUICK CREATE"
+    }
+  },
   "grid": {
+    "recentProjects": "Recent projects",
     "newProject": "New project",
     "deleteTitle": "Delete project",
     "deleteConfirm": "Delete project \"{name}\"? This cannot be undone.",

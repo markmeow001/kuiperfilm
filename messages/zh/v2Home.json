@@ -12,6 +12,21 @@
     "logout": "登出"
   },
   "loading": "载入中…",
+  "rail": {
+    "projects": "专案",
+    "projectsLabel": "专案总览",
+    "new": "新建",
+    "newLabel": "建立新专案",
+    "canvas": "画布",
+    "canvasLabel": "无限画布",
+    "playground": "创作",
+    "playgroundLabel": "创作 Playground",
+    "composite": "合成",
+    "compositeLabel": "AI 实拍合成",
+    "skills": "技能",
+    "skillsLabel": "Skill 库",
+    "studio": "STUDIO"
+  },
   "title": {
     "kicker": "MY PROJECTS",
     "heading": "我的专案",
@@ -22,7 +37,33 @@
     "clear": "清除",
     "search": "搜寻"
   },
+  "workflows": {
+    "kicker": "START WITH INTENT",
+    "heading": "你今天想完成什么？",
+    "hint": "先选择工作目的，Kuiper 会把你带到最适合的制作环境。",
+    "storyboard": {
+      "title": "AI 分镜规划",
+      "description": "贴入长篇剧本，自动拆段、辨识角色与场景，再建立可继续编辑的镜头流程。",
+      "meta": "SCRIPT → SHOTS"
+    },
+    "director": {
+      "title": "导演台 Blocking",
+      "description": "安排演员站位、摄影机与路径，建立镜头参考图和 Previz。",
+      "meta": "3D PREVIS"
+    },
+    "composite": {
+      "title": "实拍背景与角色合成",
+      "description": "上传实拍影片，用 AI 遮罩、背景替换和虚拟角色工具继续完成画面。",
+      "meta": "LIVE COMPOSITE"
+    },
+    "playground": {
+      "title": "自由创作 Playground",
+      "description": "不建立完整专案，直接用图片、影片和参考素材快速实验想法。",
+      "meta": "QUICK CREATE"
+    }
+  },
   "grid": {
+    "recentProjects": "最近专案",
     "newProject": "新建专案",
     "deleteTitle": "删除专案",
     "deleteConfirm": "删除专案「{name}」？此操作无法复原。",

@@ -65,9 +65,9 @@ export function V2WorkspaceShell({
   }
 
   return (
-    <div className="font-body grain flex min-h-screen bg-stone-950 text-stone-200">
+    <div className="kuiper-stage font-body flex min-h-screen text-text-primary">
       <Sidebar currentStep={currentStep} onSelect={handleSelect} locale={locale} />
-      <main className="flex flex-1 flex-col overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-20 lg:pb-0">
         <TopBar
           currentStep={currentStep}
           projectId={projectId}

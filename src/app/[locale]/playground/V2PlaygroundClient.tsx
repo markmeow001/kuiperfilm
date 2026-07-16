@@ -1,107 +1,101 @@
 'use client'
 
-/**
- * Playground / Freedom Mode — shell.
- *
- * Layout (2026-07-08 redesign, "两套介面" направление approved after a 3-agent
- * competitor survey — Western + Chinese tools + a Playwright teardown of
- * Higgsfield): Image and Video get DISTINCT studios, because video is
- * param-rich/slow/expensive and image is fast/high-volume.
- *   - Image → {@link ImageStudio}: masonry gallery + bottom composer, click a
- *     tile to open {@link ResultLightbox}. No permanent "current result" block
- *     (that pattern has ~zero market use and gets buried as history grows).
- *   - Video → {@link VideoStudio}: 3-column params | stage | detail.
- * All state/handlers live in {@link usePlaygroundController}; this shell only
- * renders the top bar, the 圖片/影片 mode toggle, and the active studio.
- * Keeps KuiperAI's amber-on-stone identity (borrowed layout, not colours).
- */
-
+import { useState } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { usePlaygroundController } from './usePlaygroundController'
 import { ImageStudio } from './ImageStudio'
 import { VideoStudio } from './VideoStudio'
 import { ResultLightbox } from './ResultLightbox'
 import { DiscussionStudio } from './DiscussionStudio'
-import { useState } from 'react'
 
 interface V2PlaygroundClientProps {
   locale: string
 }
 
+type PlaygroundMode = 'image' | 'video' | 'discussion'
+
 export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   const ctrl = usePlaygroundController()
-  const { outputType, setOutputType, isBusy } = ctrl
-  const [mode, setMode] = useState<'generation' | 'discussion'>('generation')
+  const t = useTranslations('playground.header')
+  const [mode, setMode] = useState<PlaygroundMode>('image')
 
-  function selectGenerationMode(nextOutputType: 'image' | 'video') {
-    setMode('generation')
-    setOutputType(nextOutputType)
+  function selectMode(nextMode: PlaygroundMode) {
+    if (nextMode !== 'discussion') {
+      ctrl.setOutputType(nextMode)
+    }
+    setMode(nextMode)
   }
 
+  const modes: Array<{ id: PlaygroundMode; icon: 'image' | 'video' | 'fileText'; label: string; hint: string }> = [
+    { id: 'image', icon: 'image', label: t('image'), hint: t('imageHint') },
+    { id: 'video', icon: 'video', label: t('video'), hint: t('videoHint') },
+    { id: 'discussion', icon: 'fileText', label: t('discussion'), hint: t('discussionHint') },
+  ]
+
   return (
-    <div className="flex h-screen flex-col bg-stone-950 text-stone-300">
-      {/* TOP — brand + mode toggle + tab strip */}
-      <header className="flex items-center justify-between border-b border-stone-800 px-8 py-3">
-        <div className="flex items-center gap-6">
-          <Link
-            href={`/${locale}/v2`}
-            className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-stone-500 hover:text-amber-400"
-          >
-            <AppIcon name="chevronLeft" className="h-3 w-3" />
-            回到專案
-          </Link>
-          <div className="font-display text-xl font-semibold italic text-amber-400">KuiperAI · Playground</div>
-          {/* 圖片 / 影片 mode toggle — switches the entire studio layout. */}
-          <div className="inline-flex items-center gap-0 rounded-sm border border-stone-800 bg-stone-900 p-0.5">
-            <button
-              type="button"
-              onClick={() => selectGenerationMode('image')}
-              disabled={isBusy}
-              className={`rounded-sm px-4 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                mode === 'generation' && outputType === 'image' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
-              }`}
+    <div className="kuiper-stage flex h-screen min-h-[640px] flex-col overflow-hidden text-text-primary">
+      <header className="z-30 border-b border-white/[0.07] bg-[#050506]/90 px-4 backdrop-blur-xl sm:px-6">
+        <div className="flex min-h-[72px] items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+            <Link
+              href={`/${locale}/v2`}
+              aria-label={t('back')}
+              title={t('back')}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400"
             >
-              圖片
-            </button>
-            <button
-              type="button"
-              onClick={() => selectGenerationMode('video')}
-              disabled={isBusy}
-              className={`rounded-sm px-4 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                mode === 'generation' && outputType === 'video' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
-              }`}
-            >
-              影片
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('discussion')}
-              disabled={isBusy}
-              className={`rounded-sm px-4 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-                mode === 'discussion' ? 'bg-amber-500/15 text-amber-400' : 'text-stone-500 hover:text-stone-300'
-              }`}
-            >
-              劇本討論
-            </button>
+              <AppIcon name="chevronLeft" className="h-4 w-4" />
+            </Link>
+            <div className="min-w-0">
+              <div className="font-mono text-[9px] tracking-[0.22em] text-primary-400">
+                {t('eyebrow')}
+              </div>
+              <h1 className="mt-1 truncate font-serif-cn text-lg font-semibold text-white">
+                {t('title')}
+              </h1>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider">
-          <span className="rounded-sm border-b-2 border-amber-500 bg-stone-900 px-3 py-1.5 text-amber-400">體驗</span>
-          <span className="px-3 py-1.5 text-stone-600">API</span>
-          <span className="px-3 py-1.5 text-stone-600">範例</span>
+
+          <nav
+            aria-label={t('title')}
+            className="flex items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1"
+          >
+            {modes.map((item) => {
+              const active = mode === item.id
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => selectMode(item.id)}
+                  disabled={ctrl.isBusy}
+                  aria-current={active ? 'page' : undefined}
+                  title={item.hint}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs transition-colors sm:px-4 ${
+                    active
+                      ? 'bg-white/[0.09] text-white'
+                      : 'text-text-tertiary hover:text-text-primary'
+                  }`}
+                >
+                  <AppIcon
+                    name={item.icon}
+                    className={`h-4 w-4 ${active ? 'text-primary-400' : 'text-current'}`}
+                  />
+                  <span className="hidden sm:inline">{item.label}</span>
+                </button>
+              )
+            })}
+          </nav>
         </div>
       </header>
 
-      {/* BODY — the active studio */}
       {mode === 'discussion'
         ? <DiscussionStudio />
-        : outputType === 'image'
-          ? <ImageStudio ctrl={ctrl} />
-          : <VideoStudio ctrl={ctrl} />}
+        : mode === 'video'
+          ? <VideoStudio ctrl={ctrl} />
+          : <ImageStudio ctrl={ctrl} />}
 
-      {/* Shared detail lightbox (Image studio) */}
-      {mode === 'generation' ? <ResultLightbox ctrl={ctrl} /> : null}
+      {mode !== 'discussion' ? <ResultLightbox ctrl={ctrl} /> : null}
     </div>
   )
 }

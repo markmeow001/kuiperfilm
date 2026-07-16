@@ -4,15 +4,15 @@
 @import "../styles/tokens-v2.css"; /* Phase 0 redesign — additive, see REDESIGN_PLAN §3 */
 
 :root {
-  --background: var(--glass-bg-canvas);
-  --foreground: var(--glass-text-primary);
+  --background: var(--surface-canvas);
+  --foreground: var(--text-primary);
 
   /* 设计系统 - 颜色 */
-  --bg-primary: var(--glass-bg-canvas);
+  --bg-primary: var(--surface-canvas);
   /* 浅灰背景 */
-  --bg-card: var(--glass-bg-surface);
+  --bg-card: var(--surface-raised);
   /* 卡片白色 */
-  --bg-glass: var(--glass-bg-surface-strong);
+  --bg-glass: var(--surface-glass);
   /* 玻璃态背景 */
 
   /* 设计系统 - 阴影 */
@@ -53,9 +53,15 @@
   --color-text-tertiary: var(--text-tertiary);
   --color-border-soft: var(--border-soft);
   --color-border-strong: var(--border-strong);
+  --color-primary-300: var(--primary-300);
   --color-primary-400: var(--primary-400);
   --color-primary-500: var(--primary-500);
   --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-900: var(--primary-900);
+  --color-editorial-400: var(--editorial-400);
+  --color-editorial-500: var(--editorial-500);
+  --color-accent-400: var(--accent-400);
   --color-accent-500: var(--accent-500);
   --color-success: var(--success);
   --color-warning: var(--warning);
@@ -88,6 +94,65 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary-500) 42%, transparent);
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary-400);
+  outline-offset: 2px;
+}
+
+.kuiper-stage {
+  background:
+    radial-gradient(circle at 58% -18%, rgba(255, 46, 175, 0.09), transparent 34rem),
+    var(--surface-canvas);
+}
+
+.kuiper-canvas-grid {
+  background-color: var(--surface-canvas);
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.kuiper-panel {
+  border: 1px solid var(--border-soft);
+  background: var(--surface-raised);
+}
+
+.kuiper-panel-interactive {
+  border: 1px solid var(--border-soft);
+  background: var(--surface-raised);
+  transition:
+    border-color var(--d-state) var(--ease-out),
+    background-color var(--d-state) var(--ease-out),
+    transform var(--d-state) var(--ease-out);
+}
+
+.kuiper-panel-interactive:hover {
+  border-color: var(--border-primary);
+  background: var(--surface-overlay);
+  transform: translateY(-2px);
+}
+
+.kuiper-primary-button {
+  border: 1px solid var(--primary-500);
+  background: var(--primary-500);
+  color: #09090b;
+  transition:
+    background-color var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) var(--ease-out),
+    transform var(--d-hover) var(--ease-out);
+}
+
+.kuiper-primary-button:hover {
+  border-color: var(--primary-300);
+  background: var(--primary-300);
+  transform: translateY(-1px);
 }
 
 /* Phase V (2026-05-28) — Global font-family utility classes.

@@ -60,20 +60,21 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
   const draftLabel = String(draftNumber ?? 1).padStart(2, '0')
 
   return (
-    <div className="border-b border-amber-900/15 px-12 pt-8 pb-6">
-      <div className="flex items-end justify-between gap-6">
-        <div>
-          <div className="mb-2 font-mono text-[11px] tracking-[0.3em] text-amber-600/80">
-            STEP {step.num} — {step.subtitle.toUpperCase()}
+    <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#050506]/88 px-4 backdrop-blur-xl sm:px-6">
+      <div className="flex min-h-[72px] items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+          <div className="shrink-0">
+            <div className="font-mono text-[9px] tracking-[0.22em] text-primary-500">
+              STEP {step.num}
+            </div>
+            <h1 className="mt-1 flex items-baseline gap-2 font-serif-cn text-lg font-semibold text-text-primary">
+              {step.label}
+              <span className="hidden font-display text-sm font-normal italic text-text-tertiary sm:inline">
+                {step.subtitle}
+              </span>
+            </h1>
           </div>
-          <h1 className="font-serif-cn text-4xl font-medium tracking-wide text-stone-100">
-            {step.label}
-            <span className="ml-3 font-display text-2xl font-normal italic text-amber-500/70">
-              {step.subtitle}
-            </span>
-          </h1>
-        </div>
-        <div className="flex items-end gap-3">
+          <div className="hidden h-8 w-px bg-white/[0.08] sm:block" />
           <ProjectSwitcher
             currentProjectId={projectId}
             currentProjectName={resolvedName}
@@ -81,6 +82,8 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
             draftLabel={draftLabel}
             totalSteps={totalSteps}
           />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           {/* Phase 12.5 (2026-05-22) — role badge.
               Only renders when projectId is supplied (i.e. inside a
               project, not on /v2 home). Tells the user at a glance
@@ -91,22 +94,21 @@ export function TopBar({ currentStep, projectId, projectName, draftNumber }: Top
           {/* Phase 12.5 — notification bell. Mounted on every page so
               owners get incoming requests anywhere they navigate. */}
           <NotificationBell locale={locale} />
-          <UserMenu />
+          <UserMenu locale={locale} />
         </div>
       </div>
 
-      {/* Progress strip */}
-      <div className="mt-6 flex items-center gap-1">
+      <div className="flex items-center gap-1 pb-2">
         {V2_STEPS.map((s, i) => (
           <div
             key={s.id}
-            className={`h-px flex-1 transition-all ${
-              i <= stepIdx ? 'bg-amber-500' : 'bg-stone-800'
+            className={`h-0.5 flex-1 rounded-full transition-all ${
+              i <= stepIdx ? 'bg-primary-500' : 'bg-stone-800'
             }`}
           />
         ))}
       </div>
-    </div>
+    </header>
   )
 }
 
@@ -188,36 +190,37 @@ function ProjectSwitcher({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="group flex items-center gap-2 rounded-sm border border-transparent bg-transparent px-2 py-1 transition-colors hover:border-amber-900/30 hover:bg-stone-900/40"
+        className="group flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 transition-colors hover:border-primary-500/35 hover:bg-white/[0.06]"
         title={t('switchProject')}
       >
-        <div className="text-right">
-          <div className="font-fraunces text-sm italic text-stone-300 group-hover:text-amber-300">
-            《{currentProjectName}》
+        <AppIcon name="folderOpen" className="hidden h-4 w-4 shrink-0 text-text-tertiary sm:block" />
+        <div className="min-w-0 text-left">
+          <div className="max-w-28 truncate font-serif-cn text-xs text-text-secondary group-hover:text-primary-300 sm:max-w-48">
+            {currentProjectName}
           </div>
-          <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-600">
+          <div className="mt-0.5 hidden font-mono text-[9px] tracking-[0.14em] text-text-tertiary sm:block">
             {t('draftFormat', { current: draftLabel, total: String(totalSteps).padStart(2, '0') })}
           </div>
         </div>
         <AppIcon
           name="chevronDown"
-          className={`h-3 w-3 text-stone-500 transition-transform group-hover:text-amber-400 ${open ? 'rotate-180' : ''}`}
+          className={`h-3 w-3 text-stone-500 transition-transform group-hover:text-primary-400 ${open ? 'rotate-180' : ''}`}
         />
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
-          <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
+        <div className="absolute left-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-2xl border border-white/[0.09] bg-overlay shadow-2xl">
+          <div className="border-b border-white/[0.07] px-4 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary-400">
             {t('switchProject')}
           </div>
 
           <div className="max-h-72 overflow-y-auto py-1">
             {loading ? (
-              <div className="px-4 py-3 font-mono text-[14px] tracking-wider text-stone-500">
+              <div className="px-4 py-3 font-mono text-[11px] tracking-wider text-text-tertiary">
                 {t('loading')}
               </div>
             ) : otherProjects.length === 0 ? (
-              <div className="px-4 py-3 font-fraunces text-xs italic text-stone-500">
+              <div className="px-4 py-3 font-fraunces text-xs italic text-text-tertiary">
                 {projects === null ? t('loading') : t('noOtherProjects')}
               </div>
             ) : (
@@ -225,7 +228,7 @@ function ProjectSwitcher({
                 <Link
                   key={p.id}
                   href={`/${locale}/v2/workspace/${p.id}${currentStepSegment ? `/${currentStepSegment}` : ''}`}
-                  className="block px-4 py-2 font-serif-cn text-sm text-stone-300 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+                  className="block px-4 py-2.5 font-serif-cn text-sm text-text-secondary transition-colors hover:bg-primary-500/10 hover:text-primary-300"
                   onClick={() => setOpen(false)}
                 >
                   {p.name || t('untitledProject')}
@@ -234,10 +237,10 @@ function ProjectSwitcher({
             )}
           </div>
 
-          <div className="border-t border-amber-900/20">
+          <div className="border-t border-white/[0.07]">
             <Link
               href={`/${locale}/v2`}
-              className="block px-4 py-2.5 font-serif-cn text-sm text-amber-400 transition-colors hover:bg-amber-500/10"
+              className="block px-4 py-2.5 font-serif-cn text-sm text-primary-400 transition-colors hover:bg-primary-500/10"
               onClick={() => setOpen(false)}
             >
               {t('newOrAllProjects')}
@@ -320,7 +323,7 @@ function RoleBadgeWithRequest({
         <button
           type="button"
           onClick={() => setRequestOpen(true)}
-          className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/15"
+          className="rounded-sm border border-primary-500/40 bg-primary-500/5 px-2 py-0.5 font-mono text-[11px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/15"
           title={t('requestEditTitle')}
         >
           {t('requestEdit')}
@@ -358,21 +361,21 @@ function roleBadgeStyle(role: ProjectAccessRole, canEdit: boolean, t: RoleBadgeT
   if (role === UserRole.OWNER) {
     return {
       label: t('owner'),
-      className: 'border-amber-500/60 bg-amber-500/15 text-amber-200',
+      className: 'border-primary-500/60 bg-primary-500/15 text-primary-200',
       title: t('ownerTitle'),
     }
   }
   if (role === 'ws_owner' || role === 'ws_owner_legacy') {
     return {
       label: t('editor'),
-      className: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
+      className: 'border-primary-500/40 bg-primary-500/5 text-primary-300',
       title: t('wsOwnerTitle'),
     }
   }
   if (role === UserRole.EDITOR || canEdit) {
     return {
       label: t('editor'),
-      className: 'border-amber-500/40 bg-amber-500/5 text-amber-300',
+      className: 'border-primary-500/40 bg-primary-500/5 text-primary-300',
       title: t('editorTitle'),
     }
   }

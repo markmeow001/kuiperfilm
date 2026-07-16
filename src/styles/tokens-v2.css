@@ -31,14 +31,24 @@
   --neutral-900: #171717;
   --neutral-950: #0A0A0A;
 
-  /* Primary — cinema marquee gold (extends current amber) */
-  --primary-400: #FFD96E;
-  --primary-500: #F5C24A;
-  --primary-600: #C99A2E;
+  /* Primary — Kuiper signal magenta.
+   * A single high-energy brand colour keeps dense production screens
+   * legible while giving navigation and primary actions a clear identity. */
+  --primary-300: #FF8AD8;
+  --primary-400: #FF58C5;
+  --primary-500: #FF2EAF;
+  --primary-600: #D9188C;
+  --primary-700: #A9136D;
+  --primary-900: #4C0B32;
 
   /* Accent — AI generation moments only */
-  --accent-500: #7C5CFF;
-  --accent-glow: radial-gradient(#7C5CFF66, transparent 70%);
+  --accent-400: #A99BFF;
+  --accent-500: #806CFF;
+  --accent-glow: radial-gradient(#806CFF66, transparent 70%);
+
+  /* Editorial gold — premium/final-output moments, never primary navigation */
+  --editorial-400: #E7C36A;
+  --editorial-500: #CDA447;
 
   /* Semantic */
   --success: #22C55E;
@@ -47,19 +57,21 @@
   --info:    #3B82F6;
 
   /* Surfaces — Cinematic Immersive route */
-  --surface-canvas:  #0A0A0A;
-  --surface-raised:  #171717;
-  --surface-overlay: #1F1F1F;
-  --surface-glass:   rgba(23, 23, 23, 0.72); /* media-only overlay */
+  --surface-canvas:  #050506;
+  --surface-raised:  #111113;
+  --surface-overlay: #1A1A1E;
+  --surface-inset:   #0B0B0D;
+  --surface-glass:   rgba(17, 17, 19, 0.82); /* media-only overlay */
 
   /* Text */
-  --text-primary:   #FAFAFA; /* 18.7:1 on canvas */
-  --text-secondary: #A3A3A3; /* 7.2:1 */
-  --text-tertiary:  #737373; /* 4.6:1, AA large only */
+  --text-primary:   #F7F7F8;
+  --text-secondary: #A7A7AE;
+  --text-tertiary:  #6F6F78;
 
   /* Border — single rule */
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-soft: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --border-primary: rgba(255, 46, 175, 0.46);
 
   /* ──────────────────────────────────────────────────────────────
    * §3.4 Spacing — 4px base

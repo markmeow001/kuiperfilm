@@ -1,0 +1,42 @@
+{
+  "header": {
+    "back": "回到专案",
+    "eyebrow": "FREEDOM MODE",
+    "title": "创作 Playground",
+    "image": "图片",
+    "video": "影片",
+    "discussion": "剧本讨论",
+    "imageHint": "快速视觉探索",
+    "videoHint": "可控动态生成",
+    "discussionHint": "结构与人物开发"
+  },
+  "image": {
+    "history": "最近生成（{count}）",
+    "emptyKicker": "START WITH AN IDEA",
+    "emptyTitle": "描述一个画面，或从制作任务开始",
+    "emptyDescription": "贴上图片作为参考、输入镜头想法，再选择模型与比例。进阶参数会在需要时出现。",
+    "templatePortrait": "角色视觉设定",
+    "templateScene": "场景气氛设计",
+    "templateShot": "电影镜头构图",
+    "templateProduct": "商品广告画面",
+    "templatePortraitPrompt": "电影角色视觉设定，清楚的人物轮廓与服装层次，柔和侧光，中景，背景简洁，写实电影摄影",
+    "templateScenePrompt": "具有明确空间层次的电影场景，环境光与实景材质，广角建立镜头，细节丰富，写实电影摄影",
+    "templateShotPrompt": "电影分镜画面，清楚的主体与前中后景，具有叙事目的的机位，真实镜头语言与自然光线",
+    "templateProductPrompt": "高质感商品广告，明确品牌主体，精确布光，干净背景，商业摄影构图与高级材质细节",
+    "addReference": "加入参考图",
+    "reference": "参考",
+    "referenceCount": "{count}/{max} 张参考图",
+    "removeReference": "移除参考图",
+    "promptPlaceholder": "描述你想生成的画面、镜头、光线与情绪…",
+    "generate": "生成",
+    "compressing": "整理提示词…",
+    "submitting": "提交中…",
+    "generating": "生成中…",
+    "queued": "排队中",
+    "model": "模型",
+    "ratio": "比例",
+    "reset": "重置",
+    "estimatedCost": "预估成本",
+    "noModel": "尚未启用图片模型 — 请到设定中心启用"
+  }
+}

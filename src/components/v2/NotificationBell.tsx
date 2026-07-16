@@ -92,28 +92,28 @@ export function NotificationBell({ locale }: NotificationBellProps) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative flex items-center justify-center rounded-sm border border-transparent p-1.5 transition-colors hover:border-amber-900/30 hover:bg-stone-900/40"
+        className="group relative flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] transition-colors hover:border-primary-500/35 hover:bg-white/[0.07]"
         title={badge > 0 ? t('titleWithCount', { count: badge }) : t('title')}
         aria-label={badge > 0 ? t('labelWithCount', { count: badge }) : t('labelDefault')}
       >
-        <AppIcon name="bell" className="h-4 w-4 text-stone-400 group-hover:text-amber-300" />
+        <AppIcon name="bell" className="h-4 w-4 text-text-secondary group-hover:text-primary-300" />
         {badge > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 font-mono text-[9px] font-bold text-stone-950">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-500 px-1 font-mono text-[9px] font-bold text-black">
             {displayBadge}
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-40 mt-2 w-96 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
-          <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
+        <div className="absolute right-0 top-full z-40 mt-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/[0.09] bg-overlay shadow-2xl">
+          <div className="border-b border-white/[0.07] px-4 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary-400">
             {t('title')}
           </div>
           <div className="max-h-[28rem] overflow-y-auto">
             {/* Section 1 — incoming requests */}
             {data && data.incomingRequests.length > 0 ? (
-              <div className="border-b border-amber-900/20">
-                <div className="px-4 pb-1 pt-3 font-fraunces text-xs italic text-amber-500/80">
+              <div className="border-b border-white/[0.07]">
+                <div className="px-4 pb-1 pt-3 font-fraunces text-xs italic text-primary-400">
                   {t('sectionIncoming', { count: data.incomingRequests.length })}
                 </div>
                 {data.incomingRequests.map((r) => (
@@ -152,8 +152,8 @@ export function NotificationBell({ locale }: NotificationBellProps) {
 
             {/* Section 2 — my requests */}
             {data && data.myRequests.length > 0 ? (
-              <div className="border-b border-amber-900/20">
-                <div className="px-4 pb-1 pt-3 font-fraunces text-xs italic text-amber-500/80">
+              <div className="border-b border-white/[0.07]">
+                <div className="px-4 pb-1 pt-3 font-fraunces text-xs italic text-primary-400">
                   {t('sectionMyRequests')}
                 </div>
                 {data.myRequests.map((r) => (
@@ -184,7 +184,7 @@ export function NotificationBell({ locale }: NotificationBellProps) {
                       <button
                         type="button"
                         onClick={() => restoreProject(d.projectId)}
-                        className="rounded-sm border border-amber-600/50 bg-amber-600/10 px-2 py-0.5 font-mono text-[11px] text-amber-300 transition-colors hover:bg-amber-600/20"
+                        className="rounded-lg border border-editorial-500/50 bg-editorial-500/10 px-2 py-0.5 font-mono text-[11px] text-editorial-400 transition-colors hover:bg-editorial-500/20"
                       >
                         {t('actionRestore')}
                       </button>
@@ -205,10 +205,10 @@ export function NotificationBell({ locale }: NotificationBellProps) {
             ) : null}
           </div>
 
-          <div className="border-t border-amber-900/20 px-4 py-2">
+          <div className="border-t border-white/[0.07] px-4 py-2">
             <Link
               href={`/${locale}/v2`}
-              className="block font-mono text-[11px] tracking-wider text-amber-500/70 hover:text-amber-300"
+              className="block font-mono text-[11px] tracking-wider text-primary-400 hover:text-primary-300"
               onClick={() => setOpen(false)}
             >
               {t('viewAll')}

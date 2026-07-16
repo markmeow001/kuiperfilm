@@ -89,11 +89,19 @@ interface AddMenu {
   fromNodeId: string | null
 }
 
-function CanvasInner() {
+interface PaneMenu {
+  screenX: number
+  screenY: number
+  flowX: number
+  flowY: number
+}
+
+function CanvasInner({ locale }: CanvasClientProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CanvasNodeData>>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [menu, setMenu] = useState<AddMenu | null>(null)
   const [ctxMenu, setCtxMenu] = useState<{ screenX: number; screenY: number; nodeId: string } | null>(null)
+  const [paneMenu, setPaneMenu] = useState<PaneMenu | null>(null)
   const [showSequence, setShowSequence] = useState(false)
   const [toolbox, setToolbox] = useState(false)
   const [charLib, setCharLib] = useState(false)
@@ -112,6 +120,8 @@ function CanvasInner() {
   const clipboardRef = useRef<Node<CanvasNodeData> | null>(null)
   const creatingRef = useRef(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
+  const pendingUploadPositionRef = useRef<{ x: number; y: number } | null>(null)
 
   const canvasQuery = useCanvas()
   const save = useSaveCanvas()
@@ -126,19 +136,13 @@ function CanvasInner() {
     dropErrorTimerRef.current = setTimeout(() => setDropError(null), ms)
   }, [])
 
-  // 拖档入画布 (LibTV): drop image files anywhere → upload as reference +
-  // spawn image nodes at the cursor, ready to edit/generate from.
-  const onFileDrop = useCallback(
-    async (e: React.DragEvent) => {
-      const files = Array.from(e.dataTransfer?.files ?? [])
-      if (files.length === 0) return // not a file drag (e.g. RF node drag) — ignore
-      e.preventDefault()
-      const images = files.filter((f) => /^image\/(jpeg|png|webp)$/.test(f.type))
+  const uploadImagesAt = useCallback(
+    async (files: File[], flow: { x: number; y: number }) => {
+      const images = files.filter((file) => /^image\/(jpeg|png|webp)$/.test(file.type))
       if (images.length === 0) {
         flashDropError('仅支持拖入 jpg/png/webp 图片', 3000)
         return
       }
-      const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
       for (const [i, file] of images.entries()) {
         try {
           const res = await upload.mutateAsync({ file, type: 'image' })
@@ -159,7 +163,19 @@ function CanvasInner() {
         }
       }
     },
-    [rf, setNodes, upload, flashDropError],
+    [setNodes, upload, flashDropError],
+  )
+
+  // 拖档入画布: drop image files anywhere → upload as reference + spawn image nodes.
+  const onFileDrop = useCallback(
+    async (e: React.DragEvent) => {
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length === 0) return
+      e.preventDefault()
+      const flow = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+      await uploadImagesAt(files, flow)
+    },
+    [rf, uploadImagesAt],
   )
 
   // Nodes currently generating (their run is pending/running) → the edges feeding
@@ -333,6 +349,23 @@ function CanvasInner() {
     [rf],
   )
 
+  const onPaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      event.preventDefault()
+      const rect = wrapperRef.current?.getBoundingClientRect()
+      const flow = rf.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      setMenu(null)
+      setCtxMenu(null)
+      setPaneMenu({
+        screenX: event.clientX - (rect?.left ?? 0),
+        screenY: event.clientY - (rect?.top ?? 0),
+        flowX: flow.x,
+        flowY: flow.y,
+      })
+    },
+    [rf],
+  )
+
   const addNodeFromMenu = useCallback(
     (type: CanvasNodeType) => {
       if (!menu) return
@@ -497,6 +530,44 @@ function CanvasInner() {
     const copy = cloneNode(c, flowX ?? c.position.x + 48, flowY ?? c.position.y + 48)
     setNodes((ns) => [...ns, copy])
   }, [setNodes])
+
+  const alignSelected = useCallback((mode: 'left' | 'top' | 'horizontal' | 'vertical') => {
+    const selected = nodes.filter((node) => node.selected && !node.parentId)
+    if (selected.length < 2) return
+    const positions = selected.map((node) => ({ node, position: absPos(node) }))
+    const selectedIds = new Set(selected.map((node) => node.id))
+
+    if (mode === 'left' || mode === 'top') {
+      const target = Math.min(...positions.map(({ position }) => mode === 'left' ? position.x : position.y))
+      setNodes((current) => current.map((node) => {
+        if (!selectedIds.has(node.id)) return node
+        return {
+          ...node,
+          position: mode === 'left'
+            ? { ...node.position, x: target }
+            : { ...node.position, y: target },
+        }
+      }))
+      return
+    }
+
+    const axis = mode === 'horizontal' ? 'x' : 'y'
+    const ordered = [...positions].sort((a, b) => a.position[axis] - b.position[axis])
+    const first = ordered[0].position[axis]
+    const last = ordered[ordered.length - 1].position[axis]
+    const gap = (last - first) / Math.max(ordered.length - 1, 1)
+    const nextPosition = new Map(ordered.map(({ node }, index) => [node.id, first + gap * index]))
+    setNodes((current) => current.map((node) => {
+      const value = nextPosition.get(node.id)
+      if (value === undefined) return node
+      return {
+        ...node,
+        position: axis === 'x'
+          ? { ...node.position, x: value }
+          : { ...node.position, y: value },
+      }
+    }))
+  }, [nodes, absPos, setNodes])
 
   // 优化工作流布局: layered left→right by longest-path depth via Kahn topo-sort
   // (terminates on cycles; cycle nodes keep depth 0).
@@ -754,12 +825,13 @@ function CanvasInner() {
         isValidConnection={isValidConnection}
         onConnectEnd={onConnectEnd}
         onDoubleClick={onPaneDoubleClick}
+        onPaneContextMenu={onPaneContextMenu}
         // RF 默认 zoomOnDoubleClick 会让 d3-zoom 吃掉双击——「双击画布添加
         // 节点」菜单从未真正触发过（2026-07-13 画布功能实测发现）。缩放走
         // 滚轮/±按钮，双击专职建节点。
         zoomOnDoubleClick={false}
         onNodeContextMenu={onNodeContextMenu}
-        onPaneClick={() => { setCtxMenu(null); setMenu(null) }}
+        onPaneClick={() => { setCtxMenu(null); setPaneMenu(null); setMenu(null) }}
         onInit={(inst) => {
           instanceRef.current = inst as ReactFlowInstance<Node<CanvasNodeData>, Edge>
           if (pendingViewportRef.current) {
@@ -805,7 +877,7 @@ function CanvasInner() {
           className="pointer-events-auto flex h-10 items-center gap-3 rounded-xl px-3 text-[13px]"
           style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
         >
-          <Link href="/zh/v2" className="text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>‹ 返回</Link>
+          <Link href={`/${locale}/v2`} className="text-[12px]" style={{ color: CANVAS_TOKENS.text.secondary }}>‹ 返回</Link>
           <button type="button" onClick={() => setResourcesOpen((value) => !value)} className="rounded-md px-1.5 py-1 hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>无限画布 ▾</button>
           <span style={{ color: CANVAS_TOKENS.text.muted }}>· {canvasTitle}</span>
         </div>
@@ -866,12 +938,46 @@ function CanvasInner() {
         <button type="button" onClick={() => rf.zoomIn()} title="放大 ⌘+" className="h-7 w-7 rounded-lg text-[14px]" style={{ color: CANVAS_TOKENS.text.secondary }}>＋</button>
       </div>
 
-      {/* Empty hint */}
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? [])
+          const position = pendingUploadPositionRef.current ?? centerFlow()
+          pendingUploadPositionRef.current = null
+          event.target.value = ''
+          void uploadImagesAt(files, position)
+        }}
+      />
+
+      {/* Empty-state launcher */}
       {nodes.length === 0 && !menu ? (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1" style={{ color: CANVAS_TOKENS.text.muted }}>
-          <div className="text-2xl" style={{ color: CANVAS_TOKENS.accent }}>◇</div>
-          <p className="text-sm">双击画布添加节点</p>
-          <p className="text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>从节点右侧端点拖出 → 连下一个节点</p>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+          <div
+            className="pointer-events-auto w-full max-w-2xl rounded-3xl border p-6 text-center backdrop-blur-xl"
+            style={{ background: `${CANVAS_TOKENS.bg.panel}d9`, borderColor: CANVAS_TOKENS.hairline, boxShadow: CANVAS_TOKENS.shadowPopover }}
+          >
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl text-xl" style={{ background: CANVAS_TOKENS.accentSoft, color: CANVAS_TOKENS.accent }}>◇</div>
+            <h1 className="text-lg font-semibold" style={{ color: CANVAS_TOKENS.text.primary }}>从一个镜头，延伸成完整制作流程</h1>
+            <p className="mt-1 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>选择模板快速开始，也可以双击或右键空白画布自由新增节点</p>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              {TOOLBOX_PRESETS.map((preset) => (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => applyToolboxPreset(preset.key)}
+                  className="rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5"
+                  style={{ background: CANVAS_TOKENS.bg.card, borderColor: CANVAS_TOKENS.hairline }}
+                >
+                  <span className="block text-[13px] font-medium" style={{ color: CANVAS_TOKENS.text.primary }}>{preset.label}</span>
+                  <span className="mt-1 block text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>{preset.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -943,6 +1049,48 @@ function CanvasInner() {
                   onClick={() => { item.on?.(); setCtxMenu(null) }}
                   className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition-colors hover:bg-white/5 disabled:opacity-40"
                   style={{ color: item.danger ? '#FF8A8A' : CANVAS_TOKENS.text.primary }}
+                >
+                  <span>{item.label}</span>
+                  {item.kbd ? <span className="font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>{item.kbd}</span> : null}
+                </button>
+              ),
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {/* Blank-canvas right-click menu */}
+      {paneMenu ? (
+        <>
+          <div className="absolute inset-0 z-30" onClick={() => setPaneMenu(null)} onContextMenu={(event) => { event.preventDefault(); setPaneMenu(null) }} />
+          <div
+            className="absolute z-40 w-56 overflow-hidden rounded-2xl py-1.5"
+            style={{
+              left: Math.min(paneMenu.screenX, (wrapperRef.current?.clientWidth ?? 800) - 232),
+              top: Math.min(paneMenu.screenY, (wrapperRef.current?.clientHeight ?? 600) - 280),
+              background: CANVAS_TOKENS.bg.popover,
+              border: `1px solid ${CANVAS_TOKENS.hairline}`,
+              boxShadow: CANVAS_TOKENS.shadowPopover,
+            }}
+          >
+            {([
+              { label: '添加节点', on: () => { setMenu({ ...paneMenu, fromNodeId: null }); setPaneMenu(null) }, kbd: 'Tab' },
+              { label: '上传图片', on: () => { pendingUploadPositionRef.current = { x: paneMenu.flowX, y: paneMenu.flowY }; uploadInputRef.current?.click() }, kbd: '' },
+              { sep: true },
+              { label: '粘贴到这里', on: () => pasteNode(paneMenu.flowX, paneMenu.flowY), kbd: '⌘V', disabled: !clipboardRef.current },
+              { label: '全选节点', on: () => setNodes((current) => current.map((node) => ({ ...node, selected: true }))), kbd: '⌘A', disabled: nodes.length === 0 },
+              { label: '整理画布', on: optimizeLayout, kbd: '⌥⇧F', disabled: nodes.length < 2 },
+            ] as Array<{ label?: string; on?: () => void; kbd?: string; sep?: boolean; disabled?: boolean }>).map((item, index) =>
+              item.sep ? (
+                <div key={`pane-sep-${index}`} className="my-1 h-px" style={{ background: CANVAS_TOKENS.hairline }} />
+              ) : (
+                <button
+                  key={item.label}
+                  type="button"
+                  disabled={item.disabled}
+                  onClick={() => { item.on?.(); setPaneMenu(null) }}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition-colors hover:bg-white/5 disabled:opacity-35"
+                  style={{ color: CANVAS_TOKENS.text.primary }}
                 >
                   <span>{item.label}</span>
                   {item.kbd ? <span className="font-mono text-[11px]" style={{ color: CANVAS_TOKENS.text.muted }}>{item.kbd}</span> : null}
@@ -1040,21 +1188,22 @@ function CanvasInner() {
         </div>
       ) : null}
 
-      {/* Multi-select floating bar (LibTV: appears when ≥2 nodes selected) */}
-      {selectedNodes.length >= 2 ? (
+      {/* Selection toolbar */}
+      {selectedNodes.length > 0 ? (
         <div
-          className="absolute left-1/2 top-16 z-20 flex -translate-x-1/2 items-center gap-1 rounded-xl p-1.5"
+          className="absolute left-1/2 top-16 z-20 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-2xl p-1.5"
           style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
         >
           <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已选 {selectedNodes.length}</span>
-          <button
-            type="button"
-            onClick={groupSelected}
-            className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
-            style={{ color: CANVAS_TOKENS.text.primary }}
-          >
-            成组
-          </button>
+          {selectedNodes.length >= 2 ? (
+            <>
+              <button type="button" onClick={() => alignSelected('left')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>左对齐</button>
+              <button type="button" onClick={() => alignSelected('top')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>顶对齐</button>
+              <button type="button" onClick={() => alignSelected('horizontal')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>横向均分</button>
+              <button type="button" onClick={() => alignSelected('vertical')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>纵向均分</button>
+              <button type="button" onClick={groupSelected} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>成组</button>
+            </>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -1148,7 +1297,7 @@ export function CanvasClient(_props: CanvasClientProps) {
   return (
     <ReactFlowProvider>
       <CanvasGenerationProvider>
-        <CanvasInner />
+        <CanvasInner locale={_props.locale} />
       </CanvasGenerationProvider>
     </ReactFlowProvider>
   )

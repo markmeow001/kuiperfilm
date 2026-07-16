@@ -140,7 +140,7 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
 
   return (
     <div className="mb-4">
-      <div className="relative rounded-lg bg-stone-950/60">
+      <div className="relative rounded-2xl bg-white/[0.03]">
         {boundNames.length > 0 ? (
           <PromptHighlightBackdrop
             prompt={prompt}
@@ -158,11 +158,11 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
           onBlur={() => setTimeout(() => setAtMenuOpen(false), 150)}
           rows={9}
           placeholder={placeholder}
-          className={`relative min-h-[140px] w-full resize-y rounded-lg border border-stone-800 bg-transparent text-stone-200 outline-none focus:border-amber-500/40 ${PROMPT_TYPO}`}
+          className={`relative min-h-[140px] w-full resize-y rounded-2xl border border-white/[0.09] bg-transparent text-text-primary outline-none focus:border-primary-500/40 ${PROMPT_TYPO}`}
         />
         {atMenuOpen && candidates.length > 0 ? (
           <div
-            className="absolute z-30 flex w-[240px] flex-wrap gap-1.5 rounded-md border border-stone-700 bg-stone-900 p-2 shadow-xl"
+            className="absolute z-30 flex w-[240px] flex-wrap gap-1.5 rounded-xl border border-white/[0.1] bg-overlay p-2 shadow-xl"
             style={atMenuPos ? { top: atMenuPos.top, left: atMenuPos.left } : { top: '100%', left: 0 }}
           >
             {candidates.map((c) => (
@@ -170,7 +170,7 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
                 type="button"
                 key={c.label}
                 onMouseDown={(e) => { e.preventDefault(); pickCandidate(c) }}
-                className="flex items-center gap-1.5 rounded-sm border border-stone-700 px-2 py-1 font-mono text-[11px] text-stone-300 hover:border-amber-500/60 hover:text-amber-300"
+                className="flex items-center gap-1.5 rounded-lg border border-white/[0.09] px-2 py-1 font-mono text-[11px] text-text-secondary hover:border-primary-500/50 hover:text-primary-300"
               >
                 {c.colorIndex !== null ? (
                   <span className={`h-2 w-2 rounded-full ${elementDotClass(c.colorIndex)}`} />
@@ -191,7 +191,7 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
             onChange={(e) => setRefText(e.target.value)}
             disabled={isBusy}
             placeholder="風格 / 旁白 / 隱喻 等補充…"
-            className="w-full rounded-sm border border-stone-800 bg-stone-900/40 px-3 py-2 text-[13px] text-stone-300 outline-none placeholder:text-stone-600 focus:border-amber-500/40"
+            className="w-full rounded-xl border border-white/[0.09] bg-white/[0.04] px-3 py-2 text-[13px] text-text-secondary outline-none placeholder:text-text-tertiary focus:border-primary-500/40"
           />
         </div>
       ) : (

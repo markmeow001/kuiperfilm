@@ -23,7 +23,7 @@ export default function Navbar() {
   const isAdmin = checkIsAdmin(role)
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-amber-900/20 bg-stone-950/95 backdrop-blur-sm">
+    <nav className="sticky top-0 z-50 border-b border-primary-900/20 bg-stone-950/95 backdrop-blur-sm">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Brand — Kuiper 影界 logo treatment matching the V2 sidebar */}
@@ -31,7 +31,7 @@ export default function Navbar() {
             href={session ? '/zh/v2' : '/'}
             className="group flex items-baseline gap-1.5"
           >
-            <span className="font-display text-2xl font-semibold italic tracking-tight text-amber-400 transition-colors group-hover:text-amber-300">
+            <span className="font-display text-2xl font-semibold italic tracking-tight text-primary-400 transition-colors group-hover:text-primary-300">
               Kuiper
             </span>
             <span className="font-serif-cn text-base font-medium text-stone-100">影界</span>
@@ -45,7 +45,7 @@ export default function Navbar() {
               <>
                 <Link
                   href="/zh/v2"
-                  className="font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
+                  className="font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
                 >
                   {t('workspace')}
                 </Link>
@@ -54,7 +54,7 @@ export default function Navbar() {
                     only)、editor 看自己擁有的、admin 看全平台。 */}
                 <Link
                   href="/zh/workspaces"
-                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
+                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
                   title="工作區 / 團隊管理"
                 >
                   <AppIcon name="userAlt" className="h-4 w-4" />
@@ -67,7 +67,7 @@ export default function Navbar() {
                 {isAdmin ? (
                   <Link
                     href="/workspace/asset-hub"
-                    className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
+                    className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
                   >
                     <AppIcon name="folderHeart" className="h-4 w-4" />
                     {t('assetHub')}
@@ -82,7 +82,7 @@ export default function Navbar() {
                 {isAdmin ? (
                   <Link
                     href="/profile"
-                    className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-amber-400"
+                    className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-300 transition-colors hover:text-primary-400"
                     title={t('profile')}
                   >
                     <AppIcon name="userRoundCog" className="h-4 w-4" />
@@ -93,7 +93,7 @@ export default function Navbar() {
                 {isAdmin ? (
                   <Link
                     href="/admin"
-                    className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-amber-400 transition-colors hover:bg-amber-500/20"
+                    className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-primary-400 transition-colors hover:bg-primary-500/20"
                     title={t('admin')}
                   >
                     <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
@@ -107,7 +107,7 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={() => void signOut({ callbackUrl: '/' })}
-                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+                  className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-wider text-stone-400 transition-colors hover:text-primary-400"
                   title="登出"
                 >
                   <AppIcon name="logout" className="h-4 w-4" />
@@ -119,13 +119,13 @@ export default function Navbar() {
                 <ThemeToggle />
                 <Link
                   href="/auth/signin"
-                  className="font-mono text-[11px] uppercase tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+                  className="font-mono text-[11px] uppercase tracking-wider text-stone-400 transition-colors hover:text-primary-400"
                 >
                   {t('signin')}
                 </Link>
                 <Link
                   href="/auth/signup"
-                  className="rounded-sm bg-amber-500 px-4 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400"
+                  className="rounded-sm bg-primary-500 px-4 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-primary-400"
                 >
                   {t('signup')}
                 </Link>

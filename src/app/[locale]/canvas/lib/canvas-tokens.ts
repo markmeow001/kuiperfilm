@@ -9,39 +9,41 @@
  * components and the canvas shell stay visually consistent without copying
  * hex strings around (immutable single source — see coding-style 鐵則).
  *
- * NOTE: these are canvas-local on purpose. The rest of KuiperAI V2 uses the
- * amber/stone palette; the canvas is a deliberately distinct "studio" surface.
+ * Canvas-local tokens mapped to the Kuiper V2 product language: near-black
+ * surfaces, magenta creation actions, violet AI tools, and restrained gold
+ * output accents.
  */
 export const CANVAS_TOKENS = {
   bg: {
-    canvas: '#141414',
-    app: '#1B1B1B',
-    panel: '#262626',
-    popover: '#1A1A1A',
-    card: '#262626',
-    hover: 'rgba(255,255,255,0.10)',
-    active: 'rgba(255,255,255,0.15)',
-    input: '#1B1B1B',
+    canvas: '#08070B',
+    app: '#100E15',
+    panel: '#15121C',
+    popover: '#191521',
+    card: '#1B1723',
+    hover: 'rgba(255,255,255,0.07)',
+    active: 'rgba(216,70,239,0.16)',
+    input: '#0F0D13',
   },
-  accent: '#1880FF', // brand blue — links / slider fill / primary emphasis
+  accent: '#E052E8',
+  accentSoft: 'rgba(224,82,232,0.14)',
   accentText: '#FFFFFF', // text on accent surfaces
   cta: '#FFFFFF', // generate ↑ button — white pill, dark glyph
-  ctaText: '#141414',
-  gold: '#F4C44E', // credits / membership only
-  sceneBlue: '#4F8EF7', // 3D 人偶 / gizmo only (M2)
+  ctaText: '#100E15',
+  gold: '#E9B95B',
+  sceneBlue: '#8D76FF',
   text: {
     primary: '#F7F7F7',
-    secondary: '#919191',
-    muted: '#6E6E76',
+    secondary: '#B5ADBE',
+    muted: '#7C7385',
   },
-  hairline: '#363636', // 0.5–1px borders on cards / dock / top-bar capsules
-  selectedRing: '#A8A8A8', // selected node = inset 2px ring
+  hairline: '#30293A',
+  selectedRing: '#E052E8',
   edge: {
-    idle: '#86909C',
-    lit: '#C0C8D0', // selected/adjacent/working edges
+    idle: '#665D70',
+    lit: '#E052E8',
   },
-  shadow: '0 4px 10px rgba(0,0,0,0.12)', // node card
-  shadowPopover: '0 16px 40px rgba(0,0,0,0.55)',
+  shadow: '0 8px 24px rgba(0,0,0,0.28)',
+  shadowPopover: '0 24px 60px rgba(0,0,0,0.58)',
   radius: { sm: 6, md: 8, lg: 12, xl: 16 },
   grid: 24, // dot-grid spacing
 } as const
@@ -57,8 +59,8 @@ export const NODE_META: Record<
   image: { label: '图片', accent: CANVAS_TOKENS.accent, hint: '文字生图 / 编辑' },
   video: { label: '视频', accent: '#7BE3A4', hint: '首帧图 → 短片' },
   text: { label: '文本', accent: CANVAS_TOKENS.text.secondary, hint: '脚本 / 提示词' },
-  director: { label: '导演台', accent: '#4F8EF7', hint: '3D 站位 → 参考图' },
-  script: { label: '脚本', accent: '#F7B84F', hint: '剧本 → 分镜 → 批量生图' },
+  director: { label: '导演台', accent: '#8D76FF', hint: '3D 站位 → 参考图' },
+  script: { label: '脚本', accent: '#E9B95B', hint: '剧本 → 分镜 → 批量生图' },
   audio: { label: '音频', accent: '#F78FD2', hint: '文字 + 参考音 → 克隆配音' },
   composition: { label: '视频合成', accent: '#55D6A8', hint: '片段排序 → 成片' },
   // Container only — never offered in add menus (ADD_ORDER excludes it);

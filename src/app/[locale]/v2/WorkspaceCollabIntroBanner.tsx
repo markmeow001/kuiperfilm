@@ -44,30 +44,30 @@ export function WorkspaceCollabIntroBanner() {
   const richTags = { b: (chunks: React.ReactNode) => <strong>{chunks}</strong> }
 
   return (
-    <div className="mb-6 rounded-sm border border-amber-500/40 bg-amber-500/5 px-5 py-4">
+    <div className="mb-6 rounded-2xl border border-primary-500/25 bg-primary-500/[0.05] px-5 py-4">
       <div className="flex items-start gap-4">
         <div className="flex-1">
-          <div className="mb-1 font-mono text-[11px] tracking-[0.2em] text-amber-400">
+          <div className="mb-1 font-mono text-[10px] tracking-[0.2em] text-primary-400">
             {t('tag')}
           </div>
-          <div className="font-serif-cn text-base font-medium text-stone-100">
+          <div className="font-serif-cn text-base font-semibold text-text-primary">
             {t('title')}
           </div>
-          <ul className="mt-2 space-y-1 font-serif-cn text-sm text-stone-300">
+          <ul className="mt-2 space-y-1 font-serif-cn text-sm text-text-secondary">
             <li>
-              <span className="text-amber-400">·</span>{' '}
+              <span className="text-primary-400">·</span>{' '}
               {t.rich('bullet1', richTags)}
             </li>
             <li>
-              <span className="text-amber-400">·</span>{' '}
+              <span className="text-primary-400">·</span>{' '}
               {t.rich('bullet2', richTags)}
             </li>
             <li>
-              <span className="text-amber-400">·</span>{' '}
+              <span className="text-primary-400">·</span>{' '}
               {t.rich('bullet3', richTags)}
             </li>
             <li>
-              <span className="text-amber-400">·</span>{' '}
+              <span className="text-primary-400">·</span>{' '}
               {t.rich('bullet4', richTags)}
             </li>
           </ul>
@@ -75,7 +75,7 @@ export function WorkspaceCollabIntroBanner() {
         <button
           type="button"
           onClick={dismiss}
-          className="shrink-0 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 font-mono text-[11px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20"
+          className="shrink-0 rounded-xl border border-primary-500/30 bg-primary-500/10 px-3 py-2 font-mono text-[10px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/20"
           title={t('dismissTitle')}
         >
           <AppIcon name="check" className="-mt-0.5 mr-1 inline h-3 w-3" />

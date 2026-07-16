@@ -16,6 +16,8 @@ import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { NotificationBell } from '@/components/v2/NotificationBell'
 import { WorkspaceCollabIntroBanner } from './WorkspaceCollabIntroBanner'
+import { V2HomeRail } from './V2HomeRail'
+import { V2WorkflowLauncher } from './V2WorkflowLauncher'
 import { isAdmin as checkIsAdmin } from '@/lib/auth/user-role'
 
 const STICKY_STEP_VALUES = ['script', 'subjects', 'storyboard', 'voice', 'final'] as const
@@ -161,179 +163,161 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
 
   if (status === 'loading' || !session) {
     return (
-      <div className="grain flex min-h-screen items-center justify-center bg-stone-950 font-mono text-xs tracking-wider text-stone-500">
+      <div className="kuiper-stage flex min-h-screen items-center justify-center font-mono text-xs tracking-wider text-text-tertiary">
         {t('loading')}
       </div>
     )
   }
 
   return (
-    <div className="grain min-h-screen bg-stone-950 text-stone-200">
+    <div className="kuiper-stage min-h-screen pb-24 text-text-primary lg:pb-0 lg:pl-[88px]">
+      <V2HomeRail locale={locale} />
+
       {/* Top header */}
-      <header className="border-b border-stone-700 px-12 py-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="font-fraunces text-2xl italic tracking-tight text-amber-400">
-              {t('header.brand')} <span className="not-italic font-serif-cn">{t('header.brandSubtitle')}</span>
+      <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#050506]/88 px-4 py-4 backdrop-blur-xl sm:px-6 lg:px-9">
+        <div className="mx-auto flex max-w-[1540px] items-center justify-between gap-5">
+          <Link href={`/${locale}/v2`} className="group min-w-0">
+            <div className="flex items-baseline gap-2">
+              <div className="font-display text-xl font-bold italic tracking-tight text-primary-400 transition-colors group-hover:text-primary-300 sm:text-2xl">
+                {t('header.brand')}
+              </div>
+              <span className="font-serif-cn text-sm font-semibold text-text-primary sm:text-base">
+                {t('header.brandSubtitle')}
+              </span>
             </div>
-            <div className="mt-0.5 font-mono text-[14px] tracking-[0.2em] text-stone-400">
+            <div className="mt-0.5 truncate font-mono text-[9px] tracking-[0.22em] text-text-tertiary sm:text-[10px]">
               {t('header.tagline')}
             </div>
-          </div>
-          <div className="flex items-center gap-3 font-mono text-[11px] tracking-wider">
+          </Link>
+
+          <div className="flex min-w-0 items-center gap-2 font-mono text-[11px] tracking-wider">
             {/* Phase 12.5 — workspace switcher. URL-driven (?ws=). Mounted
                 only on this page per spec §6.1 — project pages are
                 inherently scoped to their project's workspace. */}
             <WorkspaceSwitcher activeWs={wsParam} locale={locale} />
             {/* Phase 12.5 — bell. Same component as project pages. */}
             <NotificationBell locale={locale} />
-            <span className="text-stone-200">{session.user?.name ?? session.user?.email ?? ''}</span>
-            {/* Phase T-3 (2026-05-27) — Playground / Freedom Mode entry
-                point. Project-independent tool so it lives in the global
-                header, not the per-project sidebar. Violet accent to
-                visually separate from amber project actions. */}
-            {/* 无限画布 — node-based canvas studio. Project-independent like
-                Playground; sits just before it. */}
-            <Link
-              href={`/${locale}/canvas`}
-              className="flex items-center gap-1 rounded-sm border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-cyan-300 transition-colors hover:bg-cyan-500/20 hover:border-cyan-400"
-              title="无限画布 · 节点式创作台,导演台 3D 站位、分镜串接、生图生视频"
-            >
-              <AppIcon name="image" className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">无限画布</span>
-            </Link>
-            <Link
-              href={`/${locale}/live-composite`}
-              aria-label="AI 實拍合成"
-              className="flex items-center gap-1 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20"
-              title="AI 實拍合成 · 自動人物遮罩、手動畫筆修補、替換背景並輸出合成影片"
-            >
-              <AppIcon name="video" className="h-3.5 w-3.5" />
-              <span className="hidden 2xl:inline">AI 實拍合成</span>
-            </Link>
-            <Link
-              href={`/${locale}/playground`}
-              className="flex items-center gap-1 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-violet-300 transition-colors hover:bg-violet-500/20 hover:border-violet-400"
-              title="創作 Playground · 不綁專案,直接上傳素材生成單張圖片或單支影片"
-            >
-              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">創作 Playground</span>
-            </Link>
-            {/* 團隊 / Workspaces — visible to every signed-in role. The
-                target page (/[locale]/workspaces) hides creation /
-                management affordances when the requester isn't
-                authorised, so it's safe to surface here without a
-                role check. */}
+            <span className="hidden max-w-36 truncate text-text-secondary xl:inline">
+              {session.user?.name ?? session.user?.email ?? ''}
+            </span>
             <Link
               href={`/${locale}/workspaces`}
-              className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+              className="hidden items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400 sm:flex"
               title={t('header.teamLinkTitle')}
             >
               <AppIcon name="userAlt" className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('header.teamLink')}</span>
+              <span className="hidden xl:inline">{t('header.teamLink')}</span>
             </Link>
-            {/* Admin-only nav: profile (provider keys + default models)
-                and the admin console. Members hide both — their config
-                cascades from admin so they never need /profile, and
-                they have no business in /admin. Logout always shows. */}
             {isAdmin ? (
               <>
                 <Link
                   href={`/${locale}/profile`}
-                  className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+                  className="hidden h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400 md:flex"
                   title={t('header.profileLinkTitle')}
                 >
                   <AppIcon name="userRoundCog" className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t('header.profileLink')}</span>
                 </Link>
                 <Link
                   href={`/${locale}/admin`}
-                  className="flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-amber-300 transition-colors hover:bg-amber-500/20"
+                  className="hidden h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400 md:flex"
                   title={t('header.adminLinkTitle')}
                 >
                   <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t('header.adminLink')}</span>
                 </Link>
               </>
             ) : null}
             <button
               type="button"
               onClick={() => void signOut({ callbackUrl: `/${locale}/auth/signin` })}
-              className="rounded-sm border border-stone-600 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+              aria-label={t('header.logout')}
+              title={t('header.logout')}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400"
             >
-              {t('header.logout')}
+              <AppIcon name="logout" className="h-4 w-4" />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="px-12 py-10">
+      <main className="mx-auto max-w-[1540px] px-4 py-8 sm:px-6 lg:px-9 lg:py-10">
         {/* Phase 12.5 — one-shot intro banner. Dismissible, persists
             via cookie for 1 year. Renders above title so it's the
             first thing returning users see (then never again). */}
         <WorkspaceCollabIntroBanner />
 
         {/* Title row */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="font-mono text-[11px] tracking-[0.25em] text-amber-400">
-              {t('title.kicker')}
+        <section className="mb-9 overflow-hidden rounded-[28px] border border-white/[0.08] bg-gradient-to-br from-[#171318] via-[#111113] to-[#0b0b0d] px-6 py-7 sm:px-8 sm:py-9">
+          <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="font-mono text-[10px] tracking-[0.25em] text-primary-400">
+                {t('title.kicker')}
+              </div>
+              <h1 className="mt-3 max-w-2xl font-serif-cn text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+                {t('title.heading')}
+              </h1>
+              <p className="mt-2 max-w-2xl font-serif-cn text-sm leading-6 text-text-secondary">
+                {t('title.subtitle')}
+              </p>
             </div>
-            <h1 className="mt-2 font-serif-cn text-3xl font-light text-white">
-              {t('title.heading')}
-            </h1>
-            <p className="mt-1 font-fraunces text-sm italic text-stone-300">
-              {t('title.subtitle')}
-            </p>
-          </div>
 
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
-              placeholder={t('search.placeholder')}
-              className="w-64 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-500 focus:border-amber-500 focus:outline-none"
-            />
-            {searchQuery ? (
+            <div className="flex w-full max-w-lg items-center gap-2 rounded-2xl border border-white/[0.09] bg-black/30 p-1.5">
+              <AppIcon name="search" className="ml-2 h-4 w-4 shrink-0 text-text-tertiary" />
+              <input
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
+                placeholder={t('search.placeholder')}
+                aria-label={t('search.placeholder')}
+                className="min-w-0 flex-1 bg-transparent px-1 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="rounded-xl px-3 py-2 font-mono text-[10px] text-text-secondary transition-colors hover:bg-white/[0.06] hover:text-white"
+                >
+                  {t('search.clear')}
+                </button>
+              ) : null}
               <button
                 type="button"
-                onClick={clearSearch}
-                className="rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-2 font-mono text-xs text-stone-300 transition-colors hover:border-stone-600 hover:text-white"
+                onClick={handleSearch}
+                className="kuiper-primary-button rounded-xl px-4 py-2 font-mono text-[10px] font-semibold"
               >
-                {t('search.clear')}
+                {t('search.search')}
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleSearch}
-              className="rounded-sm border border-amber-500/60 bg-amber-500/20 px-4 py-2 font-mono text-xs text-amber-300 transition-colors hover:border-amber-500 hover:bg-amber-500/30"
-            >
-              {t('search.search')}
-            </button>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <V2WorkflowLauncher locale={locale} />
 
         {/* Project grid */}
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-serif-cn text-lg font-semibold text-text-primary">{t('grid.recentProjects')}</h2>
+          <span className="font-mono text-[10px] tracking-[0.16em] text-text-tertiary">
+            {pagination.total} PROJECTS
+          </span>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {/* + New project card */}
           <Link
             href={`/${locale}/v2/new`}
-            className="group flex h-44 items-center justify-center rounded-sm border border-amber-500/60 bg-amber-500/10 transition-all hover:border-amber-400 hover:bg-amber-500/20"
+            className="group flex min-h-52 items-center justify-center rounded-2xl border border-primary-500/70 bg-primary-500/[0.06] transition-all hover:-translate-y-0.5 hover:border-primary-400 hover:bg-primary-500/[0.11]"
           >
             <div className="flex flex-col items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-500 bg-amber-500/30 transition-all group-hover:scale-110">
-                <AppIcon name="plus" className="h-5 w-5 text-amber-300" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 text-black transition-transform group-hover:scale-105">
+                <AppIcon name="plus" className="h-5 w-5" />
               </div>
-              <span className="font-serif-cn text-base font-medium text-amber-300">{t('grid.newProject')}</span>
+              <span className="font-serif-cn text-sm font-semibold text-primary-300">{t('grid.newProject')}</span>
             </div>
           </Link>
 
           {/* Loading skeletons */}
           {loading
             ? Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-44 animate-pulse rounded-sm border border-stone-700 bg-stone-900/70" />
+                <div key={i} className="min-h-52 animate-pulse rounded-2xl border border-white/[0.07] bg-white/[0.04]" />
               ))
             : formatted.map((project) => (
                 <Link
@@ -343,49 +327,50 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
                       ? `/${locale}/v2/workspace/${project.id}?startAt=${carryStep}`
                       : `/${locale}/v2/workspace/${project.id}`
                   }
-                  className="group relative flex h-44 flex-col rounded-sm border border-stone-700 bg-stone-900/70 p-5 transition-all hover:border-amber-500 hover:bg-stone-900/90"
+                  className="kuiper-panel-interactive group relative flex min-h-52 flex-col overflow-hidden rounded-2xl p-5"
                 >
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary-500/0 to-transparent transition-all group-hover:via-primary-500/80" />
                   <button
                     type="button"
                     onClick={(e) => void handleDelete(project, e)}
                     disabled={deletingId === project.id}
-                    className="absolute right-3 top-3 hidden h-7 w-7 items-center justify-center rounded-sm border border-stone-600 bg-stone-900 text-stone-300 transition-colors hover:border-rose-500 hover:bg-rose-500/20 hover:text-rose-200 group-hover:flex disabled:opacity-50"
+                    className="absolute right-3 top-3 hidden h-8 w-8 items-center justify-center rounded-xl border border-white/[0.08] bg-black/40 text-text-secondary transition-colors hover:border-rose-500/50 hover:bg-rose-500/15 hover:text-rose-200 group-hover:flex disabled:opacity-50"
                     title={t('grid.deleteTitle')}
                   >
                     <AppIcon name="trash" className="h-3.5 w-3.5" />
                   </button>
 
-                  <div className="font-serif-cn text-lg font-medium text-white group-hover:text-amber-300">
+                  <div className="pr-9 font-serif-cn text-lg font-semibold text-white transition-colors group-hover:text-primary-300">
                     {project.name}
                   </div>
 
                   {project.description || project.stats?.firstEpisodePreview ? (
-                    <p className="mt-2 line-clamp-2 font-serif-cn text-xs leading-relaxed text-stone-300">
+                    <p className="mt-3 line-clamp-3 font-serif-cn text-xs leading-5 text-text-secondary">
                       {project.description || project.stats?.firstEpisodePreview}
                     </p>
                   ) : (
-                    <p className="mt-2 font-fraunces text-xs italic text-stone-500">
+                    <p className="mt-3 font-serif-cn text-xs text-text-tertiary">
                       {t('grid.untitledDraft')}
                     </p>
                   )}
 
-                  <div className="mt-auto flex items-center justify-between font-mono text-[14px] text-stone-400">
+                  <div className="mt-auto flex items-center justify-between gap-3 border-t border-white/[0.06] pt-4 font-mono text-[10px] text-text-tertiary">
                     <div className="flex items-center gap-3">
                       {project.stats?.episodes ? (
                         <span className="flex items-center gap-1">
-                          <AppIcon name="bookOpen" className="h-3 w-3 text-amber-400/80" />
+                          <AppIcon name="bookOpen" className="h-3 w-3 text-primary-400/80" />
                           {project.stats.episodes}
                         </span>
                       ) : null}
                       {project.stats?.images ? (
                         <span className="flex items-center gap-1">
-                          <AppIcon name="image" className="h-3 w-3 text-amber-400/80" />
+                          <AppIcon name="image" className="h-3 w-3 text-primary-400/80" />
                           {project.stats.images}
                         </span>
                       ) : null}
                       {project.stats?.videos ? (
                         <span className="flex items-center gap-1">
-                          <AppIcon name="film" className="h-3 w-3 text-amber-400/80" />
+                          <AppIcon name="film" className="h-3 w-3 text-primary-400/80" />
                           {project.stats.videos}
                         </span>
                       ) : null}
@@ -397,8 +382,8 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
         </div>
 
         {!loading && projects.length === 0 ? (
-          <div className="mt-16 text-center font-serif-cn text-stone-500">
-            <p className="font-fraunces italic">
+          <div className="mt-16 text-center font-serif-cn text-text-tertiary">
+            <p>
               {searchQuery ? t('empty.noMatch') : t('empty.noneYet')}
             </p>
           </div>
@@ -411,18 +396,18 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               type="button"
               disabled={pagination.page <= 1}
               onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
-              className="rounded-sm border border-stone-800 px-3 py-1.5 text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl border border-white/[0.08] px-3 py-2 text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               ←
             </button>
-            <span className="px-3 text-stone-500">
+            <span className="px-3 text-text-tertiary">
               {pagination.page} / {pagination.totalPages}
             </span>
             <button
               type="button"
               disabled={pagination.page >= pagination.totalPages}
               onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
-              className="rounded-sm border border-stone-800 px-3 py-1.5 text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-xl border border-white/[0.08] px-3 py-2 text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               →
             </button>
@@ -534,7 +519,7 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 text-stone-200 transition-colors hover:border-amber-500 hover:text-amber-300"
+        className="flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400"
         title={t('title')}
       >
         <AppIcon name="folder" className="h-3.5 w-3.5" />
@@ -546,38 +531,38 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-2xl">
-          <div className="border-b border-amber-900/20 px-4 py-2 font-mono text-[14px] uppercase tracking-[0.2em] text-amber-600">
+        <div className="absolute right-0 top-full z-30 mt-2 w-72 overflow-hidden rounded-2xl border border-white/[0.09] bg-[#111113] shadow-2xl">
+          <div className="border-b border-white/[0.07] px-4 py-3 font-mono text-[10px] uppercase tracking-[0.2em] text-primary-400">
             {t('header')}
           </div>
           <div className="max-h-72 overflow-y-auto py-1">
             <button
               type="button"
               onClick={() => switchTo(null)}
-              className={`block w-full px-4 py-2 text-left font-serif-cn text-sm transition-colors hover:bg-amber-500/10 hover:text-amber-300 ${
-                activeWs === null ? 'text-amber-300' : 'text-stone-300'
+              className={`block w-full px-4 py-2.5 text-left font-serif-cn text-sm transition-colors hover:bg-primary-500/10 hover:text-primary-300 ${
+                activeWs === null ? 'text-primary-300' : 'text-text-secondary'
               }`}
             >
               {t('personal')} {activeWs === null ? t('checked') : ''}
             </button>
-            <div className="my-1 border-t border-stone-800" />
+            <div className="my-1 border-t border-white/[0.07]" />
             {loading ? (
-              <div className="px-4 py-3 font-mono text-[14px] text-stone-500">{t('loading')}</div>
+              <div className="px-4 py-3 font-mono text-[10px] text-text-tertiary">{t('loading')}</div>
             ) : items && items.length > 0 ? (
               items.map((w) => (
                 <button
                   key={w.id}
                   type="button"
                   onClick={() => switchTo(w.id)}
-                  className={`block w-full px-4 py-2 text-left font-serif-cn text-sm transition-colors hover:bg-amber-500/10 hover:text-amber-300 ${
-                    activeWs === w.id ? 'text-amber-300' : 'text-stone-300'
+                  className={`block w-full px-4 py-2.5 text-left font-serif-cn text-sm transition-colors hover:bg-primary-500/10 hover:text-primary-300 ${
+                    activeWs === w.id ? 'text-primary-300' : 'text-text-secondary'
                   }`}
                 >
                   <div>
                     {w.name} {activeWs === w.id ? t('checked') : ''}
                   </div>
                   {w.organizationName ? (
-                    <div className="font-fraunces text-[11px] italic text-stone-500">
+                    <div className="mt-0.5 font-mono text-[9px] text-text-tertiary">
                       {w.organizationName}
                       {w.projectCount ? ` · ${t('projectCount', { count: w.projectCount })}` : ''}
                     </div>
@@ -585,15 +570,15 @@ function WorkspaceSwitcher({ activeWs, locale }: { activeWs: string | null; loca
                 </button>
               ))
             ) : (
-              <div className="px-4 py-3 font-fraunces text-xs italic text-stone-500">
+              <div className="px-4 py-3 font-serif-cn text-xs text-text-tertiary">
                 {t('noJoinable')}
               </div>
             )}
           </div>
-          <div className="border-t border-amber-900/20">
+          <div className="border-t border-white/[0.07]">
             <Link
               href={`/${locale}/workspaces`}
-              className="block px-4 py-2 font-mono text-[11px] tracking-wider text-amber-500/70 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+              className="block px-4 py-3 font-mono text-[10px] tracking-wider text-primary-400 transition-colors hover:bg-primary-500/10 hover:text-primary-300"
               onClick={() => setOpen(false)}
             >
               {t('manageLink')}
