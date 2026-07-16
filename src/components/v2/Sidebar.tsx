@@ -182,6 +182,22 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
           </div>
         </Link>
 
+        <Link
+          href={`/${locale}/live-composite`}
+          className="group mt-1 flex w-full items-center gap-2 rounded-md border border-transparent px-2.5 py-2 text-left transition-all hover:border-cyan-500/30 hover:bg-cyan-500/5"
+        >
+          <div className="w-5 font-mono text-[13px] tracking-wider text-cyan-400">◎</div>
+          <AppIcon name="video" className="h-4 w-4 flex-shrink-0 text-cyan-400" />
+          <div className="min-w-0 flex-1">
+            <div className="whitespace-nowrap font-serif-cn text-sm leading-none text-stone-300">
+              AI 實拍合成
+            </div>
+            <div className="mt-0.5 truncate font-fraunces text-[13px] italic text-stone-600">
+              Live Composite
+            </div>
+          </div>
+        </Link>
+
         {/* Phase 2.5 (2026-06-10) — Skill library entry. Sits next to
             Playground in the "工具" section since both are project-
             independent surfaces. Violet matches the AI-accent token
