@@ -17,6 +17,7 @@ export interface CompositeRecordingSession {
 interface AudioGraph {
   context: AudioContext
   source: MediaElementAudioSourceNode
+  monitor: GainNode
 }
 
 interface CompositeRecordingOptions {
@@ -28,6 +29,9 @@ interface CompositeRecordingOptions {
   onFrame: (time: number) => void
   onProgress: (progress: CompositeRecordingProgress) => void
   onRestore: () => void
+  preparationTimeoutMs?: number
+  stallTimeoutMs?: number
+  maxRuntimeMs?: number
 }
 
 const MIME_CANDIDATES = [
@@ -40,6 +44,8 @@ const MIME_CANDIDATES = [
 ] as const
 
 const audioGraphs = new WeakMap<HTMLVideoElement, AudioGraph>()
+const DEFAULT_PREPARATION_TIMEOUT_MS = 20_000
+const DEFAULT_STALL_TIMEOUT_MS = 20_000
 
 export class CompositeRecordingCancelledError extends Error {
   constructor() {
@@ -61,12 +67,59 @@ export function recordingExtension(mimeType: string): 'mp4' | 'webm' {
   return mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'
 }
 
-function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
+export function recordingTimeoutReason(options: {
+  now: number
+  startedAt: number
+  lastProgressAt: number
+  stallTimeoutMs: number
+  maxRuntimeMs: number
+}): 'stalled' | 'deadline' | null {
+  if (options.now - options.startedAt > options.maxRuntimeMs) return 'deadline'
+  if (options.now - options.lastProgressAt > options.stallTimeoutMs) return 'stalled'
+  return null
+}
+
+export async function releaseCompositeRecordingAudio(video: HTMLVideoElement): Promise<void> {
+  const graph = audioGraphs.get(video)
+  if (!graph) return
+  audioGraphs.delete(video)
+  try {
+    graph.source.disconnect()
+  } catch {
+    // The source may already have been disconnected by browser teardown.
+  }
+  try {
+    graph.monitor.disconnect()
+  } catch {
+    // The monitor may already have been disconnected by browser teardown.
+  }
+  if (graph.context.state !== 'closed') {
+    try {
+      await graph.context.close()
+    } catch {
+      // Closing an already-tearing-down context is best-effort cleanup.
+    }
+  }
+}
+
+export function seekVideo(
+  video: HTMLVideoElement,
+  time: number,
+  signal: AbortSignal,
+  timeoutMs: number,
+): Promise<void> {
+  if (signal.aborted) return Promise.reject(new CompositeRecordingCancelledError())
   if (video.readyState >= 2 && Math.abs(video.currentTime - time) <= 0.01) return Promise.resolve()
   return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(() => {
+      cleanup()
+      reject(new Error(`影片跳轉超過 ${Math.round(timeoutMs / 1_000)} 秒，無法開始輸出`))
+    }, timeoutMs)
     const cleanup = () => {
+      globalThis.clearTimeout(timeout)
       video.removeEventListener('seeked', handleSeeked)
       video.removeEventListener('error', handleError)
+      signal.removeEventListener('abort', handleAbort)
     }
     const handleSeeked = () => {
       cleanup()
@@ -76,8 +129,13 @@ function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
       cleanup()
       reject(new Error('影片跳轉失敗，無法開始輸出'))
     }
+    const handleAbort = () => {
+      cleanup()
+      reject(new CompositeRecordingCancelledError())
+    }
     video.addEventListener('seeked', handleSeeked, { once: true })
     video.addEventListener('error', handleError, { once: true })
+    signal.addEventListener('abort', handleAbort, { once: true })
     video.currentTime = time
   })
 }
@@ -94,23 +152,28 @@ async function connectAudio(video: HTMLVideoElement): Promise<{
   if (!graph) {
     const context = new AudioContext()
     const source = context.createMediaElementSource(video)
-    source.connect(context.destination)
-    graph = { context, source }
+    const monitor = context.createGain()
+    source.connect(monitor)
+    monitor.connect(context.destination)
+    graph = { context, source, monitor }
     audioGraphs.set(video, graph)
   }
 
   if (graph.context.state === 'suspended') await graph.context.resume()
+  graph.monitor.gain.value = 0
   const destination = graph.context.createMediaStreamDestination()
   graph.source.connect(destination)
   const track = destination.stream.getAudioTracks()[0]
   if (!track) {
     graph.source.disconnect(destination)
+    graph.monitor.gain.value = 1
     throw new Error('無法建立原音錄製軌道')
   }
   return {
     track,
     disconnect: () => {
       graph?.source.disconnect(destination)
+      if (graph) graph.monitor.gain.value = 1
       track.stop()
     },
   }
@@ -125,12 +188,17 @@ export function startCompositeRecording({
   onFrame,
   onProgress,
   onRestore,
+  preparationTimeoutMs = DEFAULT_PREPARATION_TIMEOUT_MS,
+  stallTimeoutMs = DEFAULT_STALL_TIMEOUT_MS,
+  maxRuntimeMs = Math.max(60_000, duration * 2_000 + 30_000),
 }: CompositeRecordingOptions): CompositeRecordingSession {
   let cancelled = false
   let recorder: MediaRecorder | null = null
+  const preparationController = new AbortController()
 
   const cancel = () => {
     cancelled = true
+    preparationController.abort()
     video.pause()
     if (recorder?.state !== 'inactive') recorder?.stop()
   }
@@ -146,11 +214,15 @@ export function startCompositeRecording({
       const originalTime = video.currentTime
       const wasPaused = video.paused
       const originalPlaybackRate = video.playbackRate
+      const originalVolume = video.volume
       const canvasStream = canvas.captureStream(fps)
       let audioConnection: Awaited<ReturnType<typeof connectAudio>> | null = null
       let animationFrame = 0
       let stopTimer = 0
       let settled = false
+      let startedAt = 0
+      let lastProgressAt = 0
+      let lastMediaTime = 0
       const chunks: Blob[] = []
 
       const restore = () => {
@@ -159,6 +231,7 @@ export function startCompositeRecording({
         video.removeEventListener('ended', handleEnded)
         video.pause()
         video.playbackRate = originalPlaybackRate
+        video.volume = originalVolume
         video.currentTime = originalTime
         for (const track of canvasStream.getVideoTracks()) track.stop()
         audioConnection?.disconnect()
@@ -173,6 +246,12 @@ export function startCompositeRecording({
         reject(error)
       }
 
+      const abortWithError = (error: Error) => {
+        if (settled) return
+        finishWithError(error)
+        if (recorder?.state !== 'inactive') recorder?.stop()
+      }
+
       const handleEnded = () => {
         onFrame(duration)
         onProgress({ currentTime: duration, duration })
@@ -185,6 +264,8 @@ export function startCompositeRecording({
         if (includeAudio) {
           audioConnection = await connectAudio(video)
           canvasStream.addTrack(audioConnection.track)
+        } else {
+          video.volume = 0
         }
         if (cancelled) throw new CompositeRecordingCancelledError()
 
@@ -222,7 +303,7 @@ export function startCompositeRecording({
 
         video.pause()
         video.playbackRate = 1
-        await seekVideo(video, 0)
+        await seekVideo(video, 0, preparationController.signal, preparationTimeoutMs)
         if (cancelled) throw new CompositeRecordingCancelledError()
         onFrame(0)
         onProgress({ currentTime: 0, duration })
@@ -230,6 +311,26 @@ export function startCompositeRecording({
         const render = () => {
           if (settled || cancelled) return
           const time = Math.min(duration, video.currentTime)
+          const now = performance.now()
+          if (time > lastMediaTime + 0.01) {
+            lastMediaTime = time
+            lastProgressAt = now
+          }
+          const timeoutReason = recordingTimeoutReason({
+            now,
+            startedAt,
+            lastProgressAt,
+            stallTimeoutMs,
+            maxRuntimeMs,
+          })
+          if (timeoutReason === 'stalled') {
+            abortWithError(new Error(`影片播放已停滯超過 ${Math.round(stallTimeoutMs / 1_000)} 秒，輸出已停止`))
+            return
+          }
+          if (timeoutReason === 'deadline') {
+            abortWithError(new Error('影片輸出超過安全時間上限，已自動停止'))
+            return
+          }
           onFrame(time)
           onProgress({ currentTime: time, duration })
           animationFrame = window.requestAnimationFrame(render)
@@ -237,11 +338,19 @@ export function startCompositeRecording({
 
         video.addEventListener('ended', handleEnded)
         recorder.start(250)
+        startedAt = performance.now()
+        lastProgressAt = startedAt
+        lastMediaTime = 0
         animationFrame = window.requestAnimationFrame(render)
         await video.play()
       } catch (error) {
+        const recordingError = cancelled
+          ? new CompositeRecordingCancelledError()
+          : error instanceof Error
+            ? error
+            : new Error('影片輸出失敗')
         if (recorder?.state !== 'inactive') recorder?.stop()
-        else finishWithError(error instanceof Error ? error : new Error('影片輸出失敗'))
+        else finishWithError(recordingError)
       }
     })().catch((error: unknown) => {
       reject(error instanceof Error ? error : new Error('影片輸出失敗'))

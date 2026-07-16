@@ -8,6 +8,7 @@ import { appendStrokePoint, pointerToNormalizedPoint, renderMaskStrokes } from '
 import { segmentPersonFrame } from './lib/person-segmenter'
 import { shouldRenderPreview } from './lib/render-ownership'
 import {
+  releaseCompositeRecordingAudio,
   startCompositeRecording,
   type CompositeRecordingProgress,
   type CompositeRecordingResult,
@@ -258,7 +259,19 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     return () => window.cancelAnimationFrame(animationFrame)
   }, [keyframes, paintMask, playing, renderScene])
 
-  useEffect(() => () => recordingSessionRef.current?.cancel(), [])
+  useEffect(() => () => {
+    const recordingSession = recordingSessionRef.current
+    recordingSession?.cancel()
+    const video = videoRef.current
+    if (!video) return
+    if (recordingSession) {
+      void recordingSession.result
+        .catch(() => undefined)
+        .finally(() => releaseCompositeRecordingAudio(video))
+      return
+    }
+    void releaseCompositeRecordingAudio(video)
+  }, [])
 
   useImperativeHandle(ref, () => ({
     exportMask: async () => {
