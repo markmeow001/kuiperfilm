@@ -203,6 +203,15 @@ export function V2HomeClient({ locale }: V2HomeClientProps) {
               <span className="hidden sm:inline">无限画布</span>
             </Link>
             <Link
+              href={`/${locale}/live-composite`}
+              aria-label="AI 實拍合成"
+              className="flex items-center gap-1 rounded-sm border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20"
+              title="AI 實拍合成 · 自動人物遮罩、手動畫筆修補、替換背景並輸出合成影片"
+            >
+              <AppIcon name="video" className="h-3.5 w-3.5" />
+              <span className="hidden 2xl:inline">AI 實拍合成</span>
+            </Link>
+            <Link
               href={`/${locale}/playground`}
               className="flex items-center gap-1 rounded-sm border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 text-violet-300 transition-colors hover:bg-violet-500/20 hover:border-violet-400"
               title="創作 Playground · 不綁專案,直接上傳素材生成單張圖片或單支影片"
