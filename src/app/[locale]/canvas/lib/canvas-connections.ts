@@ -17,7 +17,7 @@ export const CANVAS_TARGET_HANDLE = 'canvas-input'
 const ACCEPTS: Record<CanvasNodeType, readonly CanvasNodeType[]> = {
   text: [],
   script: ['text', 'character', 'image'],
-  image: ['text', 'script', 'character', 'image', 'video'],
+  image: ['text', 'script', 'character', 'image', 'video', 'mask'],
   video: ['text', 'script', 'character', 'image', 'video'],
   audio: ['text', 'script'],
   composition: ['video', 'composition', 'audio'],
@@ -49,7 +49,7 @@ function portTypeForSource(source: CanvasNodeType): CanvasPortType | null {
     case 'video': return 'video-clip'
     case 'audio': return 'audio-voice'
     case 'composition': return 'video-clip'
-    case 'mask': return null
+    case 'mask': return 'mask-image'
     case 'group': return 'storyboard-group'
     case 'director': return null
   }
@@ -77,6 +77,7 @@ export function inferCanvasEdgeData(
     return { portType, order, role: order === 0 ? 'first-frame' : order === 1 ? 'last-frame' : 'reference' }
   }
   if (source === 'audio' && target === 'composition') return { portType, role: options.targetMode === 'music' ? 'music' : 'voice' }
+  if (source === 'mask') return { portType, role: 'mask' }
   if (source === 'character') return { portType, role: 'reference' }
   if (source === 'image' && target === 'character') return { portType, role: 'reference' }
   if ((source === 'image' || source === 'video') && (target === 'image' || target === 'video')) {

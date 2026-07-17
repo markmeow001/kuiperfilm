@@ -16,11 +16,12 @@ export type CanvasPortType =
   | 'audio-voice'
   | 'audio-music'
   | 'storyboard-group'
+  | 'mask-image'
 
 export interface CanvasEdgeData extends Record<string, unknown> {
   portType: CanvasPortType
   order?: number
-  role?: 'first-frame' | 'last-frame' | 'reference' | 'clip' | 'voice' | 'music'
+  role?: 'first-frame' | 'last-frame' | 'reference' | 'clip' | 'voice' | 'music' | 'mask'
   invalid?: boolean
   invalidReason?: string
 }
@@ -78,6 +79,14 @@ export interface CanvasNodeData extends Record<string, unknown> {
    * silently rendering old strokes over a different picture.
    */
   maskDrawnOnSig?: string | null
+  /**
+   * Effective plate the strokes sit on, synced by MaskNode whichever way the
+   * plate arrived (upstream image node OR own upload). Downstream consumers
+   * (MediaNode 局部重绘) read these instead of re-walking the graph.
+   * maskPlateKey is the durable COS key when known (uploads); URL otherwise.
+   */
+  maskPlateUrl?: string | null
+  maskPlateKey?: string | null
   /** Prompt / text content. */
   prompt: string
   /** Selected model key (image or video catalog). Empty until chosen. */
@@ -237,6 +246,8 @@ export const DEFAULT_NODE_DATA = {
   maskSourceWidth: null as number | null,
   maskSourceHeight: null as number | null,
   maskDrawnOnSig: null as string | null,
+  maskPlateUrl: null as string | null,
+  maskPlateKey: null as string | null,
   prompt: '',
   modelKey: '',
   aspectRatio: '9:16',

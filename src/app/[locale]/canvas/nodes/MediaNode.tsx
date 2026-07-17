@@ -17,6 +17,7 @@ import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import { type CanvasNodeData, DEFAULT_NODE_DATA } from '../lib/canvas-types'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { pickUpstreamFrameUrls, pickUpstreamReferenceUrls, pickUpstreamText, resolveFirstLastFrames } from '../lib/canvas-refs'
+import { pickUpstreamMask, rasterizeMaskToPngBlob, validateMaskForSubmit } from '../lib/canvas-mask'
 import { CAMERA_MOVES, cameraMovePhrase } from '../lib/camera-moves'
 import { IMAGE_RECIPES } from '../lib/canvas-recipes'
 import { visualStyles } from '@/lib/style-library'
@@ -125,6 +126,13 @@ export function makeMediaNode(outputType: 'image' | 'video') {
     )
     const upstream = useNodesData(incomingSourceIds)
     const upstreamRefs = useMemo(() => pickUpstreamReferenceUrls(upstream, id), [upstream, id])
+    // 局部重绘: a connected mask node switches this node to inpainting — the
+    // mask's plate becomes the single source image and the rasterized strokes
+    // become mask_image. Image nodes only (video has no mask-edit provider).
+    const upstreamMask = useMemo(
+      () => (outputType === 'image' ? pickUpstreamMask(upstream) : null),
+      [upstream],
+    )
     const upstreamFrames = useMemo(() => pickUpstreamFrameUrls(upstream), [upstream])
     // Upstream 文本/脚本 nodes drive this shot's prompt (script → 分镜 chain).
     const upstreamText = useMemo(() => pickUpstreamText(upstream), [upstream])
@@ -222,6 +230,17 @@ export function makeMediaNode(outputType: 'image' | 'video') {
         setError('该模型不支持参考图/图生图：请断开上游图片、移除参考图，或换用 Grok Imagine 等支持编辑的模型')
         return
       }
+      // 局部重绘 gates mirror the server's — fail here, before freeze/rollback.
+      if (upstreamMask) {
+        const maskBlockReason = validateMaskForSubmit(
+          upstreamMask,
+          selectedModel?.capabilities?.image?.supportMaskEdit === true,
+        )
+        if (maskBlockReason) {
+          setError(maskBlockReason)
+          return
+        }
+      }
       if (outputType === 'video' && genMode === 'firstlast') {
         if (refsForSubmit.length === 0) { setError('首尾帧：请先连入或设定首帧图'); return }
         if (!connectedLastFrame) { setError('首尾帧：请连接第二张图片或上传尾帧图'); return }
@@ -254,6 +273,26 @@ export function makeMediaNode(outputType: 'image' | 'video') {
         const effectiveModelKey = outputType === 'video'
           ? variantKeyForMode(d.modelKey, genMode, models.map((m) => m.value))
           : d.modelKey
+        // 局部重绘: rasterize the strokes at the plate's natural size, upload
+        // the PNG, and pin the run to { referenceImages: [plate], maskImage }.
+        let maskSubmitFields: { referenceImages: string[]; maskImage: string } | null = null
+        if (upstreamMask) {
+          const plateRef = upstreamMask.plateKey ?? upstreamMask.plateUrl
+          const { width: plateW, height: plateH } = upstreamMask
+          if (!plateRef || !plateW || !plateH) {
+            // validateMaskForSubmit already gated these — reaching here means
+            // the mask node changed mid-submit; surface it, don't guess.
+            setError('遮罩数据在提交中发生变化，请重试')
+            setSubmitting(false)
+            return
+          }
+          const maskBlob = await rasterizeMaskToPngBlob(upstreamMask.paths, plateW, plateH)
+          const uploaded = await upload.mutateAsync({
+            file: new File([maskBlob], 'canvas-mask.png', { type: 'image/png' }),
+            type: 'image',
+          })
+          maskSubmitFields = { referenceImages: [plateRef], maskImage: uploaded.key }
+        }
         const submission = {
           prompt: finalPrompt,
           outputType,
@@ -274,6 +313,8 @@ export function makeMediaNode(outputType: 'image' | 'video') {
           ...(outputType === 'image' && effectiveImageResolution
             ? { resolution: effectiveImageResolution }
             : {}),
+          // Last: inpainting pins the plate as the ONLY reference + the mask.
+          ...(maskSubmitFields ?? {}),
         }
         // Batch (image only): fan out N playground runs — the spine hardcodes
         // generationCount=1, so N runs = N variants. Run #1 stays on this node;
@@ -377,7 +418,14 @@ export function makeMediaNode(outputType: 'image' | 'video') {
                 生成失败 · 点选节点查看
               </div>
             ) : null}
-            {allRefs.length > 0 ? (
+            {upstreamMask ? (
+              <div
+                className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 font-mono text-[9px]"
+                style={{ background: `${CANVAS_TOKENS.bg.canvas}cc`, color: '#FF2EAF', border: '1px solid #FF2EAF55' }}
+              >
+                局部重绘 ←遮罩
+              </div>
+            ) : allRefs.length > 0 ? (
               <div
                 className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 font-mono text-[9px]"
                 style={{ background: `${CANVAS_TOKENS.bg.canvas}cc`, color: CANVAS_TOKENS.accent, border: `1px solid ${CANVAS_TOKENS.accent}55` }}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useNodeConnections, useNodesData, useReactFlow, type NodeProps } from '@xyflow/react'
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
@@ -28,15 +28,30 @@ export function MaskNode({ id, data, selected }: NodeProps) {
   const incoming = useNodeConnections({ handleType: 'target' })
   const upstreamIds = useMemo(() => incoming.map((connection) => connection.source), [incoming])
   const upstreamNodes = useNodesData(upstreamIds)
-  const upstreamUrl = useMemo(() => {
+  const upstreamPlate = useMemo(() => {
     // Multiple image upstreams are ambiguous — the FIRST connected wins (the
     // connection hint tells users one plate per mask).
     const source = upstreamNodes.find((node) => node?.type === 'image')
     if (!source) return null
     const sourceData = source.data as CanvasNodeData
-    return sourceData.resultUrl ?? sourceData.anchorUrl ?? null
+    // Pair url+key exactly: a generated result exposes only its signed URL
+    // (no client-side key); an anchor-only node exposes both. Mixing the
+    // result URL with the anchor's key would rewrite a DIFFERENT picture.
+    if (sourceData.resultUrl) return { url: sourceData.resultUrl, key: null }
+    if (sourceData.anchorUrl) return { url: sourceData.anchorUrl, key: sourceData.anchorKey ?? null }
+    return null
   }, [upstreamNodes])
-  const sourceUrl = upstreamUrl ?? d.maskSourceUrl ?? null
+  const sourceUrl = upstreamPlate?.url ?? d.maskSourceUrl ?? null
+
+  // Sync the effective plate into node data so downstream 局部重绘 consumers
+  // read it directly instead of re-walking the graph (guarded: no-op renders).
+  useEffect(() => {
+    const plateUrl = upstreamPlate ? upstreamPlate.url : d.maskSourceUrl ?? null
+    const plateKey = upstreamPlate ? upstreamPlate.key : d.maskSourceKey ?? null
+    if (plateUrl !== (d.maskPlateUrl ?? null) || plateKey !== (d.maskPlateKey ?? null)) {
+      updateNodeData(id, { maskPlateUrl: plateUrl, maskPlateKey: plateKey })
+    }
+  }, [upstreamPlate, d.maskSourceUrl, d.maskSourceKey, d.maskPlateUrl, d.maskPlateKey, id, updateNodeData])
   const sourceSig = maskSourceSig(sourceUrl)
   const paths = d.maskPaths ?? []
   const mode = d.maskMode ?? 'add'
@@ -261,7 +276,7 @@ export function MaskNode({ id, data, selected }: NodeProps) {
         </div>
         {error ? <div className="mt-1 text-[10px]" style={{ color: '#FF8A8A' }}>{error}</div> : null}
         <div className="mt-2 rounded-md px-2 py-1.5 text-[10px]" style={{ background: CANVAS_TOKENS.bg.input, color: CANVAS_TOKENS.text.muted }}>
-          当前先保存可编辑遮罩；AI 背景修补会在下一阶段读取此遮罩与原图。
+          圈选后把本节点连到图片节点，生成时即对圈选区局部重绘（GPT Image 1）。
         </div>
       </div>
     </NodeShell>

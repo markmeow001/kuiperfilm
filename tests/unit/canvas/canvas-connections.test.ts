@@ -13,6 +13,9 @@ describe('canvas connection contract', () => {
     ['composition', 'composition'],
     ['audio', 'composition'],
     ['image', 'mask'],
+    // 局部重绘 (2026-07-17): mask 输出接图片节点 — consumer 在 MediaNode
+    // (upstreamMask → rasterize+upload → maskImage)。
+    ['mask', 'image'],
   ] as const)('%s -> %s 在连线白名单内（consumer 存在性靠人工核对，白名单新增时必须同步核对）', (source, target) => {
     expect(canConnectCanvasNodes(source, target)).toBe(true)
   })
@@ -20,7 +23,8 @@ describe('canvas connection contract', () => {
   it.each([
     ['audio', 'video'], ['group', 'image'], ['director', 'video'],
     ['video', 'audio'], ['script', 'director'], ['text', 'character'],
-    ['image', 'composition'], ['video', 'mask'], ['mask', 'image'],
+    ['image', 'composition'], ['video', 'mask'], ['mask', 'video'],
+    ['mask', 'composition'], ['mask', 'character'],
   ] as const)('%s -> %s is rejected instead of drawing a fake wire', (source, target) => {
     expect(canConnectCanvasNodes(source, target)).toBe(false)
   })
@@ -42,5 +46,9 @@ describe('inferCanvasEdgeData', () => {
 
   it('unsupported legacy pair -> explicit invalid metadata', () => {
     expect(inferCanvasEdgeData('audio', 'video')).toMatchObject({ portType: 'audio-voice', invalid: true })
+  })
+
+  it('mask -> image edge carries the mask role (局部重绘)', () => {
+    expect(inferCanvasEdgeData('mask', 'image')).toEqual({ portType: 'mask-image', role: 'mask' })
   })
 })

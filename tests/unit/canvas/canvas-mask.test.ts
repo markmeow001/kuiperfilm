@@ -6,7 +6,10 @@ import {
   isMaskStale,
   maskSourceSig,
   paintMaskPaths,
+  pickUpstreamMask,
+  validateMaskForSubmit,
   type MaskPaintContext,
+  type UpstreamMask,
 } from '@/app/[locale]/canvas/lib/canvas-mask'
 import type { CanvasMaskPath } from '@/app/[locale]/canvas/lib/canvas-types'
 
@@ -131,5 +134,74 @@ describe('paintMaskPaths', () => {
     const { ctx, ops } = recordingCtx()
     paintMaskPaths(ctx, [path('add', [])], 1000, 1000)
     expect(ops.filter((o) => o.op !== 'fillRect' && o.op !== 'scale')).toHaveLength(0)
+  })
+})
+
+describe('pickUpstreamMask', () => {
+  it('extracts the first connected mask node payload', () => {
+    const mask = pickUpstreamMask([
+      { type: 'text', data: { prompt: 'x' } },
+      {
+        type: 'mask',
+        data: {
+          maskPaths: [path('add', [[0.1, 0.1], [0.2, 0.2]])],
+          maskPlateUrl: 'https://cos/plate.png?sig=1',
+          maskPlateKey: 'images/plate.png',
+          maskSourceWidth: 1920,
+          maskSourceHeight: 1080,
+          maskDrawnOnSig: 'https://cos/plate.png',
+        },
+      },
+    ])
+    expect(mask).toEqual({
+      paths: [path('add', [[0.1, 0.1], [0.2, 0.2]])],
+      plateUrl: 'https://cos/plate.png?sig=1',
+      plateKey: 'images/plate.png',
+      width: 1920,
+      height: 1080,
+      drawnOnSig: 'https://cos/plate.png',
+    })
+  })
+
+  it('returns null when no mask node is connected', () => {
+    expect(pickUpstreamMask([{ type: 'image', data: {} }, null, undefined])).toBeNull()
+  })
+})
+
+describe('validateMaskForSubmit', () => {
+  const usable: UpstreamMask = {
+    paths: [path('add', [[0.1, 0.1], [0.2, 0.2]])],
+    plateUrl: 'https://cos/plate.png?sig=1',
+    plateKey: null,
+    width: 1920,
+    height: 1080,
+    drawnOnSig: 'https://cos/plate.png',
+  }
+
+  it('passes a complete, fresh mask on a supporting model', () => {
+    expect(validateMaskForSubmit(usable, true)).toBeNull()
+  })
+
+  it('blocks models without supportMaskEdit', () => {
+    expect(validateMaskForSubmit(usable, false)).toContain('不支持局部重绘')
+  })
+
+  it('blocks a mask with no plate', () => {
+    expect(validateMaskForSubmit({ ...usable, plateUrl: null, plateKey: null }, true)).toContain('没有底图')
+  })
+
+  it('blocks an ink-less mask (erase-only or empty)', () => {
+    expect(validateMaskForSubmit({ ...usable, paths: [] }, true)).toContain('遮罩为空')
+    expect(validateMaskForSubmit({ ...usable, paths: [path('erase', [[0.5, 0.5]])] }, true)).toContain('遮罩为空')
+  })
+
+  it('blocks when plate dimensions are not ready', () => {
+    expect(validateMaskForSubmit({ ...usable, width: null }, true)).toContain('尺寸未就绪')
+  })
+
+  it('blocks stale strokes (plate changed since drawing)', () => {
+    expect(
+      validateMaskForSubmit({ ...usable, drawnOnSig: 'https://cos/other.png' }, true),
+    ).toContain('底图已更新')
   })
 })
