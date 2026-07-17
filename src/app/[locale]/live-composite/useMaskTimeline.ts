@@ -8,21 +8,38 @@ interface TimelineSnapshot {
   keyframes: MaskKeyframe[]
 }
 
+interface TimelineState {
+  keyframes: MaskKeyframe[]
+  past: TimelineSnapshot[]
+  future: TimelineSnapshot[]
+}
+
 const makeInitialKeyframes = (): MaskKeyframe[] => [{ id: 'mask-keyframe-0', time: 0, strokes: [] }]
 
+const makeInitialState = (): TimelineState => ({ keyframes: makeInitialKeyframes(), past: [], future: [] })
+
 export function useMaskTimeline(currentTime: number) {
-  const [keyframes, setKeyframes] = useState<MaskKeyframe[]>(makeInitialKeyframes)
-  const [past, setPast] = useState<TimelineSnapshot[]>([])
-  const [future, setFuture] = useState<TimelineSnapshot[]>([])
+  const [state, setState] = useState<TimelineState>(makeInitialState)
+  const { keyframes, past, future } = state
 
   const resolved = useMemo(() => resolveMaskKeyframe(keyframes, currentTime), [currentTime, keyframes])
   const exact = useMemo(() => findExactMaskKeyframe(keyframes, currentTime), [currentTime, keyframes])
 
-  const commit = (next: MaskKeyframe[]) => {
-    if (next === keyframes) return
-    setPast((history) => [...history, { keyframes }])
-    setKeyframes(next)
-    setFuture([])
+  // Every mutation computes the next keyframes from the CURRENT state inside a
+  // functional update. Long-running flows (e.g. an AI scan holding a stale
+  // `applyAiMasks` reference) therefore merge against the latest keyframes and
+  // can never wipe edits made while they were in flight. Undo/redo history is
+  // kept in the same state object so snapshots stay consistent with keyframes.
+  const commit = (update: (current: MaskKeyframe[]) => MaskKeyframe[]) => {
+    setState((current) => {
+      const next = update(current.keyframes)
+      if (next === current.keyframes) return current
+      return {
+        keyframes: next,
+        past: [...current.past, { keyframes: current.keyframes }],
+        future: [],
+      }
+    })
   }
 
   return {
@@ -32,39 +49,48 @@ export function useMaskTimeline(currentTime: number) {
     strokes: resolved?.strokes ?? [],
     canUndo: past.length > 0,
     canRedo: future.length > 0,
-    reset: () => {
-      setKeyframes(makeInitialKeyframes())
-      setPast([])
-      setFuture([])
-    },
-    addKeyframe: () => commit(createMaskKeyframeFromCurrent(keyframes, currentTime, () => crypto.randomUUID())),
-    deleteKeyframe: () => {
-      if (!exact) return
-      commit(removeMaskKeyframe(keyframes, exact.id))
-    },
-    commitStroke: (stroke: MaskStroke) => {
-      const inherited = resolved?.strokes ?? []
-      commit(upsertMaskKeyframe(keyframes, currentTime, [...inherited, stroke], () => crypto.randomUUID(), resolved?.baseMask))
-    },
+    reset: () => setState(makeInitialState()),
+    addKeyframe: () => commit((current) => createMaskKeyframeFromCurrent(current, currentTime, () => crypto.randomUUID())),
+    deleteKeyframe: () => commit((current) => {
+      const exactNow = findExactMaskKeyframe(current, currentTime)
+      return exactNow ? removeMaskKeyframe(current, exactNow.id) : current
+    }),
+    commitStroke: (stroke: MaskStroke) => commit((current) => {
+      const resolvedNow = resolveMaskKeyframe(current, currentTime)
+      return upsertMaskKeyframe(current, currentTime, [...(resolvedNow?.strokes ?? []), stroke], () => crypto.randomUUID(), resolvedNow?.baseMask)
+    }),
     applyAiMasks: (frames: Array<{ time: number; mask: MaskRaster }>) => {
-      commit(mergeAiMaskKeyframes(keyframes, frames, () => crypto.randomUUID()))
+      commit((current) => mergeAiMaskKeyframes(current, frames, () => crypto.randomUUID()))
     },
-    clearCurrent: () => commit(upsertMaskKeyframe(keyframes, currentTime, [], () => crypto.randomUUID(), resolved?.baseMask)),
-    applyToStart: () => commit(applyMaskToStart(keyframes, currentTime, resolved?.strokes ?? [], () => crypto.randomUUID(), resolved?.baseMask)),
-    applyToEnd: () => commit(applyMaskToEnd(keyframes, currentTime, resolved?.strokes ?? [], () => crypto.randomUUID(), resolved?.baseMask)),
-    undo: () => {
-      const previous = past.at(-1)
-      if (!previous) return
-      setPast(past.slice(0, -1))
-      setFuture((history) => [{ keyframes }, ...history])
-      setKeyframes(previous.keyframes)
-    },
-    redo: () => {
-      const next = future[0]
-      if (!next) return
-      setFuture(future.slice(1))
-      setPast((history) => [...history, { keyframes }])
-      setKeyframes(next.keyframes)
-    },
+    clearCurrent: () => commit((current) => {
+      const resolvedNow = resolveMaskKeyframe(current, currentTime)
+      return upsertMaskKeyframe(current, currentTime, [], () => crypto.randomUUID(), resolvedNow?.baseMask)
+    }),
+    applyToStart: () => commit((current) => {
+      const resolvedNow = resolveMaskKeyframe(current, currentTime)
+      return applyMaskToStart(current, currentTime, resolvedNow?.strokes ?? [], () => crypto.randomUUID(), resolvedNow?.baseMask)
+    }),
+    applyToEnd: () => commit((current) => {
+      const resolvedNow = resolveMaskKeyframe(current, currentTime)
+      return applyMaskToEnd(current, currentTime, resolvedNow?.strokes ?? [], () => crypto.randomUUID(), resolvedNow?.baseMask)
+    }),
+    undo: () => setState((current) => {
+      const previous = current.past.at(-1)
+      if (!previous) return current
+      return {
+        keyframes: previous.keyframes,
+        past: current.past.slice(0, -1),
+        future: [{ keyframes: current.keyframes }, ...current.future],
+      }
+    }),
+    redo: () => setState((current) => {
+      const next = current.future[0]
+      if (!next) return current
+      return {
+        keyframes: next.keyframes,
+        past: [...current.past, { keyframes: current.keyframes }],
+        future: current.future.slice(1),
+      }
+    }),
   }
 }

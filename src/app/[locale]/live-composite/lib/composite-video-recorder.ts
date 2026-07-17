@@ -1,3 +1,5 @@
+import { seekVideoGuarded } from './video-seek'
+
 export interface CompositeRecordingProgress {
   currentTime: number
   duration: number
@@ -108,35 +110,12 @@ export function seekVideo(
   signal: AbortSignal,
   timeoutMs: number,
 ): Promise<void> {
-  if (signal.aborted) return Promise.reject(new CompositeRecordingCancelledError())
-  if (video.readyState >= 2 && Math.abs(video.currentTime - time) <= 0.01) return Promise.resolve()
-  return new Promise((resolve, reject) => {
-    const timeout = globalThis.setTimeout(() => {
-      cleanup()
-      reject(new Error(`影片跳轉超過 ${Math.round(timeoutMs / 1_000)} 秒，無法開始輸出`))
-    }, timeoutMs)
-    const cleanup = () => {
-      globalThis.clearTimeout(timeout)
-      video.removeEventListener('seeked', handleSeeked)
-      video.removeEventListener('error', handleError)
-      signal.removeEventListener('abort', handleAbort)
-    }
-    const handleSeeked = () => {
-      cleanup()
-      resolve()
-    }
-    const handleError = () => {
-      cleanup()
-      reject(new Error('影片跳轉失敗，無法開始輸出'))
-    }
-    const handleAbort = () => {
-      cleanup()
-      reject(new CompositeRecordingCancelledError())
-    }
-    video.addEventListener('seeked', handleSeeked, { once: true })
-    video.addEventListener('error', handleError, { once: true })
-    signal.addEventListener('abort', handleAbort, { once: true })
-    video.currentTime = time
+  return seekVideoGuarded(video, time, {
+    signal,
+    timeoutMs,
+    createTimeoutError: (timeoutSeconds) => new Error(`影片跳轉超過 ${timeoutSeconds} 秒，無法開始輸出`),
+    createSeekFailedError: () => new Error('影片跳轉失敗，無法開始輸出'),
+    createAbortError: () => new CompositeRecordingCancelledError(),
   })
 }
 
@@ -349,8 +328,11 @@ export function startCompositeRecording({
           : error instanceof Error
             ? error
             : new Error('影片輸出失敗')
-        if (recorder?.state !== 'inactive') recorder?.stop()
-        else finishWithError(recordingError)
+        // The recorder may not exist yet (cancel or failure during preparation,
+        // e.g. while connecting audio), so settle the result promise explicitly
+        // instead of relying on recorder.onstop — otherwise the promise would
+        // never resolve and the page would stay locked in the exporting state.
+        abortWithError(recordingError)
       }
     })().catch((error: unknown) => {
       reject(error instanceof Error ? error : new Error('影片輸出失敗'))

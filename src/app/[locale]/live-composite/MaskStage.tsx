@@ -7,6 +7,7 @@ import { resolveMaskKeyframe } from './lib/mask-keyframes'
 import { appendStrokePoint, pointerToNormalizedPoint, renderMaskStrokes } from './lib/mask-strokes'
 import { segmentPersonFrame } from './lib/person-segmenter'
 import { shouldRenderPreview } from './lib/render-ownership'
+import { seekVideoGuarded } from './lib/video-seek'
 import {
   releaseCompositeRecordingAudio,
   startCompositeRecording,
@@ -63,24 +64,15 @@ function drawCover(context: CanvasRenderingContext2D, image: CanvasImageSource, 
   context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
 }
 
-function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
-  if (video.readyState >= 2 && Math.abs(video.currentTime - time) <= 0.01) return Promise.resolve()
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      video.removeEventListener('seeked', handleSeeked)
-      video.removeEventListener('error', handleError)
-    }
-    const handleSeeked = () => {
-      cleanup()
-      resolve()
-    }
-    const handleError = () => {
-      cleanup()
-      reject(new Error('影片跳轉失敗，無法分析指定影格'))
-    }
-    video.addEventListener('seeked', handleSeeked, { once: true })
-    video.addEventListener('error', handleError, { once: true })
-    video.currentTime = time
+const ANALYSIS_SEEK_TIMEOUT_MS = 5_000
+
+function seekVideoForAnalysis(video: HTMLVideoElement, time: number, signal: AbortSignal): Promise<void> {
+  return seekVideoGuarded(video, time, {
+    signal,
+    timeoutMs: ANALYSIS_SEEK_TIMEOUT_MS,
+    createTimeoutError: (timeoutSeconds) => new Error(`影片跳轉超過 ${timeoutSeconds} 秒，無法分析指定影格`),
+    createSeekFailedError: () => new Error('影片跳轉失敗，無法分析指定影格'),
+    createAbortError: () => new Error('分析已中止'),
   })
 }
 
@@ -110,6 +102,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   const backgroundImageRef = useRef<HTMLImageElement | null>(null)
   const currentStrokeRef = useRef<MaskStroke | null>(null)
   const recordingSessionRef = useRef<CompositeRecordingSession | null>(null)
+  const analysisAbortRef = useRef<AbortController | null>(null)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [stageError, setStageError] = useState<string | null>(null)
@@ -260,6 +253,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   }, [keyframes, paintMask, playing, renderScene])
 
   useEffect(() => () => {
+    analysisAbortRef.current?.abort()
     const recordingSession = recordingSessionRef.current
     recordingSession?.cancel()
     const video = videoRef.current
@@ -330,8 +324,9 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     analyzePersonAt: async (time: number, threshold: number, edgeSoftness: number) => {
       const video = videoRef.current
       if (!video || !metadata) throw new Error('請先載入可分析的影片')
+      analysisAbortRef.current ??= new AbortController()
       video.pause()
-      await seekVideo(video, Math.min(metadata.duration, Math.max(0, time)))
+      await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
       return segmentPersonFrame(video, threshold, edgeSoftness)
     },
   }), [backgroundUrl, keyframes, metadata, onTimeChange, paintMask, renderScene])

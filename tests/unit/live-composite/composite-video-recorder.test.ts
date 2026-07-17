@@ -1,15 +1,56 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CompositeRecordingCancelledError,
   pickCompositeRecorderMime,
   recordingTimeoutReason,
   recordingExtension,
   seekVideo,
+  startCompositeRecording,
 } from '@/app/[locale]/live-composite/lib/composite-video-recorder'
 
 class FakeVideo extends EventTarget {
   readyState = 0
   currentTime = 8
+}
+
+class FakeRecordingVideo extends EventTarget {
+  readyState = 2
+  currentTime = 0
+  paused = true
+  playbackRate = 1
+  volume = 1
+  pause = vi.fn()
+  play = vi.fn(async () => undefined)
+}
+
+class FakeAudioContext {
+  state = 'running'
+  destination = {}
+  createMediaElementSource = () => ({ connect: vi.fn(), disconnect: vi.fn() })
+  createGain = () => ({ connect: vi.fn(), disconnect: vi.fn(), gain: { value: 1 } })
+  createMediaStreamDestination = () => ({ stream: { getAudioTracks: () => [{ stop: vi.fn() }] } })
+  close = async () => undefined
+}
+
+function makeFakeCanvas(): HTMLCanvasElement {
+  return {
+    captureStream: () => ({
+      addTrack: vi.fn(),
+      getVideoTracks: () => [],
+    }),
+  } as unknown as HTMLCanvasElement
+}
+
+function startRecordingWithFakes(video: FakeRecordingVideo, onRestore = vi.fn()) {
+  return startCompositeRecording({
+    canvas: makeFakeCanvas(),
+    video: video as unknown as HTMLVideoElement,
+    duration: 4,
+    includeAudio: true,
+    onFrame: vi.fn(),
+    onProgress: vi.fn(),
+    onRestore,
+  })
 }
 
 describe('live composite video recorder', () => {
@@ -91,5 +132,46 @@ describe('live composite video recorder', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('錄影器建立前的失敗與取消', () => {
+    beforeEach(() => {
+      vi.stubGlobal('MediaRecorder', class {
+        static isTypeSupported = () => true
+      })
+      vi.stubGlobal('window', {
+        cancelAnimationFrame: vi.fn(),
+        clearTimeout: vi.fn(),
+        requestAnimationFrame: vi.fn(() => 1),
+        setTimeout: vi.fn(() => 1),
+      })
+    })
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    it('保留原音但沒有 AudioContext -> 結果承諾立即失敗而非永遠卡住', async () => {
+      // AudioContext 未 stub：connectAudio 會在 MediaRecorder 建立前拋錯。
+      const video = new FakeRecordingVideo()
+      const onRestore = vi.fn()
+
+      const session = startRecordingWithFakes(video, onRestore)
+
+      await expect(session.result).rejects.toThrow('目前瀏覽器無法保留原音')
+      expect(onRestore).toHaveBeenCalledTimes(1)
+    })
+
+    it('MediaRecorder 建立前取消 -> 結果承諾以取消錯誤結束', async () => {
+      vi.stubGlobal('AudioContext', FakeAudioContext)
+      const video = new FakeRecordingVideo()
+      const onRestore = vi.fn()
+
+      const session = startRecordingWithFakes(video, onRestore)
+      session.cancel()
+
+      await expect(session.result).rejects.toBeInstanceOf(CompositeRecordingCancelledError)
+      expect(onRestore).toHaveBeenCalledTimes(1)
+    })
   })
 })

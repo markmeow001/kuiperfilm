@@ -30,6 +30,32 @@ async function getPersonSegmenter(variant: PersonSegmenterVariant): Promise<Imag
   return segmenterPromises[variant]
 }
 
+/** Warms up (and caches) the segmenter for a variant without running a frame. */
+export function preloadPersonSegmenter(variant: PersonSegmenterVariant): Promise<ImageSegmenter> {
+  return getPersonSegmenter(variant)
+}
+
+/**
+ * Closes every cached MediaPipe segmenter and clears the module-scope cache so
+ * the WASM/GPU resources are released when the feature unmounts. The next
+ * segmentation request will lazily create fresh instances.
+ */
+export async function releasePersonSegmenters(): Promise<void> {
+  const pending = Object.values(segmenterPromises)
+  for (const variant of Object.keys(segmenterPromises) as PersonSegmenterVariant[]) {
+    delete segmenterPromises[variant]
+  }
+  await Promise.all(pending.map(async (promise) => {
+    try {
+      const segmenter = await promise
+      segmenter.close()
+    } catch {
+      // Either the segmenter failed to initialise (nothing to release) or
+      // close() threw during browser teardown; both leave nothing to clean up.
+    }
+  }))
+}
+
 export async function segmentPersonFrame(
   source: HTMLCanvasElement | HTMLVideoElement,
   threshold: number,

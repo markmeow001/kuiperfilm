@@ -10,6 +10,7 @@ import { MaskKeyframeRail } from './MaskKeyframeRail'
 import { MaskStage, type MaskStageHandle } from './MaskStage'
 import { buildMaskAnalysisTimes } from './lib/mask-analysis'
 import { CompositeRecordingCancelledError } from './lib/composite-video-recorder'
+import { releasePersonSegmenters } from './lib/person-segmenter'
 import { useMaskTimeline } from './useMaskTimeline'
 import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskTool, VideoMetadata } from './live-composite-types'
 
@@ -69,8 +70,15 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     if (backgroundUrl) URL.revokeObjectURL(backgroundUrl)
   }, [backgroundUrl])
 
+  useEffect(() => () => {
+    void releasePersonSegmenters()
+  }, [])
+
   const selectVideo = (file: File) => {
-    if (isVideoExporting) return
+    // Swapping the video element's source while an analysis seek is pending
+    // would leave that seek waiting forever, so uploads stay locked until the
+    // user cancels the analysis or it completes.
+    if (isVideoExporting || isAnalyzing) return
     analysisRunRef.current += 1
     setVideoUrl(URL.createObjectURL(file))
     setVideoName(file.name)
@@ -84,7 +92,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }
 
   const selectBackground = (file: File) => {
-    if (isVideoExporting) return
+    if (isVideoExporting || isAnalyzing) return
     setBackgroundUrl(URL.createObjectURL(file))
     setView('composite')
     setExportError(null)
@@ -114,7 +122,17 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
 
   const exportVideo = async (includeAudio: boolean) => {
     const stage = stageRef.current
-    if (!stage || !metadata || isAnalyzing || isVideoExporting) {
+    if (isVideoExporting) {
+      // Keep the in-flight export's progress state intact; surface the reason
+      // through the error banner instead of overwriting exportProgress.
+      setExportError('已有影片輸出進行中，請先取消或等待完成。')
+      return
+    }
+    if (isAnalyzing) {
+      setExportProgress({ status: 'failed', currentTime: 0, duration: metadata?.duration ?? 0, message: '分析進行中，請先取消或等待分析完成。' })
+      return
+    }
+    if (!stage || !metadata) {
       setExportProgress({ status: 'failed', currentTime: 0, duration: 0, message: '請先載入影片。' })
       return
     }
@@ -301,7 +319,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           currentTime={currentTime}
           analysisProgress={analysisProgress}
           exportProgress={exportProgress}
-          interactionDisabled={isVideoExporting}
+          interactionDisabled={isVideoExporting || isAnalyzing}
           onVideoSelect={selectVideo}
           onBackgroundSelect={selectBackground}
           onBackgroundColorChange={setBackgroundColor}
