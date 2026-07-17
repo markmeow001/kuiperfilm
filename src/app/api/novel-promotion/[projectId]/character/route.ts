@@ -158,7 +158,8 @@ export const POST = apiHandler(async (
     referenceImageUrls,
     generateFromReference,
     artStyle,
-    customDescription  // 🔥 新增：文生图模式使用的自定义描述
+    customDescription,  // 🔥 新增：文生图模式使用的自定义描述
+    episodeId,
   } = body
 
   if (!name) {
@@ -173,26 +174,46 @@ export const POST = apiHandler(async (
     allReferenceImages = [referenceImageUrl]
   }
 
-  // 创建角色
-  const character = await prisma.novelPromotionCharacter.create({
-    data: {
-      novelPromotionProjectId: novelData.id,
-      name: name.trim(),
-      aliases: null
-    }
-  })
-
-  // 创建初始形象（独立表）
   const descText = description?.trim() || `${name.trim()} 的角色设定`
-  const appearance = await prisma.characterAppearance.create({
-    data: {
-      characterId: character.id,
-      appearanceIndex: PRIMARY_APPEARANCE_INDEX,
-      changeReason: '初始形象',
-      description: descText,
-      descriptions: JSON.stringify([descText]),
-      imageUrls: encodeImageUrls([]),
-      previousImageUrls: encodeImageUrls([])}
+  const normalizedEpisodeId = typeof episodeId === 'string' ? episodeId.trim() : ''
+  const { character, appearance } = await prisma.$transaction(async (tx) => {
+    if (normalizedEpisodeId) {
+      const episode = await tx.novelPromotionEpisode.findFirst({
+        where: { id: normalizedEpisodeId, novelPromotionProjectId: novelData.id },
+        select: { id: true },
+      })
+      if (!episode) throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_FOUND' })
+    }
+
+    const createdCharacter = await tx.novelPromotionCharacter.create({
+      data: {
+        novelPromotionProjectId: novelData.id,
+        name: name.trim(),
+        aliases: null,
+      },
+    })
+    const createdAppearance = await tx.characterAppearance.create({
+      data: {
+        characterId: createdCharacter.id,
+        appearanceIndex: PRIMARY_APPEARANCE_INDEX,
+        changeReason: '初始形象',
+        description: descText,
+        descriptions: JSON.stringify([descText]),
+        imageUrls: encodeImageUrls([]),
+        previousImageUrls: encodeImageUrls([]),
+      },
+    })
+    if (normalizedEpisodeId) {
+      await tx.episodeCharacter.create({
+        data: {
+          episodeId: normalizedEpisodeId,
+          characterId: createdCharacter.id,
+          appearanceId: createdAppearance.id,
+          role: 'manual',
+        },
+      })
+    }
+    return { character: createdCharacter, appearance: createdAppearance }
   })
 
   if (generateFromReference && allReferenceImages.length > 0) {

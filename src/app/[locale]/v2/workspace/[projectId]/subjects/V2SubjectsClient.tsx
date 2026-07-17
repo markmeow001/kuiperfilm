@@ -71,6 +71,7 @@ import {
   useCreateCharacterAppearance,
   useEpisodeCharacterBindings,
   useEpisodeLocationBindings,
+  useEpisodePropBindings,
 } from '@/lib/query/mutations/episode-character-binding-mutations'
 import { queryKeys } from '@/lib/query/keys'
 import { resolveErrorDisplay } from '@/lib/errors/display'
@@ -437,6 +438,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     for (const b of episodeLocationBindingsQuery.data ?? []) set.add(b.locationId)
     return set
   }, [episodeLocationBindingsQuery.data])
+  const episodePropBindingsQuery = useEpisodePropBindings(projectId, currentEpisodeId)
+  const episodePropBindingIds = useMemo(() => {
+    const set = new Set<string>()
+    for (const binding of episodePropBindingsQuery.data ?? []) set.add(binding.propId)
+    return set
+  }, [episodePropBindingsQuery.data])
   const characters: CharacterLike[] = currentEpisodeId
     ? allCharacters.filter((c) => episodeBindingIds.has(c.id))
     : allCharacters
@@ -947,6 +954,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           name: params.name,
           description: params.description || undefined,
           summary: params.summary || undefined,
+          episodeId: currentEpisodeId || undefined,
         }),
       })
       if (!res.ok) {
@@ -964,6 +972,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         })
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.locations(projectId) })
+      if (currentEpisodeId) {
+        await queryClient.invalidateQueries({
+          queryKey: [...queryKeys.tasks.all(projectId), 'episode-location-bindings', currentEpisodeId],
+        })
+      }
       setManualAddOpen(null)
     } catch (err) {
       alert(t('alerts.createFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
@@ -986,6 +999,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         body: JSON.stringify({
           name: params.name,
           summary: params.description || undefined,
+          episodeId: currentEpisodeId || undefined,
         }),
       })
       if (!res.ok) {
@@ -1002,6 +1016,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         })
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.projectAssets.props(projectId) })
+      if (currentEpisodeId) {
+        await queryClient.invalidateQueries({
+          queryKey: [...queryKeys.tasks.all(projectId), 'episode-prop-bindings', currentEpisodeId],
+        })
+      }
       setManualAddOpen(null)
     } catch (err) {
       alert(t('alerts.createFailed', { reason: (err as Error)?.message ?? t('alerts.unknown') }))
@@ -1010,13 +1029,16 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
     }
   }
 
-  const props = (propsQuery.data ?? []) as Array<{
+  const allProps = (propsQuery.data ?? []) as Array<{
     id: string
     name: string
     summary?: string | null
     description?: string | null
     imageUrl?: string | null
   }>
+  const props = currentEpisodeId
+    ? allProps.filter((prop) => episodePropBindingIds.has(prop.id))
+    : allProps
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
     { id: 'character', label: t('tabs.character'), count: characters.length },
     { id: 'scene', label: t('tabs.scene'), count: locations.length },
@@ -1029,7 +1051,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const isLoading =
     charactersQuery.isLoading
     || locationsQuery.isLoading
-    || (!!currentEpisodeId && (episodeBindingsQuery.isLoading || episodeLocationBindingsQuery.isLoading))
+    || (!!currentEpisodeId && (
+      episodeBindingsQuery.isLoading
+      || episodeLocationBindingsQuery.isLoading
+      || episodePropBindingsQuery.isLoading
+    ))
 
   // 2026-05-21 — replaced the always-on amber CTA strip with two
   // surfaces that share the same handleAnalyze action:
@@ -1603,12 +1629,18 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       {manualAddOpen === 'character' ? (
         <V2CharacterCreationModal
           projectId={projectId}
+          episodeId={currentEpisodeId}
           onClose={() => setManualAddOpen(null)}
           onSuccess={() => {
             setManualAddOpen(null)
             void queryClient.invalidateQueries({
               queryKey: queryKeys.projectAssets.characters(projectId),
             })
+            if (currentEpisodeId) {
+              void queryClient.invalidateQueries({
+                queryKey: [...queryKeys.tasks.all(projectId), 'episode-bindings', currentEpisodeId],
+              })
+            }
           }}
         />
       ) : null}

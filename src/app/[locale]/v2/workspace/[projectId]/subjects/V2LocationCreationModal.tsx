@@ -19,11 +19,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import { LOCATION_METADATA_OPTIONS, stringifyLocationSummary, type LocationMetadata } from '@/lib/location-metadata'
 import {
-  LOCATION_METADATA_OPTIONS,
-  stringifyLocationSummary,
-  type LocationMetadata,
-} from '@/lib/location-metadata'
+  getLocationCreatePolicy,
+  resolveLocationCreateSubmission,
+  type LocationCreateMode,
+} from './subject-create-policy'
 
 export interface V2LocationCreationModalProps {
   onClose: () => void
@@ -49,13 +50,10 @@ const EMPTY_META: LocationMetadata = {
 
 const DESC_MAX = 600
 
-export function V2LocationCreationModal({
-  onClose,
-  onSubmit,
-  isSubmitting,
-}: V2LocationCreationModalProps) {
+export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2LocationCreationModalProps) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [createMode, setCreateMode] = useState<LocationCreateMode>('description')
   const [meta, setMeta] = useState<LocationMetadata>(EMPTY_META)
   const [tagsInput, setTagsInput] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -80,7 +78,12 @@ export function V2LocationCreationModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, isSubmitting])
 
-  const canSubmit = name.trim().length > 0 && !isSubmitting
+  const createPolicy = getLocationCreatePolicy({
+    name,
+    mode: createMode,
+    hasFile: !!file,
+    isBusy: isSubmitting,
+  })
   const descTooShort = description.trim().length > 0 && description.trim().length < 10
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -90,9 +93,10 @@ export function V2LocationCreationModal({
       return
     }
     setFile(f)
+    if (f) setCreateMode('upload')
   }
 
-  function buildSummary(): string | null {
+  function buildSummary(note: string): string | null {
     // 收集 tags(逗號或頓號分隔)
     const tags = tagsInput
       .split(/[,，、]/)
@@ -107,20 +111,21 @@ export function V2LocationCreationModal({
       !!meta.lightDirection ||
       !!meta.colorTone ||
       tags.length > 0
-    if (!hasMeta) return null
+    if (!hasMeta && !note) return null
     return stringifyLocationSummary({
-      note: '',
+      note,
       metadata: { ...meta, tags },
     })
   }
 
   function handleSubmit() {
-    if (!canSubmit) return
+    if (!createPolicy.canSubmit) return
+    const submission = resolveLocationCreateSubmission(createMode, description)
     void onSubmit({
       name: name.trim(),
-      description: description.trim(),
-      summary: buildSummary(),
-      file,
+      description: submission.apiDescription,
+      summary: buildSummary(submission.summaryNote),
+      file: submission.shouldUpload ? file : null,
     })
   }
 
@@ -133,15 +138,19 @@ export function V2LocationCreationModal({
         if (e.target === e.currentTarget && !isSubmitting) onClose()
       }}
     >
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col">
+      <form
+        className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleSubmit()
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2.5">
             <AppIcon name="image" className="h-4 w-4 text-amber-400" />
             <div className="font-fraunces text-lg italic text-stone-100">新場景</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600/80">
-              MANUAL · CREATE
-            </div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600/80">MANUAL · CREATE</div>
           </div>
           <button
             type="button"
@@ -185,31 +194,46 @@ export function V2LocationCreationModal({
               )}
             </div>
 
-            {/* Upload + AI-gen action row */}
+            {/* Explicitly exclusive create modes — avoids AI/upload races. */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => fileRef.current?.click()}
+                onClick={() => {
+                  setCreateMode('upload')
+                  fileRef.current?.click()
+                }}
                 disabled={isSubmitting}
-                className="flex items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-stone-900/40 px-4 py-2.5 font-serif-cn text-sm text-stone-200 transition-all hover:bg-amber-500/10 hover:text-amber-300 disabled:opacity-50"
+                className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
+                  createMode === 'upload'
+                    ? 'border-amber-500/60 bg-amber-500/10 text-amber-300'
+                    : 'border-stone-700 bg-stone-900/40 text-stone-300 hover:border-amber-500/40'
+                }`}
               >
                 <AppIcon name="upload" className="h-4 w-4" />
-                {file ? '更換圖片' : '上傳'}
+                {file ? '自行上傳 · 已選圖片' : '自行上傳'}
               </button>
-              <div
-                className="flex cursor-not-allowed items-center justify-center gap-2 rounded-sm bg-gradient-to-r from-amber-500/30 via-rose-400/30 to-blue-400/30 px-4 py-2.5 font-serif-cn text-sm text-stone-300 opacity-60"
-                title="填寫描述後送出即會在後台 AI 生成 — 不需另外按"
+              <button
+                type="button"
+                onClick={() => setCreateMode('description')}
+                disabled={isSubmitting}
+                className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
+                  createMode === 'description'
+                    ? 'border-amber-500/60 bg-amber-500/10 text-amber-300'
+                    : 'border-stone-700 bg-stone-900/40 text-stone-300 hover:border-amber-500/40'
+                }`}
               >
                 <AppIcon name="sparklesAlt" className="h-4 w-4" />
-                AI 生成
-              </div>
+                AI 描述詞生成
+              </button>
             </div>
 
             {/* Description with counter */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <label className="font-mono text-[11px] uppercase tracking-wider text-stone-400">
-                  描述（可選 · AI 將根據此生圖）
+                  {createMode === 'upload'
+                    ? '場景說明（可選 · 不會啟動 AI）'
+                    : '描述（可選 · 填寫後由 AI 生圖）'}
                 </label>
                 <span className="font-mono text-[10px] tracking-wider text-stone-600">
                   {description.length}/{DESC_MAX}
@@ -250,9 +274,15 @@ export function V2LocationCreationModal({
                 <Select
                   value={meta.type ?? ''}
                   onChange={(v) =>
-                    setMeta((m) => ({ ...m, type: (v as 'interior' | 'exterior' | null) || null }))
+                    setMeta((m) => ({
+                      ...m,
+                      type: (v as 'interior' | 'exterior' | null) || null,
+                    }))
                   }
-                  options={LOCATION_METADATA_OPTIONS.type.map((o) => ({ value: o.value, label: o.label }))}
+                  options={LOCATION_METADATA_OPTIONS.type.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
                   placeholder="未設定"
                   disabled={isSubmitting}
                 />
@@ -261,7 +291,10 @@ export function V2LocationCreationModal({
                 <Select
                   value={meta.category ?? ''}
                   onChange={(v) => setMeta((m) => ({ ...m, category: v || null }))}
-                  options={LOCATION_METADATA_OPTIONS.category.map((v) => ({ value: v, label: v }))}
+                  options={LOCATION_METADATA_OPTIONS.category.map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
                   placeholder="未設定"
                   disabled={isSubmitting}
                 />
@@ -274,7 +307,10 @@ export function V2LocationCreationModal({
                 <Select
                   value={meta.weather ?? ''}
                   onChange={(v) => setMeta((m) => ({ ...m, weather: v || null }))}
-                  options={LOCATION_METADATA_OPTIONS.weather.map((v) => ({ value: v, label: v }))}
+                  options={LOCATION_METADATA_OPTIONS.weather.map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
                   placeholder="未設定"
                   disabled={isSubmitting}
                 />
@@ -283,7 +319,10 @@ export function V2LocationCreationModal({
                 <Select
                   value={meta.timeOfDay ?? ''}
                   onChange={(v) => setMeta((m) => ({ ...m, timeOfDay: v || null }))}
-                  options={LOCATION_METADATA_OPTIONS.timeOfDay.map((v) => ({ value: v, label: v }))}
+                  options={LOCATION_METADATA_OPTIONS.timeOfDay.map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
                   placeholder="未設定"
                   disabled={isSubmitting}
                 />
@@ -296,7 +335,10 @@ export function V2LocationCreationModal({
                 <Select
                   value={meta.lightSource ?? ''}
                   onChange={(v) => setMeta((m) => ({ ...m, lightSource: v || null }))}
-                  options={LOCATION_METADATA_OPTIONS.lightSource.map((v) => ({ value: v, label: v }))}
+                  options={LOCATION_METADATA_OPTIONS.lightSource.map((v) => ({
+                    value: v,
+                    label: v,
+                  }))}
                   placeholder="未設定"
                   disabled={isSubmitting}
                 />
@@ -315,7 +357,10 @@ export function V2LocationCreationModal({
               <Select
                 value={meta.colorTone ?? ''}
                 onChange={(v) => setMeta((m) => ({ ...m, colorTone: v || null }))}
-                options={LOCATION_METADATA_OPTIONS.colorTone.map((v) => ({ value: v, label: v }))}
+                options={LOCATION_METADATA_OPTIONS.colorTone.map((v) => ({
+                  value: v,
+                  label: v,
+                }))}
                 placeholder="未設定"
                 disabled={isSubmitting}
               />
@@ -334,35 +379,45 @@ export function V2LocationCreationModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-amber-900/20 bg-stone-900/30 px-6 py-4 flex-shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <>
-                <AppIcon name="loader" className="h-4 w-4 animate-spin" />
-                建立中…
-              </>
-            ) : (
-              <>
-                <AppIcon name="plus" className="h-4 w-4" />
-                建立
-              </>
-            )}
-          </button>
+        <div className="border-t border-amber-900/20 bg-stone-900/30 px-6 py-4 flex-shrink-0">
+          {createPolicy.hint ? (
+            <div className="mb-3 font-mono text-[11px] tracking-wider text-amber-300/80" role="status">
+              {createPolicy.hint}
+            </div>
+          ) : null}
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={!createPolicy.canSubmit}
+              className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <AppIcon name="loader" className="h-4 w-4 animate-spin" />
+                  建立中…
+                </>
+              ) : (
+                <>
+                  <AppIcon name="plus" className="h-4 w-4" />
+                {createMode === 'upload'
+                  ? '建立並上傳'
+                  : description.trim()
+                    ? '生成並建立'
+                    : '只建立場景'}
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      </form>
     </div>
   )
 }
@@ -370,9 +425,7 @@ export function V2LocationCreationModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-        {label}
-      </div>
+      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400">{label}</div>
       {children}
     </label>
   )
@@ -380,9 +433,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-b border-stone-800/60 pb-1.5 font-fraunces text-xs italic text-amber-500/80">
-      {children}
-    </div>
+    <div className="border-b border-stone-800/60 pb-1.5 font-fraunces text-xs italic text-amber-500/80">{children}</div>
   )
 }
 

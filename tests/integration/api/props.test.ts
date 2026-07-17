@@ -14,6 +14,7 @@ import {
 } from '../../helpers/auth'
 
 const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(),
   globalProp: {
     findMany: vi.fn(async (_args?: Record<string, unknown>): Promise<Record<string, unknown>[]> => []),
     findUnique: vi.fn(),
@@ -23,6 +24,9 @@ const prismaMock = vi.hoisted(() => ({
   },
   globalAssetFolder: { findUnique: vi.fn() },
   novelPromotionProject: { findUnique: vi.fn() },
+  novelPromotionEpisode: { findFirst: vi.fn() },
+  episodeProp: { create: vi.fn(), findMany: vi.fn() },
+  novelPromotionPanel: { findMany: vi.fn(), update: vi.fn() },
   novelPromotionProp: {
     findMany: vi.fn(async (_args?: Record<string, unknown>): Promise<Record<string, unknown>[]> => []),
     findFirst: vi.fn(),
@@ -41,8 +45,10 @@ beforeEach(() => {
   installAuthMocks()
   mockAuthenticated('user-A')
   mockRole('editor') // editor can write to asset-hub team-shared
+  prismaMock.$transaction.mockImplementation(async (callback) => callback(prismaMock))
   prismaMock.globalProp.findMany.mockImplementation(async () => [])
   prismaMock.novelPromotionProp.findMany.mockImplementation(async () => [])
+  prismaMock.novelPromotionPanel.findMany.mockImplementation(async () => [])
   prismaMock.globalProp.delete.mockImplementation(async () => ({}))
   prismaMock.novelPromotionProp.delete.mockImplementation(async () => ({}))
 })
@@ -217,6 +223,27 @@ describe('POST /api/novel-promotion/:projectId/prop', () => {
     expect(call.data.novelPromotionProjectId).toBe('np-1')
     expect(call.data.name).toBe('信件')
   })
+
+  it('[指定目前集數] -> [素材與 EpisodeProp 在同一 transaction 建立]', async () => {
+    prismaMock.novelPromotionProject.findUnique.mockResolvedValueOnce({ id: 'np-1' })
+    prismaMock.novelPromotionEpisode.findFirst.mockResolvedValueOnce({ id: 'episode-1' })
+    prismaMock.novelPromotionProp.create.mockResolvedValueOnce({ id: 'pp-1', name: '信件' })
+    prismaMock.episodeProp.create.mockResolvedValueOnce({ id: 'ep-prop-1' })
+
+    const { POST } = await import('@/app/api/novel-promotion/[projectId]/prop/route')
+    const res = await callRoute(POST as never, {
+      path: `/api/novel-promotion/${PROJECT}/prop`,
+      method: 'POST',
+      body: { name: '信件', episodeId: 'episode-1' },
+      context: { params: Promise.resolve({ projectId: PROJECT }) } as never,
+    })
+
+    expect(res.status).toBe(200)
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1)
+    expect(prismaMock.episodeProp.create.mock.calls[0][0]).toEqual({
+      data: { episodeId: 'episode-1', propId: 'pp-1', role: 'manual' },
+    })
+  })
 })
 
 describe('PATCH /api/novel-promotion/:projectId/prop', () => {
@@ -238,7 +265,7 @@ describe('PATCH /api/novel-promotion/:projectId/prop', () => {
   })
 
   it('happy path updates name + summary', async () => {
-    prismaMock.novelPromotionProp.findFirst.mockResolvedValueOnce({ id: 'pp-1' })
+    prismaMock.novelPromotionProp.findFirst.mockResolvedValueOnce({ id: 'pp-1', name: '舊名' })
     prismaMock.novelPromotionProp.update.mockResolvedValueOnce({ id: 'pp-1', name: '新名' })
 
     const { PATCH } = await import('@/app/api/novel-promotion/[projectId]/prop/route')

@@ -68,7 +68,7 @@ export const POST = apiHandler(async (
   const taskLocale = resolveTaskLocale(request, body)
   const bodyMeta = toObject((body as Record<string, unknown>).meta)
   const acceptLanguage = request.headers.get('accept-language') || ''
-  const { name, description } = body
+  const { name, description, episodeId } = body
 
   if (!name) {
     throw new ApiError('INVALID_PARAMS')
@@ -77,24 +77,38 @@ export const POST = apiHandler(async (
   // Phase 11.5: artStylePrompt 已 deprecated（被 styleProfile 三栏取代）。
   // 此处不再写入 artStylePrompt — 风格统一由 PATCH /api/projects/{id}/style-profile 管理。
 
-  // 创建场景
   const trimmedDescription = typeof description === 'string' ? description.trim() : ''
   const cleanDescription = trimmedDescription ? removeLocationPromptSuffix(trimmedDescription) : ''
-  const location = await prisma.novelPromotionLocation.create({
-    data: {
-      novelPromotionProjectId: novelData.id,
-      name: name.trim(),
-      summary: body.summary?.trim() || null
+  const normalizedEpisodeId = typeof episodeId === 'string' ? episodeId.trim() : ''
+  const location = await prisma.$transaction(async (tx) => {
+    if (normalizedEpisodeId) {
+      const episode = await tx.novelPromotionEpisode.findFirst({
+        where: { id: normalizedEpisodeId, novelPromotionProjectId: novelData.id },
+        select: { id: true },
+      })
+      if (!episode) throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_FOUND' })
     }
-  })
 
-  // 创建初始图片记录
-  await prisma.locationImage.create({
-    data: {
-      locationId: location.id,
-      imageIndex: 0,
-      description: cleanDescription
+    const created = await tx.novelPromotionLocation.create({
+      data: {
+        novelPromotionProjectId: novelData.id,
+        name: name.trim(),
+        summary: body.summary?.trim() || null,
+      },
+    })
+    await tx.locationImage.create({
+      data: {
+        locationId: created.id,
+        imageIndex: 0,
+        description: cleanDescription,
+      },
+    })
+    if (normalizedEpisodeId) {
+      await tx.episodeLocation.create({
+        data: { episodeId: normalizedEpisodeId, locationId: created.id, role: 'manual' },
+      })
     }
+    return created
   })
 
   // 触发后台图片生成 — 仅当用户提供了 description 时。

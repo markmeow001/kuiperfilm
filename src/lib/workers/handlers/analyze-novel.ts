@@ -90,7 +90,7 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
   // each analyze run).
   const novelPropsLib = await prisma.novelPromotionProp.findMany({
     where: { novelPromotionProjectId: novelData.id },
-    select: { name: true },
+    select: { id: true, name: true },
   })
   const propsLibName = novelPropsLib.map((p) => p.name).join(', ')
   // Detect dominant script of the source so the LLM can default to a
@@ -416,6 +416,50 @@ export async function handleAnalyzeNovelTask(job: Job<TaskJobData>) {
         createdProps.push(created)
       } catch (err) {
         _ulogError('[analyze-novel] NovelPromotionProp create failed', err, { name })
+      }
+    }
+  }
+
+  // Keep the props tab episode-scoped just like characters and locations.
+  // Include both newly-created props and exact-name matches from the existing
+  // project library. When the extraction model returns an empty list because
+  // every prop already exists, conservatively recover exact names mentioned in
+  // the source text so a later episode can reuse an existing prop.
+  if (targetEpisode?.id) {
+    const parsedPropNames = new Set(
+      parsedProps
+        .map((item) => readText(item.name).trim())
+        .filter(Boolean),
+    )
+    const existingPropIds = novelPropsLib
+      .filter((prop) => parsedPropNames.has(prop.name))
+      .map((prop) => prop.id)
+    const fallbackPropIds = parsedProps.length === 0
+      ? novelPropsLib
+          .filter((prop) => prop.name && contentToAnalyze.includes(prop.name))
+          .map((prop) => prop.id)
+      : []
+    const allPropIds = Array.from(new Set([
+      ...createdProps.map((prop) => prop.id),
+      ...existingPropIds,
+      ...fallbackPropIds,
+    ]))
+
+    if (allPropIds.length > 0) {
+      try {
+        await prisma.episodeProp.createMany({
+          data: allPropIds.map((propId) => ({
+            episodeId: targetEpisode.id,
+            propId,
+            role: 'analyze-extracted',
+          })),
+          skipDuplicates: true,
+        })
+      } catch (err) {
+        _ulogError('[analyze-novel] EpisodeProp link failed', err, {
+          episodeId: targetEpisode.id,
+          propCount: allPropIds.length,
+        })
       }
     }
   }

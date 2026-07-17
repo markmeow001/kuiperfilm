@@ -21,6 +21,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import { getNamedSubjectCreatePolicy } from './subject-create-policy'
 
 export type ManualAddSubjectType = 'character' | 'scene' | 'prop'
 
@@ -96,7 +97,7 @@ export function V2ManualAddSubjectModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, isSubmitting])
 
-  const canSubmit = name.trim().length > 0 && !isSubmitting
+  const createPolicy = getNamedSubjectCreatePolicy(name, meta.iconLabel, isSubmitting)
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null
@@ -108,7 +109,7 @@ export function V2ManualAddSubjectModal({
   }
 
   function handleSubmit() {
-    if (!canSubmit) return
+    if (!createPolicy.canSubmit) return
     void onSubmit({ name: name.trim(), description: description.trim(), file })
   }
 
@@ -122,7 +123,13 @@ export function V2ManualAddSubjectModal({
         if (e.target === e.currentTarget && !isSubmitting) onClose()
       }}
     >
-      <div className="w-full max-w-xl overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+      <form
+        className="w-full max-w-xl overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleSubmit()
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-4">
           <div className="flex items-center gap-2.5">
@@ -196,15 +203,9 @@ export function V2ManualAddSubjectModal({
             {previewUrl ? (
               <div className="relative overflow-hidden rounded-sm border border-amber-900/30 bg-stone-900/60">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewUrl}
-                  alt="預覽"
-                  className="block max-h-72 w-full object-contain"
-                />
+                <img src={previewUrl} alt="預覽" className="block max-h-72 w-full object-contain" />
                 <div className="flex items-center justify-between border-t border-amber-900/20 px-3 py-2">
-                  <div className="truncate font-mono text-[11px] tracking-wider text-stone-400">
-                    {file?.name}
-                  </div>
+                  <div className="truncate font-mono text-[11px] tracking-wider text-stone-400">{file?.name}</div>
                   <button
                     type="button"
                     onClick={() => setFile(null)}
@@ -234,35 +235,41 @@ export function V2ManualAddSubjectModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-amber-900/20 bg-stone-900/30 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <>
-                <AppIcon name="loader" className="h-4 w-4 animate-spin" />
-                建立中…
-              </>
-            ) : (
-              <>
-                <AppIcon name="plus" className="h-4 w-4" />
-                建立
-              </>
-            )}
-          </button>
+        <div className="border-t border-amber-900/20 bg-stone-900/30 px-6 py-4">
+          {createPolicy.hint ? (
+            <div className="mb-3 font-mono text-[11px] tracking-wider text-amber-300/80" role="status">
+              {createPolicy.hint}
+            </div>
+          ) : null}
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={!createPolicy.canSubmit}
+              className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <AppIcon name="loader" className="h-4 w-4 animate-spin" />
+                  建立中…
+                </>
+              ) : (
+                <>
+                  <AppIcon name="plus" className="h-4 w-4" />
+                  建立{meta.iconLabel}
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      </form>
     </div>
   )
 }

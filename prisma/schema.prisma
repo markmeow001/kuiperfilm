@@ -223,6 +223,7 @@ model NovelPromotionEpisode {
   editorProject           VideoEditorProject?
   episodeCharacters       EpisodeCharacter[]
   episodeLocations        EpisodeLocation[]
+  episodeProps            EpisodeProp[]
 
   @@unique([novelPromotionProjectId, episodeNumber])
   @@index([novelPromotionProjectId])
@@ -1617,10 +1618,29 @@ model NovelPromotionProp {
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @default(now()) @updatedAt
   novelPromotionProject   NovelPromotionProject @relation(fields: [novelPromotionProjectId], references: [id], onDelete: Cascade)
+  episodeProps            EpisodeProp[]
 
   @@index([novelPromotionProjectId])
   @@index([imageMediaId])
   @@map("novel_promotion_props")
+}
+
+// Per-episode prop membership. Mirrors EpisodeCharacter / EpisodeLocation so
+// the breakdown page can show only props that belong to the active episode.
+model EpisodeProp {
+  id        String   @id @default(uuid())
+  episodeId String
+  propId    String
+  role      String? // 'auto-from-panel' | 'manual' | 'imported-from-global'
+  createdAt DateTime @default(now())
+
+  episode NovelPromotionEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  prop    NovelPromotionProp    @relation(fields: [propId], references: [id], onDelete: Cascade)
+
+  @@unique([episodeId, propId])
+  @@index([episodeId])
+  @@index([propId])
+  @@map("episode_props")
 }
 
 // Asset-hub global prop — same shape as GlobalLocation (without images junction

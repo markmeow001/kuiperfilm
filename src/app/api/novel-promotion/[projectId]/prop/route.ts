@@ -68,7 +68,11 @@ export const POST = apiHandler(async (
   if (isErrorResponse(authResult)) return authResult
 
   const body = await request.json().catch(() => ({}))
-  const { name, summary } = body as { name?: unknown; summary?: unknown }
+  const { name, summary, episodeId } = body as {
+    name?: unknown
+    summary?: unknown
+    episodeId?: unknown
+  }
 
   if (typeof name !== 'string' || !name.trim()) {
     throw new ApiError('INVALID_PARAMS', { message: 'name is required' })
@@ -82,12 +86,29 @@ export const POST = apiHandler(async (
     throw new ApiError('NOT_FOUND', { code: 'NOVEL_PROMOTION_NOT_FOUND' })
   }
 
-  const prop = await prisma.novelPromotionProp.create({
-    data: {
-      novelPromotionProjectId: npProject.id,
-      name: name.trim(),
-      summary: typeof summary === 'string' ? summary.trim() || null : null,
-    },
+  const normalizedEpisodeId = typeof episodeId === 'string' ? episodeId.trim() : ''
+  const prop = await prisma.$transaction(async (tx) => {
+    if (normalizedEpisodeId) {
+      const episode = await tx.novelPromotionEpisode.findFirst({
+        where: { id: normalizedEpisodeId, novelPromotionProjectId: npProject.id },
+        select: { id: true },
+      })
+      if (!episode) throw new ApiError('NOT_FOUND', { code: 'EPISODE_NOT_FOUND' })
+    }
+
+    const created = await tx.novelPromotionProp.create({
+      data: {
+        novelPromotionProjectId: npProject.id,
+        name: name.trim(),
+        summary: typeof summary === 'string' ? summary.trim() || null : null,
+      },
+    })
+    if (normalizedEpisodeId) {
+      await tx.episodeProp.create({
+        data: { episodeId: normalizedEpisodeId, propId: created.id, role: 'manual' },
+      })
+    }
+    return created
   })
 
   return NextResponse.json({ success: true, prop })

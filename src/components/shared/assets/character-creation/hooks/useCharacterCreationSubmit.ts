@@ -12,8 +12,10 @@ import {
   useExtractAssetHubReferenceCharacterDescription,
   useExtractProjectReferenceCharacterDescription,
   useUploadAssetHubTempMedia,
+  useUploadProjectCharacterImage,
   useUploadProjectTempMedia,
 } from '@/lib/query/hooks'
+import { dataUrlToImageFile } from '../character-upload-utils'
 
 type Mode = 'asset-hub' | 'project'
 
@@ -21,6 +23,7 @@ interface UseCharacterCreationSubmitParams {
   mode: Mode
   folderId?: string | null
   projectId?: string
+  episodeId?: string | null
   name: string
   description: string
   aiInstruction: string
@@ -45,6 +48,7 @@ export function useCharacterCreationSubmit({
   mode,
   folderId,
   projectId,
+  episodeId,
   name,
   description,
   aiInstruction,
@@ -73,6 +77,7 @@ export function useCharacterCreationSubmit({
   const createAssetHubCharacter = useCreateAssetHubCharacter()
   const createProjectCharacter = useCreateProjectCharacter(projectId ?? '')
   const createProjectAppearance = useCreateProjectCharacterAppearance(projectId ?? '')
+  const uploadProjectCharacterImage = useUploadProjectCharacterImage(projectId ?? '')
 
   const uploadReferenceImages = useCallback(async () => {
     const uploadMutation = mode === 'asset-hub' ? uploadAssetHubTemp : uploadProjectTemp
@@ -91,9 +96,10 @@ export function useCharacterCreationSubmit({
     try {
       setIsExtracting(true)
       const referenceImageUrls = await uploadReferenceImages()
-      const result = mode === 'asset-hub'
-        ? await extractAssetHubDescription.mutateAsync(referenceImageUrls)
-        : await extractProjectDescription.mutateAsync(referenceImageUrls)
+      const result =
+        mode === 'asset-hub'
+          ? await extractAssetHubDescription.mutateAsync(referenceImageUrls)
+          : await extractProjectDescription.mutateAsync(referenceImageUrls)
       if (result?.description) {
         setDescription(result.description)
       }
@@ -123,9 +129,10 @@ export function useCharacterCreationSubmit({
 
       let finalDescription = description.trim()
       if (referenceSubMode === 'extract') {
-        const result = mode === 'asset-hub'
-          ? await extractAssetHubDescription.mutateAsync(referenceImageUrls)
-          : await extractProjectDescription.mutateAsync(referenceImageUrls)
+        const result =
+          mode === 'asset-hub'
+            ? await extractAssetHubDescription.mutateAsync(referenceImageUrls)
+            : await extractProjectDescription.mutateAsync(referenceImageUrls)
         finalDescription = result?.description || finalDescription
       }
 
@@ -142,6 +149,7 @@ export function useCharacterCreationSubmit({
         await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: finalDescription || t('character.defaultDescription', { name: name.trim() }),
+          episodeId: episodeId || undefined,
           generateFromReference: true,
           referenceImageUrls,
           customDescription: referenceSubMode === 'extract' ? finalDescription : undefined,
@@ -161,6 +169,7 @@ export function useCharacterCreationSubmit({
     createAssetHubCharacter,
     createProjectCharacter,
     description,
+    episodeId,
     extractAssetHubDescription,
     extractProjectDescription,
     folderId,
@@ -179,9 +188,12 @@ export function useCharacterCreationSubmit({
 
     try {
       setIsAiDesigning(true)
-      const result = mode === 'asset-hub'
-        ? await aiDesignAssetHubCharacter.mutateAsync(aiInstruction)
-        : await aiCreateProjectCharacter.mutateAsync({ userInstruction: aiInstruction })
+      const result =
+        mode === 'asset-hub'
+          ? await aiDesignAssetHubCharacter.mutateAsync(aiInstruction)
+          : await aiCreateProjectCharacter.mutateAsync({
+              userInstruction: aiInstruction,
+            })
 
       if (result?.prompt) {
         setDescription(result.prompt)
@@ -231,6 +243,7 @@ export function useCharacterCreationSubmit({
         await createProjectCharacter.mutateAsync({
           name: name.trim(),
           description: description.trim(),
+          episodeId: episodeId || undefined,
         })
       }
       onSuccess()
@@ -248,6 +261,7 @@ export function useCharacterCreationSubmit({
     createProjectAppearance,
     createProjectCharacter,
     description,
+    episodeId,
     folderId,
     isSubAppearance,
     mode,
@@ -258,16 +272,47 @@ export function useCharacterCreationSubmit({
     t,
   ])
 
+  const handleCreateOnly = useCallback(async () => {
+    if (!name.trim() || isSubAppearance) return
+
+    try {
+      setIsSubmitting(true)
+      if (mode === 'asset-hub') {
+        await createAssetHubCharacter.mutateAsync({
+          name: name.trim(),
+          description: t('character.defaultDescription', { name: name.trim() }),
+          folderId: folderId ?? null,
+        })
+      } else {
+        // The project API intentionally skips image generation when description
+        // is empty, while still creating the character and primary appearance.
+        await createProjectCharacter.mutateAsync({
+          name: name.trim(),
+          description: '',
+          episodeId: episodeId || undefined,
+        })
+      }
+      onSuccess()
+      onClose()
+    } catch (error: unknown) {
+      if (shouldShowError(error)) {
+        alert(getErrorMessage(error, t('errors.createFailed')))
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [createAssetHubCharacter, createProjectCharacter, episodeId, folderId, isSubAppearance, mode, name, onClose, onSuccess, t])
+
   const handleCreateWithUpload = useCallback(async () => {
     if (!name.trim() || referenceImagesBase64.length === 0) return
 
     try {
       setIsSubmitting(true)
-      const uploadMutation = mode === 'asset-hub' ? uploadAssetHubTemp : uploadProjectTemp
-      const data = await uploadMutation.mutateAsync({ imageBase64: referenceImagesBase64[0] })
-      if (!data.url) throw new Error(t('errors.uploadFailed'))
-
       if (mode === 'asset-hub') {
+        const data = await uploadAssetHubTemp.mutateAsync({
+          imageBase64: referenceImagesBase64[0],
+        })
+        if (!data.url) throw new Error(t('errors.uploadFailed'))
         await createAssetHubCharacter.mutateAsync({
           name: name.trim(),
           description: description.trim() || t('character.defaultDescription', { name: name.trim() }),
@@ -276,11 +321,24 @@ export function useCharacterCreationSubmit({
           generateFromReference: true,
         })
       } else {
-        await createProjectCharacter.mutateAsync({
+        const result = (await createProjectCharacter.mutateAsync({
           name: name.trim(),
-          description: description.trim() || t('character.defaultDescription', { name: name.trim() }),
-          referenceImageUrls: [data.url],
-          generateFromReference: true,
+          description: '',
+          episodeId: episodeId || undefined,
+        })) as {
+          character?: { id?: string; appearances?: Array<{ id?: string }> }
+        }
+        const characterId = result.character?.id
+        const appearanceId = result.character?.appearances?.[0]?.id
+        if (!characterId || !appearanceId) throw new Error(t('errors.createFailed'))
+
+        const imageFile = dataUrlToImageFile(referenceImagesBase64[0], `${name.trim()}-四視圖.png`)
+        await uploadProjectCharacterImage.mutateAsync({
+          file: imageFile,
+          characterId,
+          appearanceId,
+          imageIndex: 0,
+          labelText: name.trim(),
         })
       }
 
@@ -297,6 +355,7 @@ export function useCharacterCreationSubmit({
     createAssetHubCharacter,
     createProjectCharacter,
     description,
+    episodeId,
     folderId,
     mode,
     name,
@@ -305,7 +364,7 @@ export function useCharacterCreationSubmit({
     referenceImagesBase64,
     t,
     uploadAssetHubTemp,
-    uploadProjectTemp,
+    uploadProjectCharacterImage,
   ])
 
   return {
@@ -317,5 +376,6 @@ export function useCharacterCreationSubmit({
     handleCreateWithUpload,
     handleAiDesign,
     handleSubmit,
+    handleCreateOnly,
   }
 }

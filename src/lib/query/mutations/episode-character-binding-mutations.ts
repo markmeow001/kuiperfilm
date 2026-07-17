@@ -43,6 +43,11 @@ interface EpisodeLocationBindingRow {
   role: string | null
 }
 
+interface EpisodePropBindingRow {
+  propId: string
+  role: string | null
+}
+
 /**
  * Read-side hook: which locations are bound to a given episode via
  * EpisodeLocation. Mirrors useEpisodeCharacterBindings so V2 SubjectsPage
@@ -64,6 +69,27 @@ export function useEpisodeLocationBindings(
       )
       if (!res.ok) throw new Error('Failed to fetch episode-location bindings')
       const data = (await res.json()) as { bindings?: EpisodeLocationBindingRow[] }
+      return data.bindings || []
+    },
+  })
+}
+
+export function useEpisodePropBindings(
+  projectId: string,
+  episodeId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: episodeId
+      ? ([...queryKeys.tasks.all(projectId), 'episode-prop-bindings', episodeId] as const)
+      : (['episode-prop-bindings', 'no-episode'] as const),
+    enabled: !!episodeId,
+    staleTime: 10_000,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/novel-promotion/${projectId}/episodes/${episodeId}/props`,
+      )
+      if (!res.ok) throw new Error('Failed to fetch episode-prop bindings')
+      const data = (await res.json()) as { bindings?: EpisodePropBindingRow[] }
       return data.bindings || []
     },
   })

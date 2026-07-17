@@ -123,6 +123,7 @@ const ROUTE_FILES = [
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/auto-group-multi-shot/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/character-appearance/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/locations/route.ts',
+  'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/props/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/multi-shot-tasks-by-group/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/route.ts',
   'src/app/api/novel-promotion/[projectId]/episodes/[episodeId]/stitch-mp4/route.ts',

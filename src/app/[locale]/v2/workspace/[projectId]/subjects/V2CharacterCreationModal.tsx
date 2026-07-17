@@ -23,23 +23,23 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useCharacterCreationSubmit } from '@/components/shared/assets/character-creation/hooks/useCharacterCreationSubmit'
+import { getCharacterCreatePolicy, type CharacterCreateMode } from './subject-create-policy'
 
 export interface V2CharacterCreationModalProps {
   projectId: string
+  episodeId: string | null
   onClose: () => void
   onSuccess: () => void
 }
 
-type CreateMode = 'description' | 'reference' | 'upload'
-
-const TAB_LABELS: Record<CreateMode, { label: string; icon: 'sparklesAlt' | 'image' | 'upload' }> = {
+const TAB_LABELS: Record<CharacterCreateMode, { label: string; icon: 'sparklesAlt' | 'image' | 'upload' }> = {
   description: { label: '提示詞生成', icon: 'sparklesAlt' },
   reference: { label: '參考圖生成', icon: 'image' },
   upload: { label: '上傳四視圖', icon: 'upload' },
 }
 
-export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2CharacterCreationModalProps) {
-  const [createMode, setCreateMode] = useState<CreateMode>('description')
+export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSuccess }: V2CharacterCreationModalProps) {
+  const [createMode, setCreateMode] = useState<CharacterCreateMode>('description')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [introduction, setIntroduction] = useState('')
@@ -57,9 +57,11 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
     handleCreateWithUpload,
     handleAiDesign,
     handleSubmit,
+    handleCreateOnly,
   } = useCharacterCreationSubmit({
     mode: 'project',
     projectId,
+    episodeId,
     name,
     description,
     aiInstruction,
@@ -134,17 +136,16 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
   }
 
   // Mode-aware submit dispatch
-  const canSubmit = (() => {
-    if (isSubmitting || isAiDesigning) return false
-    if (!name.trim()) return false
-    if (createMode === 'description') return description.trim().length > 0
-    if (createMode === 'reference') return referenceImagesBase64.length > 0
-    if (createMode === 'upload') return referenceImagesBase64.length > 0
-    return false
-  })()
+  const createPolicy = getCharacterCreatePolicy({
+    name,
+    description,
+    mode: createMode,
+    referenceImageCount: referenceImagesBase64.length,
+    isBusy: isSubmitting || isAiDesigning,
+  })
 
   function dispatchSubmit() {
-    if (!canSubmit) return
+    if (!createPolicy.canGenerate) return
     if (createMode === 'description') return handleSubmit()
     if (createMode === 'reference') return handleCreateWithReference()
     return handleCreateWithUpload()
@@ -159,7 +160,13 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
         if (e.target === e.currentTarget && !isSubmitting && !isAiDesigning) onClose()
       }}
     >
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col">
+      <form
+        className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void dispatchSubmit()
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-4 flex-shrink-0">
           <div>
@@ -184,7 +191,7 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
 
         {/* Mode tabs */}
         <div className="grid grid-cols-3 gap-2 border-b border-amber-900/20 px-6 py-4 flex-shrink-0">
-          {(['description', 'reference', 'upload'] as CreateMode[]).map((m) => {
+          {(['description', 'reference', 'upload'] as CharacterCreateMode[]).map((m) => {
             const meta = TAB_LABELS[m]
             const active = createMode === m
             return (
@@ -250,7 +257,10 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
                 {referenceImagesBase64.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
                     {referenceImagesBase64.map((b64, i) => (
-                      <div key={i} className="relative aspect-square overflow-hidden rounded-sm border border-amber-900/30">
+                      <div
+                        key={i}
+                        className="relative aspect-square overflow-hidden rounded-sm border border-amber-900/30"
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={b64} alt={`參考 ${i + 1}`} className="h-full w-full object-cover" />
                         <button
@@ -264,7 +274,8 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
                         </button>
                       </div>
                     ))}
-                    {(createMode === 'reference' && referenceImagesBase64.length < 5) || (createMode === 'upload' && referenceImagesBase64.length < 1) ? (
+                    {(createMode === 'reference' && referenceImagesBase64.length < 5) ||
+                    (createMode === 'upload' && referenceImagesBase64.length < 1) ? (
                       <button
                         type="button"
                         onClick={() => fileRef.current?.click()}
@@ -307,13 +318,7 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
 
           {/* Appearance description */}
           {createMode !== 'upload' ? (
-            <Field
-              label={
-                createMode === 'description'
-                  ? '外觀描述 *（AI 生成依據）'
-                  : '外觀描述（可選,輔助 AI 重繪）'
-              }
-            >
+            <Field label={createMode === 'description' ? '外觀描述 *（AI 生成依據）' : '外觀描述（可選,輔助 AI 重繪）'}>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -370,35 +375,50 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-amber-900/20 bg-stone-900/30 px-6 py-4 flex-shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting || isAiDesigning}
-            className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={() => void dispatchSubmit()}
-            disabled={!canSubmit}
-            className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <>
-                <AppIcon name="loader" className="h-4 w-4 animate-spin" />
-                建立中…
-              </>
-            ) : (
-              <>
-                <AppIcon name="sparklesAlt" className="h-4 w-4" />
-                {createMode === 'upload' ? '建立並上傳' : '生成並建立'}
-              </>
-            )}
-          </button>
+        <div className="border-t border-amber-900/20 bg-stone-900/30 px-6 py-4 flex-shrink-0">
+          {createPolicy.hint ? (
+            <div className="mb-3 font-mono text-[11px] tracking-wider text-amber-300/80" role="status">
+              {createPolicy.hint}
+            </div>
+          ) : null}
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting || isAiDesigning}
+              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleCreateOnly()}
+              disabled={!createPolicy.canCreateOnly}
+              className="flex items-center gap-2 rounded-sm border border-amber-500/40 px-5 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <AppIcon name="plus" className="h-4 w-4" />
+              只建立角色
+            </button>
+            <button
+              type="submit"
+              disabled={!createPolicy.canGenerate}
+              className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <AppIcon name="loader" className="h-4 w-4 animate-spin" />
+                  建立中…
+                </>
+              ) : (
+                <>
+                  <AppIcon name="sparklesAlt" className="h-4 w-4" />
+                  {createMode === 'upload' ? '建立並上傳' : '生成並建立'}
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      </form>
     </div>
   )
 }
@@ -406,9 +426,7 @@ export function V2CharacterCreationModal({ projectId, onClose, onSuccess }: V2Ch
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-        {label}
-      </div>
+      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400">{label}</div>
       {children}
     </label>
   )

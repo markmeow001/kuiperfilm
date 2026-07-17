@@ -23,11 +23,18 @@ const prismaMock = vi.hoisted(() => ({
     upsert: vi.fn(async () => ({})),
     findMany: vi.fn(async () => []),
   },
+  episodeLocation: {
+    createMany: vi.fn(async () => ({ count: 0 })),
+  },
+  episodeProp: {
+    createMany: vi.fn(async () => ({ count: 0 })),
+  },
   // Session A's df611c8 (props/A) added a prop dedupe lookup at the top
   // of analyze-novel — handler now reads existing prop names so
   // re-runs don't re-extract the same "怀表" / "信封". Default to empty.
   novelPromotionProp: {
-    findMany: vi.fn(async () => []),
+    findMany: vi.fn(async (): Promise<Array<{ id: string; name: string }>> => []),
+    create: vi.fn(async () => ({ id: 'prop-new-1', name: '新信件' })),
   },
 }))
 
@@ -217,5 +224,44 @@ describe('worker analyze-novel behavior', () => {
         output: expect.stringContaining('"locations"'),
       }),
     )
+  })
+
+  it('extracted and reused props are bound to the requested episode', async () => {
+    prismaMock.novelPromotionEpisode.findFirst.mockResolvedValueOnce({
+      id: 'episode-1',
+      novelText: '主角拿出旧怀表和新信件。',
+    })
+    prismaMock.novelPromotionProp.findMany.mockResolvedValueOnce([
+      { id: 'prop-existing-1', name: '旧怀表' },
+    ])
+    llmMock.getCompletionContent
+      .mockReset()
+      .mockReturnValueOnce(JSON.stringify({ characters: [] }))
+      .mockReturnValueOnce(JSON.stringify({ locations: [] }))
+      .mockReturnValueOnce(JSON.stringify({
+        props: [
+          { name: '旧怀表', summary: '旧物', visual_description: '银色怀表' },
+          { name: '新信件', summary: '关键线索', visual_description: '折叠信纸' },
+        ],
+      }))
+
+    await handleAnalyzeNovelTask(buildJob())
+
+    expect(prismaMock.novelPromotionProp.create).toHaveBeenCalledWith({
+      data: {
+        novelPromotionProjectId: 'np-project-1',
+        name: '新信件',
+        summary: '关键线索',
+        description: '折叠信纸',
+      },
+      select: { id: true, name: true },
+    })
+    expect(prismaMock.episodeProp.createMany).toHaveBeenCalledWith({
+      data: [
+        { episodeId: 'episode-1', propId: 'prop-new-1', role: 'analyze-extracted' },
+        { episodeId: 'episode-1', propId: 'prop-existing-1', role: 'analyze-extracted' },
+      ],
+      skipDuplicates: true,
+    })
   })
 })
