@@ -95,6 +95,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     elements: rawElements,
     referenceImageNames: rawRefImageNames,
     generateAudio: rawGenerateAudio,
+    maskImage: rawMaskImage,
   } = body as {
     prompt?: unknown
     referenceImages?: unknown
@@ -111,6 +112,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     elements?: unknown
     referenceImageNames?: unknown
     generateAudio?: unknown
+    maskImage?: unknown
   }
 
   // Validate. Every reject carries a human-readable `message` — ApiError falls
@@ -179,6 +181,51 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const referenceImages = imgGuard.safe
   const lastFrameSafe = lastFrameGuard.safe[0] ?? null
   const referenceVideos = vidGuard.safe
+
+  // 局部重绘 (inpainting, 2026-07-17): maskImage = 客户端栅格化的遮罩 PNG
+  // （透明区=重绘区）。只对 image 输出有意义；底图 = referenceImages[0]。
+  // 模型必须在 capability catalog 声明 supportMaskEdit —— 不支持的模型静默
+  // 忽略 mask 等于把整图重画（CLAUDE.md §3 不静默吞错），显式拒绝。
+  let maskImageSafe: string | null = null
+  if (rawMaskImage !== undefined && rawMaskImage !== null) {
+    if (typeof rawMaskImage !== 'string' || !rawMaskImage.trim()) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'MASK_IMAGE_INVALID',
+        message: '遮罩图格式不正确',
+      })
+    }
+    if (outputType !== 'image') {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'MASK_IMAGE_OUTPUT_TYPE',
+        message: '局部重绘仅支持图片生成',
+      })
+    }
+    if (referenceImages.length < 1) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'MASK_IMAGE_NEEDS_SOURCE',
+        message: '局部重绘需要一张底图（referenceImages[0]）',
+      })
+    }
+    const maskCaps = resolveBuiltinCapabilitiesByModelKey('image', trimmedModelKey)
+    if (maskCaps?.image?.supportMaskEdit !== true) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'MASK_MODEL_UNSUPPORTED',
+        message: '该模型不支持局部重绘，请改用 GPT Image 1 (局部重绘)',
+        details: { modelKey: trimmedModelKey },
+      })
+    }
+    const maskGuard = await filterAuthorizedReferences([rawMaskImage.trim()], userId)
+    if (maskGuard.rejected.length > 0 || maskGuard.safe.length === 0) {
+      _ulogError(
+        `[playground.run] rejected unsafe mask image userId=${userId} rejected=${JSON.stringify(maskGuard.rejected)}`,
+      )
+      throw new ApiError('FORBIDDEN', {
+        code: 'REFERENCE_NOT_ALLOWED',
+        details: { message: 'mask image must be your own uploaded key or an https storage URL' },
+      })
+    }
+    maskImageSafe = maskGuard.safe[0]
+  }
 
   // Kling O3 named-subject bindings (2026-07-10). Shape:
   //   elements: [{ name: string, imageKeys: string[] (1-4) }]  ≤6 items
@@ -332,6 +379,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceVideos,
     ...(refText ? { referenceText: refText } : {}),
     ...(lastFrameSafe ? { lastFrameUrl: lastFrameSafe } : {}),
+    ...(maskImageSafe ? { maskImage: maskImageSafe } : {}),
     ...(elements.length > 0 ? { elements } : {}),
     ...(referenceImageNames.some(Boolean) ? { referenceImageNames } : {}),
     // 🔊 audio toggle (2026-07-12) — only a literal boolean passes through;

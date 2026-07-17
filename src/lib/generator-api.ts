@@ -26,6 +26,7 @@ export async function generateImage(
     prompt: string,
     options?: {
         referenceImages?: string[]
+        maskImage?: string  // 局部重绘遮罩 URL（透明区=重绘区；仅 supportMaskEdit 模型）
         aspectRatio?: string
         resolution?: string
         outputFormat?: string

@@ -63,11 +63,16 @@ interface AtlasCloudImageOptions {
   quality?: string          // GPT Image 2: 'low' | 'medium' | 'high'
   outputFormat?: string     // 'jpeg' | 'png'
   enableWebSearch?: boolean // Nano Banana Pro: grounding with web search
+  maskImage?: string        // 局部重绘遮罩 URL（透明区=重绘区；仅 gpt-image-1/edit）
 }
 
 /** Logical id (the one stored in PRESET_MODELS / projectData.imageModel)
  *  → real AtlasCloud API slug. */
 const ATLASCLOUD_IMAGE_MODEL_MAP: Record<string, string> = {
+  // gpt-image-1: 全家唯一带 mask_image 的 edit schema（2026-07-17 验证；
+  // gpt-image-2/edit 与 nano-banana 系列均无 mask 字段）。t2i slug 也存在,
+  // 但注册它主要为局部重绘 —— t2i 走这里只是避免隐式回退。
+  'gpt-image-1': 'openai/gpt-image-1/text-to-image',
   'gpt-image-2': 'openai/gpt-image-2/text-to-image',
   'nano-banana-pro': 'google/nano-banana-pro/text-to-image',
   'nano-banana': 'google/nano-banana/text-to-image',
@@ -84,6 +89,7 @@ const ATLASCLOUD_IMAGE_MODEL_MAP: Record<string, string> = {
  *  Z-Image Turbo has NO edit variant — doGenerate rejects refs explicitly
  *  (an entry here would silently reroute refs to another model's edit). */
 const ATLASCLOUD_IMAGE_EDIT_MODEL_MAP: Record<string, string> = {
+  'gpt-image-1': 'openai/gpt-image-1/edit',
   'gpt-image-2': 'openai/gpt-image-2/edit',
   'nano-banana-pro': 'google/nano-banana-pro/edit',
   'nano-banana': 'google/nano-banana/edit',
@@ -94,6 +100,12 @@ const ATLASCLOUD_IMAGE_EDIT_MODEL_MAP: Record<string, string> = {
 
 /** Logical ids that have no img2img variant at AtlasCloud. */
 const ATLASCLOUD_NO_EDIT_MODELS = new Set(['z-image-turbo'])
+
+/** Logical ids whose `/edit` schema declares `mask_image`（局部重绘）。
+ *  Schema ground truth: static.atlascloud.ai/model/schema/openai-gpt-image-1-edit.json
+ *  — "An additional image whose fully transparent areas indicate where image
+ *  should be edited" (PNG). gpt-image-2 与 nano-banana 均不声明该字段。 */
+const ATLASCLOUD_MASK_EDIT_MODELS = new Set(['gpt-image-1'])
 
 /** Resolve the API slug. When `useEdit` (referenceImages present) we pick the
  *  `/edit` img2img variant so the references are actually consumed.
@@ -117,6 +129,30 @@ export function resolveAtlasCloudImageModel(modelId?: string, useEdit = false): 
 
 function isGptImage2Slug(slug: string): boolean {
   return slug.startsWith('openai/gpt-image-2')
+}
+
+function isGptImage1Slug(slug: string): boolean {
+  return slug.startsWith('openai/gpt-image-1')
+}
+
+/** gpt-image-1 declares a 3-value size enum (1024x1024 / 1024x1536 /
+ *  1536x1024) — narrower than gpt-image-2's. Exported for unit testing. */
+export function aspectRatioToGptImage1Size(aspectRatio: string | undefined): string {
+  switch (aspectRatio) {
+    case '16:9':
+    case '2:1':
+    case '21:9':
+    case '4:3':
+    case '3:2':
+      return '1536x1024'
+    case '9:16':
+    case '3:4':
+    case '2:3':
+      return '1024x1536'
+    case '1:1':
+    default:
+      return '1024x1024'
+  }
 }
 
 function isNanoBananaSlug(slug: string): boolean {
@@ -286,6 +322,7 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       quality,
       outputFormat,
       enableWebSearch,
+      maskImage,
     } = options as AtlasCloudImageOptions
 
     // Reference images present → use the img2img `/edit` slug so AtlasCloud
@@ -300,6 +337,18 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     // fallback would silently reroute the request to another model's /edit.
     if (useEdit && modelId && ATLASCLOUD_NO_EDIT_MODELS.has(modelId)) {
       throw new Error(`${modelId} 不支持参考图（无 img2img 变体）：请移除参考图，或改用 Nano Banana / GPT Image 2 / Grok Imagine`)
+    }
+    // 局部重绘: a mask on a model whose schema has no mask_image would be
+    // SILENTLY DROPPED by the gateway — the whole image would regenerate and
+    // the user's 圈选 means nothing. Reject explicitly (不静默吞错).
+    const trimmedMask = typeof maskImage === 'string' ? maskImage.trim() : ''
+    if (trimmedMask) {
+      if (!modelId || !ATLASCLOUD_MASK_EDIT_MODELS.has(modelId)) {
+        throw new Error(`${modelId ?? '未知模型'} 不支持局部重绘遮罩：请改用 GPT Image 1 (局部重绘)`)
+      }
+      if (validRefs.length === 0) {
+        throw new Error('局部重绘需要底图：请把要修补的原图作为参考图传入')
+      }
     }
     const atlasModel = resolveAtlasCloudImageModel(modelId, useEdit)
     const logger = createScopedLogger({
@@ -319,12 +368,27 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     // img2img: pass the reference URLs the `/edit` slug consumes. AtlasCloud
     // fetches them server-side, so signed COS URLs work directly. Field name
     // is per-family: Grok declares `image_urls`, GPT/Nano declare `images`.
+    // Per-family field naming (schema CDN ground truth): Grok declares
+    // `image_urls`, gpt-image-1/edit declares `image` (1-4), GPT-2/Nano
+    // declare `images`. Wrong name = gateway silently ignores the refs.
     if (useEdit) {
       if (isGrokImagineSlug(atlasModel)) body.image_urls = validRefs
+      else if (isGptImage1Slug(atlasModel)) body.image = validRefs
       else body.images = validRefs
     }
+    if (trimmedMask) {
+      body.mask_image = trimmedMask
+    }
 
-    if (isGptImage2Slug(atlasModel)) {
+    if (isGptImage1Slug(atlasModel)) {
+      // gpt-image-1: 3-value size enum (narrower than gpt-image-2's).
+      body.size = size && ['1024x1024', '1024x1536', '1536x1024'].includes(size)
+        ? size
+        : aspectRatioToGptImage1Size(aspectRatio)
+      if (quality && ['low', 'medium', 'high'].includes(quality)) {
+        body.quality = quality
+      }
+    } else if (isGptImage2Slug(atlasModel)) {
       // Pick a concrete size from the enum.
       const candidate = size && GPT_IMAGE_2_SIZE_ENUM.has(size)
         ? size

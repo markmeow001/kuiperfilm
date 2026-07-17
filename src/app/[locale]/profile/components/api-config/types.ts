@@ -122,6 +122,8 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'nano-banana', name: 'Gemini 3 Flash Image (AtlasCloud · 快速)', type: 'image', provider: 'atlascloud' },
     { modelId: 'nano-banana-2', name: 'Gemini 3.1 Flash Image (AtlasCloud · 經濟)', type: 'image', provider: 'atlascloud' },
     { modelId: 'gpt-image-2', name: 'GPT Image 2 (AtlasCloud · OpenAI 按 token 計費)', type: 'image', provider: 'atlascloud' },
+    // 2026-07-17 — 局部重绘（inpainting）：全 AtlasCloud 唯一带 mask_image 的模型。
+    { modelId: 'gpt-image-1', name: 'GPT Image 1 (AtlasCloud · 局部重繪/遮罩編輯)', type: 'image', provider: 'atlascloud' },
     // 2026-07-02 — AtlasCloud 新图像模型三连（slug 见 generators/image/atlascloud.ts）。
     { modelId: 'z-image-turbo', name: 'Z-Image Turbo (AtlasCloud · 極速廉價，無圖生圖)', type: 'image', provider: 'atlascloud' },
     { modelId: 'grok-imagine-image', name: 'Grok Imagine (AtlasCloud · xAI 標準)', type: 'image', provider: 'atlascloud' },

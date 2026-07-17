@@ -55,6 +55,11 @@ export async function handlePlaygroundImageTask(
   const refImageKeys = parseStringArray(payload.referenceImages)
   const signedImageUrls = refImageKeys.map((k) => toSignedUrlIfCos(k, 7200) ?? k)
 
+  // 局部重绘遮罩（透明区=重绘区）。route 已做 supportMaskEdit capability 校验,
+  // 这里只负责把 key 换签名 URL 后透传给 generator。
+  const maskImageKey = typeof payload.maskImage === 'string' && payload.maskImage ? payload.maskImage : null
+  const maskImageUrl = maskImageKey ? (toSignedUrlIfCos(maskImageKey, 7200) ?? maskImageKey) : null
+
   const effectivePrompt = referenceText
     ? `${prompt}\n\n[參考文字 / Style hint] ${referenceText}`
     : prompt
@@ -65,6 +70,7 @@ export async function handlePlaygroundImageTask(
 
   const result = await generateImage(userId, modelKey, effectivePrompt, {
     ...(signedImageUrls.length > 0 ? { referenceImages: signedImageUrls } : {}),
+    ...(maskImageUrl ? { maskImage: maskImageUrl } : {}),
     ...(aspectRatio ? { aspectRatio } : {}),
     ...(resolution ? { resolution } : {}),
   })

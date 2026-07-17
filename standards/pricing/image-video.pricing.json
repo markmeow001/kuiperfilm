@@ -6212,6 +6212,15 @@
   {
     "apiType": "image",
     "provider": "atlascloud",
+    "modelId": "gpt-image-1",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.05
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
     "modelId": "gpt-image-2",
     "pricing": {
       "mode": "flat",

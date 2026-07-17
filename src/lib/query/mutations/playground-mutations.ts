@@ -54,6 +54,8 @@ export interface PlaygroundRunSubmission {
   referenceImageNames?: Array<string | null>
   /** video 音效開關（🔊 chip，2026-07-12）。缺省 = 各 generator 預設（開）。 */
   generateAudio?: boolean
+  /** 局部重绘遮罩（own COS key；透明区=重绘区）。需搭配 referenceImages[0] 底图。 */
+  maskImage?: string
   outputType: 'image' | 'video'
   modelKey: string
   resolution?: string

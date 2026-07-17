@@ -99,6 +99,40 @@ describe('handlePlaygroundImageTask (Phase 9.1 Task-spine handler)', () => {
     ).rejects.toThrow(/PLAYGROUND_IMAGE_SUBMIT_FAILED: quota exceeded/)
   })
 
+  it('signs and forwards maskImage (局部重绘) alongside the reference plate', async () => {
+    generatorMock.generateImage.mockResolvedValue({ success: true, url: 'https://prov/inpainted.png' })
+
+    await handlePlaygroundImageTask(
+      makeJob({
+        prompt: '换背景',
+        modelKey: 'atlascloud::gpt-image-1',
+        referenceImages: ['cos/plate-1'],
+        maskImage: 'cos/mask-1',
+      }),
+    )
+
+    expect(generatorMock.generateImage).toHaveBeenCalledWith(
+      'user-1',
+      'atlascloud::gpt-image-1',
+      '换背景',
+      expect.objectContaining({
+        referenceImages: ['signed:cos/plate-1'],
+        maskImage: 'signed:cos/mask-1',
+      }),
+    )
+  })
+
+  it('omits maskImage from generator options when absent', async () => {
+    generatorMock.generateImage.mockResolvedValue({ success: true, url: 'https://prov/img.png' })
+
+    await handlePlaygroundImageTask(
+      makeJob({ prompt: 'a cat', modelKey: 'atlascloud::nano-banana' }),
+    )
+
+    const options = generatorMock.generateImage.mock.calls[0][3] as Record<string, unknown>
+    expect(options).not.toHaveProperty('maskImage')
+  })
+
   it('throws when prompt or modelKey missing', async () => {
     await expect(handlePlaygroundImageTask(makeJob({ modelKey: 'm' }))).rejects.toThrow(
       /PLAYGROUND_IMAGE_PROMPT_REQUIRED/,

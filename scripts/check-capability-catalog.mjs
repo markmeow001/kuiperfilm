@@ -14,6 +14,7 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
     'aspectRatioOptions',
     'supportNegativePrompt',
     'supportReferenceImage',
+    'supportMaskEdit',
     'fieldI18n',
   ]),
   video: new Set([

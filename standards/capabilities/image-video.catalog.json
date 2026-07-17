@@ -1390,6 +1390,23 @@
   {
     "modelType": "image",
     "provider": "atlascloud",
+    "modelId": "gpt-image-1",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true,
+        "supportMaskEdit": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
     "modelId": "gpt-image-2",
     "capabilities": {
       "image": {

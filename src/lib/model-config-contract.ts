@@ -36,6 +36,8 @@ export interface ImageCapabilities {
   aspectRatioOptions?: string[]
   supportNegativePrompt?: boolean
   supportReferenceImage?: boolean
+  /** 局部重绘：接受遮罩图（透明区=重绘区）。目前仅 AtlasCloud gpt-image-1。 */
+  supportMaskEdit?: boolean
   fieldI18n?: CapabilityFieldI18nMap
 }
 
@@ -95,6 +97,7 @@ const IMAGE_ALLOWED_FIELDS = new Set<keyof ImageCapabilities>([
   'aspectRatioOptions',
   'supportNegativePrompt',
   'supportReferenceImage',
+  'supportMaskEdit',
   'fieldI18n',
 ])
 
