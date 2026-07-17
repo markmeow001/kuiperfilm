@@ -100,7 +100,7 @@ export function TextNode({ id, data, selected }: NodeProps) {
   const busy = submitting || Boolean(d.textTaskId)
 
   return (
-    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={280}>
+    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={280}>
       <div className="space-y-2 p-3">
         <textarea
           value={d.prompt}

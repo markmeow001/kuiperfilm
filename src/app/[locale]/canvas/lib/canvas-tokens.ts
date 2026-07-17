@@ -49,7 +49,7 @@ export const CANVAS_TOKENS = {
 } as const
 
 /** Per-node-type accent + label metadata. */
-export type CanvasNodeType = 'character' | 'image' | 'video' | 'text' | 'director' | 'script' | 'audio' | 'composition' | 'group'
+export type CanvasNodeType = 'character' | 'image' | 'video' | 'text' | 'director' | 'script' | 'audio' | 'composition' | 'mask' | 'group'
 
 export const NODE_META: Record<
   CanvasNodeType,
@@ -63,6 +63,7 @@ export const NODE_META: Record<
   script: { label: '脚本', accent: '#E9B95B', hint: '剧本 → 分镜 → 批量生图' },
   audio: { label: '音频', accent: '#F78FD2', hint: '文字 + 参考音 → 克隆配音' },
   composition: { label: '视频合成', accent: '#55D6A8', hint: '片段排序 → 成片' },
+  mask: { label: '遮罩', accent: '#FF58C5', hint: '圈选背景 / 修补范围' },
   // Container only — never offered in add menus (ADD_ORDER excludes it);
   // created via G 成组 on a multi-selection.
   group: { label: '分组', accent: CANVAS_TOKENS.text.muted, hint: '' },

@@ -49,6 +49,35 @@ describe('deserializeCanvas', () => {
     expect(back.viewport).toEqual({ x: 1, y: 2, zoom: 1.2 })
   })
 
+  it('鎖定與圖層狀態 -> round-trip 後仍不可拖曳且保留 zIndex', () => {
+    const locked = {
+      ...node('a', 'image', 10, 20, { locked: true }),
+      draggable: false,
+      zIndex: 7,
+    }
+    const serialized = serializeCanvas([locked], [], { x: 0, y: 0, zoom: 1 })
+    expect(serialized.nodes[0]).toMatchObject({ zIndex: 7, data: { locked: true } })
+
+    const back = deserializeCanvas(serialized)
+    expect(back.nodes[0]).toMatchObject({ zIndex: 7, draggable: false, data: { locked: true } })
+  })
+
+  it('round-trips editable normalized mask strokes', () => {
+    const maskPaths = [{
+      mode: 'add' as const,
+      brushSize: 18,
+      points: [{ x: 0.1, y: 0.2 }, { x: 0.8, y: 0.7 }],
+    }]
+    const serialized = serializeCanvas([
+      node('mask-1', 'mask', 20, 30, { maskPaths, maskSourceKey: 'refs/plate.webp' }),
+    ], [], { x: 0, y: 0, zoom: 1 })
+
+    const back = deserializeCanvas(serialized)
+    expect(back.nodes[0]).toMatchObject({ id: 'mask-1', type: 'mask' })
+    expect(back.nodes[0].data.maskPaths).toEqual(maskPaths)
+    expect(back.nodes[0].data.maskSourceKey).toBe('refs/plate.webp')
+  })
+
   it('round-trips edge portType/order/role without losing metadata', () => {
     const nodes = [node('a', 'image', 0, 0), node('b', 'video', 0, 0, { genMode: 'firstlast' })]
     const edges: Edge[] = [{ id: 'e1', source: 'a', target: 'b', sourceHandle: 'frame-out', targetHandle: 'first-frame', data: { portType: 'frame-image', order: 0, role: 'first-frame' } }]

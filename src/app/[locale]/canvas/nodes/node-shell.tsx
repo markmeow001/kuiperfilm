@@ -20,6 +20,7 @@ interface NodeShellProps {
   label: string
   hint?: string
   selected?: boolean
+  locked?: boolean
   /** Editable title controls rendered in the header (optional). */
   titleSlot?: ReactNode
   children: ReactNode
@@ -48,6 +49,7 @@ export function NodeShell({
   label,
   hint,
   selected,
+  locked,
   titleSlot,
   children,
   noTarget,
@@ -67,9 +69,10 @@ export function NodeShell({
           )}
         </div>
         {hint && (
-          <span className="ml-2 shrink-0 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>
-            {hint}
-          </span>
+          <div className="ml-2 flex shrink-0 items-center gap-1.5">
+            {locked ? <span title="节点已锁定" style={{ color: CANVAS_TOKENS.gold }}>●</span> : null}
+            <span className="text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{locked ? '已锁定' : hint}</span>
+          </div>
         )}
       </div>
       <div

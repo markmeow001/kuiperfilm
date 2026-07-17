@@ -226,7 +226,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
 
   return (
     <>
-      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={240}>
+      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={240}>
         <div className="p-3">
           <div
             className="flex aspect-video w-full items-center justify-center rounded-md text-center text-[11px]"

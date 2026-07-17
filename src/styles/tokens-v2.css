@@ -132,6 +132,14 @@
   /* ──────────────────────────────────────────────────────────────
    * §3.3 Typography scale (1.25 ratio)
    * ────────────────────────────────────────────────────────────── */
+  /* Readability floor for dense production tools. Legacy screens used
+   * 8–12px labels heavily; keep these aliases central so the global
+   * compatibility layer can lift them without rewriting every surface. */
+  --text-ui-micro:   11px;
+  --text-ui-caption: 12px;
+  --text-ui-label:   13px;
+  --text-ui-small:   14px;
+
   --text-12: 12px;
   --text-14: 14px;
   --text-16: 16px;

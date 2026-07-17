@@ -114,7 +114,7 @@ export function AudioNode({ id, data, selected }: NodeProps) {
   const busy = phase === 'submitting' || phase === 'running'
 
   return (
-    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={300}>
+    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={300}>
       <div className="space-y-2 p-3">
         <div className="flex gap-1">
           {(['voice', 'music'] as const).map((role) => (

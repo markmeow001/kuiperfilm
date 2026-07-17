@@ -16,7 +16,7 @@ import {
 } from './canvas-types'
 import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, inferCanvasEdgeData } from './canvas-connections'
 
-const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'group']
+const VALID_TYPES: readonly CanvasNodeType[] = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'mask', 'group']
 
 function isValidType(t: unknown): t is CanvasNodeType {
   return typeof t === 'string' && (VALID_TYPES as readonly string[]).includes(t)
@@ -40,6 +40,7 @@ export function serializeCanvas(
       // 成组: children carry parentId (position is parent-relative); the group
       // container persists its explicit size.
       ...(n.parentId ? { parentId: n.parentId } : {}),
+      ...(typeof n.zIndex === 'number' ? { zIndex: n.zIndex } : {}),
       ...(n.type === 'group'
         ? {
             w: Number(n.style?.width ?? n.measured?.width) || 400,
@@ -113,11 +114,14 @@ export function deserializeCanvas(raw: unknown): {
         n.type !== 'group' && n.parentId && topLevelGroupIds.has(String(n.parentId))
           ? String(n.parentId)
           : undefined
+      const data = { title: '', ...DEFAULT_NODE_DATA, ...((n.data ?? {}) as Partial<CanvasNodeData>) } as CanvasNodeData
       return {
         id: String(n.id),
         type: n.type,
         position: { x: Number(n.x) || 0, y: Number(n.y) || 0 },
-        data: { title: '', ...DEFAULT_NODE_DATA, ...((n.data ?? {}) as Partial<CanvasNodeData>) } as CanvasNodeData,
+        data,
+        draggable: !data.locked,
+        ...(typeof n.zIndex === 'number' ? { zIndex: n.zIndex } : {}),
         ...(parentId ? { parentId, extent: 'parent' as const } : {}),
         ...(n.type === 'group'
           ? { style: { width: Number(n.w) || 400, height: Number(n.h) || 300 } }

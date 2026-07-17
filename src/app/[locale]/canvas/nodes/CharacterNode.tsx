@@ -79,7 +79,7 @@ export function CharacterNode({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={240}>
+    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={240}>
       <div className="p-3">
         <button
           type="button"

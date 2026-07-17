@@ -14,6 +14,19 @@ describe('Kuiper visual system', () => {
     expect(globals).toContain('.kuiper-primary-button')
   })
 
+  it('enforces a readable global type scale for dense production screens', () => {
+    const tokens = readFileSync('src/styles/tokens-v2.css', 'utf8')
+    const globals = readFileSync('src/app/globals.css', 'utf8')
+
+    expect(tokens).toContain('--text-ui-micro:   11px')
+    expect(tokens).toContain('--text-ui-small:   14px')
+    expect(globals).toContain('--text-xs: 0.875rem')
+    expect(globals).toContain('--text-base: 1.0625rem')
+    expect(globals).toContain('font-size: 17px')
+    expect(globals).toContain('.text-\\[8px\\],')
+    expect(globals).toContain('.text-\\[14px\\]')
+  })
+
   it('uses a compact canvas-first workspace shell on desktop and mobile', () => {
     const sidebar = readFileSync('src/components/v2/Sidebar.tsx', 'utf8')
     const topbar = readFileSync('src/components/v2/TopBar.tsx', 'utf8')

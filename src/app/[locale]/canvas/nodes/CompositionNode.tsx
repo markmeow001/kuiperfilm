@@ -102,7 +102,7 @@ export function CompositionNode({ id, data, selected }: NodeProps) {
   }
 
   const busy = submitting || Boolean(d.composeTaskId)
-  return <NodeShell accent={NODE_META.composition.accent} label={NODE_META.composition.label} hint={NODE_META.composition.hint} selected={selected} width={330} noSource={!d.resultKey}>
+  return <NodeShell accent={NODE_META.composition.accent} label={NODE_META.composition.label} hint={NODE_META.composition.hint} selected={selected} locked={Boolean(d.locked)} width={330} noSource={!d.resultKey}>
     <div className="space-y-2 p-3">
       <div className="font-mono text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>片段顺序 · {ordered.length}/10</div>
       {ordered.map((node, index) => <div key={node.id} className="flex items-center gap-1 rounded-md px-2 py-1" style={{ background: CANVAS_TOKENS.bg.input }}><span className="w-5 text-[10px]" style={{ color: CANVAS_TOKENS.text.muted }}>{index + 1}</span><span className="min-w-0 flex-1 truncate text-[11px]">{(node.data as CanvasNodeData).title}</span><button type="button" onClick={() => move(index, -1)} disabled={index === 0}>↑</button><button type="button" onClick={() => move(index, 1)} disabled={index === ordered.length - 1}>↓</button></div>)}

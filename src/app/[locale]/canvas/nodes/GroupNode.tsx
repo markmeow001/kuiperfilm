@@ -71,7 +71,7 @@ export function GroupNode({ id, data, selected }: NodeProps) {
     rf.addEdges(videos.map((node, index) => ({ id: uid(), source: node.id, target: compositionId, data: { portType: 'video-clip', role: 'clip', order: index } })))
   }
 
-  if (d.groupKind !== 'storyboard') return <div className="h-full w-full" style={{ background: 'rgba(255,255,255,0.04)', border: `1.5px dashed ${selected ? CANVAS_TOKENS.selectedRing : CANVAS_TOKENS.hairline}`, borderRadius: CANVAS_TOKENS.radius.lg }}><div className="px-2.5 py-1.5 text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>{d.title || '分组'}</div></div>
+  if (d.groupKind !== 'storyboard') return <div className="h-full w-full" style={{ background: 'rgba(255,255,255,0.04)', border: `1.5px dashed ${selected ? CANVAS_TOKENS.selectedRing : CANVAS_TOKENS.hairline}`, borderRadius: CANVAS_TOKENS.radius.lg }}><div className="flex items-center justify-between px-2.5 py-1.5 text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}><span>{d.title || '分组'}</span>{d.locked ? <span style={{ color: CANVAS_TOKENS.gold }}>● 已锁定</span> : null}</div></div>
 
   return <div className="h-full w-full p-2" style={{ background: 'rgba(79,210,232,0.06)', border: `1.5px dashed ${selected ? CANVAS_TOKENS.selectedRing : '#4FD2E888'}`, borderRadius: CANVAS_TOKENS.radius.lg }}>
     <div className="mb-1 text-[11px]" style={{ color: CANVAS_TOKENS.text.secondary }}>{d.title || '分镜组'} · {ordered.length}</div>

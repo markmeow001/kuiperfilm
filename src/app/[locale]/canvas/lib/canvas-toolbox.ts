@@ -23,7 +23,7 @@ export interface ToolboxPreset {
 
 function node(
   id: string,
-  type: 'text' | 'image' | 'video' | 'character',
+  type: 'text' | 'image' | 'video' | 'character' | 'mask',
   x: number,
   y: number,
   data: Partial<CanvasNodeData> & { title: string },
@@ -78,6 +78,21 @@ export const TOOLBOX_PRESETS: ToolboxPreset[] = [
           node(vid, 'video', ox + COL, oy, { title: '视频', prompt: '', genMode: 'image' }),
         ],
         edges: [edge(mk(), img, vid)],
+      }
+    },
+  },
+  {
+    key: 'plate-to-mask',
+    label: '实拍画面 → 遮罩',
+    hint: '图片 → 手动画背景 / 修补范围',
+    build: (mk, ox, oy) => {
+      const img = mk(), mask = mk()
+      return {
+        nodes: [
+          node(img, 'image', ox, oy, { title: '实拍画面', prompt: '' }),
+          node(mask, 'mask', ox + COL, oy, { title: '背景遮罩' }),
+        ],
+        edges: [edge(mk(), img, mask)],
       }
     },
   },

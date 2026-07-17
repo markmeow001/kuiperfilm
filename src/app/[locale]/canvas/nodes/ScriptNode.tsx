@@ -273,7 +273,7 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
   const busy = phase === 'submitting' || phase === 'running'
 
   return (
-    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={520}>
+    <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={520}>
       <div className="space-y-2 p-4">
         {upstreamText ? (
           <div className="rounded-md px-2 py-1.5 text-[12px]" style={{ background: `${meta.accent}18`, color: CANVAS_TOKENS.text.secondary, border: `1px solid ${meta.accent}33` }}>

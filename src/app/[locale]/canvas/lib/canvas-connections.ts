@@ -21,6 +21,7 @@ const ACCEPTS: Record<CanvasNodeType, readonly CanvasNodeType[]> = {
   video: ['text', 'script', 'character', 'image', 'video'],
   audio: ['text', 'script'],
   composition: ['video', 'composition', 'audio'],
+  mask: ['image'],
   director: ['character', 'image'],
   // 角色节点吃「上游生成图」作参考图——用户把 图片→角色 连线,角色节点把该
   // 图 copy 进自己的 ref 命名空间(use-as-reference),消费在 CharacterNode。
@@ -48,6 +49,7 @@ function portTypeForSource(source: CanvasNodeType): CanvasPortType | null {
     case 'video': return 'video-clip'
     case 'audio': return 'audio-voice'
     case 'composition': return 'video-clip'
+    case 'mask': return null
     case 'group': return 'storyboard-group'
     case 'director': return null
   }

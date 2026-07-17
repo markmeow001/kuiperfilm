@@ -12,6 +12,7 @@ describe('canvas connection contract', () => {
     ['video', 'composition'],
     ['composition', 'composition'],
     ['audio', 'composition'],
+    ['image', 'mask'],
   ] as const)('%s -> %s 在连线白名单内（consumer 存在性靠人工核对，白名单新增时必须同步核对）', (source, target) => {
     expect(canConnectCanvasNodes(source, target)).toBe(true)
   })
@@ -19,7 +20,7 @@ describe('canvas connection contract', () => {
   it.each([
     ['audio', 'video'], ['group', 'image'], ['director', 'video'],
     ['video', 'audio'], ['script', 'director'], ['text', 'character'],
-    ['image', 'composition'],
+    ['image', 'composition'], ['video', 'mask'], ['mask', 'image'],
   ] as const)('%s -> %s is rejected instead of drawing a fake wire', (source, target) => {
     expect(canConnectCanvasNodes(source, target)).toBe(false)
   })

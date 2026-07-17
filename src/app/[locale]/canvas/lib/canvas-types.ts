@@ -41,9 +41,29 @@ export interface CanvasStoryboardShot {
   dialogue?: string
 }
 
+export interface CanvasMaskPoint {
+  /** Normalized 0–1 coordinates so the mask survives node resizing. */
+  x: number
+  y: number
+}
+
+export interface CanvasMaskPath {
+  mode: 'add' | 'erase'
+  brushSize: number
+  points: CanvasMaskPoint[]
+}
+
 export interface CanvasNodeData extends Record<string, unknown> {
   /** User-facing title shown in the node header (editable). */
   title: string
+  /** Prevents accidental movement and deletion while preserving selection. */
+  locked?: boolean
+  /** Mask node: editable vector strokes over the connected/uploaded plate. */
+  maskPaths?: CanvasMaskPath[]
+  maskMode?: 'add' | 'erase'
+  maskBrushSize?: number
+  maskSourceUrl?: string | null
+  maskSourceKey?: string | null
   /** Prompt / text content. */
   prompt: string
   /** Selected model key (image or video catalog). Empty until chosen. */
@@ -165,6 +185,8 @@ export interface SerializedNode {
   /** Group container size (type 'group' only). */
   w?: number
   h?: number
+  /** Explicit canvas stacking order. */
+  zIndex?: number
 }
 
 export interface SerializedEdge {
@@ -192,6 +214,12 @@ export interface SerializedCanvas {
 // keys. A plain `Omit<CanvasNodeData,'title'>` annotation collapses to the bare
 // index signature because CanvasNodeData has `[key: string]: unknown`.
 export const DEFAULT_NODE_DATA = {
+  locked: false,
+  maskPaths: [] as CanvasMaskPath[],
+  maskMode: 'add' as 'add' | 'erase',
+  maskBrushSize: 18,
+  maskSourceUrl: null as string | null,
+  maskSourceKey: null as string | null,
   prompt: '',
   modelKey: '',
   aspectRatio: '9:16',

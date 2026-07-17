@@ -323,7 +323,7 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
     return (
       <div className="relative">
-      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} width={nodeWidth}>
+      <NodeShell accent={meta.accent} label={meta.label} hint={meta.hint} selected={selected} locked={Boolean(d.locked)} width={nodeWidth}>
         {/* Preview body — the card itself is preview-only (LibTV) */}
         <div className="p-3">
           <div

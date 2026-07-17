@@ -49,8 +49,11 @@ import { ScriptNode } from './nodes/ScriptNode'
 import { AudioNode } from './nodes/AudioNode'
 import { GroupNode } from './nodes/GroupNode'
 import { CompositionNode } from './nodes/CompositionNode'
+import { MaskNode } from './nodes/MaskNode'
 import { CanvasResourceMenu } from './CanvasResourceMenu'
 import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, canConnectCanvasNodes, canvasConnectionHint, inferCanvasEdgeData } from './lib/canvas-connections'
+import { arrangeSelectedNodes, setSelectedLayer, setSelectedLocked, type CanvasArrangeMode, type CanvasLayerMode } from './lib/canvas-layout'
+import { EMPTY_CANVAS_HISTORY, recordCanvasSnapshot, redoCanvasSnapshot, undoCanvasSnapshot, type CanvasHistoryState } from './lib/canvas-history'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -67,9 +70,10 @@ const nodeTypes: NodeTypes = {
   audio: AudioNode,
   group: GroupNode,
   composition: CompositionNode,
+  mask: MaskNode,
 }
 
-const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'audio', 'composition', 'director', 'character', 'text']
+const ADD_ORDER: CanvasNodeType[] = ['script', 'image', 'video', 'mask', 'audio', 'composition', 'director', 'character', 'text']
 
 function makeNode(type: CanvasNodeType, x: number, y: number): Node<CanvasNodeData> {
   return {
@@ -122,6 +126,8 @@ function CanvasInner({ locale }: CanvasClientProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const pendingUploadPositionRef = useRef<{ x: number; y: number } | null>(null)
+  const historyRef = useRef<CanvasHistoryState>(EMPTY_CANVAS_HISTORY)
+  const [historyRevision, setHistoryRevision] = useState(0)
 
   const canvasQuery = useCanvas()
   const save = useSaveCanvas()
@@ -136,6 +142,34 @@ function CanvasInner({ locale }: CanvasClientProps) {
     dropErrorTimerRef.current = setTimeout(() => setDropError(null), ms)
   }, [])
 
+  const refreshHistoryState = useCallback(() => setHistoryRevision((value) => value + 1), [])
+  const captureHistory = useCallback(() => {
+    historyRef.current = recordCanvasSnapshot(historyRef.current, { nodes, edges })
+    refreshHistoryState()
+  }, [nodes, edges, refreshHistoryState])
+  const restoreHistorySnapshot = useCallback((snapshot: { nodes: Node<CanvasNodeData>[]; edges: Edge[] }) => {
+    setNodes(snapshot.nodes)
+    setEdges(snapshot.edges)
+  }, [setNodes, setEdges])
+  const undoCanvas = useCallback(() => {
+    const result = undoCanvasSnapshot(historyRef.current, { nodes, edges })
+    if (!result.snapshot) return
+    historyRef.current = result.history
+    restoreHistorySnapshot(result.snapshot)
+    refreshHistoryState()
+  }, [nodes, edges, restoreHistorySnapshot, refreshHistoryState])
+  const redoCanvas = useCallback(() => {
+    const result = redoCanvasSnapshot(historyRef.current, { nodes, edges })
+    if (!result.snapshot) return
+    historyRef.current = result.history
+    restoreHistorySnapshot(result.snapshot)
+    refreshHistoryState()
+  }, [nodes, edges, restoreHistorySnapshot, refreshHistoryState])
+  const resetCanvasHistory = useCallback(() => {
+    historyRef.current = EMPTY_CANVAS_HISTORY
+    refreshHistoryState()
+  }, [refreshHistoryState])
+
   const uploadImagesAt = useCallback(
     async (files: File[], flow: { x: number; y: number }) => {
       const images = files.filter((file) => /^image\/(jpeg|png|webp)$/.test(file.type))
@@ -143,6 +177,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
         flashDropError('仅支持拖入 jpg/png/webp 图片', 3000)
         return
       }
+      captureHistory()
       for (const [i, file] of images.entries()) {
         try {
           const res = await upload.mutateAsync({ file, type: 'image' })
@@ -163,7 +198,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
         }
       }
     },
-    [setNodes, upload, flashDropError],
+    [setNodes, upload, flashDropError, captureHistory],
   )
 
   // 拖档入画布: drop image files anywhere → upload as reference + spawn image nodes.
@@ -296,6 +331,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
         frameIndex,
         targetMode: typeof targetNode?.data?.genMode === 'string' ? targetNode.data.genMode : undefined,
       })
+      captureHistory()
       setEdges((eds) => addEdge({
         ...p,
         sourceHandle: p.sourceHandle ?? CANVAS_SOURCE_HANDLE,
@@ -303,7 +339,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
         data,
       }, eds))
     },
-    [setEdges, rf, flashDropError, edges],
+    [setEdges, rf, flashDropError, edges, captureHistory],
   )
 
   const isValidConnection = useCallback((connection: Connection | Edge) => {
@@ -369,6 +405,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
   const addNodeFromMenu = useCallback(
     (type: CanvasNodeType) => {
       if (!menu) return
+      captureHistory()
       const node = makeNode(type, menu.flowX - 140, menu.flowY - 40)
       setNodes((ns) => [...ns, node])
       if (menu.fromNodeId) {
@@ -377,7 +414,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
       }
       setMenu(null)
     },
-    [menu, setNodes, setEdges],
+    [menu, setNodes, setEdges, captureHistory],
   )
 
   const openDockMenu = useCallback((e?: React.MouseEvent) => {
@@ -429,6 +466,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
   const deleteNode = useCallback((nodeId: string) => {
     setNodes((ns) => {
       const target = ns.find((n) => n.id === nodeId)
+      if (target?.data.locked) return ns
       const rest = ns.filter((n) => n.id !== nodeId)
       // Deleting a group container releases (not deletes) its children — they
       // keep their canvas spot by converting back to absolute coordinates.
@@ -446,8 +484,9 @@ function CanvasInner({ locale }: CanvasClientProps) {
 
   // ── 成组 / 解组 (LibTV G / ⇧G) ──
   const groupSelected = useCallback(() => {
-    const sel = nodes.filter((n) => n.selected && n.type !== 'group' && !n.parentId)
+    const sel = nodes.filter((n) => n.selected && n.type !== 'group' && !n.parentId && !n.data.locked)
     if (sel.length < 2) return
+    captureHistory()
     const PAD = 40
     const HEADER = 28
     const b = rf.getNodesBounds(sel)
@@ -478,15 +517,19 @@ function CanvasInner({ locale }: CanvasClientProps) {
           selected: false,
         })),
     ])
-  }, [nodes, rf, setNodes])
+  }, [nodes, rf, setNodes, captureHistory])
 
   const ungroupSelected = useCallback(() => {
     const gids = new Set<string>()
     nodes.forEach((n) => {
-      if (n.selected && n.type === 'group') gids.add(n.id)
-      if (n.selected && n.parentId) gids.add(n.parentId)
+      if (n.selected && n.type === 'group' && !n.data.locked) gids.add(n.id)
+      if (n.selected && n.parentId) {
+        const group = nodes.find((candidate) => candidate.id === n.parentId)
+        if (!group?.data.locked) gids.add(n.parentId)
+      }
     })
     if (gids.size === 0) return
+    captureHistory()
     setNodes((ns) =>
       ns
         .filter((n) => !gids.has(n.id))
@@ -502,7 +545,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
           }
         }),
     )
-  }, [nodes, setNodes])
+  }, [nodes, setNodes, captureHistory])
 
   // Build a clean copy — only id/type/position/data, never RF internal fields
   // (measured/dragging/internals). structuredClone the data to avoid aliasing
@@ -517,61 +560,41 @@ function CanvasInner({ locale }: CanvasClientProps) {
   const duplicateNode = useCallback((nodeId: string) => {
     const n = nodes.find((x) => x.id === nodeId)
     if (!n || n.type === 'group') return
+    captureHistory()
     // cloneNode strips parentId, so the copy lands at ABSOLUTE coords — for a
     // grouped child that means converting from parent-relative first.
     const p = absPos(n)
     const copy = cloneNode(n, p.x + 48, p.y + 48)
     setNodes((ns) => [...ns.map((x) => ({ ...x, selected: false })), { ...copy, selected: true }])
-  }, [nodes, setNodes, absPos])
+  }, [nodes, setNodes, absPos, captureHistory])
 
   const pasteNode = useCallback((flowX?: number, flowY?: number) => {
     const c = clipboardRef.current
     if (!c) return
+    captureHistory()
     const copy = cloneNode(c, flowX ?? c.position.x + 48, flowY ?? c.position.y + 48)
     setNodes((ns) => [...ns, copy])
-  }, [setNodes])
+  }, [setNodes, captureHistory])
 
-  const alignSelected = useCallback((mode: 'left' | 'top' | 'horizontal' | 'vertical') => {
-    const selected = nodes.filter((node) => node.selected && !node.parentId)
-    if (selected.length < 2) return
-    const positions = selected.map((node) => ({ node, position: absPos(node) }))
-    const selectedIds = new Set(selected.map((node) => node.id))
+  const alignSelected = useCallback((mode: CanvasArrangeMode) => {
+    captureHistory()
+    setNodes((current) => arrangeSelectedNodes(current, mode))
+  }, [setNodes, captureHistory])
 
-    if (mode === 'left' || mode === 'top') {
-      const target = Math.min(...positions.map(({ position }) => mode === 'left' ? position.x : position.y))
-      setNodes((current) => current.map((node) => {
-        if (!selectedIds.has(node.id)) return node
-        return {
-          ...node,
-          position: mode === 'left'
-            ? { ...node.position, x: target }
-            : { ...node.position, y: target },
-        }
-      }))
-      return
-    }
+  const changeSelectedLayer = useCallback((mode: CanvasLayerMode) => {
+    captureHistory()
+    setNodes((current) => setSelectedLayer(current, mode))
+  }, [setNodes, captureHistory])
 
-    const axis = mode === 'horizontal' ? 'x' : 'y'
-    const ordered = [...positions].sort((a, b) => a.position[axis] - b.position[axis])
-    const first = ordered[0].position[axis]
-    const last = ordered[ordered.length - 1].position[axis]
-    const gap = (last - first) / Math.max(ordered.length - 1, 1)
-    const nextPosition = new Map(ordered.map(({ node }, index) => [node.id, first + gap * index]))
-    setNodes((current) => current.map((node) => {
-      const value = nextPosition.get(node.id)
-      if (value === undefined) return node
-      return {
-        ...node,
-        position: axis === 'x'
-          ? { ...node.position, x: value }
-          : { ...node.position, y: value },
-      }
-    }))
-  }, [nodes, absPos, setNodes])
+  const setSelectionLocked = useCallback((locked: boolean) => {
+    captureHistory()
+    setNodes((current) => setSelectedLocked(current, locked))
+  }, [setNodes, captureHistory])
 
   // 优化工作流布局: layered left→right by longest-path depth via Kahn topo-sort
   // (terminates on cycles; cycle nodes keep depth 0).
   const optimizeLayout = useCallback(() => {
+    captureHistory()
     setNodes((ns) => {
       const ids = new Set(ns.map((n) => n.id))
       const indeg = new Map<string, number>()
@@ -596,14 +619,14 @@ function CanvasInner({ locale }: CanvasClientProps) {
       return ns.map((n) => {
         // Groups and their children keep their manual arrangement — child
         // coords are parent-relative, so re-laying them out here would scatter.
-        if (n.type === 'group' || n.parentId) return n
+        if (n.type === 'group' || n.parentId || n.data.locked) return n
         const d = depth.get(n.id) ?? 0
         const row = perCol.get(d) ?? 0
         perCol.set(d, row + 1)
         return { ...n, position: { x: 80 + d * COL, y: 80 + row * ROW } }
       })
     })
-  }, [edges, setNodes])
+  }, [edges, setNodes, captureHistory])
 
   // keyboard shortcuts (ignore when typing in inputs)
   useEffect(() => {
@@ -613,7 +636,9 @@ function CanvasInner({ locale }: CanvasClientProps) {
       const meta = e.metaKey || e.ctrlKey
       const selected = nodes.filter((n) => n.selected)
       const sel = selected[0]
-      if (e.altKey && e.shiftKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF')) { optimizeLayout(); e.preventDefault() }
+      if (meta && !e.shiftKey && e.key.toLowerCase() === 'z') { undoCanvas(); e.preventDefault() }
+      else if (meta && e.shiftKey && e.key.toLowerCase() === 'z') { redoCanvas(); e.preventDefault() }
+      else if (e.altKey && e.shiftKey && (e.key === 'F' || e.key === 'f' || e.code === 'KeyF')) { optimizeLayout(); e.preventDefault() }
       else if (meta && e.key === 'c' && sel) { copyNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'd' && sel) { duplicateNode(sel.id); e.preventDefault() }
       else if (meta && e.key === 'v' && clipboardRef.current) { pasteNode(); e.preventDefault() }
@@ -625,11 +650,11 @@ function CanvasInner({ locale }: CanvasClientProps) {
       // ⌘A 全选 — 配合 Del 一次清掉批量生成/测试残留（2026-07-13 用户反馈：
       // 节点太多没法一次删。框选 Shift+拖曳 早就在，但全图清空还是 ⌘A 快）
       else if (meta && (e.key === 'a' || e.key === 'A')) { setNodes((ns) => ns.map((n) => ({ ...n, selected: true }))); e.preventDefault() }
-      else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length > 0) { selected.forEach((n) => deleteNode(n.id)); e.preventDefault() }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && selected.some((n) => !n.data.locked)) { captureHistory(); selected.filter((n) => !n.data.locked).forEach((n) => deleteNode(n.id)); e.preventDefault() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode, optimizeLayout, openDockMenu, groupSelected, ungroupSelected, setNodes])
+  }, [nodes, copyNode, duplicateNode, pasteNode, deleteNode, optimizeLayout, openDockMenu, groupSelected, ungroupSelected, setNodes, undoCanvas, redoCanvas, captureHistory])
 
   // Shot sequence = image/video nodes ordered left→right, top→bottom (the
   // storyboard reading order) — the drama as an ordered list of shots.
@@ -661,16 +686,18 @@ function CanvasInner({ locale }: CanvasClientProps) {
   const applyToolboxPreset = useCallback((presetKey: string) => {
     const preset = TOOLBOX_PRESETS.find((p) => p.key === presetKey)
     if (!preset) return
+    captureHistory()
     const c = centerFlow()
     const { nodes: newNodes, edges: newEdges } = preset.build(uid, c.x - 280, c.y - 80)
     setNodes((ns) => [...ns.map((x) => ({ ...x, selected: false })), ...newNodes])
     if (newEdges.length) setEdges((es) => [...es, ...newEdges])
     setToolbox(false)
-  }, [centerFlow, setNodes, setEdges])
+  }, [centerFlow, setNodes, setEdges, captureHistory])
 
   const assetLibraryQuery = useCanvasAssetLibrary(activeCanvasId, charLib)
   const [assetType, setAssetType] = useState<CanvasAssetLibraryItem['type']>('character')
   const dropAsset = useCallback((asset: CanvasAssetLibraryItem) => {
+    captureHistory()
     const c = centerFlow()
     const type = canvasAssetNodeType(asset)
     const node: Node<CanvasNodeData> = {
@@ -681,19 +708,18 @@ function CanvasInner({ locale }: CanvasClientProps) {
     }
     setNodes((ns) => [...ns, node])
     setCharLib(false)
-  }, [centerFlow, setNodes])
+  }, [centerFlow, setNodes, captureHistory])
 
   const minimapColor = useCallback((n: Node) => NODE_META[(n.type as CanvasNodeType) ?? 'text']?.accent ?? CANVAS_TOKENS.text.muted, [])
 
   /** 清空画布 — 批量生成/测试残留一键清（确认后全删，含连线）。 */
   const clearCanvas = useCallback(() => {
-    setNodes((ns) => {
-      if (ns.length === 0) return ns
-      if (!window.confirm(`清空画布：将删除全部 ${ns.length} 个节点与连线，且无法恢复。确定？`)) return ns
-      setEdges([])
-      return []
-    })
-  }, [setNodes, setEdges])
+    if (nodes.length === 0) return
+    if (!window.confirm(`清空画布：将删除全部 ${nodes.length} 个节点与连线，且无法恢复。确定？`)) return
+    captureHistory()
+    setEdges([])
+    setNodes([])
+  }, [nodes, setNodes, setEdges, captureHistory])
 
   const loadCanvasRecord = useCallback((record: CanvasRecordView) => {
     const next = deserializeCanvas({ nodes: record.nodes, edges: record.edges, viewport: record.viewport })
@@ -702,9 +728,10 @@ function CanvasInner({ locale }: CanvasClientProps) {
     setCanvasTitle(record.title)
     setNodes(next.nodes)
     setEdges(next.edges)
+    resetCanvasHistory()
     instanceRef.current?.setViewport(next.viewport)
     setResourcesOpen(false)
-  }, [setNodes, setEdges])
+  }, [setNodes, setEdges, resetCanvasHistory])
 
   const saveCurrentNow = useCallback(async () => {
     const currentId = canvasIdRef.current
@@ -805,6 +832,18 @@ function CanvasInner({ locale }: CanvasClientProps) {
   )
 
   const selectedNodes = useMemo(() => nodes.filter((n) => n.selected), [nodes])
+  const selectedTopLevelNodes = useMemo(() => selectedNodes.filter((node) => !node.parentId), [selectedNodes])
+  const selectedMovableTopLevelNodes = useMemo(
+    () => selectedTopLevelNodes.filter((node) => !node.data.locked),
+    [selectedTopLevelNodes],
+  )
+  const selectionLocked = selectedNodes.length > 0 && selectedNodes.every((node) => Boolean(node.data.locked))
+  const canUndo = historyRevision >= 0 && historyRef.current.past.length > 0
+  const canRedo = historyRevision >= 0 && historyRef.current.future.length > 0
+  const zoomToSelection = useCallback(() => {
+    if (selectedTopLevelNodes.length === 0) return
+    rf.fitBounds(rf.getNodesBounds(selectedTopLevelNodes), { padding: 0.24, duration: 350 })
+  }, [rf, selectedTopLevelNodes])
 
   return (
     <CanvasAssetsProvider canvasId={activeCanvasId}>
@@ -831,6 +870,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
         // 滚轮/±按钮，双击专职建节点。
         zoomOnDoubleClick={false}
         onNodeContextMenu={onNodeContextMenu}
+        onNodeDragStart={() => captureHistory()}
         onPaneClick={() => { setCtxMenu(null); setPaneMenu(null); setMenu(null) }}
         onInit={(inst) => {
           instanceRef.current = inst as ReactFlowInstance<Node<CanvasNodeData>, Edge>
@@ -1032,12 +1072,26 @@ function CanvasInner({ locale }: CanvasClientProps) {
             }}
           >
             {([
+              { label: '聚焦此节点', on: () => focusNode(ctxMenu.nodeId), kbd: '' },
               { label: '优化工作流布局', on: () => optimizeLayout(), kbd: '' },
+              { sep: true },
+              {
+                label: nodes.find((node) => node.id === ctxMenu.nodeId)?.data.locked ? '解锁节点' : '锁定节点',
+                on: () => {
+                  captureHistory()
+                  setNodes((current) => current.map((node) => node.id === ctxMenu.nodeId
+                    ? { ...node, draggable: Boolean(node.data.locked), data: { ...node.data, locked: !node.data.locked } }
+                    : node))
+                },
+                kbd: '',
+              },
+              { label: '置于顶层', on: () => { captureHistory(); setNodes((current) => setSelectedLayer(current.map((node) => ({ ...node, selected: node.id === ctxMenu.nodeId })), 'front')) }, kbd: '', disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.parentId) },
+              { label: '置于底层', on: () => { captureHistory(); setNodes((current) => setSelectedLayer(current.map((node) => ({ ...node, selected: node.id === ctxMenu.nodeId })), 'back')) }, kbd: '', disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.parentId) },
               { sep: true },
               { label: '复制节点', on: () => copyNode(ctxMenu.nodeId), kbd: '⌘C' },
               { label: '创建副本', on: () => duplicateNode(ctxMenu.nodeId), kbd: '⌘D' },
               { label: '粘贴', on: () => pasteNode(), kbd: '⌘V', disabled: !clipboardRef.current },
-              { label: '删除', on: () => deleteNode(ctxMenu.nodeId), kbd: '⌘⌫', danger: true },
+              { label: '删除', on: () => { captureHistory(); deleteNode(ctxMenu.nodeId) }, kbd: '⌘⌫', danger: true, disabled: Boolean(nodes.find((node) => node.id === ctxMenu.nodeId)?.data.locked) },
             ] as Array<{ label?: string; on?: () => void; kbd?: string; sep?: boolean; disabled?: boolean; danger?: boolean }>).map((item, i) =>
               item.sep ? (
                 <div key={`sep-${i}`} className="my-1 h-px" style={{ background: CANVAS_TOKENS.hairline }} />
@@ -1195,7 +1249,11 @@ function CanvasInner({ locale }: CanvasClientProps) {
           style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
         >
           <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已选 {selectedNodes.length}</span>
-          {selectedNodes.length >= 2 ? (
+          <button type="button" onClick={zoomToSelection} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>聚焦</button>
+          <button type="button" onClick={() => setSelectionLocked(!selectionLocked)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: selectionLocked ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.primary }}>{selectionLocked ? '解锁' : '锁定'}</button>
+          <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('front')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置顶</button>
+          <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('back')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置底</button>
+          {selectedMovableTopLevelNodes.length >= 2 ? (
             <>
               <button type="button" onClick={() => alignSelected('left')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>左对齐</button>
               <button type="button" onClick={() => alignSelected('top')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>顶对齐</button>
@@ -1203,6 +1261,9 @@ function CanvasInner({ locale }: CanvasClientProps) {
               <button type="button" onClick={() => alignSelected('vertical')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>纵向均分</button>
               <button type="button" onClick={groupSelected} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>成组</button>
             </>
+          ) : null}
+          {selectedNodes.some((node) => node.type === 'group' || node.parentId) ? (
+            <button type="button" onClick={ungroupSelected} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>解散</button>
           ) : null}
           <button
             type="button"
@@ -1216,6 +1277,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
                   return cloneNode(n, p.x + 48, p.y + 48)
                 })
               if (copies.length === 0) return
+              captureHistory()
               setNodes((ns) => [
                 ...ns.map((x) => ({ ...x, selected: false })),
                 ...copies.map((c) => ({ ...c, selected: true })),
@@ -1228,9 +1290,10 @@ function CanvasInner({ locale }: CanvasClientProps) {
           </button>
           <button
             type="button"
-            onClick={() => selectedNodes.forEach((n) => deleteNode(n.id))}
+            onClick={() => { captureHistory(); selectedNodes.filter((node) => !node.data.locked).forEach((n) => deleteNode(n.id)) }}
+            disabled={selectedNodes.every((node) => Boolean(node.data.locked))}
             className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10"
-            style={{ color: '#FF8A8A' }}
+            style={{ color: '#FF8A8A', opacity: selectedNodes.every((node) => Boolean(node.data.locked)) ? 0.4 : 1 }}
           >
             删除
           </button>
@@ -1254,6 +1317,8 @@ function CanvasInner({ locale }: CanvasClientProps) {
               ['框选多个节点', '⇧ 拖曳'],
               ['全选', '⌘A'],
               ['删除选中', 'Del'],
+              ['锁定后禁止移动 / 删除', '工具列'],
+              ['聚焦选中', '工具列'],
               ['整理画布', '⌥⇧F'],
               ['添加节点', '双击空白'],
               ['导演台 移动/旋转/缩放', 'V / R / S'],
@@ -1272,6 +1337,9 @@ function CanvasInner({ locale }: CanvasClientProps) {
         className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-xl p-2"
         style={{ background: CANVAS_TOKENS.bg.panel, border: `1px solid ${CANVAS_TOKENS.hairline}`, boxShadow: CANVAS_TOKENS.shadow }}
       >
+        <button type="button" onClick={undoCanvas} disabled={!canUndo} title="撤销 ⌘Z" className="h-8 rounded-lg px-2 text-[13px] disabled:opacity-30" style={{ color: CANVAS_TOKENS.text.secondary }}>↶</button>
+        <button type="button" onClick={redoCanvas} disabled={!canRedo} title="重做 ⇧⌘Z" className="h-8 rounded-lg px-2 text-[13px] disabled:opacity-30" style={{ color: CANVAS_TOKENS.text.secondary }}>↷</button>
+        <div className="h-5 w-px" style={{ background: CANVAS_TOKENS.hairline }} />
         {dockButtons.map((b) => (
           <button
             key={b.key}
