@@ -166,6 +166,64 @@ body {
     var(--surface-canvas);
 }
 
+/* Workspace foundation — shared by script / subjects / storyboard / voice.
+ * Keep dense production chrome around the edge while giving the authored
+ * content enough room to breathe. These primitives replace page-local
+ * amber/stone shells one surface at a time. */
+.kuiper-workspace {
+  --workspace-gutter: clamp(16px, 2.4vw, 40px);
+  background: var(--surface-canvas);
+}
+
+.kuiper-workspace-page {
+  width: min(100%, 1600px);
+  margin-inline: auto;
+  padding: 32px var(--workspace-gutter) 56px;
+}
+
+.kuiper-workspace-toolbar {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.kuiper-editor-surface {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 18%),
+    var(--surface-inset);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+  transition: border-color var(--d-state) var(--ease-out);
+}
+
+.kuiper-editor-surface:focus {
+  border-color: var(--border-primary);
+  box-shadow: 0 0 0 3px rgba(255, 46, 175, 0.08);
+}
+
+.kuiper-inspector {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  background: var(--surface-raised);
+}
+
+@media (max-width: 767px) {
+  .kuiper-workspace-page {
+    padding-top: 20px;
+    padding-bottom: 96px;
+  }
+
+  .kuiper-workspace-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-bottom: 16px;
+  }
+}
+
 .kuiper-canvas-grid {
   background-color: var(--surface-canvas);
   background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);

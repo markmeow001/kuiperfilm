@@ -146,8 +146,8 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
 
   if (projectQuery.isLoading) {
     return (
-      <div className="px-12 py-10">
-        <p className="font-mono text-xs tracking-wider text-stone-500">{t('loading')}</p>
+      <div className="kuiper-workspace-page">
+        <div className="h-6 w-48 animate-pulse rounded-chip bg-overlay" aria-label={t('loading')} />
       </div>
     )
   }
@@ -157,32 +157,32 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
   const hasContent = novelText.trim().length > 0
 
   return (
-    <div className="px-12 py-10">
-      <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+    <div className="kuiper-workspace-page">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Left column: paste + save */}
         <div>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="kuiper-workspace-toolbar mb-4">
             <div>
-              <div className="font-fraunces text-sm italic text-amber-500/80">
+              <div className="font-heading text-xl font-semibold text-text-primary">
                 {currentEpisode ? `${currentEpisode.name}` : t('noEpisodeSelected')}
               </div>
-              <div className="mt-0.5 font-mono text-[14px] tracking-wider text-stone-600">
+              <div className="mt-1 text-sm text-text-tertiary">
                 {episodes.length === 0 ? t('promptCreate') : t('promptPaste')}
               </div>
             </div>
-            <div className="flex items-center gap-3 font-mono text-[14px]">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
               <BulkEpisodeUploadButton
                 projectId={projectId}
                 hasExistingEpisodes={episodes.length > 0}
                 canEdit={canEdit}
                 viewerTip={viewerTip}
               />
-              <span className="text-stone-600">{t('chars', { count: charCount })}</span>
+              <span className="font-mono text-text-tertiary">{t('chars', { count: charCount })}</span>
               {currentEpisodeId ? (
                 saving ? (
-                  <span className="text-amber-500/70">{t('saving')}</span>
+                  <span className="text-primary-300">{t('saving')}</span>
                 ) : isDirty && hasContent ? (
-                  <span className="text-stone-500">{t('unsaved')}</span>
+                  <span className="text-text-secondary">{t('unsaved')}</span>
                 ) : !isDirty && hasContent ? (
                   <span className="text-emerald-500/70">{t('savedOk')}</span>
                 ) : null
@@ -201,7 +201,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
                 ? t('placeholder.withEpisode', { ep: currentEpisode.episodeNumber ?? 1 })
                 : t('placeholder.withoutEpisode')
             }
-            className={`h-[420px] w-full resize-none rounded-sm border border-amber-900/30 bg-stone-950 px-5 py-4 font-serif-cn text-base leading-relaxed text-stone-200 placeholder:text-stone-700 focus:border-amber-500/60 focus:outline-none ${
+            className={`kuiper-editor-surface min-h-[520px] w-full resize-y px-5 py-5 font-serif-cn text-base leading-relaxed text-text-primary placeholder:text-text-tertiary focus:outline-none lg:min-h-[620px] ${
               !canEdit ? 'cursor-not-allowed opacity-70' : ''
             }`}
           />
@@ -218,7 +218,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
               onClick={() => void handleSave()}
               disabled={saving || creatingEpisode || !hasContent || !isDirty || !canEdit}
               title={viewerTip}
-              className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="kuiper-primary-button flex min-h-11 items-center gap-2 rounded-input px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="check" className="h-4 w-4" />
               {creatingEpisode ? t('save.creating') : saving ? t('save.saving') : t('save.label')}
@@ -227,7 +227,7 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
             {!isDirty && hasContent && currentEpisodeId ? (
               <Link
                 href={buildHref(`/${locale}/v2/workspace/${projectId}/subjects`)}
-                className="font-mono text-xs tracking-wider text-stone-500 transition-colors hover:text-amber-300"
+                className="text-sm text-text-secondary transition-colors hover:text-primary-300"
               >
                 {t('nextStep')}
               </Link>
@@ -236,33 +236,33 @@ export function V2ScriptClient({ projectId, locale = 'zh-TW' }: V2ScriptClientPr
         </div>
 
         {/* Right column: workflow guide */}
-        <aside className="space-y-4 self-start rounded-sm border border-stone-800/60 bg-stone-900/30 p-5">
+        <aside className="kuiper-inspector space-y-5 self-start p-5 xl:sticky xl:top-28">
           <div>
-            <div className="mb-1 font-fraunces text-sm italic text-amber-500/80">{t('workflow.title')}</div>
-            <div className="font-mono text-[12px] uppercase tracking-[0.2em] text-stone-600">
+            <div className="mb-1 font-heading text-base font-semibold text-text-primary">{t('workflow.title')}</div>
+            <div className="font-mono text-xs uppercase tracking-[0.16em] text-text-tertiary">
               {t('workflow.summary')}
             </div>
           </div>
-          <ol className="space-y-3 font-serif-cn text-xs leading-relaxed text-stone-400">
+          <ol className="space-y-4 text-sm leading-relaxed text-text-secondary">
             <li>
-              <span className="mr-2 font-mono text-amber-500/70">01</span>
-              {t.rich('workflow.step1', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
+              <span className="mr-2 font-mono text-primary-400">01</span>
+              {t.rich('workflow.step1', { em: (chunks) => <span className="text-text-primary">{chunks}</span> })}
             </li>
             <li>
-              <span className="mr-2 font-mono text-amber-500/70">02</span>
-              {t.rich('workflow.step2', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
+              <span className="mr-2 font-mono text-primary-400">02</span>
+              {t.rich('workflow.step2', { em: (chunks) => <span className="text-text-primary">{chunks}</span> })}
             </li>
             <li>
-              <span className="mr-2 font-mono text-amber-500/70">03</span>
-              {t.rich('workflow.step3', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
+              <span className="mr-2 font-mono text-primary-400">03</span>
+              {t.rich('workflow.step3', { em: (chunks) => <span className="text-text-primary">{chunks}</span> })}
             </li>
             <li>
-              <span className="mr-2 font-mono text-amber-500/70">04</span>
-              {t.rich('workflow.step4', { em: (chunks) => <span className="text-amber-300">{chunks}</span> })}
+              <span className="mr-2 font-mono text-primary-400">04</span>
+              {t.rich('workflow.step4', { em: (chunks) => <span className="text-text-primary">{chunks}</span> })}
             </li>
           </ol>
-          <div className="border-t border-stone-800/60 pt-3 font-fraunces text-[11px] italic text-stone-600">
-            {t('workflow.footerPrefix')}<Link href={`/${locale}/v2/workspace/${projectId}?stay=1`} className="ml-1 text-amber-500/80 hover:text-amber-300">{t('workflow.footerLink')}</Link>{t('workflow.footerSuffix')}
+          <div className="border-t border-border-soft pt-4 text-sm text-text-tertiary">
+            {t('workflow.footerPrefix')}<Link href={`/${locale}/v2/workspace/${projectId}?stay=1`} className="ml-1 text-primary-400 hover:text-primary-300">{t('workflow.footerLink')}</Link>{t('workflow.footerSuffix')}
           </div>
         </aside>
       </div>

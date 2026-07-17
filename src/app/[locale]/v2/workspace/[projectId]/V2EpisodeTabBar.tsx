@@ -165,7 +165,7 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
   // net for users who skip the tab bar and start typing directly.
   return (
     <div
-      className="flex items-stretch gap-2 border-b border-stone-800/60 bg-stone-950 px-6 py-3"
+      className="flex items-stretch gap-2 border-b border-border-soft bg-canvas/95 px-[var(--workspace-gutter)] py-3 backdrop-blur-xl"
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >
@@ -175,7 +175,7 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
       <Link
         href={`/${locale}/v2/workspace/${projectId}?stay=1`}
         title={projectName ?? '專案首頁'}
-        className="flex shrink-0 items-center gap-2 rounded-sm border border-stone-800/50 bg-stone-900/30 px-3 py-1.5 font-serif-cn text-sm text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-300"
+        className="flex shrink-0 items-center gap-2 rounded-input border border-border-soft bg-raised px-3 py-1.5 text-sm text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
       >
         <AppIcon name="bookOpen" className="h-4 w-4" />
         <span className="max-w-[160px] truncate">{projectName ?? '專案'}</span>
@@ -195,7 +195,7 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
               <div
                 key={episode.id}
                 data-tab-id={episode.id}
-                className="flex shrink-0 items-center gap-1 rounded-sm border border-amber-500/50 bg-amber-500/10 px-2 py-1.5"
+                className="flex shrink-0 items-center gap-1 rounded-input border border-primary-500/50 bg-primary-500/10 px-2 py-1.5"
               >
                 <input
                   type="text"
@@ -207,7 +207,7 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
                   }}
                   onBlur={() => void submitRename(episode.id)}
                   autoFocus
-                  className="w-28 bg-transparent font-serif-cn text-sm text-amber-100 outline-none"
+                  className="w-28 bg-transparent text-sm text-text-primary outline-none"
                 />
               </div>
             )
@@ -229,12 +229,12 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
                 aria-label={`${episode.name}${isActive ? '（目前選取）' : ''}（雙擊重命名）`}
                 className={`flex items-center gap-1.5 rounded-sm border px-3 py-1.5 font-serif-cn text-sm transition-all ${
                   isActive
-                    ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
-                    : 'border-stone-800/40 bg-stone-900/20 text-stone-400 hover:border-stone-700 hover:text-stone-200'
+                    ? 'border-primary-500/50 bg-primary-500/10 text-primary-300'
+                    : 'border-border-soft bg-raised/60 text-text-secondary hover:border-border-strong hover:text-text-primary'
                 }`}
                 title={`${episode.name}（雙擊重命名)`}
               >
-                <span className={`font-mono text-[14px] ${isActive ? 'text-amber-500' : 'text-stone-600'}`}>
+                <span className={`font-mono text-sm ${isActive ? 'text-primary-400' : 'text-text-tertiary'}`}>
                   {String(episode.episodeNumber).padStart(2, '0')}
                 </span>
                 <span>{episode.name}</span>
@@ -260,7 +260,7 @@ export function V2EpisodeTabBar({ projectId, locale, projectName }: V2EpisodeTab
         type="button"
         onClick={() => void handleAdd()}
         disabled={busy === 'add'}
-        className="flex shrink-0 items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/5 px-3 py-1.5 font-serif-cn text-sm text-amber-400 transition-colors hover:border-amber-500/60 hover:bg-amber-500/15 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex shrink-0 items-center gap-1.5 rounded-input border border-primary-500/40 bg-primary-500/5 px-3 py-1.5 text-sm text-primary-400 transition-colors hover:border-primary-500/60 hover:bg-primary-500/15 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-50"
       >
         <AppIcon name="plus" className="h-3.5 w-3.5" />
         <span>{busy === 'add' ? '新增中…' : '新建劇集'}</span>

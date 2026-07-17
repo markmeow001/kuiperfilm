@@ -42,7 +42,28 @@ describe('Kuiper visual system', () => {
     expect(topbar).toContain('min-h-[72px]')
     expect(topbar).toContain('sticky top-0')
     expect(shell).toContain('kuiper-stage')
+    expect(shell).toContain('kuiper-workspace')
     expect(shell).toContain('pb-20 lg:pb-0')
+  })
+
+  it('uses the shared workspace editor foundation on the script surface', () => {
+    const globals = readFileSync('src/app/globals.css', 'utf8')
+    const script = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/script/V2ScriptClient.tsx',
+      'utf8',
+    )
+    const episodeTabs = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/V2EpisodeTabBar.tsx',
+      'utf8',
+    )
+
+    expect(globals).toContain('.kuiper-workspace-page')
+    expect(globals).toContain('.kuiper-editor-surface')
+    expect(globals).toContain('.kuiper-inspector')
+    expect(script).toContain('xl:grid-cols-[minmax(0,1fr)_340px]')
+    expect(script).toContain('min-h-[520px]')
+    expect(script).toContain('kuiper-primary-button')
+    expect(episodeTabs).toContain('border-primary-500/50')
   })
 
   it('starts the home experience from production intent instead of tool names', () => {

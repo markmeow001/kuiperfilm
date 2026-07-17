@@ -65,7 +65,7 @@ export function V2WorkspaceShell({
   }
 
   return (
-    <div className="kuiper-stage font-body flex min-h-screen text-text-primary">
+    <div className="kuiper-stage kuiper-workspace font-body flex min-h-screen text-text-primary">
       <Sidebar currentStep={currentStep} onSelect={handleSelect} locale={locale} />
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-20 lg:pb-0">
         <TopBar
