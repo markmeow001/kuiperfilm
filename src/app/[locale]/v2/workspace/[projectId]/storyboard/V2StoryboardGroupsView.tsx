@@ -165,7 +165,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
   //        visual weight (filled bg, brighter border) so the eye lands
   //        on the next step.
   const groupsToolbar = (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       {/* Row 1: layout toggle */}
       <div className="flex justify-end">{layoutToggleNode}</div>
 
@@ -180,7 +180,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
       </div>
 
       {/* Row 3: actions, split into data ops (left) + workflow ops (right) */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         {/* LEFT cluster — data ops (muted stone style, secondary) */}
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -188,7 +188,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
             disabled={!currentEpisodeId || manualPanelSubmitting}
             onClick={onManualPanelOpen}
             title={t('buttons.manualAddTitle')}
-            className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-border-strong bg-raised/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:bg-primary-500/10 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="plus" className="h-3 w-3" />
             {t('buttons.manualAdd')}
@@ -200,8 +200,8 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
             title={t('buttons.regenerateStoryboardTitle')}
             className={`flex items-center gap-1.5 rounded-sm border px-3 py-1.5 font-mono text-[13px] tracking-wider transition-all disabled:cursor-not-allowed ${
               analyzeBusy
-                ? 'border-amber-500/50 bg-amber-500/15 text-amber-200'
-                : 'border-stone-700 bg-stone-900/50 text-stone-300 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:opacity-50'
+                ? 'border-primary-500/50 bg-primary-500/15 text-primary-200'
+                : 'border-border-strong bg-raised/50 text-text-secondary hover:border-primary-500/40 hover:bg-primary-500/10 hover:text-primary-300 disabled:opacity-50'
             }`}
           >
             <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
@@ -212,7 +212,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
             disabled={!currentEpisodeId}
             onClick={onStaleCleanupOpen}
             title={t('buttons.cleanupSourceTitle')}
-            className="flex items-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-border-strong bg-raised/50 px-3 py-1.5 font-mono text-[13px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:bg-primary-500/10 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('buttons.cleanupSource')}
           </button>
@@ -252,7 +252,7 @@ export function V2StoryboardGroupsView(props: V2StoryboardGroupsViewProps) {
                   ? t('multiShot.tipSeedancePerGroup')
                   : t('multiShot.tipKlingMultiShot')
             }
-            className="flex items-center gap-1.5 rounded-sm border border-amber-500/60 bg-amber-500/25 px-3.5 py-1.5 font-mono text-[14px] font-semibold tracking-wider text-amber-100 shadow-sm shadow-amber-500/10 transition-all hover:border-amber-400 hover:bg-amber-500/35 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-primary-500/60 bg-primary-500/25 px-3.5 py-1.5 font-mono text-[14px] font-semibold tracking-wider text-primary-100 shadow-sm shadow-primary-500/10 transition-all hover:border-primary-400 hover:bg-primary-500/35 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {multiShotState.status === 'submitting'

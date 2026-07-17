@@ -165,25 +165,25 @@ export function V2CharacterEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-stone-950/90 p-6 backdrop-blur-md sm:p-10"
+      className="kuiper-modal-backdrop fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 sm:p-10"
       onClick={onClose}
     >
       <div
-        className="relative my-10 w-full max-w-5xl rounded-sm border border-stone-800 bg-stone-950 shadow-2xl"
+        className="kuiper-modal-surface relative my-6 w-full max-w-5xl sm:my-10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-stone-800/60 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border-soft/60 px-6 py-4">
           <div>
-            <div className="font-fraunces text-xl italic text-amber-400">編輯角色</div>
-            <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
+            <div className="font-fraunces text-xl italic text-primary-400">編輯角色</div>
+            <div className="mt-1 font-mono text-[14px] tracking-wider text-text-tertiary">
               EDIT_CHARACTER · {character.id.slice(0, 8)}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-sm border border-stone-800 text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
+            className="flex h-8 w-8 items-center justify-center rounded-sm border border-border-soft text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
             aria-label="關閉"
           >
             ×
@@ -195,7 +195,7 @@ export function V2CharacterEditModal({
           {/* Left: image + image actions */}
           <div className="space-y-3">
             <div
-              className={`relative aspect-[3/4] overflow-hidden rounded-sm border border-stone-800 bg-gradient-to-br from-stone-800 to-stone-900 ${
+              className={`relative aspect-[3/4] overflow-hidden rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised ${
                 imageUrl ? 'cursor-zoom-in' : ''
               }`}
               onClick={() => imageUrl && onZoomImage(imageUrl)}
@@ -205,29 +205,29 @@ export function V2CharacterEditModal({
                 <img src={imageUrl} alt={character.name ?? '角色'} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <AppIcon name="image" className="h-10 w-10 text-stone-600" />
+                  <AppIcon name="image" className="h-10 w-10 text-text-tertiary" />
                 </div>
               )}
               {isExpanding ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
-                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-amber-300">提交中…</div>
-                  <div className="px-4 text-center font-serif-cn text-[14px] text-stone-400">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
+                  <div className="font-mono text-[14px] tracking-wider text-primary-300">提交中…</div>
+                  <div className="px-4 text-center font-serif-cn text-[14px] text-text-secondary">
                     上傳參考圖,即將開始生 3 視角
                   </div>
                 </div>
               ) : isRegenerating ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
-                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-amber-300">生圖中…</div>
-                  <div className="px-4 text-center font-serif-cn text-[14px] text-stone-400">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
+                  <div className="font-mono text-[14px] tracking-wider text-primary-300">生圖中…</div>
+                  <div className="px-4 text-center font-serif-cn text-[14px] text-text-secondary">
                     Tencent VOD 60-180 秒,撞並發會自動 retry
                   </div>
                 </div>
               ) : isUploading ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
-                  <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-amber-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-amber-300">上傳中…</div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                  <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-primary-400" />
+                  <div className="font-mono text-[14px] tracking-wider text-primary-300">上傳中…</div>
                 </div>
               ) : null}
             </div>
@@ -237,7 +237,7 @@ export function V2CharacterEditModal({
                 type="button"
                 onClick={onRegenerate}
                 disabled={isRegenerating || isUploading}
-                className="flex items-center justify-center gap-1 rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center justify-center gap-1 rounded-sm border border-border-soft bg-raised/50 py-2 font-mono text-[14px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {isRegenerating ? '生圖中…' : imageUrl ? '重新生成' : '生成'}
@@ -246,7 +246,7 @@ export function V2CharacterEditModal({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isRegenerating || isUploading}
-                className="flex items-center justify-center gap-1 rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center justify-center gap-1 rounded-sm border border-border-soft bg-raised/50 py-2 font-mono text-[14px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="cloudUpload" className="h-3 w-3" />
                 上傳替換
@@ -271,7 +271,7 @@ export function V2CharacterEditModal({
                   onClick={() => expandFileInputRef.current?.click()}
                   disabled={isRegenerating || isUploading || isExpanding}
                   title="上傳一張參考圖,自動生成 3 張多視角圖(正面/側面/背面),覆蓋現有圖"
-                  className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 py-2 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <AppIcon name="sparklesAlt" className="h-3 w-3" />
                   {isExpanding ? '提交中…' : '上傳並轉多視角(3 張)'}
@@ -296,7 +296,7 @@ export function V2CharacterEditModal({
                 download={`${character.name ?? 'character'}.png`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1 rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400"
+                className="flex items-center justify-center gap-1 rounded-sm border border-border-soft bg-raised/50 py-2 font-mono text-[14px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400"
               >
                 <AppIcon name="cloudUpload" className="h-3 w-3 rotate-180" />
                 下載原圖
@@ -309,8 +309,8 @@ export function V2CharacterEditModal({
               disabled={isLocking}
               className={`flex w-full items-center justify-center gap-1 rounded-sm border py-2 font-mono text-[14px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 character.profileConfirmed
-                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-400'
-                  : 'border-stone-800 bg-stone-900/50 text-stone-300 hover:border-amber-500/40 hover:text-amber-400'
+                  ? 'border-primary-500/50 bg-primary-500/10 text-primary-400'
+                  : 'border-border-soft bg-raised/50 text-text-secondary hover:border-primary-500/40 hover:text-primary-400'
               }`}
               title={character.profileConfirmed ? '已標記為「定稿」— 純註記,沒有實際 binding 行為' : '標記為「定稿」— 純註記用,代表你確認這個角色設定完成。角色與集數的綁定是自動的(analyze + 分鏡時會自動建立 EpisodeCharacter),不需要先鎖定。'}
             >
@@ -322,8 +322,8 @@ export function V2CharacterEditModal({
           <div className="space-y-5">
             <div>
               <div className="mb-1 flex items-center justify-between font-mono text-[14px] tracking-wider">
-                <span className="text-stone-500">角色名稱</span>
-                <span className="text-stone-600">
+                <span className="text-text-tertiary">角色名稱</span>
+                <span className="text-text-tertiary">
                   {nameChanged ? '改名後分鏡引用會自動同步' : ''}
                 </span>
               </div>
@@ -338,7 +338,7 @@ export function V2CharacterEditModal({
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
                 placeholder="角色名稱"
-                className="w-full rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-fraunces text-base italic text-stone-200 outline-none transition-colors focus:border-amber-500 disabled:opacity-60"
+                className="w-full rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-fraunces text-base italic text-text-primary outline-none transition-colors focus:border-primary-500 disabled:opacity-60"
                 disabled={isSavingName}
                 maxLength={64}
               />
@@ -347,7 +347,7 @@ export function V2CharacterEditModal({
                   type="button"
                   onClick={() => setNameDraft(initialName)}
                   disabled={!nameChanged || isSavingName}
-                  className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="font-mono text-[14px] tracking-wider text-text-tertiary transition-colors hover:text-text-secondary disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   還原
                 </button>
@@ -355,7 +355,7 @@ export function V2CharacterEditModal({
                   type="button"
                   onClick={() => onSaveName(nameTrimmed)}
                   disabled={!nameChanged || isSavingName}
-                  className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isSavingName ? '儲存中…' : '儲存名稱'}
                 </button>
@@ -364,15 +364,15 @@ export function V2CharacterEditModal({
 
             <div>
               <div className="mb-1 flex items-center justify-between font-mono text-[14px] tracking-wider">
-                <span className="text-stone-500">角色描述 (身份 / 關係 / 稱呼)</span>
-                <span className="text-stone-600">{introductionDraft.length} 字</span>
+                <span className="text-text-tertiary">角色描述 (身份 / 關係 / 稱呼)</span>
+                <span className="text-text-tertiary">{introductionDraft.length} 字</span>
               </div>
               <textarea
                 value={introductionDraft}
                 onChange={(e) => setIntroductionDraft(e.target.value)}
                 rows={3}
                 placeholder="例:Catherine 的丈夫,中年企業家,對妻子充滿掌控欲。 ⋯ 用於生圖時提供身份脈絡"
-                className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 p-3 font-body text-sm text-stone-200 outline-none transition-colors focus:border-amber-500"
+                className="w-full resize-none rounded-sm border border-border-soft bg-raised/60 p-3 font-body text-sm text-text-primary outline-none transition-colors focus:border-primary-500"
                 disabled={isSavingIntroduction}
               />
               <div className="mt-2 flex items-center justify-end gap-2">
@@ -380,7 +380,7 @@ export function V2CharacterEditModal({
                   type="button"
                   onClick={() => setIntroductionDraft(initialIntroduction)}
                   disabled={!introductionChanged || isSavingIntroduction}
-                  className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="font-mono text-[14px] tracking-wider text-text-tertiary transition-colors hover:text-text-secondary disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   還原
                 </button>
@@ -388,7 +388,7 @@ export function V2CharacterEditModal({
                   type="button"
                   onClick={() => onSaveIntroduction(introductionDraft.trim())}
                   disabled={!introductionChanged || isSavingIntroduction || !introductionDraft.trim()}
-                  className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isSavingIntroduction ? '儲存中…' : '儲存描述'}
                 </button>
@@ -397,19 +397,19 @@ export function V2CharacterEditModal({
 
             <div>
               <div className="mb-1 flex items-center justify-between font-mono text-[14px] tracking-wider">
-                <span className="text-amber-500/80">外觀提示詞 (餵給 AI 生圖)</span>
-                <span className="text-stone-600">{visualPromptDraft.length} 字</span>
+                <span className="text-primary-500/80">外觀提示詞 (餵給 AI 生圖)</span>
+                <span className="text-text-tertiary">{visualPromptDraft.length} 字</span>
               </div>
               <textarea
                 value={visualPromptDraft}
                 onChange={(e) => setVisualPromptDraft(e.target.value)}
                 rows={8}
                 placeholder="例:35 歲中年男性,黑短髮,商務白襯衫卷袖,深灰精紡羊毛西褲,黃銅皮帶扣,銀色腕錶,神情冷峻,寫實風格 ⋯ 越具體生圖越穩定。注意年代與服裝符合劇本設定。"
-                className="w-full resize-none rounded-sm border border-amber-500/30 bg-stone-900/60 p-3 font-body text-sm leading-relaxed text-stone-200 outline-none transition-colors focus:border-amber-500"
+                className="w-full resize-none rounded-sm border border-primary-500/30 bg-raised/60 p-3 font-body text-sm leading-relaxed text-text-primary outline-none transition-colors focus:border-primary-500"
                 disabled={isSavingVisualPrompt}
               />
               <div className="mt-2 flex items-center justify-between">
-                <div className="font-mono text-[12px] tracking-wider text-stone-600">
+                <div className="font-mono text-[12px] tracking-wider text-text-tertiary">
                   儲存後下次「重新生成」會用此 prompt
                 </div>
                 <div className="flex items-center gap-2">
@@ -419,7 +419,7 @@ export function V2CharacterEditModal({
                       onClick={onRedescribe}
                       disabled={isRedescribing || isSavingVisualPrompt || isRegenerating || isUploading || !imageUrl}
                       title="用 AI 從目前角色圖重新抽外觀提示詞 — 適合上傳新圖後 / 描述跟圖對不上時"
-                      className="rounded-sm border border-stone-700 bg-stone-900/50 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/50 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-sm border border-border-strong bg-raised/50 px-3 py-1.5 font-mono text-[14px] tracking-wider text-text-secondary transition-all hover:border-primary-500/50 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {isRedescribing ? '抽描述中…' : '↻ 從圖抽描述'}
                     </button>
@@ -428,7 +428,7 @@ export function V2CharacterEditModal({
                     type="button"
                     onClick={() => setVisualPromptDraft(initialVisualPrompt)}
                     disabled={!visualPromptChanged || isSavingVisualPrompt}
-                    className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="font-mono text-[14px] tracking-wider text-text-tertiary transition-colors hover:text-text-secondary disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     還原
                   </button>
@@ -436,7 +436,7 @@ export function V2CharacterEditModal({
                     type="button"
                     onClick={() => onSaveVisualPrompt(visualPromptDraft.trim())}
                     disabled={!visualPromptChanged || isSavingVisualPrompt || !visualPromptDraft.trim()}
-                    className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {isSavingVisualPrompt ? '儲存中…' : '儲存提示詞'}
                   </button>
@@ -507,7 +507,7 @@ export function V2CharacterEditModal({
         </div>
 
         {/* Footer — destructive on the left, primary close on the right */}
-        <div className="flex items-center justify-between gap-3 border-t border-stone-800/60 px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-t border-border-soft/60 px-6 py-4">
           <button
             type="button"
             onClick={handleConfirmDelete}
@@ -519,7 +519,7 @@ export function V2CharacterEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm border border-stone-700 bg-stone-900 px-5 py-2 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-300"
+            className="rounded-sm border border-border-strong bg-raised px-5 py-2 font-mono text-[14px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-300"
           >
             完成
           </button>
@@ -557,10 +557,10 @@ function CharacterTagsSection({ profileData }: { profileData: string | null }) {
   if (!hasAnyTag) return null
 
   return (
-    <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
+    <div className="rounded-sm border border-border-soft/60 bg-raised/40 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <div className="font-mono text-[14px] tracking-wider text-stone-500">LLM 角色標籤</div>
-        <div className="font-mono text-[12px] text-stone-600">分析時自動抽取</div>
+        <div className="font-mono text-[14px] tracking-wider text-text-tertiary">LLM 角色標籤</div>
+        <div className="font-mono text-[12px] text-text-tertiary">分析時自動抽取</div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {archetype ? <Chip color="amber">{archetype}</Chip> : null}
@@ -576,12 +576,12 @@ function CharacterTagsSection({ profileData }: { profileData: string | null }) {
 
 function Chip({ children, color }: { children: React.ReactNode; color: 'amber' | 'rose' | 'emerald' | 'violet' | 'sky' | 'stone' }) {
   const palette = {
-    amber: 'border-amber-500/40 bg-amber-500/10 text-amber-300',
+    amber: 'border-primary-500/40 bg-primary-500/10 text-primary-300',
     rose: 'border-rose-500/40 bg-rose-500/10 text-rose-300',
     emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
     violet: 'border-violet-500/40 bg-violet-500/10 text-violet-300',
     sky: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
-    stone: 'border-stone-700 bg-stone-900/60 text-stone-300',
+    stone: 'border-border-strong bg-raised/60 text-text-secondary',
   }[color]
   return (
     <span className={`rounded-sm border px-2 py-0.5 font-mono text-[14px] tracking-wider ${palette}`}>
@@ -615,14 +615,14 @@ function CharacterVoiceSection({
   }
 
   return (
-    <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
+    <div className="rounded-sm border border-border-soft/60 bg-raised/40 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <div className="font-mono text-[14px] tracking-wider text-stone-500">參考音色</div>
+        <div className="font-mono text-[14px] tracking-wider text-text-tertiary">參考音色</div>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={upload.isPending}
-          className="flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-1 rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-1 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <AppIcon name="cloudUpload" className="h-3 w-3" />
           {upload.isPending ? '上傳中…' : customVoiceUrl ? '替換' : '上傳音色'}
@@ -643,7 +643,7 @@ function CharacterVoiceSection({
          
         <audio src={customVoiceUrl} controls className="w-full max-w-md" />
       ) : (
-        <div className="font-body text-[11px] italic text-stone-500">
+        <div className="font-body text-[11px] italic text-text-tertiary">
           (還沒上傳音色 — 配音生成會用預設嗓音。支援 MP3 / WAV / M4A 等。)
         </div>
       )}

@@ -62,26 +62,26 @@ export function LocationViewPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm"
+      className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl overflow-hidden rounded-sm border border-amber-900/30 bg-stone-900 shadow-2xl"
+        className="kuiper-modal-surface w-full max-w-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-amber-900/20 bg-stone-950/40 px-5 py-3">
+        <header className="flex items-center justify-between border-b border-primary-900/20 bg-canvas/40 px-5 py-3">
           <div>
-            <div className="font-mono text-[14px] uppercase tracking-wider text-amber-500/70">
+            <div className="font-mono text-[14px] uppercase tracking-wider text-primary-500/70">
               換視角
             </div>
-            <div className="mt-0.5 font-fraunces text-base italic text-amber-300">
+            <div className="mt-0.5 font-fraunces text-base italic text-primary-300">
               {location.name}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-stone-500 transition-colors hover:text-stone-200"
+            className="text-text-tertiary transition-colors hover:text-text-primary"
           >
             <AppIcon name="close" className="h-5 w-5" />
           </button>
@@ -89,7 +89,7 @@ export function LocationViewPickerModal({
 
         <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
           {images.length === 0 ? (
-            <p className="font-serif-cn text-sm italic text-stone-500">
+            <p className="font-serif-cn text-sm italic text-text-tertiary">
               這個場景目前只有主視角(沒有額外的 view)。先到「劇本拆解 → 場景」加入新視角。
             </p>
           ) : (
@@ -110,11 +110,11 @@ export function LocationViewPickerModal({
                     }}
                     className={`group relative overflow-hidden rounded-sm border text-left transition-all ${
                       isCurrent
-                        ? 'border-amber-500/60 ring-2 ring-amber-500/30'
-                        : 'border-stone-800 hover:border-amber-500/40'
+                        ? 'border-primary-500/60 ring-2 ring-primary-500/30'
+                        : 'border-border-soft hover:border-primary-500/40'
                     }`}
                   >
-                    <div className="relative aspect-video overflow-hidden bg-stone-950">
+                    <div className="relative aspect-video overflow-hidden bg-canvas">
                       {img.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -123,20 +123,20 @@ export function LocationViewPickerModal({
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-full items-center justify-center text-stone-600">
+                        <div className="flex h-full items-center justify-center text-text-tertiary">
                           <AppIcon name="image" className="h-6 w-6" />
                         </div>
                       )}
                       {isCurrent ? (
-                        <div className="absolute right-1.5 top-1.5 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-950">
+                        <div className="absolute right-1.5 top-1.5 rounded bg-primary-500/90 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-canvas">
                           當前
                         </div>
                       ) : null}
                     </div>
-                    <div className="bg-stone-900/80 px-2 py-1.5">
-                      <div className="font-serif-cn text-xs text-stone-200">{label}</div>
+                    <div className="bg-raised/80 px-2 py-1.5">
+                      <div className="font-serif-cn text-xs text-text-primary">{label}</div>
                       {img.description ? (
-                        <div className="mt-0.5 line-clamp-1 font-mono text-[12px] tracking-wider text-stone-500">
+                        <div className="mt-0.5 line-clamp-1 font-mono text-[12px] tracking-wider text-text-tertiary">
                           {img.description}
                         </div>
                       ) : null}
@@ -148,21 +148,21 @@ export function LocationViewPickerModal({
           )}
         </div>
 
-        <footer className="flex items-center justify-between border-t border-amber-900/20 bg-stone-950/40 px-5 py-2.5">
+        <footer className="flex items-center justify-between border-t border-primary-900/20 bg-canvas/40 px-5 py-2.5">
           <button
             type="button"
             onClick={() => {
               onSelect(null)
               onClose()
             }}
-            className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+            className="font-mono text-[14px] tracking-wider text-text-tertiary transition-colors hover:text-primary-400"
           >
             還原預設(主視角)
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm border border-stone-800 px-3 py-1 font-mono text-[14px] tracking-wider text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
+            className="rounded-sm border border-border-soft px-3 py-1 font-mono text-[14px] tracking-wider text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
           >
             取消
           </button>

@@ -1,5 +1,7 @@
 {
   "viewerHint": "You are a viewer · read-only · request edit access to edit",
+  "pageTitle": "Script breakdown",
+  "pageSubtitle": "Organize this episode's cast, locations, and key props",
   "loading": "Loading…",
   "tabs": {
     "character": "Characters",

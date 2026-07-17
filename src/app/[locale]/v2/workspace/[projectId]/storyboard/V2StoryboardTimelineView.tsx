@@ -159,7 +159,7 @@ export interface V2StoryboardTimelineViewProps {
 
 export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="kuiper-storyboard-shell flex flex-col">
       <V2StoryboardTimelineStrip
         allPanels={props.allPanels}
         selectedId={props.selectedId}
@@ -208,7 +208,7 @@ export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
         bindings/cast/notes third (order-3) — but they remain in the
         DOM in their original order so React keys / refs stay stable.
       */}
-      <div className="grid flex-1 grid-cols-12 gap-5 overflow-y-auto px-6 py-6">
+      <div className="grid flex-1 grid-cols-1 gap-5 overflow-y-auto px-[var(--workspace-gutter)] py-6 xl:grid-cols-12">
         {/* Text column — visually middle, was leftmost.
             Widened to col-span-5 because the 視角 / 景別 / 運鏡 chip
             grids and the 描述詞 / 對話 textareas were getting pinched
@@ -292,7 +292,7 @@ export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
             if (e.key === 'Escape') props.setZoomImageUrl(null)
           }}
           tabIndex={-1}
-          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-stone-950/95 p-8"
+          className="fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-canvas/95 p-8"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -300,7 +300,7 @@ export function V2StoryboardTimelineView(props: V2StoryboardTimelineViewProps) {
             alt="Zoomed"
             className="max-h-full max-w-full object-contain"
           />
-          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[14px] uppercase tracking-wider text-stone-400">
+          <div className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-[14px] uppercase tracking-wider text-text-secondary">
             click anywhere or press esc to close
           </div>
         </div>

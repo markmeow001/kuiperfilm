@@ -58,45 +58,45 @@ export function GroupCharacterAddPickerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/80 backdrop-blur-sm"
+      className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl overflow-hidden rounded-sm border border-amber-900/30 bg-stone-900 shadow-2xl"
+        className="kuiper-modal-surface w-full max-w-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-amber-900/20 bg-stone-950/40 px-5 py-3">
+        <header className="flex items-center justify-between border-b border-primary-900/20 bg-canvas/40 px-5 py-3">
           <div>
-            <div className="font-mono text-[14px] uppercase tracking-wider text-amber-500/70">
+            <div className="font-mono text-[14px] uppercase tracking-wider text-primary-500/70">
               加角色
             </div>
-            <div className="mt-0.5 font-serif-cn text-[14px] text-stone-400">
+            <div className="mt-0.5 font-serif-cn text-[14px] text-text-secondary">
               从专案角色库中选一位加进这组
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-stone-500 transition-colors hover:text-stone-200"
+            className="text-text-tertiary transition-colors hover:text-text-primary"
           >
             <AppIcon name="close" className="h-5 w-5" />
           </button>
         </header>
 
-        <div className="border-b border-stone-800/60 bg-stone-950/30 px-5 py-2.5">
+        <div className="border-b border-border-soft/60 bg-canvas/30 px-5 py-2.5">
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索角色..."
             autoFocus
-            className="w-full rounded-sm border border-stone-800 bg-stone-900 px-3 py-1.5 font-serif-cn text-[14px] text-stone-200 outline-none placeholder:text-stone-600 focus:border-amber-500/40"
+            className="w-full rounded-sm border border-border-soft bg-raised px-3 py-1.5 font-serif-cn text-[14px] text-text-primary outline-none placeholder:text-text-tertiary focus:border-primary-500/40"
           />
         </div>
 
         <div className="max-h-[60vh] overflow-y-auto px-5 py-3">
           {filtered.length === 0 ? (
-            <p className="py-6 text-center font-serif-cn text-sm italic text-stone-500">
+            <p className="py-6 text-center font-serif-cn text-sm italic text-text-tertiary">
               {candidates.length === 0
                 ? '该专案所有角色已加入这组'
                 : '没有匹配的角色'}
@@ -110,9 +110,9 @@ export function GroupCharacterAddPickerModal({
                     <button
                       type="button"
                       onClick={() => onSelect(c.id)}
-                      className="flex w-full items-center gap-3 rounded-sm border border-transparent bg-stone-950/30 px-3 py-2 transition-colors hover:border-amber-500/40 hover:bg-amber-500/10"
+                      className="flex w-full items-center gap-3 rounded-sm border border-transparent bg-canvas/30 px-3 py-2 transition-colors hover:border-primary-500/40 hover:bg-primary-500/10"
                     >
-                      <div className="relative h-9 w-9 flex-shrink-0 overflow-hidden rounded-full bg-stone-800">
+                      <div className="relative h-9 w-9 flex-shrink-0 overflow-hidden rounded-full bg-overlay">
                         {avatar ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -123,14 +123,14 @@ export function GroupCharacterAddPickerModal({
                         ) : (
                           <AppIcon
                             name="user"
-                            className="m-auto h-4 w-4 text-stone-600"
+                            className="m-auto h-4 w-4 text-text-tertiary"
                           />
                         )}
                       </div>
-                      <span className="flex-1 text-left font-serif-cn text-[14px] text-stone-200">
+                      <span className="flex-1 text-left font-serif-cn text-[14px] text-text-primary">
                         {c.name}
                       </span>
-                      <span className="font-mono text-[12px] uppercase tracking-wider text-amber-500/60">
+                      <span className="font-mono text-[12px] uppercase tracking-wider text-primary-500/60">
                         + 加入
                       </span>
                     </button>

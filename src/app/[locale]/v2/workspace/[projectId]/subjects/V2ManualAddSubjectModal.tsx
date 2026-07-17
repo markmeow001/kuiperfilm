@@ -16,7 +16,7 @@
  *   - 上傳檔案不阻擋 — 沒上傳就只建記錄(可後續再產圖)
  *   - 客戶端先預覽再送,避免錯檔
  *   - 跟 V2LocationEditModal / V2CharacterEditModal 共用同一套灰底
- *     amber-accent 風格
+ *     primary-accent 風格
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -115,7 +115,7 @@ export function V2ManualAddSubjectModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/85 px-4 py-8 backdrop-blur-sm"
+      className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
       role="dialog"
       aria-modal="true"
       onClick={(e) => {
@@ -124,21 +124,21 @@ export function V2ManualAddSubjectModal({
       }}
     >
       <form
-        className="w-full max-w-xl overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+        className="kuiper-modal-surface w-full max-w-xl"
         onSubmit={(event) => {
           event.preventDefault()
           handleSubmit()
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-primary-900/20 px-6 py-4">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-500/10">
-              <AppIcon name="plus" className="h-3.5 w-3.5 text-amber-400" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-500/10">
+              <AppIcon name="plus" className="h-3.5 w-3.5 text-primary-400" />
             </div>
             <div>
-              <div className="font-fraunces text-lg italic text-stone-100">{meta.title}</div>
-              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600/80">
+              <div className="font-fraunces text-lg italic text-text-primary">{meta.title}</div>
+              <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-primary-600/80">
                 {meta.iconLabel} · MANUAL
               </div>
             </div>
@@ -147,7 +147,7 @@ export function V2ManualAddSubjectModal({
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-900 hover:text-amber-400 disabled:opacity-50"
+            className="rounded p-1 text-text-tertiary transition-colors hover:bg-raised hover:text-primary-400 disabled:opacity-50"
             aria-label="關閉"
           >
             <AppIcon name="close" className="h-4 w-4" />
@@ -158,7 +158,7 @@ export function V2ManualAddSubjectModal({
         <div className="space-y-5 px-6 py-5">
           {/* Name */}
           <div>
-            <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-wider text-stone-400">
+            <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-wider text-text-secondary">
               名稱 <span className="text-rose-400">*</span>
             </label>
             <input
@@ -168,13 +168,13 @@ export function V2ManualAddSubjectModal({
               placeholder={meta.namePlaceholder}
               disabled={isSubmitting}
               autoFocus
-              className="w-full rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+              className="w-full rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-wider text-stone-400">
+            <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-wider text-text-secondary">
               {meta.descLabel}
             </label>
             <textarea
@@ -183,13 +183,13 @@ export function V2ManualAddSubjectModal({
               placeholder={meta.descPlaceholder}
               disabled={isSubmitting}
               rows={4}
-              className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+              className="w-full resize-none rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
             />
           </div>
 
           {/* File picker + preview */}
           <div>
-            <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-wider text-stone-400">
+            <label className="mb-1.5 block font-mono text-[11px] uppercase tracking-wider text-text-secondary">
               圖片（可選）
             </label>
             <input
@@ -201,16 +201,16 @@ export function V2ManualAddSubjectModal({
               className="hidden"
             />
             {previewUrl ? (
-              <div className="relative overflow-hidden rounded-sm border border-amber-900/30 bg-stone-900/60">
+              <div className="relative overflow-hidden rounded-sm border border-primary-900/30 bg-raised/60">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={previewUrl} alt="預覽" className="block max-h-72 w-full object-contain" />
-                <div className="flex items-center justify-between border-t border-amber-900/20 px-3 py-2">
-                  <div className="truncate font-mono text-[11px] tracking-wider text-stone-400">{file?.name}</div>
+                <div className="flex items-center justify-between border-t border-primary-900/20 px-3 py-2">
+                  <div className="truncate font-mono text-[11px] tracking-wider text-text-secondary">{file?.name}</div>
                   <button
                     type="button"
                     onClick={() => setFile(null)}
                     disabled={isSubmitting}
-                    className="rounded p-1 text-stone-500 transition-colors hover:text-rose-400 disabled:opacity-50"
+                    className="rounded p-1 text-text-tertiary transition-colors hover:text-rose-400 disabled:opacity-50"
                     aria-label="移除圖片"
                   >
                     <AppIcon name="close" className="h-3.5 w-3.5" />
@@ -222,11 +222,11 @@ export function V2ManualAddSubjectModal({
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={isSubmitting}
-                className="flex w-full flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-stone-700 bg-stone-900/30 py-8 transition-colors hover:border-amber-500/40 hover:bg-amber-500/5 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-border-strong bg-raised/30 py-8 transition-colors hover:border-primary-500/40 hover:bg-primary-500/5 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <AppIcon name="upload" className="h-5 w-5 text-stone-500" />
-                <div className="font-serif-cn text-sm text-stone-400">點擊上傳圖片</div>
-                <div className="font-mono text-[10px] tracking-wider text-stone-600">
+                <AppIcon name="upload" className="h-5 w-5 text-text-tertiary" />
+                <div className="font-serif-cn text-sm text-text-secondary">點擊上傳圖片</div>
+                <div className="font-mono text-[10px] tracking-wider text-text-tertiary">
                   JPG / PNG / WebP · 不上傳也可,之後可生圖
                 </div>
               </button>
@@ -235,9 +235,9 @@ export function V2ManualAddSubjectModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-amber-900/20 bg-stone-900/30 px-6 py-4">
+        <div className="border-t border-primary-900/20 bg-raised/30 px-6 py-4">
           {createPolicy.hint ? (
-            <div className="mb-3 font-mono text-[11px] tracking-wider text-amber-300/80" role="status">
+            <div className="mb-3 font-mono text-[11px] tracking-wider text-primary-300/80" role="status">
               {createPolicy.hint}
             </div>
           ) : null}
@@ -246,14 +246,14 @@ export function V2ManualAddSubjectModal({
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
+              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={!createPolicy.canSubmit}
-              className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>

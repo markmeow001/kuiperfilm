@@ -182,24 +182,24 @@ export function V2LocationEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-stone-950/90 p-6 backdrop-blur-md sm:p-10"
+      className="kuiper-modal-backdrop fixed inset-0 z-40 flex items-start justify-center overflow-y-auto p-4 sm:p-10"
       onClick={onClose}
     >
       <div
-        className="relative my-10 w-full max-w-5xl rounded-sm border border-stone-800 bg-stone-950 shadow-2xl"
+        className="kuiper-modal-surface relative my-6 w-full max-w-5xl sm:my-10"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-stone-800/60 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-border-soft/60 px-6 py-4">
           <div>
-            <div className="font-fraunces text-xl italic text-amber-400">編輯場景</div>
-            <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
+            <div className="font-fraunces text-xl italic text-primary-400">編輯場景</div>
+            <div className="mt-1 font-mono text-[14px] tracking-wider text-text-tertiary">
               EDIT_LOCATION · {location.id.slice(0, 8)}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-sm border border-stone-800 text-stone-400 transition-colors hover:border-stone-700 hover:text-stone-200"
+            className="flex h-8 w-8 items-center justify-center rounded-sm border border-border-soft text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary"
             aria-label="關閉"
           >
             ×
@@ -210,7 +210,7 @@ export function V2LocationEditModal({
           {/* Left: image + actions */}
           <div className="space-y-3">
             <div
-              className={`relative aspect-video overflow-hidden rounded-sm border border-stone-800 bg-gradient-to-br from-stone-800 to-stone-900 ${
+              className={`relative aspect-video overflow-hidden rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised ${
                 imageUrl ? 'cursor-zoom-in' : ''
               }`}
               onClick={() => imageUrl && onZoomImage(imageUrl)}
@@ -220,13 +220,13 @@ export function V2LocationEditModal({
                 <img src={imageUrl} alt={location.name ?? '場景'} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <AppIcon name="image" className="h-10 w-10 text-stone-600" />
+                  <AppIcon name="image" className="h-10 w-10 text-text-tertiary" />
                 </div>
               )}
               {isRegenerating ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
-                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                  <div className="font-mono text-[14px] tracking-wider text-amber-300">生圖中…</div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                  <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
+                  <div className="font-mono text-[14px] tracking-wider text-primary-300">生圖中…</div>
                 </div>
               ) : null}
             </div>
@@ -247,7 +247,7 @@ export function V2LocationEditModal({
                 type="button"
                 onClick={onRegenerate}
                 disabled={isRegenerating}
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2 font-serif-cn text-xs text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-50"
+                className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-2 font-serif-cn text-xs text-primary-300 transition-colors hover:bg-primary-500/20 disabled:opacity-50"
               >
                 {isRegenerating ? '生圖中…' : imageUrl ? '重新生成' : '生成'}
               </button>
@@ -255,7 +255,7 @@ export function V2LocationEditModal({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="rounded-sm border border-stone-700 px-3 py-2 font-serif-cn text-xs text-stone-300 transition-colors hover:bg-stone-800 disabled:opacity-50"
+                className="rounded-sm border border-border-strong px-3 py-2 font-serif-cn text-xs text-text-secondary transition-colors hover:bg-overlay disabled:opacity-50"
               >
                 {isUploading ? '上傳中…' : '上傳替換'}
               </button>
@@ -268,7 +268,7 @@ export function V2LocationEditModal({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-body text-sm text-stone-200 outline-none focus:border-amber-500/50"
+                className="w-full rounded-sm border border-border-soft bg-raised px-3 py-2 font-body text-sm text-text-primary outline-none focus:border-primary-500/50"
                 placeholder="例:客廳"
               />
             </Field>
@@ -344,7 +344,7 @@ export function V2LocationEditModal({
               <input
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
-                className="w-full rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-body text-sm text-stone-200 outline-none focus:border-amber-500/50"
+                className="w-full rounded-sm border border-border-soft bg-raised px-3 py-2 font-body text-sm text-text-primary outline-none focus:border-primary-500/50"
                 placeholder="例:溫馨, 家庭, 工業風"
               />
             </Field>
@@ -354,7 +354,7 @@ export function V2LocationEditModal({
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
-                className="w-full rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-body text-sm text-stone-200 outline-none focus:border-amber-500/50"
+                className="w-full rounded-sm border border-border-soft bg-raised px-3 py-2 font-body text-sm text-text-primary outline-none focus:border-primary-500/50"
               />
             </Field>
 
@@ -363,19 +363,19 @@ export function V2LocationEditModal({
                 type="button"
                 onClick={handleSaveBasics}
                 disabled={!basicsChanged || isSavingBasics}
-                className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-xs text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-2 font-serif-cn text-xs text-primary-300 transition-colors hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isSavingBasics ? '儲存中…' : '儲存基本資料'}
               </button>
             </div>
 
-            <div className="border-t border-stone-800/60 pt-5">
+            <div className="border-t border-border-soft/60 pt-5">
               <Field label="AI 描述詞(下次重生時送給模型)">
                 <textarea
                   value={descriptionDraft}
                   onChange={(e) => setDescriptionDraft(e.target.value)}
                   rows={5}
-                  className="w-full rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-body text-sm text-stone-200 outline-none focus:border-amber-500/50"
+                  className="w-full rounded-sm border border-border-soft bg-raised px-3 py-2 font-body text-sm text-text-primary outline-none focus:border-primary-500/50"
                   placeholder="描述場景的視覺細節 — 牆面、家具、地板、裝飾,例如:北歐風格客廳,白色牆面,木地板,沙發朝向窗戶..."
                 />
               </Field>
@@ -384,7 +384,7 @@ export function V2LocationEditModal({
                   type="button"
                   onClick={handleSaveDescription}
                   disabled={!descriptionChanged || isSavingDescription}
-                  className="rounded-sm border border-stone-700 px-4 py-2 font-serif-cn text-xs text-stone-300 transition-colors hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-sm border border-border-strong px-4 py-2 font-serif-cn text-xs text-text-secondary transition-colors hover:bg-overlay disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isSavingDescription ? '儲存中…' : '儲存描述詞'}
                 </button>
@@ -414,7 +414,7 @@ export function V2LocationEditModal({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-mono text-[14px] tracking-wider text-stone-500">{label}</div>
+      <div className="mb-1.5 font-mono text-[14px] tracking-wider text-text-tertiary">{label}</div>
       {children}
     </label>
   )
@@ -422,7 +422,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-b border-stone-800/60 pb-1 font-fraunces text-xs italic text-amber-500/80">
+    <div className="border-b border-border-soft/60 pb-1 font-fraunces text-xs italic text-primary-500/80">
       {children}
     </div>
   )
@@ -444,7 +444,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-sm border border-stone-800 bg-stone-900 px-3 py-2 font-body text-sm text-stone-200 outline-none focus:border-amber-500/50"
+      className="w-full rounded-sm border border-border-soft bg-raised px-3 py-2 font-body text-sm text-text-primary outline-none focus:border-primary-500/50"
     >
       <option value="">{placeholder}</option>
       {options.map((o) => (

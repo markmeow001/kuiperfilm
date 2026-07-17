@@ -84,9 +84,9 @@ export function V2CharacterAppearancesPanel({
   const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null)
 
   return (
-    <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-900/40 p-3">
+    <div className="space-y-2 rounded-sm border border-border-soft/60 bg-raised/40 p-3">
       <div className="flex items-center justify-between">
-        <div className="font-mono text-[14px] tracking-wider text-stone-500">
+        <div className="font-mono text-[14px] tracking-wider text-text-tertiary">
           造型管理 ({appearances.length})
         </div>
         <AddAppearanceButton
@@ -98,7 +98,7 @@ export function V2CharacterAppearancesPanel({
 
       {/* Per-appearance management — thumbnail + rename / delete */}
       {appearances.length > 0 ? (
-        <div className="space-y-1.5 border-t border-stone-800/40 pt-2">
+        <div className="space-y-1.5 border-t border-border-soft/40 pt-2">
           {appearances.map((ap) => (
             <AppearanceManageRow
               key={ap.id}
@@ -119,11 +119,11 @@ export function V2CharacterAppearancesPanel({
       ) : null}
 
       {appearances.length <= 1 ? (
-        <div className="font-body text-[11px] italic text-stone-500">
+        <div className="font-body text-[11px] italic text-text-tertiary">
           目前只有一個造型。點「+新增造型」加上換裝(例:時間跳轉後的新形象、戰鬥裝、年老回憶等),然後在下方為各集綁定。
         </div>
       ) : episodes.length === 0 ? (
-        <div className="font-body text-[11px] italic text-stone-500">
+        <div className="font-body text-[11px] italic text-text-tertiary">
           已有 {appearances.length} 個造型,但專案還沒有集數 — 新建劇集後可在此分配。
         </div>
       ) : (
@@ -137,7 +137,7 @@ export function V2CharacterAppearancesPanel({
             appearances={appearances}
           />
 
-          <div className="flex items-center justify-between border-t border-stone-800/40 pt-2 font-mono text-[12px] text-stone-600">
+          <div className="flex items-center justify-between border-t border-border-soft/40 pt-2 font-mono text-[12px] text-text-tertiary">
             <span>每集綁定({episodes.length} 集)</span>
             <span>未綁定 = 用第一個造型</span>
           </div>
@@ -279,7 +279,7 @@ function AppearanceManageRow({
   }
 
   return (
-    <div className="rounded-sm bg-stone-950/40">
+    <div className="rounded-sm bg-canvas/40">
       <div className="flex items-center gap-2.5 p-2">
         {/* 64×64 thumbnail. Click → lightbox. Hover overlay shows the zoom
             icon so it reads as clickable. Falls back to a gradient + 👤 icon
@@ -288,7 +288,7 @@ function AppearanceManageRow({
           <button
             type="button"
             onClick={() => onZoom(thumbUrl)}
-            className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border border-stone-800 bg-stone-900 transition-all hover:border-amber-500/60"
+            className="group relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-sm border border-border-soft bg-raised transition-all hover:border-primary-500/60"
             title="點擊看大圖"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -298,22 +298,22 @@ function AppearanceManageRow({
               className="h-full w-full object-cover transition-transform group-hover:scale-105"
             />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity group-hover:bg-black/40 group-hover:opacity-100">
-              <span className="font-mono text-[12px] tracking-wider text-amber-300">🔍</span>
+              <span className="font-mono text-[12px] tracking-wider text-primary-300">🔍</span>
             </div>
           </button>
         ) : (
           <div
-            className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-sm border border-stone-800 bg-gradient-to-br from-stone-800 to-stone-900"
+            className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-sm border border-border-soft bg-gradient-to-br from-overlay to-raised"
             title="尚未生成圖片"
           >
-            <AppIcon name="user" className="h-5 w-5 text-stone-600" />
+            <AppIcon name="user" className="h-5 w-5 text-text-tertiary" />
           </div>
         )}
 
         {/* Right column — name (editable) + caption + actions. */}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex items-center gap-2">
-            <span className="flex-shrink-0 font-mono text-[12px] tracking-wider text-stone-600">{idxLabel}</span>
+            <span className="flex-shrink-0 font-mono text-[12px] tracking-wider text-text-tertiary">{idxLabel}</span>
             {editing ? (
               <input
                 autoFocus
@@ -329,21 +329,21 @@ function AppearanceManageRow({
                   }
                 }}
                 disabled={update.isPending}
-                className="flex-1 rounded-sm border border-amber-500/50 bg-stone-950 px-1.5 py-0.5 font-body text-xs text-stone-100 outline-none disabled:opacity-50"
+                className="flex-1 rounded-sm border border-primary-500/50 bg-canvas px-1.5 py-0.5 font-body text-xs text-text-primary outline-none disabled:opacity-50"
                 placeholder="造型名稱"
               />
             ) : (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="flex-1 truncate text-left font-body text-[13px] text-stone-200 transition-colors hover:text-amber-300"
+                className="flex-1 truncate text-left font-body text-[13px] text-text-primary transition-colors hover:text-primary-300"
                 title="點擊改名"
               >
                 {display}
               </button>
             )}
             {update.isPending ? (
-              <span className="font-mono text-[12px] text-stone-500">儲存中…</span>
+              <span className="font-mono text-[12px] text-text-tertiary">儲存中…</span>
             ) : null}
             {/* 上傳 — per-appearance custom reference image. Upload → 3-view
                 sheet (same upload-and-expand path as 新增造型). Lets the user
@@ -353,7 +353,7 @@ function AppearanceManageRow({
               onClick={() => uploadInputRef.current?.click()}
               disabled={uploadExpand.isPending}
               title="上傳這個造型的參考圖（會生成 3 視角）"
-              className="flex-shrink-0 rounded-sm border border-stone-800 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-all hover:border-amber-500/50 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex-shrink-0 rounded-sm border border-border-soft px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-text-tertiary transition-all hover:border-primary-500/50 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {uploadExpand.isPending ? '上傳中…' : '上傳'}
             </button>
@@ -375,8 +375,8 @@ function AppearanceManageRow({
               title={descExpanded ? '收起描述編輯器' : '編輯造型描述'}
               className={`flex-shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[12px] tracking-wider transition-all ${
                 descExpanded
-                  ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
-                  : 'border-stone-800 text-stone-500 hover:border-amber-500/50 hover:text-amber-300'
+                  ? 'border-primary-500/50 bg-primary-500/10 text-primary-300'
+                  : 'border-border-soft text-text-tertiary hover:border-primary-500/50 hover:text-primary-300'
               }`}
             >
               {descExpanded ? '▾ 描述' : '✎ 描述'}
@@ -386,17 +386,17 @@ function AppearanceManageRow({
               onClick={handleDelete}
               disabled={!canDelete || del.isPending}
               title={canDelete ? '刪除這個造型' : '至少要保留一個造型'}
-              className="flex-shrink-0 rounded-sm border border-stone-800 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-all hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+              className="flex-shrink-0 rounded-sm border border-border-soft px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-text-tertiary transition-all hover:border-rose-500/50 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
             >
               {del.isPending ? '…' : '刪除'}
             </button>
           </div>
           {caption ? (
-            <div className="line-clamp-1 font-body text-[12px] text-stone-500" title={caption}>
+            <div className="line-clamp-1 font-body text-[12px] text-text-tertiary" title={caption}>
               {caption}
             </div>
           ) : (
-            <div className="font-body text-[12px] italic text-stone-700">無描述</div>
+            <div className="font-body text-[12px] italic text-text-tertiary">無描述</div>
           )}
           {/* 2026-05-23 — Phase 3: 火山方舟 asset registration chip.
               Sits below the caption so the row main content stays uncluttered.
@@ -429,16 +429,16 @@ function AppearanceManageRow({
           PATCH /character/appearance with the new description; cancel
           reverts to the persisted value. */}
       {descExpanded ? (
-        <div className="border-t border-stone-800/40 p-2">
+        <div className="border-t border-border-soft/40 p-2">
           <textarea
             value={descDraft}
             onChange={(e) => setDescDraft(e.target.value)}
             rows={6}
             placeholder="造型描述（LLM 生成圖時會用這段作為 prompt）"
-            className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 p-2 font-serif-cn text-[12px] leading-relaxed text-stone-100 outline-none focus:border-amber-500/40"
+            className="w-full resize-none rounded-sm border border-border-soft bg-raised/60 p-2 font-serif-cn text-[12px] leading-relaxed text-text-primary outline-none focus:border-primary-500/40"
           />
           <div className="mt-1.5 flex items-center justify-between gap-2">
-            <div className="font-mono text-[11px] tracking-wider text-stone-600">
+            <div className="font-mono text-[11px] tracking-wider text-text-tertiary">
               {descDirty ? `✏ 已修改 · ${descDraft.trim().length} 字` : `${descDraft.trim().length} 字`}
             </div>
             <div className="flex items-center gap-1.5">
@@ -446,7 +446,7 @@ function AppearanceManageRow({
                 type="button"
                 onClick={handleCancelDescription}
                 disabled={update.isPending}
-                className="rounded-sm border border-stone-800 px-2 py-0.5 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:border-stone-600 hover:text-stone-300 disabled:opacity-40"
+                className="rounded-sm border border-border-soft px-2 py-0.5 font-mono text-[12px] tracking-wider text-text-tertiary transition-colors hover:border-border-strong hover:text-text-secondary disabled:opacity-40"
               >
                 取消
               </button>
@@ -454,7 +454,7 @@ function AppearanceManageRow({
                 type="button"
                 onClick={handleSaveDescription}
                 disabled={!descDirty || update.isPending}
-                className="rounded-sm border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-200 transition-all hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-sm border border-primary-500/50 bg-primary-500/15 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-200 transition-all hover:bg-primary-500/25 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {update.isPending ? '儲存中…' : '儲存描述'}
               </button>
@@ -509,7 +509,7 @@ function AppearanceLightbox({ url, onClose }: { url: string; onClose: () => void
         <button
           type="button"
           onClick={onClose}
-          className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-stone-700 bg-stone-900 font-mono text-[14px] text-stone-300 shadow-md transition-colors hover:border-amber-500/60 hover:text-amber-300"
+          className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border-strong bg-raised font-mono text-[14px] text-text-secondary shadow-md transition-colors hover:border-primary-500/60 hover:text-primary-300"
           title="關閉 (ESC)"
         >
           ✕
@@ -582,13 +582,13 @@ function RangeBindToolbar({
       <div className="mb-1.5 font-mono text-[14px] tracking-wider text-violet-300">
         ⚡ 批量綁定
       </div>
-      <div className="flex flex-wrap items-center gap-1.5 font-body text-xs text-stone-300">
-        <span className="text-stone-400">套用</span>
+      <div className="flex flex-wrap items-center gap-1.5 font-body text-xs text-text-secondary">
+        <span className="text-text-secondary">套用</span>
         <select
           value={selectedAppearance}
           onChange={(e) => setSelectedAppearance(e.target.value)}
           disabled={bulk.isPending}
-          className="rounded-sm border border-stone-800 bg-stone-950/80 px-1.5 py-0.5 text-xs text-stone-200 outline-none focus:border-violet-500/60 disabled:opacity-50"
+          className="rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-xs text-text-primary outline-none focus:border-violet-500/60 disabled:opacity-50"
         >
           <option value="">— 用第一個造型 —</option>
           {appearances.map((ap) => {
@@ -600,7 +600,7 @@ function RangeBindToolbar({
             )
           })}
         </select>
-        <span className="text-stone-400">至 第</span>
+        <span className="text-text-secondary">至 第</span>
         <input
           type="number"
           value={fromNum}
@@ -608,9 +608,9 @@ function RangeBindToolbar({
           min={minNum}
           max={maxNum}
           disabled={bulk.isPending}
-          className="w-14 rounded-sm border border-stone-800 bg-stone-950/80 px-1.5 py-0.5 text-center font-mono text-xs text-stone-200 outline-none focus:border-violet-500/60 disabled:opacity-50"
+          className="w-14 rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-center font-mono text-xs text-text-primary outline-none focus:border-violet-500/60 disabled:opacity-50"
         />
-        <span className="text-stone-400">-</span>
+        <span className="text-text-secondary">-</span>
         <input
           type="number"
           value={toNum}
@@ -618,9 +618,9 @@ function RangeBindToolbar({
           min={minNum}
           max={maxNum}
           disabled={bulk.isPending}
-          className="w-14 rounded-sm border border-stone-800 bg-stone-950/80 px-1.5 py-0.5 text-center font-mono text-xs text-stone-200 outline-none focus:border-violet-500/60 disabled:opacity-50"
+          className="w-14 rounded-sm border border-border-soft bg-canvas/80 px-1.5 py-0.5 text-center font-mono text-xs text-text-primary outline-none focus:border-violet-500/60 disabled:opacity-50"
         />
-        <span className="text-stone-400">集</span>
+        <span className="text-text-secondary">集</span>
         <button
           type="button"
           onClick={handleApply}
@@ -708,7 +708,7 @@ function AddAppearanceButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-1 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20"
+        className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-1 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20"
       >
         + 新增造型
       </button>
@@ -718,14 +718,14 @@ function AddAppearanceButton({
   const suggestedReason = existingAppearanceCount === 1 ? '時間跳轉造型' : `造型 ${existingAppearanceCount + 1}`
 
   return (
-    <div className="flex flex-1 flex-col gap-2 rounded-sm border border-amber-500/40 bg-stone-950/60 p-2">
-      <div className="font-mono text-[14px] tracking-wider text-amber-400">新增造型</div>
+    <div className="flex flex-1 flex-col gap-2 rounded-sm border border-primary-500/40 bg-canvas/60 p-2">
+      <div className="font-mono text-[14px] tracking-wider text-primary-400">新增造型</div>
       <input
         type="text"
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder={`造型名稱(例:${suggestedReason})`}
-        className="rounded-sm border border-stone-800 bg-stone-950/80 px-2 py-1 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
+        className="rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500"
         disabled={inFlight}
       />
       <textarea
@@ -735,7 +735,7 @@ function AddAppearanceButton({
         placeholder={pickedFile
           ? '描述(可選 — 上傳參考圖後可以留空,系統用圖片生 3 視角)'
           : '外觀描述(種族/年齡/服裝/配件,越具體越穩)或下方上傳參考圖至少擇一'}
-        className="resize-none rounded-sm border border-stone-800 bg-stone-950/80 px-2 py-1 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
+        className="resize-none rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500"
         disabled={inFlight}
       />
 
@@ -743,15 +743,15 @@ function AddAppearanceButton({
           after the appearance row is created so the new outfit gets a
           3-view sheet generated FROM the user's reference instead of a
           pure-text prompt. */}
-      <div className="flex items-center justify-between rounded-sm border border-stone-800/60 bg-stone-900/40 px-2 py-1.5">
+      <div className="flex items-center justify-between rounded-sm border border-border-soft/60 bg-raised/40 px-2 py-1.5">
         <div className="flex items-center gap-2">
-          <AppIcon name="image" className="h-3 w-3 text-stone-500" />
+          <AppIcon name="image" className="h-3 w-3 text-text-tertiary" />
           {pickedFile ? (
-            <span className="font-mono text-[14px] text-amber-300" title={pickedFile.name}>
+            <span className="font-mono text-[14px] text-primary-300" title={pickedFile.name}>
               {pickedFile.name.length > 28 ? `${pickedFile.name.slice(0, 28)}…` : pickedFile.name}
             </span>
           ) : (
-            <span className="font-mono text-[14px] text-stone-500">參考圖(可選 — 上傳即用此圖生 3 視角)</span>
+            <span className="font-mono text-[14px] text-text-tertiary">參考圖(可選 — 上傳即用此圖生 3 視角)</span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -763,7 +763,7 @@ function AddAppearanceButton({
                 if (fileInputRef.current) fileInputRef.current.value = ''
               }}
               disabled={inFlight}
-              className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-rose-400 disabled:opacity-50"
+              className="font-mono text-[12px] tracking-wider text-text-tertiary transition-colors hover:text-rose-400 disabled:opacity-50"
             >
               清除
             </button>
@@ -772,7 +772,7 @@ function AddAppearanceButton({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={inFlight}
-            className="rounded-sm border border-stone-700 bg-stone-900 px-2 py-0.5 font-mono text-[12px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-sm border border-border-strong bg-raised px-2 py-0.5 font-mono text-[12px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {pickedFile ? '更換' : '選擇圖片'}
           </button>
@@ -794,7 +794,7 @@ function AddAppearanceButton({
           type="button"
           onClick={reset}
           disabled={inFlight}
-          className="text-stone-500 transition-colors hover:text-stone-300 disabled:opacity-50"
+          className="text-text-tertiary transition-colors hover:text-text-secondary disabled:opacity-50"
         >
           取消
         </button>
@@ -802,7 +802,7 @@ function AddAppearanceButton({
           type="button"
           onClick={handleSave}
           disabled={inFlight || !reason.trim() || (!desc.trim() && !pickedFile)}
-          className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1 text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {create.isPending
             ? '建立中…'
@@ -848,12 +848,12 @@ function EpisodeBindingRow({
 
   return (
     <div className="flex items-center gap-2">
-      <div className="w-20 flex-shrink-0 font-mono text-[14px] text-stone-400">{epLabel}</div>
+      <div className="w-20 flex-shrink-0 font-mono text-[14px] text-text-secondary">{epLabel}</div>
       <select
         value={currentValue}
         onChange={(e) => handleChange(e.target.value)}
         disabled={updateBinding.isPending}
-        className="flex-1 rounded-sm border border-stone-800 bg-stone-950/80 px-2 py-1 font-body text-xs text-stone-200 outline-none focus:border-amber-500 disabled:opacity-50"
+        className="flex-1 rounded-sm border border-border-soft bg-canvas/80 px-2 py-1 font-body text-xs text-text-primary outline-none focus:border-primary-500 disabled:opacity-50"
       >
         <option value="">— 用第一個造型 —</option>
         {appearances.map((ap) => {
@@ -866,7 +866,7 @@ function EpisodeBindingRow({
         })}
       </select>
       {updateBinding.isPending ? (
-        <span className="font-mono text-[12px] text-stone-500">儲存中…</span>
+        <span className="font-mono text-[12px] text-text-tertiary">儲存中…</span>
       ) : null}
     </div>
   )

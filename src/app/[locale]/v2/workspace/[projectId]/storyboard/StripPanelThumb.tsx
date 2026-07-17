@@ -52,12 +52,12 @@ export function StripPanelThumb({
       onClick={onSelect}
       className={`flex-shrink-0 overflow-hidden rounded-sm border-l-4 border-y border-r text-left transition-all ${accentClass} ${
         active
-          ? 'border-amber-500/60 ring-2 ring-amber-500/20'
-          : 'border-stone-800/60 hover:border-stone-700'
+          ? 'border-primary-500/60 ring-2 ring-primary-500/20'
+          : 'border-border-soft/60 hover:border-border-strong'
       } ${groupBoundary ? 'ml-2' : ''}`}
     >
       <div
-        className={`relative ${thumbHeightClass} overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900`}
+        className={`relative ${thumbHeightClass} overflow-hidden bg-gradient-to-br from-overlay to-raised`}
         // Inline aspectRatio (instead of Tailwind aspect-[9/16])
         // because user-reported "thumbs render 16:9 even though
         // project is 9:16" — Tailwind arbitrary aspect classes
@@ -72,12 +72,12 @@ export function StripPanelThumb({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.imageUrl ?? ''} alt={`panel ${i + 1}`} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-stone-950/70">
-            <AppIcon name="image" className="h-5 w-5 text-stone-600" />
+          <div className="flex h-full w-full items-center justify-center bg-canvas/70">
+            <AppIcon name="image" className="h-5 w-5 text-text-tertiary" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-950/90 via-transparent to-transparent" />
-        <div className="absolute left-2 top-1.5 rounded bg-stone-950/50 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 backdrop-blur-sm">
+        <div className="absolute inset-0 bg-gradient-to-t from-canvas/90 via-transparent to-transparent" />
+        <div className="absolute left-2 top-1.5 rounded bg-canvas/50 px-1.5 py-0.5 font-mono text-[14px] text-text-primary backdrop-blur-sm">
           #{String(i + 1).padStart(2, '0')}
         </div>
         {(() => {
@@ -89,9 +89,9 @@ export function StripPanelThumb({
           const isVid = localVid || remoteVid
           if (isImg || isVid) {
             return (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
-                <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                <div className="font-mono text-[12px] tracking-wider text-amber-300">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-canvas/75 backdrop-blur-sm">
+                <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-primary-400" />
+                <div className="font-mono text-[12px] tracking-wider text-primary-300">
                   {isVid ? t('gallery.videoGenerating') : t('gallery.imageGenerating')}
                 </div>
               </div>

@@ -66,6 +66,50 @@ describe('Kuiper visual system', () => {
     expect(episodeTabs).toContain('border-primary-500/50')
   })
 
+  it('uses the shared production surfaces across subjects and storyboard views', () => {
+    const globals = readFileSync('src/app/globals.css', 'utf8')
+    const subjects = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/subjects/V2SubjectsClient.tsx',
+      'utf8',
+    )
+    const subjectGrid = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/subjects/SubjectGrid.tsx',
+      'utf8',
+    )
+    const gallery = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardGalleryView.tsx',
+      'utf8',
+    )
+    const timeline = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardTimelineView.tsx',
+      'utf8',
+    )
+
+    expect(globals).toContain('.kuiper-surface-card')
+    expect(globals).toContain('.kuiper-modal-surface')
+    expect(globals).toContain('.kuiper-segmented-control')
+    expect(subjects).toContain('kuiper-workspace-page')
+    expect(subjectGrid).toContain('kuiper-surface-card')
+    expect(gallery).toContain('kuiper-storyboard-shell')
+    expect(gallery).toContain('xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]')
+    expect(timeline).toContain('xl:grid-cols-12')
+  })
+
+  it('does not reintroduce legacy amber or stone utilities in redesigned production areas', () => {
+    const redesignedFiles = [
+      'src/app/[locale]/v2/workspace/[projectId]/subjects/V2SubjectsClient.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/subjects/SubjectGrid.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardGalleryView.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardGroupsView.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardTimelineView.tsx',
+    ]
+
+    for (const file of redesignedFiles) {
+      const source = readFileSync(file, 'utf8')
+      expect(source).not.toMatch(/(?:amber|stone)-/)
+    }
+  })
+
   it('starts the home experience from production intent instead of tool names', () => {
     const launcher = readFileSync(
       'src/app/[locale]/v2/V2WorkflowLauncher.tsx',

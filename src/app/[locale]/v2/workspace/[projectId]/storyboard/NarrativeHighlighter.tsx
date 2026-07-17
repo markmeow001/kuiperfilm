@@ -81,7 +81,7 @@ interface EntityToken {
 function classForKind(kind: EntityKind): string {
   switch (kind) {
     case 'character':
-      return 'bg-amber-500/25 text-amber-200 rounded-sm'
+      return 'bg-primary-500/25 text-primary-200 rounded-sm'
     case 'scene':
       return 'bg-emerald-500/25 text-emerald-200 rounded-sm'
     case 'prop':
@@ -192,8 +192,8 @@ export function NarrativeHighlighter({
   // (does NOT participate in layout) — both pre and textarea now sit
   // identically inside the same border-box.
   const wrapperClasses = [
-    'relative w-full rounded-sm bg-stone-900/40 transition-colors',
-    'ring-1 ring-inset ring-stone-800 focus-within:ring-amber-500/40',
+    'relative w-full rounded-sm bg-raised/40 transition-colors',
+    'ring-1 ring-inset ring-border-soft focus-within:ring-primary-500/40',
     flashing ? 'ring-2 ring-emerald-400/60' : '',
   ].join(' ')
 
@@ -247,11 +247,11 @@ export function NarrativeHighlighter({
       <pre
         ref={preRef}
         aria-hidden="true"
-        className={`${sharedTypography} ${sharedPadding} pointer-events-none absolute inset-0 m-0 overflow-y-auto overflow-x-hidden text-stone-200`}
+        className={`${sharedTypography} ${sharedPadding} pointer-events-none absolute inset-0 m-0 overflow-y-auto overflow-x-hidden text-text-primary`}
         style={sharedSyncStyle}
       >
         {value.length === 0 ? (
-          <span className="text-stone-600">{placeholder ?? ''}</span>
+          <span className="text-text-tertiary">{placeholder ?? ''}</span>
         ) : (
           segments.map((seg, i) =>
             seg.kind ? (
@@ -275,7 +275,7 @@ export function NarrativeHighlighter({
         rows={rows}
         placeholder={value.length === 0 ? undefined : placeholder}
         spellCheck={false}
-        className={`${sharedTypography} ${sharedPadding} relative w-full resize-y border-0 bg-transparent text-transparent caret-stone-100 outline-none`}
+        className={`${sharedTypography} ${sharedPadding} relative w-full resize-y border-0 bg-transparent text-transparent caret-text-primary outline-none`}
         style={sharedSyncStyle}
       />
     </div>

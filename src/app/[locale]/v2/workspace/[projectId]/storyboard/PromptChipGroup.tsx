@@ -22,7 +22,7 @@ export function PromptChipGroup({
 }) {
   return (
     <div>
-      <div className="mb-2 font-mono text-[14px] tracking-wider text-stone-500">{label}</div>
+      <div className="mb-2 font-mono text-[14px] tracking-wider text-text-tertiary">{label}</div>
       <div className={`grid gap-1.5 ${cols === 1 ? '' : cols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
         {options.map((v) => (
           <button
@@ -38,10 +38,10 @@ export function PromptChipGroup({
             }}
             className={`rounded-sm border px-2 py-1.5 text-left font-serif-cn text-xs transition-all ${
               active === v
-                ? 'border-amber-500/50 bg-amber-500/5 text-amber-400'
+                ? 'border-primary-500/50 bg-primary-500/5 text-primary-400'
                 : disabled || !onChange
-                  ? 'border-stone-800 text-stone-500'
-                  : 'border-stone-800 text-stone-300 hover:border-amber-500/40 hover:text-amber-300'
+                  ? 'border-border-soft text-text-tertiary'
+                  : 'border-border-soft text-text-secondary hover:border-primary-500/40 hover:text-primary-300'
             }`}
           >
             {v}

@@ -102,20 +102,20 @@ export function V2PropEditModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/85 backdrop-blur-sm">
-      <div className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-sm border border-stone-800 bg-stone-950 p-8">
+    <div className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="kuiper-modal-surface relative max-h-[90vh] w-full max-w-3xl overflow-y-auto p-6 sm:p-8">
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-5 top-5 font-mono text-2xl text-stone-500 transition-colors hover:text-amber-400"
+          className="absolute right-5 top-5 font-mono text-2xl text-text-tertiary transition-colors hover:text-primary-400"
           aria-label="關閉"
         >
           ×
         </button>
 
         <div className="mb-6">
-          <h2 className="font-fraunces text-2xl italic text-amber-400">編輯道具</h2>
-          <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
+          <h2 className="font-fraunces text-2xl italic text-primary-400">編輯道具</h2>
+          <div className="mt-1 font-mono text-[14px] tracking-wider text-text-tertiary">
             EDIT_PROP · {prop.id.slice(0, 8)}
           </div>
         </div>
@@ -123,7 +123,7 @@ export function V2PropEditModal({
         <div className="grid grid-cols-[200px_1fr] gap-6">
           {/* Left: image preview */}
           <div className="space-y-3">
-            <div className="aspect-square overflow-hidden rounded-sm border border-stone-800 bg-stone-900">
+            <div className="aspect-square overflow-hidden rounded-sm border border-border-soft bg-raised">
               {imageUrl ? (
                 <button
                   type="button"
@@ -134,7 +134,7 @@ export function V2PropEditModal({
                 </button>
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
-                  <AppIcon name="image" className="h-10 w-10 text-stone-600" />
+                  <AppIcon name="image" className="h-10 w-10 text-text-tertiary" />
                 </div>
               )}
             </div>
@@ -144,12 +144,12 @@ export function V2PropEditModal({
                 type="button"
                 onClick={onRegenerate}
                 disabled={isRegenerating}
-                className="flex items-center justify-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[13px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex items-center justify-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[13px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {isRegenerating ? '生成中…' : imageUrl ? '重新生成' : '生成圖片'}
               </button>
-              <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900 px-3 py-1.5 font-mono text-[13px] tracking-wider text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-300">
+              <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-sm border border-border-strong bg-raised px-3 py-1.5 font-mono text-[13px] tracking-wider text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-300">
                 <AppIcon name="cloudUpload" className="h-3 w-3" />
                 {isUploading ? '上傳中…' : '上傳圖片'}
                 <input
@@ -167,8 +167,8 @@ export function V2PropEditModal({
           <div className="space-y-5">
             <div>
               <div className="mb-1 flex items-center justify-between font-mono text-[14px] tracking-wider">
-                <span className="text-stone-500">道具名稱</span>
-                <span className="text-stone-600">
+                <span className="text-text-tertiary">道具名稱</span>
+                <span className="text-text-tertiary">
                   {nameChanged ? '改名後分鏡引用會自動同步' : ''}
                 </span>
               </div>
@@ -177,7 +177,7 @@ export function V2PropEditModal({
                 value={nameDraft}
                 onChange={(e) => setNameDraft(e.target.value)}
                 placeholder="道具名稱 (例:骨杖 / 信封 / 銀劍)"
-                className="w-full rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-fraunces text-base italic text-stone-200 outline-none transition-colors focus:border-amber-500 disabled:opacity-60"
+                className="w-full rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-fraunces text-base italic text-text-primary outline-none transition-colors focus:border-primary-500 disabled:opacity-60"
                 disabled={isSavingName}
                 maxLength={64}
               />
@@ -186,7 +186,7 @@ export function V2PropEditModal({
                   type="button"
                   onClick={() => setNameDraft(initialName)}
                   disabled={!nameChanged || isSavingName}
-                  className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="font-mono text-[14px] tracking-wider text-text-tertiary transition-colors hover:text-text-secondary disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   還原
                 </button>
@@ -194,7 +194,7 @@ export function V2PropEditModal({
                   type="button"
                   onClick={() => onSaveName(nameTrimmed)}
                   disabled={!nameChanged || isSavingName}
-                  className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isSavingName ? '儲存中…' : '儲存名稱'}
                 </button>
@@ -203,15 +203,15 @@ export function V2PropEditModal({
 
             <div>
               <div className="mb-1 flex items-center justify-between font-mono text-[14px] tracking-wider">
-                <span className="text-stone-500">道具描述 (生圖時提供細節)</span>
-                <span className="text-stone-600">{summaryDraft.length} 字</span>
+                <span className="text-text-tertiary">道具描述 (生圖時提供細節)</span>
+                <span className="text-text-tertiary">{summaryDraft.length} 字</span>
               </div>
               <textarea
                 value={summaryDraft}
                 onChange={(e) => setSummaryDraft(e.target.value)}
                 rows={4}
                 placeholder="例:一柄帶有銀色狼頭把柄的長劍,劍鞘上刻著古老的盧恩符文。 ⋯ 用於生圖時錨定外觀"
-                className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 p-3 font-body text-sm text-stone-200 outline-none transition-colors focus:border-amber-500"
+                className="w-full resize-none rounded-sm border border-border-soft bg-raised/60 p-3 font-body text-sm text-text-primary outline-none transition-colors focus:border-primary-500"
                 disabled={isSavingSummary}
               />
               <div className="mt-2 flex items-center justify-end gap-2">
@@ -219,7 +219,7 @@ export function V2PropEditModal({
                   type="button"
                   onClick={() => setSummaryDraft(initialSummary)}
                   disabled={!summaryChanged || isSavingSummary}
-                  className="font-mono text-[14px] tracking-wider text-stone-500 transition-colors hover:text-stone-300 disabled:cursor-not-allowed disabled:opacity-30"
+                  className="font-mono text-[14px] tracking-wider text-text-tertiary transition-colors hover:text-text-secondary disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   還原
                 </button>
@@ -227,14 +227,14 @@ export function V2PropEditModal({
                   type="button"
                   onClick={() => onSaveSummary(summaryDraft.trim())}
                   disabled={!summaryChanged || isSavingSummary}
-                  className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isSavingSummary ? '儲存中…' : '儲存描述'}
                 </button>
               </div>
             </div>
 
-            <div className="border-t border-stone-800 pt-4">
+            <div className="border-t border-border-soft pt-4">
               <button
                 type="button"
                 onClick={handleConfirmDelete}

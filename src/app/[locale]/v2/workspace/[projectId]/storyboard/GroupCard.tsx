@@ -1642,24 +1642,24 @@ export function GroupCard({
     statusLabel.tone === 'done'
       ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-400'
       : statusLabel.tone === 'pending'
-        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+        ? 'border-primary-500/40 bg-primary-500/10 text-primary-300'
         : statusLabel.tone === 'error'
           ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
-          : 'border-stone-800/60 bg-stone-900/30 text-stone-500'
+          : 'border-border-soft/60 bg-raised/30 text-text-tertiary'
 
   return (
     <article
-      className={`overflow-hidden rounded-sm border-y border-r border-l-4 border-stone-800/60 bg-stone-900/30 ${accentClass}`}
+      className={`kuiper-surface-card border-l-4 ${accentClass}`}
     >
       <header
-        className="flex cursor-pointer select-none items-center justify-between gap-4 border-b border-amber-900/15 bg-stone-950/40 px-4 py-2.5 transition-colors hover:bg-stone-950/60"
+        className="flex cursor-pointer select-none items-center justify-between gap-4 border-b border-primary-900/15 bg-canvas/40 px-4 py-2.5 transition-colors hover:bg-canvas/60"
         onClick={() => setExpanded((v) => !v)}
       >
         <div className="flex flex-1 items-center gap-3 overflow-hidden">
-          <div className="flex-shrink-0 font-mono text-[14px] uppercase tracking-wider text-amber-500/80">
+          <div className="flex-shrink-0 font-mono text-[14px] uppercase tracking-wider text-primary-500/80">
             {groupLabel}
           </div>
-          <div className="flex flex-shrink-0 items-center gap-1 rounded-sm border border-stone-800 bg-stone-900/60 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-stone-400">
+          <div className="flex flex-shrink-0 items-center gap-1 rounded-sm border border-border-soft bg-raised/60 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-text-secondary">
             <AppIcon name="play" className="h-2.5 w-2.5" />
             {timeRangeLabel}
           </div>
@@ -1670,7 +1670,7 @@ export function GroupCard({
             {statusLabel.text}
           </div>
           {!expanded && briefDescription ? (
-            <div className="truncate font-serif-cn text-[12px] text-stone-300">
+            <div className="truncate font-serif-cn text-[12px] text-text-secondary">
               {briefDescription}
             </div>
           ) : null}
@@ -1693,16 +1693,16 @@ export function GroupCard({
               }
               className={`flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-[12px] tracking-wider transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 regenState.status === 'submitting'
-                  ? 'border-amber-400 bg-amber-500/30 text-amber-100 ring-2 ring-amber-500/40'
+                  ? 'border-primary-400 bg-primary-500/30 text-primary-100 ring-2 ring-primary-500/40'
                   : regenState.status === 'done'
                     ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
                     : regenState.status === 'error'
                       ? 'border-rose-500/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25'
-                      : 'border-amber-500/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25'
+                      : 'border-primary-500/50 bg-primary-500/15 text-primary-200 hover:bg-primary-500/25'
               }`}
             >
               {regenState.status === 'submitting' ? (
-                <span className="inline-block h-3 w-3 animate-spin rounded-full border border-amber-400/40 border-t-amber-200" />
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border border-primary-400/40 border-t-primary-200" />
               ) : (
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
               )}
@@ -1725,7 +1725,7 @@ export function GroupCard({
                       : t('cta.generateVideo')}
             </button>
           ) : null}
-          <div className="font-mono text-[14px] tracking-wider text-stone-500">
+          <div className="font-mono text-[14px] tracking-wider text-text-tertiary">
             {expanded ? '▲' : '▼'}
           </div>
         </div>
@@ -1734,9 +1734,9 @@ export function GroupCard({
       {!expanded ? null : (
       <div className="space-y-3 p-4">
         {regenState.status === 'submitting' ? (
-          <div className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-400/40 border-t-amber-200" />
-            <div className="font-serif-cn text-[12px] text-amber-200">
+          <div className="flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-2">
+            <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary-400/40 border-t-primary-200" />
+            <div className="font-serif-cn text-[12px] text-primary-200">
               {videoFamily === 'seedance'
                 ? t('submitHint.seedancePending')
                 : t('submitHint.klingPending')}
@@ -1813,7 +1813,7 @@ export function GroupCard({
               <button
                 type="button"
                 onClick={handleResetOverrides}
-                className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-violet-300"
+                className="font-mono text-[12px] tracking-wider text-text-tertiary transition-colors hover:text-violet-300"
               >
                 {t('overrides.clear')}
               </button>
@@ -1835,10 +1835,10 @@ export function GroupCard({
               重生敘事 button onto a third visual line, leaving 叙事提示词
               awkwardly alone. */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
+            <div className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-primary-500/70">
               <AppIcon name="sparklesAlt" className="h-3 w-3" />
               {t('narrative.title')}
-              <span className="text-stone-500">{t('narrative.charCount', { count: narrativeDraft.length })}</span>
+              <span className="text-text-tertiary">{t('narrative.charCount', { count: narrativeDraft.length })}</span>
             </div>
             {/* Phase V (2026-05-28) — 保存 + ↻ 重生敘事 button cluster.
                 Both pinned right of the title row to stay on the same
@@ -1875,7 +1875,7 @@ export function GroupCard({
                   )
                 }}
                 title="保存敘事 — 存入專案（重新整理 / 改時長都會保留），下次「生成視頻」以這段為主 prompt"
-                className={`whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[12px] tracking-wider transition-colors disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 ${
+                className={`whitespace-nowrap rounded-sm border px-2 py-0.5 font-mono text-[12px] tracking-wider transition-colors disabled:cursor-not-allowed disabled:border-border-soft disabled:bg-raised/40 disabled:text-text-tertiary ${
                   narrativeSavedFlash
                     ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-200'
                     : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-200'
@@ -1924,7 +1924,7 @@ export function GroupCard({
                 title={narrativeDirty
                   ? t('narrative.regenTitleDirty')
                   : t('narrative.regenTitleClean')}
-                className="whitespace-nowrap rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:border-stone-800 disabled:bg-stone-900/40 disabled:text-stone-600 disabled:hover:bg-stone-900/40 disabled:hover:border-stone-800 disabled:hover:text-stone-600"
+                className="whitespace-nowrap rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 transition-colors hover:border-primary-500/60 hover:bg-primary-500/20 hover:text-primary-200 disabled:cursor-not-allowed disabled:border-border-soft disabled:bg-raised/40 disabled:text-text-tertiary disabled:hover:bg-raised/40 disabled:hover:border-border-soft disabled:hover:text-text-tertiary"
               >
                 {t('narrative.regenButton')}
               </button>
@@ -1935,7 +1935,7 @@ export function GroupCard({
                   Default ON (auto) for Episode 1 / Group 1. See
                   docs/design/reelshort-cold-open-evaluation.md. */}
               <label
-                className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
+                className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-text-secondary"
                 title={t('hook.title')}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
@@ -1951,7 +1951,7 @@ export function GroupCard({
                     // template" gesture.
                     setNarrativeDirty(false)
                   }}
-                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
+                  className="rounded-sm border border-border-soft bg-raised px-1.5 py-0.5 font-mono text-[14px] text-text-primary outline-none focus:border-primary-500/40"
                 >
                   <option value="off">{t('hook.options.off')}</option>
                   <option value="auto">{t('hook.options.auto')}</option>
@@ -1968,7 +1968,7 @@ export function GroupCard({
                   Disabled when SHOT 01 has no generated image. */}
               <label
                 className={`flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider ${
-                  panels[0]?.imageUrl ? 'text-stone-400' : 'text-stone-700'
+                  panels[0]?.imageUrl ? 'text-text-secondary' : 'text-text-tertiary'
                 }`}
                 title={panels[0]?.imageUrl
                   ? t('frameLock.tipReady')
@@ -1983,7 +1983,7 @@ export function GroupCard({
                     setFrameLockMode(next)
                   }}
                   disabled={!panels[0]?.imageUrl || !canEdit}
-                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded-sm border border-border-soft bg-raised px-1.5 py-0.5 font-mono text-[14px] text-text-primary outline-none focus:border-primary-500/40 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <option value="off">{t('frameLock.options.off')}</option>
                   <option value="first_frame">{t('frameLock.options.firstFrame')}</option>
@@ -1994,7 +1994,7 @@ export function GroupCard({
                   </option>
                 </select>
               </label>
-              <label className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400">
+              <label className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-text-secondary">
                 <AppIcon name="play" className="h-3 w-3" />
                 {t('duration.label')}
                 <select
@@ -2027,7 +2027,7 @@ export function GroupCard({
                       ? t('duration.tipAuto', { n: recommendedDurationSec })
                       : t('duration.tipManual')
                   }
-                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
+                  className="rounded-sm border border-border-soft bg-raised px-1.5 py-0.5 font-mono text-[14px] text-text-primary outline-none focus:border-primary-500/40"
                 >
                   <option value={0}>
                     {recommendedDurationSec !== null
@@ -2056,7 +2056,7 @@ export function GroupCard({
                 />
               ) : null}
               <label
-                className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
+                className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-text-secondary"
                 title={t('style.title')}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
@@ -2064,7 +2064,7 @@ export function GroupCard({
                 <select
                   value={visualStyleOverride}
                   onChange={(e) => setVisualStyleOverride(e.target.value)}
-                  className="rounded-sm border border-stone-800 bg-stone-900 px-1.5 py-0.5 font-mono text-[14px] text-stone-200 outline-none focus:border-amber-500/40"
+                  className="rounded-sm border border-border-soft bg-raised px-1.5 py-0.5 font-mono text-[14px] text-text-primary outline-none focus:border-primary-500/40"
                 >
                   <option value={STYLE_INHERIT}>{t('style.inheritOption')}</option>
                   {sortedStyleOptions.map((s) => (
@@ -2126,7 +2126,7 @@ export function GroupCard({
               ✓ 敘事已保存 — 下次「{taskId ? '重新生成' : '生成視頻'}」會以這段為主 prompt（覆蓋分鏡描述，並關閉對白驅動時長）
             </div>
           ) : (
-            <div className="font-mono text-[12px] tracking-wider text-stone-600">
+            <div className="font-mono text-[12px] tracking-wider text-text-tertiary">
               {totalDurationDraft === 0
                 ? t('narrative.previewWithDialogue', { count: panels.length })
                 : t('narrative.previewWithoutDialogue', { count: panels.length, total: totalDurationDraft })}
@@ -2138,70 +2138,70 @@ export function GroupCard({
               到底用了哪張圖當首/尾幀，並提示「會犧牲多鏡頭」。
               SHOT 01 / SHOT N 沒圖時也顯示提示讓 user 知道下一步。 */}
           {frameLockMode !== 'off' ? (
-            <div className="rounded-sm border border-amber-500/40 bg-amber-500/5 p-2">
-              <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-300">
+            <div className="rounded-sm border border-primary-500/40 bg-primary-500/5 p-2">
+              <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-primary-300">
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {frameLockMode === 'first_last_frame' ? t('frameLockPreview.modeFirstLast') : t('frameLockPreview.modeFirstOnly')}{t('frameLockPreview.modeSuffix')}
-                <span className="font-serif-cn text-[11px] normal-case tracking-normal text-amber-400/70 italic">
+                <span className="font-serif-cn text-[11px] normal-case tracking-normal text-primary-400/70 italic">
                   {t('frameLockPreview.modeHint')}
                 </span>
               </div>
               <div className="flex items-stretch gap-2">
                 {/* SHOT 01 thumbnail */}
                 <div className="flex flex-col items-center">
-                  <div className="font-mono text-[10px] tracking-wider text-amber-400/80">{t('frameLockPreview.firstFrameLabel')}</div>
+                  <div className="font-mono text-[10px] tracking-wider text-primary-400/80">{t('frameLockPreview.firstFrameLabel')}</div>
                   {panels[0]?.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={panels[0].imageUrl}
                       alt={t('frameLockPreview.firstFrameAlt')}
-                      className="mt-0.5 h-16 w-12 rounded-sm border border-amber-500/40 object-cover"
+                      className="mt-0.5 h-16 w-12 rounded-sm border border-primary-500/40 object-cover"
                     />
                   ) : (
                     <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300 whitespace-pre-line">
                       {t('frameLockPreview.noImageLabel01')}
                     </div>
                   )}
-                  <div className="mt-0.5 font-mono text-[10px] text-stone-500">SHOT 01</div>
+                  <div className="mt-0.5 font-mono text-[10px] text-text-tertiary">SHOT 01</div>
                 </div>
                 {frameLockMode === 'first_last_frame' ? (
                   <div className="flex flex-col items-center">
-                    <div className="font-mono text-[10px] tracking-wider text-amber-400/80">{t('frameLockPreview.lastFrameLabel')}</div>
+                    <div className="font-mono text-[10px] tracking-wider text-primary-400/80">{t('frameLockPreview.lastFrameLabel')}</div>
                     {panels[panels.length - 1]?.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={panels[panels.length - 1]!.imageUrl!}
                         alt={t('frameLockPreview.lastFrameAlt', { n: panels.length })}
-                        className="mt-0.5 h-16 w-12 rounded-sm border border-amber-500/40 object-cover"
+                        className="mt-0.5 h-16 w-12 rounded-sm border border-primary-500/40 object-cover"
                       />
                     ) : (
                       <div className="mt-0.5 flex h-16 w-12 items-center justify-center rounded-sm border border-red-700/50 bg-red-900/20 text-center font-mono text-[9px] text-red-300 whitespace-pre-line">
                         {t('frameLockPreview.noImageLabel', { n: panels.length })}
                       </div>
                     )}
-                    <div className="mt-0.5 font-mono text-[10px] text-stone-500">SHOT {panels.length}</div>
+                    <div className="mt-0.5 font-mono text-[10px] text-text-tertiary">SHOT {panels.length}</div>
                   </div>
                 ) : null}
-                <div className="flex-1 font-serif-cn text-[12px] leading-relaxed text-stone-400">
+                <div className="flex-1 font-serif-cn text-[12px] leading-relaxed text-text-secondary">
                   {t('frameLockPreview.klingDescBefore')}
-                  <span className="text-amber-300">{t('style.frameKeyHint')}</span>
+                  <span className="text-primary-300">{t('style.frameKeyHint')}</span>
                   {frameLockMode === 'first_last_frame' ? (
                     <>
                       {t('frameLockPreview.klingDescAnd')}
-                      <span className="text-amber-300">{t('style.frameTailHint')}</span>
+                      <span className="text-primary-300">{t('style.frameTailHint')}</span>
                       {t('frameLockPreview.klingDescBoth')}
                     </>
                   ) : (
                     t('frameLockPreview.klingDescAfter')
                   )}
                   {t('frameLockPreview.klingDescMid')}
-                  <span className="text-stone-300">{t('frameLockPreview.klingDescUseCase')}</span>
+                  <span className="text-text-secondary">{t('frameLockPreview.klingDescUseCase')}</span>
                   {t('frameLockPreview.klingDescEnd')}
                 </div>
               </div>
             </div>
           ) : !panels[0]?.imageUrl ? (
-            <div className="rounded-sm border border-stone-800/60 bg-stone-950/40 px-2 py-1.5 font-mono text-[11px] italic tracking-wider text-stone-600">
+            <div className="rounded-sm border border-border-soft/60 bg-canvas/40 px-2 py-1.5 font-mono text-[11px] italic tracking-wider text-text-tertiary">
               {t('frameLockPreview.unlockHint')}
             </div>
           ) : null}
@@ -2210,10 +2210,10 @@ export function GroupCard({
               we still render the section (when canEdit) so the +加
               buttons stay discoverable. */}
           {(groupCast.length > 0 || groupScenes.length > 0 || boundCharacters.length > 0 || canEdit) ? (
-            <div className="space-y-2 rounded-sm border border-stone-800/60 bg-stone-950/30 p-2">
+            <div className="space-y-2 rounded-sm border border-border-soft/60 bg-canvas/30 p-2">
               {(groupCast.length > 0 || canEdit) ? (
                 <div>
-                  <div className="mb-1 flex items-center justify-between gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
+                  <div className="mb-1 flex items-center justify-between gap-1 font-mono text-[12px] uppercase tracking-wider text-primary-500/70">
                     <div className="flex items-center gap-1">
                       <AppIcon name="user" className="h-3 w-3" />
                       {t('castSection.characterHeader', { count: groupCast.length })}
@@ -2224,7 +2224,7 @@ export function GroupCard({
                         onClick={() => setAddCharOpen(true)}
                         disabled={addingCharId !== null}
                         title="从专案角色库中加一位角色到这组"
-                        className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-1.5 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 transition-colors hover:border-primary-500/60 hover:bg-primary-500/20 hover:text-primary-200 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         + 加角色
                       </button>
@@ -2236,7 +2236,7 @@ export function GroupCard({
                         && characterOverrides[c.character.id] !== c.appearanceId
                       const stateClass = overridden
                         ? 'border-violet-500/60 bg-violet-500/10'
-                        : 'border-amber-900/30 bg-stone-950/40'
+                        : 'border-primary-900/30 bg-canvas/40'
                       // 2026-05-13 — chip refactored from single <button> to
                       // a <div> with two interactive children: main area
                       // opens the swap modal; the trailing × removes this
@@ -2246,7 +2246,7 @@ export function GroupCard({
                       return (
                         <div
                           key={c.character.id}
-                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-1 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-1 transition-colors hover:border-primary-500/60 hover:bg-primary-500/10 ${stateClass}`}
                         >
                           <button
                             type="button"
@@ -2261,18 +2261,18 @@ export function GroupCard({
                             className="inline-flex items-center gap-1.5 pr-1"
                             title={t('chips.characterTitleClick', { name: c.character.name, appearance: c.appearanceLabel ?? t('chips.defaultAppearance') })}
                           >
-                            <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                            <div className="relative h-5 w-5 overflow-hidden rounded-full bg-overlay">
                               {c.avatarUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={c.avatarUrl} alt={c.character.name} className="h-full w-full object-cover" />
                               ) : (
-                                <AppIcon name="user" className="h-3 w-3 m-auto text-stone-600" />
+                                <AppIcon name="user" className="h-3 w-3 m-auto text-text-tertiary" />
                               )}
                             </div>
-                            <span className="font-serif-cn text-[14px] text-stone-200">
+                            <span className="font-serif-cn text-[14px] text-text-primary">
                               {c.character.name}
                             </span>
-                            <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                            <span className="font-mono text-[12px] tracking-wider text-primary-500/70">
                               {c.appearanceLabel ?? '默認造型'}
                             </span>
                             {overridden ? (
@@ -2286,7 +2286,7 @@ export function GroupCard({
                             onClick={() => void handleRemoveCharacterFromGroup(c.character.id, c.character.name)}
                             disabled={removingCharId === c.character.id || !canEdit}
                             title={t('chips.removeCharFromGroup', { name: c.character.name })}
-                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
                             {removingCharId === c.character.id ? (
                               <span className="font-mono text-[12px]">…</span>
@@ -2326,7 +2326,7 @@ export function GroupCard({
                         && locationOverrides[s.location.id] !== s.viewName
                       const stateClass = overridden
                         ? 'border-violet-500/60 bg-violet-500/10'
-                        : 'border-emerald-900/30 bg-stone-950/40'
+                        : 'border-emerald-900/30 bg-canvas/40'
                       // 2026-05-13 — same refactor as 出場角色: split into
                       // main button + × remove button. Removes scene
                       // from every panel.location in this group.
@@ -2348,15 +2348,15 @@ export function GroupCard({
                             className="inline-flex items-center gap-1.5 pr-1"
                             title={t('chips.sceneTitleClick', { name: s.location.name, view: s.viewName ?? t('chips.mainView') })}
                           >
-                            <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
+                            <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-overlay">
                               {s.avatarUrl ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={s.avatarUrl} alt={s.location.name} className="h-full w-full object-cover" />
                               ) : (
-                                <AppIcon name="image" className="h-3 w-3 m-auto text-stone-600" />
+                                <AppIcon name="image" className="h-3 w-3 m-auto text-text-tertiary" />
                               )}
                             </div>
-                            <span className="font-serif-cn text-[14px] text-stone-200">
+                            <span className="font-serif-cn text-[14px] text-text-primary">
                               {s.location.name}
                             </span>
                             <span className="font-mono text-[12px] tracking-wider text-emerald-500/70">
@@ -2373,7 +2373,7 @@ export function GroupCard({
                             onClick={() => void handleRemoveSceneFromGroup(s.location.id, s.location.name)}
                             disabled={removingSceneId === s.location.id || !canEdit}
                             title={t('chips.removeSceneFromGroup', { name: s.location.name })}
-                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
                             {removingSceneId === s.location.id ? (
                               <span className="font-mono text-[12px]">…</span>
@@ -2390,7 +2390,7 @@ export function GroupCard({
 
               {boundCharacters.length > 0 ? (
                 <div>
-                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
+                  <div className="mb-1 flex items-center gap-1 font-mono text-[12px] uppercase tracking-wider text-primary-500/70">
                     <AppIcon name="user" className="h-3 w-3" />
                     {t('castSection.boundCharsHeader', { count: boundCharacters.length })}
                   </div>
@@ -2402,7 +2402,7 @@ export function GroupCard({
                         && overrideAppearanceId !== c.appearanceId
                       const stateClass = hasOverride
                         ? 'border-violet-500/60 bg-violet-500/10'
-                        : 'border-amber-900/30 bg-stone-950/40'
+                        : 'border-primary-900/30 bg-canvas/40'
                       const character = characterById.get(c.id) ?? null
                       const handleClick = () => {
                         if (!character) return
@@ -2423,7 +2423,7 @@ export function GroupCard({
                       return (
                         <div
                           key={c.id}
-                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-1 transition-colors hover:border-amber-500/60 hover:bg-amber-500/10 ${stateClass}`}
+                          className={`inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-1 transition-colors hover:border-primary-500/60 hover:bg-primary-500/10 ${stateClass}`}
                         >
                           <button
                             type="button"
@@ -2432,7 +2432,7 @@ export function GroupCard({
                             className={`inline-flex items-center gap-1.5 pr-1 ${character ? 'cursor-pointer' : 'cursor-default'}`}
                             title={title}
                           >
-                            <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                            <div className="relative h-5 w-5 overflow-hidden rounded-full bg-overlay">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={c.imageUrl}
@@ -2440,10 +2440,10 @@ export function GroupCard({
                                 className="h-full w-full object-cover"
                               />
                             </div>
-                            <span className="font-serif-cn text-[14px] text-stone-200">
+                            <span className="font-serif-cn text-[14px] text-text-primary">
                               {c.name}
                             </span>
-                            <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                            <span className="font-mono text-[12px] tracking-wider text-primary-500/70">
                               {c.appearanceLabel ?? t('chips.defaultAppearance')}
                             </span>
                             {hasOverride ? (
@@ -2457,7 +2457,7 @@ export function GroupCard({
                             onClick={() => void handleRemoveCharacterFromGroup(c.id, c.name)}
                             disabled={removingCharId === c.id || !canEdit}
                             title={t('chips.removeCharFromGroup', { name: c.name })}
-                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-text-tertiary transition-colors hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                           >
                             {removingCharId === c.id ? (
                               <span className="font-mono text-[12px]">…</span>
@@ -2474,11 +2474,11 @@ export function GroupCard({
             </div>
           ) : null}
 
-          <div className="border-t border-stone-800/60 pt-2">
+          <div className="border-t border-border-soft/60 pt-2">
             <button
               type="button"
               onClick={() => setShowAdvancedEditor((v) => !v)}
-              className="flex items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+              className="flex items-center gap-1 font-mono text-[12px] tracking-wider text-text-tertiary transition-colors hover:text-primary-400"
             >
               {showAdvancedEditor ? '▼' : '▶'} {t('panelEditMore.toggle', { count: panels.length })}
             </button>
@@ -2495,15 +2495,15 @@ export function GroupCard({
                   return (
                     <div
                       key={p.id}
-                      className="rounded-sm border border-stone-800/60 bg-stone-950/40 p-2"
+                      className="rounded-sm border border-border-soft/60 bg-canvas/40 p-2"
                     >
                       <div className="mb-1 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[12px] tracking-wider text-amber-500/60">
+                          <span className="font-mono text-[12px] tracking-wider text-primary-500/60">
                             #{String(panelIdx + 1).padStart(2, '0')}
                           </span>
                           {Array.isArray(p.characters) && p.characters.length > 0 ? (
-                            <span className="font-mono text-[12px] tracking-wider text-stone-500">
+                            <span className="font-mono text-[12px] tracking-wider text-text-tertiary">
                               {p.characters
                                 .map((c) => (typeof c === 'string' ? c : c.name))
                                 .join(' / ')}
@@ -2518,14 +2518,14 @@ export function GroupCard({
                         }
                         rows={2}
                         placeholder={t('panelEditMore.descPlaceholder')}
-                        className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/40 p-1.5 font-serif-cn text-[12px] leading-relaxed text-stone-200 outline-none focus:border-amber-500/40"
+                        className="w-full resize-none rounded-sm border border-border-soft bg-raised/40 p-1.5 font-serif-cn text-[12px] leading-relaxed text-text-primary outline-none focus:border-primary-500/40"
                       />
                       {descChanged ? (
                         <button
                           type="button"
                           disabled={isSavingThis || !canEdit}
                           onClick={() => handleSaveDescription(p.id)}
-                          className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+                          className="mt-1 rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/20 disabled:opacity-40"
                         >
                           {isSavingThis ? t('panelEditMore.saving') : t('panelEditMore.saveDesc')}
                         </button>
@@ -2538,14 +2538,14 @@ export function GroupCard({
                           }
                           rows={1}
                           placeholder={t('panelEditMore.dialoguePlaceholder')}
-                          className="w-full resize-none rounded-sm border border-amber-500/15 bg-amber-500/5 p-1.5 font-serif-cn text-[11px] leading-relaxed italic text-amber-300/80 outline-none focus:border-amber-500/40"
+                          className="w-full resize-none rounded-sm border border-primary-500/15 bg-primary-500/5 p-1.5 font-serif-cn text-[11px] leading-relaxed italic text-primary-300/80 outline-none focus:border-primary-500/40"
                         />
                         {dialChanged ? (
                           <button
                             type="button"
                             disabled={isSavingThis || !canEdit}
                             onClick={() => handleSaveDialogue(p.id)}
-                            className="mt-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:opacity-40"
+                            className="mt-1 rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/20 disabled:opacity-40"
                           >
                             {isSavingThis ? t('panelEditMore.saving') : t('panelEditMore.saveDialogue')}
                           </button>

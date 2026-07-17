@@ -66,6 +66,7 @@
   --color-canvas: var(--surface-canvas);
   --color-raised: var(--surface-raised);
   --color-overlay: var(--surface-overlay);
+  --color-inset: var(--surface-inset);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-tertiary: var(--text-tertiary);
@@ -209,6 +210,82 @@ body {
   border: 1px solid var(--border-soft);
   border-radius: var(--r-card);
   background: var(--surface-raised);
+}
+
+.kuiper-surface-card {
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  background: var(--surface-raised);
+  transition:
+    border-color var(--d-state) var(--ease-out),
+    transform var(--d-state) var(--ease-out),
+    background-color var(--d-state) var(--ease-out);
+}
+
+.kuiper-surface-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.kuiper-modal-backdrop {
+  background: rgba(5, 5, 6, 0.84);
+  backdrop-filter: blur(12px);
+}
+
+.kuiper-modal-surface {
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-modal);
+  background: var(--surface-raised);
+  box-shadow: var(--elev-3);
+}
+
+.kuiper-input {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-input);
+  background: var(--surface-inset);
+  color: var(--text-primary);
+  transition: border-color var(--d-state) var(--ease-out);
+}
+
+.kuiper-input:focus {
+  border-color: var(--border-primary);
+  box-shadow: 0 0 0 3px rgba(255, 46, 175, 0.08);
+  outline: none;
+}
+
+.kuiper-secondary-button {
+  min-height: 40px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-input);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  transition:
+    border-color var(--d-state) var(--ease-out),
+    color var(--d-state) var(--ease-out),
+    background-color var(--d-state) var(--ease-out);
+}
+
+.kuiper-secondary-button:hover:not(:disabled) {
+  border-color: var(--border-primary);
+  background: color-mix(in srgb, var(--primary-500) 8%, var(--surface-raised));
+  color: var(--text-primary);
+}
+
+.kuiper-segmented-control {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-input);
+  background: var(--surface-inset);
+}
+
+.kuiper-storyboard-shell {
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-canvas);
 }
 
 @media (max-width: 767px) {

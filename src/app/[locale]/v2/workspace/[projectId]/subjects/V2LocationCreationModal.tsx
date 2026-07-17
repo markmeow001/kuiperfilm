@@ -131,7 +131,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/85 px-4 py-8 backdrop-blur-sm"
+      className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
       role="dialog"
       aria-modal="true"
       onClick={(e) => {
@@ -139,24 +139,24 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
       }}
     >
       <form
-        className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col"
+        className="kuiper-modal-surface flex max-h-[90vh] w-full max-w-4xl flex-col"
         onSubmit={(event) => {
           event.preventDefault()
           handleSubmit()
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between border-b border-primary-900/20 px-6 py-4 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <AppIcon name="image" className="h-4 w-4 text-amber-400" />
-            <div className="font-fraunces text-lg italic text-stone-100">新場景</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-600/80">MANUAL · CREATE</div>
+            <AppIcon name="image" className="h-4 w-4 text-primary-400" />
+            <div className="font-fraunces text-lg italic text-text-primary">新場景</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary-600/80">MANUAL · CREATE</div>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-900 hover:text-amber-400 disabled:opacity-50"
+            className="rounded p-1 text-text-tertiary transition-colors hover:bg-raised hover:text-primary-400 disabled:opacity-50"
             aria-label="關閉"
           >
             <AppIcon name="close" className="h-4 w-4" />
@@ -177,7 +177,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
             />
 
             {/* Image preview / drop area */}
-            <div className="aspect-video w-full overflow-hidden rounded-sm border border-dashed border-stone-700 bg-stone-900/60">
+            <div className="aspect-video w-full overflow-hidden rounded-sm border border-dashed border-border-strong bg-raised/60">
               {previewUrl ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img src={previewUrl} alt="預覽" className="h-full w-full object-contain" />
@@ -186,10 +186,10 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={isSubmitting}
-                  className="flex h-full w-full flex-col items-center justify-center gap-2 transition-colors hover:bg-amber-500/5"
+                  className="flex h-full w-full flex-col items-center justify-center gap-2 transition-colors hover:bg-primary-500/5"
                 >
-                  <AppIcon name="upload" className="h-8 w-8 text-stone-500" />
-                  <div className="font-serif-cn text-sm text-stone-400">點擊上傳</div>
+                  <AppIcon name="upload" className="h-8 w-8 text-text-tertiary" />
+                  <div className="font-serif-cn text-sm text-text-secondary">點擊上傳</div>
                 </button>
               )}
             </div>
@@ -205,8 +205,8 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
                 disabled={isSubmitting}
                 className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
                   createMode === 'upload'
-                    ? 'border-amber-500/60 bg-amber-500/10 text-amber-300'
-                    : 'border-stone-700 bg-stone-900/40 text-stone-300 hover:border-amber-500/40'
+                    ? 'border-primary-500/60 bg-primary-500/10 text-primary-300'
+                    : 'border-border-strong bg-raised/40 text-text-secondary hover:border-primary-500/40'
                 }`}
               >
                 <AppIcon name="upload" className="h-4 w-4" />
@@ -218,8 +218,8 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
                 disabled={isSubmitting}
                 className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
                   createMode === 'description'
-                    ? 'border-amber-500/60 bg-amber-500/10 text-amber-300'
-                    : 'border-stone-700 bg-stone-900/40 text-stone-300 hover:border-amber-500/40'
+                    ? 'border-primary-500/60 bg-primary-500/10 text-primary-300'
+                    : 'border-border-strong bg-raised/40 text-text-secondary hover:border-primary-500/40'
                 }`}
               >
                 <AppIcon name="sparklesAlt" className="h-4 w-4" />
@@ -230,12 +230,12 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
             {/* Description with counter */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <label className="font-mono text-[11px] uppercase tracking-wider text-stone-400">
+                <label className="font-mono text-[11px] uppercase tracking-wider text-text-secondary">
                   {createMode === 'upload'
                     ? '場景說明（可選 · 不會啟動 AI）'
                     : '描述（可選 · 填寫後由 AI 生圖）'}
                 </label>
-                <span className="font-mono text-[10px] tracking-wider text-stone-600">
+                <span className="font-mono text-[10px] tracking-wider text-text-tertiary">
                   {description.length}/{DESC_MAX}
                 </span>
               </div>
@@ -246,7 +246,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
                 disabled={isSubmitting}
                 rows={6}
                 placeholder="詳細描述場景的視覺細節（牆面、家具、光線、氣氛...）"
-                className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+                className="w-full resize-none rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
               />
               {descTooShort ? (
                 <div className="mt-1.5 flex items-center gap-1.5 rounded-sm border border-rose-500/30 bg-rose-500/5 px-3 py-1.5 font-mono text-[11px] tracking-wider text-rose-300">
@@ -265,7 +265,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
                 onChange={(e) => setName(e.target.value)}
                 disabled={isSubmitting}
                 placeholder="例:雨夜停車場"
-                className="w-full rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
               />
             </Field>
 
@@ -372,16 +372,16 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
                 onChange={(e) => setTagsInput(e.target.value)}
                 disabled={isSubmitting}
                 placeholder="用逗號分隔,如:溫馨, 家庭, 工業風"
-                className="w-full rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+                className="w-full rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
               />
             </Field>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="border-t border-amber-900/20 bg-stone-900/30 px-6 py-4 flex-shrink-0">
+        <div className="border-t border-primary-900/20 bg-raised/30 px-6 py-4 flex-shrink-0">
           {createPolicy.hint ? (
-            <div className="mb-3 font-mono text-[11px] tracking-wider text-amber-300/80" role="status">
+            <div className="mb-3 font-mono text-[11px] tracking-wider text-primary-300/80" role="status">
               {createPolicy.hint}
             </div>
           ) : null}
@@ -390,14 +390,14 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
               type="button"
               onClick={onClose}
               disabled={isSubmitting}
-              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
+              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={!createPolicy.canSubmit}
-              className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
@@ -425,7 +425,7 @@ export function V2LocationCreationModal({ onClose, onSubmit, isSubmitting }: V2L
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400">{label}</div>
+      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-text-secondary">{label}</div>
       {children}
     </label>
   )
@@ -433,7 +433,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="border-b border-stone-800/60 pb-1.5 font-fraunces text-xs italic text-amber-500/80">{children}</div>
+    <div className="border-b border-border-soft/60 pb-1.5 font-fraunces text-xs italic text-primary-500/80">{children}</div>
   )
 }
 
@@ -460,7 +460,7 @@ function Select({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="w-full appearance-none rounded-sm border border-stone-800 bg-stone-900/60 bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2210%22%20height%3D%226%22%20viewBox%3D%220%200%2010%206%22%3E%3Cpath%20fill%3D%22%23737373%22%20d%3D%22M0%200l5%206%205-6z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:10px_6px] bg-[right_0.75rem_center] bg-no-repeat px-3 py-2 pr-8 font-serif-cn text-sm text-stone-100 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+      className="w-full appearance-none rounded-sm border border-border-soft bg-raised/60 bg-[url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2210%22%20height%3D%226%22%20viewBox%3D%220%200%2010%206%22%3E%3Cpath%20fill%3D%22%23737373%22%20d%3D%22M0%200l5%206%205-6z%22%2F%3E%3C%2Fsvg%3E')] bg-[length:10px_6px] bg-[right_0.75rem_center] bg-no-repeat px-3 py-2 pr-8 font-serif-cn text-sm text-text-primary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
     >
       <option value="">{placeholder}</option>
       {options.map((o) => (

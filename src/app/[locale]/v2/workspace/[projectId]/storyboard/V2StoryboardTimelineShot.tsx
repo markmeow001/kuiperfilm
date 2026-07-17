@@ -90,14 +90,14 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
   } = props
 
   return (
-    <div className="col-span-3 order-1">
+    <div className="order-1 col-span-1 xl:col-span-3">
       <div className="mb-3 flex items-center justify-between">
-        <div className="font-fraunces text-sm italic text-amber-500/80">Selected Shot</div>
+        <div className="font-fraunces text-sm italic text-primary-500/80">Selected Shot</div>
         <button
           type="button"
           onClick={() => onSubmitMultiShot()}
           disabled={multiShotState.status === 'submitting' || !canMultiShot}
-          className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-500 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-primary-500 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           title={(() => {
             const m = project?.novelPromotionData?.videoModel ?? ''
             if (!canMultiShot) {
@@ -134,7 +134,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
           (c) 只有 image 或都沒有 → 不顯示，下方既有的「生成圖片 /
               ↻ 重新生成圖」按鈕負責 */}
       {selected?.imageUrl && selected?.videoUrl ? (
-        <div className="mb-3 inline-flex rounded-sm border border-stone-800/60 bg-stone-900/40 font-mono text-[12px]">
+        <div className="mb-3 inline-flex rounded-sm border border-border-soft/60 bg-raised/40 font-mono text-[12px]">
           <button
             type="button"
             onClick={() =>
@@ -142,8 +142,8 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
             }
             className={`flex items-center gap-1.5 px-3 py-1.5 transition-all ${
               selectedMediaDisplayMode === 'image'
-                ? 'bg-amber-500/20 text-amber-300'
-                : 'text-stone-500 hover:text-stone-300'
+                ? 'bg-primary-500/20 text-primary-300'
+                : 'text-text-tertiary hover:text-text-secondary'
             }`}
             title={t('toggle.showImage')}
           >
@@ -155,10 +155,10 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
             onClick={() =>
               setMediaDisplayOverride((prev) => ({ ...prev, [selected.id]: 'video' }))
             }
-            className={`flex items-center gap-1.5 border-l border-stone-800/60 px-3 py-1.5 transition-all ${
+            className={`flex items-center gap-1.5 border-l border-border-soft/60 px-3 py-1.5 transition-all ${
               selectedMediaDisplayMode === 'video'
-                ? 'bg-amber-500/20 text-amber-300'
-                : 'text-stone-500 hover:text-stone-300'
+                ? 'bg-primary-500/20 text-primary-300'
+                : 'text-text-tertiary hover:text-text-secondary'
             }`}
             title={t('toggle.showVideo')}
           >
@@ -187,7 +187,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
               },
             )
           }}
-          className="mb-3 inline-flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mb-3 inline-flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           title={t('bpath.missingImageHint')}
         >
           <AppIcon name="image" className="h-3 w-3" />
@@ -220,12 +220,12 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
         original-resolution asset for detailed inspection.
       */}
       <div
-        className={`overflow-hidden rounded-sm border border-stone-800/60 bg-stone-900/30 mx-auto ${
+        className={`overflow-hidden rounded-sm border border-border-soft/60 bg-raised/30 mx-auto ${
           isPortraitRatio ? 'max-w-[260px]' : 'max-w-[480px]'
         }`}
       >
         <div
-          className="relative bg-gradient-to-br from-stone-800 to-stone-900"
+          className="relative bg-gradient-to-br from-overlay to-raised"
           style={{ aspectRatio: projectVideoRatio.replace(':', '/') }}
         >
           {selectedMediaDisplayMode === 'video' && selected?.videoUrl ? (
@@ -253,22 +253,22 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
-              <AppIcon name="image" className="h-8 w-8 text-stone-600" />
+              <AppIcon name="image" className="h-8 w-8 text-text-tertiary" />
             </div>
           )}
           {isCurrentPanelVideoInFlight || isCurrentPanelImageInFlight ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-stone-950/75 backdrop-blur-sm">
-              <AppIcon name="sparklesAlt" className="h-8 w-8 animate-pulse text-amber-400" />
-              <div className="font-fraunces text-base italic text-amber-300">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-canvas/75 backdrop-blur-sm">
+              <AppIcon name="sparklesAlt" className="h-8 w-8 animate-pulse text-primary-400" />
+              <div className="font-fraunces text-base italic text-primary-300">
                 {isCurrentPanelVideoInFlight ? t('selectedShot.videoGeneratingFull') : t('selectedShot.imageGeneratingFull')}
               </div>
-              <div className="px-6 text-center font-serif-cn text-xs text-stone-300">
+              <div className="px-6 text-center font-serif-cn text-xs text-text-secondary">
                 {isCurrentPanelVideoInFlight
                   ? t('selectedShot.klingUpdateHint')
                   : t('selectedShot.tencentUpdateHint')}
               </div>
-              <div className="mt-1 h-0.5 w-48 overflow-hidden rounded-full bg-stone-800/60">
-                <div className="h-full w-1/3 animate-[progressSlide_2s_linear_infinite] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
+              <div className="mt-1 h-0.5 w-48 overflow-hidden rounded-full bg-overlay/60">
+                <div className="h-full w-1/3 animate-[progressSlide_2s_linear_infinite] bg-gradient-to-r from-transparent via-primary-400 to-transparent" />
               </div>
             </div>
           ) : (() => {
@@ -306,25 +306,25 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
             )
           })()}
         </div>
-        <div className="bg-stone-900/60 px-4 py-3">
-          <div className="font-serif-cn text-stone-100">
+        <div className="bg-raised/60 px-4 py-3">
+          <div className="font-serif-cn text-text-primary">
             {t('selectedShot.shotLabel', { n: String(selectedIndex + 1).padStart(2, '0') })}
           </div>
           {selected?.videoUrl ? (
-            <div className="mt-1 font-mono text-[14px] tracking-wider text-amber-500">
+            <div className="mt-1 font-mono text-[14px] tracking-wider text-primary-500">
               {t('selectedShot.videoReady')}
             </div>
           ) : isCurrentPanelVideoInFlight ? (
-            <div className="mt-1 flex items-center gap-1.5 font-mono text-[14px] tracking-wider text-amber-400">
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+            <div className="mt-1 flex items-center gap-1.5 font-mono text-[14px] tracking-wider text-primary-400">
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary-400" />
               {t('selectedShot.videoGenerating')}
             </div>
           ) : selected?.imageUrl ? (
-            <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">
+            <div className="mt-1 font-mono text-[14px] tracking-wider text-text-tertiary">
               {t('selectedShot.imageReadyVideoPending')}
             </div>
           ) : (
-            <div className="mt-1 font-mono text-[14px] tracking-wider text-stone-500">{t('selectedShot.notGenerated')}</div>
+            <div className="mt-1 font-mono text-[14px] tracking-wider text-text-tertiary">{t('selectedShot.notGenerated')}</div>
           )}
         </div>
       </div>
@@ -352,7 +352,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
               },
             )
           }}
-          className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 bg-stone-900/50 py-2.5 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-border-soft bg-raised/50 py-2.5 font-serif-cn text-sm text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <AppIcon name="image" className="h-3.5 w-3.5" />
           {regenPanel.isPending
@@ -372,7 +372,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
                 ? t('genBlocked.videoStillGenerating')
                 : t('multiShot.tipKlingPerGroup')
           }
-          className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 py-2.5 font-serif-cn text-sm text-amber-400 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 py-2.5 font-serif-cn text-sm text-primary-400 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <AppIcon name="play" className="h-3.5 w-3.5" />
           {generateVideo.isPending
@@ -391,7 +391,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
           Smaller, secondary visual weight so it doesn't compete with
           the project-default "生成視頻" CTA above. Disabled state
           tracks the same prerequisites (need image, no inflight). */}
-      <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-stone-500">
+      <div className="mt-2 flex items-center gap-2 text-[11px] font-mono text-text-tertiary">
         <span className="shrink-0">{t('gallery.fal.label')}</span>
         <button
           type="button"
@@ -402,7 +402,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
               ? t('genBlocked.needImageFirst')
               : t('gallery.fal.seedanceTitle')
           }
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-border-strong bg-raised/40 px-2 py-1.5 font-serif-cn text-[12px] text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <AppIcon name="play" className="h-3 w-3" />
           {t('gallery.fal.seedance')} (1080p+audio)
@@ -416,7 +416,7 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
               ? t('genBlocked.needImageFirst')
               : t('gallery.fal.fastTitle')
           }
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-700 bg-stone-900/40 px-2 py-1.5 font-serif-cn text-[12px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-border-strong bg-raised/40 px-2 py-1.5 font-serif-cn text-[12px] text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <AppIcon name="play" className="h-3 w-3" />
           {t('gallery.fal.seedance')} {t('gallery.fal.fast')}
@@ -437,9 +437,9 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
             rel="noopener noreferrer"
             aria-disabled={!selected.imageUrl}
             onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-border-soft py-2 font-mono text-[14px] tracking-wider text-text-secondary transition-all ${
               selected.imageUrl
-                ? 'hover:border-amber-500/40 hover:text-amber-400'
+                ? 'hover:border-primary-500/40 hover:text-primary-400'
                 : 'cursor-not-allowed opacity-40'
             }`}
           >
@@ -453,9 +453,9 @@ export function V2StoryboardTimelineShot(props: V2StoryboardTimelineShotProps) {
             rel="noopener noreferrer"
             aria-disabled={!selected.videoUrl}
             onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-stone-800 py-2 font-mono text-[14px] tracking-wider text-stone-400 transition-all ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-sm border border-border-soft py-2 font-mono text-[14px] tracking-wider text-text-secondary transition-all ${
               selected.videoUrl
-                ? 'hover:border-amber-500/40 hover:text-amber-400'
+                ? 'hover:border-primary-500/40 hover:text-primary-400'
                 : 'cursor-not-allowed opacity-40'
             }`}
           >

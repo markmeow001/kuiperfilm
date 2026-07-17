@@ -22,12 +22,12 @@ export function StyleOverridePreview({ styleId }: { styleId: string }) {
       alt={style.nameZh}
       title={`${style.category} · ${style.nameZh}`}
       loading="lazy"
-      className="h-10 w-8 rounded-sm border border-stone-800 object-cover"
+      className="h-10 w-8 rounded-sm border border-border-soft object-cover"
     />
   ) : (
     <span
       title={`${style.category} · ${style.nameZh} ${t('style.thumbnailPending')}`}
-      className="flex h-10 w-8 items-center justify-center rounded-sm border border-stone-800 bg-stone-900/60 font-mono text-[14px] tracking-wider text-stone-600"
+      className="flex h-10 w-8 items-center justify-center rounded-sm border border-border-soft bg-raised/60 font-mono text-[14px] tracking-wider text-text-tertiary"
     >
       {style.category}
     </span>

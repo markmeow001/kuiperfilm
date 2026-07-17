@@ -33,26 +33,32 @@ export function SubjectGrid({
 }) {
   const t = useTranslations('v2Subjects.card')
   const aspectClass = aspect === 'wide' ? 'aspect-video' : 'aspect-[3/4]'
+  const gridClass = aspect === 'wide'
+    ? 'grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3'
+    : 'grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-6 rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
-        <p className="font-fraunces text-base italic text-stone-400">{emptyHint}</p>
+      <div className="kuiper-inspector flex min-h-72 flex-col items-center justify-center gap-6 p-8 text-center sm:p-12">
+        <div className="flex h-12 w-12 items-center justify-center rounded-card bg-overlay text-text-tertiary">
+          <AppIcon name="image" className="h-6 w-6" />
+        </div>
+        <p className="max-w-xl text-base text-text-secondary">{emptyHint}</p>
         {emptyAction}
       </div>
     )
   }
 
   return (
-    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+    <div className={gridClass}>
       {items.map((item, i) => {
         const showGenerateCta = !item.imageUrl && !item.isRegenerating && !item.isUploading && Boolean(item.onRegenerate)
         return (
         <div
           key={item.id}
-          className="group overflow-hidden rounded-sm border border-stone-800/50 bg-stone-900/30 transition-all hover:border-amber-500/40"
+          className="kuiper-surface-card group"
         >
           <div
-            className={`relative ${aspectClass} overflow-hidden bg-gradient-to-br from-stone-800 to-stone-900 ${
+            className={`relative ${aspectClass} overflow-hidden bg-gradient-to-br from-overlay to-raised ${
               item.imageUrl && item.onZoom ? 'cursor-zoom-in' : ''
             }`}
             onClick={() => {
@@ -68,28 +74,28 @@ export function SubjectGrid({
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
-                <AppIcon name="image" className="h-8 w-8 text-stone-600" />
+                <AppIcon name="image" className="h-8 w-8 text-text-tertiary" />
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-stone-950/95 via-stone-950/30 to-transparent" />
-            <div className="absolute left-3 top-3 rounded-sm bg-stone-950/40 px-2 py-1 font-mono text-[12px] tracking-[0.2em] text-stone-300/80 backdrop-blur-sm">
+            <div className="absolute inset-0 bg-gradient-to-t from-canvas/95 via-canvas/30 to-transparent" />
+            <div className="absolute left-3 top-3 rounded-chip border border-white/10 bg-canvas/55 px-2 py-1 font-mono text-xs tracking-[0.16em] text-text-secondary backdrop-blur-md">
               {String(i + 1).padStart(3, '0')}
             </div>
             <div className="absolute bottom-3 left-3 right-3">
-              <div className="font-fraunces text-[11px] italic text-amber-300/90">{item.caption}</div>
+              <div className="text-sm font-medium text-primary-300">{item.caption}</div>
             </div>
             {item.isRegenerating ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
-                <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                <div className="font-mono text-[14px] tracking-wider text-amber-300">{t('generating')}</div>
-                <div className="px-4 text-center font-serif-cn text-[14px] text-stone-400">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
+                <div className="font-mono text-[14px] tracking-wider text-primary-300">{t('generating')}</div>
+                <div className="px-4 text-center font-serif-cn text-[14px] text-text-secondary">
                   {t('generatingHint')}
                 </div>
               </div>
             ) : item.isUploading ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/70 backdrop-blur-sm">
-                <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-amber-400" />
-                <div className="font-mono text-[14px] tracking-wider text-amber-300">{t('uploading')}</div>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/70 backdrop-blur-sm">
+                <AppIcon name="cloudUpload" className="h-6 w-6 animate-pulse text-primary-400" />
+                <div className="font-mono text-[14px] tracking-wider text-primary-300">{t('uploading')}</div>
               </div>
             ) : showGenerateCta ? (
               <button
@@ -98,32 +104,32 @@ export function SubjectGrid({
                   e.stopPropagation()
                   item.onRegenerate?.()
                 }}
-                className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/40 backdrop-blur-[1px] transition-all hover:bg-amber-500/15"
+                className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/40 backdrop-blur-[1px] transition-all hover:bg-primary-500/15"
                 title={t('generateOneTitle')}
               >
-                <AppIcon name="sparklesAlt" className="h-7 w-7 text-amber-400/80" />
-                <div className="font-serif-cn text-base text-amber-300">{t('generateOne')}</div>
-                <div className="font-mono text-[11px] tracking-wider text-stone-400">{t('generateOneSub')}</div>
+                <AppIcon name="sparklesAlt" className="h-7 w-7 text-primary-400/80" />
+                <div className="font-serif-cn text-base text-primary-300">{t('generateOne')}</div>
+                <div className="font-mono text-[11px] tracking-wider text-text-secondary">{t('generateOneSub')}</div>
               </button>
             ) : null}
           </div>
-          <div className="px-4 py-3">
-            <div className="flex items-center justify-between gap-2">
+          <div className="px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
               <button
                 type="button"
                 onClick={item.onOpenEditor}
                 disabled={!item.onOpenEditor}
                 title={item.onOpenEditor ? t('editOpenTitle') : undefined}
-                className="truncate text-left font-serif-cn text-base text-stone-100 transition-colors enabled:hover:text-amber-300 disabled:cursor-default"
+                className="min-w-0 truncate text-left text-base font-semibold text-text-primary transition-colors enabled:hover:text-primary-300 disabled:cursor-default"
               >
                 {item.name}
               </button>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {item.onOpenEditor ? (
                   <button
                     type="button"
                     onClick={item.onOpenEditor}
-                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+                    className="flex flex-shrink-0 items-center gap-1 text-sm text-text-tertiary transition-colors hover:text-primary-400"
                     title={t('editButtonTitle')}
                   >
                     <AppIcon name="edit" className="h-3 w-3" />
@@ -134,7 +140,7 @@ export function SubjectGrid({
                   <button
                     type="button"
                     onClick={item.onEditDescription}
-                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400"
+                    className="flex flex-shrink-0 items-center gap-1 text-sm text-text-tertiary transition-colors hover:text-primary-400"
                     title={t('appearanceEditTitle')}
                   >
                     {t('appearanceEdit')}
@@ -145,7 +151,7 @@ export function SubjectGrid({
                     type="button"
                     onClick={item.onRedescribe}
                     disabled={item.isRedescribing}
-                    className="flex flex-shrink-0 items-center gap-1 font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex flex-shrink-0 items-center gap-1 text-sm text-text-tertiary transition-colors hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
                     title={t('redescribeTitle')}
                   >
                     {item.isRedescribing ? t('redescribing') : t('redescribe')}
@@ -154,21 +160,21 @@ export function SubjectGrid({
               </div>
             </div>
             {item.description ? (
-              <div className="mt-1 line-clamp-2 font-body text-xs leading-relaxed text-stone-400">
+              <div className="mt-2 line-clamp-2 text-sm leading-relaxed text-text-secondary">
                 {item.description}
               </div>
             ) : null}
             {item.isEditingDescription ? (
-              <div className="mt-3 space-y-2 rounded-sm border border-amber-500/30 bg-stone-950/40 p-2">
-                <div className="flex items-center justify-between font-mono text-[12px] tracking-wider text-amber-500/70">
+              <div className="mt-3 space-y-2 rounded-sm border border-primary-500/30 bg-canvas/40 p-2">
+                <div className="flex items-center justify-between font-mono text-[12px] tracking-wider text-primary-500/70">
                   <span>{t('appearancePrompt')}</span>
-                  <span className="text-stone-600">{t('wordCount', { count: item.descriptionDraft?.length ?? 0 })}</span>
+                  <span className="text-text-tertiary">{t('wordCount', { count: item.descriptionDraft?.length ?? 0 })}</span>
                 </div>
                 <textarea
                   value={item.descriptionDraft ?? ''}
                   onChange={(e) => item.onDescriptionDraftChange?.(e.target.value)}
                   rows={5}
-                  className="w-full resize-none rounded-sm border border-amber-500/40 bg-stone-900/80 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500"
+                  className="w-full resize-none rounded-sm border border-primary-500/40 bg-raised/80 p-2 font-body text-xs text-text-primary outline-none focus:border-primary-500"
                   placeholder={t('appearancePlaceholder')}
                   disabled={item.isSavingDescription}
                 />
@@ -177,7 +183,7 @@ export function SubjectGrid({
                     type="button"
                     onClick={item.onDescriptionCancel}
                     disabled={item.isSavingDescription}
-                    className="text-stone-500 transition-colors hover:text-stone-300 disabled:opacity-50"
+                    className="text-text-tertiary transition-colors hover:text-text-secondary disabled:opacity-50"
                   >
                     {t('cancel')}
                   </button>
@@ -185,34 +191,34 @@ export function SubjectGrid({
                     type="button"
                     onClick={item.onDescriptionSave}
                     disabled={item.isSavingDescription}
-                    className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1 text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {item.isSavingDescription ? t('saving') : t('savePrompt')}
                   </button>
                 </div>
               </div>
             ) : item.visualPrompt ? (
-              <div className="mt-2 rounded-sm border border-stone-800/40 bg-stone-950/30 p-2">
-                <div className="mb-1 font-mono text-[12px] tracking-wider text-stone-500">
+              <div className="mt-2 rounded-sm border border-border-soft/40 bg-canvas/30 p-2">
+                <div className="mb-1 font-mono text-[12px] tracking-wider text-text-tertiary">
                   {t('appearancePromptStatic')}
                 </div>
-                <div className="line-clamp-3 font-body text-[11px] leading-relaxed text-stone-400">
+                <div className="line-clamp-3 font-body text-[11px] leading-relaxed text-text-secondary">
                   {item.visualPrompt}
                 </div>
               </div>
             ) : item.onEditDescription ? (
-              <div className="mt-2 font-body text-[11px] italic text-stone-600">
+              <div className="mt-2 font-body text-[11px] italic text-text-tertiary">
                 {t('appearanceEmpty')}
               </div>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-3 border-t border-stone-800/50 px-4 pb-3 pt-2 font-mono text-[14px] tracking-wider">
+          <div className="flex min-h-12 flex-wrap items-center gap-3 border-t border-border-soft px-4 py-3 text-sm">
             {item.onRegenerate ? (
               <button
                 type="button"
                 disabled={item.isRegenerating}
                 onClick={item.onRegenerate}
-                className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1 text-text-secondary transition-all hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
                 title={item.imageUrl ? t('regenImageTitle') : t('genImageTitle')}
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
@@ -238,7 +244,7 @@ export function SubjectGrid({
                 download={`${item.name}.png`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400"
+                className="flex items-center gap-1 text-text-secondary transition-all hover:text-primary-400"
                 title={t('downloadTitle')}
               >
                 <AppIcon name="cloudUpload" className="h-3 w-3 rotate-180" />
@@ -271,7 +277,7 @@ export function SubjectGrid({
                 onClick={item.onLock}
                 title={item.isLocked ? t('lockedTitle') : t('lockTitle')}
                 className={`transition-all disabled:cursor-not-allowed ${
-                  item.isLocked ? 'text-amber-400' : 'text-stone-400 hover:text-amber-400'
+                  item.isLocked ? 'text-primary-400' : 'text-text-secondary hover:text-primary-400'
                 } ${item.isLocking ? 'opacity-50' : ''}`}
               >
                 {item.isLocking ? t('locking') : item.isLocked ? t('locked') : t('lock')}
@@ -314,7 +320,7 @@ function UploadButton({
         type="button"
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
-        className="flex items-center gap-1 text-stone-300 transition-all hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex items-center gap-1 text-text-secondary transition-all hover:text-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
         title={t('uploadReplaceTitle')}
       >
         <AppIcon name="cloudUpload" className="h-3 w-3" />

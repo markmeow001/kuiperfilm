@@ -55,17 +55,17 @@ export function V2StoryboardTimelineText(props: V2StoryboardTimelineTextProps) {
   } = props
 
   return (
-    <div className="col-span-5 space-y-5 order-2">
+    <div className="order-2 col-span-1 space-y-5 xl:col-span-5">
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="font-mono text-[14px] tracking-wider text-amber-600">
+          <div className="font-mono text-[14px] tracking-wider text-primary-600">
             {t('timeline.shotDescTitle', { n: String(selectedIndex + 1).padStart(2, '0') })}
           </div>
           <button
             type="button"
             onClick={onSaveDescription}
             disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
-            className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
           </button>
@@ -75,20 +75,20 @@ export function V2StoryboardTimelineText(props: V2StoryboardTimelineTextProps) {
           onChange={(e) => setDescDraft(e.target.value)}
           rows={5}
           placeholder={t('timeline.descPlaceholder')}
-          className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
+          className="w-full rounded-sm border border-primary-900/20 bg-raised/40 p-3 font-serif-cn text-sm leading-relaxed text-text-secondary outline-none focus:border-primary-500/40"
         />
       </div>
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="font-mono text-[14px] tracking-wider text-amber-600">
+          <div className="font-mono text-[14px] tracking-wider text-primary-600">
             {t('timeline.shotDialogueTitle', { n: String(selectedIndex + 1).padStart(2, '0') })}
           </div>
           <button
             type="button"
             onClick={onSaveDialogue}
             disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
-            className="rounded-sm border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-sm border border-primary-500/40 bg-primary-500/10 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 transition-colors hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
           </button>
@@ -98,7 +98,7 @@ export function V2StoryboardTimelineText(props: V2StoryboardTimelineTextProps) {
           onChange={(e) => setDialogueDraft(e.target.value)}
           rows={3}
           placeholder={t('timeline.dialoguePlaceholder')}
-          className="w-full rounded-sm border border-amber-900/20 bg-stone-900/40 p-3 font-serif-cn text-sm leading-relaxed text-stone-300 outline-none focus:border-amber-500/40"
+          className="w-full rounded-sm border border-primary-900/20 bg-raised/40 p-3 font-serif-cn text-sm leading-relaxed text-text-secondary outline-none focus:border-primary-500/40"
         />
       </div>
 
@@ -149,7 +149,7 @@ export function V2StoryboardTimelineText(props: V2StoryboardTimelineTextProps) {
         }}
       />
       {updatePanel.isPending ? (
-        <div className="font-mono text-[12px] tracking-wider text-stone-500">{t('chips.saving')}</div>
+        <div className="font-mono text-[12px] tracking-wider text-text-tertiary">{t('chips.saving')}</div>
       ) : updatePanel.isError ? (
         <div className="rounded-sm border border-rose-500/30 bg-rose-500/10 px-2 py-1 font-mono text-[12px] tracking-wider text-rose-300">
           {t('chips.saveFailedWith', { reason: (updatePanel.error as Error)?.message ?? t('chips.saveFailedUnknown') })}

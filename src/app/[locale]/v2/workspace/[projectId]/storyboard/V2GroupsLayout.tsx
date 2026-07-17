@@ -152,7 +152,7 @@ export type GroupRegenSubmitResult = {
 }
 
 const GROUP_ACCENTS = [
-  'border-l-amber-500',
+  'border-l-primary-500',
   'border-l-rose-500',
   'border-l-emerald-500',
   'border-l-sky-500',
@@ -274,27 +274,27 @@ export function V2GroupsLayout({
   const hasNoGroups = groups.ordered.length === 0
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-amber-900/15 px-8 pb-3 pt-5">
+    <div className="kuiper-storyboard-shell flex flex-col">
+      <div className="border-b border-border-soft px-[var(--workspace-gutter)] pb-4 pt-5">
         {toolbarNode}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-[var(--workspace-gutter)] py-6">
         {durationShortfall ? (
-          <div className="mb-4 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-            <p className="font-fraunces text-sm text-amber-300">
+          <div className="mb-4 rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-3">
+            <p className="font-fraunces text-sm text-primary-300">
               ⚠ 總時長 {Math.round(durationShortfall.cumulativeSec)}s / 目標{' '}
               {Math.round(durationShortfall.targetSec)}s（
               {Math.round(durationShortfall.ratio * 100)}%）— 多鏡頭合成出來會比劇本短。
             </p>
-            <p className="mt-1 text-xs text-amber-200/80">
+            <p className="mt-1 text-xs text-primary-200/80">
               修法選一：(a) 點「重新分析」讓分鏡 LLM 給出更多 panel；(b) 手動拉開每組「時長」下拉到 15s；(c) 把專案目標時長改短。
             </p>
           </div>
         ) : null}
         {hasNoGroups ? (
-          <div className="rounded-sm border border-amber-500/20 bg-amber-500/5 px-6 py-8 text-center">
-            <p className="font-fraunces text-base italic text-amber-400">
+          <div className="rounded-sm border border-primary-500/20 bg-primary-500/5 px-6 py-8 text-center">
+            <p className="font-fraunces text-base italic text-primary-400">
               還沒有切組 — 先點上方「自動切組」讓 LLM 把分鏡分成多鏡頭群,然後就能一次出影片
             </p>
             {emptyHint ? <div className="mt-4">{emptyHint}</div> : null}
@@ -346,14 +346,14 @@ export function V2GroupsLayout({
             })}
 
             {groups.ungrouped.length > 0 ? (
-              <div className="rounded-sm border border-stone-800/60 bg-stone-900/20 px-4 py-3">
+              <div className="rounded-sm border border-border-soft/60 bg-raised/20 px-4 py-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <AppIcon name="sparklesAlt" className="h-3 w-3 text-stone-500" />
-                  <div className="font-mono text-[12px] uppercase tracking-wider text-stone-500">
+                  <AppIcon name="sparklesAlt" className="h-3 w-3 text-text-tertiary" />
+                  <div className="font-mono text-[12px] uppercase tracking-wider text-text-tertiary">
                     未切組 · {groups.ungrouped.length} 鏡
                   </div>
                 </div>
-                <p className="font-serif-cn text-[11px] italic text-stone-500">
+                <p className="font-serif-cn text-[11px] italic text-text-tertiary">
                   這些分鏡尚未指派到 multi-shot group。再跑一次「自動切組」可以把它們納入。
                 </p>
               </div>

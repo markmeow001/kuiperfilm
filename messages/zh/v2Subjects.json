@@ -1,5 +1,7 @@
 {
   "viewerHint": "你是 viewer · 唯读模式 · 编辑按钮需要请求权限",
+  "pageTitle": "剧本拆解",
+  "pageSubtitle": "整理本集的角色、场景与关键道具",
   "loading": "载入中…",
   "tabs": {
     "character": "角色",

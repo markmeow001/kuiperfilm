@@ -153,7 +153,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/85 px-4 py-8 backdrop-blur-sm"
+      className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
       role="dialog"
       aria-modal="true"
       onClick={(e) => {
@@ -161,20 +161,20 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
       }}
     >
       <form
-        className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-sm border border-amber-900/30 bg-stone-950 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col"
+        className="kuiper-modal-surface flex max-h-[90vh] w-full max-w-2xl flex-col"
         onSubmit={(event) => {
           event.preventDefault()
           void dispatchSubmit()
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-amber-900/20 px-6 py-4 flex-shrink-0">
+        <div className="flex items-center justify-between border-b border-primary-900/20 px-6 py-4 flex-shrink-0">
           <div>
             <div className="flex items-center gap-2.5">
-              <AppIcon name="sparklesAlt" className="h-4 w-4 text-amber-400" />
-              <div className="font-fraunces text-lg italic text-stone-100">新建角色</div>
+              <AppIcon name="sparklesAlt" className="h-4 w-4 text-primary-400" />
+              <div className="font-fraunces text-lg italic text-text-primary">新建角色</div>
             </div>
-            <div className="mt-1 font-mono text-[10px] tracking-wider text-stone-500">
+            <div className="mt-1 font-mono text-[10px] tracking-wider text-text-tertiary">
               選擇創建方式:AI 提示詞生成、上傳參考圖生成、或直接上傳四視圖
             </div>
           </div>
@@ -182,7 +182,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
             type="button"
             onClick={onClose}
             disabled={isSubmitting || isAiDesigning}
-            className="rounded p-1 text-stone-500 transition-colors hover:bg-stone-900 hover:text-amber-400 disabled:opacity-50"
+            className="rounded p-1 text-text-tertiary transition-colors hover:bg-raised hover:text-primary-400 disabled:opacity-50"
             aria-label="關閉"
           >
             <AppIcon name="close" className="h-4 w-4" />
@@ -190,7 +190,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
         </div>
 
         {/* Mode tabs */}
-        <div className="grid grid-cols-3 gap-2 border-b border-amber-900/20 px-6 py-4 flex-shrink-0">
+        <div className="grid grid-cols-3 gap-2 border-b border-primary-900/20 px-6 py-4 flex-shrink-0">
           {(['description', 'reference', 'upload'] as CharacterCreateMode[]).map((m) => {
             const meta = TAB_LABELS[m]
             const active = createMode === m
@@ -202,8 +202,8 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                 disabled={isSubmitting || isAiDesigning}
                 className={`flex items-center justify-center gap-2 rounded-sm border px-4 py-2.5 font-serif-cn text-sm transition-all disabled:opacity-50 ${
                   active
-                    ? 'border-amber-500/60 bg-amber-500/10 text-amber-300'
-                    : 'border-stone-800 bg-stone-900/40 text-stone-400 hover:border-stone-700 hover:text-stone-200'
+                    ? 'border-primary-500/60 bg-primary-500/10 text-primary-300'
+                    : 'border-border-soft bg-raised/40 text-text-secondary hover:border-border-strong hover:text-text-primary'
                 }`}
               >
                 <AppIcon name={meta.icon} className="h-4 w-4" />
@@ -224,7 +224,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
               disabled={isSubmitting}
               autoFocus
               placeholder="輸入角色名稱"
-              className="w-full rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+              className="w-full rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
             />
           </Field>
 
@@ -252,14 +252,14 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
               <div
                 onDrop={handleDrop}
                 onDragOver={(e) => e.preventDefault()}
-                className="rounded-sm border border-dashed border-stone-700 bg-stone-900/30 p-4"
+                className="rounded-sm border border-dashed border-border-strong bg-raised/30 p-4"
               >
                 {referenceImagesBase64.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
                     {referenceImagesBase64.map((b64, i) => (
                       <div
                         key={i}
-                        className="relative aspect-square overflow-hidden rounded-sm border border-amber-900/30"
+                        className="relative aspect-square overflow-hidden rounded-sm border border-primary-900/30"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={b64} alt={`參考 ${i + 1}`} className="h-full w-full object-cover" />
@@ -267,7 +267,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                           type="button"
                           onClick={() => setReferenceImagesBase64((prev) => prev.filter((_, j) => j !== i))}
                           disabled={isSubmitting}
-                          className="absolute right-1 top-1 rounded-full bg-stone-950/80 p-1 text-stone-300 transition-colors hover:text-rose-400 disabled:opacity-50"
+                          className="absolute right-1 top-1 rounded-full bg-canvas/80 p-1 text-text-secondary transition-colors hover:text-rose-400 disabled:opacity-50"
                           aria-label="移除"
                         >
                           <AppIcon name="close" className="h-3 w-3" />
@@ -280,7 +280,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                         type="button"
                         onClick={() => fileRef.current?.click()}
                         disabled={isSubmitting}
-                        className="aspect-square rounded-sm border border-dashed border-stone-700 text-stone-500 transition-colors hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
+                        className="aspect-square rounded-sm border border-dashed border-border-strong text-text-tertiary transition-colors hover:border-primary-500/40 hover:text-primary-400 disabled:opacity-50"
                       >
                         <AppIcon name="plus" className="mx-auto h-5 w-5" />
                       </button>
@@ -291,7 +291,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                     type="button"
                     onClick={() => fileRef.current?.click()}
                     disabled={isSubmitting}
-                    className="flex w-full flex-col items-center justify-center gap-2 py-8 text-stone-500 transition-colors hover:text-amber-400 disabled:opacity-50"
+                    className="flex w-full flex-col items-center justify-center gap-2 py-8 text-text-tertiary transition-colors hover:text-primary-400 disabled:opacity-50"
                   >
                     <AppIcon name="upload" className="h-6 w-6" />
                     <div className="font-serif-cn text-sm">點擊或拖放圖片</div>
@@ -307,7 +307,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                   type="button"
                   onClick={() => void handleExtractDescription()}
                   disabled={isExtracting || isSubmitting}
-                  className="mt-2 flex items-center gap-2 rounded-sm border border-amber-500/30 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-amber-400 transition-colors hover:bg-amber-500/10 disabled:opacity-50"
+                  className="mt-2 flex items-center gap-2 rounded-sm border border-primary-500/30 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-primary-400 transition-colors hover:bg-primary-500/10 disabled:opacity-50"
                 >
                   <AppIcon name="sparklesAlt" className="h-3 w-3" />
                   {isExtracting ? '識別中…' : 'AI 從參考圖識別描述'}
@@ -325,7 +325,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                 disabled={isSubmitting}
                 rows={4}
                 placeholder="詳細描述角色外觀,如:身高 175cm、黑色短髮、藍色眼睛、穿著白色襯衫和深色西褲…"
-                className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+                className="w-full resize-none rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
               />
               {createMode === 'description' ? (
                 <div className="mt-2 flex items-center gap-2">
@@ -335,13 +335,13 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
                     onChange={(e) => setAiInstruction(e.target.value)}
                     disabled={isSubmitting || isAiDesigning}
                     placeholder="AI 設計輔助:輸入簡短指令(例:三十歲精悍刑警)"
-                    className="flex-1 rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-1.5 font-mono text-[11px] tracking-wider text-stone-200 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+                    className="flex-1 rounded-sm border border-border-soft bg-raised/60 px-3 py-1.5 font-mono text-[11px] tracking-wider text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
                   />
                   <button
                     type="button"
                     onClick={() => void handleAiDesign()}
                     disabled={isAiDesigning || !aiInstruction.trim()}
-                    className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-amber-400 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-primary-400 transition-colors hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <AppIcon name="sparklesAlt" className="h-3 w-3" />
                     {isAiDesigning ? '生成中…' : 'AI 補全'}
@@ -359,15 +359,15 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
               disabled={isSubmitting}
               rows={3}
               placeholder="描述角色的個性、身份、與主角的關係…(可後續編輯)"
-              className="w-full resize-none rounded-sm border border-stone-800 bg-stone-900/60 px-3 py-2 font-serif-cn text-sm text-stone-100 placeholder:text-stone-600 focus:border-amber-500/50 focus:outline-none disabled:opacity-50"
+              className="w-full resize-none rounded-sm border border-border-soft bg-raised/60 px-3 py-2 font-serif-cn text-sm text-text-primary placeholder:text-text-tertiary focus:border-primary-500/50 focus:outline-none disabled:opacity-50"
             />
           </Field>
 
           {/* AI generation note */}
           {createMode !== 'upload' ? (
-            <div className="flex items-start gap-2 rounded-sm border border-amber-900/30 bg-amber-500/5 px-3 py-2">
-              <AppIcon name="sparklesAlt" className="mt-0.5 h-3 w-3 text-amber-400" />
-              <div className="font-mono text-[11px] tracking-wider text-amber-200/80">
+            <div className="flex items-start gap-2 rounded-sm border border-primary-900/30 bg-primary-500/5 px-3 py-2">
+              <AppIcon name="sparklesAlt" className="mt-0.5 h-3 w-3 text-primary-400" />
+              <div className="font-mono text-[11px] tracking-wider text-primary-200/80">
                 AI 將根據您的描述自動生成 16:9 橫排四視圖設定圖（面部特寫、正面、側面、背面）
               </div>
             </div>
@@ -375,9 +375,9 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
         </div>
 
         {/* Footer */}
-        <div className="border-t border-amber-900/20 bg-stone-900/30 px-6 py-4 flex-shrink-0">
+        <div className="border-t border-primary-900/20 bg-raised/30 px-6 py-4 flex-shrink-0">
           {createPolicy.hint ? (
-            <div className="mb-3 font-mono text-[11px] tracking-wider text-amber-300/80" role="status">
+            <div className="mb-3 font-mono text-[11px] tracking-wider text-primary-300/80" role="status">
               {createPolicy.hint}
             </div>
           ) : null}
@@ -386,7 +386,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
               type="button"
               onClick={onClose}
               disabled={isSubmitting || isAiDesigning}
-              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-stone-400 transition-colors hover:text-stone-200 disabled:opacity-50"
+              className="rounded-sm px-4 py-2 font-mono text-[12px] uppercase tracking-wider text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
             >
               取消
             </button>
@@ -394,7 +394,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
               type="button"
               onClick={() => void handleCreateOnly()}
               disabled={!createPolicy.canCreateOnly}
-              className="flex items-center gap-2 rounded-sm border border-amber-500/40 px-5 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-sm border border-primary-500/40 px-5 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:bg-primary-500/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="plus" className="h-4 w-4" />
               只建立角色
@@ -402,7 +402,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
             <button
               type="submit"
               disabled={!createPolicy.canGenerate}
-              className="flex items-center gap-2 rounded-sm bg-amber-500 px-5 py-2 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-sm bg-primary-500 px-5 py-2 font-serif-cn text-sm font-medium text-canvas transition-all hover:bg-primary-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? (
                 <>
@@ -426,7 +426,7 @@ export function V2CharacterCreationModal({ projectId, episodeId, onClose, onSucc
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-stone-400">{label}</div>
+      <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-text-secondary">{label}</div>
       {children}
     </label>
   )

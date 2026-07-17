@@ -111,19 +111,19 @@ function MultiShotProgressBar({ task }: { task: MultiShotTaskRecord }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between font-mono text-[11px] tracking-wider">
-        <span className="text-amber-400/90">{stage}</span>
-        <span className="text-stone-500">
+        <span className="text-primary-400/90">{stage}</span>
+        <span className="text-text-tertiary">
           {formatElapsed(elapsedMs)}
           {etaMs !== null && etaMs > 0 ? ` · 預計 ~${formatElapsed(etaMs)}` : ''}
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-800/80">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-overlay/80">
         <div
-          className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-700 ease-out"
+          className="h-full bg-gradient-to-r from-primary-500 to-primary-400 transition-all duration-700 ease-out"
           style={{ width: `${Math.max(progress, 2)}%` }}
         />
       </div>
-      <div className="flex items-center justify-between font-mono text-[10px] tracking-wider text-stone-500">
+      <div className="flex items-center justify-between font-mono text-[10px] tracking-wider text-text-tertiary">
         <span>進度 {progress}%</span>
         <span className="italic">不必停在此頁,完成後會自動刷新</span>
       </div>
@@ -244,27 +244,9 @@ function ClipPlayer({ url }: { url: string }) {
         onClick={handleFullscreenClick}
         title="全螢幕播放"
         aria-label="全螢幕播放"
-        className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-sm border border-stone-700/60 bg-stone-950/70 text-stone-300 backdrop-blur-sm transition-colors hover:border-amber-500/60 hover:bg-stone-900/90 hover:text-amber-400"
+        className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-sm border border-border-strong/60 bg-canvas/70 text-text-secondary backdrop-blur-sm transition-colors hover:border-primary-500/60 hover:bg-raised/90 hover:text-primary-400"
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          {/* Maximize corners (lucide-react Maximize2 shape inlined to
-              avoid adding a new icon to the registry for one use site). */}
-          <polyline points="15 3 21 3 21 9" />
-          <polyline points="9 21 3 21 3 15" />
-          <line x1="21" y1="3" x2="14" y2="10" />
-          <line x1="3" y1="21" x2="10" y2="14" />
-        </svg>
+        <AppIcon name="maximize" className="h-3 w-3" aria-hidden="true" />
       </button>
     </div>
   )
@@ -315,13 +297,13 @@ export function MultiShotBindingsRail({
   const hasContent = showCastBlock || scenes.length > 0
 
   return (
-    <div className="rounded-sm border border-amber-900/15 bg-stone-900/20 px-3 py-2.5">
+    <div className="rounded-sm border border-primary-900/15 bg-raised/20 px-3 py-2.5">
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-amber-500/70">
+        <div className="flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-primary-500/70">
           <AppIcon name="sparklesAlt" className="h-3 w-3" />
           多鏡頭綁定
           {groupLabel ? (
-            <span className="text-stone-500">· {groupLabel}</span>
+            <span className="text-text-tertiary">· {groupLabel}</span>
           ) : null}
         </div>
         <div className="font-mono text-[12px] tracking-wider">
@@ -330,11 +312,11 @@ export function MultiShotBindingsRail({
           ) : status === 'failed' ? (
             <span className="text-rose-400/80">失敗</span>
           ) : status === 'queued' || status === 'processing' ? (
-            <span className="animate-pulse text-amber-400/80">生成中</span>
+            <span className="animate-pulse text-primary-400/80">生成中</span>
           ) : isLoading ? (
-            <span className="text-stone-500">載入中</span>
+            <span className="text-text-tertiary">載入中</span>
           ) : (
-            <span className="text-stone-500">—</span>
+            <span className="text-text-tertiary">—</span>
           )}
         </div>
       </div>
@@ -342,7 +324,7 @@ export function MultiShotBindingsRail({
       {!isTerminal && !hasContent && clipUrls.length === 0 ? (
         <div className="space-y-2">
           {data ? <MultiShotProgressBar task={data} /> : null}
-          <div className="font-serif-cn text-[11px] italic text-stone-500">
+          <div className="font-serif-cn text-[11px] italic text-text-tertiary">
             完成後會顯示視頻播放器與綁定的角色造型 / 場景視角。
           </div>
         </div>
@@ -432,7 +414,7 @@ export function MultiShotBindingsRail({
                   R2V（參考圖生視頻）需要角色與場景的參考圖當身份依據，但本組的
                   角色 / 場景目前還沒有生成圖片。請先到「劇集設定」幫出場角色與
                   場景生成參考圖，再回來「重新生成」。
-                  <span className="text-stone-500"> （R2V 省掉的是每鏡分鏡圖，不是角色 / 場景參考圖。）</span>
+                  <span className="text-text-tertiary"> （R2V 省掉的是每鏡分鏡圖，不是角色 / 場景參考圖。）</span>
                 </div>
               </>
             ) : (
@@ -447,11 +429,11 @@ export function MultiShotBindingsRail({
           {clipUrls.map((url, i) => (
             <div
               key={url}
-              className="overflow-hidden rounded-sm border border-amber-900/20 bg-stone-950"
+              className="overflow-hidden rounded-sm border border-primary-900/20 bg-canvas"
             >
               <ClipPlayer url={url} />
-              <div className="flex items-center justify-between border-t border-amber-900/20 bg-stone-900/40 px-2 py-1">
-                <div className="font-mono text-[12px] tracking-wider text-amber-500/70">
+              <div className="flex items-center justify-between border-t border-primary-900/20 bg-raised/40 px-2 py-1">
+                <div className="font-mono text-[12px] tracking-wider text-primary-500/70">
                   {isChunked ? (
                     <>CLIP {i + 1}/{clipUrls.length}</>
                   ) : (
@@ -466,7 +448,7 @@ export function MultiShotBindingsRail({
                   download=""
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="font-mono text-[12px] tracking-wider text-stone-400 transition-colors hover:text-amber-400"
+                  className="font-mono text-[12px] tracking-wider text-text-secondary transition-colors hover:text-primary-400"
                 >
                   下載
                 </a>
@@ -474,7 +456,7 @@ export function MultiShotBindingsRail({
             </div>
           ))}
           {isChunked ? (
-            <div className="mt-1.5 rounded-sm border border-amber-500/20 bg-amber-500/5 px-2 py-1.5 font-mono text-[10px] leading-relaxed tracking-wider text-amber-300/80">
+            <div className="mt-1.5 rounded-sm border border-primary-500/20 bg-primary-500/5 px-2 py-1.5 font-mono text-[10px] leading-relaxed tracking-wider text-primary-300/80">
               對白超過 15s，已拆成 {clipUrls.length} 段。下載後可在剪映 / CapCut 順序拼接。
             </div>
           ) : null}
@@ -485,7 +467,7 @@ export function MultiShotBindingsRail({
         <div className="space-y-2">
           {showCastBlock ? (
             <div>
-              <div className="mb-1 font-mono text-[12px] uppercase tracking-wider text-stone-500">
+              <div className="mb-1 font-mono text-[12px] uppercase tracking-wider text-text-tertiary">
                 Cast · {characters.length}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -497,9 +479,9 @@ export function MultiShotBindingsRail({
                     'inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2'
                   const stateClass = hasOverride
                     ? 'border-violet-500/60 bg-violet-500/10'
-                    : 'border-amber-900/30 bg-stone-950/40'
+                    : 'border-primary-900/30 bg-canvas/40'
                   const interactive = onCharacterChipClick
-                    ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-amber-500/60 hover:bg-amber-500/10`
+                    ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-primary-500/60 hover:bg-primary-500/10`
                     : `${baseClass} ${stateClass}`
                   const title = hasOverride
                     ? `${c.name} — 下次重生會改用新造型(尚未送出)`
@@ -513,12 +495,12 @@ export function MultiShotBindingsRail({
                         className={interactive}
                         title={title}
                       >
-                        <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                        <div className="relative h-5 w-5 overflow-hidden rounded-full bg-overlay">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
                         </div>
-                        <span className="font-serif-cn text-[14px] text-stone-200">{c.name}</span>
-                        <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                        <span className="font-serif-cn text-[14px] text-text-primary">{c.name}</span>
+                        <span className="font-mono text-[12px] tracking-wider text-primary-500/70">
                           {c.appearanceLabel ?? '默認造型'}
                         </span>
                         {hasOverride ? (
@@ -531,12 +513,12 @@ export function MultiShotBindingsRail({
                   }
                   return (
                     <div key={c.id} className={interactive} title={title}>
-                      <div className="relative h-5 w-5 overflow-hidden rounded-full bg-stone-800">
+                      <div className="relative h-5 w-5 overflow-hidden rounded-full bg-overlay">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={c.imageUrl} alt={c.name} className="h-full w-full object-cover" />
                       </div>
-                      <span className="font-serif-cn text-[14px] text-stone-200">{c.name}</span>
-                      <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                      <span className="font-serif-cn text-[14px] text-text-primary">{c.name}</span>
+                      <span className="font-mono text-[12px] tracking-wider text-primary-500/70">
                         {c.appearanceLabel ?? '默認造型'}
                       </span>
                     </div>
@@ -548,7 +530,7 @@ export function MultiShotBindingsRail({
 
           {scenes.length > 0 ? (
             <div>
-              <div className="mb-1 font-mono text-[12px] uppercase tracking-wider text-stone-500">
+              <div className="mb-1 font-mono text-[12px] uppercase tracking-wider text-text-tertiary">
                 Scenes · {scenes.length}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -559,9 +541,9 @@ export function MultiShotBindingsRail({
                     'inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2'
                   const stateClass = hasOverride
                     ? 'border-violet-500/60 bg-violet-500/10'
-                    : 'border-amber-900/30 bg-stone-950/40'
+                    : 'border-primary-900/30 bg-canvas/40'
                   const interactive = onSceneChipClick
-                    ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-amber-500/60 hover:bg-amber-500/10`
+                    ? `${baseClass} ${stateClass} cursor-pointer transition-colors hover:border-primary-500/60 hover:bg-primary-500/10`
                     : `${baseClass} ${stateClass}`
                   const title = hasOverride
                     ? `${s.name} — 下次重生會改用新視角(尚未送出)`
@@ -575,12 +557,12 @@ export function MultiShotBindingsRail({
                         className={interactive}
                         title={title}
                       >
-                        <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
+                        <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-overlay">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={s.imageUrl} alt={s.name} className="h-full w-full object-cover" />
                         </div>
-                        <span className="font-serif-cn text-[14px] text-stone-200">{s.name}</span>
-                        <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                        <span className="font-serif-cn text-[14px] text-text-primary">{s.name}</span>
+                        <span className="font-mono text-[12px] tracking-wider text-primary-500/70">
                           {s.viewName ?? '主視角'}
                         </span>
                         {hasOverride ? (
@@ -593,12 +575,12 @@ export function MultiShotBindingsRail({
                   }
                   return (
                     <div key={s.id} className={interactive} title={title}>
-                      <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-stone-800">
+                      <div className="relative h-5 w-8 overflow-hidden rounded-sm bg-overlay">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={s.imageUrl} alt={s.name} className="h-full w-full object-cover" />
                       </div>
-                      <span className="font-serif-cn text-[14px] text-stone-200">{s.name}</span>
-                      <span className="font-mono text-[12px] tracking-wider text-amber-500/70">
+                      <span className="font-serif-cn text-[14px] text-text-primary">{s.name}</span>
+                      <span className="font-mono text-[12px] tracking-wider text-primary-500/70">
                         {s.viewName ?? '主視角'}
                       </span>
                     </div>

@@ -132,16 +132,16 @@ export function VideoModelPickerInline({
   const chipClass = (active: boolean) =>
     `px-2.5 py-1 font-serif-cn text-[12px] transition-colors ${
       active
-        ? 'bg-amber-500/15 text-amber-300'
-        : 'text-stone-400 hover:text-amber-400'
+        ? 'bg-primary-500/15 text-primary-300'
+        : 'text-text-secondary hover:text-primary-400'
     }`
 
   return (
-    <div className="flex flex-wrap items-center gap-2 font-mono text-[12px] tracking-wider text-stone-500">
+    <div className="flex flex-wrap items-center gap-2 font-mono text-[12px] tracking-wider text-text-tertiary">
       <span className="shrink-0">視頻模型:</span>
 
       {/* Family chips — segmented control style */}
-      <div className="inline-flex overflow-hidden rounded-sm border border-stone-800 bg-stone-900/40">
+      <div className="inline-flex overflow-hidden rounded-sm border border-border-soft bg-raised/40">
         <button
           type="button"
           onClick={() => setFamily('seedance')}
@@ -157,7 +157,7 @@ export function VideoModelPickerInline({
             type="button"
             onClick={() => setFamily('kling')}
             disabled={updateConfig.isPending}
-            className={`border-l border-stone-800 ${chipClass(currentFamily === 'kling')} ${
+            className={`border-l border-border-soft ${chipClass(currentFamily === 'kling')} ${
               updateConfig.isPending ? 'cursor-not-allowed opacity-50' : ''
             }`}
           >
@@ -173,7 +173,7 @@ export function VideoModelPickerInline({
         value={currentVariant?.id ?? ''}
         onChange={(event) => setVariant(event.target.value)}
         disabled={updateConfig.isPending}
-        className="max-w-[260px] truncate rounded-sm border border-stone-800 bg-stone-900/40 px-2 py-1 font-mono text-[12px] text-stone-300 transition-colors hover:border-amber-500/40 focus:border-amber-500/60 focus:outline-none disabled:opacity-50"
+        className="max-w-[260px] truncate rounded-sm border border-border-soft bg-raised/40 px-2 py-1 font-mono text-[12px] text-text-secondary transition-colors hover:border-primary-500/40 focus:border-primary-500/60 focus:outline-none disabled:opacity-50"
       >
         {currentVariant === null && (
           <option value="" disabled>
@@ -220,7 +220,7 @@ export function VideoModelPickerInline({
               }
             }}
             disabled={updateConfig.isPending}
-            className="rounded-sm border border-stone-800 bg-stone-900/40 px-1.5 py-0.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+            className="rounded-sm border border-border-soft bg-raised/40 px-1.5 py-0.5 font-mono text-[12px] text-text-primary outline-none focus:border-primary-500/40 disabled:opacity-50"
           >
             <option value="480p">480p · 草稿</option>
             <option value="720p">720p · 默認</option>
@@ -265,7 +265,7 @@ export function VideoModelPickerInline({
             </span>
           )}
           <span
-            className="rounded-sm border border-stone-700 bg-stone-900/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-stone-400"
+            className="rounded-sm border border-border-strong bg-raised/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-text-secondary"
             title={currentVariant.hint || ''}
           >
             ≤{currentVariant.capabilities.maxDurationSec}s · {currentVariant.capabilities.costTier}
@@ -292,7 +292,7 @@ export function VideoModelPickerInline({
             }
           }}
           disabled={updateConfig.isPending}
-          className="rounded-sm border border-stone-800 bg-stone-900/40 px-1.5 py-0.5 font-mono text-[12px] text-stone-200 outline-none focus:border-amber-500/40 disabled:opacity-50"
+          className="rounded-sm border border-border-soft bg-raised/40 px-1.5 py-0.5 font-mono text-[12px] text-text-primary outline-none focus:border-primary-500/40 disabled:opacity-50"
         >
           <option value={30}>30s</option>
           <option value={60}>1 分鐘</option>
@@ -311,7 +311,7 @@ export function VideoModelPickerInline({
           type="button"
           onClick={() => setVariant(VIDEO_MODEL_VARIANTS.find((v) => v.id === 'tencent-vod::Kling-3.0-Omni')?.id ?? VIDEO_MODEL_VARIANTS[0].id)}
           disabled={updateConfig.isPending}
-          className="rounded-sm border border-amber-500/40 bg-amber-500/5 px-2 py-0.5 text-[11px] text-amber-400 hover:bg-amber-500/10"
+          className="rounded-sm border border-primary-500/40 bg-primary-500/5 px-2 py-0.5 text-[11px] text-primary-400 hover:bg-primary-500/10"
         >
           目前模型不在清單中 · 點此切到推薦
         </button>

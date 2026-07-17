@@ -1079,12 +1079,12 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   const analyzeDisabled = analyze.isPending || isAnalyzing || !currentEpisodeId || !canEdit
 
   const compactAnalyzeButton = (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <button
         type="button"
         onClick={handleAnalyze}
         disabled={analyzeDisabled}
-        className="flex items-center gap-1.5 rounded-sm border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+        className="kuiper-primary-button flex min-h-10 items-center gap-1.5 rounded-input px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
       >
         <AppIcon name="sparklesAlt" className="h-3 w-3" />
         {analyzeLabel} {currentEpisode ? `· ${currentEpisode.name}` : ''}
@@ -1094,14 +1094,14 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         onClick={handleAnalyzeAllEpisodes}
         disabled={!canEdit || analyzeAll.isPending}
         title={t('analyzeAll.confirm')}
-        className="flex items-center gap-1.5 rounded-sm border border-violet-500/50 bg-violet-500/10 px-3 py-1.5 font-mono text-[12px] tracking-wider text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex min-h-10 items-center gap-1.5 rounded-input border border-accent-500/40 bg-accent-500/10 px-4 py-2 text-sm text-accent-400 transition-all hover:bg-accent-500/20 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <AppIcon name="sparklesAlt" className="h-3 w-3" />
         {analyzeAll.isPending ? t('analyzeAll.submitting') : t('analyzeAll.button')}
       </button>
       <Link
         href={`/${locale}/workspace/asset-hub`}
-        className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
+        className="px-2 text-sm text-text-secondary transition-colors hover:text-primary-300"
       >
         {t('header.importFromLibrary')}
       </Link>
@@ -1114,19 +1114,19 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         type="button"
         onClick={handleAnalyze}
         disabled={analyzeDisabled}
-        className="flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-3 font-serif-cn text-base font-medium text-stone-950 shadow-lg shadow-amber-500/20 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+        className="kuiper-primary-button flex min-h-11 items-center gap-2 rounded-input px-6 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
       >
         <AppIcon name="sparklesAlt" className="h-5 w-5" />
         {currentEpisode
           ? t('analyze.ctaWithEpisode', { label: analyzeLabel, episode: currentEpisode.name })
           : t('analyze.ctaWithoutEpisode', { label: analyzeLabel })}
       </button>
-      <div className="font-mono text-[12px] tracking-wider text-stone-500">
+      <div className="text-sm text-text-tertiary">
         {t('header.aiAnalyzeHelp')}
       </div>
       <Link
         href={`/${locale}/workspace/asset-hub`}
-        className="font-mono text-[12px] tracking-wider text-stone-500 transition-colors hover:text-amber-300"
+        className="text-sm text-text-secondary transition-colors hover:text-primary-300"
       >
         {t('header.orFromLibrary')}
       </Link>
@@ -1134,12 +1134,18 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
   )
 
   return (
-    <div className="px-12 py-10">
+    <div className="kuiper-workspace-page">
       {/* Compact analyze toolbar — replaces the deleted amber CTA strip.
           Ambient access to 重新分析 when the grid already has items.
           When grid is empty, SubjectGrid renders the bigger emptyStateCta
           inside its empty card so the user has a clearer next action. */}
-      <div className="mb-4 flex items-center justify-end">
+      <div className="kuiper-workspace-toolbar mb-6 flex-wrap pb-4">
+        <div>
+          <h1 className="font-heading text-xl font-semibold text-text-primary">{t('pageTitle')}</h1>
+          <p className="mt-1 text-sm text-text-tertiary">
+            {t('pageSubtitle')}{currentEpisode ? ` · ${currentEpisode.name}` : ''}
+          </p>
+        </div>
         {compactAnalyzeButton}
       </div>
 
@@ -1156,11 +1162,11 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           {t('analyze.taskFailed', { message: taskErrorDisplay?.message ?? t('analyze.taskFailedNoMsg') })}
         </div>
       ) : isAnalyzing ? (
-        <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
+        <div className="mb-6 rounded-sm border border-primary-500/30 bg-primary-500/10 px-4 py-3 font-serif-cn text-sm text-primary-300">
           {t('analyze.inProgress', { progress: taskProgress })}
         </div>
       ) : taskStatus === 'completed' && serverInflightIds.size > 0 ? (
-        <div className="mb-6 rounded-sm border border-amber-500/30 bg-amber-500/10 px-4 py-3 font-serif-cn text-sm text-amber-300">
+        <div className="mb-6 rounded-sm border border-primary-500/30 bg-primary-500/10 px-4 py-3 font-serif-cn text-sm text-primary-300">
           {t('analyze.completeBackground')}
           {(() => {
             // Localised comma-joined breakdown — "3 character images,
@@ -1204,17 +1210,17 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
         </div>
       ) : null}
 
-      <div className="mb-8 flex items-center justify-between">
-        <div className="flex gap-1 rounded-sm border border-stone-800/50 bg-stone-900/50 p-1">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="kuiper-segmented-control w-fit max-w-full overflow-x-auto">
           {tabs.map((tabRow) => (
             <button
               key={tabRow.id}
               type="button"
               onClick={() => setTab(tabRow.id)}
-              className={`rounded-sm px-5 py-2 font-serif-cn text-sm transition-all ${
+              className={`min-h-10 rounded-input px-5 py-2 text-sm transition-all ${
                 tab === tabRow.id
-                  ? 'bg-amber-500/10 text-amber-400'
-                  : 'text-stone-400 hover:text-stone-200'
+                  ? 'bg-primary-500/15 text-primary-300 shadow-elev-1'
+                  : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
               }`}
             >
               {tabRow.label}
@@ -1222,7 +1228,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* 手動新增 — 三個 tab 都顯示,用「+」icon 區分。
               點開 V2ManualAddSubjectModal,filled in 後 POST + 上傳,
               既不依賴劇本分析,也不阻擋自動分析流程。 */}
@@ -1234,7 +1240,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
                 tab === 'character' ? 'character' : tab === 'scene' ? 'scene' : 'prop',
               )
             }
-            className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-200 transition-all hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+            className="kuiper-secondary-button flex items-center gap-2 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             title={!canEdit ? viewerTip : t('manualAdd.titleByTab', { entity: tab === 'character' ? t('entityNames.character') : tab === 'scene' ? t('entityNames.scene') : t('entityNames.prop') })}
           >
             <AppIcon name="plus" className="h-4 w-4" />
@@ -1246,7 +1252,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               onClick={handleBatchRegenCharacters}
               disabled={!!batchGenInFlight || !canEdit}
               title={viewerTip}
-              className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {batchGenInFlight === 'characters' && batchProgress
@@ -1260,7 +1266,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               onClick={handleBatchRegenLocations}
               disabled={!!batchGenInFlight || !canEdit}
               title={viewerTip}
-              className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {batchGenInFlight === 'locations' && batchProgress
@@ -1274,7 +1280,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
               onClick={handleBatchGenProps}
               disabled={!!batchGenInFlight || !canEdit}
               title={viewerTip}
-              className="flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/10 px-4 py-2 font-serif-cn text-sm text-amber-300 transition-all hover:border-amber-500 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/10 px-4 py-2 font-serif-cn text-sm text-primary-300 transition-all hover:border-primary-500 hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {batchGenInFlight === 'props' && batchProgress
@@ -1284,7 +1290,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           ) : null}
           <Link
             href={buildHref(`/${locale}/v2/workspace/${projectId}/storyboard`)}
-            className="flex items-center gap-2 rounded-sm border border-stone-700 bg-stone-900/50 px-4 py-2 font-serif-cn text-sm text-stone-300 transition-all hover:border-amber-500/50 hover:text-amber-300"
+            className="kuiper-secondary-button flex items-center gap-2 px-4 py-2 text-sm"
           >
             {t('nextStep')} <AppIcon name="chevronRight" className="h-4 w-4" />
           </Link>
@@ -1292,7 +1298,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       </div>
 
       {tab === 'character' && currentEpisode && isFilteringByEpisode && hiddenInThisEpisodeCount > 0 ? (
-        <div className="mb-4 rounded-sm border border-stone-800/50 bg-stone-900/40 px-3 py-2 font-mono text-[14px] tracking-wider text-stone-400">
+        <div className="mb-4 rounded-sm border border-border-soft/50 bg-raised/40 px-3 py-2 font-mono text-[14px] tracking-wider text-text-secondary">
           {t('filteredHint', {
             episode: currentEpisode.name,
             visibleCount: characters.length,
@@ -1302,7 +1308,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
       ) : null}
 
       {isLoading ? (
-        <p className="font-mono text-xs tracking-wider text-stone-500">{t('loading')}</p>
+        <p className="font-mono text-xs tracking-wider text-text-tertiary">{t('loading')}</p>
       ) : tab === 'character' ? (
         <SubjectGrid
           items={characters.map((c) => {
@@ -1608,7 +1614,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
           type="button"
           aria-label={t('lightbox.closeAria')}
           onClick={() => setZoomImage(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/90 p-6 backdrop-blur-md"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/90 p-6 backdrop-blur-md"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -1617,7 +1623,7 @@ export function V2SubjectsClient({ projectId, locale }: V2SubjectsClientProps) {
             className="max-h-full max-w-full object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
-          <span className="absolute right-6 top-6 rounded-sm border border-stone-700 bg-stone-900/80 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300">
+          <span className="absolute right-6 top-6 rounded-sm border border-border-strong bg-raised/80 px-3 py-1.5 font-mono text-[14px] tracking-wider text-text-secondary">
             {t('lightbox.escHint')}
           </span>
         </button>

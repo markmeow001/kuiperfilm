@@ -114,37 +114,37 @@ export function StaleStoryboardCleanupModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+      className="kuiper-modal-backdrop fixed inset-0 z-50 flex items-center justify-center px-4"
       onClick={onClose}
     >
       <div
-        className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-sm border border-stone-700 bg-stone-950 shadow-2xl"
+        className="kuiper-modal-surface max-h-[85vh] w-full max-w-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-stone-800 px-5 py-3">
+        <div className="flex items-center justify-between border-b border-border-soft px-5 py-3">
           <div className="flex items-center gap-2">
-            <AppIcon name="sparklesAlt" className="h-3 w-3 text-amber-400" />
-            <h2 className="font-mono text-[14px] uppercase tracking-wider text-amber-300">
+            <AppIcon name="sparklesAlt" className="h-3 w-3 text-primary-400" />
+            <h2 className="font-mono text-[14px] uppercase tracking-wider text-primary-300">
               整理分鏡來源
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm border border-stone-700 px-2 py-0.5 font-mono text-[12px] text-stone-400 hover:border-stone-500 hover:text-stone-200"
+            className="rounded-sm border border-border-strong px-2 py-0.5 font-mono text-[12px] text-text-secondary hover:border-border-strong hover:text-text-primary"
           >
             關閉
           </button>
         </div>
 
-        <div className="border-b border-stone-800 bg-stone-900/40 px-5 py-2 font-serif-cn text-[12px] italic leading-relaxed text-stone-400">
+        <div className="border-b border-border-soft bg-raised/40 px-5 py-2 font-serif-cn text-[12px] italic leading-relaxed text-text-secondary">
           每個 clip 的分鏡會落在自己的「分鏡來源」。再分析失敗時舊的分鏡會殘留在這裡，造成時間軸/多鏡頭模式順序錯亂。挑出
-          <span className="text-amber-300">不該存在的那組</span>刪掉即可。
+          <span className="text-primary-300">不該存在的那組</span>刪掉即可。
         </div>
 
         <div className="max-h-[65vh] overflow-y-auto p-4">
           {loading ? (
-            <div className="px-3 py-6 text-center font-mono text-[12px] text-stone-500">
+            <div className="px-3 py-6 text-center font-mono text-[12px] text-text-tertiary">
               載入中…
             </div>
           ) : error ? (
@@ -152,7 +152,7 @@ export function StaleStoryboardCleanupModal({
               {error}
             </div>
           ) : storyboards.length === 0 ? (
-            <div className="px-3 py-6 text-center font-mono text-[12px] text-stone-500">
+            <div className="px-3 py-6 text-center font-mono text-[12px] text-text-tertiary">
               這集沒有分鏡來源
             </div>
           ) : (
@@ -162,13 +162,13 @@ export function StaleStoryboardCleanupModal({
                 return (
                   <div
                     key={sb.id}
-                    className="rounded-sm border border-stone-800 bg-stone-900/40 p-3"
+                    className="rounded-sm border border-border-soft bg-raised/40 p-3"
                   >
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 font-mono text-[12px] uppercase tracking-wider text-amber-400">
+                        <div className="flex items-center gap-2 font-mono text-[12px] uppercase tracking-wider text-primary-400">
                           來源 {String(idx + 1).padStart(2, '0')}
-                          <span className="text-stone-500">
+                          <span className="text-text-tertiary">
                             · {sb.panelCount} 鏡
                           </span>
                           {sb.lastError ? (
@@ -177,7 +177,7 @@ export function StaleStoryboardCleanupModal({
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1 font-mono text-[10px] text-stone-600">
+                        <div className="mt-1 font-mono text-[10px] text-text-tertiary">
                           id {sb.id.slice(0, 8)} · clip {sb.clipId.slice(0, 8)} · 更新{' '}
                           {new Date(sb.updatedAt).toLocaleString()}
                         </div>
@@ -193,8 +193,8 @@ export function StaleStoryboardCleanupModal({
                     </div>
 
                     {fp ? (
-                      <div className="space-y-1 rounded-sm border border-stone-800 bg-black/20 p-2">
-                        <div className="font-mono text-[11px] tracking-wider text-stone-400">
+                      <div className="space-y-1 rounded-sm border border-border-soft bg-black/20 p-2">
+                        <div className="font-mono text-[11px] tracking-wider text-text-secondary">
                           首鏡預覽
                         </div>
                         {fp.location ? (
@@ -203,18 +203,18 @@ export function StaleStoryboardCleanupModal({
                           </div>
                         ) : null}
                         {fp.characterNames.length > 0 ? (
-                          <div className="font-serif-cn text-[12px] text-amber-300">
+                          <div className="font-serif-cn text-[12px] text-primary-300">
                             出場：{fp.characterNames.join('、')}
                           </div>
                         ) : null}
                         {fp.description ? (
-                          <div className="font-serif-cn text-[12px] leading-relaxed text-stone-300">
+                          <div className="font-serif-cn text-[12px] leading-relaxed text-text-secondary">
                             {fp.description}
                           </div>
                         ) : null}
                       </div>
                     ) : (
-                      <div className="rounded-sm border border-stone-800 bg-black/20 p-2 font-mono text-[11px] italic text-stone-500">
+                      <div className="rounded-sm border border-border-soft bg-black/20 p-2 font-mono text-[11px] italic text-text-tertiary">
                         (空分鏡來源 — 無 panel 可預覽)
                       </div>
                     )}

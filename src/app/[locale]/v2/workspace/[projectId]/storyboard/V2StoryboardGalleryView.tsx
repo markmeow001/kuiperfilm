@@ -178,12 +178,12 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
   return (
     <>
       {globalOverlaysNode}
-      <div className="flex h-full flex-col">
+      <div className="kuiper-storyboard-shell flex flex-col">
         {/* Top toolbar — analyze + autogroup + layout toggle
             (2026-05-12: split into two rows — view toggle on top,
             title + action cluster below — same as Groups layout) */}
-        <div className="border-b border-amber-900/15 px-8 pb-3 pt-5">
-          <div className="flex flex-col gap-2">
+        <div className="border-b border-border-soft px-[var(--workspace-gutter)] pb-4 pt-5">
+          <div className="flex flex-col gap-3">
             <div className="flex justify-end">{layoutToggleNode}</div>
             {/* 2026-05-19 — picker mirrored from groups toolbar so gallery
                 users can see/change the current video model without
@@ -192,25 +192,25 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
               {videoModelPickerNode}
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="font-fraunces text-sm italic text-amber-500/80">{t('header.panelsHeader')}</div>
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="font-heading text-lg font-semibold text-text-primary">{t('header.panelsHeader')}</div>
                 {hasGroups ? (
                   <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
                     {t('header.groupSummary', { groups: orderedGroupIds.length, grouped: groupedPanelCount, total: allPanels.length })}
                   </span>
                 ) : null}
-                <div className="font-mono text-[14px] tracking-wider text-stone-500">
+                <div className="font-mono text-[14px] tracking-wider text-text-tertiary">
                   {t('header.shotsAndRatio', { total: allPanels.length, ratio: projectVideoRatio })}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 disabled={analyzeBusy || !currentEpisodeId || !canEdit}
                 onClick={onAnalyzeStoryboard}
                 title={t('buttons.regenerateStoryboardTitleOverwrite')}
-                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
                 {analyzeBusy ? analyzeBusyLabel : t('buttons.regenerateStoryboardArrow')}
@@ -220,7 +220,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                 disabled={!currentEpisodeId}
                 onClick={onStaleCleanupOpen}
                 title={t('buttons.cleanupSourceTitle')}
-                className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-sm border border-border-strong bg-raised/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-text-secondary transition-all hover:border-border-strong hover:bg-overlay/60 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('buttons.cleanupSourceFull')}
               </button>
@@ -249,7 +249,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                       ? t('multiShot.tipSeedancePerGroup')
                       : t('multiShot.tipKlingPerGroup')
                 }
-                className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <AppIcon name="sparklesAlt" className="h-3 w-3" />
                 {multiShotState.status === 'submitting'
@@ -262,13 +262,13 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
             </div>
           </div>
           {analyzeBusy ? (
-            <div className="mt-2 flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
-              <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+            <div className="mt-2 flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/15 px-3 py-2 text-sm text-primary-200">
+              <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-primary-400" />
               <span>{analyzeBannerLabel}</span>
               {analyzePhase === 'processing' ? (
-                <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-stone-900/60">
+                <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-raised/60">
                   <div
-                    className="h-full bg-amber-400 transition-all duration-500"
+                    className="h-full bg-primary-400 transition-all duration-500"
                     style={{ width: `${Math.max(2, Math.min(100, analyzeProgress))}%` }}
                   />
                 </div>
@@ -289,10 +289,10 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
         </div>
 
         {/* Main 60/40 split */}
-        <div className="grid flex-1 grid-cols-[1.5fr_1fr] gap-0 overflow-hidden">
+        <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
           {/* Left: gallery grid */}
-          <div className="overflow-y-auto px-8 py-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="overflow-y-auto px-[var(--workspace-gutter)] py-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
               {allPanels.map((p, i) => {
                 const active = p.id === selected?.id
                 const accent = accentForGroupId(p.multiShotGroupId, orderedGroupIds)
@@ -307,40 +307,40 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     key={p.id}
                     type="button"
                     onClick={() => setSelectedId(p.id)}
-                    className={`group flex flex-col overflow-hidden rounded-sm border-l-4 border-y border-r text-left transition-all ${accent} ${
+                    className={`kuiper-surface-card group flex flex-col border-l-4 text-left ${accent} ${
                       active
-                        ? 'border-amber-500/60 ring-2 ring-amber-500/20'
-                        : 'border-stone-800/60 hover:border-amber-500/40'
+                        ? 'border-primary-500/60 ring-2 ring-primary-500/20'
+                        : 'border-border-soft/60 hover:border-primary-500/40'
                     }`}
                   >
-                    <div className={`relative ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
+                    <div className={`relative ${aspectClass} bg-gradient-to-br from-overlay to-raised`}>
                       {p.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={p.imageUrl} alt={`#${i + 1}`} className="h-full w-full object-cover" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center">
-                          <AppIcon name="image" className="h-7 w-7 text-stone-600" />
+                          <AppIcon name="image" className="h-7 w-7 text-text-tertiary" />
                         </div>
                       )}
-                      <div className="absolute left-2 top-2 rounded bg-stone-950/60 px-2 py-0.5 font-mono text-[14px] text-stone-200 backdrop-blur-sm">
+                      <div className="absolute left-2 top-2 rounded bg-canvas/60 px-2 py-0.5 font-mono text-[14px] text-text-primary backdrop-blur-sm">
                         #{String(i + 1).padStart(2, '0')}
                       </div>
                       {p.videoUrl ? (
-                        <div className="absolute bottom-2 right-2 rounded bg-amber-500/90 px-1.5 py-0.5 font-mono text-[12px] text-stone-950 backdrop-blur-sm">
+                        <div className="absolute bottom-2 right-2 rounded bg-primary-500/90 px-1.5 py-0.5 font-mono text-[12px] text-canvas backdrop-blur-sm">
                           {t('gallery.videoBadge')}
                         </div>
                       ) : null}
                       {isImg || isVid ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-950/75 backdrop-blur-sm">
-                          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
-                          <div className="font-mono text-[12px] tracking-wider text-amber-300">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-canvas/75 backdrop-blur-sm">
+                          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-primary-400" />
+                          <div className="font-mono text-[12px] tracking-wider text-primary-300">
                             {isVid ? t('gallery.videoGenerating') : t('gallery.imageGenerating')}
                           </div>
                         </div>
                       ) : null}
                     </div>
-                    <div className="bg-stone-900/40 px-3 py-2">
-                      <div className="line-clamp-2 font-serif-cn text-xs leading-snug text-stone-200">
+                    <div className="bg-raised/40 px-3 py-2">
+                      <div className="line-clamp-2 font-serif-cn text-xs leading-snug text-text-primary">
                         {p.description?.slice(0, 60) ?? t('gallery.panelPlaceholder', { n: i + 1 })}
                       </div>
                     </div>
@@ -351,18 +351,18 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
           </div>
 
           {/* Right: selected shot detail */}
-          <aside className="overflow-y-auto border-l border-amber-900/15 bg-stone-950/40 px-6 py-6">
+          <aside className="overflow-y-auto border-t border-border-soft bg-raised/45 px-[var(--workspace-gutter)] py-6 xl:border-l xl:border-t-0 xl:px-6">
             {selected ? (
               <>
                 <div className="mb-3 flex items-center justify-between">
-                  <div className="font-fraunces text-base italic text-amber-500/80">
+                  <div className="font-fraunces text-base italic text-primary-500/80">
                     {t('gallery.shotLabel', { n: String(selectedIdxForGallery + 1).padStart(2, '0') })}
                   </div>
-                  <div className="font-mono text-[14px] tracking-wider text-stone-500">
+                  <div className="font-mono text-[14px] tracking-wider text-text-tertiary">
                     {selected.videoUrl ? t('gallery.videoGenerated') : selected.imageUrl ? t('gallery.imageGeneratedBadge') : t('gallery.notGenerated')}
                   </div>
                 </div>
-                <div className={`relative mx-auto max-h-[480px] max-w-[280px] overflow-hidden rounded-sm border border-stone-800 ${aspectClass} bg-gradient-to-br from-stone-800 to-stone-900`}>
+                <div className={`relative mx-auto max-h-[480px] max-w-[280px] overflow-hidden rounded-sm border border-border-soft ${aspectClass} bg-gradient-to-br from-overlay to-raised`}>
                   {selected.videoUrl ? (
                     <video
                       key={selected.id + ':' + selected.videoUrl}
@@ -377,16 +377,16 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     <img src={selected.imageUrl} alt="selected" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
-                      <AppIcon name="image" className="h-8 w-8 text-stone-600" />
+                      <AppIcon name="image" className="h-8 w-8 text-text-tertiary" />
                     </div>
                   )}
                   {isCurrentPanelVideoInFlight || isCurrentPanelImageInFlight ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-950/75 backdrop-blur-sm">
-                      <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-amber-400" />
-                      <div className="font-fraunces text-sm italic text-amber-300">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-canvas/75 backdrop-blur-sm">
+                      <AppIcon name="sparklesAlt" className="h-6 w-6 animate-pulse text-primary-400" />
+                      <div className="font-fraunces text-sm italic text-primary-300">
                         {isCurrentPanelVideoInFlight ? t('gallery.videoGeneratingFull') : t('gallery.imageGeneratingFull')}
                       </div>
-                      <div className="px-3 text-center font-serif-cn text-[14px] text-stone-300">
+                      <div className="px-3 text-center font-serif-cn text-[14px] text-text-secondary">
                         {t('gallery.autoUpdateHint')}
                       </div>
                     </div>
@@ -414,7 +414,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                         },
                       )
                     }}
-                    className="rounded-sm border border-stone-800 bg-stone-900/50 py-2 font-serif-cn text-xs text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
+                    className="rounded-sm border border-border-soft bg-raised/50 py-2 font-serif-cn text-xs text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:opacity-50"
                   >
                     {regenPanel.isPending
                       ? t('gallery.submitting')
@@ -426,7 +426,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     type="button"
                     disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => onGenerateVideo()}
-                    className="rounded-sm border border-amber-500/40 bg-amber-500/10 py-2 font-serif-cn text-xs text-amber-300 transition-all hover:bg-amber-500/20 disabled:opacity-50"
+                    className="rounded-sm border border-primary-500/40 bg-primary-500/10 py-2 font-serif-cn text-xs text-primary-300 transition-all hover:bg-primary-500/20 disabled:opacity-50"
                   >
                     {generateVideo.isPending
                       ? t('gallery.submitting')
@@ -442,14 +442,14 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     Mirrors the Selected Shot card's secondary row below
                     the main 生成視頻 CTA. Compact labels (Seedance / Fast)
                     because the panel-card mini area is narrow. */}
-                <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-stone-500">
+                <div className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-text-tertiary">
                   <span className="shrink-0">{t('gallery.fal.label')}</span>
                   <button
                     type="button"
                     disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => onGenerateVideo('fal::bytedance/seedance-2.0/image-to-video')}
                     title={t('gallery.fal.seedanceTitle')}
-                    className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center rounded-sm border border-border-strong bg-raised/40 py-1 font-serif-cn text-[11px] text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:opacity-50"
                   >
                     {t('gallery.fal.seedance')}
                   </button>
@@ -458,7 +458,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     disabled={!selected.imageUrl || generateVideo.isPending || isCurrentPanelVideoInFlight || !canEdit}
                     onClick={() => onGenerateVideo('fal::bytedance/seedance-2.0/fast/image-to-video')}
                     title={t('gallery.fal.fastTitle')}
-                    className="flex flex-1 items-center justify-center rounded-sm border border-stone-700 bg-stone-900/40 py-1 font-serif-cn text-[11px] text-stone-300 transition-all hover:border-amber-500/40 hover:text-amber-400 disabled:opacity-50"
+                    className="flex flex-1 items-center justify-center rounded-sm border border-border-strong bg-raised/40 py-1 font-serif-cn text-[11px] text-text-secondary transition-all hover:border-primary-500/40 hover:text-primary-400 disabled:opacity-50"
                   >
                     {t('gallery.fal.fast')}
                   </button>
@@ -467,12 +467,12 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                 <div className="mt-4 space-y-4">
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('gallery.fields.descriptionLabel')}</div>
+                      <div className="font-mono text-[14px] tracking-wider text-primary-600">{t('gallery.fields.descriptionLabel')}</div>
                       <button
                         type="button"
                         onClick={onSaveDescription}
                         disabled={!descChanged || updatePanelText.isPending || !selected || !canEdit}
-                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                        className="rounded-sm border border-primary-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 hover:bg-primary-500/10 disabled:opacity-40"
                       >
                         {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
                       </button>
@@ -481,17 +481,17 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                       value={descDraft}
                       onChange={(e) => setDescDraft(e.target.value)}
                       rows={4}
-                      className="w-full rounded-sm border border-stone-800 bg-stone-900/50 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500/50"
+                      className="w-full rounded-sm border border-border-soft bg-raised/50 p-2 font-body text-xs text-text-primary outline-none focus:border-primary-500/50"
                     />
                   </div>
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
-                      <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('gallery.fields.dialogueLabel')}</div>
+                      <div className="font-mono text-[14px] tracking-wider text-primary-600">{t('gallery.fields.dialogueLabel')}</div>
                       <button
                         type="button"
                         onClick={onSaveDialogue}
                         disabled={!dialogueChanged || updatePanelText.isPending || !selected || !canEdit}
-                        className="rounded-sm border border-amber-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+                        className="rounded-sm border border-primary-500/40 px-2 py-0.5 font-mono text-[12px] tracking-wider text-primary-300 hover:bg-primary-500/10 disabled:opacity-40"
                       >
                         {updatePanelText.isPending ? t('gallery.fields.savingButton') : t('gallery.fields.save')}
                       </button>
@@ -501,7 +501,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                       onChange={(e) => setDialogueDraft(e.target.value)}
                       rows={3}
                       placeholder={t('gallery.fields.dialoguePlaceholder')}
-                      className="w-full rounded-sm border border-stone-800 bg-stone-900/50 p-2 font-body text-xs text-stone-200 outline-none focus:border-amber-500/50"
+                      className="w-full rounded-sm border border-border-soft bg-raised/50 p-2 font-body text-xs text-text-primary outline-none focus:border-primary-500/50"
                     />
                   </div>
                 </div>
@@ -524,7 +524,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     rel="noopener noreferrer"
                     aria-disabled={!selected.imageUrl}
                     onClick={(e) => { if (!selected.imageUrl) e.preventDefault() }}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.imageUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-border-soft py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.imageUrl ? 'text-text-secondary hover:border-primary-500/40 hover:text-primary-400' : 'cursor-not-allowed text-text-tertiary opacity-50'}`}
                   >
                     <AppIcon name="download" className="h-3 w-3" />
                     {t('gallery.downloads.image')}
@@ -536,7 +536,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
                     rel="noopener noreferrer"
                     aria-disabled={!selected.videoUrl}
                     onClick={(e) => { if (!selected.videoUrl) e.preventDefault() }}
-                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-stone-800 py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.videoUrl ? 'text-stone-400 hover:border-amber-500/40 hover:text-amber-400' : 'cursor-not-allowed text-stone-600 opacity-50'}`}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-sm border border-border-soft py-1.5 font-mono text-[14px] tracking-wider transition-all ${selected.videoUrl ? 'text-text-secondary hover:border-primary-500/40 hover:text-primary-400' : 'cursor-not-allowed text-text-tertiary opacity-50'}`}
                   >
                     <AppIcon name="download" className="h-3 w-3" />
                     {t('gallery.downloads.video')}
@@ -545,7 +545,7 @@ export function V2StoryboardGalleryView(props: V2StoryboardGalleryViewProps) {
               </>
             ) : (
               <div className="flex h-full items-center justify-center text-center">
-                <p className="font-fraunces text-sm italic text-stone-500">{t('gallery.noSelected')}</p>
+                <p className="font-fraunces text-sm italic text-text-tertiary">{t('gallery.noSelected')}</p>
               </div>
             )}
           </aside>

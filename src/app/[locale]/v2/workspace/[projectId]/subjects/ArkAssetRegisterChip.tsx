@@ -69,7 +69,7 @@ export function ArkAssetRegisterChip(props: ArkAssetRegisterChipProps) {
   if (arkAssetStatus === 'pending' || submitting) {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-amber-300"
+        className="inline-flex items-center gap-1 rounded-sm border border-primary-500/40 bg-primary-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-primary-300"
         title="已提交火山,排队中"
       >
         <AppIcon name="loader" className="h-3 w-3 animate-spin" />
@@ -81,7 +81,7 @@ export function ArkAssetRegisterChip(props: ArkAssetRegisterChipProps) {
   if (arkAssetStatus === 'processing') {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded-sm border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-amber-300"
+        className="inline-flex items-center gap-1 rounded-sm border border-primary-500/40 bg-primary-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-primary-300"
         title="火山后端正在审核(通常 1-15 分钟)"
       >
         <AppIcon name="loader" className="h-3 w-3 animate-spin" />
@@ -138,7 +138,7 @@ export function ArkAssetRegisterChip(props: ArkAssetRegisterChipProps) {
       type="button"
       onClick={handleClick}
       disabled={submitting}
-      className="inline-flex items-center gap-1 rounded-sm border border-stone-700 bg-stone-900/60 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-stone-400 hover:border-amber-500/40 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex items-center gap-1 rounded-sm border border-border-strong bg-raised/60 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-text-secondary hover:border-primary-500/40 hover:text-primary-300 disabled:cursor-not-allowed disabled:opacity-50"
       title="向火山方舟注册此图片,通过后 Seedance 2.0 视频生成会用 asset:// 引用(绕过真人人脸检测)"
     >
       <AppIcon name="sparklesAlt" className="h-3 w-3" />

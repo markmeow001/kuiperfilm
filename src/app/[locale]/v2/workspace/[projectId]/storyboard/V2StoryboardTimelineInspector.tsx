@@ -45,7 +45,7 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
   } = props
 
   return (
-    <div className="col-span-4 space-y-5 order-3">
+    <div className="order-3 col-span-1 space-y-5 xl:col-span-4">
       {selectedGroupTaskId ? (
         <MultiShotBindingsRail
           taskId={selectedGroupTaskId}
@@ -56,9 +56,9 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <div className="font-mono text-[14px] tracking-wider text-amber-600">{t('cast.title')}</div>
+          <div className="font-mono text-[14px] tracking-wider text-primary-600">{t('cast.title')}</div>
           {currentEpisode?.episodeNumber ? (
-            <div className="font-mono text-[11px] tracking-wider text-stone-500">
+            <div className="font-mono text-[11px] tracking-wider text-text-tertiary">
               {t('cast.epBinding', { episode: currentEpisode.episodeNumber })}
             </div>
           ) : null}
@@ -140,14 +140,14 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
               return (
                 <div
                   key={`${name}-${i}`}
-                  className="flex items-center gap-2.5 rounded-sm border border-stone-800/60 bg-stone-900/40 px-2.5 py-1.5"
+                  className="flex items-center gap-2.5 rounded-sm border border-border-soft/60 bg-raised/40 px-2.5 py-1.5"
                   title={
                     resolved?.isDefault
                       ? t('cast.titleDefault', { label: resolved.label })
                       : t('cast.titleBound', { label: resolved?.label ?? t('cast.titleBoundNone') })
                   }
                 >
-                  <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-sm bg-gradient-to-br from-amber-500 to-rose-700">
+                  <div className="h-7 w-7 flex-shrink-0 overflow-hidden rounded-sm bg-gradient-to-br from-primary-500 to-rose-700">
                     {resolved?.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -158,8 +158,8 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
                     ) : null}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-serif-cn text-xs text-stone-200">{name}</div>
-                    <div className="truncate font-mono text-[11px] tracking-wider text-amber-500/70">
+                    <div className="truncate font-serif-cn text-xs text-text-primary">{name}</div>
+                    <div className="truncate font-mono text-[11px] tracking-wider text-primary-500/70">
                       {resolved
                         ? resolved.isDefault
                           ? t('cast.appearancePresetSuffix', { label: resolved.label })
@@ -169,7 +169,7 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
                   </div>
                   {resolved?.isDefault && appearances.length > 1 ? (
                     <span
-                      className="flex-shrink-0 rounded-sm border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-amber-300"
+                      className="flex-shrink-0 rounded-sm border border-primary-500/30 bg-primary-500/10 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-primary-300"
                       title={t('cast.unboundChipTitle')}
                     >
                       {t('cast.unboundChipLabel')}
@@ -180,13 +180,13 @@ export function V2StoryboardTimelineInspector(props: V2StoryboardTimelineInspect
             })}
           </div>
         ) : (
-          <p className="font-serif-cn text-xs text-stone-500">{t('cast.noCharacters')}</p>
+          <p className="font-serif-cn text-xs text-text-tertiary">{t('cast.noCharacters')}</p>
         )}
       </div>
 
       <div>
-        <div className="mb-2 font-mono text-[14px] tracking-wider text-amber-600">{t('notes.title')}</div>
-        <div className="rounded-sm border border-stone-800/60 bg-stone-900/40 px-3 py-2 font-serif-cn text-xs leading-relaxed text-stone-400">
+        <div className="mb-2 font-mono text-[14px] tracking-wider text-primary-600">{t('notes.title')}</div>
+        <div className="rounded-sm border border-border-soft/60 bg-raised/40 px-3 py-2 font-serif-cn text-xs leading-relaxed text-text-secondary">
           {selected?.videoPrompt ?? t('notes.empty')}
         </div>
       </div>

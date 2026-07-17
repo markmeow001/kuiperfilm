@@ -114,8 +114,8 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
   } = props
 
   return (
-    <div className="border-b border-amber-900/15 px-12 pb-4 pt-6">
-      <div className="mb-3 flex flex-col gap-2">
+    <div className="border-b border-border-soft px-[var(--workspace-gutter)] pb-4 pt-5">
+      <div className="mb-3 flex flex-col gap-3">
         <div className="flex justify-end">{layoutToggleNode}</div>
         {/* 2026-05-19 — picker mirrored from groups toolbar so timeline
             users can see/change the current video model without
@@ -123,22 +123,22 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           {videoModelPickerNode}
         </div>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="font-fraunces text-sm italic text-amber-500/80">{t('timeline.header')}</div>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="font-heading text-lg font-semibold text-text-primary">{t('timeline.header')}</div>
             {hasGroups ? (
               <span className="rounded-sm border border-emerald-500/30 bg-emerald-500/5 px-2 py-0.5 font-mono text-[12px] uppercase tracking-wider text-emerald-400">
                 {t('header.groupSummary', { groups: orderedGroupIds.length, grouped: groupedPanelCount, total: allPanels.length })}
               </span>
             ) : null}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={analyzeBusy || !currentEpisodeId || !canEdit}
             onClick={onAnalyzeStoryboard}
             title={t('timeline.regenStoryboardTitle')}
-            className="flex items-center gap-1.5 rounded-sm border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-amber-300 transition-all hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-primary-500/40 bg-primary-500/10 px-3 py-1.5 font-mono text-[14px] tracking-wider text-primary-300 transition-all hover:bg-primary-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <AppIcon name="sparklesAlt" className={`h-3 w-3 ${analyzeBusy ? 'animate-pulse' : ''}`} />
             {analyzeBusy ? analyzeBusyLabel : t('buttons.regenerateStoryboardArrow')}
@@ -148,7 +148,7 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
             disabled={!currentEpisodeId}
             onClick={onStaleCleanupOpen}
             title={t('timeline.cleanupSourceTitle')}
-            className="flex items-center gap-1.5 rounded-sm border border-stone-600 bg-stone-900/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-stone-300 transition-all hover:border-stone-500 hover:bg-stone-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-sm border border-border-strong bg-raised/40 px-3 py-1.5 font-mono text-[14px] tracking-wider text-text-secondary transition-all hover:border-border-strong hover:bg-overlay/60 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('buttons.cleanupSourceFull')}
           </button>
@@ -207,20 +207,20 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
               </button>
             )
           })()}
-          <div className="font-mono text-[14px] tracking-wider text-stone-500">
+          <div className="font-mono text-[14px] tracking-wider text-text-tertiary">
             {t('timeline.shotsDraft', { count: allPanels.length })}
           </div>
           </div>
         </div>
       </div>
       {analyzeBusy ? (
-        <div className="mb-2 flex items-center gap-2 rounded-sm border border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm text-amber-200">
-          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-amber-400" />
+        <div className="mb-2 flex items-center gap-2 rounded-sm border border-primary-500/40 bg-primary-500/15 px-3 py-2 text-sm text-primary-200">
+          <AppIcon name="sparklesAlt" className="h-4 w-4 animate-pulse text-primary-400" />
           <span>{analyzeBannerLabel}</span>
           {analyzePhase === 'processing' ? (
-            <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-stone-900/60">
+            <div className="ml-auto h-1.5 w-32 overflow-hidden rounded-full bg-raised/60">
               <div
-                className="h-full bg-amber-400 transition-all duration-500"
+                className="h-full bg-primary-400 transition-all duration-500"
                 style={{ width: `${Math.max(2, Math.min(100, analyzeProgress))}%` }}
               />
             </div>
@@ -280,4 +280,3 @@ export function V2StoryboardTimelineStrip(props: V2StoryboardTimelineStripProps)
     </div>
   )
 }
-

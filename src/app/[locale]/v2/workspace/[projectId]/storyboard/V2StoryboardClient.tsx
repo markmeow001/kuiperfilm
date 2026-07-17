@@ -1165,17 +1165,17 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
 
   if (projectQuery.isLoading || storyboardsQuery.isLoading) {
     return (
-      <div className="px-12 py-10">
-        <p className="font-mono text-xs tracking-wider text-stone-500">{t('loading')}</p>
+      <div className="kuiper-workspace-page">
+        <div className="h-6 w-48 animate-pulse rounded-chip bg-overlay" aria-label={t('loading')} />
       </div>
     )
   }
 
   if (!currentEpisodeId) {
     return (
-      <div className="px-12 py-10">
-        <div className="rounded-sm border border-stone-800/50 bg-stone-900/30 p-12 text-center">
-          <p className="font-fraunces text-base italic text-stone-400">
+      <div className="kuiper-workspace-page">
+        <div className="kuiper-inspector p-12 text-center">
+          <p className="text-base text-text-secondary">
             {t('page.noEpisodeHint')}
           </p>
         </div>
@@ -1191,20 +1191,20 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         ? t('buttons.reanalyze')
         : t('generateSplash.titleGeneric')
     return (
-      <div className="px-12 py-10">
-        <div className="rounded-sm border border-amber-500/30 bg-amber-500/5 p-8 text-center">
+      <div className="kuiper-workspace-page">
+        <div className="kuiper-inspector p-8 text-center">
           <div className="mx-auto max-w-xl space-y-4">
-            <div className="font-fraunces text-lg italic text-amber-400">
+            <div className="font-heading text-xl font-semibold text-text-primary">
               {currentEpisode ? t('generateSplash.titleForEpisode', { episode: currentEpisode.name }) : t('generateSplash.titleGeneric')}
             </div>
-            <p className="font-serif-cn text-sm leading-relaxed text-stone-400">
+            <p className="font-serif-cn text-sm leading-relaxed text-text-secondary">
               {t('generateSplash.subtitle')}
             </p>
             <button
               type="button"
               onClick={handleAnalyzeStoryboard}
               disabled={submitDisabled}
-              className="inline-flex items-center gap-2 rounded-sm bg-amber-500 px-6 py-2.5 font-serif-cn text-sm font-medium text-stone-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="kuiper-primary-button inline-flex min-h-11 items-center gap-2 rounded-input px-6 py-2.5 font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               <AppIcon name="sparklesAlt" className="h-4 w-4" />
               {ctaLabel}
@@ -1223,7 +1223,7 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
               </p>
             ) : null}
             {!currentEpisodeId ? (
-              <p className="font-mono text-[14px] tracking-wider text-stone-500">
+              <p className="font-mono text-[14px] tracking-wider text-text-tertiary">
                 {t('generateSplash.noEpisodes')}
               </p>
             ) : null}
@@ -1237,15 +1237,15 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
   // their toolbar so the user can flip between Gallery / Timeline /
   // Groups without leaving the page.
   const layoutToggleNode = (
-    <div className="flex items-center gap-0 overflow-hidden rounded-sm border border-stone-800">
+    <div className="kuiper-segmented-control items-center overflow-x-auto">
       <button
         type="button"
         onClick={() => setLayoutMode('gallery')}
         title={t('layouts.galleryTitle')}
-        className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
+        className={`min-h-9 rounded-input px-3 py-1.5 text-sm transition-colors ${
           layoutMode === 'gallery'
-            ? 'bg-amber-500/15 text-amber-300'
-            : 'text-stone-500 hover:text-amber-400'
+            ? 'bg-primary-500/15 text-primary-300'
+            : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
         }`}
       >
         {t('layouts.gallery')}
@@ -1254,10 +1254,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         type="button"
         onClick={() => setLayoutMode('timeline')}
         title={t('layouts.timelineTitle')}
-        className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
+        className={`min-h-9 rounded-input px-3 py-1.5 text-sm transition-colors ${
           layoutMode === 'timeline'
-            ? 'bg-amber-500/15 text-amber-300'
-            : 'text-stone-500 hover:text-amber-400'
+            ? 'bg-primary-500/15 text-primary-300'
+            : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
         }`}
       >
         {t('layouts.timeline')}
@@ -1266,10 +1266,10 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
         type="button"
         onClick={() => setLayoutMode('groups')}
         title={t('layouts.multiShotTitle')}
-        className={`px-2.5 py-1.5 font-mono text-[14px] tracking-wider transition-colors ${
+        className={`min-h-9 rounded-input px-3 py-1.5 text-sm transition-colors ${
           layoutMode === 'groups'
-            ? 'bg-amber-500/15 text-amber-300'
-            : 'text-stone-500 hover:text-amber-400'
+            ? 'bg-primary-500/15 text-primary-300'
+            : 'text-text-secondary hover:bg-overlay hover:text-text-primary'
         }`}
       >
         {t('layouts.multiShot')}
@@ -1523,4 +1523,3 @@ export function V2StoryboardClient({ projectId }: V2StoryboardClientProps) {
     />
   )
 }
-

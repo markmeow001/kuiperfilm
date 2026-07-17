@@ -101,7 +101,7 @@ export function GroupReferenceVideoSlot({
           onClick={handleRemove}
           disabled={busy}
           title="移除動作參考視頻"
-          className="rounded-sm border border-stone-700 px-1.5 py-0.5 font-mono text-[11px] text-stone-400 transition-colors hover:border-rose-500/60 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
+          className="rounded-sm border border-border-strong px-1.5 py-0.5 font-mono text-[11px] text-text-secondary transition-colors hover:border-rose-500/60 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {remove.isPending ? '移除中…' : '×'}
         </button>
@@ -111,7 +111,7 @@ export function GroupReferenceVideoSlot({
 
   return (
     <label
-      className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-stone-400"
+      className="flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] uppercase tracking-wider text-text-secondary"
       title={`上傳一段 ≤${MAX_VIDEO_DURATION_SEC}s 的動作 / 鏡頭參考視頻 (${ALLOWED_MIMES_DISPLAY}, ≤50MB)。所有 4 家 Seedance 都會把它送進 R2V endpoint。`}
     >
       <AppIcon name="upload" className="h-3 w-3" />
@@ -119,7 +119,7 @@ export function GroupReferenceVideoSlot({
         type="button"
         onClick={() => fileInputRef.current?.click()}
         disabled={busy}
-        className="rounded-sm border border-stone-800 bg-stone-900 px-2 py-0.5 font-mono text-[12px] text-stone-300 transition-colors hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded-sm border border-border-soft bg-raised px-2 py-0.5 font-mono text-[12px] text-text-secondary transition-colors hover:border-violet-500/60 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {upload.isPending ? '上傳中…' : '＋動作參考視頻'}
       </button>
