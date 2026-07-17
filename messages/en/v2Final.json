@@ -1,6 +1,21 @@
 {
   "viewerHint": "You are a viewer · read-only · request edit access to edit",
+  "page": {
+    "eyebrow": "FINAL DELIVERY",
+    "title": "Final & Export",
+    "subtitle": "Review video completion shot by shot, preview generated clips, and package production assets for your editor.",
+    "episodeNumber": "Episode {number}",
+    "currentEpisode": "Current episode"
+  },
+  "status": {
+    "packageReady": "Package ready",
+    "packaging": "Packaging",
+    "draft": "In production"
+  },
   "player": {
+    "title": "Shot preview",
+    "shotLabel": "SHOT {number}",
+    "previewAlt": "Current storyboard preview",
     "videoNotYet": "Video not generated yet for this panel",
     "noStoryboard": "No storyboard data yet",
     "header": "EP 01 · OPENING SEQUENCE"
@@ -10,7 +25,11 @@
     "ratio": "{done} / {total} panels with video",
     "panelTitleReady": "Video ready",
     "panelTitleImageOnly": "Image only",
-    "panelTitleNone": "Not generated yet"
+    "panelTitleNone": "Not generated yet",
+    "empty": "Shots will appear here after storyboard breakdown"
+  },
+  "progress": {
+    "title": "Episode progress"
   },
   "stats": {
     "title": "Sheet",
@@ -24,6 +43,9 @@
     "durationSeconds": "{n}s"
   },
   "package": {
+    "title": "Export package",
+    "description": "Collect generated videos, reference images, and dialogue into one handoff package for post-production.",
+    "create": "Create asset package",
     "downloadZip": "Download assets ZIP",
     "downloadHint": "Includes all panel mp4s + reference images + dialogue script. Drag into CapCut to edit.",
     "repackaging": "Repackaging…",
@@ -39,7 +61,10 @@
     "errorFallback": "Package failed"
   },
   "links": {
-    "viewScript": "View script"
+    "related": "Related production pages",
+    "viewStoryboard": "View storyboard",
+    "viewScript": "View script",
+    "openStoryboard": "Open storyboard"
   },
   "tagline": {
     "title": "From spark to screen.",

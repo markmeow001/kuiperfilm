@@ -95,6 +95,26 @@ describe('Kuiper visual system', () => {
     expect(timeline).toContain('xl:grid-cols-12')
   })
 
+  it('uses responsive production workspaces for voice casting and final delivery', () => {
+    const voice = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/voice/V2VoiceClient.tsx',
+      'utf8',
+    )
+    const finalDelivery = readFileSync(
+      'src/app/[locale]/v2/workspace/[projectId]/final/V2FinalClient.tsx',
+      'utf8',
+    )
+
+    expect(voice).toContain('kuiper-workspace-page')
+    expect(voice).toContain('xl:grid-cols-[260px_minmax(0,1fr)_300px]')
+    expect(voice).toContain('kuiper-surface-card')
+    expect(voice).toContain('voicesQuery.isError')
+    expect(finalDelivery).toContain('kuiper-workspace-page')
+    expect(finalDelivery).toContain('xl:grid-cols-[minmax(0,1fr)_340px]')
+    expect(finalDelivery).toContain('videoProgress')
+    expect(finalDelivery).toContain('kuiper-primary-button')
+  })
+
   it('does not reintroduce legacy amber or stone utilities in redesigned production areas', () => {
     const redesignedFiles = [
       'src/app/[locale]/v2/workspace/[projectId]/subjects/V2SubjectsClient.tsx',
@@ -102,6 +122,8 @@ describe('Kuiper visual system', () => {
       'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardGalleryView.tsx',
       'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardGroupsView.tsx',
       'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardTimelineView.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/voice/V2VoiceClient.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/final/V2FinalClient.tsx',
     ]
 
     for (const file of redesignedFiles) {

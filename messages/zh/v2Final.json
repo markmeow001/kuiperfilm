@@ -1,6 +1,21 @@
 {
   "viewerHint": "你是 viewer · 唯读模式 · 编辑按钮需要请求权限",
+  "page": {
+    "eyebrow": "FINAL DELIVERY",
+    "title": "成片与输出",
+    "subtitle": "检查每个镜头的视频完成度，预览片段并打包可直接进入剪辑软件的制作素材。",
+    "episodeNumber": "第 {number} 集",
+    "currentEpisode": "当前剧集"
+  },
+  "status": {
+    "packageReady": "素材包已就绪",
+    "packaging": "正在打包",
+    "draft": "制作中"
+  },
   "player": {
+    "title": "镜头预览",
+    "shotLabel": "SHOT {number}",
+    "previewAlt": "当前分镜预览",
     "videoNotYet": "尚未生成此分镜视频",
     "noStoryboard": "还没有任何分镜资料",
     "header": "EP 01 · OPENING SEQUENCE"
@@ -10,7 +25,11 @@
     "ratio": "{done} / {total} 段已生视频",
     "panelTitleReady": "已生视频",
     "panelTitleImageOnly": "只有图",
-    "panelTitleNone": "尚未生成"
+    "panelTitleNone": "尚未生成",
+    "empty": "完成分镜拆解后，镜头会显示在这里"
+  },
+  "progress": {
+    "title": "本集完成度"
   },
   "stats": {
     "title": "Sheet",
@@ -24,6 +43,9 @@
     "durationSeconds": "{n}s"
   },
   "package": {
+    "title": "输出素材包",
+    "description": "整理本集已生成的视频、参考图与对白脚本，作为后期剪辑的统一交付包。",
+    "create": "建立素材包",
     "downloadZip": "下载素材包 ZIP",
     "downloadHint": "包含全部分镜 mp4 + 参考图 + 对白脚本，拖进剪映/CapCut 即可剪辑。",
     "repackaging": "重新打包中…",
@@ -39,7 +61,10 @@
     "errorFallback": "打包失败"
   },
   "links": {
-    "viewScript": "查看剧本"
+    "related": "相关制作页面",
+    "viewStoryboard": "查看分镜",
+    "viewScript": "查看剧本",
+    "openStoryboard": "前往分镜台"
   },
   "tagline": {
     "title": "From spark to screen.",

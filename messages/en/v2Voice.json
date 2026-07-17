@@ -1,9 +1,23 @@
 {
+  "page": {
+    "eyebrow": "VOICE CASTING",
+    "title": "Voice Studio",
+    "subtitle": "Browse and audition voices from the asset hub to shape a consistent vocal direction for every character."
+  },
+  "summary": {
+    "total": "Total voices",
+    "previewable": "Previewable",
+    "showing": "Showing"
+  },
   "header": {
     "title": "Voices",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "resultCount": "{count} results"
   },
   "filters": {
+    "title": "Filter voices",
+    "reset": "Clear",
+    "search": "Search name or description",
     "genderTitle": "Filter · Gender",
     "emotionTitle": "Filter · Emotion",
     "gender": {
@@ -28,11 +42,29 @@
   },
   "empty": {
     "noVoices": "No voices in asset hub — add some there first",
-    "noMatches": "No voices match the filter"
+    "noMatches": "No voices match the filter",
+    "loadFailed": "Voices could not be loaded. Please try again.",
+    "retry": "Reload"
   },
   "voice": {
     "untitled": "Untitled voice",
     "bindHint": "Will bind to {target}",
-    "controlsHint": "Intensity / speed / pitch controls coming next."
+    "controlsHint": "This pass completes voice browsing and preview. Character binding, intensity, speed, and pitch arrive in the functional wiring pass.",
+    "selected": "Selected",
+    "playPreview": "Preview {name}",
+    "pausePreview": "Pause preview",
+    "playbackFailed": "Preview failed. Check the audio source."
+  },
+  "inspector": {
+    "title": "Voice details",
+    "empty": "Select a voice to inspect its details and preview status.",
+    "noDescription": "No description is available for this voice.",
+    "gender": "Gender",
+    "age": "Age",
+    "emotion": "Emotion",
+    "preview": "Preview file",
+    "ready": "Ready",
+    "unavailable": "Unavailable",
+    "play": "Play preview"
   }
 }

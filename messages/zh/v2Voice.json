@@ -1,9 +1,23 @@
 {
+  "page": {
+    "eyebrow": "VOICE CASTING",
+    "title": "配音工作室",
+    "subtitle": "浏览与试听资产中心音色，为角色建立一致的声音方向。"
+  },
+  "summary": {
+    "total": "全部音色",
+    "previewable": "可试听",
+    "showing": "目前显示"
+  },
   "header": {
     "title": "音色列表",
-    "loading": "载入中…"
+    "loading": "载入中…",
+    "resultCount": "{count} 个结果"
   },
   "filters": {
+    "title": "筛选音色",
+    "reset": "清除",
+    "search": "搜索名称或描述",
     "genderTitle": "筛选 · 性别",
     "emotionTitle": "筛选 · 情绪",
     "gender": {
@@ -28,11 +42,29 @@
   },
   "empty": {
     "noVoices": "资产中心还没有音色 — 请先到资产中心新增",
-    "noMatches": "没有符合筛选的音色"
+    "noMatches": "没有符合筛选的音色",
+    "loadFailed": "音色载入失败，请重新尝试",
+    "retry": "重新载入"
   },
   "voice": {
     "untitled": "未命名音色",
     "bindHint": "将绑到 {target}",
-    "controlsHint": "情绪强度 / 语速 / 语调 控制，下一步加。"
+    "controlsHint": "这一版先完成音色浏览与试听；角色绑定、情绪强度、语速与语调会在功能接线阶段加入。",
+    "selected": "已选择",
+    "playPreview": "试听 {name}",
+    "pausePreview": "暂停试听",
+    "playbackFailed": "试听失败，请检查音频来源"
+  },
+  "inspector": {
+    "title": "音色详情",
+    "empty": "选择一个音色查看详细资料与试听状态",
+    "noDescription": "这个音色暂时没有说明。",
+    "gender": "性别",
+    "age": "年龄",
+    "emotion": "情绪",
+    "preview": "试听档",
+    "ready": "可用",
+    "unavailable": "未提供",
+    "play": "播放试听"
   }
 }
