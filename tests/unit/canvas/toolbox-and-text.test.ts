@@ -20,7 +20,7 @@ describe('toolbox presets', () => {
       }
       // every node has a title + valid type
       for (const node of nodes) {
-        expect(['text', 'image', 'video', 'character']).toContain(node.type)
+        expect(['text', 'image', 'video', 'character', 'mask']).toContain(node.type)
         expect(typeof node.data.title).toBe('string')
       }
     }

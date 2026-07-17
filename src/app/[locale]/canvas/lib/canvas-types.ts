@@ -64,6 +64,20 @@ export interface CanvasNodeData extends Record<string, unknown> {
   maskBrushSize?: number
   maskSourceUrl?: string | null
   maskSourceKey?: string | null
+  /**
+   * Natural pixel size of the plate the strokes were drawn over. The drawing
+   * surface matches this aspect ratio, so normalized points map 1:1 onto the
+   * full image — the rasterizer needs these dims to reproduce that mapping.
+   */
+  maskSourceWidth?: number | null
+  maskSourceHeight?: number | null
+  /**
+   * Signature (query-stripped URL) of the plate at the time the first stroke
+   * was committed. When the live source drifts from this (upstream image
+   * regenerated / rewired), the node shows a stale warning instead of
+   * silently rendering old strokes over a different picture.
+   */
+  maskDrawnOnSig?: string | null
   /** Prompt / text content. */
   prompt: string
   /** Selected model key (image or video catalog). Empty until chosen. */
@@ -220,6 +234,9 @@ export const DEFAULT_NODE_DATA = {
   maskBrushSize: 18,
   maskSourceUrl: null as string | null,
   maskSourceKey: null as string | null,
+  maskSourceWidth: null as number | null,
+  maskSourceHeight: null as number | null,
+  maskDrawnOnSig: null as string | null,
   prompt: '',
   modelKey: '',
   aspectRatio: '9:16',
