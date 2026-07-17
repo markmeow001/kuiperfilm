@@ -42,4 +42,24 @@ describe('AiMaskPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '分析完目前影格後取消' }))
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
+
+  it('分析中整體素材互動鎖定（canAnalyze=false）-> 取消按鈕仍可使用', () => {
+    const onCancel = vi.fn()
+    render(
+      <AiMaskPanel
+        canAnalyze={false}
+        currentTime={1.25}
+        progress={{ status: 'analyzing', completed: 1, total: 4, message: '分析 1.00 秒的人物輪廓…' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={vi.fn()}
+        onCancel={onCancel}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: '目前影格 1.3s' })).toBeDisabled()
+    const cancelButton = screen.getByRole('button', { name: '分析完目前影格後取消' })
+    expect(cancelButton).toBeEnabled()
+    fireEvent.click(cancelButton)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
 })

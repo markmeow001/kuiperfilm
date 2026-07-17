@@ -11,6 +11,9 @@ import { MaskStage, type MaskStageHandle } from './MaskStage'
 import { buildMaskAnalysisTimes } from './lib/mask-analysis'
 import { CompositeRecordingCancelledError } from './lib/composite-video-recorder'
 import { releasePersonSegmenters } from './lib/person-segmenter'
+import { ProjectPanel } from './ProjectPanel'
+import { SaveToLibraryDialog, type ExportedAsset } from './SaveToLibraryDialog'
+import { useLiveCompositeProjects } from './useLiveCompositeProjects'
 import { useMaskTimeline } from './useMaskTimeline'
 import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskTool, VideoMetadata } from './live-composite-types'
 
@@ -32,6 +35,17 @@ const INITIAL_EXPORT_PROGRESS: CompositeExportProgress = {
   message: '',
 }
 
+interface LastExport {
+  asset: ExportedAsset
+  label: string
+}
+
+function exportDefaultName(kind: string): string {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${kind} ${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+}
+
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -47,8 +61,17 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const analysisRestoreTimeRef = useRef<number | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoName, setVideoName] = useState<string | null>(null)
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoKey, setVideoKey] = useState<string | null>(null)
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null)
+  const [backgroundFile, setBackgroundFile] = useState<File | null>(null)
+  const [backgroundKey, setBackgroundKey] = useState<string | null>(null)
   const [backgroundColor, setBackgroundColor] = useState('#172033')
+  const [projectId, setProjectId] = useState<string | null>(null)
+  const [projectName, setProjectName] = useState('未命名合成')
+  const [lastExport, setLastExport] = useState<LastExport | null>(null)
+  const [libraryDialogOpen, setLibraryDialogOpen] = useState(false)
+  const projectStore = useLiveCompositeProjects()
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const maskTimeline = useMaskTimeline(currentTime)
@@ -82,6 +105,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     analysisRunRef.current += 1
     setVideoUrl(URL.createObjectURL(file))
     setVideoName(file.name)
+    setVideoFile(file)
+    setVideoKey(null)
     setMetadata(null)
     setCurrentTime(0)
     maskTimeline.reset()
@@ -94,8 +119,60 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const selectBackground = (file: File) => {
     if (isVideoExporting || isAnalyzing) return
     setBackgroundUrl(URL.createObjectURL(file))
+    setBackgroundFile(file)
+    setBackgroundKey(null)
     setView('composite')
     setExportError(null)
+  }
+
+  const saveProject = async () => {
+    if (isVideoExporting || isAnalyzing) return
+    try {
+      const saved = await projectStore.saveProject({
+        projectId,
+        name: projectName,
+        videoFile,
+        videoKey,
+        videoName,
+        backgroundFile,
+        backgroundKey,
+        backgroundColor,
+        keyframes: maskTimeline.keyframes,
+      })
+      setProjectId(saved.projectId)
+      setVideoKey(saved.videoKey)
+      setBackgroundKey(saved.backgroundKey)
+    } catch {
+      // Not silent: the hook already recorded the failure and ProjectPanel
+      // renders projectStore.error to the user.
+    }
+  }
+
+  const openProject = async (id: string) => {
+    if (isVideoExporting || isAnalyzing) return
+    try {
+      const loaded = await projectStore.openProject(id)
+      analysisRunRef.current += 1
+      setProjectId(loaded.id)
+      setProjectName(loaded.name)
+      setVideoFile(null)
+      setVideoKey(loaded.videoKey)
+      setVideoUrl(loaded.videoUrl)
+      setVideoName(loaded.videoName)
+      setBackgroundFile(null)
+      setBackgroundKey(loaded.backgroundKey)
+      setBackgroundUrl(loaded.backgroundUrl)
+      setBackgroundColor(loaded.backgroundColor)
+      setMetadata(null)
+      setCurrentTime(0)
+      maskTimeline.load(loaded.keyframes)
+      setView(loaded.backgroundKey ? 'composite' : 'source')
+      setExportError(null)
+      setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS)
+      setExportProgress(INITIAL_EXPORT_PROGRESS)
+    } catch {
+      // Not silent: surfaced through projectStore.error in ProjectPanel.
+    }
   }
 
   const exportMask = async () => {
@@ -104,6 +181,16 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       const blob = await stageRef.current?.exportMask()
       if (!blob) throw new Error('遮罩尚未準備完成')
       downloadBlob(blob, 'kuiper-mask.png')
+      setLastExport({
+        label: '遮罩 PNG',
+        asset: {
+          blob,
+          assetType: 'image',
+          mimeType: 'image/png',
+          fileName: 'kuiper-mask.png',
+          defaultName: exportDefaultName('遮罩'),
+        },
+      })
     } catch (error) {
       setExportError(error instanceof Error ? error.message : '遮罩輸出失敗')
     }
@@ -115,6 +202,16 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       const blob = await stageRef.current?.exportCompositeFrame()
       if (!blob) throw new Error('合成影格尚未準備完成')
       downloadBlob(blob, 'kuiper-composite-frame.png')
+      setLastExport({
+        label: '合成影格',
+        asset: {
+          blob,
+          assetType: 'image',
+          mimeType: 'image/png',
+          fileName: 'kuiper-composite-frame.png',
+          defaultName: exportDefaultName('合成影格'),
+        },
+      })
     } catch (error) {
       setExportError(error instanceof Error ? error.message : '合成影格輸出失敗')
     }
@@ -158,6 +255,16 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       })
       const baseName = metadata.name.replace(/\.[^.]+$/, '') || 'kuiper-composite'
       downloadBlob(result.blob, `${baseName}-composite.${result.extension}`)
+      setLastExport({
+        label: '合成影片',
+        asset: {
+          blob: result.blob,
+          assetType: 'video',
+          mimeType: result.extension === 'mp4' ? 'video/mp4' : 'video/webm',
+          fileName: `${baseName}-composite.${result.extension}`,
+          defaultName: exportDefaultName('合成影片'),
+        },
+      })
       setExportProgress({
         status: 'completed',
         currentTime: metadata.duration,
@@ -289,7 +396,18 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         <div className="flex items-center gap-5 text-xs text-stone-500">
           <span className="flex items-center gap-1.5 text-emerald-400"><AppIcon name="circleCheck" className="h-3.5 w-3.5" />時間型遮罩 · {maskTimeline.keyframes.length} 個關鍵影格</span>
           <span className="text-violet-300">AI 人物辨識 · 本機 MediaPipe</span>
-          <span className="text-cyan-300">影片合成輸出 · 本機錄製</span>
+          <ProjectPanel
+            projectName={projectName}
+            hasProject={Boolean(projectId)}
+            projects={projectStore.projects}
+            busyMessage={projectStore.busyMessage}
+            error={projectStore.error}
+            disabled={isVideoExporting || isAnalyzing}
+            onProjectNameChange={setProjectName}
+            onSave={() => void saveProject()}
+            onOpen={(id) => void openProject(id)}
+            onRefreshList={() => void projectStore.refreshProjects()}
+          />
         </div>
       </header>
 
@@ -330,6 +448,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           onAnalyzeCurrent={analyzeCurrent}
           onAnalyzeClip={analyzeClip}
           onCancelAnalysis={cancelAnalysis}
+          lastExportLabel={lastExport?.label ?? null}
+          onSaveToLibrary={lastExport ? () => setLibraryDialogOpen(true) : undefined}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <MaskStage
@@ -369,6 +489,9 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         </div>
       </div>
       {exportError ? <div role="alert" className="absolute bottom-5 right-5 rounded-lg border border-red-400/30 bg-red-950 px-4 py-2 text-sm text-red-200">{exportError}</div> : null}
+      {libraryDialogOpen && lastExport ? (
+        <SaveToLibraryDialog asset={lastExport.asset} onClose={() => setLibraryDialogOpen(false)} />
+      ) : null}
     </main>
   )
 }

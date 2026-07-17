@@ -92,6 +92,10 @@ const ROUTE_FILES = [
   'src/app/api/edit-requests/incoming/route.ts',
   'src/app/api/files/[...path]/route.ts',
   'src/app/api/files/extract-episodes/route.ts',
+  // Live Composite Studio project persistence (owner-only CRUD; see
+  // src/app/api/live-composite/lib/projects-contract.ts).
+  'src/app/api/live-composite/projects/[id]/route.ts',
+  'src/app/api/live-composite/projects/route.ts',
   'src/app/api/notifications/summary/route.ts',
   'src/app/api/novel-promotion/[projectId]/ai-create-character/route.ts',
   'src/app/api/novel-promotion/[projectId]/ai-create-location/route.ts',

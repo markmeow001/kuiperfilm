@@ -1963,3 +1963,19 @@ model SkillInstallation {
   @@index([userId, enabled])
   @@map("skill_installations")
 }
+
+model LiveCompositeProject {
+  id              String   @id @default(uuid())
+  ownerUserId     String
+  name            String   @default("未命名合成")
+  videoKey        String?  @db.VarChar(512)
+  videoName       String?  @db.VarChar(255)
+  backgroundKey   String?  @db.VarChar(512)
+  backgroundColor String   @default("#172033") @db.VarChar(16)
+  // { keyframes: [{ id, time, baseMaskKey?, strokes: [{tool,brushPercent,points[]}] }] }
+  timeline        Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ownerUserId, updatedAt])
+}

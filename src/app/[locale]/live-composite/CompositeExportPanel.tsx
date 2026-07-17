@@ -11,6 +11,9 @@ interface CompositeExportPanelProps {
   onExportFrame: () => void
   onExportVideo: (includeAudio: boolean) => void
   onCancelVideo: () => void
+  /** Label of the most recent completed export (存入資產庫 entry point). */
+  lastExportLabel?: string | null
+  onSaveToLibrary?: () => void
 }
 
 export function CompositeExportPanel({
@@ -20,6 +23,8 @@ export function CompositeExportPanel({
   onExportFrame,
   onExportVideo,
   onCancelVideo,
+  lastExportLabel = null,
+  onSaveToLibrary,
 }: CompositeExportPanelProps) {
   const [includeAudio, setIncludeAudio] = useState(true)
   const isExporting = progress.status === 'preparing' || progress.status === 'recording'
@@ -67,6 +72,17 @@ export function CompositeExportPanel({
             <AppIcon name="download" className="h-4 w-4" />輸出完整合成影片
           </button>
         )}
+
+        {lastExportLabel && onSaveToLibrary ? (
+          <button
+            type="button"
+            disabled={isExporting}
+            onClick={onSaveToLibrary}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-cyan-400/30 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-400/[0.08] disabled:opacity-30"
+          >
+            <AppIcon name="bookmark" className="h-4 w-4" />存入資產庫（{lastExportLabel}）
+          </button>
+        ) : null}
 
         {progress.status === 'completed' || progress.status === 'failed' ? (
           <p role="status" className={`text-xs leading-5 ${progress.status === 'failed' ? 'text-red-300' : 'text-emerald-300'}`}>

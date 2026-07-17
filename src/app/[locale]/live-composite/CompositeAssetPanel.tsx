@@ -24,6 +24,8 @@ interface CompositeAssetPanelProps {
   onAnalyzeCurrent: (settings: AiMaskSettings) => void
   onAnalyzeClip: (settings: AiMaskSettings) => void
   onCancelAnalysis: () => void
+  lastExportLabel?: string | null
+  onSaveToLibrary?: () => void
 }
 
 export function CompositeAssetPanel({
@@ -45,6 +47,8 @@ export function CompositeAssetPanel({
   onAnalyzeCurrent,
   onAnalyzeClip,
   onCancelAnalysis,
+  lastExportLabel = null,
+  onSaveToLibrary,
 }: CompositeAssetPanelProps) {
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-stone-950/80">
@@ -87,6 +91,8 @@ export function CompositeAssetPanel({
         onExportFrame={onExportFrame}
         onExportVideo={onExportVideo}
         onCancelVideo={onCancelVideoExport}
+        lastExportLabel={lastExportLabel}
+        onSaveToLibrary={onSaveToLibrary}
       />
     </aside>
   )

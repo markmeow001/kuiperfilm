@@ -50,6 +50,12 @@ export function useMaskTimeline(currentTime: number) {
     canUndo: past.length > 0,
     canRedo: future.length > 0,
     reset: () => setState(makeInitialState()),
+    // Replace the whole timeline with persisted keyframes (project load).
+    // History is intentionally cleared — undo must not cross a project load.
+    load: (loaded: MaskKeyframe[]) => {
+      if (loaded.length === 0) throw new Error('載入的遮罩時間軸是空的')
+      setState({ keyframes: [...loaded].sort((a, b) => a.time - b.time), past: [], future: [] })
+    },
     addKeyframe: () => commit((current) => createMaskKeyframeFromCurrent(current, currentTime, () => crypto.randomUUID())),
     deleteKeyframe: () => commit((current) => {
       const exactNow = findExactMaskKeyframe(current, currentTime)

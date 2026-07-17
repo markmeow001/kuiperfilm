@@ -27,7 +27,14 @@ const apiConfigMock = vi.hoisted(() => ({
 }))
 
 const submitterMock = vi.hoisted(() => ({
-  submitTask: vi.fn(async () => ({
+  submitTask: vi.fn<(arg: Record<string, unknown>) => Promise<{
+    success: boolean
+    async: boolean
+    taskId: string
+    runId: string
+    status: string
+    deduped: boolean
+  }>>(async () => ({
     success: true,
     async: true,
     taskId: 'task-1',
