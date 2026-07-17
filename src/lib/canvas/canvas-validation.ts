@@ -9,7 +9,9 @@
  */
 import { z } from 'zod'
 
-const NODE_TYPES = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'group'] as const
+// ⚠️ 三处副本要同步：client canvas-tokens CanvasNodeType / canvas-serialize
+// VALID_TYPES / 这里。漏这里 = 含该节点的画布保存整包被拒（2026-07-18 mask 事故）。
+const NODE_TYPES = ['character', 'image', 'video', 'text', 'director', 'script', 'audio', 'composition', 'mask', 'group'] as const
 
 export const MAX_NODES = 500
 export const MAX_EDGES = 1000
@@ -38,9 +40,10 @@ const serializedEdgeSchema = z.object({
   sourceHandle: z.string().max(128).nullable().optional(),
   targetHandle: z.string().max(128).nullable().optional(),
   data: z.object({
-    portType: z.enum(['text', 'script', 'identity-image', 'frame-image', 'video-clip', 'audio-voice', 'audio-music', 'storyboard-group']),
+    // 同步自 client canvas-types CanvasPortType / CanvasEdgeData.role。
+    portType: z.enum(['text', 'script', 'identity-image', 'frame-image', 'video-clip', 'audio-voice', 'audio-music', 'storyboard-group', 'mask-image']),
     order: z.number().int().nonnegative().optional(),
-    role: z.enum(['first-frame', 'last-frame', 'reference', 'clip', 'voice', 'music']).optional(),
+    role: z.enum(['first-frame', 'last-frame', 'reference', 'clip', 'voice', 'music', 'mask']).optional(),
     invalid: z.boolean().optional(),
     invalidReason: z.string().max(300).optional(),
   }).passthrough().optional(),

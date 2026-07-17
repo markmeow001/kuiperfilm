@@ -292,6 +292,11 @@ function CanvasInner({ locale }: CanvasClientProps) {
               setActiveCanvasId(canvas.id)
             }
           },
+          // 保存失败必须浮出（CLAUDE.md 不静默吞错）——2026-07-18 mask 事故：
+          // 服务端 schema 拒掉整包时用户毫无感知，刷新即丢一切改动。
+          onError: (err) => {
+            flashDropError(`画布保存失败：${(err as Error)?.message ?? '未知错误'} — 更改不会被保留`, 8000)
+          },
           onSettled: () => {
             creatingRef.current = false
           },
