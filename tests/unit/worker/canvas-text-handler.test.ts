@@ -60,6 +60,23 @@ describe('handleCanvasTextTask', () => {
     expect(call?.messages[0]?.content).toContain('运镜')
   })
 
+  it('assistant mode returns a validated operation plan instead of free text', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({
+      text: '{"summary":"建立图片流程","operations":[{"kind":"create_node","alias":"frame","nodeType":"image","title":"主画面"}]}',
+      reasoning: '',
+    })
+    const res = await handleCanvasTextTask(makeJob({ text: '{"instruction":"建立图片"}', mode: 'assistant', model: 'm' }))
+    expect(res).toMatchObject({ success: true, assistantPlan: { summary: '建立图片流程' } })
+  })
+
+  it('assistant mode rejects malformed or destructive AI plans', async () => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({
+      text: '{"summary":"删除","operations":[{"kind":"delete_node","nodeIds":["x"]}]}',
+      reasoning: '',
+    })
+    await expect(handleCanvasTextTask(makeJob({ text: '{"instruction":"整理"}', mode: 'assistant', model: 'm' }))).rejects.toThrow(/unsupported operation/)
+  })
+
   it('throws when text is missing', async () => {
     await expect(handleCanvasTextTask(makeJob({ mode: 'expand', model: 'm' }))).rejects.toThrow(/text is required/)
   })

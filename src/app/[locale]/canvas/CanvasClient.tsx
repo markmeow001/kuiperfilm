@@ -54,6 +54,11 @@ import { CanvasResourceMenu } from './CanvasResourceMenu'
 import { CANVAS_SOURCE_HANDLE, CANVAS_TARGET_HANDLE, canConnectCanvasNodes, canvasConnectionHint, inferCanvasEdgeData } from './lib/canvas-connections'
 import { arrangeSelectedNodes, setSelectedLayer, setSelectedLocked, type CanvasArrangeMode, type CanvasLayerMode } from './lib/canvas-layout'
 import { EMPTY_CANVAS_HISTORY, recordCanvasSnapshot, redoCanvasSnapshot, undoCanvasSnapshot, type CanvasHistoryState } from './lib/canvas-history'
+import { clearCanvasImportAssetFromHref, type CanvasImportIntent } from './lib/canvas-import-intent'
+import { CanvasAssistantPanel } from './CanvasAssistantPanel'
+import { buildCanvasAssistantContext } from './lib/canvas-assistant-context'
+import { applyCanvasAssistantPlan } from './lib/canvas-assistant-apply'
+import type { CanvasAssistantPlan } from '@/lib/canvas/assistant-contract'
 
 const uid = () =>
   typeof crypto !== 'undefined' && crypto.randomUUID
@@ -100,7 +105,7 @@ interface PaneMenu {
   flowY: number
 }
 
-function CanvasInner({ locale }: CanvasClientProps) {
+function CanvasInner({ locale, importIntent }: CanvasClientProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CanvasNodeData>>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [menu, setMenu] = useState<AddMenu | null>(null)
@@ -112,6 +117,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
   const [showMinimap, setShowMinimap] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [resourcesOpen, setResourcesOpen] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [resourceError, setResourceError] = useState<string | null>(null)
   const [canvasTitle, setCanvasTitle] = useState('未命名画布')
   const [activeCanvasId, setActiveCanvasId] = useState<string | null>(null)
@@ -127,6 +133,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const pendingUploadPositionRef = useRef<{ x: number; y: number } | null>(null)
   const historyRef = useRef<CanvasHistoryState>(EMPTY_CANVAS_HISTORY)
+  const importedAssetRef = useRef<string | null>(null)
   const [historyRevision, setHistoryRevision] = useState(0)
 
   const canvasQuery = useCanvas()
@@ -247,7 +254,13 @@ function CanvasInner({ locale }: CanvasClientProps) {
   useEffect(() => {
     if (loadedRef.current || canvasQuery.isLoading) return
     loadedRef.current = true
-    const canvas = canvasQuery.data?.canvas
+    const requested = importIntent
+      ? canvasQuery.data?.resources.find((resource) => resource.id === importIntent.canvasId && resource.kind === 'canvas')
+      : null
+    const canvas = requested ?? canvasQuery.data?.canvas
+    if (importIntent && !requested) {
+      setResourceError('找不到 Live Composite 指定的目标画布；未自动建立节点')
+    }
     if (!canvas) return
     canvasIdRef.current = canvas.id
     setActiveCanvasId(canvas.id)
@@ -262,7 +275,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
     // Apply viewport now if the instance is ready, else stash for onInit.
     if (instanceRef.current) instanceRef.current.setViewport(viewport)
     else pendingViewportRef.current = viewport
-  }, [canvasQuery.isLoading, canvasQuery.data, setNodes, setEdges])
+  }, [canvasQuery.isLoading, canvasQuery.data, importIntent, setNodes, setEdges])
 
   // ── Autosave (debounced) to DB on any change ──
   useEffect(() => {
@@ -699,7 +712,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
     setToolbox(false)
   }, [centerFlow, setNodes, setEdges, captureHistory])
 
-  const assetLibraryQuery = useCanvasAssetLibrary(activeCanvasId, charLib)
+  const assetLibraryQuery = useCanvasAssetLibrary(activeCanvasId, charLib || Boolean(importIntent))
   const [assetType, setAssetType] = useState<CanvasAssetLibraryItem['type']>('character')
   const dropAsset = useCallback((asset: CanvasAssetLibraryItem) => {
     captureHistory()
@@ -714,6 +727,23 @@ function CanvasInner({ locale }: CanvasClientProps) {
     setNodes((ns) => [...ns, node])
     setCharLib(false)
   }, [centerFlow, setNodes, captureHistory])
+
+  // Live Composite handoff: select the requested canvas during hydration,
+  // then materialize the freshly-saved asset as a real node exactly once.
+  useEffect(() => {
+    if (!importIntent || activeCanvasId !== importIntent.canvasId || importedAssetRef.current === importIntent.assetId) return
+    if (!assetLibraryQuery.isSuccess) return
+    const asset = assetLibraryQuery.data.find((item) => item.id === importIntent.assetId)
+    if (!asset) {
+      importedAssetRef.current = importIntent.assetId
+      setResourceError('合成输出已存入资产库，但找不到对应资产，无法自动建立节点')
+      window.history.replaceState(null, '', clearCanvasImportAssetFromHref(window.location.href))
+      return
+    }
+    importedAssetRef.current = importIntent.assetId
+    dropAsset(asset)
+    window.history.replaceState(null, '', clearCanvasImportAssetFromHref(window.location.href))
+  }, [activeCanvasId, assetLibraryQuery.data, assetLibraryQuery.isSuccess, dropAsset, importIntent])
 
   const minimapColor = useCallback((n: Node) => NODE_META[(n.type as CanvasNodeType) ?? 'text']?.accent ?? CANVAS_TOKENS.text.muted, [])
 
@@ -753,6 +783,21 @@ function CanvasInner({ locale }: CanvasClientProps) {
       setActiveCanvasId(result.canvas.id)
     }
   }, [nodes, edges, canvasTitle, save])
+
+  const assistantContext = useCallback(
+    (instruction: string) => buildCanvasAssistantContext(instruction, nodes, edges),
+    [nodes, edges],
+  )
+  const applyAssistantPlan = useCallback((plan: CanvasAssistantPlan) => {
+    const center = centerFlow()
+    const next = applyCanvasAssistantPlan(nodes, edges, plan, {
+      center: { x: center.x - 140, y: center.y - 80 },
+      createId: uid,
+    })
+    captureHistory()
+    setNodes(next.nodes)
+    setEdges(next.edges)
+  }, [centerFlow, nodes, edges, captureHistory, setNodes, setEdges])
 
   const runResourceAction = useCallback(async (action: () => Promise<void>) => {
     setResourceError(null)
@@ -830,6 +875,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
       { key: 'toolbox', label: '工具箱', onClick: () => setToolbox((v) => !v) },
       { key: 'sequence', label: '镜头序列', onClick: () => setShowSequence((v) => !v) },
       { key: 'character', label: '资产库', onClick: () => setCharLib((v) => !v) },
+      { key: 'assistant', label: 'AI 助理', onClick: () => setAssistantOpen((value) => !value) },
       { key: 'clear', label: '清空画布', onClick: clearCanvas },
       { key: 'shortcuts', label: '快捷键', onClick: () => setShortcutsOpen((v) => !v) },
     ],
@@ -1255,6 +1301,7 @@ function CanvasInner({ locale }: CanvasClientProps) {
         >
           <span className="px-1.5 text-[12px]" style={{ color: CANVAS_TOKENS.text.muted }}>已选 {selectedNodes.length}</span>
           <button type="button" onClick={zoomToSelection} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.text.primary }}>聚焦</button>
+          <button type="button" onClick={() => setAssistantOpen(true)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: CANVAS_TOKENS.accent }}>✨ AI 助理</button>
           <button type="button" onClick={() => setSelectionLocked(!selectionLocked)} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10" style={{ color: selectionLocked ? CANVAS_TOKENS.gold : CANVAS_TOKENS.text.primary }}>{selectionLocked ? '解锁' : '锁定'}</button>
           <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('front')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置顶</button>
           <button type="button" disabled={selectedTopLevelNodes.length === 0} onClick={() => changeSelectedLayer('back')} className="h-7 rounded-lg px-2 text-[12px] hover:bg-white/10 disabled:opacity-35" style={{ color: CANVAS_TOKENS.text.primary }}>置底</button>
@@ -1303,6 +1350,16 @@ function CanvasInner({ locale }: CanvasClientProps) {
             删除
           </button>
         </div>
+      ) : null}
+
+      {assistantOpen ? (
+        <CanvasAssistantPanel
+          locale={locale}
+          selectedCount={selectedNodes.length}
+          buildContext={assistantContext}
+          onApply={applyAssistantPlan}
+          onClose={() => setAssistantOpen(false)}
+        />
       ) : null}
 
       {/* 快捷键 panel */}
@@ -1364,13 +1421,14 @@ function CanvasInner({ locale }: CanvasClientProps) {
 
 interface CanvasClientProps {
   locale: string
+  importIntent?: CanvasImportIntent | null
 }
 
 export function CanvasClient(_props: CanvasClientProps) {
   return (
     <ReactFlowProvider>
       <CanvasGenerationProvider>
-        <CanvasInner locale={_props.locale} />
+        <CanvasInner locale={_props.locale} importIntent={_props.importIntent ?? null} />
       </CanvasGenerationProvider>
     </ReactFlowProvider>
   )

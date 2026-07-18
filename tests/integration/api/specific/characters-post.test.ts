@@ -4,6 +4,7 @@ import {
   installAuthMocks,
   mockAuthenticated,
   mockUnauthenticated,
+  mockRole,
   resetAuthMockState,
 } from '../../../helpers/auth'
 
@@ -30,6 +31,7 @@ describe('api specific - characters POST', () => {
   it('returns invalid params when name is missing', async () => {
     installAuthMocks()
     mockAuthenticated('user-a')
+    mockRole('editor')
     const mod = await import('@/app/api/asset-hub/characters/route')
     const req = buildMockRequest({
       path: '/api/asset-hub/characters',

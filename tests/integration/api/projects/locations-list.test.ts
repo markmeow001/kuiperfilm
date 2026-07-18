@@ -4,6 +4,7 @@ import {
   installAuthMocks,
   mockAuthenticated,
   mockUnauthenticated,
+  mockProjectAuth,
   resetAuthMockState,
 } from '../../../helpers/auth'
 
@@ -60,7 +61,7 @@ describe('GET /api/projects/[projectId]/locations', () => {
   it('project 不存在 -> 404', async () => {
     installAuthMocks()
     mockAuthenticated('user-a')
-    prismaMock.project.findUnique.mockResolvedValue(null)
+    mockProjectAuth('not_found')
 
     const mod = await import('@/app/api/projects/[projectId]/locations/route')
     const req = buildMockRequest({
@@ -74,7 +75,7 @@ describe('GET /api/projects/[projectId]/locations', () => {
   it('不擁有此 project -> 403', async () => {
     installAuthMocks()
     mockAuthenticated('user-b')
-    prismaMock.project.findUnique.mockResolvedValue({ id: 'proj-1', userId: 'user-a' })
+    mockProjectAuth('forbidden')
 
     const mod = await import('@/app/api/projects/[projectId]/locations/route')
     const req = buildMockRequest({

@@ -366,8 +366,8 @@ export async function runMultiShotFalComposite(params: {
   const propRefs = collectPropRefs(usedPanels, projectData)
 
   let firstFrameUrl: string | null = null
-  let referenceImages: string[] = []
-  let r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }> = []
+  const referenceImages: string[] = []
+  const r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }> = []
 
   if (mode === 'r2v') {
     for (const c of characterRefs) {

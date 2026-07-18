@@ -79,11 +79,11 @@ export function playgroundDownloadHref(url: string, filename?: string): string {
   return `/api/playground/download?${params.toString()}`
 }
 
-export function usePlaygroundController() {
+export function usePlaygroundController(workspaceId: string | null = null) {
   const userModelsQuery = useUserModels()
   const upload = useUploadPlaygroundReference()
   const submit = useSubmitPlaygroundRun()
-  const runsQuery = usePlaygroundRuns(null)
+  const runsQuery = usePlaygroundRuns(workspaceId)
   // Kling O3 named subjects (人物/場景) — state + handlers live in their own
   // hook; kept across model switches so a switch doesn't wipe uploads.
   const kling = useKlingElements(upload)
@@ -179,8 +179,10 @@ export function usePlaygroundController() {
       setAspectRatio('16:9')
     }
   }, [isKlingO3Model, aspectRatio])
-  const resolutionOptions: string[] =
-    (outputType === 'video' && selectedVideoModel?.capabilities?.video?.resolutionOptions) || []
+  const resolutionOptions = useMemo(
+    () => (outputType === 'video' && selectedVideoModel?.capabilities?.video?.resolutionOptions) || [],
+    [outputType, selectedVideoModel],
+  )
   const showResolutionPicker = resolutionOptions.length > 1
   useEffect(() => {
     if (resolutionOptions.length > 0 && !resolutionOptions.includes(resolution)) {
@@ -401,6 +403,7 @@ export function usePlaygroundController() {
         referenceText: refText.trim() || undefined,
         outputType,
         modelKey: effectiveModelKey,
+        workspaceId,
         aspectRatio,
         ...(outputType === 'video' ? { durationSec, generateAudio: soundOn } : {}),
         ...(showResolutionPicker ? { resolution } : {}),

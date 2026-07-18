@@ -131,15 +131,15 @@ export default function WorkspacesPage() {
   }, [workspaces, memberships])
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-200">
+    <div className="kuiper-studio-page">
       <Navbar />
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <header className="mb-8 flex items-center justify-between">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+        <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <div className="font-mono text-xs uppercase tracking-[0.2em] text-amber-500">
+            <div className="kuiper-studio-kicker">
               WORKSPACES
             </div>
-            <h1 className="font-fraunces text-3xl italic">工作區管理</h1>
+            <h1 className="kuiper-studio-heading mt-1 text-3xl">工作區管理</h1>
             <p className="mt-1 font-serif-cn text-sm text-stone-400">
               {role === UserRole.ADMIN ? '管理員視圖：看見全平台所有 org / workspace。'
                 : role === UserRole.EDITOR ? '編輯者視圖：管理你建立的工作區、加 / 踢成員、看組員專案。'
@@ -169,7 +169,7 @@ export default function WorkspacesPage() {
             {canCreateOrg && (
               <button
                 onClick={() => setShowOrgModal(true)}
-                className="rounded-sm bg-amber-500 px-3 py-1.5 font-serif-cn text-sm font-medium text-stone-950 hover:bg-amber-400"
+                className="kuiper-studio-primary px-4 py-2 text-sm"
               >
                 + 新增組織
               </button>
@@ -178,13 +178,13 @@ export default function WorkspacesPage() {
           {loading ? (
             <div className="font-mono text-xs text-stone-500">載入中...</div>
           ) : orgs.length === 0 ? (
-            <div className="rounded-sm border border-stone-800 bg-stone-900/50 px-4 py-6 font-serif-cn text-sm text-stone-400">
+            <div className="kuiper-empty-state font-serif-cn text-sm">
               {canCreateOrg ? '還沒有組織。先建一個組織才能下面建工作區。' : '你目前不在任何組織內。'}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {orgs.map((o) => (
-                <div key={o.id} className="rounded-sm border border-stone-800 bg-stone-900/50 p-4">
+                <div key={o.id} className="kuiper-studio-panel p-5">
                   <div className="font-fraunces text-base italic">{o.name}</div>
                   {o.description && <div className="mt-1 font-serif-cn text-xs text-stone-400">{o.description}</div>}
                   <div className="mt-3 flex items-center justify-between">
@@ -210,7 +210,7 @@ export default function WorkspacesPage() {
             {canCreateWs && (
               <button
                 onClick={() => setShowWsModal(true)}
-                className="rounded-sm bg-amber-500 px-3 py-1.5 font-serif-cn text-sm font-medium text-stone-950 hover:bg-amber-400"
+                className="kuiper-studio-primary px-4 py-2 text-sm"
               >
                 + 新增工作區
               </button>
@@ -219,7 +219,7 @@ export default function WorkspacesPage() {
           {loading ? (
             <div className="font-mono text-xs text-stone-500">載入中...</div>
           ) : allWs.length === 0 ? (
-            <div className="rounded-sm border border-stone-800 bg-stone-900/50 px-4 py-6 font-serif-cn text-sm text-stone-400">
+            <div className="kuiper-empty-state font-serif-cn text-sm">
               {canCreateWs
                 ? '還沒有工作區。點上方「新增工作區」建一個。'
                 : role === UserRole.EDITOR && orgs.length === 0
@@ -236,7 +236,7 @@ export default function WorkspacesPage() {
                     key={w.id}
                     type="button"
                     onClick={() => setSelectedWs(w)}
-                    className="rounded-sm border border-stone-800 bg-stone-900/50 p-4 text-left transition-colors hover:border-amber-500/50 hover:bg-stone-900"
+                    className="kuiper-studio-card p-5 text-left"
                   >
                     <div className="flex items-start justify-between">
                       <div>

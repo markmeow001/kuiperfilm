@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getAuthSession } from '@/lib/api-auth'
 import { CanvasClient } from './CanvasClient'
+import { parseCanvasImportIntent } from './lib/canvas-import-intent'
 
 /**
  * 无限画布（Infinite Canvas）M1 — 独立创作区，与 v2 劇集流分开（仿 /playground 模式）。
@@ -13,15 +14,17 @@ import { CanvasClient } from './CanvasClient'
  */
 interface PageProps {
   params: Promise<{ locale: string }>
+  searchParams: Promise<{ canvas?: string | string[]; asset?: string | string[] }>
 }
 
-export default async function CanvasPage({ params }: PageProps) {
+export default async function CanvasPage({ params, searchParams }: PageProps) {
   const { locale } = await params
+  const importIntent = parseCanvasImportIntent(await searchParams)
 
   const session = await getAuthSession()
   if (!session?.user?.id) {
     redirect(`/${locale}/auth/signin?callbackUrl=${encodeURIComponent(`/${locale}/canvas`)}`)
   }
 
-  return <CanvasClient locale={locale} />
+  return <CanvasClient locale={locale} importIntent={importIntent} />
 }

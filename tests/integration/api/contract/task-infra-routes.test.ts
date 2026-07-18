@@ -4,6 +4,7 @@ import { buildMockRequest } from '../../../helpers/request'
 
 type AuthState = {
   authenticated: boolean
+  projectAccessAllowed: boolean
 }
 
 type TaskRecord = {
@@ -20,6 +21,7 @@ type TaskRecord = {
 
 const authState = vi.hoisted<AuthState>(() => ({
   authenticated: true,
+  projectAccessAllowed: true,
 }))
 
 const queryTasksMock = vi.hoisted(() => vi.fn())
@@ -56,6 +58,9 @@ vi.mock('@/lib/api-auth', () => {
         project: { id: projectId, userId: 'user-1' },
       }
     },
+    requireProjectAccess: async () => authState.projectAccessAllowed
+      ? { allowed: true, effectiveRole: 'editor' }
+      : { allowed: false, reason: 'NO_ACCESS' },
   }
 })
 
@@ -115,6 +120,7 @@ describe('api contract - task infra routes (behavior)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     authState.authenticated = true
+    authState.projectAccessAllowed = true
     subscriberState.listener = null
 
     queryTasksMock.mockResolvedValue([baseTask])
@@ -256,10 +262,12 @@ describe('api contract - task infra routes (behavior)', () => {
 
     authState.authenticated = true
     getTaskByIdMock.mockResolvedValueOnce({ ...baseTask, userId: 'other-user' })
+    authState.projectAccessAllowed = false
     const notFoundReq = buildMockRequest({ path: '/api/tasks/task-1', method: 'GET' })
     const notFoundRes = await route.GET(notFoundReq, { params: Promise.resolve({ taskId: 'task-1' }) })
     expect(notFoundRes.status).toBe(404)
 
+    authState.projectAccessAllowed = true
     const req = buildMockRequest({ path: '/api/tasks/task-1', method: 'GET' })
     const res = await route.GET(req, { params: Promise.resolve({ taskId: 'task-1' }) })
     expect(res.status).toBe(200)

@@ -6,6 +6,7 @@
  * read back from the shared usePlaygroundRuns poll. No new task type in M1.
  */
 import type { CanvasNodeType } from './canvas-tokens'
+import type { CanvasDirectorOutputMetadata } from './director-output-metadata'
 
 export type CanvasPortType =
   | 'text'
@@ -54,9 +55,25 @@ export interface CanvasMaskPath {
   points: CanvasMaskPoint[]
 }
 
+export interface CanvasImageVersion {
+  rootNodeId: string
+  parentNodeId: string
+  version: number
+  operation: 'crop' | 'outpaint'
+  aspectRatio: string
+}
+
 export interface CanvasNodeData extends Record<string, unknown> {
   /** User-facing title shown in the node header (editable). */
   title: string
+  /** Immutable blocking/previz provenance captured when 导演台 creates this output. */
+  directorMetadata?: CanvasDirectorOutputMetadata | null
+  /** Storyboard handoff: prefilled blocking brief for the Director AI draft panel. */
+  blockingBrief?: string | null
+  /** One-shot UI intent used when a storyboard creates a Director node. */
+  openDirectorOnCreate?: boolean
+  /** Non-destructive image edit lineage; edited outputs always live in sibling nodes. */
+  imageVersion?: CanvasImageVersion | null
   /** Prevents accidental movement and deletion while preserving selection. */
   locked?: boolean
   /** Mask node: editable vector strokes over the connected/uploaded plate. */

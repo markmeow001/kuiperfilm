@@ -14,7 +14,7 @@
  * Wire character nodes INTO the director (its left handle) to define the cast.
  * The heavy 3D stage is lazy-loaded + portaled to document.body.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import {
@@ -28,9 +28,10 @@ import {
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import { DEFAULT_NODE_DATA, type CanvasNodeData } from '../lib/canvas-types'
+import { buildDirectorOutputMetadata } from '../lib/director-output-metadata'
 import { useCanvasGeneration } from '../lib/canvas-generation'
 import { NodeShell } from './node-shell'
-import { DEFAULT_STAGE, normalizeStage, type DirectorStageState } from '../director/stage-types'
+import { DEFAULT_STAGE, normalizeStage, type DirectorStageState, type StageCamera } from '../director/stage-types'
 import type { PrevizExportPayload } from '../director/DirectorStage'
 import type { DirectorRouteInputMode, DirectorRouteSegment } from '@/lib/canvas/director-routes-schema'
 import type { DirectorBlockingDraft } from '@/lib/canvas/director-blocking-schema'
@@ -64,8 +65,12 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
   const { updateNodeData, getNode, addNodes, addEdges } = rf
   const upload = useUploadPlaygroundReference()
   const gen = useCanvasGeneration()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(Boolean(d.openDirectorOnCreate))
   const meta = NODE_META.director
+
+  useEffect(() => {
+    if (d.openDirectorOnCreate) updateNodeData(id, { openDirectorOnCreate: false })
+  }, [d.openDirectorOnCreate, id, updateNodeData])
 
   // Cast = character/image nodes wired INTO the director.
   const incoming = useNodeConnections({ handleType: 'target' })
@@ -97,7 +102,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
 
   // Throws on failure so the stage can surface it (the node card is hidden
   // behind the fullscreen stage during a send).
-  async function handleSendShot(dataUrl: string, label: string, newStage: DirectorStageState) {
+  async function handleSendShot(dataUrl: string, camera: StageCamera, newStage: DirectorStageState) {
     const res = await upload.mutateAsync({ file: dataUrlToFile(dataUrl, `shot-${uid()}.png`), type: 'image' })
     const self = getNode(id)
     const base = self?.position ?? { x: 0, y: 0 }
@@ -108,7 +113,18 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
       id: frameId,
       type: 'image',
       position: { x: base.x + 360, y: base.y + sentCount * 200 },
-      data: { ...DEFAULT_NODE_DATA, title: label, anchorKey: res.key, anchorUrl: res.signedUrl },
+      data: {
+        ...DEFAULT_NODE_DATA,
+        title: camera.label,
+        anchorKey: res.key,
+        anchorUrl: res.signedUrl,
+        directorMetadata: buildDirectorOutputMetadata({
+          directorNodeId: id,
+          source: 'camera-still',
+          state: newStage,
+          cameraId: camera.id,
+        }),
+      },
     }
     addNodes(frame)
 
@@ -165,6 +181,12 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
         anchorUrl: json.firstFrameUrl ?? null,
         lastFrameKey: json.lastFrameKey ?? null,
         lastFramePreview: json.lastFrameUrl ?? null,
+        directorMetadata: buildDirectorOutputMetadata({
+          directorNodeId: id,
+          source: payload.scope === 'shot' ? 'previz-shot' : 'previz-scene',
+          state: payload.state,
+          shotIds: payload.shotIds,
+        }),
       },
     } satisfies Node<CanvasNodeData>)
     const castEdges: Edge[] = cast.map((n) => ({ id: uid(), source: n.id, target: frameId, animated: true }))
@@ -259,6 +281,7 @@ export function DirectorNode({ id, data, selected }: NodeProps) {
               onPersistState={(s) => updateNodeData(id, { stage: s })}
               onGenerateRoutes={handleGenerateRoutes}
               onGenerateBlocking={handleGenerateBlocking}
+              initialBlockingDescription={d.blockingBrief ?? ''}
               saving={upload.isPending}
               uploadImage={async (file) => {
                 const res = await upload.mutateAsync({ file, type: 'image' })

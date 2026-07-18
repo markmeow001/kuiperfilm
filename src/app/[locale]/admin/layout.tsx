@@ -36,5 +36,5 @@ export default async function AdminLayout({
     redirect(`/${locale}`)
   }
 
-  return <>{children}</>
+  return <div className="kuiper-studio-page">{children}</div>
 }

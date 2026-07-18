@@ -382,8 +382,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }
 
   return (
-    <main className="flex h-screen min-h-[680px] flex-col overflow-hidden bg-[#09090b] text-stone-100">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 bg-stone-950 px-5">
+    <main className="kuiper-studio-page flex h-dvh min-h-[680px] flex-col overflow-hidden">
+      <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 overflow-x-auto border-b border-white/10 bg-[#0B0B0D]/95 px-4 py-2 sm:px-5">
         <div className="flex items-center gap-4">
           <Link href={`/${locale}/v2`} aria-label="回到專案列表" className="grid h-9 w-9 place-items-center rounded-lg text-stone-500 hover:bg-white/10 hover:text-white">
             <AppIcon name="arrowLeft" className="h-4 w-4" />
@@ -393,7 +393,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             <div className="mt-0.5 text-xs text-stone-600">Live Composite Studio · Mask MVP</div>
           </div>
         </div>
-        <div className="flex items-center gap-5 text-xs text-stone-500">
+        <div className="flex shrink-0 items-center gap-5 text-xs text-stone-500">
           <span className="flex items-center gap-1.5 text-emerald-400"><AppIcon name="circleCheck" className="h-3.5 w-3.5" />時間型遮罩 · {maskTimeline.keyframes.length} 個關鍵影格</span>
           <span className="text-violet-300">AI 人物辨識 · 本機 MediaPipe</span>
           <ProjectPanel
@@ -490,7 +490,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       </div>
       {exportError ? <div role="alert" className="absolute bottom-5 right-5 rounded-lg border border-red-400/30 bg-red-950 px-4 py-2 text-sm text-red-200">{exportError}</div> : null}
       {libraryDialogOpen && lastExport ? (
-        <SaveToLibraryDialog asset={lastExport.asset} onClose={() => setLibraryDialogOpen(false)} />
+        <SaveToLibraryDialog asset={lastExport.asset} locale={locale} onClose={() => setLibraryDialogOpen(false)} />
       ) : null}
     </main>
   )

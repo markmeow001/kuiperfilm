@@ -477,14 +477,16 @@ export interface PrevizExportPayload {
   scope: 'shot' | 'scene'
   title: string
   directorText: string
+  /** Exact ordered source shots represented by this export. */
+  shotIds: string[]
   state: DirectorStageState
 }
 
 interface DirectorStageProps {
   initialState: DirectorStageState
   onClose: () => void
-  /** Capture cameraId's POV → spawn a frame on the canvas (label = camera label). */
-  onSendShot: (dataUrl: string, label: string, state: DirectorStageState) => void | Promise<void>
+  /** Capture camera POV → spawn a frame and retain the exact camera metadata. */
+  onSendShot: (dataUrl: string, camera: StageCamera, state: DirectorStageState) => void | Promise<void>
   /** 导出预演 → 上传转码 → 生成带参考视频的视频节点；返回可预览/下载的 MP4 URL。 */
   onExportPreviz?: (payload: PrevizExportPayload) => Promise<{ videoUrl: string }>
   /**
@@ -497,6 +499,8 @@ interface DirectorStageProps {
   onGenerateRoutes?: (description: string, mode: DirectorRouteInputMode, cast: string[], props: string[]) => Promise<DirectorRouteSegment[]>
   /** AI 排戏：把自然语言转换为待确认的可编辑 3D 场景草稿。 */
   onGenerateBlocking?: (description: string) => Promise<DirectorBlockingDraft>
+  /** Storyboard-derived brief used to open AI blocking without re-pasting text. */
+  initialBlockingDescription?: string
   /** Names of character nodes wired into the director (the cast), for display. */
   castLabels?: string[]
   saving?: boolean
@@ -512,7 +516,7 @@ interface DirectorStageProps {
 
 const PANORAMA_PROMPT = '将这张场景图转换为无缝衔接的 360° 等距圆柱全景图（equirectangular panorama，2:1），左右边缘可平滑环绕拼接，保持原场景的风格、光线与氛围，适合作为环境背景球贴图'
 
-export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, onPersistState, onGenerateRoutes, onGenerateBlocking, castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
+export function DirectorStage({ initialState, onClose, onSendShot, onExportPreviz, onPersistState, onGenerateRoutes, onGenerateBlocking, initialBlockingDescription = '', castLabels = [], saving, uploadImage, generateImage, upstreamImages = [], importBackground }: DirectorStageProps) {
   const [state, setState] = useState<DirectorStageState>(initialState)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [mode, setMode] = useState<TransformMode>('translate')
@@ -556,7 +560,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
   const [exporting, setExporting] = useState(false)
   const [recording, setRecording] = useState(false)
   const [routesOpen, setRoutesOpen] = useState(false)
-  const [blockingOpen, setBlockingOpen] = useState(false)
+  const [blockingOpen, setBlockingOpen] = useState(Boolean(initialBlockingDescription))
   const [blockingUndoState, setBlockingUndoState] = useState<DirectorStageState | null>(null)
   const selectedShotIndex = state.shots.findIndex((s) => s.id === selectedShotId)
   const selectedShot = selectedShotIndex >= 0 ? state.shots[selectedShotIndex] : null
@@ -870,6 +874,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
         scope,
         title,
         directorText: buildPrevizDirectorText(state.shots, actorLabels, scope === 'shot' ? { shotId: state.shots[selectedShotIndex].id } : {}),
+        shotIds: scope === 'shot' ? [state.shots[selectedShotIndex].id] : state.shots.map((shot) => shot.id),
         state,
       })
       setToast('✓ 预演已导出：视频节点已带参考视频生成（关闭导演台可见）')
@@ -890,7 +895,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
     if (!url) { setToast('截图失败，请重试'); return }
     try {
       setToast(`发送中… ${cam.label}`)
-      await onSendShot(url, cam.label, state)
+      await onSendShot(url, cam, state)
       setSentTotal((n) => n + 1)
       setToast(`✓ ${cam.label} 已发送到画布（关闭导演台后可见）`)
     } catch (e) {
@@ -1223,7 +1228,7 @@ export function DirectorStage({ initialState, onClose, onSendShot, onExportPrevi
       ) : null}
 
       {blockingOpen && onGenerateBlocking ? (
-        <BlockingPanel onClose={() => setBlockingOpen(false)} onGenerate={onGenerateBlocking} onApply={applyBlockingDraft} />
+        <BlockingPanel initialDescription={initialBlockingDescription} onClose={() => setBlockingOpen(false)} onGenerate={onGenerateBlocking} onApply={applyBlockingDraft} />
       ) : null}
 
       {/* previz 时间轴 — 有镜头或选中镜头时常驻；空序列只显示「+」入口 */}

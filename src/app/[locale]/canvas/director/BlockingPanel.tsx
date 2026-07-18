@@ -7,6 +7,7 @@ import type { DirectorBlockingDraft } from '@/lib/canvas/director-blocking-schem
 const MAX_DESCRIPTION_CHARS = 800
 
 export interface BlockingPanelProps {
+  initialDescription?: string
   onClose: () => void
   onGenerate: (description: string) => Promise<DirectorBlockingDraft>
   onApply: (draft: DirectorBlockingDraft) => void
@@ -16,8 +17,8 @@ function coordinates(value: [number, number, number]): string {
   return value.map((n) => Number(n.toFixed(1))).join(', ')
 }
 
-export function BlockingPanel({ onClose, onGenerate, onApply }: BlockingPanelProps) {
-  const [description, setDescription] = useState('')
+export function BlockingPanel({ initialDescription = '', onClose, onGenerate, onApply }: BlockingPanelProps) {
+  const [description, setDescription] = useState(initialDescription.slice(0, MAX_DESCRIPTION_CHARS))
   const [draft, setDraft] = useState<DirectorBlockingDraft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

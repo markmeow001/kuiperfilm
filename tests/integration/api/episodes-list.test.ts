@@ -26,6 +26,9 @@ const prismaMock = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('@/lib/media/service', () => ({
+  resolveMediaRefFromLegacyValue: vi.fn(async (value: string) => ({ url: value })),
+}))
 
 describe('GET /api/novel-promotion/[projectId]/episodes', () => {
   beforeEach(() => {

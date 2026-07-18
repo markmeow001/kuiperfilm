@@ -83,6 +83,9 @@ const ANALYZE_TYPES = new Set<string>([
   'canvas_director_routes',
   'canvas_director_blocking',
   'canvas_text',
+  // Provider-side asset ingestion/validation. It creates no image or video;
+  // count it with analysis/preparation work instead of leaving usage drift.
+  'register_ark_asset',
 ])
 
 const VOICE_TYPES = new Set<string>([

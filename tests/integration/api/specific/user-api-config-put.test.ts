@@ -3,6 +3,7 @@ import { buildMockRequest } from '../../../helpers/request'
 import {
   installAuthMocks,
   mockAuthenticated,
+  mockRole,
   resetAuthMockState,
 } from '../../../helpers/auth'
 
@@ -67,6 +68,7 @@ describe('api specific - user api-config PUT provider uniqueness', () => {
     vi.resetModules()
     vi.clearAllMocks()
     resetAuthMockState()
+    mockRole('admin')
 
     prismaMock.userPreference.findUnique.mockResolvedValue({
       customProviders: null,

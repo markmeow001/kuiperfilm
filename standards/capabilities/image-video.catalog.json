@@ -278,6 +278,85 @@
   {
     "modelType": "video",
     "provider": "ark",
+    "modelId": "doubao-seedance-2-0-260128",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal",
+          "firstlastframe"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p",
+          "1080p"
+        ],
+        "firstlastframe": true,
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "ark",
+    "modelId": "doubao-seedance-2-0-fast-260128",
+    "capabilities": {
+      "video": {
+        "generationModeOptions": [
+          "normal",
+          "firstlastframe"
+        ],
+        "generateAudioOptions": [
+          true,
+          false
+        ],
+        "durationOptions": [
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "resolutionOptions": [
+          "480p",
+          "720p"
+        ],
+        "firstlastframe": true,
+        "supportGenerateAudio": true,
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "video",
+    "provider": "ark",
     "modelId": "doubao-seedance-1-5-pro-251215-batch",
     "capabilities": {
       "video": {

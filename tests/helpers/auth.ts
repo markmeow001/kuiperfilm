@@ -102,6 +102,18 @@ export function installAuthMocks() {
         project: { id: projectId, userId: state.session.user.id, name: 'project' },
       }
     },
+    requireProjectAccess: async () => {
+      if (!state.session) {
+        return { allowed: false, reason: 'NOT_AUTHENTICATED' as const }
+      }
+      if (state.projectAuthMode === 'not_found') {
+        return { allowed: false, reason: 'NOT_FOUND' as const }
+      }
+      if (state.projectAuthMode === 'forbidden') {
+        return { allowed: false, reason: 'NO_ACCESS' as const }
+      }
+      return { allowed: true, effectiveRole: 'owner' as const }
+    },
     requireAdminAuth: async () => {
       if (!state.session) return unauthorizedResponse()
       if (!state.isActive) return forbiddenResponse()

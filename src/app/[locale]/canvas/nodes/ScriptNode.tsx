@@ -9,11 +9,12 @@
  * LLM call from the client (CLAUDE.md §3).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNodeConnections, useNodesData, useReactFlow, type Edge, type NodeProps } from '@xyflow/react'
+import { useNodeConnections, useNodesData, useReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import { CANVAS_TOKENS, NODE_META } from '../lib/canvas-tokens'
 import { type CanvasNodeData, type CanvasStoryboardShot, DEFAULT_NODE_DATA } from '../lib/canvas-types'
 import { pickUpstreamReferenceUrls, pickUpstreamText } from '../lib/canvas-refs'
 import { useCanvasGeneration } from '../lib/canvas-generation'
+import { buildStoryboardBlockingBrief } from '../lib/storyboard-director-handoff'
 import { NodeShell } from './node-shell'
 
 type Phase = 'idle' | 'submitting' | 'running' | 'done' | 'failed'
@@ -221,6 +222,33 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
     return ids
   }
 
+  function openPickedShotsInDirector() {
+    if (pickedShots.length === 0) return
+    const self = getNode(id)
+    const base = self?.position ?? { x: 0, y: 0 }
+    const directorId = `n_${Date.now()}_director`
+    const brief = buildStoryboardBlockingBrief(pickedShots)
+    const node: Node<CanvasNodeData> = {
+      id: directorId,
+      type: 'director',
+      position: { x: base.x + 580, y: base.y },
+      data: {
+        ...DEFAULT_NODE_DATA,
+        title: `导演台 · ${pickedShots.length} 镜`,
+        blockingBrief: brief,
+        openDirectorOnCreate: true,
+      },
+    }
+    addNodes(node)
+    const edges: Edge[] = refSourceIds.map((sourceId, index) => ({
+      id: `e_${Date.now()}_director_${index}`,
+      source: sourceId,
+      target: directorId,
+      animated: true,
+    }))
+    if (edges.length > 0) addEdges(edges)
+  }
+
   // 批量生图:铺节点 + 接线 + 逐个提交生成(LibTV「批量生分镜图」等价)。
   // 顺序提交而非并发:避免瞬间打爆队列/余额;单发失败立即停,后续镜头
   // 不再扣费。
@@ -379,6 +407,15 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
               style={{ background: CANVAS_TOKENS.cta, color: CANVAS_TOKENS.ctaText }}
             >
               {batch.running ? `批量生图中… ${batch.done}/${batch.total}` : `⚡ 批量生图（${pickedShots.length}）`}
+            </button>
+            <button
+              type="button"
+              onClick={openPickedShotsInDirector}
+              disabled={pickedShots.length === 0 || batch.running}
+              className="nodrag w-full rounded-lg py-2 text-[13px] font-semibold disabled:opacity-40"
+              style={{ background: `${NODE_META.director.accent}22`, color: NODE_META.director.accent, border: `1px solid ${NODE_META.director.accent}66` }}
+            >
+              打开 3D 导演台排戏（{pickedShots.length} 镜）
             </button>
             {batch.error ? <div className="text-[12px]" style={{ color: '#FF8A8A' }}>{batch.error}</div> : null}
             <div className="flex gap-1.5">

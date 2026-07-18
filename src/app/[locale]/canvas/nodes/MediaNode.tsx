@@ -27,6 +27,8 @@ import { NodeShell } from './node-shell'
 import { SaveCanvasAssetButton, type CanvasAssetSource } from '../lib/canvas-assets-client'
 import { CanvasMediaLightbox } from './CanvasMediaLightbox'
 import { canvasDownloadHref } from '../lib/canvas-download'
+import { ImageEditPanel } from './ImageEditPanel'
+import { useCanvasImageEdits } from './useCanvasImageEdits'
 
 const ASPECT_OPTIONS = ['9:16', '16:9', '2:1', '21:9', '1:1', '4:3', '3:4', '4:5']
 const RESOLUTION_OPTIONS = ['480p', '720p', '1080p']
@@ -184,6 +186,11 @@ export function makeMediaNode(outputType: 'image' | 'video') {
 
     // Cache the result URL into node data so a reload shows it before polling.
     const resultUrl = run?.resultUrls?.[0] ?? d.resultUrl ?? null
+    const imageEdits = useCanvasImageEdits({
+      nodeId: id,
+      data: d,
+      sourceUrl: outputType === 'image' ? resultUrl : null,
+    })
     // Download basename: node title (镜 3 / 图片…) + short run suffix so a page
     // full of same-titled nodes still saves as distinct, ordered files (not the
     // browser's generic「download」). The route appends the real extension.
@@ -502,6 +509,16 @@ export function makeMediaNode(outputType: 'image' | 'video') {
             boxShadow: CANVAS_TOKENS.shadowPopover,
           }}
         >
+          {outputType === 'image' && resultUrl ? (
+            <ImageEditPanel
+              aspectRatio={d.aspectRatio}
+              sourcePrompt={d.prompt}
+              busy={imageEdits.busy}
+              error={imageEdits.error}
+              onCrop={imageEdits.crop}
+              onOutpaint={imageEdits.outpaint}
+            />
+          ) : null}
           {/* image: 预设配方 menu (LibTV-style recipes, incl. 720全景) */}
           {outputType === 'image' ? (
             <div className="relative">

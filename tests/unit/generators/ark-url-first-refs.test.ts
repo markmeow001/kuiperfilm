@@ -15,8 +15,9 @@
  * worker utils, then asserting the outgoing arkCreateVideoTask body shape.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ArkVideoTaskRequest } from '@/lib/ark-api'
 
-const arkCreateVideoTaskMock = vi.hoisted(() => vi.fn(async () => ({
+const arkCreateVideoTaskMock = vi.hoisted(() => vi.fn<(request: ArkVideoTaskRequest) => Promise<{ id: string }>>(async () => ({
   id: 'task_test_id',
 })))
 const imageUrlToBase64Mock = vi.hoisted(() => vi.fn(async (input: string) => {
@@ -53,7 +54,16 @@ import { ArkVideoGenerator } from '@/lib/generators/ark'
 
 function lastRequestBody() {
   expect(arkCreateVideoTaskMock).toHaveBeenCalled()
-  return arkCreateVideoTaskMock.mock.calls[arkCreateVideoTaskMock.mock.calls.length - 1]![0]
+  const body = arkCreateVideoTaskMock.mock.calls.at(-1)?.[0]
+  if (!body) throw new Error('expected arkCreateVideoTask request body')
+  return body
+}
+
+type ArkContentEntry = ArkVideoTaskRequest['content'][number]
+
+function imageUrl(entry: ArkContentEntry | undefined): string {
+  if (!entry?.image_url?.url) throw new Error('expected image_url content entry')
+  return entry.image_url.url
 }
 
 describe('ArkVideoGenerator URL-first reference resolution', () => {
@@ -76,8 +86,8 @@ describe('ArkVideoGenerator URL-first reference resolution', () => {
     const body = lastRequestBody()
     const imageEntry = body.content.find((c: { type: string }) => c.type === 'image_url')
     expect(imageEntry).toBeDefined()
-    expect(imageEntry!.image_url.url).toBe('https://r2.example.com/images/character/abc.png?sig=fake')
-    expect(imageEntry!.image_url.url).not.toMatch(/^data:/)
+    expect(imageUrl(imageEntry)).toBe('https://r2.example.com/images/character/abc.png?sig=fake')
+    expect(imageUrl(imageEntry)).not.toMatch(/^data:/)
   })
 
   it('passes already-https first_frame through unchanged', async () => {
@@ -92,7 +102,7 @@ describe('ArkVideoGenerator URL-first reference resolution', () => {
     expect(imageUrlToBase64Mock).not.toHaveBeenCalled()
     const body = lastRequestBody()
     const imageEntry = body.content.find((c: { type: string }) => c.type === 'image_url')
-    expect(imageEntry!.image_url.url).toBe('https://cdn.example.com/already-public.png')
+    expect(imageUrl(imageEntry)).toBe('https://cdn.example.com/already-public.png')
   })
 
   it('falls back to base64 for local file paths (STORAGE_TYPE=local dev)', async () => {
@@ -107,7 +117,7 @@ describe('ArkVideoGenerator URL-first reference resolution', () => {
     expect(imageUrlToBase64Mock).toHaveBeenCalledWith('/uploads/local/dev-only.png')
     const body = lastRequestBody()
     const imageEntry = body.content.find((c: { type: string }) => c.type === 'image_url')
-    expect(imageEntry!.image_url.url).toMatch(/^data:image\/png;base64,FAKE_BASE64_FOR/)
+    expect(imageUrl(imageEntry)).toMatch(/^data:image\/png;base64,FAKE_BASE64_FOR/)
   })
 
   it('passes all multi-modal reference_images as URLs when COS-keyed', async () => {
@@ -133,8 +143,8 @@ describe('ArkVideoGenerator URL-first reference resolution', () => {
     )
     expect(refEntries).toHaveLength(2)
     for (const ref of refEntries) {
-      expect(ref.image_url.url).toMatch(/^https:\/\//)
-      expect(ref.image_url.url).not.toMatch(/^data:/)
+      expect(imageUrl(ref)).toMatch(/^https:\/\//)
+      expect(imageUrl(ref)).not.toMatch(/^data:/)
     }
   })
 
@@ -163,7 +173,7 @@ describe('ArkVideoGenerator URL-first reference resolution', () => {
       (c: { type: string; role?: string }) => c.type === 'image_url' && c.role === 'reference_image',
     )
     expect(refEntries).toHaveLength(3)
-    const urls = refEntries.map((r: { image_url: { url: string } }) => r.image_url.url)
+    const urls = refEntries.map(imageUrl)
     expect(urls[0]).toMatch(/^https:\/\/r2/)
     expect(urls[1]).toMatch(/^data:image/)
     expect(urls[2]).toBe('https://cdn.example.com/passthru.png')
@@ -186,7 +196,7 @@ describe('ArkVideoGenerator URL-first reference resolution', () => {
     const body = lastRequestBody()
     const firstFrame = body.content.find((c: { role?: string }) => c.role === 'first_frame')
     const lastFrame = body.content.find((c: { role?: string }) => c.role === 'last_frame')
-    expect(firstFrame.image_url.url).toMatch(/^https:\/\/r2.*first\.png/)
-    expect(lastFrame.image_url.url).toMatch(/^https:\/\/r2.*last\.png/)
+    expect(imageUrl(firstFrame)).toMatch(/^https:\/\/r2.*first\.png/)
+    expect(imageUrl(lastFrame)).toMatch(/^https:\/\/r2.*last\.png/)
   })
 })

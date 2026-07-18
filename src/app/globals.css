@@ -228,6 +228,78 @@ body {
   transform: translateY(-1px);
 }
 
+/* Studio Dark — shared shell for account, admin and operational tools.
+ * These routes previously mixed amber/stone one-off shells with the V2
+ * magenta system. The semantic classes let us migrate page-by-page without
+ * coupling business components to a specific Tailwind colour name. */
+.kuiper-studio-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 82% -12%, rgba(128, 108, 255, 0.08), transparent 30rem),
+    radial-gradient(circle at 12% 0%, rgba(255, 46, 175, 0.07), transparent 26rem),
+    var(--surface-canvas);
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.kuiper-studio-panel {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
+  box-shadow: var(--elev-1);
+}
+
+.kuiper-studio-card {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-card);
+  background: var(--surface-raised);
+  transition: border-color var(--d-state) var(--ease-out), transform var(--d-state) var(--ease-out);
+}
+
+.kuiper-studio-card:hover {
+  border-color: var(--border-primary);
+  transform: translateY(-2px);
+}
+
+.kuiper-studio-kicker {
+  color: var(--primary-400);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.kuiper-studio-heading {
+  color: var(--text-primary);
+  font-family: var(--font-heading), var(--font-geist-sans), sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.kuiper-studio-primary {
+  min-height: 40px;
+  border-radius: var(--r-input);
+  background: var(--primary-500);
+  color: #080809;
+  font-weight: 650;
+  transition: background-color var(--d-hover) var(--ease-out), transform var(--d-hover) var(--ease-out);
+}
+
+.kuiper-studio-primary:hover {
+  background: var(--primary-400);
+  transform: translateY(-1px);
+}
+
+.kuiper-empty-state {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-card);
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  padding: 32px 24px;
+  text-align: center;
+}
+
 .kuiper-modal-backdrop {
   background: rgba(5, 5, 6, 0.84);
   backdrop-filter: blur(12px);

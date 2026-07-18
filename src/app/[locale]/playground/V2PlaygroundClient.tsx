@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { usePlaygroundController } from './usePlaygroundController'
@@ -9,6 +10,7 @@ import { ImageStudio } from './ImageStudio'
 import { VideoStudio } from './VideoStudio'
 import { ResultLightbox } from './ResultLightbox'
 import { DiscussionStudio } from './DiscussionStudio'
+import { PlaygroundWorkspacePicker } from './PlaygroundWorkspacePicker'
 
 interface V2PlaygroundClientProps {
   locale: string
@@ -17,7 +19,9 @@ interface V2PlaygroundClientProps {
 type PlaygroundMode = 'image' | 'video' | 'discussion'
 
 export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
-  const ctrl = usePlaygroundController()
+  const searchParams = useSearchParams()
+  const workspaceId = searchParams?.get('ws')?.trim() || null
+  const ctrl = usePlaygroundController(workspaceId)
   const t = useTranslations('playground.header')
   const [mode, setMode] = useState<PlaygroundMode>('image')
 
@@ -57,10 +61,12 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
             </div>
           </div>
 
-          <nav
-            aria-label={t('title')}
-            className="flex items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1"
-          >
+          <div className="flex items-center gap-3">
+            <PlaygroundWorkspacePicker workspaceId={workspaceId} />
+            <nav
+              aria-label={t('title')}
+              className="flex items-center rounded-2xl border border-white/[0.08] bg-white/[0.04] p-1"
+            >
             {modes.map((item) => {
               const active = mode === item.id
               return (
@@ -85,7 +91,8 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
                 </button>
               )
             })}
-          </nav>
+            </nav>
+          </div>
         </div>
       </header>
 

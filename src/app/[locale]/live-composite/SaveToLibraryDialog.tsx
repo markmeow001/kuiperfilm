@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { useUploadPlaygroundReference } from '@/lib/query/mutations/playground-mutations'
 import { createCanvasLibraryAsset, listUserCanvases, type CanvasSummary } from './lib/canvas-library-api'
+import { buildCanvasImportHref } from '../canvas/lib/canvas-import-intent'
 
 const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024
 const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -25,10 +26,11 @@ export interface ExportedAsset {
 
 interface SaveToLibraryDialogProps {
   asset: ExportedAsset
+  locale: string
   onClose: () => void
 }
 
-export function SaveToLibraryDialog({ asset, onClose }: SaveToLibraryDialogProps) {
+export function SaveToLibraryDialog({ asset, locale, onClose }: SaveToLibraryDialogProps) {
   const upload = useUploadPlaygroundReference()
   const [canvases, setCanvases] = useState<CanvasSummary[] | null>(null)
   const [canvasId, setCanvasId] = useState('')
@@ -53,7 +55,7 @@ export function SaveToLibraryDialog({ asset, onClose }: SaveToLibraryDialogProps
     }
   }, [])
 
-  const save = async () => {
+  const save = async (openInCanvas: boolean) => {
     setError(null)
     setSavedMessage(null)
     const trimmedName = name.trim()
@@ -75,13 +77,17 @@ export function SaveToLibraryDialog({ asset, onClose }: SaveToLibraryDialogProps
       const file = new File([asset.blob], asset.fileName, { type: asset.mimeType })
       const uploaded = await upload.mutateAsync({ file, type: asset.assetType })
       setBusyMessage('正在寫入資產庫…')
-      await createCanvasLibraryAsset({
+      const created = await createCanvasLibraryAsset({
         canvasId,
         name: trimmedName.slice(0, 120),
         type: asset.assetType,
         source: { kind: 'storage-key', storageKey: uploaded.key },
       })
       setBusyMessage(null)
+      if (openInCanvas) {
+        window.location.assign(buildCanvasImportHref(locale, { canvasId, assetId: created.id }))
+        return
+      }
       setSavedMessage('已存入資產庫。')
     } catch (err) {
       setBusyMessage(null)
@@ -142,10 +148,18 @@ export function SaveToLibraryDialog({ asset, onClose }: SaveToLibraryDialogProps
           <button
             type="button"
             disabled={busy || canvases === null || canvases.length === 0 || Boolean(savedMessage)}
-            onClick={() => void save()}
-            className="rounded-lg bg-cyan-400 px-3 py-2 text-sm font-medium text-stone-950 hover:bg-cyan-300 disabled:opacity-40"
+            onClick={() => void save(false)}
+            className="rounded-lg border border-cyan-400/40 px-3 py-2 text-sm font-medium text-cyan-200 hover:bg-cyan-400/10 disabled:opacity-40"
           >
             存入資產庫
+          </button>
+          <button
+            type="button"
+            disabled={busy || canvases === null || canvases.length === 0 || Boolean(savedMessage)}
+            onClick={() => void save(true)}
+            className="rounded-lg bg-cyan-400 px-3 py-2 text-sm font-medium text-stone-950 hover:bg-cyan-300 disabled:opacity-40"
+          >
+            存入並在畫布建立節點
           </button>
         </div>
       </div>

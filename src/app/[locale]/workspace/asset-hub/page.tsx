@@ -328,12 +328,13 @@ export default function AssetHubPage() {
     }
 
     return (
-        <div className="glass-page min-h-screen">
+        <div className="glass-page kuiper-studio-page">
             <Navbar />
-            <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
                 {/* 页面标题 */}
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-[var(--glass-text-primary)]">{t('title')}</h1>
+                <div className="mb-7">
+                    <div className="kuiper-studio-kicker">Asset Library</div>
+                    <h1 className="kuiper-studio-heading mt-1 text-3xl">{t('title')}</h1>
                     <p className="text-sm text-[var(--glass-text-secondary)] mt-1">{t('description')}</p>
                     <p className="text-xs text-[var(--glass-text-tertiary)] mt-2 flex items-center gap-1">
                         <AppIcon name="info" className="w-3.5 h-3.5" />
@@ -343,7 +344,7 @@ export default function AssetHubPage() {
                     </p>
                 </div>
 
-                <div className="flex gap-6">
+                <div className="flex flex-col gap-6 lg:flex-row">
                     {/* 左侧文件夹树 */}
                     <FolderSidebar
                         folders={folders}

@@ -39,7 +39,7 @@ const prismaMock = vi.hoisted(() => ({
   task: {
     groupBy: vi.fn(async () => []),
   },
-  $queryRaw: vi.fn(async () => []),
+  $queryRaw: vi.fn<(query: Prisma.Sql) => Promise<unknown[]>>(async () => []),
   $queryRawUnsafe: vi.fn(async () => {
     throw new Error('$queryRawUnsafe must not be called — F2 regression')
   }),

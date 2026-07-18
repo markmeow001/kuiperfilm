@@ -600,8 +600,8 @@ export async function runMultiShotAtlasCloudComposite(params: {
 
   // ── MODE-SPECIFIC MEDIA ASSEMBLY ──
   let firstFrameUrl: string | null = null
-  let referenceImages: string[] = []
-  let r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }> = []
+  const referenceImages: string[] = []
+  const r2vRefOrder: Array<{ kind: 'char' | 'scene' | 'prop'; ref: CharacterRef | SceneRef | PropRef }> = []
 
   if (mode === 'r2v') {
     // Slot priority: char → scene → prop → panel (up to 9 total).

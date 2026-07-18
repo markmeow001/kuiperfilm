@@ -6,6 +6,10 @@ const authMock = vi.hoisted(() => ({
   requireUserAuth: vi.fn(async () => ({
     session: { user: { id: 'user-1' } },
   })),
+  requireEditorAuth: vi.fn(async () => ({
+    session: { user: { id: 'user-1' } },
+    role: 'editor',
+  })),
   isErrorResponse: vi.fn((value: unknown) => value instanceof Response),
 }))
 
@@ -98,8 +102,11 @@ describe('api specific - characters POST forwarding to reference task', () => {
   })
 
   it('returns unauthorized when auth fails', async () => {
-    authMock.requireUserAuth.mockResolvedValueOnce(
-      NextResponse.json({ error: { code: 'UNAUTHORIZED' } }, { status: 401 }) as unknown as { session: { user: { id: string } } },
+    authMock.requireEditorAuth.mockResolvedValueOnce(
+      NextResponse.json({ error: { code: 'UNAUTHORIZED' } }, { status: 401 }) as unknown as {
+        session: { user: { id: string } }
+        role: string
+      },
     )
     const mod = await import('@/app/api/asset-hub/characters/route')
     const req = buildMockRequest({

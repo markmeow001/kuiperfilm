@@ -1,6 +1,7 @@
 import type { Job } from 'bullmq'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TASK_TYPE, type TaskJobData, type TaskType } from '@/lib/task/types'
+import { STYLE_PROFILE_PRESETS } from '@/lib/style-profile/presets'
 
 const utilsMock = vi.hoisted(() => ({
   assertTaskActive: vi.fn(async () => {}),
@@ -190,12 +191,16 @@ describe('modify image with references writes real description', () => {
       }),
     )
 
-    // Q-009: loadStyleProfile 結果（三栏全 null → null）必須透傳給 chokepoint。
+    // 三栏全 null 的旧专案会套用真实摄影 fallback，并原样传给 chokepoint。
     const generationArg = utilsMock.resolveImageSourceFromGeneration.mock.calls.at(-1)?.[1] as
       | { styleProfile?: unknown }
       | undefined
     expect(generationArg).toHaveProperty('styleProfile')
-    expect(generationArg?.styleProfile).toBeNull()
+    expect(generationArg?.styleProfile).toEqual({
+      positivePrompt: STYLE_PROFILE_PRESETS.realistic.positivePrompt,
+      negativePrompt: STYLE_PROFILE_PRESETS.realistic.negativePrompt,
+      referenceImageUrls: [],
+    })
 
     const updateArg = prismaMock.characterAppearance.update.mock.calls.at(-1)?.[0]
     const updateData = getUpdateData(updateArg)

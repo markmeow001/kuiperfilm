@@ -294,7 +294,7 @@ export default function ProfilePage() {
 
   if (status === 'loading' || !session) {
     return (
-      <div className="font-body grain flex min-h-screen items-center justify-center bg-stone-950 text-stone-200">
+      <div className="kuiper-studio-page font-body grain flex items-center justify-center">
         <div className="font-fraunces text-base italic text-stone-500">{tc('loading')}</div>
       </div>
     )
@@ -307,22 +307,22 @@ export default function ProfilePage() {
   const availableTypes = [...new Set(projectDetails?.recentRecords?.map(r => r.apiType) || [])]
 
   return (
-    <div className="font-body grain min-h-screen bg-stone-950 text-stone-200">
+    <div className="kuiper-studio-page font-body grain">
       <Navbar />
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex h-[calc(100vh-140px)] gap-6">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+        <div className="flex min-h-[calc(100vh-140px)] flex-col gap-6 xl:h-[calc(100vh-140px)] xl:flex-row">
 
           {/* 左侧侧边栏 */}
-          <div className="w-72 flex-shrink-0">
-            <div className="flex h-full flex-col rounded-sm border border-amber-900/25 bg-stone-900/40 p-6">
+          <div className="w-full flex-shrink-0 xl:w-72">
+            <div className="kuiper-studio-panel flex h-full flex-col p-6">
 
               {/* 用户信息 */}
               <div className="mb-8">
-                <div className="font-mono text-[10px] uppercase tracking-[0.3em] text-amber-600/80">
+                <div className="kuiper-studio-kicker">
                   {t('personalAccount')}
                 </div>
-                <h2 className="mt-2 font-serif-cn text-xl font-medium text-stone-100">
+                <h2 className="kuiper-studio-heading mt-2 text-xl">
                   {session.user?.name || t('user')}
                 </h2>
                 {(session.user as { role?: string } | undefined)?.role ? (
@@ -361,7 +361,7 @@ export default function ProfilePage() {
 
           {/* 右侧内容区 */}
           <div className="min-w-0 flex-1">
-            <div className="flex h-full flex-col rounded-sm border border-amber-900/25 bg-stone-900/40">
+            <div className="kuiper-studio-panel flex h-full min-h-[620px] flex-col">
 
               {activeSection === 'apiConfig' && isAdmin ? (
                 <ApiConfigTab />

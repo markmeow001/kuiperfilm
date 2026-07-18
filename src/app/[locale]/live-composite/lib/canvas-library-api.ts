@@ -56,7 +56,7 @@ export async function listUserCanvases(): Promise<CanvasSummary[]> {
     }))
 }
 
-export async function createCanvasLibraryAsset(input: CanvasAssetCreateInput): Promise<void> {
+export async function createCanvasLibraryAsset(input: CanvasAssetCreateInput): Promise<{ id: string }> {
   let response: Response
   try {
     response = await fetch('/api/canvas/assets', {
@@ -69,4 +69,9 @@ export async function createCanvasLibraryAsset(input: CanvasAssetCreateInput): P
   }
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
   if (!response.ok) throw extractError(payload, response.status, '存入資產庫失敗')
+  const asset = payload.asset && typeof payload.asset === 'object' ? payload.asset as Record<string, unknown> : null
+  if (!asset || typeof asset.id !== 'string' || !asset.id) {
+    throw new Error('存入資產庫失敗（伺服器未回傳資產 ID）')
+  }
+  return { id: asset.id }
 }

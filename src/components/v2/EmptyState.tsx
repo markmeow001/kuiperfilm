@@ -30,6 +30,7 @@
  */
 
 import { type ReactNode } from 'react'
+import { AppIcon } from '@/components/ui/icons'
 import { Button } from './Button'
 
 type Size = 'md' | 'lg'
@@ -117,32 +118,13 @@ export function EmptyState({
 }
 
 function DefaultPlaceholder({ size }: { size: 'md' | 'lg' }) {
-  const d = size === 'lg' ? 128 : 80
-  // 9:16 stylized cinema frame — single stroke, two diagonal slits
-  // suggesting an empty stage. Pure geometry, no photo / mascot.
-  const w = (d * 9) / 16
+  const dimensionClass = size === 'lg' ? 'h-32 w-32' : 'h-20 w-20'
   return (
-    <svg
-      width={d}
-      height={d}
-      viewBox="0 0 100 100"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <AppIcon
+      name="clapperboard"
       aria-hidden="true"
-      className="text-primary-500"
-      style={{ width: `${w * 1.5}px`, height: `${d}px` }}
-    >
-      {/* outer 9:16 frame */}
-      <rect x="36" y="14" width="28" height="72" rx="2" />
-      {/* clapperboard slits */}
-      <line x1="36" y1="28" x2="64" y2="28" />
-      <line x1="40" y1="22" x2="48" y2="34" />
-      <line x1="52" y1="22" x2="60" y2="34" />
-      {/* simple stage horizon */}
-      <line x1="42" y1="64" x2="58" y2="64" opacity="0.4" />
-    </svg>
+      strokeWidth={1.25}
+      className={`${dimensionClass} text-primary-500`}
+    />
   )
 }

@@ -139,6 +139,9 @@ const prismaMock = vi.hoisted(() => ({
       ],
     })),
   },
+  novelPromotionStoryboard: {
+    findUnique: vi.fn(async () => ({ episodeId: 'episode-1' })),
+  },
   novelPromotionEpisode: {
     findFirst: vi.fn(async () => ({
       id: 'episode-1',

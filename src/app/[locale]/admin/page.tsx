@@ -137,13 +137,13 @@ export default function AdminLandingPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100">
+    <div className="kuiper-studio-page">
       <Navbar />
-      <div className="mx-auto max-w-6xl px-8 py-10">
-        <h1 className="font-serif-cn text-3xl font-medium tracking-wide text-stone-100">
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <h1 className="kuiper-studio-heading text-3xl">
           管理員後台
         </h1>
-        <p className="mt-2 font-fraunces text-base italic text-amber-500/80">Admin Console</p>
+        <p className="kuiper-studio-kicker mt-2">Admin Console</p>
 
         {error ? (
           <div className="mt-6 rounded-sm border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
@@ -152,7 +152,7 @@ export default function AdminLandingPage() {
         ) : null}
 
         {/* Queue health strip */}
-        <div className="mt-8 rounded-sm border border-amber-900/30 bg-stone-900/40 p-5">
+        <div className="kuiper-studio-panel mt-8 p-5">
           <div className="mb-3 flex items-center justify-between">
             <div className="font-fraunces text-sm italic text-amber-500/80">佇列健康 · QUEUES</div>
             <div className="font-mono text-[10px] tracking-wider text-stone-500">每 30 秒自動刷新</div>
@@ -199,7 +199,7 @@ export default function AdminLandingPage() {
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <Link
             href={`/${locale}/admin/users`}
-            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+            className="kuiper-studio-card group p-6"
           >
             <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">01 · USERS</div>
             <div className="mt-2 font-serif-cn text-xl text-stone-100">使用者管理</div>
@@ -220,7 +220,7 @@ export default function AdminLandingPage() {
 
           <Link
             href={`/${locale}/admin/invites`}
-            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+            className="kuiper-studio-card group p-6"
           >
             <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">02 · INVITES</div>
             <div className="mt-2 font-serif-cn text-xl text-stone-100">邀請碼管理</div>
@@ -240,7 +240,7 @@ export default function AdminLandingPage() {
 
           <Link
             href={`/${locale}/admin/projects`}
-            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+            className="kuiper-studio-card group p-6"
           >
             <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">03 · PROJECTS</div>
             <div className="mt-2 font-serif-cn text-xl text-stone-100">所有專案</div>
@@ -260,7 +260,7 @@ export default function AdminLandingPage() {
 
           <Link
             href={`/${locale}/admin/runs`}
-            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+            className="kuiper-studio-card group p-6"
           >
             <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">04 · RUNS</div>
             <div className="mt-2 font-serif-cn text-xl text-stone-100">失敗任務</div>
@@ -279,7 +279,7 @@ export default function AdminLandingPage() {
 
           <Link
             href={`/${locale}/admin/usage`}
-            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+            className="kuiper-studio-card group p-6"
           >
             <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">05 · USAGE</div>
             <div className="mt-2 font-serif-cn text-xl text-stone-100">使用量統計</div>
@@ -290,7 +290,7 @@ export default function AdminLandingPage() {
 
           <Link
             href={`/${locale}/admin/economics`}
-            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+            className="kuiper-studio-card group p-6"
           >
             <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">06 · ECONOMICS</div>
             <div className="mt-2 font-serif-cn text-xl text-stone-100">生產經濟指標</div>
@@ -301,7 +301,7 @@ export default function AdminLandingPage() {
 
           <Link
             href={`/${locale}/admin/bobapi-health`}
-            className="group rounded-sm border border-amber-900/30 bg-stone-900/40 p-6 transition-all hover:-translate-y-0.5 hover:border-amber-500/40"
+            className="kuiper-studio-card group p-6"
           >
             <div className="font-mono text-[10px] tracking-[0.3em] text-amber-600">07 · PROVIDER HEALTH</div>
             <div className="mt-2 font-serif-cn text-xl text-stone-100">影片供應商健康</div>
@@ -311,7 +311,7 @@ export default function AdminLandingPage() {
           </Link>
         </div>
 
-        <div className="mt-12 rounded-sm border border-stone-800/60 bg-stone-900/20 p-5">
+        <div className="kuiper-studio-panel mt-12 p-5">
           <div className="mb-2 font-fraunces text-sm italic text-amber-500/80">流程</div>
           <ol className="space-y-2 font-serif-cn text-sm text-stone-300">
             <li>1. 邀請碼管理 → 點「新建邀請碼」選擇角色</li>

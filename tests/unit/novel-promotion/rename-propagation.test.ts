@@ -14,7 +14,8 @@ import {
 } from '@/lib/novel-promotion/rename-propagation'
 
 function makeTxStub(panels: Array<{ id: string; characters?: string | null; props?: string | null; location?: string | null }>) {
-  const updateSpy = vi.fn(async () => ({}))
+  interface UpdateArgs { where: { id: string }; data: { characters?: string; props?: string; location?: string } }
+  const updateSpy = vi.fn<(args: UpdateArgs) => Promise<Record<string, never>>>(async () => ({}))
   return {
     tx: {
       novelPromotionPanel: {
@@ -48,7 +49,8 @@ describe('propagateCharacterRename', () => {
     const result = await propagateCharacterRename(tx as any, 'proj1', 'Karrug', 'Khoda')
     expect(result.panelsRewritten).toBe(1)
     expect(updateSpy).toHaveBeenCalledOnce()
-    const call = updateSpy.mock.calls[0][0]
+    const call = updateSpy.mock.calls[0]?.[0]
+    if (!call?.data.characters) throw new Error('expected characters update')
     const next = JSON.parse(call.data.characters)
     expect(next[0].name).toBe('Khoda')
     expect(next[0].appearance).toBe('a1') // unchanged sibling fields preserved
@@ -60,7 +62,8 @@ describe('propagateCharacterRename', () => {
       { id: 'p1', characters: JSON.stringify(['Karrug', 'Zara']) },
     ])
     await propagateCharacterRename(tx as any, 'proj1', 'Karrug', 'Khoda')
-    const call = updateSpy.mock.calls[0][0]
+    const call = updateSpy.mock.calls[0]?.[0]
+    if (!call?.data.characters) throw new Error('expected characters update')
     expect(JSON.parse(call.data.characters)).toEqual(['Khoda', 'Zara'])
   })
 
@@ -108,7 +111,8 @@ describe('propagatePropRename', () => {
       { id: 'p1', props: JSON.stringify([{ name: '骨杖' }, { name: '銀劍' }]) },
     ])
     await propagatePropRename(tx as any, 'proj1', '骨杖', '靈骨杖')
-    const call = updateSpy.mock.calls[0][0]
+    const call = updateSpy.mock.calls[0]?.[0]
+    if (!call?.data.props) throw new Error('expected props update')
     expect(JSON.parse(call.data.props)).toEqual([{ name: '靈骨杖' }, { name: '銀劍' }])
   })
 })
@@ -119,7 +123,7 @@ describe('propagateLocationRename', () => {
       { id: 'p1', location: '懸崖洞穴' },
     ])
     await propagateLocationRename(tx as any, 'proj1', '懸崖洞穴', '神殿廢墟')
-    expect(updateSpy.mock.calls[0][0].data.location).toBe('神殿廢墟')
+    expect(updateSpy.mock.calls[0]?.[0]?.data.location).toBe('神殿廢墟')
   })
 
   it('rewrites "Name#viewHint" preserving the hint segment', async () => {
@@ -127,7 +131,7 @@ describe('propagateLocationRename', () => {
       { id: 'p1', location: '懸崖洞穴#深夜' },
     ])
     await propagateLocationRename(tx as any, 'proj1', '懸崖洞穴', '神殿廢墟')
-    expect(updateSpy.mock.calls[0][0].data.location).toBe('神殿廢墟#深夜')
+    expect(updateSpy.mock.calls[0]?.[0]?.data.location).toBe('神殿廢墟#深夜')
   })
 
   it('does NOT touch location when head segment differs (substring hit only)', async () => {

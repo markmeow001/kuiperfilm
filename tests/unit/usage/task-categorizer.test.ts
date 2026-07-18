@@ -48,6 +48,7 @@ describe('categorizeTaskType', () => {
       TASK_TYPE.CHARACTER_PROFILE_CONFIRM,
       TASK_TYPE.CHARACTER_PROFILE_BATCH_CONFIRM,
       TASK_TYPE.CANVAS_DIRECTOR_BLOCKING,
+      TASK_TYPE.REGISTER_ARK_ASSET,
     ]
     for (const t of analyzeTasks) {
       expect(categorizeTaskType(t)).toBe('analyze')
