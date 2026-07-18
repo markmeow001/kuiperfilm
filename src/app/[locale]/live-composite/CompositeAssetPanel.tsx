@@ -2,8 +2,9 @@
 
 import { AiMaskPanel, type AiMaskSettings } from './AiMaskPanel'
 import { CompositeExportPanel } from './CompositeExportPanel'
-import type { CompositeExportProgress, MaskAnalysisProgress, VideoMetadata } from './live-composite-types'
+import type { CompositeExportProgress, MaskAnalysisProgress, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 import { UploadFileButton } from './UploadFileButton'
+import { VirtualCharacterPanel } from './VirtualCharacterPanel'
 
 interface CompositeAssetPanelProps {
   metadata: VideoMetadata | null
@@ -14,9 +15,13 @@ interface CompositeAssetPanelProps {
   analysisProgress: MaskAnalysisProgress
   exportProgress: CompositeExportProgress
   interactionDisabled: boolean
+  virtualCharacter: VirtualCharacterLayer | null
   onVideoSelect: (file: File) => void
   onBackgroundSelect: (file: File) => void
   onBackgroundColorChange: (color: string) => void
+  onVirtualCharacterSelect: (file: File) => void
+  onVirtualCharacterChange: (patch: Partial<VirtualCharacterLayer>) => void
+  onVirtualCharacterRemove: () => void
   onExportMask: () => void
   onExportFrame: () => void
   onExportVideo: (includeAudio: boolean) => void
@@ -37,9 +42,13 @@ export function CompositeAssetPanel({
   analysisProgress,
   exportProgress,
   interactionDisabled,
+  virtualCharacter,
   onVideoSelect,
   onBackgroundSelect,
   onBackgroundColorChange,
+  onVirtualCharacterSelect,
+  onVirtualCharacterChange,
+  onVirtualCharacterRemove,
   onExportMask,
   onExportFrame,
   onExportVideo,
@@ -51,7 +60,7 @@ export function CompositeAssetPanel({
   onSaveToLibrary,
 }: CompositeAssetPanelProps) {
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-stone-950/80">
+    <aside className="flex w-80 shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-stone-950/80">
       <div className="border-b border-white/10 px-4 py-4">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-stone-500">素材</div>
         <div className="mt-3 space-y-2">
@@ -74,6 +83,15 @@ export function CompositeAssetPanel({
           <input type="color" value={backgroundColor} disabled={interactionDisabled} onChange={(event) => onBackgroundColorChange(event.target.value)} className="h-7 w-10 cursor-pointer rounded border-0 bg-transparent disabled:cursor-not-allowed" />
         </label>
       </div>
+
+      <VirtualCharacterPanel
+        layer={virtualCharacter}
+        duration={metadata?.duration ?? 0}
+        disabled={interactionDisabled || !metadata}
+        onSelect={onVirtualCharacterSelect}
+        onChange={onVirtualCharacterChange}
+        onRemove={onVirtualCharacterRemove}
+      />
 
       <AiMaskPanel
         canAnalyze={Boolean(metadata) && !interactionDisabled}

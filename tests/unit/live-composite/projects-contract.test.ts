@@ -53,6 +53,16 @@ describe('live-composite projects contract', () => {
       ...ok,
       timeline: { keyframes: [{ id: 'kf-9', time: 1, baseMaskKey: 'images/playground-ref/user-2/m.png', strokes: [] }] },
     }, USER)).toEqual({ field: 'timeline.keyframes[kf-9].baseMaskKey', key: 'images/playground-ref/user-2/m.png' })
+
+    expect(findForeignStorageKey({
+      timeline: liveCompositeTimelineSchema.parse(timeline({
+        virtualCharacter: {
+          assetType: 'video', assetName: 'robot.webm', assetKey: 'video/playground-ref/user-2/robot.webm',
+          anchor: 'person', x: 0.7, y: 0.5, offsetX: 0.2, offsetY: 0, scale: 0.4,
+          rotation: 0, opacity: 1, startTime: 0, endTime: 2, loop: true, depth: 'behind-person',
+        },
+      })),
+    }, USER)).toEqual({ field: 'timeline.virtualCharacter.assetKey', key: 'video/playground-ref/user-2/robot.webm' })
   })
 
   it('timeline schema accepts the real editor shape and rejects malformed strokes', () => {
@@ -78,6 +88,18 @@ describe('live-composite projects contract', () => {
       keyframes: [{ id: 'kf-0', time: 0, strokes: [], surprise: true }],
     })
     expect(liveCompositeTimelineSchema.safeParse(extraProp).success).toBe(false)
+  })
+
+  it('validates virtual character timing, transform and storage metadata', () => {
+    const character = {
+      assetType: 'image', assetName: 'robot.png', assetKey: `images/playground-ref/${USER}/robot.png`,
+      anchor: 'person', x: 0.7, y: 0.5, offsetX: 0.2, offsetY: 0, scale: 0.4,
+      rotation: 0, opacity: 1, startTime: 0, endTime: 2, loop: false, depth: 'in-front',
+    }
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: character })).success).toBe(true)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, endTime: -1 } })).success).toBe(false)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, startTime: 3 } })).success).toBe(false)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, opacity: 2 } })).success).toBe(false)
   })
 
   it('create schema requires timeline and validates the color format', () => {

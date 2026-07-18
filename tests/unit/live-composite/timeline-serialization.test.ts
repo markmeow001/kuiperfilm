@@ -6,7 +6,7 @@ import {
   serializeMaskStroke,
   serializeTimeline,
 } from '@/app/[locale]/live-composite/lib/timeline-serialization'
-import type { MaskKeyframe, MaskRaster, MaskStroke } from '@/app/[locale]/live-composite/live-composite-types'
+import type { MaskKeyframe, MaskRaster, MaskStroke, VirtualCharacterLayer } from '@/app/[locale]/live-composite/live-composite-types'
 
 function makeRaster(seed: number): MaskRaster {
   return { width: 2, height: 2, alpha: new Uint8ClampedArray([seed, 0, 255, 128]) }
@@ -23,6 +23,14 @@ function makeStroke(overrides: Partial<MaskStroke> = {}): MaskStroke {
 }
 
 describe('live-composite timeline serialization', () => {
+  const character: VirtualCharacterLayer = {
+    assetType: 'video', assetName: 'robot.webm', assetUrl: 'blob:robot',
+    assetKey: 'video/playground-ref/user-1/robot.webm', anchor: 'person',
+    x: 0.7, y: 0.5, offsetX: 0.25, offsetY: 0, scale: 0.4,
+    rotation: 0, opacity: 1, startTime: 0, endTime: 3, loop: true,
+    depth: 'behind-person',
+  }
+
   it('stroke round trip maps size <-> brushPercent and keeps tool/points', () => {
     const serialized = serializeMaskStroke(makeStroke({ tool: 'erase', size: 0.125 }))
     expect(serialized).toEqual({
@@ -106,5 +114,24 @@ describe('live-composite timeline serialization', () => {
       'images/playground-ref/u/x.png',
       'images/playground-ref/u/y.png',
     ])
+  })
+
+  it('serializes virtual character settings without transient assetUrl', () => {
+    const result = serializeTimeline([{ id: 'kf-0', time: 0, strokes: [] }], () => undefined, character)
+    expect(result.virtualCharacter).toEqual({
+      assetType: 'video', assetName: 'robot.webm', assetKey: character.assetKey,
+      anchor: 'person', x: 0.7, y: 0.5, offsetX: 0.25, offsetY: 0,
+      scale: 0.4, rotation: 0, opacity: 1, startTime: 0, endTime: 3,
+      loop: true, depth: 'behind-person',
+    })
+    expect(result.virtualCharacter).not.toHaveProperty('assetUrl')
+  })
+
+  it('refuses to save a local-only virtual character', () => {
+    expect(() => serializeTimeline(
+      [{ id: 'kf-0', time: 0, strokes: [] }],
+      () => undefined,
+      { ...character, assetKey: null },
+    )).toThrow('虛擬角色素材尚未上傳')
   })
 })

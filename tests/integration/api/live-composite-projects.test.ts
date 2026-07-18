@@ -82,6 +82,7 @@ const OWNER = 'user-1'
 const VIDEO_KEY = `video/playground-ref/${OWNER}/ref-a.mp4`
 const BG_KEY = `images/playground-ref/${OWNER}/ref-bg.png`
 const MASK_KEY = `images/playground-ref/${OWNER}/ref-mask.png`
+const CHARACTER_KEY = `video/playground-ref/${OWNER}/robot.webm`
 
 function validTimeline(overrides: Record<string, unknown> = {}) {
   return {
@@ -98,6 +99,15 @@ function validTimeline(overrides: Record<string, unknown> = {}) {
       { id: 'kf-1', time: 1.5, strokes: [] },
     ],
     ...overrides,
+  }
+}
+
+function virtualCharacter(assetKey = CHARACTER_KEY) {
+  return {
+    assetType: 'video', assetName: 'robot.webm', assetKey,
+    anchor: 'person', x: 0.7, y: 0.5, offsetX: 0.2, offsetY: 0,
+    scale: 0.4, rotation: 0, opacity: 1, startTime: 0, endTime: 2,
+    loop: true, depth: 'behind-person',
   }
 }
 
@@ -137,7 +147,10 @@ describe('/api/live-composite/projects — persistence contract', () => {
     const { GET: DETAIL } = await loadDetailRoute()
 
     const createRes = await POST(
-      buildMockRequest({ path: '/api/live-composite/projects', method: 'POST', body: createBody() }),
+      buildMockRequest({
+        path: '/api/live-composite/projects', method: 'POST',
+        body: createBody({ timeline: validTimeline({ virtualCharacter: virtualCharacter() }) }),
+      }),
       { params: Promise.resolve({}) },
     )
     expect(createRes.status).toBe(200)
@@ -176,6 +189,12 @@ describe('/api/live-composite/projects — persistence contract', () => {
     expect(detail.timeline.keyframes[0].baseMaskUrl).toBe(`https://signed.example/${MASK_KEY}`)
     expect(detail.timeline.keyframes[0].strokes).toEqual(validTimeline().keyframes[0].strokes)
     expect(detail.timeline.keyframes[1]).not.toHaveProperty('baseMaskUrl')
+    expect(detail.timeline.virtualCharacter).toMatchObject({
+      assetKey: CHARACTER_KEY,
+      assetUrl: `https://signed.example/${CHARACTER_KEY}`,
+      anchor: 'person',
+      depth: 'behind-person',
+    })
   })
 
   it('non-owner get / patch / delete → 404 (existence does not leak)', async () => {
@@ -243,6 +262,18 @@ describe('/api/live-composite/projects — persistence contract', () => {
     )
     expect(foreignMask.status).toBe(403)
     expect((await foreignMask.json()).error.details.code).toBe('LIVE_COMPOSITE_STORAGE_KEY_REJECTED')
+
+    const foreignCharacter = await POST(
+      buildMockRequest({
+        path: '/api/live-composite/projects', method: 'POST',
+        body: createBody({
+          timeline: validTimeline({ virtualCharacter: virtualCharacter('video/playground-ref/user-2/robot.webm') }),
+        }),
+      }),
+      { params: Promise.resolve({}) },
+    )
+    expect(foreignCharacter.status).toBe(403)
+    expect((await foreignCharacter.json()).error.details.details.field).toBe('timeline.virtualCharacter.assetKey')
     expect(dbState.rows).toHaveLength(0)
   })
 

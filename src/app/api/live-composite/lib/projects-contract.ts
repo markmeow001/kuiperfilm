@@ -21,6 +21,27 @@ export const LIVE_COMPOSITE_MAX_POINTS_PER_STROKE = 5_000
 export const LIVE_COMPOSITE_MAX_TIMELINE_BYTES = 2_000_000
 export const LIVE_COMPOSITE_PROJECT_LIST_CAP = 100
 
+const virtualCharacterSchema = z
+  .object({
+    assetType: z.enum(['image', 'video']),
+    assetName: z.string().trim().min(1).max(255),
+    assetKey: z.string().trim().min(1).max(512),
+    anchor: z.enum(['screen', 'person']),
+    x: z.number().finite().min(-2).max(3),
+    y: z.number().finite().min(-2).max(3),
+    offsetX: z.number().finite().min(-2).max(2),
+    offsetY: z.number().finite().min(-2).max(2),
+    scale: z.number().finite().min(0.05).max(2),
+    rotation: z.number().finite().min(-360).max(360),
+    opacity: z.number().finite().min(0).max(1),
+    startTime: z.number().finite().min(0),
+    endTime: z.number().finite().min(0),
+    loop: z.boolean(),
+    depth: z.enum(['behind-person', 'in-front']),
+  })
+  .strict()
+  .refine((value) => value.endTime >= value.startTime, { message: '角色結束時間不得早於開始時間' })
+
 const normalizedPointSchema = z
   .object({
     x: z.number().min(0).max(1),
@@ -50,6 +71,7 @@ const serializedKeyframeSchema = z
 export const liveCompositeTimelineSchema = z
   .object({
     keyframes: z.array(serializedKeyframeSchema).min(1).max(LIVE_COMPOSITE_MAX_KEYFRAMES),
+    virtualCharacter: virtualCharacterSchema.optional(),
   })
   .strict()
 
@@ -130,6 +152,10 @@ export function findForeignStorageKey(
       return { field: `timeline.keyframes[${keyframe.id}].baseMaskKey`, key: keyframe.baseMaskKey }
     }
   }
+  const character = payload.timeline?.virtualCharacter
+  if (character && !isOwnPlaygroundRefKey(character.assetKey, userId, character.assetType)) {
+    return { field: 'timeline.virtualCharacter.assetKey', key: character.assetKey }
+  }
   return null
 }
 
@@ -157,6 +183,7 @@ export interface LiveCompositeProjectDetail {
   backgroundColor: string
   timeline: {
     keyframes: Array<LiveCompositeSerializedKeyframe & { baseMaskUrl?: string }>
+    virtualCharacter?: NonNullable<LiveCompositeSerializedTimeline['virtualCharacter']> & { assetUrl: string }
   }
   createdAt: string
   updatedAt: string

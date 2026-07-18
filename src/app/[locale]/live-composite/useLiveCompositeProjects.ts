@@ -23,7 +23,7 @@ import {
   updateLiveCompositeProject,
 } from './lib/project-api'
 import { collectBaseMaskKeys, deserializeTimeline, serializeTimeline } from './lib/timeline-serialization'
-import type { MaskKeyframe, MaskRaster } from './live-composite-types'
+import type { MaskKeyframe, MaskRaster, VirtualCharacterLayer } from './live-composite-types'
 
 const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024
 const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -38,12 +38,15 @@ export interface SaveProjectInput {
   backgroundKey: string | null
   backgroundColor: string
   keyframes: MaskKeyframe[]
+  virtualCharacter: VirtualCharacterLayer | null
+  virtualCharacterFile: File | null
 }
 
 export interface SaveProjectResult {
   projectId: string
   videoKey: string | null
   backgroundKey: string | null
+  virtualCharacterKey: string | null
 }
 
 export interface OpenedProject {
@@ -56,6 +59,7 @@ export interface OpenedProject {
   backgroundKey: string | null
   backgroundColor: string
   keyframes: MaskKeyframe[]
+  virtualCharacter: VirtualCharacterLayer | null
 }
 
 export function useLiveCompositeProjects() {
@@ -101,6 +105,15 @@ export function useLiveCompositeProjects() {
         backgroundKey = await uploadFile(input.backgroundFile, 'image')
       }
 
+      let virtualCharacterKey = input.virtualCharacter?.assetKey ?? null
+      if (input.virtualCharacter && !virtualCharacterKey && input.virtualCharacterFile) {
+        setBusyMessage('正在上傳虛擬角色素材…')
+        virtualCharacterKey = await uploadFile(input.virtualCharacterFile, input.virtualCharacter.assetType)
+      }
+      if (input.virtualCharacter && !virtualCharacterKey) {
+        throw new Error('虛擬角色素材缺少可儲存的上傳檔案')
+      }
+
       const maskCache = maskKeyByRasterRef.current
       const pendingMasks = input.keyframes.filter(
         (keyframe) => keyframe.baseMask && !maskCache.has(keyframe.baseMask),
@@ -114,8 +127,13 @@ export function useLiveCompositeProjects() {
         maskCache.set(keyframe.baseMask, await uploadFile(file, 'image'))
       }
 
-      const timeline = serializeTimeline(input.keyframes, (keyframe) =>
-        keyframe.baseMask ? maskCache.get(keyframe.baseMask) : undefined,
+      const characterForSave = input.virtualCharacter && virtualCharacterKey
+        ? { ...input.virtualCharacter, assetKey: virtualCharacterKey }
+        : null
+      const timeline = serializeTimeline(
+        input.keyframes,
+        (keyframe) => keyframe.baseMask ? maskCache.get(keyframe.baseMask) : undefined,
+        characterForSave,
       )
 
       setBusyMessage('正在儲存合成專案…')
@@ -138,7 +156,7 @@ export function useLiveCompositeProjects() {
 
       setBusyMessage(null)
       void refreshProjects()
-      return { projectId: saved.id, videoKey, backgroundKey }
+      return { projectId: saved.id, videoKey, backgroundKey, virtualCharacterKey }
     } catch (err) {
       setBusyMessage(null)
       setError(err instanceof Error ? err.message : '合成專案儲存失敗')
@@ -166,6 +184,7 @@ export function useLiveCompositeProjects() {
       }
 
       const keyframes = deserializeTimeline(detail.timeline, rasterByKey)
+      const storedCharacter = detail.timeline.virtualCharacter
       setBusyMessage(null)
       return {
         id: detail.id,
@@ -177,6 +196,11 @@ export function useLiveCompositeProjects() {
         backgroundKey: detail.backgroundKey,
         backgroundColor: detail.backgroundColor,
         keyframes,
+        virtualCharacter: storedCharacter ? {
+          ...storedCharacter,
+          assetUrl: storedCharacter.assetUrl,
+          assetKey: storedCharacter.assetKey,
+        } : null,
       }
     } catch (err) {
       setBusyMessage(null)

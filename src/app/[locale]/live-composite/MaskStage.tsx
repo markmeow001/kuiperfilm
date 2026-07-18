@@ -8,6 +8,7 @@ import { appendStrokePoint, pointerToNormalizedPoint, renderMaskStrokes } from '
 import { segmentPersonFrame } from './lib/person-segmenter'
 import { shouldRenderPreview } from './lib/render-ownership'
 import { seekVideoGuarded } from './lib/video-seek'
+import { useVirtualCharacterMedia } from './useVirtualCharacterMedia'
 import {
   releaseCompositeRecordingAudio,
   startCompositeRecording,
@@ -15,7 +16,7 @@ import {
   type CompositeRecordingResult,
   type CompositeRecordingSession,
 } from './lib/composite-video-recorder'
-import type { CompositeView, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, VideoMetadata } from './live-composite-types'
+import type { CompositeView, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 
 export interface MaskStageHandle {
   exportMask: () => Promise<Blob>
@@ -42,6 +43,7 @@ interface MaskStageProps {
   brushPercent: number
   view: CompositeView
   overlayVisible: boolean
+  virtualCharacter: VirtualCharacterLayer | null
   editingDisabled?: boolean
   onMetadata: (metadata: VideoMetadata) => void
   onCommitStroke: (stroke: MaskStroke) => void
@@ -89,6 +91,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   brushPercent,
   view,
   overlayVisible,
+  virtualCharacter,
   editingDisabled = false,
   onMetadata,
   onCommitStroke,
@@ -100,12 +103,28 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   const rasterCanvasRef = useRef<{ raster: MaskRaster; canvas: HTMLCanvasElement } | null>(null)
   const workCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const backgroundImageRef = useRef<HTMLImageElement | null>(null)
+  const renderSceneRef = useRef<() => void>(() => undefined)
   const currentStrokeRef = useRef<MaskStroke | null>(null)
   const recordingSessionRef = useRef<CompositeRecordingSession | null>(null)
   const analysisAbortRef = useRef<AbortController | null>(null)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [stageError, setStageError] = useState<string | null>(null)
+  const requestStageRender = useCallback(() => {
+    if (shouldRenderPreview(Boolean(recordingSessionRef.current))) renderSceneRef.current()
+  }, [])
+  const {
+    element: characterMediaElement,
+    draw: drawVirtualCharacter,
+    assertReady: assertCharacterMediaReady,
+  } = useVirtualCharacterMedia({
+    layer: virtualCharacter,
+    keyframes,
+    playing,
+    timelineTime: currentTime,
+    requestRender: requestStageRender,
+    onError: setStageError,
+  })
 
   const paintMask = useCallback((
     activeStroke: MaskStroke | null = currentStrokeRef.current,
@@ -139,7 +158,11 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     )
   }, [baseMask, strokes])
 
-  const renderScene = useCallback((viewOverride?: CompositeView, showOverlay: boolean = overlayVisible) => {
+  const renderScene = useCallback((
+    viewOverride?: CompositeView,
+    showOverlay: boolean = overlayVisible,
+    characterMask: MaskRaster | undefined = baseMask,
+  ) => {
     const video = videoRef.current
     const display = displayCanvasRef.current
     const mask = maskCanvasRef.current
@@ -169,6 +192,8 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       if (background?.complete && background.naturalWidth > 0) {
         drawCover(context, background, background.naturalWidth, background.naturalHeight, width, height)
       }
+      const timelineTime = video.currentTime
+      if (virtualCharacter?.depth === 'behind-person') drawVirtualCharacter(context, characterMask, timelineTime)
       workContext.clearRect(0, 0, width, height)
       workContext.globalCompositeOperation = 'source-over'
       workContext.drawImage(video, 0, 0, width, height)
@@ -176,6 +201,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       workContext.drawImage(mask, 0, 0)
       workContext.globalCompositeOperation = 'source-over'
       context.drawImage(work, 0, 0)
+      if (virtualCharacter?.depth === 'in-front') drawVirtualCharacter(context, characterMask, timelineTime)
     }
 
     if (showOverlay) {
@@ -191,7 +217,10 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       context.drawImage(work, 0, 0)
       context.restore()
     }
-  }, [backgroundColor, overlayVisible, view])
+  }, [backgroundColor, baseMask, drawVirtualCharacter, overlayVisible, view, virtualCharacter?.depth])
+  useEffect(() => {
+    renderSceneRef.current = () => renderScene()
+  }, [renderScene])
 
   useEffect(() => {
     if (!metadata) return
@@ -217,13 +246,14 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   useEffect(() => {
     backgroundImageRef.current = null
     if (!backgroundUrl) {
-      if (shouldRenderPreview(Boolean(recordingSessionRef.current))) renderScene()
+      if (shouldRenderPreview(Boolean(recordingSessionRef.current))) renderSceneRef.current()
       return
     }
     const image = new Image()
+    image.crossOrigin = 'anonymous'
     image.onload = () => {
       backgroundImageRef.current = image
-      if (shouldRenderPreview(Boolean(recordingSessionRef.current))) renderScene()
+      if (shouldRenderPreview(Boolean(recordingSessionRef.current))) renderSceneRef.current()
     }
     image.onerror = () => setStageError('背景圖片無法讀取')
     image.src = backgroundUrl
@@ -231,12 +261,14 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       image.onload = null
       image.onerror = null
     }
-  }, [backgroundUrl, renderScene])
+  }, [backgroundUrl])
 
   useEffect(() => {
     if (!shouldRenderPreview(Boolean(recordingSessionRef.current))) return
     if (!playing) {
-      renderScene()
+      const pausedTime = videoRef.current?.currentTime ?? 0
+      const pausedKeyframe = resolveMaskKeyframe(keyframes, pausedTime)
+      renderScene(undefined, overlayVisible, pausedKeyframe?.baseMask)
       return
     }
     let animationFrame = 0
@@ -245,12 +277,12 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       const playbackTime = videoRef.current?.currentTime ?? 0
       const keyframe = resolveMaskKeyframe(keyframes, playbackTime)
       paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
-      renderScene()
+      renderScene(undefined, overlayVisible, keyframe?.baseMask)
       animationFrame = window.requestAnimationFrame(tick)
     }
     animationFrame = window.requestAnimationFrame(tick)
     return () => window.cancelAnimationFrame(animationFrame)
-  }, [keyframes, paintMask, playing, renderScene])
+  }, [keyframes, overlayVisible, paintMask, playing, renderScene])
 
   useEffect(() => () => {
     analysisAbortRef.current?.abort()
@@ -286,6 +318,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       const display = displayCanvasRef.current
       if (!video || !display || !metadata) throw new Error('請先載入影片')
       if (backgroundUrl && !backgroundImageRef.current) throw new Error('背景圖片仍在載入，請稍後再輸出')
+      assertCharacterMediaReady()
       if (recordingSessionRef.current) throw new Error('目前已有影片正在輸出')
 
       const session = startCompositeRecording({
@@ -297,12 +330,12 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
         onFrame: (time) => {
           const keyframe = resolveMaskKeyframe(keyframes, time)
           paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
-          renderScene('composite', false)
+          renderScene('composite', false, keyframe?.baseMask)
         },
         onRestore: () => {
           const keyframe = resolveMaskKeyframe(keyframes, video.currentTime)
           paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
-          renderScene()
+          renderScene(undefined, overlayVisible, keyframe?.baseMask)
         },
       })
       recordingSessionRef.current = session
@@ -329,7 +362,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
       return segmentPersonFrame(video, threshold, edgeSoftness)
     },
-  }), [backgroundUrl, keyframes, metadata, onTimeChange, paintMask, renderScene])
+  }), [assertCharacterMediaReady, backgroundUrl, keyframes, metadata, onTimeChange, overlayVisible, paintMask, renderScene])
 
   const pointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -401,6 +434,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
           src={videoUrl}
           className="pointer-events-none absolute h-px w-px opacity-0"
           playsInline
+          crossOrigin="anonymous"
           preload="metadata"
           onLoadedMetadata={(event) => {
             const video = event.currentTarget
@@ -420,6 +454,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
           }}
           onError={() => setStageError('影片格式無法由瀏覽器解碼')}
         />
+        {characterMediaElement}
         <canvas
           ref={displayCanvasRef}
           aria-label="影片遮罩編輯畫布"

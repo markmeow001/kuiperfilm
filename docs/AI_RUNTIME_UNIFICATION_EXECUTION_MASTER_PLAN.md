@@ -815,6 +815,9 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 - ⚠️ 本轮无新 BLOCK 问题；pre-existing Q-002 / Q-003 / Q-004（Phase 11.5 同步阶段已登记）仍挡 `npm run test:regression` 完整链路，不在 Phase 11.1 范围内
 
 ## 当前问题登记（必须先记录再推进）
+- ✅ Live Composite 虛擬角色合成 MVP（2026-07-18 working tree）：透明角色圖片／影片、人物遮罩中心追蹤與關鍵影格位置插值、人物前後景遮擋、時間／transform 控制、專案 timeline 保存與簽名讀取、影格／影片輸出及既有 Canvas handoff 已完成程式整合；未新增 AI provider、資料表或旁路 runtime。高階場景深度遮擋、光影匹配與動作生成留待後續切片。
+- ✅ 本輪驗證：`tests/unit/live-composite`（12 files / 61 tests）、完整 unit、完整 API integration（含 live-composite project 5 tests）、guards、`npx tsc --noEmit`、lint（0 errors／23 既有 warnings）及 production build 全通過。
+- ✅ 本輪瀏覽器驗收：localhost 登入後確認 Live Composite 非空白、無 Next.js error overlay／console error；3 秒 640×360 測試影片與角色 PNG 首次上傳成功，角色 transform／時間／遮擋控制完整呈現並在 Canvas 合成顯示。雲端素材上傳與 UI 保存／重開未在未確認下觸發，保存契約由 API integration 覆蓋。
 - ⚠️ 回归门禁未全绿：存在 3 个历史/并行改动引入的失败用例，导致 `test:regression` 无法通过。
 - ⚠️ 本地构建环境 Redis 未监听 `127.0.0.1:16379`，`next build` 期间出现大量连接拒绝日志，但构建产物仍成功输出。
 - ⚠️ Q-002（pre-existing，非本 phase 引入）：ripgrep 未裝 → `scripts/check-api-handler.ts` 用 `rg --files` 報 `command not found` → `npm run test:guards` 連帶失敗 → `npm run test:regression` 同樣中斷在第一步。建議解法：`brew install ripgrep` 或讓 guard fallback 到 `grep`。

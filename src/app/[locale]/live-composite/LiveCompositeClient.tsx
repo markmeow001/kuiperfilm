@@ -15,7 +15,7 @@ import { ProjectPanel } from './ProjectPanel'
 import { SaveToLibraryDialog, type ExportedAsset } from './SaveToLibraryDialog'
 import { useLiveCompositeProjects } from './useLiveCompositeProjects'
 import { useMaskTimeline } from './useMaskTimeline'
-import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskTool, VideoMetadata } from './live-composite-types'
+import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskTool, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 
 interface LiveCompositeClientProps {
   locale: string
@@ -67,6 +67,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null)
   const [backgroundKey, setBackgroundKey] = useState<string | null>(null)
   const [backgroundColor, setBackgroundColor] = useState('#172033')
+  const [virtualCharacter, setVirtualCharacter] = useState<VirtualCharacterLayer | null>(null)
+  const [virtualCharacterFile, setVirtualCharacterFile] = useState<File | null>(null)
   const [projectId, setProjectId] = useState<string | null>(null)
   const [projectName, setProjectName] = useState('未命名合成')
   const [lastExport, setLastExport] = useState<LastExport | null>(null)
@@ -92,6 +94,13 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   useEffect(() => () => {
     if (backgroundUrl) URL.revokeObjectURL(backgroundUrl)
   }, [backgroundUrl])
+
+  useEffect(() => {
+    const localUrl = virtualCharacterFile ? virtualCharacter?.assetUrl : null
+    return () => {
+      if (localUrl) URL.revokeObjectURL(localUrl)
+    }
+  }, [virtualCharacter?.assetUrl, virtualCharacterFile])
 
   useEffect(() => () => {
     void releasePersonSegmenters()
@@ -125,6 +134,47 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     setExportError(null)
   }
 
+  const selectVirtualCharacter = (file: File) => {
+    if (isVideoExporting || isAnalyzing || !metadata) return
+    const assetType = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : null
+    if (!assetType) {
+      setExportError('虛擬角色素材必須是圖片或影片格式。')
+      return
+    }
+    setVirtualCharacter({
+      assetType,
+      assetName: file.name,
+      assetUrl: URL.createObjectURL(file),
+      assetKey: null,
+      anchor: 'screen',
+      x: 0.72,
+      y: 0.58,
+      offsetX: 0.28,
+      offsetY: 0,
+      scale: 0.42,
+      rotation: 0,
+      opacity: 1,
+      startTime: 0,
+      endTime: metadata.duration,
+      loop: true,
+      depth: 'behind-person',
+    })
+    setVirtualCharacterFile(file)
+    setView('composite')
+    setOverlayVisible(false)
+    setExportError(null)
+  }
+
+  const updateVirtualCharacter = (patch: Partial<VirtualCharacterLayer>) => {
+    setVirtualCharacter((current) => {
+      if (!current) return null
+      const next = { ...current, ...patch }
+      if ('startTime' in patch && next.startTime > next.endTime) next.endTime = next.startTime
+      if ('endTime' in patch && next.endTime < next.startTime) next.startTime = next.endTime
+      return next
+    })
+  }
+
   const saveProject = async () => {
     if (isVideoExporting || isAnalyzing) return
     try {
@@ -138,10 +188,15 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         backgroundKey,
         backgroundColor,
         keyframes: maskTimeline.keyframes,
+        virtualCharacter,
+        virtualCharacterFile,
       })
       setProjectId(saved.projectId)
       setVideoKey(saved.videoKey)
       setBackgroundKey(saved.backgroundKey)
+      if (virtualCharacter && saved.virtualCharacterKey) {
+        setVirtualCharacter({ ...virtualCharacter, assetKey: saved.virtualCharacterKey })
+      }
     } catch {
       // Not silent: the hook already recorded the failure and ProjectPanel
       // renders projectStore.error to the user.
@@ -163,6 +218,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       setBackgroundKey(loaded.backgroundKey)
       setBackgroundUrl(loaded.backgroundUrl)
       setBackgroundColor(loaded.backgroundColor)
+      setVirtualCharacterFile(null)
+      setVirtualCharacter(loaded.virtualCharacter)
       setMetadata(null)
       setCurrentTime(0)
       maskTimeline.load(loaded.keyframes)
@@ -390,7 +447,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           </Link>
           <div>
             <div className="flex items-center gap-2 text-sm font-medium"><AppIcon name="sparklesAlt" className="h-4 w-4 text-cyan-300" />AI 實拍合成台</div>
-            <div className="mt-0.5 text-xs text-stone-600">Live Composite Studio · Mask MVP</div>
+            <div className="mt-0.5 text-xs text-stone-600">Live Composite Studio · Mask + Virtual Character</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-5 text-xs text-stone-500">
@@ -438,9 +495,16 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           analysisProgress={analysisProgress}
           exportProgress={exportProgress}
           interactionDisabled={isVideoExporting || isAnalyzing}
+          virtualCharacter={virtualCharacter}
           onVideoSelect={selectVideo}
           onBackgroundSelect={selectBackground}
           onBackgroundColorChange={setBackgroundColor}
+          onVirtualCharacterSelect={selectVirtualCharacter}
+          onVirtualCharacterChange={updateVirtualCharacter}
+          onVirtualCharacterRemove={() => {
+            setVirtualCharacter(null)
+            setVirtualCharacterFile(null)
+          }}
           onExportMask={exportMask}
           onExportFrame={exportFrame}
           onExportVideo={(includeAudio) => void exportVideo(includeAudio)}
@@ -466,6 +530,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             brushPercent={brushPercent}
             view={view}
             overlayVisible={overlayVisible}
+            virtualCharacter={virtualCharacter}
             editingDisabled={isVideoExporting}
             onMetadata={setMetadata}
             onCommitStroke={maskTimeline.commitStroke}

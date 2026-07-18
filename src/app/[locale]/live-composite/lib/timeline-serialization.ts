@@ -13,7 +13,7 @@ import type {
   LiveCompositeSerializedTimeline,
 } from '@/app/api/live-composite/lib/projects-contract'
 import { LIVE_COMPOSITE_MAX_KEYFRAMES, LIVE_COMPOSITE_MAX_STROKES_PER_KEYFRAME } from '@/app/api/live-composite/lib/projects-contract'
-import type { MaskKeyframe, MaskRaster, MaskStroke } from '../live-composite-types'
+import type { MaskKeyframe, MaskRaster, MaskStroke, VirtualCharacterLayer } from '../live-composite-types'
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
@@ -56,10 +56,14 @@ export function deserializeMaskStroke(stroke: LiveCompositeSerializedStroke): Ma
 export function serializeTimeline(
   keyframes: MaskKeyframe[],
   resolveBaseMaskKey: (keyframe: MaskKeyframe) => string | undefined,
+  virtualCharacter?: VirtualCharacterLayer | null,
 ): LiveCompositeSerializedTimeline {
   if (keyframes.length === 0) throw new Error('遮罩時間軸是空的，無法儲存')
   if (keyframes.length > LIVE_COMPOSITE_MAX_KEYFRAMES) {
     throw new Error(`關鍵影格數量 ${keyframes.length} 超過上限 ${LIVE_COMPOSITE_MAX_KEYFRAMES}`)
+  }
+  if (virtualCharacter && !virtualCharacter.assetKey) {
+    throw new Error('虛擬角色素材尚未上傳，無法儲存')
   }
   return {
     keyframes: keyframes.map((keyframe) => {
@@ -77,6 +81,25 @@ export function serializeTimeline(
       }
       return baseMaskKey ? { ...serialized, baseMaskKey } : serialized
     }),
+    ...(virtualCharacter?.assetKey ? {
+      virtualCharacter: {
+        assetType: virtualCharacter.assetType,
+        assetName: virtualCharacter.assetName,
+        assetKey: virtualCharacter.assetKey,
+        anchor: virtualCharacter.anchor,
+        x: round4(virtualCharacter.x),
+        y: round4(virtualCharacter.y),
+        offsetX: round4(virtualCharacter.offsetX),
+        offsetY: round4(virtualCharacter.offsetY),
+        scale: round4(virtualCharacter.scale),
+        rotation: round4(virtualCharacter.rotation),
+        opacity: round4(virtualCharacter.opacity),
+        startTime: round4(virtualCharacter.startTime),
+        endTime: round4(virtualCharacter.endTime),
+        loop: virtualCharacter.loop,
+        depth: virtualCharacter.depth,
+      },
+    } : {}),
   }
 }
 

@@ -70,6 +70,12 @@ export const GET = apiHandler(async (_request: NextRequest, { params }: RouteCon
         ...keyframe,
         ...(keyframe.baseMaskKey ? { baseMaskUrl: getSignedUrl(keyframe.baseMaskKey, SIGNED_URL_TTL_SECONDS) } : {}),
       })),
+      ...(timelineParsed.data.virtualCharacter ? {
+        virtualCharacter: {
+          ...timelineParsed.data.virtualCharacter,
+          assetUrl: getSignedUrl(timelineParsed.data.virtualCharacter.assetKey, SIGNED_URL_TTL_SECONDS),
+        },
+      } : {}),
     },
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
