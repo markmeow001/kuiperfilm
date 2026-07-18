@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { characterMediaTime, computeCharacterTransform, isCharacterVisible, resolveTrackedPersonCenter } from './lib/virtual-character'
+import { characterMediaTime, computeCharacterTransform, isCharacterVisible, resolveCharacterMotion, resolveTrackedPersonCenter } from './lib/virtual-character'
+import { characterFilter, DEFAULT_CHARACTER_APPEARANCE } from './lib/character-appearance'
 import type { MaskKeyframe, MaskRaster, VirtualCharacterLayer } from './live-composite-types'
 
 interface VirtualCharacterMediaOptions {
@@ -48,20 +49,34 @@ export function useVirtualCharacterMedia({
       const targetTime = characterMediaTime(layer, time, source.duration)
       if (Math.abs(source.currentTime - targetTime) > 0.04) source.currentTime = targetTime
     }
+    const motion = layer.motionEnabled ? resolveCharacterMotion(layer.motionKeyframes ?? [], time) : null
+    const renderLayer = motion ? { ...layer, anchor: 'person' as const, scale: layer.scale * motion.scale, rotation: layer.rotation + motion.rotation } : layer
     const transform = computeCharacterTransform(
-      layer,
+      renderLayer,
       raster,
       context.canvas.width,
       context.canvas.height,
       sourceWidth,
       sourceHeight,
-      layer.anchor === 'person' ? resolveTrackedPersonCenter(keyframes, time) : null,
+      motion ? { x: motion.x, y: motion.y } : layer.anchor === 'person' ? resolveTrackedPersonCenter(keyframes, time, layer.trackingKeyframes) : null,
     )
     context.save()
     context.translate(transform.centerX, transform.centerY)
     context.rotate(transform.rotationRadians)
     context.globalAlpha = transform.opacity
+    const appearance = layer.appearance ?? DEFAULT_CHARACTER_APPEARANCE
+    context.filter = characterFilter(appearance)
+    context.shadowColor = `rgba(0, 0, 0, ${appearance.shadowOpacity})`
+    context.shadowBlur = appearance.shadowBlur
+    context.shadowOffsetX = appearance.shadowOffsetX
+    context.shadowOffsetY = appearance.shadowOffsetY
     context.drawImage(source, -transform.width / 2, -transform.height / 2, transform.width, transform.height)
+    if (appearance.lightWrap > 0) {
+      context.globalCompositeOperation = 'source-atop'
+      context.globalAlpha = transform.opacity * appearance.lightWrap
+      context.filter = `blur(${Math.max(2, appearance.blur + 4)}px)`
+      context.drawImage(source, -transform.width / 2 - 2, -transform.height / 2 - 2, transform.width + 4, transform.height + 4)
+    }
     context.restore()
   }, [keyframes, layer])
 

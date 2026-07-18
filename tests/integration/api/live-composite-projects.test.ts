@@ -82,6 +82,7 @@ const OWNER = 'user-1'
 const VIDEO_KEY = `video/playground-ref/${OWNER}/ref-a.mp4`
 const BG_KEY = `images/playground-ref/${OWNER}/ref-bg.png`
 const MASK_KEY = `images/playground-ref/${OWNER}/ref-mask.png`
+const OCCLUSION_KEY = `images/playground-ref/${OWNER}/ref-occlusion.png`
 const CHARACTER_KEY = `video/playground-ref/${OWNER}/robot.webm`
 
 function validTimeline(overrides: Record<string, unknown> = {}) {
@@ -149,7 +150,10 @@ describe('/api/live-composite/projects — persistence contract', () => {
     const createRes = await POST(
       buildMockRequest({
         path: '/api/live-composite/projects', method: 'POST',
-        body: createBody({ timeline: validTimeline({ virtualCharacter: virtualCharacter() }) }),
+        body: createBody({ timeline: validTimeline({
+          virtualCharacter: virtualCharacter(),
+          occlusionKeyframes: [{ id: 'depth-0', time: 0, baseMaskKey: OCCLUSION_KEY, strokes: [] }],
+        }) }),
       }),
       { params: Promise.resolve({}) },
     )
@@ -189,6 +193,7 @@ describe('/api/live-composite/projects — persistence contract', () => {
     expect(detail.timeline.keyframes[0].baseMaskUrl).toBe(`https://signed.example/${MASK_KEY}`)
     expect(detail.timeline.keyframes[0].strokes).toEqual(validTimeline().keyframes[0].strokes)
     expect(detail.timeline.keyframes[1]).not.toHaveProperty('baseMaskUrl')
+    expect(detail.timeline.occlusionKeyframes[0].baseMaskUrl).toBe(`https://signed.example/${OCCLUSION_KEY}`)
     expect(detail.timeline.virtualCharacter).toMatchObject({
       assetKey: CHARACTER_KEY,
       assetUrl: `https://signed.example/${CHARACTER_KEY}`,

@@ -38,6 +38,34 @@ const virtualCharacterSchema = z
     endTime: z.number().finite().min(0),
     loop: z.boolean(),
     depth: z.enum(['behind-person', 'in-front']),
+    trackingKeyframes: z.array(z.object({
+      id: z.string().trim().min(1).max(64),
+      time: z.number().finite().min(0),
+      offsetX: z.number().finite().min(-2).max(2),
+      offsetY: z.number().finite().min(-2).max(2),
+    }).strict()).max(LIVE_COMPOSITE_MAX_KEYFRAMES).optional(),
+    appearance: z.object({
+      exposure: z.number().finite().min(-1).max(1),
+      contrast: z.number().finite().min(-1).max(1),
+      saturation: z.number().finite().min(-1).max(1),
+      temperature: z.number().finite().min(-1).max(1),
+      blur: z.number().finite().min(0).max(20),
+      lightWrap: z.number().finite().min(0).max(1),
+      shadowOpacity: z.number().finite().min(0).max(1),
+      shadowBlur: z.number().finite().min(0).max(100),
+      shadowOffsetX: z.number().finite().min(-100).max(100),
+      shadowOffsetY: z.number().finite().min(-100).max(100),
+    }).strict().optional(),
+    motionEnabled: z.boolean().optional(),
+    motionKeyframes: z.array(z.object({
+      id: z.string().trim().min(1).max(64),
+      time: z.number().finite().min(0),
+      x: z.number().finite().min(-1).max(2),
+      y: z.number().finite().min(-1).max(2),
+      scale: z.number().finite().min(0.1).max(5),
+      rotation: z.number().finite().min(-360).max(360),
+      confidence: z.number().finite().min(0).max(1),
+    }).strict()).max(LIVE_COMPOSITE_MAX_KEYFRAMES).optional(),
   })
   .strict()
   .refine((value) => value.endTime >= value.startTime, { message: '角色結束時間不得早於開始時間' })
@@ -71,6 +99,7 @@ const serializedKeyframeSchema = z
 export const liveCompositeTimelineSchema = z
   .object({
     keyframes: z.array(serializedKeyframeSchema).min(1).max(LIVE_COMPOSITE_MAX_KEYFRAMES),
+    occlusionKeyframes: z.array(serializedKeyframeSchema).min(1).max(LIVE_COMPOSITE_MAX_KEYFRAMES).optional(),
     virtualCharacter: virtualCharacterSchema.optional(),
   })
   .strict()
@@ -152,6 +181,11 @@ export function findForeignStorageKey(
       return { field: `timeline.keyframes[${keyframe.id}].baseMaskKey`, key: keyframe.baseMaskKey }
     }
   }
+  for (const keyframe of payload.timeline?.occlusionKeyframes ?? []) {
+    if (keyframe.baseMaskKey && !isOwnPlaygroundRefKey(keyframe.baseMaskKey, userId, 'image')) {
+      return { field: `timeline.occlusionKeyframes[${keyframe.id}].baseMaskKey`, key: keyframe.baseMaskKey }
+    }
+  }
   const character = payload.timeline?.virtualCharacter
   if (character && !isOwnPlaygroundRefKey(character.assetKey, userId, character.assetType)) {
     return { field: 'timeline.virtualCharacter.assetKey', key: character.assetKey }
@@ -183,6 +217,7 @@ export interface LiveCompositeProjectDetail {
   backgroundColor: string
   timeline: {
     keyframes: Array<LiveCompositeSerializedKeyframe & { baseMaskUrl?: string }>
+    occlusionKeyframes?: Array<LiveCompositeSerializedKeyframe & { baseMaskUrl?: string }>
     virtualCharacter?: NonNullable<LiveCompositeSerializedTimeline['virtualCharacter']> & { assetUrl: string }
   }
   createdAt: string

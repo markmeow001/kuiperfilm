@@ -11,11 +11,14 @@ import { MaskStage, type MaskStageHandle } from './MaskStage'
 import { buildMaskAnalysisTimes } from './lib/mask-analysis'
 import { CompositeRecordingCancelledError } from './lib/composite-video-recorder'
 import { releasePersonSegmenters } from './lib/person-segmenter'
+import { releaseInteractiveSegmenter } from './lib/interactive-segmenter'
+import { DEFAULT_CHARACTER_APPEARANCE } from './lib/character-appearance'
+import { releasePoseLandmarker } from './lib/pose-landmarker'
 import { ProjectPanel } from './ProjectPanel'
 import { SaveToLibraryDialog, type ExportedAsset } from './SaveToLibraryDialog'
 import { useLiveCompositeProjects } from './useLiveCompositeProjects'
 import { useMaskTimeline } from './useMaskTimeline'
-import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskTool, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
+import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskEditTarget, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 
 interface LiveCompositeClientProps {
   locale: string
@@ -77,6 +80,13 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const maskTimeline = useMaskTimeline(currentTime)
+  const occlusionTimeline = useMaskTimeline(currentTime)
+  const [editTarget, setEditTarget] = useState<MaskEditTarget>('person')
+  const [occlusionPicking, setOcclusionPicking] = useState(false)
+  const [occlusionBusy, setOcclusionBusy] = useState(false)
+  const [occlusionMessage, setOcclusionMessage] = useState<string | null>(null)
+  const [motionBusy, setMotionBusy] = useState(false)
+  const [motionMessage, setMotionMessage] = useState<string | null>(null)
   const [tool, setTool] = useState<MaskTool>('keep')
   const [view, setView] = useState<CompositeView>('source')
   const [brushPercent, setBrushPercent] = useState(6)
@@ -102,15 +112,18 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     }
   }, [virtualCharacter?.assetUrl, virtualCharacterFile])
 
+  useEffect(() => () => releasePoseLandmarker(), [])
+
   useEffect(() => () => {
     void releasePersonSegmenters()
+    void releaseInteractiveSegmenter()
   }, [])
 
   const selectVideo = (file: File) => {
     // Swapping the video element's source while an analysis seek is pending
     // would leave that seek waiting forever, so uploads stay locked until the
     // user cancels the analysis or it completes.
-    if (isVideoExporting || isAnalyzing) return
+    if (isVideoExporting || isAnalyzing || occlusionBusy) return
     analysisRunRef.current += 1
     setVideoUrl(URL.createObjectURL(file))
     setVideoName(file.name)
@@ -119,6 +132,10 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     setMetadata(null)
     setCurrentTime(0)
     maskTimeline.reset()
+    occlusionTimeline.reset()
+    setEditTarget('person')
+    setOcclusionPicking(false)
+    setOcclusionMessage(null)
     setView('source')
     setExportError(null)
     setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS)
@@ -126,7 +143,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }
 
   const selectBackground = (file: File) => {
-    if (isVideoExporting || isAnalyzing) return
+    if (isVideoExporting || isAnalyzing || occlusionBusy) return
     setBackgroundUrl(URL.createObjectURL(file))
     setBackgroundFile(file)
     setBackgroundKey(null)
@@ -135,7 +152,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }
 
   const selectVirtualCharacter = (file: File) => {
-    if (isVideoExporting || isAnalyzing || !metadata) return
+    if (isVideoExporting || isAnalyzing || occlusionBusy || !metadata) return
     const assetType = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : null
     if (!assetType) {
       setExportError('虛擬角色素材必須是圖片或影片格式。')
@@ -175,8 +192,34 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     })
   }
 
+  const analyzeCharacterMotion = async (wholeClip: boolean) => {
+    const stage = stageRef.current
+    if (!stage || !metadata || !virtualCharacter || motionBusy) return
+    const restoreTime = currentTime
+    const times = wholeClip ? buildMaskAnalysisTimes(metadata.duration, 0.5) : [currentTime]
+    setMotionBusy(true)
+    setMotionMessage(`正在分析骨架 0 / ${times.length}`)
+    const detected = [] as NonNullable<VirtualCharacterLayer['motionKeyframes']>
+    let firstFailure: unknown = null
+    try {
+      for (let index = 0; index < times.length; index += 1) {
+        try { detected.push(await stage.analyzePoseAt(times[index])) } catch (error) { firstFailure ??= error }
+        setMotionMessage(`正在分析骨架 ${index + 1} / ${times.length}`)
+      }
+      if (detected.length === 0) throw firstFailure instanceof Error ? firstFailure : new Error('這段畫面沒有偵測到完整人體骨架')
+      const previous = wholeClip ? [] : (virtualCharacter.motionKeyframes ?? []).filter((keyframe) => Math.abs(keyframe.time - currentTime) >= 0.05)
+      updateVirtualCharacter({ motionEnabled: true, motionKeyframes: [...previous, ...detected].sort((a, b) => a.time - b.time) })
+      setMotionMessage(`完成 ${detected.length} 個動作關鍵影格${detected.length < times.length ? `，${times.length - detected.length} 格未偵測到完整骨架` : ''}`)
+    } catch (error) {
+      setMotionMessage(error instanceof Error ? error.message : '骨架分析失敗')
+    } finally {
+      stage.seekTo(restoreTime)
+      setMotionBusy(false)
+    }
+  }
+
   const saveProject = async () => {
-    if (isVideoExporting || isAnalyzing) return
+    if (isVideoExporting || isAnalyzing || occlusionBusy) return
     try {
       const saved = await projectStore.saveProject({
         projectId,
@@ -188,6 +231,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         backgroundKey,
         backgroundColor,
         keyframes: maskTimeline.keyframes,
+        occlusionKeyframes: occlusionTimeline.keyframes,
         virtualCharacter,
         virtualCharacterFile,
       })
@@ -204,7 +248,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }
 
   const openProject = async (id: string) => {
-    if (isVideoExporting || isAnalyzing) return
+    if (isVideoExporting || isAnalyzing || occlusionBusy) return
     try {
       const loaded = await projectStore.openProject(id)
       analysisRunRef.current += 1
@@ -223,6 +267,10 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       setMetadata(null)
       setCurrentTime(0)
       maskTimeline.load(loaded.keyframes)
+      occlusionTimeline.load(loaded.occlusionKeyframes)
+      setEditTarget('person')
+      setOcclusionPicking(false)
+      setOcclusionMessage(null)
       setView(loaded.backgroundKey ? 'composite' : 'source')
       setExportError(null)
       setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS)
@@ -438,6 +486,35 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     }
   }
 
+  const startOcclusionPicking = () => {
+    setEditTarget('occlusion')
+    setView('composite')
+    setOverlayVisible(true)
+    setOcclusionPicking(true)
+    setOcclusionMessage('點選畫面中的前景物件，AI 會建立目前時間的遮擋關鍵影格。')
+  }
+
+  const pickOccluder = async (point: NormalizedPoint) => {
+    const stage = stageRef.current
+    if (!stage || !metadata || occlusionBusy) return
+    setOcclusionBusy(true)
+    setOcclusionMessage('正在以本機 AI 辨識點選的物件…')
+    try {
+      const mask = await stage.analyzeOccluderAt(currentTime, point)
+      occlusionTimeline.applyAiMasks([{ time: currentTime, mask }])
+      setOcclusionPicking(false)
+      setView('composite')
+      setOverlayVisible(true)
+      setOcclusionMessage('已建立前景遮擋；可用「增加遮擋／移除遮擋」筆刷修正邊緣。')
+    } catch (error) {
+      setOcclusionMessage(error instanceof Error ? error.message : '前景物件辨識失敗')
+    } finally {
+      setOcclusionBusy(false)
+    }
+  }
+
+  const activeTimeline = editTarget === 'occlusion' ? occlusionTimeline : maskTimeline
+
   return (
     <main className="kuiper-studio-page flex h-dvh min-h-[680px] flex-col overflow-hidden">
       <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 overflow-x-auto border-b border-white/10 bg-[#0B0B0D]/95 px-4 py-2 sm:px-5">
@@ -452,6 +529,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         </div>
         <div className="flex shrink-0 items-center gap-5 text-xs text-stone-500">
           <span className="flex items-center gap-1.5 text-emerald-400"><AppIcon name="circleCheck" className="h-3.5 w-3.5" />時間型遮罩 · {maskTimeline.keyframes.length} 個關鍵影格</span>
+          <span className="text-amber-300">前景遮擋 · {occlusionTimeline.keyframes.length} 個關鍵影格</span>
           <span className="text-violet-300">AI 人物辨識 · 本機 MediaPipe</span>
           <ProjectPanel
             projectName={projectName}
@@ -459,7 +537,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             projects={projectStore.projects}
             busyMessage={projectStore.busyMessage}
             error={projectStore.error}
-            disabled={isVideoExporting || isAnalyzing}
+            disabled={isVideoExporting || isAnalyzing || occlusionBusy}
             onProjectNameChange={setProjectName}
             onSave={() => void saveProject()}
             onOpen={(id) => void openProject(id)}
@@ -470,19 +548,24 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
 
       <CompositeToolbar
         tool={tool}
+        editTarget={editTarget}
         view={view}
         brushPercent={brushPercent}
         overlayVisible={overlayVisible}
-        canUndo={maskTimeline.canUndo}
-        canRedo={maskTimeline.canRedo}
-        disabled={isVideoExporting}
+        canUndo={activeTimeline.canUndo}
+        canRedo={activeTimeline.canRedo}
+        disabled={isVideoExporting || occlusionBusy}
         onToolChange={setTool}
+        onEditTargetChange={(target) => {
+          setEditTarget(target)
+          setOcclusionPicking(false)
+        }}
         onViewChange={setView}
         onBrushPercentChange={setBrushPercent}
         onOverlayVisibleChange={setOverlayVisible}
-        onUndo={maskTimeline.undo}
-        onRedo={maskTimeline.redo}
-        onClear={maskTimeline.clearCurrent}
+        onUndo={activeTimeline.undo}
+        onRedo={activeTimeline.redo}
+        onClear={activeTimeline.clearCurrent}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -490,21 +573,40 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           metadata={metadata}
           backgroundColor={backgroundColor}
           hasBackgroundImage={Boolean(backgroundUrl)}
-          canExport={Boolean(metadata) && !isAnalyzing}
+          canExport={Boolean(metadata) && !isAnalyzing && !occlusionBusy}
           currentTime={currentTime}
           analysisProgress={analysisProgress}
           exportProgress={exportProgress}
-          interactionDisabled={isVideoExporting || isAnalyzing}
+          interactionDisabled={isVideoExporting || isAnalyzing || occlusionBusy}
           virtualCharacter={virtualCharacter}
+          maskKeyframes={maskTimeline.keyframes}
+          occlusionPicking={occlusionPicking}
+          occlusionBusy={occlusionBusy}
+          occlusionMessage={occlusionMessage}
+          occlusionKeyframeCount={occlusionTimeline.keyframes.length}
           onVideoSelect={selectVideo}
           onBackgroundSelect={selectBackground}
           onBackgroundColorChange={setBackgroundColor}
           onVirtualCharacterSelect={selectVirtualCharacter}
           onVirtualCharacterChange={updateVirtualCharacter}
+          onVirtualCharacterAutoMatch={() => {
+            try {
+              const patch = stageRef.current?.matchCharacterAppearance()
+              if (patch) updateVirtualCharacter({ appearance: { ...DEFAULT_CHARACTER_APPEARANCE, ...virtualCharacter?.appearance, ...patch } })
+            } catch (error) {
+              setExportError(error instanceof Error ? error.message : '畫面匹配失敗')
+            }
+          }}
+          motionBusy={motionBusy}
+          motionMessage={motionMessage}
+          onAnalyzeMotionCurrent={() => void analyzeCharacterMotion(false)}
+          onAnalyzeMotionClip={() => void analyzeCharacterMotion(true)}
           onVirtualCharacterRemove={() => {
             setVirtualCharacter(null)
             setVirtualCharacterFile(null)
           }}
+          onStartOcclusionPicking={startOcclusionPicking}
+          onCancelOcclusionPicking={() => setOcclusionPicking(false)}
           onExportMask={exportMask}
           onExportFrame={exportFrame}
           onExportVideo={(includeAudio) => void exportVideo(includeAudio)}
@@ -526,28 +628,37 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             keyframes={maskTimeline.keyframes}
             baseMask={maskTimeline.activeKeyframe?.baseMask}
             strokes={maskTimeline.strokes}
+            occlusionKeyframes={occlusionTimeline.keyframes}
+            occlusionBaseMask={occlusionTimeline.activeKeyframe?.baseMask}
+            occlusionStrokes={occlusionTimeline.strokes}
+            editTarget={editTarget}
+            objectPickEnabled={occlusionPicking}
             tool={tool}
             brushPercent={brushPercent}
             view={view}
             overlayVisible={overlayVisible}
             virtualCharacter={virtualCharacter}
-            editingDisabled={isVideoExporting}
+            editingDisabled={isVideoExporting || occlusionBusy}
             onMetadata={setMetadata}
-            onCommitStroke={maskTimeline.commitStroke}
+            onCommitStroke={(target, stroke) => {
+              if (target === 'occlusion') occlusionTimeline.commitStroke(stroke)
+              else maskTimeline.commitStroke(stroke)
+            }}
+            onPickOccluder={(point) => void pickOccluder(point)}
             onTimeChange={setCurrentTime}
           />
           {metadata ? (
             <MaskKeyframeRail
               duration={metadata.duration}
               currentTime={currentTime}
-              keyframes={maskTimeline.keyframes}
-              activeKeyframeId={maskTimeline.activeKeyframe?.id ?? null}
-              hasExactKeyframe={Boolean(maskTimeline.exactKeyframe)}
-              disabled={isVideoExporting}
-              onAdd={maskTimeline.addKeyframe}
-              onDelete={maskTimeline.deleteKeyframe}
-              onApplyToStart={maskTimeline.applyToStart}
-              onApplyToEnd={maskTimeline.applyToEnd}
+              keyframes={activeTimeline.keyframes}
+              activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null}
+              hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)}
+              disabled={isVideoExporting || occlusionBusy}
+              onAdd={activeTimeline.addKeyframe}
+              onDelete={activeTimeline.deleteKeyframe}
+              onApplyToStart={activeTimeline.applyToStart}
+              onApplyToEnd={activeTimeline.applyToEnd}
               onSeek={(time) => stageRef.current?.seekTo(time)}
             />
           ) : null}

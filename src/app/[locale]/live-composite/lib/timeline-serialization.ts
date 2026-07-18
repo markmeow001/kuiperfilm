@@ -57,6 +57,7 @@ export function serializeTimeline(
   keyframes: MaskKeyframe[],
   resolveBaseMaskKey: (keyframe: MaskKeyframe) => string | undefined,
   virtualCharacter?: VirtualCharacterLayer | null,
+  occlusionKeyframes?: MaskKeyframe[],
 ): LiveCompositeSerializedTimeline {
   if (keyframes.length === 0) throw new Error('遮罩時間軸是空的，無法儲存')
   if (keyframes.length > LIVE_COMPOSITE_MAX_KEYFRAMES) {
@@ -65,14 +66,18 @@ export function serializeTimeline(
   if (virtualCharacter && !virtualCharacter.assetKey) {
     throw new Error('虛擬角色素材尚未上傳，無法儲存')
   }
-  return {
-    keyframes: keyframes.map((keyframe) => {
+  const serializeKeyframes = (frames: MaskKeyframe[], label: string): LiveCompositeSerializedKeyframe[] => {
+    if (frames.length === 0) throw new Error(`${label}時間軸是空的，無法儲存`)
+    if (frames.length > LIVE_COMPOSITE_MAX_KEYFRAMES) {
+      throw new Error(`${label}關鍵影格數量 ${frames.length} 超過上限 ${LIVE_COMPOSITE_MAX_KEYFRAMES}`)
+    }
+    return frames.map((keyframe) => {
       if (keyframe.strokes.length > LIVE_COMPOSITE_MAX_STROKES_PER_KEYFRAME) {
-        throw new Error(`關鍵影格 ${keyframe.time.toFixed(2)}s 的筆劃數超過上限 ${LIVE_COMPOSITE_MAX_STROKES_PER_KEYFRAME}`)
+        throw new Error(`${label}關鍵影格 ${keyframe.time.toFixed(2)}s 的筆劃數超過上限 ${LIVE_COMPOSITE_MAX_STROKES_PER_KEYFRAME}`)
       }
       const baseMaskKey = keyframe.baseMask ? resolveBaseMaskKey(keyframe) : undefined
       if (keyframe.baseMask && !baseMaskKey) {
-        throw new Error(`關鍵影格 ${keyframe.time.toFixed(2)}s 的 AI 遮罩尚未上傳，無法儲存`)
+        throw new Error(`${label}關鍵影格 ${keyframe.time.toFixed(2)}s 的 AI 遮罩尚未上傳，無法儲存`)
       }
       const serialized: LiveCompositeSerializedKeyframe = {
         id: keyframe.id,
@@ -80,7 +85,11 @@ export function serializeTimeline(
         strokes: keyframe.strokes.map(serializeMaskStroke),
       }
       return baseMaskKey ? { ...serialized, baseMaskKey } : serialized
-    }),
+    })
+  }
+  return {
+    keyframes: serializeKeyframes(keyframes, '人物遮罩'),
+    ...(occlusionKeyframes ? { occlusionKeyframes: serializeKeyframes(occlusionKeyframes, '前景遮擋') } : {}),
     ...(virtualCharacter?.assetKey ? {
       virtualCharacter: {
         assetType: virtualCharacter.assetType,
@@ -98,6 +107,36 @@ export function serializeTimeline(
         endTime: round4(virtualCharacter.endTime),
         loop: virtualCharacter.loop,
         depth: virtualCharacter.depth,
+        ...(virtualCharacter.trackingKeyframes?.length ? {
+          trackingKeyframes: virtualCharacter.trackingKeyframes.map((keyframe) => ({
+            id: keyframe.id,
+            time: round4(keyframe.time),
+            offsetX: round4(keyframe.offsetX),
+            offsetY: round4(keyframe.offsetY),
+          })),
+        } : {}),
+        ...(virtualCharacter.appearance ? { appearance: {
+          exposure: round4(virtualCharacter.appearance.exposure),
+          contrast: round4(virtualCharacter.appearance.contrast),
+          saturation: round4(virtualCharacter.appearance.saturation),
+          temperature: round4(virtualCharacter.appearance.temperature),
+          blur: round4(virtualCharacter.appearance.blur),
+          lightWrap: round4(virtualCharacter.appearance.lightWrap),
+          shadowOpacity: round4(virtualCharacter.appearance.shadowOpacity),
+          shadowBlur: round4(virtualCharacter.appearance.shadowBlur),
+          shadowOffsetX: round4(virtualCharacter.appearance.shadowOffsetX),
+          shadowOffsetY: round4(virtualCharacter.appearance.shadowOffsetY),
+        } } : {}),
+        ...(virtualCharacter.motionEnabled !== undefined ? { motionEnabled: virtualCharacter.motionEnabled } : {}),
+        ...(virtualCharacter.motionKeyframes?.length ? { motionKeyframes: virtualCharacter.motionKeyframes.map((keyframe) => ({
+          id: keyframe.id,
+          time: round4(keyframe.time),
+          x: round4(keyframe.x),
+          y: round4(keyframe.y),
+          scale: round4(keyframe.scale),
+          rotation: round4(keyframe.rotation),
+          confidence: round4(keyframe.confidence),
+        })) } : {}),
       },
     } : {}),
   }
@@ -128,10 +167,33 @@ export function deserializeTimeline(
   })
 }
 
+export function deserializeOcclusionTimeline(
+  timeline: LiveCompositeSerializedTimeline,
+  rasterByKey: ReadonlyMap<string, MaskRaster>,
+): MaskKeyframe[] {
+  if (!timeline.occlusionKeyframes) {
+    return [{ id: 'occlusion-keyframe-0', time: 0, strokes: [] }]
+  }
+  return timeline.occlusionKeyframes.map((keyframe) => {
+    const restored: MaskKeyframe = {
+      id: keyframe.id,
+      time: keyframe.time,
+      strokes: keyframe.strokes.map(deserializeMaskStroke),
+    }
+    if (!keyframe.baseMaskKey) return restored
+    const raster = rasterByKey.get(keyframe.baseMaskKey)
+    if (!raster) throw new Error(`前景遮擋 ${keyframe.time.toFixed(2)}s 的 AI 遮罩下載失敗，無法載入`)
+    return { ...restored, baseMask: raster }
+  })
+}
+
 /** All distinct baseMaskKeys referenced by a persisted timeline. */
 export function collectBaseMaskKeys(timeline: LiveCompositeSerializedTimeline): string[] {
   const keys = new Set<string>()
   for (const keyframe of timeline.keyframes) {
+    if (keyframe.baseMaskKey) keys.add(keyframe.baseMaskKey)
+  }
+  for (const keyframe of timeline.occlusionKeyframes ?? []) {
     if (keyframe.baseMaskKey) keys.add(keyframe.baseMaskKey)
   }
   return [...keys]

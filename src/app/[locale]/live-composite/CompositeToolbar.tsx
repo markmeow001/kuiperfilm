@@ -1,10 +1,11 @@
 'use client'
 
 import { AppIcon } from '@/components/ui/icons'
-import type { CompositeView, MaskTool } from './live-composite-types'
+import type { CompositeView, MaskEditTarget, MaskTool } from './live-composite-types'
 
 interface CompositeToolbarProps {
   tool: MaskTool
+  editTarget: MaskEditTarget
   view: CompositeView
   brushPercent: number
   overlayVisible: boolean
@@ -12,6 +13,7 @@ interface CompositeToolbarProps {
   canRedo: boolean
   disabled?: boolean
   onToolChange: (tool: MaskTool) => void
+  onEditTargetChange: (target: MaskEditTarget) => void
   onViewChange: (view: CompositeView) => void
   onBrushPercentChange: (value: number) => void
   onOverlayVisibleChange: (visible: boolean) => void
@@ -29,6 +31,7 @@ const toolButtonClass = (active: boolean): string =>
 
 export function CompositeToolbar({
   tool,
+  editTarget,
   view,
   brushPercent,
   overlayVisible,
@@ -36,6 +39,7 @@ export function CompositeToolbar({
   canRedo,
   disabled = false,
   onToolChange,
+  onEditTargetChange,
   onViewChange,
   onBrushPercentChange,
   onOverlayVisibleChange,
@@ -45,11 +49,15 @@ export function CompositeToolbar({
 }: CompositeToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-stone-950/90 px-4 py-3">
+      <div className="flex items-center rounded-lg border border-white/10 bg-black/30 p-1">
+        <button type="button" disabled={disabled} onClick={() => onEditTargetChange('person')} className={toolButtonClass(editTarget === 'person')}>人物遮罩</button>
+        <button type="button" disabled={disabled} onClick={() => onEditTargetChange('occlusion')} className={toolButtonClass(editTarget === 'occlusion')}>前景遮擋</button>
+      </div>
       <button type="button" disabled={disabled} className={toolButtonClass(tool === 'keep')} onClick={() => onToolChange('keep')}>
-        <AppIcon name="brush" className="h-4 w-4" />保留畫筆
+        <AppIcon name="brush" className="h-4 w-4" />{editTarget === 'occlusion' ? '增加遮擋' : '保留畫筆'}
       </button>
       <button type="button" disabled={disabled} className={toolButtonClass(tool === 'erase')} onClick={() => onToolChange('erase')}>
-        <AppIcon name="eraser" className="h-4 w-4" />移除畫筆
+        <AppIcon name="eraser" className="h-4 w-4" />{editTarget === 'occlusion' ? '移除遮擋' : '移除畫筆'}
       </button>
 
       <label className="ml-1 flex items-center gap-2 text-xs text-stone-500">

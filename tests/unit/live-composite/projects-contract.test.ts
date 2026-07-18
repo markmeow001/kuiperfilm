@@ -55,6 +55,17 @@ describe('live-composite projects contract', () => {
     }, USER)).toEqual({ field: 'timeline.keyframes[kf-9].baseMaskKey', key: 'images/playground-ref/user-2/m.png' })
 
     expect(findForeignStorageKey({
+      ...ok,
+      timeline: {
+        keyframes: ok.timeline.keyframes,
+        occlusionKeyframes: [{ id: 'depth-1', time: 0, baseMaskKey: 'images/playground-ref/user-2/depth.png', strokes: [] }],
+      },
+    }, USER)).toEqual({
+      field: 'timeline.occlusionKeyframes[depth-1].baseMaskKey',
+      key: 'images/playground-ref/user-2/depth.png',
+    })
+
+    expect(findForeignStorageKey({
       timeline: liveCompositeTimelineSchema.parse(timeline({
         virtualCharacter: {
           assetType: 'video', assetName: 'robot.webm', assetKey: 'video/playground-ref/user-2/robot.webm',
@@ -67,6 +78,9 @@ describe('live-composite projects contract', () => {
 
   it('timeline schema accepts the real editor shape and rejects malformed strokes', () => {
     expect(liveCompositeTimelineSchema.safeParse(timeline()).success).toBe(true)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({
+      occlusionKeyframes: [{ id: 'depth-0', time: 0, strokes: [] }],
+    })).success).toBe(true)
 
     const badTool = timeline({
       keyframes: [{ id: 'kf-0', time: 0, strokes: [{ id: 's-1', tool: 'remove', brushPercent: 6, points: [{ x: 0.5, y: 0.5 }] }] }],
@@ -100,6 +114,14 @@ describe('live-composite projects contract', () => {
     expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, endTime: -1 } })).success).toBe(false)
     expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, startTime: 3 } })).success).toBe(false)
     expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, opacity: 2 } })).success).toBe(false)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: {
+      ...character,
+      trackingKeyframes: [{ id: 'track-1', time: 1, offsetX: 0.1, offsetY: -0.1 }],
+      appearance: { exposure: 0, contrast: 0, saturation: 0, temperature: 0, blur: 0, lightWrap: 0.1, shadowOpacity: 0.2, shadowBlur: 10, shadowOffsetX: 0, shadowOffsetY: 4 },
+      motionEnabled: true,
+      motionKeyframes: [{ id: 'pose-1', time: 1, x: 0.5, y: 0.6, scale: 1, rotation: 0, confidence: 0.9 }],
+    } })).success).toBe(true)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, motionKeyframes: [{ id: 'pose-1', time: 1, x: 0.5, y: 0.6, scale: 1, rotation: 0, confidence: 2 }] } })).success).toBe(false)
   })
 
   it('create schema requires timeline and validates the color format', () => {

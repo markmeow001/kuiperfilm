@@ -2,9 +2,10 @@
 
 import { AiMaskPanel, type AiMaskSettings } from './AiMaskPanel'
 import { CompositeExportPanel } from './CompositeExportPanel'
-import type { CompositeExportProgress, MaskAnalysisProgress, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
+import type { CompositeExportProgress, MaskAnalysisProgress, MaskKeyframe, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 import { UploadFileButton } from './UploadFileButton'
 import { VirtualCharacterPanel } from './VirtualCharacterPanel'
+import { OcclusionPanel } from './OcclusionPanel'
 
 interface CompositeAssetPanelProps {
   metadata: VideoMetadata | null
@@ -16,12 +17,24 @@ interface CompositeAssetPanelProps {
   exportProgress: CompositeExportProgress
   interactionDisabled: boolean
   virtualCharacter: VirtualCharacterLayer | null
+  maskKeyframes: MaskKeyframe[]
+  occlusionPicking: boolean
+  occlusionBusy: boolean
+  occlusionMessage: string | null
+  occlusionKeyframeCount: number
   onVideoSelect: (file: File) => void
   onBackgroundSelect: (file: File) => void
   onBackgroundColorChange: (color: string) => void
   onVirtualCharacterSelect: (file: File) => void
   onVirtualCharacterChange: (patch: Partial<VirtualCharacterLayer>) => void
   onVirtualCharacterRemove: () => void
+  onVirtualCharacterAutoMatch: () => void
+  motionBusy: boolean
+  motionMessage: string | null
+  onAnalyzeMotionCurrent: () => void
+  onAnalyzeMotionClip: () => void
+  onStartOcclusionPicking: () => void
+  onCancelOcclusionPicking: () => void
   onExportMask: () => void
   onExportFrame: () => void
   onExportVideo: (includeAudio: boolean) => void
@@ -43,12 +56,24 @@ export function CompositeAssetPanel({
   exportProgress,
   interactionDisabled,
   virtualCharacter,
+  maskKeyframes,
+  occlusionPicking,
+  occlusionBusy,
+  occlusionMessage,
+  occlusionKeyframeCount,
   onVideoSelect,
   onBackgroundSelect,
   onBackgroundColorChange,
   onVirtualCharacterSelect,
   onVirtualCharacterChange,
   onVirtualCharacterRemove,
+  onVirtualCharacterAutoMatch,
+  motionBusy,
+  motionMessage,
+  onAnalyzeMotionCurrent,
+  onAnalyzeMotionClip,
+  onStartOcclusionPicking,
+  onCancelOcclusionPicking,
   onExportMask,
   onExportFrame,
   onExportVideo,
@@ -86,11 +111,28 @@ export function CompositeAssetPanel({
 
       <VirtualCharacterPanel
         layer={virtualCharacter}
+        keyframes={maskKeyframes}
+        currentTime={currentTime}
         duration={metadata?.duration ?? 0}
         disabled={interactionDisabled || !metadata}
         onSelect={onVirtualCharacterSelect}
         onChange={onVirtualCharacterChange}
         onRemove={onVirtualCharacterRemove}
+        onAutoMatch={onVirtualCharacterAutoMatch}
+        motionBusy={motionBusy}
+        motionMessage={motionMessage}
+        onAnalyzeMotionCurrent={onAnalyzeMotionCurrent}
+        onAnalyzeMotionClip={onAnalyzeMotionClip}
+      />
+
+      <OcclusionPanel
+        disabled={interactionDisabled || !metadata || !virtualCharacter}
+        picking={occlusionPicking}
+        busy={occlusionBusy}
+        message={occlusionMessage}
+        keyframeCount={occlusionKeyframeCount}
+        onStartPicking={onStartOcclusionPicking}
+        onCancelPicking={onCancelOcclusionPicking}
       />
 
       <AiMaskPanel

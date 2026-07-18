@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectBaseMaskKeys,
+  deserializeOcclusionTimeline,
   deserializeMaskStroke,
   deserializeTimeline,
   serializeMaskStroke,
@@ -71,6 +72,31 @@ describe('live-composite timeline serialization', () => {
     expect(restored[0].baseMask).toBe(raster)
   })
 
+  it('round trips an independent foreground occlusion timeline', () => {
+    const personRaster = makeRaster(10)
+    const occlusionRaster = makeRaster(20)
+    const personKeyframes: MaskKeyframe[] = [{ id: 'person-0', time: 0, strokes: [], baseMask: personRaster }]
+    const occlusionKeyframes: MaskKeyframe[] = [{ id: 'depth-0', time: 0, strokes: [makeStroke()], baseMask: occlusionRaster }]
+    const keys = new Map<MaskRaster, string>([
+      [personRaster, 'images/playground-ref/user-1/person.png'],
+      [occlusionRaster, 'images/playground-ref/user-1/depth.png'],
+    ])
+
+    const timeline = serializeTimeline(personKeyframes, (keyframe) => keyframe.baseMask ? keys.get(keyframe.baseMask) : undefined, null, occlusionKeyframes)
+    expect(timeline.occlusionKeyframes?.[0].baseMaskKey).toBe('images/playground-ref/user-1/depth.png')
+    expect(deserializeOcclusionTimeline(timeline, new Map([
+      ['images/playground-ref/user-1/person.png', personRaster],
+      ['images/playground-ref/user-1/depth.png', occlusionRaster],
+    ]))).toEqual(occlusionKeyframes)
+  })
+
+  it('opens legacy timelines with an empty foreground occlusion keyframe', () => {
+    const legacy = { keyframes: [{ id: 'person-0', time: 0, strokes: [] }] }
+    expect(deserializeOcclusionTimeline(legacy, new Map())).toEqual([
+      { id: 'occlusion-keyframe-0', time: 0, strokes: [] },
+    ])
+  })
+
   it('serialize fails loudly when a keyframe raster has no uploaded key', () => {
     const keyframes: MaskKeyframe[] = [{ id: 'kf-0', time: 1.25, strokes: [], baseMask: makeRaster(1) }]
     expect(() => serializeTimeline(keyframes, () => undefined)).toThrow('AI 遮罩尚未上傳')
@@ -109,10 +135,15 @@ describe('live-composite timeline serialization', () => {
         { id: 'c', time: 2, baseMaskKey: 'images/playground-ref/u/y.png', strokes: [] },
         { id: 'd', time: 3, strokes: [] },
       ],
+      occlusionKeyframes: [
+        { id: 'depth-a', time: 0, baseMaskKey: 'images/playground-ref/u/y.png', strokes: [] },
+        { id: 'depth-b', time: 1, baseMaskKey: 'images/playground-ref/u/z.png', strokes: [] },
+      ],
     }
     expect(collectBaseMaskKeys(timeline)).toEqual([
       'images/playground-ref/u/x.png',
       'images/playground-ref/u/y.png',
+      'images/playground-ref/u/z.png',
     ])
   })
 
@@ -125,6 +156,20 @@ describe('live-composite timeline serialization', () => {
       loop: true, depth: 'behind-person',
     })
     expect(result.virtualCharacter).not.toHaveProperty('assetUrl')
+  })
+
+  it('persists tracking corrections, appearance, and pose motion keyframes', () => {
+    const result = serializeTimeline([{ id: 'kf-0', time: 0, strokes: [] }], () => undefined, {
+      ...character,
+      trackingKeyframes: [{ id: 'track-1', time: 1.23456, offsetX: 0.12345, offsetY: -0.2 }],
+      appearance: { exposure: 0.1, contrast: -0.2, saturation: 0.3, temperature: 0.4, blur: 1.5, lightWrap: 0.2, shadowOpacity: 0.4, shadowBlur: 20, shadowOffsetX: 2, shadowOffsetY: 8 },
+      motionEnabled: true,
+      motionKeyframes: [{ id: 'pose-1', time: 1, x: 0.5, y: 0.6, scale: 1.1, rotation: 4, confidence: 0.8 }],
+    })
+    expect(result.virtualCharacter?.trackingKeyframes?.[0]).toEqual({ id: 'track-1', time: 1.2346, offsetX: 0.1235, offsetY: -0.2 })
+    expect(result.virtualCharacter?.appearance?.shadowBlur).toBe(20)
+    expect(result.virtualCharacter?.motionEnabled).toBe(true)
+    expect(result.virtualCharacter?.motionKeyframes?.[0].confidence).toBe(0.8)
   })
 
   it('refuses to save a local-only virtual character', () => {

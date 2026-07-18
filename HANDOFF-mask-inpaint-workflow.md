@@ -76,3 +76,14 @@ Claude 沒碰以上任何一個；Codex 照常提交即可，不會跟這 6 個 
   billing/佇列/資產庫白名單全部沿用，6 登記點不用動。
 - 遮罩座標 contract：normalized 0-1 對齊**完整底圖**（繪製面板 aspect = 底圖 natural 比例），
   栅格化在 1000×1000 viewBox 空間畫完再縮放到 natural 尺寸，與 SVG 預覽逐像素一致。
+
+## 7. Codex 後續補完（2026-07-18～19，尚未提交）
+
+- 前景遮擋：新增獨立 occlusion timeline、MagicTouch 點選物件、人工 keep/erase 修正；預覽、單幀與影片輸出共用同一遮擋合成路徑。
+- 追蹤 2.0：人物遮罩品質估算、warning/lost 區段、可保存的 X/Y 校正關鍵影格與時間插值。
+- 光影匹配：本機抽樣實拍影格，自動建議曝光／對比／飽和度／色溫；另有柔焦、邊緣融光與接地陰影控制，全部可保存並進入輸出。
+- 動作參考：本機 MediaPipe Pose Landmarker（CPU/WASM）擷取髖部位置、軀幹比例、肩線旋轉與信心值，可分析目前影格或整段；驅動整個 2D／透明影片角色圖層。沒有 rig 的單張 PNG 不宣稱能產生四肢變形。
+- 本機模型：`magic-touch.tflite` 與 `pose-landmarker-lite.task` 均放在 `public/models/live-composite/`，來源與 SHA-256 見同目錄 README。
+- 向後相容：`occlusionKeyframes`、追蹤校正、appearance 與 motion 欄位在 wire schema 都是 optional；舊專案開啟時建立空遮擋 timeline 並套用外觀預設。
+- 驗證：Live Composite 單元／API 71 綠、DOM 64 綠、guards 全綠、TypeScript 與 production build 通過；無頭 Chrome 實測 Pose 產生關鍵影格、自動畫面匹配改值、人物追蹤品質顯示與合成 PNG 下載。
+- Voice workspace 仍依先前決定排在最後驗收，本輪沒有修改 Voice 檔案。

@@ -1,4 +1,5 @@
 export type MaskTool = 'keep' | 'erase'
+export type MaskEditTarget = 'person' | 'occlusion'
 
 export type CompositeView = 'source' | 'mask' | 'composite'
 
@@ -57,6 +58,37 @@ export type VirtualCharacterAssetType = 'image' | 'video'
 export type VirtualCharacterDepth = 'behind-person' | 'in-front'
 export type VirtualCharacterAnchor = 'screen' | 'person'
 
+export interface VirtualCharacterTrackingKeyframe {
+  id: string
+  time: number
+  /** Manual correction added to the AI-tracked center. */
+  offsetX: number
+  offsetY: number
+}
+
+export interface VirtualCharacterAppearance {
+  exposure: number
+  contrast: number
+  saturation: number
+  temperature: number
+  blur: number
+  lightWrap: number
+  shadowOpacity: number
+  shadowBlur: number
+  shadowOffsetX: number
+  shadowOffsetY: number
+}
+
+export interface VirtualCharacterMotionKeyframe {
+  id: string
+  time: number
+  x: number
+  y: number
+  scale: number
+  rotation: number
+  confidence: number
+}
+
 export interface VirtualCharacterLayer {
   assetType: VirtualCharacterAssetType
   assetName: string
@@ -77,4 +109,10 @@ export interface VirtualCharacterLayer {
   endTime: number
   loop: boolean
   depth: VirtualCharacterDepth
+  /** Optional for projects saved before tracking correction shipped. */
+  trackingKeyframes?: VirtualCharacterTrackingKeyframe[]
+  /** Optional for projects saved before appearance matching shipped. */
+  appearance?: VirtualCharacterAppearance
+  motionEnabled?: boolean
+  motionKeyframes?: VirtualCharacterMotionKeyframe[]
 }

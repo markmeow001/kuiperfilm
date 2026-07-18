@@ -4,8 +4,11 @@ import {
   computeCharacterTransform,
   findPersonBounds,
   isCharacterVisible,
+  maskTrackingConfidence,
   resolveCharacterCenter,
+  resolveCharacterMotion,
   resolveTrackedPersonCenter,
+  trackingFailureRanges,
 } from '@/app/[locale]/live-composite/lib/virtual-character'
 import type { MaskRaster, VirtualCharacterLayer } from '@/app/[locale]/live-composite/live-composite-types'
 
@@ -71,8 +74,33 @@ describe('virtual character compositing geometry', () => {
       { id: 'b', time: 2, strokes: [], baseMask: rightMask },
     ]
     expect(resolveTrackedPersonCenter(keyframes, 1)).toEqual({ x: 0.5, y: 0.5 })
+    expect(resolveTrackedPersonCenter(keyframes, 1, [
+      { id: 'c1', time: 0, offsetX: 0, offsetY: 0 },
+      { id: 'c2', time: 2, offsetX: 0.2, offsetY: -0.1 },
+    ])).toEqual({ x: 0.6, y: 0.45 })
     expect(resolveTrackedPersonCenter(keyframes, -1)).toEqual({ x: 0.125, y: 0.5 })
     expect(resolveTrackedPersonCenter([], 1)).toBeNull()
+  })
+
+  it('reports deterministic tracking quality and groups failed mask times', () => {
+    expect(maskTrackingConfidence(personMask())).toBeGreaterThan(0.5)
+    expect(maskTrackingConfidence(undefined)).toBe(0)
+    const keyframes = [
+      { id: 'a', time: 0, strokes: [], baseMask: personMask() },
+      { id: 'b', time: 1, strokes: [] },
+      { id: 'c', time: 2, strokes: [] },
+    ]
+    expect(trackingFailureRanges(keyframes)).toEqual([
+      { startTime: 1, endTime: 2, status: 'lost' },
+    ])
+  })
+
+  it('interpolates pose-driven position, scale, rotation, and confidence', () => {
+    expect(resolveCharacterMotion([
+      { id: 'p1', time: 0, x: 0.2, y: 0.4, scale: 0.8, rotation: -10, confidence: 0.9 },
+      { id: 'p2', time: 2, x: 0.6, y: 0.8, scale: 1.2, rotation: 10, confidence: 0.7 },
+    ], 1)).toEqual({ x: 0.4, y: 0.6000000000000001, scale: 1, rotation: 0, confidence: 0.8 })
+    expect(resolveCharacterMotion([], 1)).toBeNull()
   })
 
   it('computes aspect-correct stage geometry and opacity', () => {

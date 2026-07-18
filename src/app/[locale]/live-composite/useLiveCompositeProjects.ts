@@ -22,7 +22,7 @@ import {
   listLiveCompositeProjects,
   updateLiveCompositeProject,
 } from './lib/project-api'
-import { collectBaseMaskKeys, deserializeTimeline, serializeTimeline } from './lib/timeline-serialization'
+import { collectBaseMaskKeys, deserializeOcclusionTimeline, deserializeTimeline, serializeTimeline } from './lib/timeline-serialization'
 import type { MaskKeyframe, MaskRaster, VirtualCharacterLayer } from './live-composite-types'
 
 const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -38,6 +38,7 @@ export interface SaveProjectInput {
   backgroundKey: string | null
   backgroundColor: string
   keyframes: MaskKeyframe[]
+  occlusionKeyframes: MaskKeyframe[]
   virtualCharacter: VirtualCharacterLayer | null
   virtualCharacterFile: File | null
 }
@@ -59,6 +60,7 @@ export interface OpenedProject {
   backgroundKey: string | null
   backgroundColor: string
   keyframes: MaskKeyframe[]
+  occlusionKeyframes: MaskKeyframe[]
   virtualCharacter: VirtualCharacterLayer | null
 }
 
@@ -115,9 +117,12 @@ export function useLiveCompositeProjects() {
       }
 
       const maskCache = maskKeyByRasterRef.current
-      const pendingMasks = input.keyframes.filter(
-        (keyframe) => keyframe.baseMask && !maskCache.has(keyframe.baseMask),
-      )
+      const uniqueRasters = new Set<MaskRaster>()
+      const pendingMasks = [...input.keyframes, ...input.occlusionKeyframes].filter((keyframe) => {
+        if (!keyframe.baseMask || maskCache.has(keyframe.baseMask) || uniqueRasters.has(keyframe.baseMask)) return false
+        uniqueRasters.add(keyframe.baseMask)
+        return true
+      })
       for (let index = 0; index < pendingMasks.length; index += 1) {
         const keyframe = pendingMasks[index]
         if (!keyframe.baseMask) continue
@@ -134,6 +139,7 @@ export function useLiveCompositeProjects() {
         input.keyframes,
         (keyframe) => keyframe.baseMask ? maskCache.get(keyframe.baseMask) : undefined,
         characterForSave,
+        input.occlusionKeyframes,
       )
 
       setBusyMessage('正在儲存合成專案…')
@@ -184,6 +190,7 @@ export function useLiveCompositeProjects() {
       }
 
       const keyframes = deserializeTimeline(detail.timeline, rasterByKey)
+      const occlusionKeyframes = deserializeOcclusionTimeline(detail.timeline, rasterByKey)
       const storedCharacter = detail.timeline.virtualCharacter
       setBusyMessage(null)
       return {
@@ -196,6 +203,7 @@ export function useLiveCompositeProjects() {
         backgroundKey: detail.backgroundKey,
         backgroundColor: detail.backgroundColor,
         keyframes,
+        occlusionKeyframes,
         virtualCharacter: storedCharacter ? {
           ...storedCharacter,
           assetUrl: storedCharacter.assetUrl,

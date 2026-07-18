@@ -2,13 +2,16 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AppIcon } from '@/components/ui/icons'
-import { maskRasterToImageData } from './lib/mask-analysis'
+import { segmentObjectAtPoint } from './lib/interactive-segmenter'
+import { paintMaskCanvas } from './lib/mask-canvas'
+import { canvasBlob, drawCover, seekVideoForAnalysis } from './lib/mask-stage-utils'
 import { resolveMaskKeyframe } from './lib/mask-keyframes'
-import { appendStrokePoint, pointerToNormalizedPoint, renderMaskStrokes } from './lib/mask-strokes'
+import { appendStrokePoint, pointerToNormalizedPoint } from './lib/mask-strokes'
 import { segmentPersonFrame } from './lib/person-segmenter'
 import { shouldRenderPreview } from './lib/render-ownership'
-import { seekVideoGuarded } from './lib/video-seek'
 import { useVirtualCharacterMedia } from './useVirtualCharacterMedia'
+import { sampleVideoAppearance } from './lib/character-appearance'
+import { detectPoseAt } from './lib/pose-landmarker'
 import {
   releaseCompositeRecordingAudio,
   startCompositeRecording,
@@ -16,7 +19,7 @@ import {
   type CompositeRecordingResult,
   type CompositeRecordingSession,
 } from './lib/composite-video-recorder'
-import type { CompositeView, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
+import type { CompositeView, MaskEditTarget, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterAppearance, VirtualCharacterLayer, VirtualCharacterMotionKeyframe } from './live-composite-types'
 
 export interface MaskStageHandle {
   exportMask: () => Promise<Blob>
@@ -28,8 +31,10 @@ export interface MaskStageHandle {
   cancelCompositeVideo: () => void
   seekTo: (time: number) => void
   analyzePersonAt: (time: number, threshold: number, edgeSoftness: number) => Promise<MaskRaster>
+  analyzeOccluderAt: (time: number, point: NormalizedPoint) => Promise<MaskRaster>
+  matchCharacterAppearance: () => Partial<VirtualCharacterAppearance>
+  analyzePoseAt: (time: number) => Promise<VirtualCharacterMotionKeyframe>
 }
-
 interface MaskStageProps {
   videoUrl: string | null
   videoName: string | null
@@ -39,6 +44,11 @@ interface MaskStageProps {
   keyframes: MaskKeyframe[]
   baseMask?: MaskRaster
   strokes: MaskStroke[]
+  occlusionKeyframes: MaskKeyframe[]
+  occlusionBaseMask?: MaskRaster
+  occlusionStrokes: MaskStroke[]
+  editTarget: MaskEditTarget
+  objectPickEnabled: boolean
   tool: MaskTool
   brushPercent: number
   view: CompositeView
@@ -46,38 +56,10 @@ interface MaskStageProps {
   virtualCharacter: VirtualCharacterLayer | null
   editingDisabled?: boolean
   onMetadata: (metadata: VideoMetadata) => void
-  onCommitStroke: (stroke: MaskStroke) => void
+  onCommitStroke: (target: MaskEditTarget, stroke: MaskStroke) => void
+  onPickOccluder: (point: NormalizedPoint) => void
   onTimeChange: (time: number) => void
 }
-
-function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob)
-      else reject(new Error('無法建立 PNG 輸出'))
-    }, 'image/png')
-  })
-}
-
-function drawCover(context: CanvasRenderingContext2D, image: CanvasImageSource, sourceWidth: number, sourceHeight: number, width: number, height: number): void {
-  const scale = Math.max(width / sourceWidth, height / sourceHeight)
-  const drawWidth = sourceWidth * scale
-  const drawHeight = sourceHeight * scale
-  context.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight)
-}
-
-const ANALYSIS_SEEK_TIMEOUT_MS = 5_000
-
-function seekVideoForAnalysis(video: HTMLVideoElement, time: number, signal: AbortSignal): Promise<void> {
-  return seekVideoGuarded(video, time, {
-    signal,
-    timeoutMs: ANALYSIS_SEEK_TIMEOUT_MS,
-    createTimeoutError: (timeoutSeconds) => new Error(`影片跳轉超過 ${timeoutSeconds} 秒，無法分析指定影格`),
-    createSeekFailedError: () => new Error('影片跳轉失敗，無法分析指定影格'),
-    createAbortError: () => new Error('分析已中止'),
-  })
-}
-
 export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function MaskStage({
   videoUrl,
   videoName,
@@ -87,6 +69,11 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   keyframes,
   baseMask,
   strokes,
+  occlusionKeyframes,
+  occlusionBaseMask,
+  occlusionStrokes,
+  editTarget,
+  objectPickEnabled,
   tool,
   brushPercent,
   view,
@@ -95,12 +82,13 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   editingDisabled = false,
   onMetadata,
   onCommitStroke,
+  onPickOccluder,
   onTimeChange,
 }: MaskStageProps, ref) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const displayCanvasRef = useRef<HTMLCanvasElement>(null)
   const maskCanvasRef = useRef<HTMLCanvasElement>(null)
-  const rasterCanvasRef = useRef<{ raster: MaskRaster; canvas: HTMLCanvasElement } | null>(null)
+  const occlusionCanvasRef = useRef<HTMLCanvasElement>(null)
   const workCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const backgroundImageRef = useRef<HTMLImageElement | null>(null)
   const renderSceneRef = useRef<() => void>(() => undefined)
@@ -125,39 +113,20 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     requestRender: requestStageRender,
     onError: setStageError,
   })
-
   const paintMask = useCallback((
     activeStroke: MaskStroke | null = currentStrokeRef.current,
     baseStrokes: MaskStroke[] = strokes,
     raster: MaskRaster | undefined = baseMask,
   ) => {
-    const maskCanvas = maskCanvasRef.current
-    const context = maskCanvas?.getContext('2d')
-    if (!maskCanvas || !context) return
-    context.clearRect(0, 0, maskCanvas.width, maskCanvas.height)
-    if (raster) {
-      let cached = rasterCanvasRef.current
-      if (!cached || cached.raster !== raster) {
-        const canvas = document.createElement('canvas')
-        canvas.width = raster.width
-        canvas.height = raster.height
-        const rasterContext = canvas.getContext('2d')
-        if (!rasterContext) throw new Error('無法建立 AI 遮罩畫布')
-        rasterContext.putImageData(maskRasterToImageData(raster), 0, 0)
-        cached = { raster, canvas }
-        rasterCanvasRef.current = cached
-      }
-      context.drawImage(cached.canvas, 0, 0, maskCanvas.width, maskCanvas.height)
-    }
-    renderMaskStrokes(
-      context,
-      activeStroke ? [...baseStrokes, activeStroke] : baseStrokes,
-      maskCanvas.width,
-      maskCanvas.height,
-      false,
-    )
+    paintMaskCanvas(maskCanvasRef.current, baseStrokes, raster, activeStroke)
   }, [baseMask, strokes])
-
+  const paintOcclusionMask = useCallback((
+    activeStroke: MaskStroke | null = editTarget === 'occlusion' ? currentStrokeRef.current : null,
+    baseStrokes: MaskStroke[] = occlusionStrokes,
+    raster: MaskRaster | undefined = occlusionBaseMask,
+  ) => {
+    paintMaskCanvas(occlusionCanvasRef.current, baseStrokes, raster, activeStroke)
+  }, [editTarget, occlusionBaseMask, occlusionStrokes])
   const renderScene = useCallback((
     viewOverride?: CompositeView,
     showOverlay: boolean = overlayVisible,
@@ -166,8 +135,9 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     const video = videoRef.current
     const display = displayCanvasRef.current
     const mask = maskCanvasRef.current
+    const occlusionMask = occlusionCanvasRef.current
     const work = workCanvasRef.current
-    if (!video || !display || !mask || !work || video.readyState < 2) return
+    if (!video || !display || !mask || !occlusionMask || !work || video.readyState < 2) return
     const context = display.getContext('2d')
     const workContext = work.getContext('2d')
     if (!context || !workContext) return
@@ -179,7 +149,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     if (activeView === 'mask') {
       context.fillStyle = '#000000'
       context.fillRect(0, 0, width, height)
-      context.drawImage(mask, 0, 0)
+      context.drawImage(editTarget === 'occlusion' ? occlusionMask : mask, 0, 0)
       return
     }
 
@@ -202,14 +172,23 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       workContext.globalCompositeOperation = 'source-over'
       context.drawImage(work, 0, 0)
       if (virtualCharacter?.depth === 'in-front') drawVirtualCharacter(context, characterMask, timelineTime)
+      if (virtualCharacter) {
+        workContext.clearRect(0, 0, width, height)
+        workContext.globalCompositeOperation = 'source-over'
+        workContext.drawImage(video, 0, 0, width, height)
+        workContext.globalCompositeOperation = 'destination-in'
+        workContext.drawImage(occlusionMask, 0, 0)
+        workContext.globalCompositeOperation = 'source-over'
+        context.drawImage(work, 0, 0)
+      }
     }
 
     if (showOverlay) {
       workContext.clearRect(0, 0, width, height)
       workContext.globalCompositeOperation = 'source-over'
-      workContext.drawImage(mask, 0, 0)
+      workContext.drawImage(editTarget === 'occlusion' ? occlusionMask : mask, 0, 0)
       workContext.globalCompositeOperation = 'source-in'
-      workContext.fillStyle = '#fb4b6b'
+      workContext.fillStyle = editTarget === 'occlusion' ? '#f59e0b' : '#fb4b6b'
       workContext.fillRect(0, 0, width, height)
       workContext.globalCompositeOperation = 'source-over'
       context.save()
@@ -217,31 +196,33 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       context.drawImage(work, 0, 0)
       context.restore()
     }
-  }, [backgroundColor, baseMask, drawVirtualCharacter, overlayVisible, view, virtualCharacter?.depth])
+  }, [backgroundColor, baseMask, drawVirtualCharacter, editTarget, overlayVisible, view, virtualCharacter])
   useEffect(() => {
     renderSceneRef.current = () => renderScene()
   }, [renderScene])
-
   useEffect(() => {
     if (!metadata) return
     const display = displayCanvasRef.current
     const mask = maskCanvasRef.current
-    if (!display || !mask) return
+    const occlusionMask = occlusionCanvasRef.current
+    if (!display || !mask || !occlusionMask) return
     display.width = metadata.width
     display.height = metadata.height
     mask.width = metadata.width
     mask.height = metadata.height
+    occlusionMask.width = metadata.width
+    occlusionMask.height = metadata.height
     const work = document.createElement('canvas')
     work.width = metadata.width
     work.height = metadata.height
     workCanvasRef.current = work
   }, [metadata])
-
   useEffect(() => {
     if (!shouldRenderPreview(Boolean(recordingSessionRef.current))) return
     paintMask(null)
+    paintOcclusionMask(null)
     renderScene()
-  }, [metadata, paintMask, renderScene])
+  }, [metadata, paintMask, paintOcclusionMask, renderScene])
 
   useEffect(() => {
     backgroundImageRef.current = null
@@ -262,12 +243,13 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       image.onerror = null
     }
   }, [backgroundUrl])
-
   useEffect(() => {
     if (!shouldRenderPreview(Boolean(recordingSessionRef.current))) return
     if (!playing) {
       const pausedTime = videoRef.current?.currentTime ?? 0
       const pausedKeyframe = resolveMaskKeyframe(keyframes, pausedTime)
+      const pausedOcclusion = resolveMaskKeyframe(occlusionKeyframes, pausedTime)
+      paintOcclusionMask(null, pausedOcclusion?.strokes ?? [], pausedOcclusion?.baseMask)
       renderScene(undefined, overlayVisible, pausedKeyframe?.baseMask)
       return
     }
@@ -276,13 +258,15 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       if (!shouldRenderPreview(Boolean(recordingSessionRef.current))) return
       const playbackTime = videoRef.current?.currentTime ?? 0
       const keyframe = resolveMaskKeyframe(keyframes, playbackTime)
+      const occlusionKeyframe = resolveMaskKeyframe(occlusionKeyframes, playbackTime)
       paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
+      paintOcclusionMask(null, occlusionKeyframe?.strokes ?? [], occlusionKeyframe?.baseMask)
       renderScene(undefined, overlayVisible, keyframe?.baseMask)
       animationFrame = window.requestAnimationFrame(tick)
     }
     animationFrame = window.requestAnimationFrame(tick)
     return () => window.cancelAnimationFrame(animationFrame)
-  }, [keyframes, overlayVisible, paintMask, playing, renderScene])
+  }, [keyframes, occlusionKeyframes, overlayVisible, paintMask, paintOcclusionMask, playing, renderScene])
 
   useEffect(() => () => {
     analysisAbortRef.current?.abort()
@@ -298,10 +282,9 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     }
     void releaseCompositeRecordingAudio(video)
   }, [])
-
   useImperativeHandle(ref, () => ({
     exportMask: async () => {
-      const mask = maskCanvasRef.current
+      const mask = editTarget === 'occlusion' ? occlusionCanvasRef.current : maskCanvasRef.current
       if (!mask || !metadata) throw new Error('請先載入影片並建立遮罩')
       return canvasBlob(mask)
     },
@@ -329,12 +312,16 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
         onProgress,
         onFrame: (time) => {
           const keyframe = resolveMaskKeyframe(keyframes, time)
+          const occlusionKeyframe = resolveMaskKeyframe(occlusionKeyframes, time)
           paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
+          paintOcclusionMask(null, occlusionKeyframe?.strokes ?? [], occlusionKeyframe?.baseMask)
           renderScene('composite', false, keyframe?.baseMask)
         },
         onRestore: () => {
           const keyframe = resolveMaskKeyframe(keyframes, video.currentTime)
+          const occlusionKeyframe = resolveMaskKeyframe(occlusionKeyframes, video.currentTime)
           paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
+          paintOcclusionMask(null, occlusionKeyframe?.strokes ?? [], occlusionKeyframe?.baseMask)
           renderScene(undefined, overlayVisible, keyframe?.baseMask)
         },
       })
@@ -362,31 +349,46 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
       return segmentPersonFrame(video, threshold, edgeSoftness)
     },
-  }), [assertCharacterMediaReady, backgroundUrl, keyframes, metadata, onTimeChange, overlayVisible, paintMask, renderScene])
-
+    analyzeOccluderAt: async (time: number, point: NormalizedPoint) => {
+      const video = videoRef.current
+      if (!video || !metadata) throw new Error('請先載入可分析的影片')
+      video.pause()
+      analysisAbortRef.current ??= new AbortController()
+      await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
+      return segmentObjectAtPoint(video, point)
+    },
+    matchCharacterAppearance: () => videoRef.current ? sampleVideoAppearance(videoRef.current) : (() => { throw new Error('請先載入影片') })(),
+    analyzePoseAt: (time: number) => detectPoseAt(videoRef.current, metadata?.duration, time, (analysisAbortRef.current ??= new AbortController()).signal),
+  }), [assertCharacterMediaReady, backgroundUrl, editTarget, keyframes, metadata, occlusionKeyframes, onTimeChange, overlayVisible, paintMask, paintOcclusionMask, renderScene])
   const pointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
     return pointerToNormalizedPoint(event.clientX, event.clientY, rect)
   }
-
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!metadata || editingDisabled) return
     videoRef.current?.pause()
+    const point = pointFromEvent(event)
+    if (objectPickEnabled) {
+      onPickOccluder(point)
+      return
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
     currentStrokeRef.current = {
       id: crypto.randomUUID(),
       tool,
       size: brushPercent / 100,
-      points: [pointFromEvent(event)],
+      points: [point],
     }
-    paintMask()
+    if (editTarget === 'occlusion') paintOcclusionMask()
+    else paintMask()
     renderScene()
   }
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!currentStrokeRef.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return
     currentStrokeRef.current = appendStrokePoint(currentStrokeRef.current, pointFromEvent(event))
-    paintMask()
+    if (editTarget === 'occlusion') paintOcclusionMask()
+    else paintMask()
     renderScene()
   }
 
@@ -395,7 +397,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     if (!stroke) return
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     currentStrokeRef.current = null
-    onCommitStroke(stroke)
+    onCommitStroke(editTarget, stroke)
   }
 
   const togglePlayback = () => {
@@ -411,8 +413,8 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
 
   const canvasStyle = useMemo(() => ({
     aspectRatio: metadata ? `${metadata.width} / ${metadata.height}` : '16 / 9',
-    cursor: editingDisabled ? 'not-allowed' : tool === 'keep' ? 'crosshair' : 'cell',
-  }), [editingDisabled, metadata, tool])
+    cursor: editingDisabled ? 'not-allowed' : objectPickEnabled ? 'copy' : tool === 'keep' ? 'crosshair' : 'cell',
+  }), [editingDisabled, metadata, objectPickEnabled, tool])
 
   if (!videoUrl) {
     return (
@@ -466,6 +468,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
           onPointerCancel={finishStroke}
         />
         <canvas ref={maskCanvasRef} className="hidden" aria-hidden="true" />
+        <canvas ref={occlusionCanvasRef} className="hidden" aria-hidden="true" />
         {stageError ? <div role="alert" className="absolute bottom-5 rounded-lg border border-red-400/30 bg-red-950/90 px-4 py-2 text-sm text-red-200">{stageError}</div> : null}
       </div>
 

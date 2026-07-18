@@ -70,6 +70,12 @@ export const GET = apiHandler(async (_request: NextRequest, { params }: RouteCon
         ...keyframe,
         ...(keyframe.baseMaskKey ? { baseMaskUrl: getSignedUrl(keyframe.baseMaskKey, SIGNED_URL_TTL_SECONDS) } : {}),
       })),
+      ...(timelineParsed.data.occlusionKeyframes ? {
+        occlusionKeyframes: timelineParsed.data.occlusionKeyframes.map((keyframe) => ({
+          ...keyframe,
+          ...(keyframe.baseMaskKey ? { baseMaskUrl: getSignedUrl(keyframe.baseMaskKey, SIGNED_URL_TTL_SECONDS) } : {}),
+        })),
+      } : {}),
       ...(timelineParsed.data.virtualCharacter ? {
         virtualCharacter: {
           ...timelineParsed.data.virtualCharacter,

@@ -6,15 +6,18 @@ describe('CompositeToolbar', () => {
   it('選擇移除畫筆與合成檢視 -> 回傳明確工具狀態', () => {
     const onToolChange = vi.fn()
     const onViewChange = vi.fn()
+    const onEditTargetChange = vi.fn()
     render(
       <CompositeToolbar
         tool="keep"
+        editTarget="person"
         view="source"
         brushPercent={6}
         overlayVisible
         canUndo
         canRedo={false}
         onToolChange={onToolChange}
+        onEditTargetChange={onEditTargetChange}
         onViewChange={onViewChange}
         onBrushPercentChange={vi.fn()}
         onOverlayVisibleChange={vi.fn()}
@@ -25,8 +28,10 @@ describe('CompositeToolbar', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: '移除畫筆' }))
+    fireEvent.click(screen.getByRole('button', { name: '前景遮擋' }))
     fireEvent.click(screen.getByRole('button', { name: '查看合成結果' }))
     expect(onToolChange).toHaveBeenCalledWith('erase')
+    expect(onEditTargetChange).toHaveBeenCalledWith('occlusion')
     expect(onViewChange).toHaveBeenCalledWith('composite')
   })
 
@@ -35,12 +40,14 @@ describe('CompositeToolbar', () => {
     render(
       <CompositeToolbar
         tool="keep"
+        editTarget="person"
         view="source"
         brushPercent={6}
         overlayVisible
         canUndo={false}
         canRedo={false}
         onToolChange={vi.fn()}
+        onEditTargetChange={vi.fn()}
         onViewChange={vi.fn()}
         onBrushPercentChange={onBrushPercentChange}
         onOverlayVisibleChange={vi.fn()}
@@ -58,6 +65,7 @@ describe('CompositeToolbar', () => {
     render(
       <CompositeToolbar
         tool="keep"
+        editTarget="person"
         view="composite"
         brushPercent={6}
         overlayVisible
@@ -65,6 +73,7 @@ describe('CompositeToolbar', () => {
         canRedo
         disabled
         onToolChange={vi.fn()}
+        onEditTargetChange={vi.fn()}
         onViewChange={vi.fn()}
         onBrushPercentChange={vi.fn()}
         onOverlayVisibleChange={vi.fn()}
