@@ -88,7 +88,7 @@ export function useFetchProjectVoiceStageData(projectId: string) {
                     '获取角色音色失败',
                 ),
                 requestJsonWithError<{ speakers?: string[] }>(
-                    `/api/novel-promotion/${projectId}/voice-lines?speakersOnly=1`,
+                    `/api/novel-promotion/${projectId}/voice-lines?speakersOnly=1&episodeId=${encodeURIComponent(episodeId)}`,
                     { method: 'GET' },
                     '获取说话人失败',
                 ),

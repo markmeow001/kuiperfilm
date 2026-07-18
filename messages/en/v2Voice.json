@@ -2,17 +2,42 @@
   "page": {
     "eyebrow": "VOICE CASTING",
     "title": "Voice Studio",
-    "subtitle": "Browse and audition voices from the asset hub to shape a consistent vocal direction for every character."
+    "subtitle": "Browse and audition voices from the asset hub to shape a consistent vocal direction for every character.",
+    "functionalSubtitle": "Assign voices to this episode's cast, tune emotion per line, and track voice generation status."
   },
   "summary": {
     "total": "Total voices",
     "previewable": "Previewable",
-    "showing": "Showing"
+    "showing": "Showing",
+    "speakers": "Episode cast",
+    "bound": "Voices assigned",
+    "lines": "Dialogue lines",
+    "generated": "Generated"
   },
   "header": {
     "title": "Voices",
     "loading": "Loading…",
-    "resultCount": "{count} results"
+    "resultCount": "{count} results",
+    "assignHint": "Select a voice to assign to: {speaker}",
+    "noSpeaker": "No speaker yet"
+  },
+  "speakers": {
+    "title": "Episode cast",
+    "empty": "Analyze dialogue first to identify speakers who need voices.",
+    "bound": "Assigned",
+    "unbound": "Unassigned",
+    "lineCount": "{count} lines"
+  },
+  "actions": {
+    "analyze": "Analyze dialogue",
+    "reanalyze": "Reanalyze dialogue",
+    "analyzing": "Analyzing…",
+    "reanalyzeConfirm": "Reanalysis deletes this episode's current dialogue lines and generated audio, then rebuilds them from the latest script. Continue?",
+    "generateAll": "Generate {count} lines",
+    "submitting": "Submitting…",
+    "noGeneratableLines": "Assign voices first, or there are no lines waiting to generate.",
+    "downloadAll": "Download all voices",
+    "downloading": "Downloading…"
   },
   "filters": {
     "title": "Filter voices",
@@ -62,9 +87,46 @@
     "gender": "Gender",
     "age": "Age",
     "emotion": "Emotion",
+    "language": "Language",
+    "type": "Voice type",
     "preview": "Preview file",
     "ready": "Ready",
     "unavailable": "Unavailable",
-    "play": "Play preview"
+    "play": "Play preview",
+    "targetSpeaker": "Assignment target",
+    "bindTo": "Assign to {speaker}",
+    "selectSpeakerFirst": "Select a speaker first",
+    "binding": "Assigning…",
+    "projectCharacterVoice": "Existing voice from character profile"
+  },
+  "lines": {
+    "title": "Dialogue & emotion",
+    "subtitle": "Emotion direction and intensity are saved per line and used by the next voice generation.",
+    "count": "{count} lines",
+    "empty": "No dialogue yet. Use “Analyze dialogue” above to build a voice list from this episode's script.",
+    "playLine": "Play line {number}",
+    "generating": "Generating",
+    "ready": "Ready",
+    "failed": "Failed",
+    "pending": "Pending",
+    "matchedShot": "Matched to shot {number}",
+    "emotionPrompt": "Emotion direction",
+    "emotionPlaceholder": "e.g. lowered voice, restrained but angry",
+    "emotionStrength": "Emotion strength",
+    "saving": "Saving…",
+    "saveEmotion": "Save emotion",
+    "bindVoiceFirst": "Assign a voice to this speaker first",
+    "generate": "Generate voice",
+    "regenerate": "Regenerate"
+  },
+  "errors": {
+    "voiceHasNoPreview": "This voice has no usable preview audio and cannot be assigned.",
+    "bindFailed": "Voice assignment failed",
+    "analyzeFailed": "Dialogue analysis failed",
+    "generateFailed": "Voice generation failed",
+    "batchFailed": "Batch voice submission failed",
+    "saveEmotionFailed": "Emotion settings could not be saved",
+    "downloadFailed": "Voice download failed",
+    "loadStageFailed": "Voice workspace data could not be loaded"
   }
 }

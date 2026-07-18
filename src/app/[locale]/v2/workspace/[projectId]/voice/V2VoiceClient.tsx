@@ -1,20 +1,41 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { AppIcon } from '@/components/ui/icons'
 import { useGlobalVoices } from '@/lib/query/hooks/useGlobalAssets'
+import { useProjectCharacters } from '@/lib/query/hooks/useProjectAssets'
+import { useProjectAccess } from '@/lib/query/hooks/useProjectAccess'
+import { useVoiceTaskPresentation } from '@/lib/query/hooks/useTaskPresentation'
+import {
+  useAnalyzeProjectVoice,
+  useDownloadProjectVoices,
+  useGenerateProjectVoice,
+  useUpdateProjectVoiceLine,
+  useUpdateSpeakerVoice,
+} from '@/lib/query/mutations/useVoiceMutations'
+import { useCurrentEpisode } from '../hooks/useCurrentEpisode'
+import { VoiceInspector } from './VoiceInspector'
+import { VoiceLibrary } from './VoiceLibrary'
+import { VoiceLinePanel } from './VoiceLinePanel'
+import { VoiceSpeakerRail } from './VoiceSpeakerRail'
+import { useAudioPreview } from './useAudioPreview'
+import { useVoiceWorkspaceData } from './useVoiceWorkspaceData'
+import {
+  collectEpisodeSpeakers,
+  countGeneratableLines,
+  filterVoiceAssets,
+  getVoicePreviewUrl,
+} from './voice-workspace-helpers'
+import type {
+  SpeakerVoiceEntry,
+  VoiceAsset,
+  VoiceLine,
+  VoiceLineSavePayload,
+} from './voice-workspace-types'
 
 interface V2VoiceClientProps {
   projectId: string
-}
-
-interface VoiceLike {
-  id: string
-  name?: string | null
-  description?: string | null
-  audioUrl?: string | null
-  metadata?: { gender?: string; age?: string; emotion?: string } | null
 }
 
 const GENDER_FILTERS = [
@@ -26,342 +47,342 @@ const GENDER_FILTERS = [
   { key: '特殊', labelKey: 'special' },
 ] as const
 
-const EMOTION_FILTERS = [
-  { key: '中性', labelKey: 'neutral' },
-  { key: '欢快', labelKey: 'happy' },
-  { key: '悲伤', labelKey: 'sad' },
-  { key: '愤怒', labelKey: 'angry' },
-  { key: '惊讶', labelKey: 'surprised' },
-  { key: '神秘', labelKey: 'mysterious' },
-  { key: '温柔', labelKey: 'tender' },
-  { key: '庄严', labelKey: 'solemn' },
-  { key: '俏皮', labelKey: 'playful' },
-] as const
-
 type GenderLabelKey = (typeof GENDER_FILTERS)[number]['labelKey']
-type EmotionLabelKey = (typeof EMOTION_FILTERS)[number]['labelKey']
 
-export function V2VoiceClient({ projectId: _projectId }: V2VoiceClientProps) {
+const EMPTY_VOICE_LINES: VoiceLine[] = []
+const EMPTY_SPEAKER_VOICES: Record<string, SpeakerVoiceEntry> = {}
+const EMPTY_VOICE_ASSETS: VoiceAsset[] = []
+const EMPTY_SPEAKERS: string[] = []
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
+export function V2VoiceClient({ projectId }: V2VoiceClientProps) {
   const t = useTranslations('v2Voice')
+  const { currentEpisodeId } = useCurrentEpisode(projectId)
+  const { canEdit } = useProjectAccess(projectId)
+  const stageQuery = useVoiceWorkspaceData(projectId, currentEpisodeId)
   const voicesQuery = useGlobalVoices(null)
-  const voices = useMemo(
-    () => (voicesQuery.data ?? []) as unknown as VoiceLike[],
-    [voicesQuery.data],
-  )
-  const [genderFilter, setGenderFilter] = useState('全部')
-  const [emotionFilter, setEmotionFilter] = useState<string | null>(null)
+  const charactersQuery = useProjectCharacters(projectId)
+  const analyzeVoice = useAnalyzeProjectVoice(projectId)
+  const generateVoice = useGenerateProjectVoice(projectId)
+  const updateSpeakerVoice = useUpdateSpeakerVoice(projectId)
+  const updateVoiceLine = useUpdateProjectVoiceLine(projectId)
+  const downloadVoices = useDownloadProjectVoices(projectId)
+  const audioPreview = useAudioPreview()
+
+  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string | null>(null)
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [playingId, setPlayingId] = useState<string | null>(null)
-  const [playbackErrorId, setPlaybackErrorId] = useState<string | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [genderFilter, setGenderFilter] = useState('全部')
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [savingLineId, setSavingLineId] = useState<string | null>(null)
+  const [submittingLineIds, setSubmittingLineIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause()
-      audioRef.current = null
+  const workspace = stageQuery.data
+  const voiceLines = workspace?.voiceLines ?? EMPTY_VOICE_LINES
+  const speakerVoices = workspace?.speakerVoices ?? EMPTY_SPEAKER_VOICES
+  const voices = voicesQuery.data ?? EMPTY_VOICE_ASSETS
+  const projectSpeakers = workspace?.speakers ?? EMPTY_SPEAKERS
+  const speakers = useMemo(
+    () => collectEpisodeSpeakers(voiceLines, projectSpeakers),
+    [projectSpeakers, voiceLines],
+  )
+  const selectedSpeaker = selectedSpeakerId && speakers.includes(selectedSpeakerId)
+    ? selectedSpeakerId
+    : speakers[0] ?? null
+  const filteredVoices = useMemo(
+    () => filterVoiceAssets(voices, search, genderFilter),
+    [genderFilter, search, voices],
+  )
+  const selectedVoice = voices.find((voice) => voice.id === selectedVoiceId) ?? null
+
+  const characterVoiceBySpeaker = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const character of charactersQuery.data ?? []) {
+      if (character.customVoiceUrl) map.set(character.name.trim(), character.customVoiceUrl)
     }
-  }, [])
+    return map
+  }, [charactersQuery.data])
+  const boundSpeakers = useMemo(() => {
+    const bound = new Set<string>()
+    for (const speaker of speakers) {
+      if (speakerVoices[speaker]?.audioUrl || characterVoiceBySpeaker.has(speaker)) bound.add(speaker)
+    }
+    return bound
+  }, [characterVoiceBySpeaker, speakerVoices, speakers])
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase()
-    return voices.filter((voice) => {
-      if (genderFilter !== '全部' && voice.metadata?.gender !== genderFilter) return false
-      if (emotionFilter && voice.metadata?.emotion !== emotionFilter) return false
-      if (!query) return true
-      const haystack = [voice.name, voice.description, voice.metadata?.age, voice.metadata?.gender]
-        .filter(Boolean)
-        .join(' ')
-        .toLocaleLowerCase()
-      return haystack.includes(query)
-    })
-  }, [emotionFilter, genderFilter, search, voices])
-
-  const selectedVoice = voices.find((voice) => voice.id === selectedId) ?? null
-  const previewCount = voices.filter((voice) => Boolean(voice.audioUrl)).length
-  const hasFilters = genderFilter !== '全部' || emotionFilter !== null || search.trim().length > 0
+  const voiceTaskTargets = useMemo(
+    () => voiceLines.map((line) => ({
+      key: line.id,
+      targetType: 'NovelPromotionVoiceLine',
+      targetId: line.id,
+      types: ['voice_line'],
+      resource: 'audio' as const,
+      hasOutput: Boolean(line.audioUrl),
+    })),
+    [voiceLines],
+  )
+  const voiceTaskPresentation = useVoiceTaskPresentation(projectId, voiceTaskTargets, {
+    enabled: voiceTaskTargets.length > 0,
+    staleTime: 3000,
+  })
+  const readyLineCount = voiceLines.filter((line) => Boolean(line.audioUrl)).length
+  const boundSpeakerCount = speakers.filter((speaker) => boundSpeakers.has(speaker)).length
+  const generatableLineCount = countGeneratableLines(voiceLines, boundSpeakers)
+  const currentBinding = selectedSpeaker ? speakerVoices[selectedSpeaker] ?? null : null
+  const currentBindingName = currentBinding?.voiceId
+    ? voices.find((voice) => voice.voiceId === currentBinding.voiceId)?.name ?? null
+    : selectedSpeaker && characterVoiceBySpeaker.has(selectedSpeaker)
+      ? t('inspector.projectCharacterVoice')
+      : null
+  const hasFilters = search.trim().length > 0 || genderFilter !== '全部'
 
   function resetFilters() {
-    setGenderFilter('全部')
-    setEmotionFilter(null)
     setSearch('')
+    setGenderFilter('全部')
   }
 
-  function handlePlay(voice: VoiceLike) {
-    if (!voice.audioUrl) return
-    audioRef.current?.pause()
-    audioRef.current = null
-    setPlaybackErrorId(null)
-
-    if (playingId === voice.id) {
-      setPlayingId(null)
+  async function bindSelectedVoice() {
+    if (!currentEpisodeId || !selectedSpeaker || !selectedVoice) return
+    const previewUrl = getVoicePreviewUrl(selectedVoice)
+    if (!previewUrl) {
+      setActionError(t('errors.voiceHasNoPreview'))
       return
     }
+    setActionError(null)
+    try {
+      await updateSpeakerVoice.mutateAsync({
+        episodeId: currentEpisodeId,
+        speaker: selectedSpeaker,
+        audioUrl: previewUrl,
+        voiceType: selectedVoice.voiceType,
+        ...(selectedVoice.voiceId ? { voiceId: selectedVoice.voiceId } : {}),
+      })
+      await stageQuery.refetch()
+    } catch (error) {
+      setActionError(errorMessage(error, t('errors.bindFailed')))
+    }
+  }
 
-    const audio = new Audio(voice.audioUrl)
-    audio.onended = () => {
-      setPlayingId((current) => (current === voice.id ? null : current))
-      if (audioRef.current === audio) audioRef.current = null
+  async function analyzeDialogue() {
+    if (!currentEpisodeId) return
+    if (voiceLines.length > 0 && !window.confirm(t('actions.reanalyzeConfirm'))) return
+    setActionError(null)
+    try {
+      await analyzeVoice.mutateAsync({ episodeId: currentEpisodeId })
+      await stageQuery.refetch()
+    } catch (error) {
+      setActionError(errorMessage(error, t('errors.analyzeFailed')))
     }
-    audio.onerror = () => {
-      setPlayingId((current) => (current === voice.id ? null : current))
-      setPlaybackErrorId(voice.id)
-      if (audioRef.current === audio) audioRef.current = null
+  }
+
+  async function generateLine(lineId: string) {
+    if (!currentEpisodeId) return
+    setActionError(null)
+    setSubmittingLineIds((current) => new Set(current).add(lineId))
+    try {
+      await generateVoice.mutateAsync({ episodeId: currentEpisodeId, lineId })
+      await stageQuery.refetch()
+    } catch (error) {
+      setActionError(errorMessage(error, t('errors.generateFailed')))
+    } finally {
+      setSubmittingLineIds((current) => {
+        const next = new Set(current)
+        next.delete(lineId)
+        return next
+      })
     }
-    audioRef.current = audio
-    setPlayingId(voice.id)
-    void audio.play().catch(() => {
-      setPlayingId((current) => (current === voice.id ? null : current))
-      setPlaybackErrorId(voice.id)
-      if (audioRef.current === audio) audioRef.current = null
-    })
+  }
+
+  async function generateAll() {
+    if (!currentEpisodeId || generatableLineCount === 0) return
+    const lineIds = voiceLines
+      .filter((line) => !line.audioUrl && boundSpeakers.has(line.speaker))
+      .map((line) => line.id)
+    setActionError(null)
+    setSubmittingLineIds(new Set(lineIds))
+    try {
+      await generateVoice.mutateAsync({ episodeId: currentEpisodeId, all: true })
+      await stageQuery.refetch()
+    } catch (error) {
+      setActionError(errorMessage(error, t('errors.batchFailed')))
+    } finally {
+      setSubmittingLineIds(new Set())
+    }
+  }
+
+  async function saveLineEmotion(payload: VoiceLineSavePayload) {
+    setActionError(null)
+    setSavingLineId(payload.lineId)
+    try {
+      await updateVoiceLine.mutateAsync(payload)
+      await stageQuery.refetch()
+    } catch (error) {
+      setActionError(errorMessage(error, t('errors.saveEmotionFailed')))
+    } finally {
+      setSavingLineId(null)
+    }
+  }
+
+  async function downloadAll() {
+    if (!currentEpisodeId || readyLineCount === 0) return
+    setActionError(null)
+    try {
+      const blob = await downloadVoices.mutateAsync({ episodeId: currentEpisodeId })
+      const url = window.URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `voices-${currentEpisodeId}.zip`
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      setActionError(errorMessage(error, t('errors.downloadFailed')))
+    }
   }
 
   return (
     <main className="kuiper-workspace-page mx-auto w-full max-w-[1800px] px-[var(--workspace-gutter)] py-6 sm:py-8">
-      <header className="mb-6 flex flex-col gap-4 border-b border-border-soft pb-5 lg:flex-row lg:items-end lg:justify-between">
+      <header className="mb-6 flex flex-col gap-4 border-b border-border-soft pb-5 2xl:flex-row 2xl:items-end 2xl:justify-between">
         <div>
-          <div className="mb-2 font-mono text-[12px] uppercase tracking-[0.18em] text-primary-300">
-            {t('page.eyebrow')}
-          </div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
-            {t('page.title')}
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">
-            {t('page.subtitle')}
-          </p>
+          <div className="mb-2 font-mono text-[12px] uppercase tracking-[0.18em] text-primary-300">{t('page.eyebrow')}</div>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">{t('page.title')}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">{t('page.functionalSubtitle')}</p>
         </div>
-        <div className="grid grid-cols-3 gap-2 sm:flex">
-          <div className="kuiper-surface-card min-w-0 px-3 py-2.5 sm:min-w-[112px]">
-            <div className="font-mono text-lg text-text-primary">{voices.length}</div>
-            <div className="text-[12px] text-text-tertiary">{t('summary.total')}</div>
-          </div>
-          <div className="kuiper-surface-card min-w-0 px-3 py-2.5 sm:min-w-[112px]">
-            <div className="font-mono text-lg text-emerald-300">{previewCount}</div>
-            <div className="text-[12px] text-text-tertiary">{t('summary.previewable')}</div>
-          </div>
-          <div className="kuiper-surface-card min-w-0 px-3 py-2.5 sm:min-w-[112px]">
-            <div className="font-mono text-lg text-primary-300">{filtered.length}</div>
-            <div className="text-[12px] text-text-tertiary">{t('summary.showing')}</div>
-          </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!currentEpisodeId || analyzeVoice.isPending || !canEdit}
+            onClick={() => void analyzeDialogue()}
+            className="kuiper-secondary-button inline-flex items-center gap-2 px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <AppIcon name={analyzeVoice.isPending ? 'loader' : 'fileText'} className={`h-4 w-4 ${analyzeVoice.isPending ? 'animate-spin' : ''}`} />
+            {analyzeVoice.isPending ? t('actions.analyzing') : voiceLines.length > 0 ? t('actions.reanalyze') : t('actions.analyze')}
+          </button>
+          <button
+            type="button"
+            disabled={generatableLineCount === 0 || generateVoice.isPending || !canEdit}
+            onClick={() => void generateAll()}
+            title={generatableLineCount === 0 ? t('actions.noGeneratableLines') : undefined}
+            className="kuiper-primary-button inline-flex items-center gap-2 rounded-[var(--r-input)] px-3 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <AppIcon name={generateVoice.isPending ? 'loader' : 'sparklesAlt'} className={`h-4 w-4 ${generateVoice.isPending ? 'animate-spin' : ''}`} />
+            {generateVoice.isPending ? t('actions.submitting') : t('actions.generateAll', { count: generatableLineCount })}
+          </button>
+          <button
+            type="button"
+            disabled={readyLineCount === 0 || downloadVoices.isPending}
+            onClick={() => void downloadAll()}
+            className="kuiper-secondary-button inline-flex items-center gap-2 px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <AppIcon name={downloadVoices.isPending ? 'loader' : 'download'} className={`h-4 w-4 ${downloadVoices.isPending ? 'animate-spin' : ''}`} />
+            {downloadVoices.isPending ? t('actions.downloading') : t('actions.downloadAll')}
+          </button>
         </div>
       </header>
 
-      <div className="grid min-h-0 gap-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-        <aside className="kuiper-surface-card h-fit p-4 xl:sticky xl:top-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-heading text-sm font-semibold text-text-primary">{t('filters.title')}</h2>
-            {hasFilters ? (
-              <button type="button" onClick={resetFilters} className="text-xs text-primary-300 hover:text-primary-200">
-                {t('filters.reset')}
-              </button>
-            ) : null}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { value: speakers.length, label: t('summary.speakers'), tone: 'text-text-primary' },
+          { value: `${boundSpeakerCount}/${speakers.length}`, label: t('summary.bound'), tone: 'text-emerald-300' },
+          { value: voiceLines.length, label: t('summary.lines'), tone: 'text-text-primary' },
+          { value: `${readyLineCount}/${voiceLines.length}`, label: t('summary.generated'), tone: 'text-primary-300' },
+        ].map((item) => (
+          <div key={item.label} className="kuiper-surface-card px-3 py-2.5">
+            <div className={`font-mono text-lg ${item.tone}`}>{item.value}</div>
+            <div className="text-[12px] text-text-tertiary">{item.label}</div>
           </div>
-          <label className="block">
-            <span className="sr-only">{t('filters.search')}</span>
-            <div className="relative">
-              <AppIcon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={t('filters.search')}
-                className="kuiper-input w-full py-2.5 pl-9 pr-3 text-sm"
-              />
-            </div>
-          </label>
+        ))}
+      </div>
 
-          <div className="mt-5">
-            <div className="mb-2 text-xs font-medium text-text-secondary">{t('filters.genderTitle')}</div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {GENDER_FILTERS.map((filter) => {
-                const active = filter.key === genderFilter
-                return (
-                  <button
-                    key={filter.key}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setGenderFilter(filter.key)}
-                    className={`rounded-[var(--r-input)] border px-2 py-2 text-xs transition-colors ${
-                      active
-                        ? 'border-primary-500/50 bg-primary-500/15 text-primary-200'
-                        : 'border-border-soft bg-surface-inset text-text-secondary hover:border-border-primary hover:text-text-primary'
-                    }`}
-                  >
-                    {t(`filters.gender.${filter.labelKey}` as `filters.gender.${GenderLabelKey}`)}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+      {actionError || stageQuery.isError ? (
+        <div role="alert" className="mb-4 flex items-start gap-3 rounded-[var(--r-card)] border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          <AppIcon name="alertCircle" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1">{actionError || errorMessage(stageQuery.error, t('errors.loadStageFailed'))}</span>
+          <button type="button" onClick={() => { setActionError(null); void stageQuery.refetch() }} className="shrink-0 text-xs underline underline-offset-2">
+            {t('empty.retry')}
+          </button>
+        </div>
+      ) : null}
 
-          <div className="mt-5">
-            <div className="mb-2 text-xs font-medium text-text-secondary">{t('filters.emotionTitle')}</div>
-            <div className="flex flex-wrap gap-1.5">
-              {EMOTION_FILTERS.map((filter) => {
-                const active = filter.key === emotionFilter
-                return (
-                  <button
-                    key={filter.key}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setEmotionFilter(active ? null : filter.key)}
-                    className={`rounded-full border px-2.5 py-1.5 text-xs transition-colors ${
-                      active
-                        ? 'border-primary-500/50 bg-primary-500/15 text-primary-200'
-                        : 'border-border-soft text-text-tertiary hover:border-border-primary hover:text-text-secondary'
-                    }`}
-                  >
-                    {t(`filters.emotion.${filter.labelKey}` as `filters.emotion.${EmotionLabelKey}`)}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </aside>
+      <div className="grid min-h-0 gap-4 xl:grid-cols-[250px_minmax(0,1fr)_310px]">
+        <VoiceSpeakerRail
+          speakers={speakers}
+          selectedSpeaker={selectedSpeaker}
+          speakerStats={workspace?.speakerStats ?? {}}
+          boundSpeakers={boundSpeakers}
+          onSelect={setSelectedSpeakerId}
+        />
 
         <section aria-labelledby="voice-library-title" className="min-w-0">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 id="voice-library-title" className="font-heading text-base font-semibold text-text-primary">
-              {t('header.title')}
-            </h2>
-            <span className="font-mono text-[12px] text-text-tertiary">
-              {t('header.resultCount', { count: filtered.length })}
-            </span>
+          <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 id="voice-library-title" className="font-heading text-base font-semibold text-text-primary">{t('header.title')}</h2>
+              <p className="mt-1 text-xs text-text-tertiary">{t('header.assignHint', { speaker: selectedSpeaker || t('header.noSpeaker') })}</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <label className="relative block min-w-[220px]">
+                <span className="sr-only">{t('filters.search')}</span>
+                <AppIcon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-tertiary" />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('filters.search')} className="kuiper-input w-full py-2 pl-9 pr-3 text-sm" />
+              </label>
+              <select value={genderFilter} onChange={(event) => setGenderFilter(event.target.value)} className="kuiper-input min-w-[120px] px-3 py-2 text-sm">
+                {GENDER_FILTERS.map((filter) => (
+                  <option key={filter.key} value={filter.key}>{t(`filters.gender.${filter.labelKey}` as `filters.gender.${GenderLabelKey}`)}</option>
+                ))}
+              </select>
+            </div>
           </div>
-
-          {voicesQuery.isLoading ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              {Array.from({ length: 6 }, (_, index) => (
-                <div key={index} className="kuiper-surface-card h-[106px] animate-pulse bg-surface-raised" />
-              ))}
-            </div>
-          ) : voicesQuery.isError ? (
-            <div className="kuiper-surface-card border-rose-500/30 p-8 text-center">
-              <AppIcon name="alertCircle" className="mx-auto h-6 w-6 text-rose-300" />
-              <p className="mt-3 text-sm text-text-primary">{t('empty.loadFailed')}</p>
-              <button type="button" onClick={() => void voicesQuery.refetch()} className="kuiper-secondary-button mt-4 px-4 py-2 text-sm">
-                {t('empty.retry')}
-              </button>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="kuiper-surface-card p-10 text-center">
-              <AppIcon name="audioWaveform" className="mx-auto h-7 w-7 text-text-tertiary" />
-              <p className="mt-3 text-sm text-text-secondary">
-                {voices.length === 0 ? t('empty.noVoices') : t('empty.noMatches')}
-              </p>
-              {hasFilters ? (
-                <button type="button" onClick={resetFilters} className="kuiper-secondary-button mt-4 px-4 py-2 text-sm">
-                  {t('filters.reset')}
-                </button>
-              ) : null}
-            </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {filtered.map((voice) => {
-                const selected = selectedId === voice.id
-                const playing = playingId === voice.id
-                const playbackFailed = playbackErrorId === voice.id
-                return (
-                  <article
-                    key={voice.id}
-                    className={`kuiper-surface-card flex min-w-0 items-center gap-3 p-3 transition-colors ${
-                      selected ? 'border-primary-500/60 bg-primary-500/[0.08]' : 'hover:border-border-primary'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      disabled={!voice.audioUrl}
-                      onClick={() => handlePlay(voice)}
-                      aria-label={playing ? t('voice.pausePreview') : t('voice.playPreview', { name: voice.name ?? t('voice.untitled') })}
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                        playing
-                          ? 'border-primary-400 bg-primary-500 text-black'
-                          : 'border-border-primary bg-surface-overlay text-text-primary hover:border-primary-500/60 hover:text-primary-200'
-                      }`}
-                    >
-                      <AppIcon name={playing ? 'pause' : 'play'} className="h-4 w-4" />
-                    </button>
-                    <button type="button" onClick={() => setSelectedId(voice.id)} className="min-w-0 flex-1 py-1 text-left">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-sm font-semibold text-text-primary sm:text-base">
-                          {voice.name ?? t('voice.untitled')}
-                        </span>
-                        {selected ? (
-                          <span className="rounded-full bg-primary-500/15 px-2 py-0.5 text-[11px] text-primary-200">
-                            {t('voice.selected')}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-text-tertiary">
-                        {voice.metadata?.gender ? <span>{voice.metadata.gender}</span> : null}
-                        {voice.metadata?.age ? <span>· {voice.metadata.age}</span> : null}
-                        {voice.metadata?.emotion ? <span>· {voice.metadata.emotion}</span> : null}
-                      </div>
-                      {voice.description ? <p className="mt-1.5 line-clamp-1 text-xs text-text-secondary">{voice.description}</p> : null}
-                      {playbackFailed ? <p className="mt-1.5 text-xs text-rose-300">{t('voice.playbackFailed')}</p> : null}
-                    </button>
-                  </article>
-                )
-              })}
-            </div>
-          )}
+          <VoiceLibrary
+            voices={filteredVoices}
+            isLoading={voicesQuery.isLoading}
+            isError={voicesQuery.isError}
+            selectedVoiceId={selectedVoiceId}
+            playingKey={audioPreview.playingKey}
+            errorKey={audioPreview.errorKey}
+            onSelect={setSelectedVoiceId}
+            onTogglePreview={audioPreview.toggle}
+            onRetry={() => void voicesQuery.refetch()}
+            onResetFilters={resetFilters}
+            hasFilters={hasFilters}
+          />
         </section>
 
-        <aside className="kuiper-surface-card h-fit p-4 xl:sticky xl:top-4">
-          <div className="mb-4 flex items-center gap-2 border-b border-border-soft pb-3">
-            <AppIcon name="sliders" className="h-4 w-4 text-primary-300" />
-            <h2 className="font-heading text-sm font-semibold text-text-primary">{t('inspector.title')}</h2>
-          </div>
-          {selectedVoice ? (
-            <div>
-              <div className="flex h-20 items-center justify-center rounded-[var(--r-card)] border border-border-soft bg-surface-inset">
-                <AppIcon name="audioWaveform" className="h-8 w-8 text-primary-300" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-text-primary">{selectedVoice.name ?? t('voice.untitled')}</h3>
-              <p className="mt-2 text-sm leading-6 text-text-secondary">
-                {selectedVoice.description || t('inspector.noDescription')}
-              </p>
-              <dl className="mt-4 divide-y divide-border-soft border-y border-border-soft">
-                <div className="flex items-center justify-between py-2.5 text-sm">
-                  <dt className="text-text-tertiary">{t('inspector.gender')}</dt>
-                  <dd className="text-text-primary">{selectedVoice.metadata?.gender ?? '—'}</dd>
-                </div>
-                <div className="flex items-center justify-between py-2.5 text-sm">
-                  <dt className="text-text-tertiary">{t('inspector.age')}</dt>
-                  <dd className="text-text-primary">{selectedVoice.metadata?.age ?? '—'}</dd>
-                </div>
-                <div className="flex items-center justify-between py-2.5 text-sm">
-                  <dt className="text-text-tertiary">{t('inspector.emotion')}</dt>
-                  <dd className="text-text-primary">{selectedVoice.metadata?.emotion ?? '—'}</dd>
-                </div>
-                <div className="flex items-center justify-between py-2.5 text-sm">
-                  <dt className="text-text-tertiary">{t('inspector.preview')}</dt>
-                  <dd className={selectedVoice.audioUrl ? 'text-emerald-300' : 'text-text-tertiary'}>
-                    {selectedVoice.audioUrl ? t('inspector.ready') : t('inspector.unavailable')}
-                  </dd>
-                </div>
-              </dl>
-              <button
-                type="button"
-                disabled={!selectedVoice.audioUrl}
-                onClick={() => handlePlay(selectedVoice)}
-                className="kuiper-primary-button mt-4 flex w-full items-center justify-center gap-2 rounded-[var(--r-input)] px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <AppIcon name={playingId === selectedVoice.id ? 'pause' : 'play'} className="h-4 w-4" />
-                {playingId === selectedVoice.id ? t('voice.pausePreview') : t('inspector.play')}
-              </button>
-            </div>
-          ) : (
-            <div className="py-8 text-center">
-              <AppIcon name="cursor" className="mx-auto h-6 w-6 text-text-tertiary" />
-              <p className="mt-3 text-sm leading-6 text-text-secondary">{t('inspector.empty')}</p>
-            </div>
-          )}
-          <div className="mt-4 rounded-[var(--r-card)] border border-primary-500/20 bg-primary-500/[0.06] p-3 text-xs leading-5 text-text-secondary">
-            {t('voice.controlsHint')}
-          </div>
-        </aside>
+        <VoiceInspector
+          selectedVoice={selectedVoice}
+          selectedSpeaker={selectedSpeaker}
+          currentBinding={currentBinding}
+          currentBindingName={currentBindingName}
+          isSpeakerBound={selectedSpeaker ? boundSpeakers.has(selectedSpeaker) : false}
+          playingKey={audioPreview.playingKey}
+          isBinding={updateSpeakerVoice.isPending}
+          canEdit={canEdit}
+          onTogglePreview={audioPreview.toggle}
+          onBind={() => void bindSelectedVoice()}
+        />
       </div>
+
+      {stageQuery.isLoading ? (
+        <div className="mt-6 grid gap-3 2xl:grid-cols-2">
+          {Array.from({ length: 4 }, (_, index) => <div key={index} className="kuiper-surface-card h-56 animate-pulse" />)}
+        </div>
+      ) : (
+        <VoiceLinePanel
+          voiceLines={voiceLines}
+          taskStatesByLineId={voiceTaskPresentation.statesByKey}
+          boundSpeakers={boundSpeakers}
+          playingKey={audioPreview.playingKey}
+          savingLineId={savingLineId}
+          submittingLineIds={submittingLineIds}
+          canEdit={canEdit}
+          onTogglePreview={audioPreview.toggle}
+          onGenerate={(lineId) => void generateLine(lineId)}
+          onSave={(payload) => void saveLineEmotion(payload)}
+        />
+      )}
     </main>
   )
 }

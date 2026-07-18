@@ -2,17 +2,42 @@
   "page": {
     "eyebrow": "VOICE CASTING",
     "title": "配音工作室",
-    "subtitle": "浏览与试听资产中心音色，为角色建立一致的声音方向。"
+    "subtitle": "浏览与试听资产中心音色，为角色建立一致的声音方向。",
+    "functionalSubtitle": "为本集角色绑定音色、调整每句台词的情绪，并追踪配音生成状态。"
   },
   "summary": {
     "total": "全部音色",
     "previewable": "可试听",
-    "showing": "目前显示"
+    "showing": "目前显示",
+    "speakers": "本集角色",
+    "bound": "已绑音色",
+    "lines": "台词总数",
+    "generated": "已生成"
   },
   "header": {
     "title": "音色列表",
     "loading": "载入中…",
-    "resultCount": "{count} 个结果"
+    "resultCount": "{count} 个结果",
+    "assignHint": "选择音色后绑定给：{speaker}",
+    "noSpeaker": "尚无角色"
+  },
+  "speakers": {
+    "title": "本集角色",
+    "empty": "先分析台词，系统才会列出需要配音的角色",
+    "bound": "已绑定",
+    "unbound": "未绑定",
+    "lineCount": "{count} 句"
+  },
+  "actions": {
+    "analyze": "分析台词",
+    "reanalyze": "重新分析台词",
+    "analyzing": "分析中…",
+    "reanalyzeConfirm": "重新分析会删除本集现有台词与已生成音频，并以最新剧本重新建立。确定继续吗？",
+    "generateAll": "批量生成 {count} 句",
+    "submitting": "提交中…",
+    "noGeneratableLines": "请先为角色绑定音色，或目前没有待生成台词",
+    "downloadAll": "下载全部配音",
+    "downloading": "下载中…"
   },
   "filters": {
     "title": "筛选音色",
@@ -62,9 +87,46 @@
     "gender": "性别",
     "age": "年龄",
     "emotion": "情绪",
+    "language": "语言",
+    "type": "音色类型",
     "preview": "试听档",
     "ready": "可用",
     "unavailable": "未提供",
-    "play": "播放试听"
+    "play": "播放试听",
+    "targetSpeaker": "绑定目标",
+    "bindTo": "绑定给 {speaker}",
+    "selectSpeakerFirst": "请先选择角色",
+    "binding": "绑定中…",
+    "projectCharacterVoice": "角色资料中的既有音色"
+  },
+  "lines": {
+    "title": "台词与情绪",
+    "subtitle": "情绪文字与强度会保存到每句台词，并用于下一次配音生成。",
+    "count": "{count} 句",
+    "empty": "还没有台词。点击上方「分析台词」从本集剧本建立配音清单。",
+    "playLine": "播放第 {number} 句",
+    "generating": "生成中",
+    "ready": "已完成",
+    "failed": "生成失败",
+    "pending": "待生成",
+    "matchedShot": "对应镜头 {number}",
+    "emotionPrompt": "情绪描述",
+    "emotionPlaceholder": "例如：压低声音、克制但愤怒",
+    "emotionStrength": "情绪强度",
+    "saving": "保存中…",
+    "saveEmotion": "保存情绪",
+    "bindVoiceFirst": "请先为这个角色绑定音色",
+    "generate": "生成配音",
+    "regenerate": "重新生成"
+  },
+  "errors": {
+    "voiceHasNoPreview": "这个音色没有可用的试听音频，无法绑定。",
+    "bindFailed": "音色绑定失败",
+    "analyzeFailed": "台词分析失败",
+    "generateFailed": "配音生成失败",
+    "batchFailed": "批次配音提交失败",
+    "saveEmotionFailed": "情绪设定保存失败",
+    "downloadFailed": "配音下载失败",
+    "loadStageFailed": "配音工作区资料载入失败"
   }
 }

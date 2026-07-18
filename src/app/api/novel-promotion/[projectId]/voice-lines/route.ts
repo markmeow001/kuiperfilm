@@ -86,20 +86,23 @@ export const GET = apiHandler(async (
   const speakersOnly = searchParams.get('speakersOnly')
 
   if (speakersOnly === '1') {
-    const novelProject = await prisma.novelPromotionProject.findUnique({
-      where: { projectId },
+    if (!episodeId) {
+      throw new ApiError('INVALID_PARAMS')
+    }
+
+    const episode = await prisma.novelPromotionEpisode.findFirst({
+      where: {
+        id: episodeId,
+        novelPromotionProject: { projectId }
+      },
       select: { id: true }
     })
-    if (!novelProject) {
+    if (!episode) {
       throw new ApiError('NOT_FOUND')
     }
 
     const speakerRows = await prisma.novelPromotionVoiceLine.findMany({
-      where: {
-        episode: {
-          novelPromotionProjectId: novelProject.id
-        }
-      },
+      where: { episodeId },
       select: { speaker: true },
       distinct: ['speaker'],
       orderBy: { speaker: 'asc' }
@@ -263,10 +266,28 @@ export const PATCH = apiHandler(async (
 
   // 单条更新
   if (lineId) {
+    const ownedLine = await prisma.novelPromotionVoiceLine.findFirst({
+      where: {
+        id: lineId,
+        episode: {
+          novelPromotionProject: { projectId }
+        }
+      },
+      select: { id: true, episodeId: true }
+    })
+    if (!ownedLine) {
+      throw new ApiError('NOT_FOUND')
+    }
+
     const updateData: Prisma.NovelPromotionVoiceLineUncheckedUpdateInput = {}
     if (voicePresetId !== undefined) updateData.voicePresetId = voicePresetId
     if (emotionPrompt !== undefined) updateData.emotionPrompt = emotionPrompt || null
-    if (emotionStrength !== undefined) updateData.emotionStrength = emotionStrength
+    if (emotionStrength !== undefined) {
+      if (typeof emotionStrength !== 'number' || !Number.isFinite(emotionStrength) || emotionStrength < 0.1 || emotionStrength > 1) {
+        throw new ApiError('INVALID_PARAMS')
+      }
+      updateData.emotionStrength = emotionStrength
+    }
     if (content !== undefined) {
       if (!content.trim()) {
         throw new ApiError('INVALID_PARAMS')
@@ -289,15 +310,7 @@ export const PATCH = apiHandler(async (
       updateData.audioMediaId = media?.id || null
     }
     if (matchedPanelId !== undefined) {
-      const currentLine = await prisma.novelPromotionVoiceLine.findUnique({
-        where: { id: lineId },
-        select: { episodeId: true }
-      })
-      if (!currentLine) {
-        throw new ApiError('NOT_FOUND')
-      }
-
-      const matchedPanelData = await resolveMatchedPanelData(matchedPanelId, currentLine.episodeId)
+      const matchedPanelData = await resolveMatchedPanelData(matchedPanelId, ownedLine.episodeId)
       if (matchedPanelData) {
         updateData.matchedPanelId = matchedPanelData.matchedPanelId
         updateData.matchedStoryboardId = matchedPanelData.matchedStoryboardId
@@ -306,7 +319,7 @@ export const PATCH = apiHandler(async (
     }
 
     const updated = await prisma.novelPromotionVoiceLine.update({
-      where: { id: lineId },
+      where: { id: ownedLine.id },
       data: updateData,
       include: {
         matchedPanel: {
@@ -326,6 +339,16 @@ export const PATCH = apiHandler(async (
 
   // 批量更新同一发言人（仅支持更新音色）
   if (speaker && episodeId) {
+    const ownedEpisode = await prisma.novelPromotionEpisode.findFirst({
+      where: {
+        id: episodeId,
+        novelPromotionProject: { projectId }
+      },
+      select: { id: true }
+    })
+    if (!ownedEpisode) {
+      throw new ApiError('NOT_FOUND')
+    }
     const result = await prisma.novelPromotionVoiceLine.updateMany({
       where: {
         episodeId,
@@ -365,9 +388,14 @@ export const DELETE = apiHandler(async (
     throw new ApiError('INVALID_PARAMS')
   }
 
-  // 获取要删除的台词
-  const lineToDelete = await prisma.novelPromotionVoiceLine.findUnique({
-    where: { id: lineId }
+  // 获取要删除的台词，并确认它属于当前项目
+  const lineToDelete = await prisma.novelPromotionVoiceLine.findFirst({
+    where: {
+      id: lineId,
+      episode: {
+        novelPromotionProject: { projectId }
+      }
+    }
   })
 
   if (!lineToDelete) {

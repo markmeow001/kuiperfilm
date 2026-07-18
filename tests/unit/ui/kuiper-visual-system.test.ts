@@ -106,9 +106,10 @@ describe('Kuiper visual system', () => {
     )
 
     expect(voice).toContain('kuiper-workspace-page')
-    expect(voice).toContain('xl:grid-cols-[260px_minmax(0,1fr)_300px]')
+    expect(voice).toContain('xl:grid-cols-[250px_minmax(0,1fr)_310px]')
     expect(voice).toContain('kuiper-surface-card')
-    expect(voice).toContain('voicesQuery.isError')
+    expect(voice).toContain('bindSelectedVoice')
+    expect(voice).toContain('generateAll')
     expect(finalDelivery).toContain('kuiper-workspace-page')
     expect(finalDelivery).toContain('xl:grid-cols-[minmax(0,1fr)_340px]')
     expect(finalDelivery).toContain('videoProgress')
@@ -123,6 +124,11 @@ describe('Kuiper visual system', () => {
       'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardGroupsView.tsx',
       'src/app/[locale]/v2/workspace/[projectId]/storyboard/V2StoryboardTimelineView.tsx',
       'src/app/[locale]/v2/workspace/[projectId]/voice/V2VoiceClient.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/voice/VoiceSpeakerRail.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/voice/VoiceLibrary.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/voice/VoiceInspector.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/voice/VoiceLinePanel.tsx',
+      'src/app/[locale]/v2/workspace/[projectId]/voice/VoiceLineCard.tsx',
       'src/app/[locale]/v2/workspace/[projectId]/final/V2FinalClient.tsx',
     ]
 
