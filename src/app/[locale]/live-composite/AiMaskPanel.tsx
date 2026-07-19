@@ -8,8 +8,6 @@ export interface AiMaskSettings {
   interval: number
   threshold: number
   edgeSoftness: number
-  /** 以骨架外接框裁掉遠處誤判；偵測不到骨架的影格維持不裁切。 */
-  poseRoiClip: boolean
 }
 
 interface AiMaskPanelProps {
@@ -32,9 +30,8 @@ export function AiMaskPanel({
   const [interval, setIntervalValue] = useState(1)
   const [threshold, setThreshold] = useState(0.5)
   const [edgeSoftness, setEdgeSoftness] = useState(0.12)
-  const [poseRoiClip, setPoseRoiClip] = useState(true)
   const busy = progress.status === 'loading-model' || progress.status === 'analyzing'
-  const settings = { interval, threshold, edgeSoftness, poseRoiClip }
+  const settings = { interval, threshold, edgeSoftness }
   const percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
 
   return (
@@ -89,21 +86,6 @@ export function AiMaskPanel({
             onChange={(event) => setEdgeSoftness(Number(event.target.value))}
             className="mt-2 w-full accent-violet-400"
           />
-        </label>
-
-        <label className="flex items-start gap-2 text-xs text-stone-500">
-          <input
-            aria-label="骨架範圍裁切"
-            type="checkbox"
-            checked={poseRoiClip}
-            disabled={busy}
-            onChange={(event) => setPoseRoiClip(event.target.checked)}
-            className="mt-0.5 accent-violet-400"
-          />
-          <span>
-            骨架範圍裁切
-            <span className="mt-1 block text-[11px] leading-4 text-stone-600">以人物骨架外接框排除遠處誤判（教堂/建築）；偵測不到骨架時不裁切</span>
-          </span>
         </label>
       </div>
 

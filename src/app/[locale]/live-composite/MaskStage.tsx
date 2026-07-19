@@ -11,8 +11,7 @@ import { segmentPersonFrame } from './lib/person-segmenter'
 import { shouldRenderPreview } from './lib/render-ownership'
 import { useVirtualCharacterMedia } from './useVirtualCharacterMedia'
 import { sampleVideoAppearance } from './lib/character-appearance'
-import { detectMultiPoseLandmarks, detectPoseAt } from './lib/pose-landmarker'
-import { computePoseUnionRoi } from './lib/person-roi'
+import { detectPoseAt } from './lib/pose-landmarker'
 import { detectFaceAt, type FaceFrameAnalysis } from './lib/face-landmarker'
 import {
   releaseCompositeRecordingAudio,
@@ -21,7 +20,7 @@ import {
   type CompositeRecordingResult,
   type CompositeRecordingSession,
 } from './lib/composite-video-recorder'
-import type { CompositeView, MaskEditTarget, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, NormalizedPoint, PersonMaskAnalysisFrame, VideoMetadata, VirtualCharacterAppearance, VirtualCharacterLayer, VirtualCharacterMotionKeyframe } from './live-composite-types'
+import type { CompositeView, MaskEditTarget, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterAppearance, VirtualCharacterLayer, VirtualCharacterMotionKeyframe } from './live-composite-types'
 
 export interface MaskStageHandle {
   exportMask: () => Promise<Blob>
@@ -32,7 +31,7 @@ export interface MaskStageHandle {
   }) => Promise<CompositeRecordingResult>
   cancelCompositeVideo: () => void
   seekTo: (time: number) => void
-  analyzePersonAt: (time: number, threshold: number, edgeSoftness: number, poseRoiClip: boolean) => Promise<PersonMaskAnalysisFrame>
+  analyzePersonAt: (time: number, threshold: number, edgeSoftness: number) => Promise<MaskRaster>
   analyzeOccluderAt: (time: number, point: NormalizedPoint) => Promise<MaskRaster>
   matchCharacterAppearance: () => Partial<VirtualCharacterAppearance>
   analyzePoseAt: (time: number) => Promise<VirtualCharacterMotionKeyframe>
@@ -355,17 +354,13 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       setCurrentTime(time)
       onTimeChange(time)
     },
-    analyzePersonAt: async (time: number, threshold: number, edgeSoftness: number, poseRoiClip: boolean) => {
+    analyzePersonAt: async (time: number, threshold: number, edgeSoftness: number) => {
       const video = videoRef.current
       if (!video || !metadata) throw new Error('請先載入可分析的影片')
       analysisAbortRef.current ??= new AbortController()
       video.pause()
       await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
-      // roi === null with clipping enabled means no skeleton on this frame; the
-      // mask stays unclipped and poseRoiApplied=false reports that to the UI.
-      const poseRoi = poseRoiClip ? computePoseUnionRoi(await detectMultiPoseLandmarks(video)) : null
-      const mask = await segmentPersonFrame(video, threshold, edgeSoftness, poseRoi)
-      return { mask, poseRoiApplied: poseRoi !== null }
+      return segmentPersonFrame(video, threshold, edgeSoftness)
     },
     analyzeOccluderAt: async (time: number, point: NormalizedPoint) => {
       const video = videoRef.current

@@ -29,12 +29,6 @@ export interface MaskKeyframe {
   baseMask?: MaskRaster
 }
 
-export interface PersonMaskAnalysisFrame {
-  mask: MaskRaster
-  /** false = 骨架範圍裁切關閉，或這一影格偵測不到骨架（未裁切，結果需回報 UI）。 */
-  poseRoiApplied: boolean
-}
-
 export type MaskAnalysisStatus = 'idle' | 'loading-model' | 'analyzing' | 'completed' | 'failed'
 
 export interface MaskAnalysisProgress {
