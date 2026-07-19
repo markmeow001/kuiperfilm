@@ -176,6 +176,7 @@ describe('Kuiper visual system', () => {
   it('requires explicit generation controls and prompt review for live-action reconstruction', () => {
     const studio = readFileSync('src/app/[locale]/playground/ReconstructionStudio.tsx', 'utf8')
     const controls = readFileSync('src/app/[locale]/playground/ReconstructionGenerationControls.tsx', 'utf8')
+    const resultStage = readFileSync('src/app/[locale]/playground/ReconstructionResultStage.tsx', 'utf8')
     const brief = readFileSync('src/app/[locale]/playground/ReconstructionBriefForm.tsx', 'utf8')
     const controller = readFileSync('src/app/[locale]/playground/usePlaygroundController.ts', 'utf8')
 
@@ -199,5 +200,11 @@ describe('Kuiper visual system', () => {
     expect(brief).toContain('例如：1930 年代民國')
     expect(controls).toContain('生成前檢查 Prompt')
     expect(controls).toContain('確認 Prompt 並生成影片')
+    expect(studio).toContain('URL.createObjectURL(file)')
+    expect(studio).toContain('previewUrl ?? characterReference?.signedUrl')
+    expect(controls).toContain('props.asset.previewUrl || props.asset.signedUrl')
+    expect(controls).toContain('預覽失敗')
+    expect(resultStage).toContain('參考圖片已就緒')
+    expect(resultStage).toContain('characterReferenceUrl')
   })
 })

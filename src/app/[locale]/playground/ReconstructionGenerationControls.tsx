@@ -1,6 +1,6 @@
 'use client'
 
-import type { ChangeEvent } from 'react'
+import { useEffect, useState, type ChangeEvent } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { PlaygroundController } from './usePlaygroundController'
 
@@ -9,6 +9,7 @@ type ReconstructionModel = PlaygroundController['videoModels'][number]
 export interface ReconstructionReferenceAsset {
   key: string
   signedUrl: string
+  previewUrl?: string
 }
 
 interface ReconstructionGenerationControlsProps {
@@ -163,8 +164,7 @@ function ReferenceUploadCard(props: {
 }) {
   return props.asset ? (
     <div className="flex items-center gap-3 rounded-xl border border-white/[0.09] bg-black/20 p-2">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={props.asset.signedUrl} alt={props.label} className="h-16 w-16 rounded-lg object-cover" />
+      <ReferenceImage asset={props.asset} label={props.label} />
       <span className="min-w-0 flex-1 text-xs text-white">{props.label}<span className="mt-1 block text-[10px] text-emerald-300">已上傳</span></span>
       <button type="button" onClick={props.onRemove} disabled={props.disabled} className="px-2 text-xs text-text-tertiary hover:text-red-300 disabled:opacity-40">移除</button>
     </div>
@@ -174,6 +174,34 @@ function ReferenceUploadCard(props: {
       上傳{props.label}{props.required ? '（必填）' : ''}
       <input type="file" accept="image/jpeg,image/png,image/webp" disabled={props.disabled} onChange={props.onPick} className="sr-only" />
     </label>
+  )
+}
+
+function ReferenceImage(props: { asset: ReconstructionReferenceAsset; label: string }) {
+  const preferredUrl = props.asset.previewUrl || props.asset.signedUrl
+  const [src, setSrc] = useState(preferredUrl)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setSrc(preferredUrl)
+    setFailed(false)
+  }, [preferredUrl])
+
+  if (failed) {
+    return <div role="img" aria-label={`${props.label}預覽失敗`} className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] px-2 text-center text-[10px] leading-4 text-red-200">預覽失敗<br />請重傳</div>
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={props.label}
+      className="h-16 w-16 shrink-0 rounded-lg object-cover"
+      onError={() => {
+        if (src !== props.asset.signedUrl) setSrc(props.asset.signedUrl)
+        else setFailed(true)
+      }}
+    />
   )
 }
 

@@ -81,6 +81,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     setVideoRefMode: setControllerVideoRefMode,
   } = ctrl
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const referencePreviewUrlsRef = useRef(new Set<string>())
   const analyze = useAnalyzePlaygroundVideo()
   const keyframeSubmit = useSubmitPlaygroundRun()
   const [sourceName, setSourceName] = useState<string | null>(null)
@@ -164,6 +165,11 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       setControllerModelKey(effectiveModelKey)
     }
   }, [effectiveModelKey, controllerModelKey, setControllerModelKey, setControllerOutputType, setControllerVideoRefMode])
+
+  useEffect(() => () => {
+    referencePreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    referencePreviewUrlsRef.current.clear()
+  }, [])
   const generatedRun = ctrl.latestRun?.outputType === 'video' && ctrl.latestRun.id === reconstructionRunId
     ? ctrl.latestRun
     : null
@@ -249,14 +255,33 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
 
   async function uploadReference(role: 'character' | 'environment', file: File) {
     setError(null)
+    const previewUrl = URL.createObjectURL(file)
+    referencePreviewUrlsRef.current.add(previewUrl)
     try {
       const uploaded = await ctrl.upload.mutateAsync({ file, type: 'image' })
-      const asset = { key: uploaded.key, signedUrl: uploaded.signedUrl }
+      const asset = { key: uploaded.key, signedUrl: uploaded.signedUrl, previewUrl }
+      const previousAsset = role === 'character' ? characterReference : sceneReference
+      if (previousAsset?.previewUrl) {
+        URL.revokeObjectURL(previousAsset.previewUrl)
+        referencePreviewUrlsRef.current.delete(previousAsset.previewUrl)
+      }
       if (role === 'character') setCharacterReference(asset)
       else setSceneReference(asset)
     } catch (caught) {
+      URL.revokeObjectURL(previewUrl)
+      referencePreviewUrlsRef.current.delete(previewUrl)
       setError(caught instanceof Error ? caught.message : '參考圖片上傳失敗')
     }
+  }
+
+  function removeReference(role: 'character' | 'environment') {
+    const currentAsset = role === 'character' ? characterReference : sceneReference
+    if (currentAsset?.previewUrl) {
+      URL.revokeObjectURL(currentAsset.previewUrl)
+      referencePreviewUrlsRef.current.delete(currentAsset.previewUrl)
+    }
+    if (role === 'character') setCharacterReference(null)
+    else setSceneReference(null)
   }
 
   async function generateTargetKeyframe() {
@@ -475,10 +500,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
               characterReference={characterReference}
               sceneReference={sceneReference}
               onReferencePick={uploadReference}
-              onRemoveReference={(role) => {
-                if (role === 'character') setCharacterReference(null)
-                else setSceneReference(null)
-              }}
+              onRemoveReference={removeReference}
               targetKeyframe={targetKeyframe}
               keyframeIsStale={keyframeIsStale}
               keyframeModelLabel={keyframeModel?.label ?? null}
@@ -517,6 +539,8 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
         sourceHeight={metadata?.height ?? null}
         generatedRun={generatedRun}
         generatedUrl={generatedUrl ?? null}
+        characterReferenceUrl={characterReference?.previewUrl ?? characterReference?.signedUrl ?? null}
+        sceneReferenceUrl={sceneReference?.previewUrl ?? sceneReference?.signedUrl ?? null}
       />
     </main>
   )
