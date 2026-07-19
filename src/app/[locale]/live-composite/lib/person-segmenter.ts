@@ -1,5 +1,6 @@
 import type { ImageSegmenter, MPMask } from '@mediapipe/tasks-vision'
 import { confidenceToMaskRaster, selectPersonSegmenterVariant, type PersonSegmenterVariant } from './mask-analysis'
+import { clipMaskToRoi, type PoseRoi } from './person-roi'
 import type { MaskRaster } from '../live-composite-types'
 
 const WASM_PATH = '/mediapipe/vision'
@@ -61,10 +62,17 @@ export async function releasePersonSegmenters(): Promise<void> {
   }))
 }
 
+/**
+ * `poseRoi` (normalized, from computePoseUnionRoi) zeroes segmenter confidence
+ * OUTSIDE the pose union box before threshold/softness post-processing, killing
+ * far-away false positives (buildings the model mistakes for people). null =
+ * no clipping (setting off or no pose detected; callers surface that to the UI).
+ */
 export async function segmentPersonFrame(
   source: HTMLCanvasElement | HTMLVideoElement,
   threshold: number,
   edgeSoftness: number,
+  poseRoi: PoseRoi | null = null,
 ): Promise<MaskRaster> {
   const width = source instanceof HTMLVideoElement ? source.videoWidth : source.width
   const height = source instanceof HTMLVideoElement ? source.videoHeight : source.height
@@ -75,7 +83,7 @@ export async function segmentPersonFrame(
   try {
     const personMask = selectPersonConfidenceMask(confidenceMasks)
     return confidenceToMaskRaster(
-      personMask.getAsFloat32Array(),
+      clipMaskToRoi(personMask.getAsFloat32Array(), personMask.width, personMask.height, poseRoi),
       personMask.width,
       personMask.height,
       threshold,

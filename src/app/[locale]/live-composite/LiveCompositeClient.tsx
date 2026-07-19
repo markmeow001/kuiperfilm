@@ -9,6 +9,7 @@ import { CompositeToolbar } from './CompositeToolbar'
 import { MaskKeyframeRail } from './MaskKeyframeRail'
 import { MaskStage, type MaskStageHandle } from './MaskStage'
 import { buildMaskAnalysisTimes } from './lib/mask-analysis'
+import { describePoseRoiOutcome } from './lib/person-roi'
 import { CompositeRecordingCancelledError } from './lib/composite-video-recorder'
 import { releasePersonSegmenters } from './lib/person-segmenter'
 import { releaseInteractiveSegmenter } from './lib/interactive-segmenter'
@@ -497,6 +498,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
 
     try {
       const frames = []
+      const poseRoiFlags: boolean[] = []
       for (let index = 0; index < times.length; index += 1) {
         if (analysisRunRef.current !== runId) return
         const time = times[index]
@@ -506,9 +508,10 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           total: times.length,
           message: `分析 ${time.toFixed(2)} 秒的人物輪廓…`,
         })
-        const mask = await stage.analyzePersonAt(time, settings.threshold, settings.edgeSoftness)
+        const { mask, poseRoiApplied } = await stage.analyzePersonAt(time, settings.threshold, settings.edgeSoftness, settings.poseRoiClip)
         if (analysisRunRef.current !== runId) return
         frames.push({ time, mask })
+        poseRoiFlags.push(poseRoiApplied)
         setAnalysisProgress({
           status: 'analyzing',
           completed: index + 1,
@@ -521,11 +524,12 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       maskTimeline.applyAiMasks(frames)
       setView('mask')
       setOverlayVisible(true)
+      const poseRoiNote = describePoseRoiOutcome(settings.poseRoiClip, poseRoiFlags)
       setAnalysisProgress({
         status: 'completed',
         completed: times.length,
         total: times.length,
-        message: `AI 人物遮罩完成：已建立 ${times.length} 個可手動修正的關鍵影格。`,
+        message: `AI 人物遮罩完成：已建立 ${times.length} 個可手動修正的關鍵影格。${poseRoiNote}`,
       })
       setWorkflowStep(3)
     } catch (error) {

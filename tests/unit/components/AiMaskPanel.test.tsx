@@ -21,7 +21,62 @@ describe('AiMaskPanel', () => {
     fireEvent.change(screen.getByLabelText('AI 遮罩邊緣柔化'), { target: { value: '0.08' } })
     fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
 
-    expect(onAnalyzeClip).toHaveBeenCalledWith({ interval: 2, threshold: 0.6, edgeSoftness: 0.08 })
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ interval: 2, threshold: 0.6, edgeSoftness: 0.08, poseRoiClip: true })
+  })
+
+  it('骨架範圍裁切預設開啟 -> 分析目前影格帶出 poseRoiClip: true', () => {
+    const onAnalyzeCurrent = vi.fn()
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={1.25}
+        progress={{ status: 'idle', completed: 0, total: 0, message: '' }}
+        onAnalyzeCurrent={onAnalyzeCurrent}
+        onAnalyzeClip={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    const checkbox = screen.getByLabelText('骨架範圍裁切')
+    expect(checkbox).toBeChecked()
+    expect(screen.getByText('以人物骨架外接框排除遠處誤判（教堂/建築）；偵測不到骨架時不裁切')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '目前影格 1.3s' }))
+    expect(onAnalyzeCurrent).toHaveBeenCalledWith({ interval: 1, threshold: 0.5, edgeSoftness: 0.12, poseRoiClip: true })
+  })
+
+  it('取消勾選骨架範圍裁切 -> 設定帶出 poseRoiClip: false', () => {
+    const onAnalyzeClip = vi.fn()
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={0}
+        progress={{ status: 'idle', completed: 0, total: 0, message: '' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={onAnalyzeClip}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByLabelText('骨架範圍裁切'))
+    fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
+
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ interval: 1, threshold: 0.5, edgeSoftness: 0.12, poseRoiClip: false })
+  })
+
+  it('分析進行中 -> 骨架範圍裁切勾選框鎖定', () => {
+    render(
+      <AiMaskPanel
+        canAnalyze={false}
+        currentTime={0}
+        progress={{ status: 'analyzing', completed: 1, total: 4, message: '分析中' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('骨架範圍裁切')).toBeDisabled()
   })
 
   it('選擇精細追蹤 -> 以 0.25 秒間隔掃描', () => {
@@ -40,7 +95,7 @@ describe('AiMaskPanel', () => {
     fireEvent.change(screen.getByLabelText('AI 遮罩取樣間隔'), { target: { value: '0.25' } })
     fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
 
-    expect(onAnalyzeClip).toHaveBeenCalledWith({ interval: 0.25, threshold: 0.5, edgeSoftness: 0.12 })
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ interval: 0.25, threshold: 0.5, edgeSoftness: 0.12, poseRoiClip: true })
   })
 
   it('分析進行中 -> 顯示具體進度並允許取消', () => {
