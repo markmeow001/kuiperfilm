@@ -87,6 +87,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceText,
     lastFrameUrl: rawLastFrame,
     outputType,
+    preserveSourceAudio,
     modelKey,
     resolution,
     aspectRatio,
@@ -104,6 +105,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceText?: unknown
     lastFrameUrl?: unknown
     outputType?: unknown
+    preserveSourceAudio?: unknown
     modelKey?: unknown
     resolution?: unknown
     aspectRatio?: unknown
@@ -124,6 +126,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
   }
   if (outputType !== 'image' && outputType !== 'video') {
     throw new ApiError('INVALID_PARAMS', { code: 'OUTPUT_TYPE_INVALID', message: '输出类型无效（image/video）' })
+  }
+  if (preserveSourceAudio !== undefined && typeof preserveSourceAudio !== 'boolean') {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PRESERVE_SOURCE_AUDIO_INVALID',
+      message: '保留原始音軌設定無效',
+    })
   }
   const promptHardLimit = outputType === 'video' ? VIDEO_PROMPT_HARD_LIMIT : 4000
   if (prompt.length > promptHardLimit) {
@@ -183,6 +191,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const referenceImages = imgGuard.safe
   const lastFrameSafe = lastFrameGuard.safe[0] ?? null
   const referenceVideos = vidGuard.safe
+  if (preserveSourceAudio === true && (outputType !== 'video' || referenceVideos.length !== 1)) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PRESERVE_SOURCE_AUDIO_REQUIRES_VIDEO',
+      message: '保留原始對白需要且只能綁定一支參考影片',
+    })
+  }
 
   // 局部重绘 (inpainting, 2026-07-17): maskImage = 客户端栅格化的遮罩 PNG
   // （透明区=重绘区）。只对 image 输出有意义；底图 = referenceImages[0]。
@@ -379,6 +393,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     outputType,
     referenceImages,
     referenceVideos,
+    ...(preserveSourceAudio === true ? { preserveSourceAudio: true } : {}),
     ...(refText ? { referenceText: refText } : {}),
     ...(lastFrameSafe ? { lastFrameUrl: lastFrameSafe } : {}),
     ...(maskImageSafe ? { maskImage: maskImageSafe } : {}),

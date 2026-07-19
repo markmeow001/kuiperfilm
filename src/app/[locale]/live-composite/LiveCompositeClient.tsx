@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { AppIcon } from '@/components/ui/icons'
 import type { AiMaskSettings } from './AiMaskPanel'
 import { CompositeAssetPanel } from './CompositeAssetPanel'
@@ -67,6 +68,8 @@ function downloadBlob(blob: Blob, filename: string): void {
 }
 
 export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
+  const searchParams = useSearchParams()
+  const sourceRunId = searchParams?.get('sourceRunId')?.trim() || null
   const stageRef = useRef<MaskStageHandle>(null)
   const analysisRunRef = useRef(0)
   const analysisRestoreTimeRef = useRef<number | null>(null)
@@ -113,6 +116,31 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   // Every existing "analysis running" gate also locks during face analysis.
   const isAnalyzing = isMaskAnalyzing || isFaceAnalyzing
   const canAnalyzeFace = Boolean(metadata) && !isVideoExporting && !isMaskAnalyzing && !occlusionBusy && !motionBusy
+
+  useEffect(() => {
+    if (!sourceRunId || videoUrl) return
+    let cancelled = false
+    void fetch(`/api/playground/runs/${encodeURIComponent(sourceRunId)}`, { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as {
+          run?: { resultUrls?: string[] | null }
+          error?: { message?: string }
+        } | null
+        if (!response.ok) throw new Error(payload?.error?.message ?? '無法載入 Playground 影片')
+        const sourceUrl = payload?.run?.resultUrls?.[0]
+        if (!sourceUrl) throw new Error('Playground 影片沒有可用結果')
+        if (cancelled) return
+        setVideoUrl(sourceUrl)
+        setVideoName('Playground 實拍重建結果.mp4')
+        setVideoFile(null)
+        setVideoKey(sourceUrl)
+        setWorkflowStep(2)
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) setExportError(caught instanceof Error ? caught.message : '無法載入 Playground 影片')
+      })
+    return () => { cancelled = true }
+  }, [sourceRunId, videoUrl])
 
   useEffect(
     () => () => {

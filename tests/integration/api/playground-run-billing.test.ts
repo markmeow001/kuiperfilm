@@ -131,4 +131,24 @@ describe('POST /api/playground/run — billing passthrough (Phase 9.1 spine)', (
     expect(payload.resolution).toBe('1080p')
     expect(payload.modelId).toBe('seedance-2.0')
   })
+
+  it('preserveSourceAudio requires exactly one reference video', async () => {
+    const { POST } = await loadRoute()
+    const req = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: postBody({
+        outputType: 'video',
+        modelKey: 'atlascloud::seedance-2.0-r2v',
+        preserveSourceAudio: true,
+      }),
+    })
+
+    const res = await POST(req, { params: Promise.resolve({}) })
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error.code).toBe('INVALID_PARAMS')
+    expect(json.error.details.code).toBe('PRESERVE_SOURCE_AUDIO_REQUIRES_VIDEO')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
 })

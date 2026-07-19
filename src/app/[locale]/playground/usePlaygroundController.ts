@@ -283,6 +283,14 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     setRefVideo(null)
   }
 
+  /** Apply an already-uploaded video from a specialised Playground workflow. */
+  function applyUploadedVideoReference(reference: { key: string; signedUrl: string }) {
+    setRefVideo(reference)
+    setRefImages([])
+    setOutputType('video')
+    setVideoRefMode('omni')
+  }
+
   // 尾幀 (frames-family) — reuses the image upload path.
   async function handleEndFramePick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -300,7 +308,11 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     setEndFrame(null)
   }
 
-  async function handleRun(overrideModelKey?: string, promptOverride?: string) {
+  async function handleRun(
+    overrideModelKey?: string,
+    promptOverride?: string,
+    runOverrides?: { preserveSourceAudio?: boolean; preservePromptVerbatim?: boolean },
+  ) {
     // promptOverride lets the lightbox re-run a finished run's OWN prompt
     // without waiting for a setPrompt() state commit (the stale-closure bug).
     const basePrompt = (promptOverride ?? prompt).trim()
@@ -322,7 +334,11 @@ export function usePlaygroundController(workspaceId: string | null = null) {
       return
     }
     let effectivePrompt = basePrompt
-    if (outputType === 'video' && effectivePrompt.length > VIDEO_PROMPT_SOFT_LIMIT) {
+    if (
+      outputType === 'video' &&
+      effectivePrompt.length > VIDEO_PROMPT_SOFT_LIMIT &&
+      !runOverrides?.preservePromptVerbatim
+    ) {
       setCompressing(true)
       try {
         effectivePrompt = await compressVideoPrompt(effectivePrompt)
@@ -419,6 +435,9 @@ export function usePlaygroundController(workspaceId: string | null = null) {
         workspaceId,
         aspectRatio,
         ...(outputType === 'video' ? { durationSec, generateAudio: soundOn } : {}),
+        ...(outputType === 'video' && runOverrides?.preserveSourceAudio
+          ? { preserveSourceAudio: true }
+          : {}),
         ...(showResolutionPicker ? { resolution } : {}),
         ...(outputType === 'video' && modelFamily === 'frames' && endFrame
           ? { lastFrameUrl: endFrame.key }
@@ -445,6 +464,7 @@ export function usePlaygroundController(workspaceId: string | null = null) {
       // appears in the gallery.
       if (row.outputType === 'video') setStageRun(row)
       else setLightboxRun(null)
+      return row
     } catch (err) {
       alert(`生成失敗:${(err as Error)?.message ?? '未知錯誤'}`)
     }
@@ -549,6 +569,7 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     // handlers
     insertReferenceToken,
     handleImagePick, handleVideoPick, removeRefImage, removeRefVideo, setRefImageName,
+    applyUploadedVideoReference,
     handleEndFramePick, removeEndFrame,
     addElement: kling.addElement,
     removeElement: kling.removeElement,

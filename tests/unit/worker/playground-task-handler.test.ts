@@ -14,8 +14,15 @@ const utilsMock = vi.hoisted(() => ({
   toSignedUrlIfCos: vi.fn((key: string) => `signed:${key}`),
 }))
 
+const sourceAudioMock = vi.hoisted(() => ({
+  extractReferenceAudioToCos: vi.fn(async () => 'cos/source-audio.m4a'),
+  muxGeneratedVideoWithSourceAudio: vi.fn(async () => Buffer.from('muxed-video')),
+}))
+
 vi.mock('@/lib/generator-api', () => generatorMock)
 vi.mock('@/lib/workers/utils', () => utilsMock)
+vi.mock('@/lib/workers/shared', () => ({ reportTaskProgress: vi.fn() }))
+vi.mock('@/lib/playground/source-audio', () => sourceAudioMock)
 vi.mock('@/lib/logging/core', () => ({
   logInfo: vi.fn(),
   logError: vi.fn(),
@@ -176,5 +183,29 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
     await expect(
       handlePlaygroundVideoTask(makeJob({ prompt: 'x', modelKey: 'fal::seedance' })),
     ).rejects.toThrow(/PLAYGROUND_VIDEO_SUBMIT_FAILED/)
+  })
+
+  it('preserves source dialogue audio and uploads the muxed result without falling back', async () => {
+    generatorMock.generateVideo.mockResolvedValue({ success: true, externalId: 'vid-audio' })
+    utilsMock.waitExternalResult.mockResolvedValue({ url: 'https://prov/generated.mp4' })
+
+    await handlePlaygroundVideoTask(makeJob({
+      prompt: 'reconstruct the shot',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source.mp4'],
+      preserveSourceAudio: true,
+    }))
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).toHaveBeenCalledWith('signed:cos/source.mp4', 'task-1')
+    expect(sourceAudioMock.muxGeneratedVideoWithSourceAudio).toHaveBeenCalledWith(expect.objectContaining({
+      generatedVideoUrl: 'https://prov/generated.mp4',
+      sourceVideoUrl: 'signed:cos/source.mp4',
+    }))
+    expect(utilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'playground-runs/task-1',
+      'task-1',
+      undefined,
+    )
   })
 })

@@ -79,7 +79,8 @@
     "assetHubAiDesignLocation": "Asset hub location design",
     "assetHubAiModifyCharacter": "Asset hub character modify",
     "assetHubAiModifyLocation": "Asset hub location modify",
-    "assetHubReferenceToCharacter": "Asset hub reference to character"
+    "assetHubReferenceToCharacter": "Asset hub reference to character",
+    "playgroundVideoAnalyze": "Live-action shot analysis"
   },
   "stage": {
     "received": "Task received",

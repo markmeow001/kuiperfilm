@@ -11,12 +11,13 @@ import { VideoStudio } from './VideoStudio'
 import { ResultLightbox } from './ResultLightbox'
 import { DiscussionStudio } from './DiscussionStudio'
 import { PlaygroundWorkspacePicker } from './PlaygroundWorkspacePicker'
+import { ReconstructionStudio } from './ReconstructionStudio'
 
 interface V2PlaygroundClientProps {
   locale: string
 }
 
-type PlaygroundMode = 'image' | 'video' | 'discussion'
+type PlaygroundMode = 'image' | 'video' | 'reconstruction' | 'discussion'
 
 export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
   const searchParams = useSearchParams()
@@ -27,14 +28,15 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
 
   function selectMode(nextMode: PlaygroundMode) {
     if (nextMode !== 'discussion') {
-      ctrl.setOutputType(nextMode)
+      ctrl.setOutputType(nextMode === 'image' ? 'image' : 'video')
     }
     setMode(nextMode)
   }
 
-  const modes: Array<{ id: PlaygroundMode; icon: 'image' | 'video' | 'fileText'; label: string; hint: string }> = [
+  const modes: Array<{ id: PlaygroundMode; icon: 'image' | 'video' | 'sparklesAlt' | 'fileText'; label: string; hint: string }> = [
     { id: 'image', icon: 'image', label: t('image'), hint: t('imageHint') },
     { id: 'video', icon: 'video', label: t('video'), hint: t('videoHint') },
+    { id: 'reconstruction', icon: 'sparklesAlt', label: '實拍重建', hint: '保留表演、運鏡與對白，重建人物和環境' },
     { id: 'discussion', icon: 'fileText', label: t('discussion'), hint: t('discussionHint') },
   ]
 
@@ -98,11 +100,13 @@ export function V2PlaygroundClient({ locale }: V2PlaygroundClientProps) {
 
       {mode === 'discussion'
         ? <DiscussionStudio />
+        : mode === 'reconstruction'
+          ? <ReconstructionStudio ctrl={ctrl} locale={locale} />
         : mode === 'video'
           ? <VideoStudio ctrl={ctrl} />
           : <ImageStudio ctrl={ctrl} />}
 
-      {mode !== 'discussion' ? <ResultLightbox ctrl={ctrl} /> : null}
+      {mode !== 'discussion' && mode !== 'reconstruction' ? <ResultLightbox ctrl={ctrl} /> : null}
     </div>
   )
 }

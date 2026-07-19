@@ -13,6 +13,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJsonWithError } from './mutation-shared'
+import { waitForTaskResult } from '@/lib/task/client'
+import type { ReconstructionAnalysisResult } from '@/lib/playground/reconstruction-contract'
 
 interface UploadResult {
   success: boolean
@@ -41,6 +43,33 @@ export function useUploadPlaygroundReference() {
   })
 }
 
+export function useAnalyzePlaygroundVideo() {
+  return useMutation({
+    mutationFn: async ({
+      videoKey,
+      locale,
+    }: {
+      videoKey: string
+      locale: string
+    }): Promise<ReconstructionAnalysisResult> => {
+      const submitted = await requestJsonWithError(
+        '/api/playground/analyze-video',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoKey, locale }),
+        },
+        '實拍鏡頭分析失敗',
+      ) as { taskId?: string }
+      if (!submitted.taskId) throw new Error('分析任務沒有回傳 taskId')
+      return await waitForTaskResult(submitted.taskId, {
+        intervalMs: 1500,
+        timeoutMs: 5 * 60 * 1000,
+      }) as unknown as ReconstructionAnalysisResult
+    },
+  })
+}
+
 export interface PlaygroundRunSubmission {
   prompt: string
   referenceImages?: string[]
@@ -54,6 +83,8 @@ export interface PlaygroundRunSubmission {
   referenceImageNames?: Array<string | null>
   /** video 音效開關（🔊 chip，2026-07-12）。缺省 = 各 generator 預設（開）。 */
   generateAudio?: boolean
+  /** 實拍重建：抽出參考影片音軌供模型遵循，並在結果上重新封裝原始對白音軌。 */
+  preserveSourceAudio?: boolean
   /** 局部重绘遮罩（own COS key；透明区=重绘区）。需搭配 referenceImages[0] 底图。 */
   maskImage?: string
   outputType: 'image' | 'video'

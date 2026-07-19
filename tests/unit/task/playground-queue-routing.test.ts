@@ -27,6 +27,10 @@ describe('Phase 9.1 — playground task queue routing', () => {
     expect(getQueueTypeByTaskType(TASK_TYPE.PLAYGROUND_VIDEO)).toBe('video')
   })
 
+  it('routes PLAYGROUND_VIDEO_ANALYZE to the text queue', () => {
+    expect(getQueueTypeByTaskType(TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE)).toBe('text')
+  })
+
   // Same invariant for the canvas task types — CANVAS_STORYBOARD is an LLM
   // text task (default → text), CANVAS_TTS must land on the VOICE queue.
   it('routes CANVAS_STORYBOARD to the text queue', () => {

@@ -53,6 +53,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.REGISTER_ARK_ASSET]: 'tests/unit/worker/register-ark-asset.test.ts',
   [TASK_TYPE.PLAYGROUND_IMAGE]: 'tests/unit/worker/playground-task-handler.test.ts',
   [TASK_TYPE.PLAYGROUND_VIDEO]: 'tests/unit/worker/playground-task-handler.test.ts',
+  [TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE]: 'tests/unit/worker/playground-video-analyze.test.ts',
   [TASK_TYPE.CANVAS_STORYBOARD]: 'tests/unit/worker/canvas-storyboard-handler.test.ts',
   [TASK_TYPE.CANVAS_DIRECTOR_ROUTES]: 'tests/unit/worker/canvas-director-routes-handler.test.ts',
   [TASK_TYPE.CANVAS_DIRECTOR_BLOCKING]: 'tests/unit/worker/canvas-director-blocking-handler.test.ts',

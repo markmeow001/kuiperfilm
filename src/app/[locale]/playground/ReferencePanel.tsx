@@ -210,7 +210,7 @@ export function ReferencePanel({ ctrl }: ReferencePanelProps) {
           >
             <AppIcon name="upload" className="h-6 w-6" />
             <div className="text-[12px]">可拖曳檔案至此，或點擊上傳</div>
-            <div className="font-mono text-[10px] text-stone-600">mp4/mov/webm · ≤50MB · 建議 ≤15s</div>
+            <div className="font-mono text-[10px] text-stone-600">mp4/mov/webm · ≤150MB · 建議 ≤15s</div>
           </button>
         )}
         <input

@@ -189,6 +189,7 @@ const ROUTE_FILES = [
   'src/app/api/organizations/[organizationId]/route.ts',
   'src/app/api/organizations/route.ts',
   'src/app/api/playground/discussion/route.ts',
+  'src/app/api/playground/analyze-video/route.ts',
   'src/app/api/playground/download/route.ts',
   'src/app/api/playground/estimate-cost/route.ts',
   'src/app/api/playground/run/route.ts',

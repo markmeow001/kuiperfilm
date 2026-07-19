@@ -89,6 +89,7 @@ export const TASK_TYPE = {
   // sentinel (no FK on Task.projectId; already in billing VIRTUAL_PROJECT_IDS).
   PLAYGROUND_IMAGE: 'playground_image',
   PLAYGROUND_VIDEO: 'playground_video',
+  PLAYGROUND_VIDEO_ANALYZE: 'playground_video_analyze',
   // Canvas 无限画布 script node — pasted/wired script → LLM → array of
   // storyboard shots (text-only). Rides the text worker; result JSON is read
   // back via /api/tasks/[taskId]. Uses the 'playground' virtual project id.

@@ -19,6 +19,8 @@ import { uploadVideoSourceToCos, waitExternalResult, toSignedUrlIfCos } from '..
 import { extractVideoTailFrameToCos } from '@/lib/video-tail-frame'
 import { buildRefImageMapSection, replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
+import { extractReferenceAudioToCos, muxGeneratedVideoWithSourceAudio } from '@/lib/playground/source-audio'
+import { reportTaskProgress } from '@/lib/workers/shared'
 
 function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -61,6 +63,17 @@ export async function handlePlaygroundVideoTask(
   const signedVideoUrls = refVideoKeys
     .map((k) => toSignedUrlIfCos(k, 7200))
     .filter((u): u is string => Boolean(u))
+  const preserveSourceAudio = payload.preserveSourceAudio === true
+  if (preserveSourceAudio && signedVideoUrls.length !== 1) {
+    throw new Error('PLAYGROUND_SOURCE_AUDIO_REQUIRES_ONE_REFERENCE_VIDEO')
+  }
+  let signedReferenceAudioUrl: string | null = null
+  if (preserveSourceAudio) {
+    await reportTaskProgress(job, 12, { stage: 'extract_source_audio', message: '正在保留原始對白音軌' })
+    const audioKey = await extractReferenceAudioToCos(signedVideoUrls[0], taskId)
+    signedReferenceAudioUrl = toSignedUrlIfCos(audioKey, 7200)
+    if (!signedReferenceAudioUrl) throw new Error('PLAYGROUND_SOURCE_AUDIO_URL_INVALID')
+  }
 
   // Kling O3 named-subject bindings (2026-07-10) — payload.elements:
   // [{ name, imageKeys[] }] (validated by the route). Sign each element's
@@ -149,6 +162,9 @@ export async function handlePlaygroundVideoTask(
     ...(signedVideoUrls.length > 0
       ? { referenceVideos: signedVideoUrls as unknown as string }
       : {}),
+    ...(signedReferenceAudioUrl
+      ? { referenceAudios: [signedReferenceAudioUrl] as unknown as string }
+      : {}),
   })
 
   if (!result.success || !result.externalId) {
@@ -167,11 +183,18 @@ export async function handlePlaygroundVideoTask(
     throw new Error('PLAYGROUND_VIDEO_NO_RESULT_URL')
   }
 
+  const finalSource = preserveSourceAudio
+    ? await muxGeneratedVideoWithSourceAudio({
+        generatedVideoUrl: polled.url,
+        generatedDownloadHeaders: polled.downloadHeaders,
+        sourceVideoUrl: signedVideoUrls[0],
+      })
+    : polled.url
   const cosKey = await uploadVideoSourceToCos(
-    polled.url,
+    finalSource,
     `playground-runs/${taskId}`,
     taskId,
-    polled.downloadHeaders,
+    preserveSourceAudio ? undefined : polled.downloadHeaders,
   )
 
   // 尾帧抽取(画布续镜链用)— 非致命:视频本体已成功,抽帧挂了只损失

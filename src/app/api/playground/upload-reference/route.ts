@@ -4,7 +4,7 @@
  * POST /api/playground/upload-reference
  *   multipart/form-data with `file` and `type` ('image' | 'video')
  *   - image: image/jpeg, image/png, image/webp ≤ 10MB
- *   - video: video/mp4, video/quicktime, video/webm ≤ 50MB
+ *   - video: video/mp4, video/quicktime, video/webm ≤ 150MB
  *   → uploads to COS at images/playground-ref/<userId>/<uuid>.<ext>
  *     (image) or video/playground-ref/<userId>/<uuid>.<ext> (video)
  *   → returns { success, key, signedUrl }
@@ -23,7 +23,7 @@ import { uploadToCOS, generateUniqueKey, getSignedUrl } from '@/lib/cos'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
-const MAX_VIDEO_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB
+const MAX_VIDEO_SIZE_BYTES = 150 * 1024 * 1024 // 150 MB — short 4K live-action references can exceed 50 MB
 const MAX_AUDIO_SIZE_BYTES = 15 * 1024 * 1024 // 15 MB (reference voice clip)
 const ALLOWED_IMAGE_MIMES: ReadonlySet<string> = new Set([
   'image/jpeg',

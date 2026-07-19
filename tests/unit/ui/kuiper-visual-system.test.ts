@@ -162,7 +162,8 @@ describe('Kuiper visual system', () => {
       'utf8',
     )
 
-    expect(shell).toContain("type PlaygroundMode = 'image' | 'video' | 'discussion'")
+    expect(shell).toContain("type PlaygroundMode = 'image' | 'video' | 'reconstruction' | 'discussion'")
+    expect(shell).toContain("label: '實拍重建'")
     expect(shell).toContain("useTranslations('playground.header')")
     expect(shell).toContain('min-h-[72px]')
     expect(imageStudio).toContain("useTranslations('playground.image')")

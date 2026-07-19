@@ -41,6 +41,7 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   [TASK_TYPE.VIDEO_MULTI_SHOT]: 'progress.taskType.videoMultiShot',
   [TASK_TYPE.EPISODE_STITCH_MP4]: 'progress.taskType.episodeStitchMp4',
   [TASK_TYPE.VIDEO_EDITOR_RENDER]: 'progress.taskType.videoEditorRender',
+  [TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE]: 'progress.taskType.playgroundVideoAnalyze',
 }
 
 const STAGE_LABELS: Record<string, string> = {

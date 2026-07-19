@@ -54,6 +54,7 @@ const BILLABLE_TASK_TYPES = new Set<TaskType>([
   TASK_TYPE.VIDEO_MULTI_SHOT,
   TASK_TYPE.PLAYGROUND_IMAGE,
   TASK_TYPE.PLAYGROUND_VIDEO,
+  TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE,
   TASK_TYPE.CANVAS_STORYBOARD,
   TASK_TYPE.CANVAS_DIRECTOR_ROUTES,
   TASK_TYPE.CANVAS_DIRECTOR_BLOCKING,
@@ -319,6 +320,7 @@ export function buildDefaultTaskBillingInfo(taskType: TaskType, payload: AnyPayl
     case TASK_TYPE.CANVAS_DIRECTOR_ROUTES:
     case TASK_TYPE.CANVAS_DIRECTOR_BLOCKING:
     case TASK_TYPE.CANVAS_TEXT:
+    case TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE:
       return buildTextTaskInfo(taskType, payload)
     case TASK_TYPE.PANEL_VARIANT:
       return buildImageTaskInfo(taskType, payload)
