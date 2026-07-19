@@ -2,20 +2,47 @@
 
 import type { ChangeEvent, RefObject } from 'react'
 import { AppIcon } from '@/components/ui/icons'
-import type { ReconstructionReferenceRole } from '@/lib/playground/reconstruction-contract'
+import type { ReconstructionReferenceRole, ReconstructionStrategy } from '@/lib/playground/reconstruction-contract'
 import type { PlaygroundController } from './usePlaygroundController'
 
 type ReconstructionModel = PlaygroundController['videoModels'][number]
 type ReferenceImage = PlaygroundController['refImages'][number]
 
 const ROLE_OPTIONS: Array<{ value: ReconstructionReferenceRole; label: string }> = [
-  { value: 'character', label: '人物身份' },
-  { value: 'environment', label: '場景環境' },
-  { value: 'wardrobe', label: '服裝／妝容' },
+  { value: 'character', label: '人物外觀' },
+  { value: 'keyframe', label: '目標關鍵幀' },
+]
+
+const STRATEGY_OPTIONS: Array<{
+  value: ReconstructionStrategy
+  label: string
+  badge: string
+  description: string
+}> = [
+  {
+    value: 'motion-first',
+    label: '動作優先',
+    badge: '最穩定',
+    description: '只送原影片，不送圖片。最能保留舞蹈、表情、運鏡、節奏與背景音樂；人物外觀以文字改造。',
+  },
+  {
+    value: 'identity-first',
+    label: '人物外觀參考',
+    badge: '實驗性',
+    description: '原影片加一張人物圖。圖片只作外觀參考，但模型仍可能改變動作、構圖或人物身份。',
+  },
+  {
+    value: 'keyframe-guided',
+    label: '高一致性',
+    badge: '需目標幀',
+    description: '上傳一張已換好人物、服裝與場景，且姿勢和構圖貼近原片的目標關鍵幀，再由原影片驅動動作。',
+  },
 ]
 
 interface ReconstructionGenerationControlsProps {
   models: ReconstructionModel[]
+  strategy: ReconstructionStrategy
+  onStrategyChange: (strategy: ReconstructionStrategy) => void
   modelKey: string
   onModelChange: (modelKey: string) => void
   durationMode: string
@@ -34,12 +61,46 @@ interface ReconstructionGenerationControlsProps {
 }
 
 export function ReconstructionGenerationControls(props: ReconstructionGenerationControlsProps) {
+  const acceptsReferenceImage = props.strategy !== 'motion-first'
+  const referenceTitle = props.strategy === 'keyframe-guided' ? '目標關鍵幀' : '人物外觀參考圖'
+  const referenceHelp = props.strategy === 'keyframe-guided'
+    ? '不是一般人物照：畫面需包含目標人物、服裝與場景，姿勢和鏡頭構圖要貼近原片。'
+    : 'Seedance 沒有 API 級人物硬綁定；名稱只會作為 Prompt 的語義對應。建議使用全身、自然站姿、角度接近原片的單人照片。'
+  const expectedRole: ReconstructionReferenceRole = props.strategy === 'keyframe-guided' ? 'keyframe' : 'character'
+
   return (
     <div className="space-y-4 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.04] p-3">
       <div>
         <div className="text-sm font-medium text-white">生成控制</div>
         <p className="mt-1 text-xs leading-5 text-text-tertiary">只顯示可接收表演影片的 AtlasCloud Seedance 2.0 R2V 模型。</p>
       </div>
+
+      <fieldset className="space-y-2">
+        <legend className="text-xs text-text-secondary">重建策略</legend>
+        <div className="grid gap-2">
+          {STRATEGY_OPTIONS.map((option) => {
+            const selected = props.strategy === option.value
+            return (
+              <label key={option.value} className={`cursor-pointer rounded-xl border p-3 transition ${selected ? 'border-cyan-400/50 bg-cyan-400/10' : 'border-white/[0.08] bg-black/20 hover:border-white/20'}`}>
+                <input
+                  type="radio"
+                  name="reconstruction-strategy"
+                  value={option.value}
+                  checked={selected}
+                  disabled={props.isBusy}
+                  onChange={() => props.onStrategyChange(option.value)}
+                  className="sr-only"
+                />
+                <span className="flex items-center justify-between gap-2">
+                  <span className={`text-xs font-medium ${selected ? 'text-cyan-200' : 'text-white'}`}>{option.label}</span>
+                  <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-text-tertiary">{option.badge}</span>
+                </span>
+                <span className="mt-1.5 block text-[11px] leading-5 text-text-tertiary">{option.description}</span>
+              </label>
+            )
+          })}
+        </div>
+      </fieldset>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="space-y-1.5">
@@ -75,8 +136,8 @@ export function ReconstructionGenerationControls(props: ReconstructionGeneration
 
       <div className="flex items-center justify-between border-t border-white/[0.07] pt-3">
         <div>
-          <div className="text-xs font-medium text-white">人物／場景參考圖</div>
-          <div className="mt-1 text-[11px] text-text-tertiary">每張圖片都要指定用途與名稱，系統會寫進 Prompt 綁定契約。</div>
+          <div className="text-xs font-medium text-white">{referenceTitle}</div>
+          <div className="mt-1 text-[11px] leading-5 text-text-tertiary">{acceptsReferenceImage ? referenceHelp : '動作優先不會把任何參考圖送給模型，避免圖片蓋過原片的舞蹈與運鏡。'}</div>
         </div>
         <span className="font-mono text-[11px] text-cyan-300">{props.refImages.length}/{props.refImagesCap}</span>
       </div>
@@ -91,11 +152,11 @@ export function ReconstructionGenerationControls(props: ReconstructionGeneration
       <button
         type="button"
         onClick={() => props.imageInputRef.current?.click()}
-        disabled={props.isBusy || props.refImages.length >= props.refImagesCap}
+        disabled={props.isBusy || !acceptsReferenceImage || props.refImages.length >= props.refImagesCap}
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.14] px-3 py-3 text-xs text-text-secondary hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-40"
       >
         <AppIcon name="upload" className="h-4 w-4" />
-        上傳人物、場景或服裝參考圖
+        {props.strategy === 'keyframe-guided' ? '上傳目標關鍵幀' : '上傳一張人物外觀參考圖'}
       </button>
 
       {props.refImages.length > 0 ? (
@@ -106,12 +167,12 @@ export function ReconstructionGenerationControls(props: ReconstructionGeneration
               <img src={reference.signedUrl} alt={`參考圖片 ${index + 1}`} className="h-12 w-12 rounded-lg object-cover" />
               <select
                 aria-label={`參考圖片 ${index + 1} 用途`}
-                value={props.referenceRoles[reference.key] ?? 'character'}
+                value={props.referenceRoles[reference.key] ?? expectedRole}
                 onChange={(event) => props.onRoleChange(reference.key, event.target.value as ReconstructionReferenceRole)}
                 disabled={props.isBusy}
                 className="min-w-0 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-[11px] text-white"
               >
-                {ROLE_OPTIONS.map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
+                {ROLE_OPTIONS.filter((role) => role.value === expectedRole).map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
               </select>
               <input
                 aria-label={`參考圖片 ${index + 1} 名稱`}
@@ -119,8 +180,8 @@ export function ReconstructionGenerationControls(props: ReconstructionGeneration
                 onChange={(event) => props.onNameChange(reference.key, event.target.value)}
                 disabled={props.isBusy}
                 maxLength={80}
-                placeholder={props.referenceRoles[reference.key] === 'environment' ? '例如：上海街道' : '例如：女主角'}
-                className="min-w-0 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white outline-none focus:border-cyan-400/50"
+                placeholder={props.strategy === 'keyframe-guided' ? '例如：民國街道目標幀' : '例如：女主角外觀'}
+                className="min-w-0 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white outline-none placeholder:text-text-tertiary/70 focus:border-cyan-400/50"
               />
               <button type="button" aria-label={`移除參考圖片 ${index + 1}`} onClick={() => props.onRemoveImage(index)} disabled={props.isBusy} className="px-1 text-text-tertiary hover:text-red-300">×</button>
             </div>

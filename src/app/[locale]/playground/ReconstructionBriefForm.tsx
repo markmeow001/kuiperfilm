@@ -8,18 +8,19 @@ import type {
 
 function Field(props: {
   label: string
+  placeholder: string
   value: string
   onChange: (value: string) => void
   multiline?: boolean
 }) {
-  const className = 'w-full rounded-xl border border-white/[0.09] bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400/60'
+  const className = 'w-full rounded-xl border border-white/[0.09] bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-text-tertiary/70 focus:border-cyan-400/60'
   return (
     <label className="block space-y-1.5">
       <span className="text-xs text-text-secondary">{props.label}</span>
       {props.multiline ? (
-        <textarea className={`${className} min-h-20 resize-y`} value={props.value} onChange={(event) => props.onChange(event.target.value)} />
+        <textarea className={`${className} min-h-20 resize-y`} placeholder={props.placeholder} value={props.value} onChange={(event) => props.onChange(event.target.value)} />
       ) : (
-        <input className={className} value={props.value} onChange={(event) => props.onChange(event.target.value)} />
+        <input className={className} placeholder={props.placeholder} value={props.value} onChange={(event) => props.onChange(event.target.value)} />
       )}
     </label>
   )
@@ -44,15 +45,15 @@ export function ReconstructionBriefForm(props: ReconstructionBriefFormProps) {
       <div className="space-y-3">
         <div className="text-sm font-medium text-white">重建設定</div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="年代" value={props.brief.era} onChange={(era) => patchBrief({ era })} />
-          <Field label="時間／天氣" value={props.brief.weatherAndTime} onChange={(weatherAndTime) => patchBrief({ weatherAndTime })} />
+          <Field label="年代" placeholder="例如：1930 年代民國" value={props.brief.era} onChange={(era) => patchBrief({ era })} />
+          <Field label="時間／天氣" placeholder="例如：陰天午後，空氣略帶霧氣" value={props.brief.weatherAndTime} onChange={(weatherAndTime) => patchBrief({ weatherAndTime })} />
         </div>
-        <Field label="新場景" value={props.brief.location} onChange={(location) => patchBrief({ location })} />
-        <Field label="故事情境" value={props.brief.story} multiline onChange={(story) => patchBrief({ story })} />
-        <Field label="新人物設計" value={props.brief.characterDesign} multiline onChange={(characterDesign) => patchBrief({ characterDesign })} />
-        <Field label="服裝／髮妝／特效妝" value={props.brief.wardrobe} multiline onChange={(wardrobe) => patchBrief({ wardrobe })} />
-        <Field label="影像氣氛" value={props.brief.mood} onChange={(mood) => patchBrief({ mood })} />
-        <Field label="背景如何持續運動" value={props.brief.backgroundMotion} multiline onChange={(backgroundMotion) => patchBrief({ backgroundMotion })} />
+        <Field label="新場景" placeholder="例如：上海法租界街道與老式商行" value={props.brief.location} onChange={(location) => patchBrief({ location })} />
+        <Field label="故事情境" placeholder="例如：人物在動盪年代執行一場帶有危機感的秘密行動" value={props.brief.story} multiline onChange={(story) => patchBrief({ story })} />
+        <Field label="新人物設計" placeholder="例如：電影寫實的民國女情報員，真實皮膚、自然五官與符合年代的髮型" value={props.brief.characterDesign} multiline onChange={(characterDesign) => patchBrief({ characterDesign })} />
+        <Field label="服裝／髮妝／特效妝" placeholder="例如：深色旗袍、低髮髻、自然底妝與舊傷疤特效妝，布料隨動作自然擺動" value={props.brief.wardrobe} multiline onChange={(wardrobe) => patchBrief({ wardrobe })} />
+        <Field label="影像氣氛" placeholder="例如：寫實電影質感，克制、緊張、有敘事性的光影" value={props.brief.mood} onChange={(mood) => patchBrief({ mood })} />
+        <Field label="背景如何持續運動" placeholder="例如：路人、旗幟、車輛、煙霧與光影持續自然運動，不要像靜態照片" value={props.brief.backgroundMotion} multiline onChange={(backgroundMotion) => patchBrief({ backgroundMotion })} />
         <label className="flex items-center gap-2 text-sm text-text-secondary">
           <input type="checkbox" checked={props.brief.replacePeople} onChange={(event) => patchBrief({ replacePeople: event.target.checked })} className="accent-cyan-400" />
           完整替換原演員外觀，只保留表情、情緒與動作

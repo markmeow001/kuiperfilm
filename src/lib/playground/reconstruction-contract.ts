@@ -52,7 +52,9 @@ export interface ReconstructionDialogueLine {
 
 export type ReconstructionAudioMode = 'preserve-original' | 'generate'
 
-export type ReconstructionReferenceRole = 'character' | 'environment' | 'wardrobe'
+export type ReconstructionStrategy = 'motion-first' | 'identity-first' | 'keyframe-guided'
+
+export type ReconstructionReferenceRole = 'character' | 'environment' | 'wardrobe' | 'keyframe'
 
 export interface ReconstructionReferenceBinding {
   imageIndex: number
@@ -78,6 +80,7 @@ export interface ReconstructionPromptInput {
   creative: ReconstructionCreativeBrief
   dialogue: ReconstructionDialogueLine[]
   audioMode: ReconstructionAudioMode
+  strategy: ReconstructionStrategy
   references?: ReconstructionReferenceBinding[]
   outputDurationSec?: number
 }

@@ -10,6 +10,7 @@ import type {
   ReconstructionDialogueLine,
   ReconstructionReferenceBinding,
   ReconstructionReferenceRole,
+  ReconstructionStrategy,
   ReconstructionVideoMetadata,
 } from '@/lib/playground/reconstruction-contract'
 import { useAnalyzePlaygroundVideo } from '@/lib/query/mutations/playground-mutations'
@@ -28,14 +29,14 @@ interface ReconstructionStudioProps {
 }
 
 const DEFAULT_BRIEF: ReconstructionCreativeBrief = {
-  era: '1930 年代民國',
-  location: '上海法租界街道與老式商行',
-  story: '人物在動盪年代執行一場帶有危機感的秘密行動',
-  characterDesign: '電影寫實的民國人物，真實皮膚、自然五官與符合年代的髮型',
-  wardrobe: '考據準確的民國服裝、鞋履、髮妝與配件，布料隨動作自然擺動',
-  mood: '寫實電影質感，克制、緊張、有敘事性的光影',
-  weatherAndTime: '陰天午後，空氣略帶霧氣',
-  backgroundMotion: '路人、旗幟、車輛、煙霧與光影保持細微且連續的運動，絕非靜態照片',
+  era: '',
+  location: '',
+  story: '',
+  characterDesign: '',
+  wardrobe: '',
+  mood: '',
+  weatherAndTime: '',
+  backgroundMotion: '',
   replacePeople: true,
 }
 
@@ -86,6 +87,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
   const [brief, setBrief] = useState<ReconstructionCreativeBrief>(DEFAULT_BRIEF)
   const [dialogue, setDialogue] = useState<ReconstructionDialogueLine[]>([])
   const [audioMode, setAudioMode] = useState<ReconstructionAudioMode>('preserve-original')
+  const [strategy, setStrategy] = useState<ReconstructionStrategy>('motion-first')
   const [durationMode, setDurationMode] = useState('source')
   const [selectedModelKey, setSelectedModelKey] = useState('')
   const [referenceRoles, setReferenceRoles] = useState<Record<string, ReconstructionReferenceRole>>({})
@@ -105,28 +107,32 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
   const outputDurationSec = durationMode === 'source'
     ? Math.max(4, Math.min(15, Math.round(metadata?.durationSec ?? 5)))
     : Number(durationMode)
+  const activeReferenceImages = useMemo(() => (
+    strategy === 'motion-first' ? [] : ctrl.refImages.slice(0, 1)
+  ), [strategy, ctrl.refImages])
   const referenceBindings = useMemo<ReconstructionReferenceBinding[]>(() => (
-    ctrl.refImages.map((reference, index) => ({
+    activeReferenceImages.map((reference, index) => ({
       imageIndex: index + 1,
       name: reference.name?.trim() ?? '',
-      role: referenceRoles[reference.key] ?? 'character',
+      role: strategy === 'keyframe-guided' ? 'keyframe' : 'character',
     }))
-  ), [ctrl.refImages, referenceRoles])
+  ), [activeReferenceImages, strategy])
   const currentFingerprint = useMemo(() => JSON.stringify({
     analysisResult,
     metadata,
     brief,
     dialogue,
     audioMode,
+    strategy,
     durationMode,
     outputDurationSec,
     effectiveModelKey,
-    references: ctrl.refImages.map((reference) => ({
+    references: activeReferenceImages.map((reference) => ({
       key: reference.key,
       name: reference.name?.trim() ?? '',
-      role: referenceRoles[reference.key] ?? 'character',
+      role: strategy === 'keyframe-guided' ? 'keyframe' : 'character',
     })),
-  }), [analysisResult, metadata, brief, dialogue, audioMode, durationMode, outputDurationSec, effectiveModelKey, ctrl.refImages, referenceRoles])
+  }), [analysisResult, metadata, brief, dialogue, audioMode, strategy, durationMode, outputDurationSec, effectiveModelKey, activeReferenceImages])
   const promptIsStale = promptFingerprint !== null && promptFingerprint !== currentFingerprint
 
   useEffect(() => {
@@ -159,6 +165,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       setAnalysisResult(null)
       setDialogue([])
       setAudioMode(local.durationSec < 4 ? 'generate' : 'preserve-original')
+      setStrategy('motion-first')
       setDurationMode(local.durationSec < 4 ? '4' : 'source')
       setReferenceRoles({})
       setPromptPreview('')
@@ -216,6 +223,12 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     ctrl.setDurationSec(nextDuration)
   }
 
+  function selectStrategy(nextStrategy: ReconstructionStrategy) {
+    setStrategy(nextStrategy)
+    const role: ReconstructionReferenceRole = nextStrategy === 'keyframe-guided' ? 'keyframe' : 'character'
+    setReferenceRoles(Object.fromEntries(ctrl.refImages.map((reference) => [reference.key, role])))
+  }
+
   function removeReferenceImage(index: number) {
     const removedKey = ctrl.refImages[index]?.key
     ctrl.removeRefImage(index)
@@ -237,7 +250,12 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     if (invalidLine) return '對白內容與時間碼需完整，且不得超過原片長度'
     if (audioMode === 'preserve-original' && durationMode !== 'source') return '保留原始對白音軌時，輸出秒數必須選擇「跟隨原片」'
     if (!Number.isInteger(outputDurationSec) || outputDurationSec < 4 || outputDurationSec > 15) return '輸出秒數需介於 4–15 秒'
-    if (referenceBindings.some((reference) => !reference.name)) return '每張參考圖都必須填寫名稱，才能正確綁定人物或場景'
+    if (strategy !== 'motion-first' && ctrl.refImages.length !== 1) {
+      return strategy === 'keyframe-guided'
+        ? '高一致性模式需要且只能上傳 1 張目標關鍵幀'
+        : '人物外觀參考模式需要且只能上傳 1 張人物圖片，避免多張圖片互相競爭'
+    }
+    if (referenceBindings.some((reference) => !reference.name)) return '請替參考圖片填寫名稱，讓 Prompt 能清楚指出它的用途'
     const normalizedNames = referenceBindings.map((reference) => reference.name.toLocaleLowerCase())
     if (new Set(normalizedNames).size !== normalizedNames.length) return '參考圖名稱不可重複，請為人物、場景與服裝使用不同名稱'
     return null
@@ -256,6 +274,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       creative: brief,
       dialogue,
       audioMode,
+      strategy,
       references: referenceBindings,
       outputDurationSec: durationMode === 'source' ? metadata.durationSec : outputDurationSec,
     })
@@ -296,6 +315,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     const run = await ctrl.handleRun(effectiveModelKey, promptPreview, {
       preserveSourceAudio: audioMode === 'preserve-original',
       preservePromptVerbatim: true,
+      referenceImageKeys: activeReferenceImages.map((reference) => reference.key),
     })
     if (run) setReconstructionRunId(run.id)
   }
@@ -343,13 +363,15 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
 
             <ReconstructionGenerationControls
               models={reconstructionModels}
+              strategy={strategy}
+              onStrategyChange={selectStrategy}
               modelKey={effectiveModelKey}
               onModelChange={selectModel}
               durationMode={durationMode}
               sourceDurationSec={metadata?.durationSec ?? 5}
               onDurationChange={selectDuration}
               refImages={ctrl.refImages}
-              refImagesCap={ctrl.refImagesCap}
+              refImagesCap={strategy === 'motion-first' ? 0 : 1}
               referenceRoles={referenceRoles}
               onRoleChange={(key, role) => setReferenceRoles((current) => ({ ...current, [key]: role }))}
               onNameChange={ctrl.setRefImageName}

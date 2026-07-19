@@ -32,10 +32,26 @@ function dialogueSection(lines: ReconstructionDialogueLine[], preserveOriginal: 
 }
 
 const REFERENCE_ROLE_INSTRUCTIONS: Record<ReconstructionReferenceBinding['role'], string> = {
-  character: 'Use this image as the exact identity, face, body proportions, hairstyle, and age reference for the named character.',
-  environment: 'Use this image as the exact architecture, layout, materials, palette, and atmosphere reference for the reconstructed environment.',
-  wardrobe: 'Use this image as the exact wardrobe, hair, makeup, prosthetic makeup, and accessory reference.',
+  character: 'Use this image only as the target appearance for the named character: facial identity, age, hairstyle, and general body proportions. Video 1 remains authoritative for pose, action, timing, framing, and camera motion.',
+  environment: 'Use this image as visual inspiration for architecture, materials, palette, and atmosphere. Video 1 remains authoritative for framing, camera path, depth, and motion.',
+  wardrobe: 'Use this image as visual inspiration for wardrobe, hair, makeup, prosthetic makeup, and accessories without copying its pose or composition.',
+  keyframe: 'Use this image as the target keyframe for character appearance, wardrobe, environment, pose, framing, and composition at the matching moment. Animate it using the performance and camera trajectory from video 1.',
 }
+
+const STRATEGY_INSTRUCTIONS = {
+  'motion-first': [
+    'MOTION-FIRST MODE',
+    'Video 1 is the sole visual reference and has absolute priority. Preserve its choreography, body mechanics, facial emotion, timing, blocking, camera path, framing, parallax, and music rhythm. Reconstruct appearance from text only. Do not reinterpret or replace the source choreography.',
+  ],
+  'identity-first': [
+    'APPEARANCE-REFERENCE MODE (EXPERIMENTAL)',
+    'Video 1 remains authoritative for performance and camera motion. The single still image controls only the target character appearance. Never copy the still image pose, framing, background, or camera angle. If the two references conflict, preserve the motion and camera trajectory from video 1.',
+  ],
+  'keyframe-guided': [
+    'TARGET-KEYFRAME MODE',
+    'Use the single target keyframe to anchor the redesigned character, wardrobe, environment, pose, and composition at its matching moment. Use video 1 as the authoritative temporal source for all movement, expression, timing, and camera trajectory. Extend the target keyframe coherently through the shot without inventing a different scene or choreography.',
+  ],
+} as const
 
 function referenceSection(references: ReconstructionReferenceBinding[]): string {
   if (references.length === 0) {
@@ -45,13 +61,13 @@ function referenceSection(references: ReconstructionReferenceBinding[]): string 
     .slice()
     .sort((a, b) => a.imageIndex - b.imageIndex)
     .map((reference) => (
-      `- Reference image ${reference.imageIndex} is bound to “${clean(reference.name)}”. ${REFERENCE_ROLE_INSTRUCTIONS[reference.role]} Do not transfer this image to any other subject or scene element.`
+      `- Reference image ${reference.imageIndex} is labeled “${clean(reference.name)}”. ${REFERENCE_ROLE_INSTRUCTIONS[reference.role]} Treat this as a semantic visual reference, not as a replacement source for the motion in video 1.`
     ))
     .join('\n')
 }
 
 export function buildReconstructionPrompt(input: ReconstructionPromptInput): string {
-  const { analysis, creative, metadata, dialogue, audioMode, references = [] } = input
+  const { analysis, creative, metadata, dialogue, audioMode, strategy, references = [] } = input
   const outputDurationSec = input.outputDurationSec ?? metadata.durationSec
   const preserveOriginal = audioMode === 'preserve-original'
   const subjects = analysis.subjects.map((subject) => (
@@ -62,6 +78,7 @@ export function buildReconstructionPrompt(input: ReconstructionPromptInput): str
 
   return [
     'REFERENCE CONTRACT',
+    ...STRATEGY_INSTRUCTIONS[strategy],
     `Use video 1 (${metadata.durationSec.toFixed(2)} seconds) as the exact source of performance, timing, blocking, camera motion, lens perspective, framing, subject scale changes, and depth parallax. Produce one continuous shot with a target duration of ${outputDurationSec.toFixed(2)} seconds.`,
     outputDurationSec === metadata.durationSec
       ? 'Preserve the original action timing without retiming or truncation.'

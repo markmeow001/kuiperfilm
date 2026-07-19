@@ -311,7 +311,11 @@ export function usePlaygroundController(workspaceId: string | null = null) {
   async function handleRun(
     overrideModelKey?: string,
     promptOverride?: string,
-    runOverrides?: { preserveSourceAudio?: boolean; preservePromptVerbatim?: boolean },
+    runOverrides?: {
+      preserveSourceAudio?: boolean
+      preservePromptVerbatim?: boolean
+      referenceImageKeys?: string[]
+    },
   ) {
     // promptOverride lets the lightbox re-run a finished run's OWN prompt
     // without waiting for a setPrompt() state commit (the stale-closure bug).
@@ -361,12 +365,17 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     // reference images (each becomes a single-image subject). Validate
     // before submit so failures are instant (route re-validates).
     const isKlingKey = /::kling-o3-/.test(useModelKey)
+    const submittedRefImages = runOverrides?.referenceImageKeys
+      ? runOverrides.referenceImageKeys
+        .map((key) => refImages.find((image) => image.key === key))
+        .filter((image): image is NonNullable<typeof image> => Boolean(image))
+      : refImages
     let klingSubmitElements: Array<{ name: string; imageKeys: string[] }> = []
-    let klingPlainImageKeys: string[] = refImages.map((r) => r.key)
+    let klingPlainImageKeys: string[] = submittedRefImages.map((r) => r.key)
     if (isKlingKey) {
       const merged = mergeNamedRefImagesIntoElements(
         kling.elements.map((el) => ({ name: el.name, imageKeys: el.images.map((im) => im.key) })),
-        refImages,
+        submittedRefImages,
       )
       if (merged.error) {
         alert(merged.error)
@@ -414,12 +423,12 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     const submitKlingElements = isKlingKey && klingSubmitElements.length > 0
     // Non-Kling video with named images → worker prepends the 參考圖對應
     // textual map (Seedance-class has no API-level named binding).
-    const referenceImageNames = refImages.map((r) => r.name?.trim() || null)
+    const referenceImageNames = submittedRefImages.map((r) => r.name?.trim() || null)
     const hasNamedImages = referenceImageNames.some(Boolean)
     // Kling O3 keys skip the t2v/i2v/r2v sibling remap — the family has a
     // single r2v endpoint and the dash regex would otherwise hunt for a
     // nonexistent kling-o3-*-i2v sibling.
-    const effectiveModelKey = outputType === 'video' && refImages.length > 0 && !isKlingKey
+    const effectiveModelKey = outputType === 'video' && submittedRefImages.length > 0 && !isKlingKey
       ? variantKeyForMode(useModelKey, videoRefMode, videoModels.map((m) => m.value))
       : useModelKey
     try {
@@ -427,7 +436,7 @@ export function usePlaygroundController(workspaceId: string | null = null) {
         prompt: effectivePrompt,
         // Kling: named images ride the elements payload instead (else the
         // same image would count twice — once bound, once plain).
-        referenceImages: isKlingKey ? klingPlainImageKeys : refImages.map((r) => r.key),
+        referenceImages: isKlingKey ? klingPlainImageKeys : submittedRefImages.map((r) => r.key),
         referenceVideos: refVideo ? [refVideo.key] : [],
         referenceText: refText.trim() || undefined,
         outputType,

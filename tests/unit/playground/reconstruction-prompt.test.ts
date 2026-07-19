@@ -18,6 +18,7 @@ const baseInput = {
   },
   dialogue: [{ id: 'line-1', speaker: '阿珍', startSec: 1.2, endSec: 2.8, text: '你確定沒有人跟著？', emotion: '壓低聲音' }],
   audioMode: 'preserve-original' as const,
+  strategy: 'motion-first' as const,
 }
 
 describe('buildReconstructionPrompt', () => {
@@ -29,6 +30,8 @@ describe('buildReconstructionPrompt', () => {
     expect(prompt).toContain('original source audio')
     expect(prompt).toContain('黃包車、路人與招牌持續運動')
     expect(prompt).toContain('three-dimensional parallax')
+    expect(prompt).toContain('MOTION-FIRST MODE')
+    expect(prompt).toContain('sole visual reference')
   })
 
   it('does not invent a transcript when no dialogue lines were supplied', () => {
@@ -36,21 +39,29 @@ describe('buildReconstructionPrompt', () => {
     expect(prompt).toContain('Do not invent or rewrite speech')
   })
 
-  it('binds named character and environment images to their exact roles', () => {
+  it('treats a named character image as appearance-only while preserving video motion', () => {
     const prompt = buildReconstructionPrompt({
       ...baseInput,
+      strategy: 'identity-first',
       references: [
         { imageIndex: 1, name: '女主角', role: 'character' },
-        { imageIndex: 2, name: '百樂門舞台', role: 'environment' },
-        { imageIndex: 3, name: '特效妝', role: 'wardrobe' },
       ],
     })
-    expect(prompt).toContain('Reference image 1 is bound to “女主角”')
-    expect(prompt).toContain('exact identity, face, body proportions')
-    expect(prompt).toContain('Reference image 2 is bound to “百樂門舞台”')
-    expect(prompt).toContain('exact architecture, layout, materials')
-    expect(prompt).toContain('Reference image 3 is bound to “特效妝”')
-    expect(prompt).toContain('exact wardrobe, hair, makeup, prosthetic makeup')
+    expect(prompt).toContain('APPEARANCE-REFERENCE MODE (EXPERIMENTAL)')
+    expect(prompt).toContain('Reference image 1 is labeled “女主角”')
+    expect(prompt).toContain('target appearance')
+    expect(prompt).toContain('Video 1 remains authoritative for pose, action, timing, framing, and camera motion')
+    expect(prompt).toContain('semantic visual reference, not as a replacement source for the motion')
+  })
+
+  it('uses one redesigned target frame as a composition anchor', () => {
+    const prompt = buildReconstructionPrompt({
+      ...baseInput,
+      strategy: 'keyframe-guided',
+      references: [{ imageIndex: 1, name: '民國街道目標幀', role: 'keyframe' }],
+    })
+    expect(prompt).toContain('TARGET-KEYFRAME MODE')
+    expect(prompt).toContain('target keyframe for character appearance, wardrobe, environment, pose, framing, and composition')
   })
 
   it('states the requested output duration separately from the source duration', () => {
