@@ -601,9 +601,9 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           <div>
             <div className="flex items-center gap-2 text-sm font-medium">
               <AppIcon name="sparklesAlt" className="h-4 w-4 text-cyan-300" />
-              AI 實拍合成台
+              AI 實拍重製
             </div>
-            <div className="mt-0.5 text-xs text-stone-600">Live Composite Studio · Mask + Virtual Character</div>
+            <div className="mt-0.5 text-xs text-stone-600">表演驅動角色重製 · 真人提供表演，AI 重新生成角色與場景</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs text-stone-500">

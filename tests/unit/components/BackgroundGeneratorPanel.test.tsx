@@ -35,8 +35,8 @@ describe('BackgroundGeneratorPanel', () => {
     mocks.mutateAsync.mockResolvedValue({ run: { id: 'run-bg-1' } })
     render(<BackgroundGeneratorPanel metadata={{ width: 1920, height: 1080, duration: 3, name: 'shot.mp4' }} disabled={false} onGenerated={vi.fn()} />)
 
-    fireEvent.change(screen.getByLabelText('AI 背景描述'), { target: { value: '雨夜霓虹街道' } })
-    fireEvent.click(screen.getByRole('button', { name: '生成並套用背景' }))
+    fireEvent.change(screen.getByLabelText('背景概念圖描述'), { target: { value: '雨夜霓虹街道' } })
+    fireEvent.click(screen.getByRole('button', { name: '生成背景概念圖' }))
 
     await waitFor(() => expect(mocks.mutateAsync).toHaveBeenCalledWith({
       prompt: '雨夜霓虹街道\n只生成乾淨的場景背景，不要人物、文字、浮水印或邊框。',
@@ -58,14 +58,14 @@ describe('BackgroundGeneratorPanel', () => {
     const onGenerated = vi.fn()
     render(<BackgroundGeneratorPanel metadata={null} disabled={false} onGenerated={onGenerated} />)
 
-    fireEvent.change(screen.getByLabelText('AI 背景描述'), { target: { value: '乾淨攝影棚空景' } })
-    fireEvent.click(screen.getByRole('button', { name: '生成並套用背景' }))
+    fireEvent.change(screen.getByLabelText('背景概念圖描述'), { target: { value: '乾淨攝影棚空景' } })
+    fireEvent.click(screen.getByRole('button', { name: '生成背景概念圖' }))
 
     await waitFor(() => expect(onGenerated).toHaveBeenCalledTimes(1))
     const generated = onGenerated.mock.calls[0][0] as File
     expect(generated.name).toBe('ai-background.webp')
     expect(generated.type).toBe('image/webp')
     expect(String(fetchMock.mock.calls[0][0])).toContain('/api/playground/download?')
-    expect(screen.getByText('背景已生成並套用；儲存專案時會一併保存。')).toBeInTheDocument()
+    expect(screen.getByText('背景概念圖已生成並套用為合成預覽背景；儲存專案時會一併保存。')).toBeInTheDocument()
   })
 })

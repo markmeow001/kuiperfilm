@@ -26,7 +26,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
   const utilityLinks: UtilityLink[] = [
     { href: `/${locale}/canvas`, icon: 'image', label: '無限畫布' },
     { href: `/${locale}/playground`, icon: 'sparklesAlt', label: 'Playground' },
-    { href: `/${locale}/live-composite`, icon: 'video', label: '實拍合成' },
+    { href: `/${locale}/live-composite`, icon: 'video', label: 'AI 實拍重製' },
   ]
 
   return (

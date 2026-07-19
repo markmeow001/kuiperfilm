@@ -21,8 +21,8 @@
     "canvasLabel": "Infinite Canvas",
     "playground": "Create",
     "playgroundLabel": "Creative Playground",
-    "composite": "Composite",
-    "compositeLabel": "AI Live Composite",
+    "composite": "Remake",
+    "compositeLabel": "AI Live-Action Remake",
     "skills": "Skills",
     "skillsLabel": "Skill library",
     "studio": "STUDIO"
@@ -52,9 +52,9 @@
       "meta": "3D PREVIS"
     },
     "composite": {
-      "title": "Live background and character composite",
-      "description": "Upload footage, refine an AI mask, replace the background, and place virtual characters.",
-      "meta": "LIVE COMPOSITE"
+      "title": "AI live-action remake",
+      "description": "Upload a real performance video and let AI regenerate the character and scene while keeping the emotion, gaze, lip sync, and motion timing.",
+      "meta": "PERFORMANCE REMAKE"
     },
     "playground": {
       "title": "Creative Playground",

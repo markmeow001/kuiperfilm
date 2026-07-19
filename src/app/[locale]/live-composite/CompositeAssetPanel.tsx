@@ -137,7 +137,7 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
       {workflowStep === 4 ? (
         <>
           <section className="border-b border-white/10 px-4 py-5">
-            <p className="mb-4 text-sm leading-6 text-stone-400">選擇一張現成背景、使用純色，或描述想要的空景讓 AI 生成。</p>
+            <p className="mb-4 text-sm leading-6 text-stone-400">選擇一張現成背景、使用純色，或生成一張「背景概念圖」作為構圖預覽／概念參考。</p>
             <UploadFileButton disabled={interactionDisabled} label={hasBackgroundImage ? '更換背景圖片' : '上傳背景圖片'} accept="image/*" kind="image" onSelect={onBackgroundSelect} />
             <label className="mt-3 flex items-center justify-between rounded-lg border border-white/10 px-3 py-2 text-sm text-stone-400">
               使用純色背景

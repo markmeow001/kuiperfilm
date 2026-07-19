@@ -21,8 +21,8 @@
     "canvasLabel": "无限画布",
     "playground": "创作",
     "playgroundLabel": "创作 Playground",
-    "composite": "合成",
-    "compositeLabel": "AI 实拍合成",
+    "composite": "重制",
+    "compositeLabel": "AI 实拍重制",
     "skills": "技能",
     "skillsLabel": "Skill 库",
     "studio": "STUDIO"
@@ -52,9 +52,9 @@
       "meta": "3D PREVIS"
     },
     "composite": {
-      "title": "实拍背景与角色合成",
-      "description": "上传实拍影片，用 AI 遮罩、背景替换和虚拟角色工具继续完成画面。",
-      "meta": "LIVE COMPOSITE"
+      "title": "AI 实拍重制",
+      "description": "上传真人表演视频，AI 重新生成角色与场景，保留表演的情绪、眼神、口型与动作节奏。",
+      "meta": "PERFORMANCE REMAKE"
     },
     "playground": {
       "title": "自由创作 Playground",

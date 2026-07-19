@@ -46,12 +46,12 @@ export function BackgroundGeneratorPanel({ metadata, disabled, onGenerated }: Ba
   useEffect(() => {
     if (!runId || !run) return
     if (run.status === 'failed') {
-      setMessage(run.errorMessage || 'AI 背景生成失敗')
+      setMessage(run.errorMessage || '背景概念圖生成失敗')
       return
     }
     const resultUrl = run.resultUrls?.[0]
     if (run.status === 'succeeded' && !resultUrl) {
-      setMessage('AI 背景任務已完成，但沒有回傳圖片。')
+      setMessage('背景概念圖任務已完成，但沒有回傳圖片。')
       return
     }
     if (run.status !== 'succeeded' || !resultUrl || applyingRunRef.current === runId || appliedRunIdsRef.current.has(runId)) return
@@ -64,11 +64,11 @@ export function BackgroundGeneratorPanel({ metadata, disabled, onGenerated }: Ba
         if (!active) return
         appliedRunIdsRef.current.add(runId)
         onGeneratedRef.current(file)
-        setMessage('背景已生成並套用；儲存專案時會一併保存。')
+        setMessage('背景概念圖已生成並套用為合成預覽背景；儲存專案時會一併保存。')
       })
       .catch((error: unknown) => {
         if (!active) return
-        setMessage(error instanceof Error ? error.message : '生成背景套用失敗')
+        setMessage(error instanceof Error ? error.message : '背景概念圖套用失敗')
       })
       .finally(() => {
         if (applyingRunRef.current === runId) applyingRunRef.current = null
@@ -84,14 +84,14 @@ export function BackgroundGeneratorPanel({ metadata, disabled, onGenerated }: Ba
   const generate = async () => {
     const trimmedPrompt = prompt.trim()
     if (!trimmedPrompt) {
-      setMessage('請先描述要生成的背景。')
+      setMessage('請先描述要生成的背景概念圖。')
       return
     }
     if (!modelKey) {
       setMessage('目前沒有已啟用的圖片生成模型，請先到設定中心啟用。')
       return
     }
-    setMessage('正在建立 AI 背景生成任務…')
+    setMessage('正在建立背景概念圖任務…')
     try {
       const result = await submit.mutateAsync({
         prompt: `${trimmedPrompt}\n只生成乾淨的場景背景，不要人物、文字、浮水印或邊框。`,
@@ -100,9 +100,9 @@ export function BackgroundGeneratorPanel({ metadata, disabled, onGenerated }: Ba
         aspectRatio,
       })
       setRunId(result.run.id)
-      setMessage('背景生成中；完成後會自動套用。')
+      setMessage('背景概念圖生成中；完成後會自動套用為合成預覽背景。')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'AI 背景生成任務建立失敗')
+      setMessage(error instanceof Error ? error.message : '背景概念圖任務建立失敗')
     }
   }
 
@@ -111,12 +111,12 @@ export function BackgroundGeneratorPanel({ metadata, disabled, onGenerated }: Ba
   return (
     <section className="border-b border-white/10 px-4 py-4">
       <div className="flex items-center justify-between">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300">AI 生成背景</div>
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300">背景概念圖</div>
         <span className="font-mono text-[10px] text-stone-600">{aspectRatio}</span>
       </div>
-      <p className="mt-2 text-[11px] leading-5 text-stone-500">描述空景；完成後會直接成為目前合成背景，不會改動原始影片。</p>
+      <p className="mt-2 text-[11px] leading-5 text-stone-500">描述空景，生成一張背景概念圖。靜態圖片只是構圖預覽／概念參考，不是最終影片背景；Track B 正式成品的動態場景由模型全幀重新生成。</p>
       <textarea
-        aria-label="AI 背景描述"
+        aria-label="背景概念圖描述"
         value={prompt}
         disabled={disabled || busy}
         onChange={(event) => setPrompt(event.target.value)}
@@ -124,7 +124,7 @@ export function BackgroundGeneratorPanel({ metadata, disabled, onGenerated }: Ba
         className="mt-3 min-h-20 w-full resize-y rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs leading-5 text-stone-200 outline-none placeholder:text-stone-700 focus:border-cyan-400/40 disabled:opacity-50"
       />
       <select
-        aria-label="AI 背景模型"
+        aria-label="背景概念圖模型"
         value={modelKey}
         disabled={disabled || busy || imageModels.length === 0}
         onChange={(event) => setModelKey(event.target.value)}
@@ -138,7 +138,7 @@ export function BackgroundGeneratorPanel({ metadata, disabled, onGenerated }: Ba
         onClick={() => void generate()}
         className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 px-3 py-2 text-xs font-medium text-stone-950 hover:bg-cyan-300 disabled:opacity-40"
       >
-        <AppIcon name="sparkles" className="h-4 w-4" />{busy ? '生成背景中…' : '生成並套用背景'}
+        <AppIcon name="sparkles" className="h-4 w-4" />{busy ? '概念圖生成中…' : '生成背景概念圖'}
       </button>
       <div className="mt-2 flex items-start justify-between gap-3 text-[10px] leading-4 text-stone-600"><span role="status">{message}</span><span className="shrink-0">{costLabel}</span></div>
     </section>
