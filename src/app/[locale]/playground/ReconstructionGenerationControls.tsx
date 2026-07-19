@@ -18,7 +18,8 @@ interface ReconstructionGenerationControlsProps {
   durationMode: string
   sourceDurationSec: number
   onDurationChange: (mode: string) => void
-  sourceFrameUrl: string
+  sourceFrameUrl: string | null
+  analysisReady: boolean
   characterReference: ReconstructionReferenceAsset | null
   sceneReference: ReconstructionReferenceAsset | null
   onReferencePick: (role: 'character' | 'environment', file: File) => Promise<void>
@@ -116,9 +117,25 @@ export function ReconstructionGenerationControls(props: ReconstructionGeneration
           <div className="text-xs font-medium text-white">3. 建立定裝關鍵幀</div>
           <p className="mt-1 text-[11px] leading-5 text-text-tertiary">AI 會以原片畫面的姿勢和構圖為底，先套用新角色、服裝與場景。確認這張畫面正確後，才會生成完整影片。</p>
         </div>
+        {!props.analysisReady ? (
+          <div role="status" className="rounded-lg border border-amber-400/25 bg-amber-400/[0.08] px-3 py-2 text-[11px] leading-5 text-amber-100">
+            角色與場景圖片已可先上傳。要建立定裝關鍵幀時，再執行上方的付費鏡頭分析以取得原片動作幀。
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-2">
-          <KeyframeTile label="原片動作幀" imageUrl={props.sourceFrameUrl} />
-          <KeyframeTile label="定裝關鍵幀" imageUrl={props.targetKeyframe?.signedUrl ?? null} pending={props.isGeneratingKeyframe} />
+          <KeyframeTile
+            label="原片動作幀"
+            imageUrl={props.sourceFrameUrl}
+            emptyLabel="分析後顯示動作幀"
+          />
+          <KeyframeTile
+            label="定裝關鍵幀"
+            imageUrl={props.targetKeyframe?.signedUrl ?? null}
+            pending={props.isGeneratingKeyframe}
+            emptyLabel={props.analysisReady
+              ? props.characterReference ? '已就緒，可點下方建立' : '先上傳新角色圖片'
+              : '等待鏡頭分析'}
+          />
         </div>
         {props.keyframeIsStale && props.targetKeyframe ? <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">角色、場景或重建設定已變更，請重新建立定裝關鍵幀。</div> : null}
         <button type="button" onClick={props.onGenerateKeyframe} disabled={props.isBusy || props.isGeneratingKeyframe || !props.canGenerateKeyframe} className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/35 bg-cyan-400/10 px-3 py-3 text-xs font-medium text-cyan-200 hover:bg-cyan-400/15 disabled:opacity-40">
@@ -160,14 +177,14 @@ function ReferenceUploadCard(props: {
   )
 }
 
-function KeyframeTile(props: { label: string; imageUrl: string | null; pending?: boolean }) {
+function KeyframeTile(props: { label: string; imageUrl: string | null; pending?: boolean; emptyLabel: string }) {
   return (
     <div className="overflow-hidden rounded-xl border border-white/[0.09] bg-black/25">
-      <div className="aspect-video bg-black/50">
+      <div className="aspect-video bg-[linear-gradient(135deg,rgba(255,255,255,0.035)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.035)_50%,rgba(255,255,255,0.035)_75%,transparent_75%)] bg-[length:16px_16px]">
         {props.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={props.imageUrl} alt={props.label} className="h-full w-full object-cover" />
-        ) : <div className="flex h-full items-center justify-center px-3 text-center text-[10px] text-text-tertiary">{props.pending ? 'AI 生成中…' : '尚未建立'}</div>}
+        ) : <div className="flex h-full items-center justify-center px-3 text-center text-[10px] leading-4 text-text-tertiary">{props.pending ? 'AI 生成中…' : props.emptyLabel}</div>}
       </div>
       <div className="px-2 py-1.5 text-[10px] text-text-secondary">{props.label}</div>
     </div>

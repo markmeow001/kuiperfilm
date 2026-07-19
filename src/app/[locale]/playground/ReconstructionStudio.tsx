@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { buildReconstructionKeyframePrompt, buildReconstructionPrompt } from '@/lib/playground/reconstruction-prompt'
+import { getReconstructionStageAvailability } from '@/lib/playground/reconstruction-stage'
 import type {
   ReconstructionAnalysisResult,
   ReconstructionAudioMode,
@@ -149,6 +150,12 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     targetKeyframeFingerprint,
   }), [analysisResult, metadata, brief, dialogue, audioMode, durationMode, outputDurationSec, effectiveModelKey, targetKeyframe?.key, targetKeyframeFingerprint])
   const promptIsStale = promptFingerprint !== null && promptFingerprint !== currentFingerprint
+  const stageAvailability = getReconstructionStageAvailability({
+    hasVideo: Boolean(ctrl.refVideo),
+    hasAnalysis: Boolean(analysisResult?.sourceFrame),
+    hasCharacterReference: Boolean(characterReference),
+    hasKeyframeModel: Boolean(keyframeModel),
+  })
 
   useEffect(() => {
     setControllerOutputType('video')
@@ -400,11 +407,13 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
         </div>
 
         <div className="mb-5 grid grid-cols-5 gap-1.5 text-center text-[11px]">
-          {['影片', '分析', '設定', '定裝', '生成'].map((label, index) => {
+          {['影片', '設定', '分析', '定裝', '生成'].map((label, index) => {
             const reached = index === 0
               ? Boolean(ctrl.refVideo)
-              : index <= 2
-                ? Boolean(analysisResult)
+              : index === 1
+                ? stageAvailability.showSetup
+                : index === 2
+                  ? Boolean(analysisResult)
                 : index === 3
                   ? Boolean(targetKeyframe && !keyframeIsStale)
                   : Boolean(generatedRun)
@@ -423,19 +432,24 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
         </button>
 
         {ctrl.refVideo ? (
-          <button type="button" onClick={() => void analyzeSource()} disabled={analyze.isPending || ctrl.isGenerating} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-300 disabled:opacity-50">
-            <AppIcon name="sparklesAlt" className="h-4 w-4" />
-            {analyze.isPending ? 'AI 正在分析運鏡與表演…' : analysisResult ? '重新分析鏡頭' : 'AI 分析鏡頭'}
-          </button>
+          <div className="mt-3 space-y-2">
+            <button type="button" onClick={() => void analyzeSource()} disabled={analyze.isPending || ctrl.isGenerating} className="flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-300 disabled:opacity-50">
+              <AppIcon name="sparklesAlt" className="h-4 w-4" />
+              {analyze.isPending ? 'AI 正在分析運鏡與表演…' : analysisResult ? '重新分析鏡頭（會產生費用）' : '需要時再分析鏡頭（會產生費用）'}
+            </button>
+            {!analysisResult ? <p className="text-[11px] leading-5 text-text-tertiary">可先填設定、上傳角色與場景圖片，不會產生 AI 分析費；建立定裝關鍵幀前再分析即可。</p> : null}
+          </div>
         ) : null}
 
-        {analysisResult ? (
+        {stageAvailability.showSetup ? (
           <div className="mt-5 space-y-5">
-            <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-xs leading-5 text-text-secondary">
-              <div className="mb-1 text-cyan-300">分析摘要</div>
-              {analysisResult.analysis.summary}
-              <div className="mt-2 text-text-tertiary">運鏡：{analysisResult.analysis.camera.movement}</div>
-            </div>
+            {analysisResult ? (
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-xs leading-5 text-text-secondary">
+                <div className="mb-1 text-cyan-300">分析摘要</div>
+                {analysisResult.analysis.summary}
+                <div className="mt-2 text-text-tertiary">運鏡：{analysisResult.analysis.camera.movement}</div>
+              </div>
+            ) : null}
 
             <ReconstructionBriefForm
               brief={brief}
@@ -456,7 +470,8 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
               durationMode={durationMode}
               sourceDurationSec={metadata?.durationSec ?? 5}
               onDurationChange={selectDuration}
-              sourceFrameUrl={analysisResult.sourceFrame.signedUrl}
+              sourceFrameUrl={analysisResult?.sourceFrame.signedUrl ?? null}
+              analysisReady={Boolean(analysisResult?.sourceFrame)}
               characterReference={characterReference}
               sceneReference={sceneReference}
               onReferencePick={uploadReference}
@@ -468,24 +483,26 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
               keyframeIsStale={keyframeIsStale}
               keyframeModelLabel={keyframeModel?.label ?? null}
               onGenerateKeyframe={() => void generateTargetKeyframe()}
-              canGenerateKeyframe={Boolean(characterReference && keyframeModel)}
+              canGenerateKeyframe={stageAvailability.canGenerateKeyframe}
               isGeneratingKeyframe={isGeneratingKeyframe}
               isBusy={ctrl.isBusy || ctrl.isGenerating || isGeneratingKeyframe}
               estimatedUsd={ctrl.costEstimate.data?.amountUsd ?? null}
             />
 
-            <ReconstructionPromptReview
-              prompt={promptPreview}
-              isStale={promptIsStale}
-              isBusy={ctrl.isBusy || isGeneratingKeyframe}
-              isGenerating={ctrl.isGenerating}
-              onBuild={buildPromptPreview}
-              onPromptChange={(prompt) => {
-                setPromptPreview(prompt)
-                ctrl.setPrompt(prompt)
-              }}
-              onGenerate={() => void generate()}
-            />
+            {analysisResult ? (
+              <ReconstructionPromptReview
+                prompt={promptPreview}
+                isStale={promptIsStale}
+                isBusy={ctrl.isBusy || isGeneratingKeyframe}
+                isGenerating={ctrl.isGenerating}
+                onBuild={buildPromptPreview}
+                onPromptChange={(prompt) => {
+                  setPromptPreview(prompt)
+                  ctrl.setPrompt(prompt)
+                }}
+                onGenerate={() => void generate()}
+              />
+            ) : null}
 
             {error ? <div role="alert" className="rounded-xl border border-red-400/30 bg-red-950/40 p-3 text-sm text-red-200">{error}</div> : null}
           </div>
