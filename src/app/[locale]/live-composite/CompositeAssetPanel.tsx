@@ -10,6 +10,7 @@ import { VirtualCharacterPanel } from './VirtualCharacterPanel'
 import { OcclusionPanel } from './OcclusionPanel'
 import { BackgroundGeneratorPanel } from './BackgroundGeneratorPanel'
 import { LiveCompositeWorkflowGuide, type LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
+import { MaterialReadinessCard } from './MaterialReadinessCard'
 
 interface CompositeAssetPanelProps {
   metadata: VideoMetadata | null
@@ -49,6 +50,8 @@ interface CompositeAssetPanelProps {
   canAnalyzeFace: boolean
   faceProgress: MaskAnalysisProgress
   faceTrack: FacePerformanceTrack | null
+  /** null＝瀏覽器無法偵測音訊軌（體檢報告顯示 unknown）。 */
+  videoHasAudio: boolean | null
   onAnalyzeFace: () => void
   onCancelFaceAnalysis: () => void
   onClearFaceTrack: () => void
@@ -83,7 +86,7 @@ function StepNavigation({ back, next, nextLabel = '下一步', onStepChange }: S
   )
 }
 
-export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
+export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, videoHasAudio, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
   return (
     <aside className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-stone-950/80">
       <LiveCompositeWorkflowGuide activeStep={workflowStep} completedSteps={completedWorkflowSteps} onStepChange={onWorkflowStepChange} />
@@ -105,6 +108,7 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
               </div>
             ) : null}
           </div>
+          <MaterialReadinessCard metadata={metadata} videoHasAudio={videoHasAudio} faceTrack={faceTrack} />
           {metadata ? <StepNavigation next={2} nextLabel="下一步：AI 辨識人物" onStepChange={onWorkflowStepChange} /> : null}
         </>
       ) : null}
@@ -113,6 +117,7 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
         <>
           <AiMaskPanel canAnalyze={Boolean(metadata) && !interactionDisabled} currentTime={currentTime} progress={analysisProgress} onAnalyzeCurrent={onAnalyzeCurrent} onAnalyzeClip={onAnalyzeClip} onCancel={onCancelAnalysis} />
           <FacePerformancePanel canAnalyze={canAnalyzeFace} progress={faceProgress} track={faceTrack} onAnalyze={onAnalyzeFace} onCancel={onCancelFaceAnalysis} onClear={onClearFaceTrack} />
+          <MaterialReadinessCard metadata={metadata} videoHasAudio={videoHasAudio} faceTrack={faceTrack} />
           <StepNavigation back={1} next={completedWorkflowSteps.has(2) ? 3 : undefined} nextLabel="下一步：檢查人物邊緣" onStepChange={onWorkflowStepChange} />
         </>
       ) : null}

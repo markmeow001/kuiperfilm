@@ -16,6 +16,7 @@ import { releaseInteractiveSegmenter } from './lib/interactive-segmenter'
 import { DEFAULT_CHARACTER_APPEARANCE } from './lib/character-appearance'
 import { releasePoseLandmarker } from './lib/pose-landmarker'
 import { releaseFaceLandmarker } from './lib/face-landmarker'
+import { probeVideoHasAudio } from './lib/video-audio-probe'
 import {
   extractFacePerformance,
   FACE_ANALYSIS_DEFAULT_INTERVAL,
@@ -109,6 +110,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const [analysisProgress, setAnalysisProgress] = useState<MaskAnalysisProgress>(INITIAL_ANALYSIS_PROGRESS)
   const [faceProgress, setFaceProgress] = useState<MaskAnalysisProgress>(INITIAL_ANALYSIS_PROGRESS)
   const [faceTrack, setFaceTrack] = useState<FacePerformanceTrack | null>(null)
+  // null＝尚未偵測或瀏覽器無法偵測音訊軌；供表演素材體檢報告使用。
+  const [videoHasAudio, setVideoHasAudio] = useState<boolean | null>(null)
   const [exportProgress, setExportProgress] = useState<CompositeExportProgress>(INITIAL_EXPORT_PROGRESS)
   const isVideoExporting = exportProgress.status === 'preparing' || exportProgress.status === 'recording'
   const isMaskAnalyzing = analysisProgress.status === 'loading-model' || analysisProgress.status === 'analyzing'
@@ -141,6 +144,21 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       })
     return () => { cancelled = true }
   }, [sourceRunId, videoUrl])
+
+  useEffect(() => {
+    setVideoHasAudio(null)
+    if (!videoUrl) return
+    let cancelled = false
+    void probeVideoHasAudio(videoUrl)
+      .then((result) => {
+        if (!cancelled) setVideoHasAudio(result)
+      })
+      .catch(() => {
+        // 偵測失敗＝無法確認，體檢報告以 unknown 列顯示。
+        if (!cancelled) setVideoHasAudio(null)
+      })
+    return () => { cancelled = true }
+  }, [videoUrl])
 
   useEffect(
     () => () => {
@@ -840,6 +858,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           canAnalyzeFace={canAnalyzeFace}
           faceProgress={faceProgress}
           faceTrack={faceTrack}
+          videoHasAudio={videoHasAudio}
           onAnalyzeFace={() => void analyzeFacePerformance()}
           onCancelFaceAnalysis={cancelFaceAnalysis}
           onClearFaceTrack={() => {
