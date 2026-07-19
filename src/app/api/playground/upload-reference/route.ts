@@ -21,6 +21,7 @@ import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { uploadToCOS, generateUniqueKey, getSignedUrl } from '@/lib/cos'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
+import { detectSupportedImageType } from '@/lib/playground/image-file-type'
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const MAX_VIDEO_SIZE_BYTES = 150 * 1024 * 1024 // 150 MB — short 4K live-action references can exceed 50 MB
@@ -133,7 +134,16 @@ export const POST = apiHandler(async (request: NextRequest) => {
 
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
-  const ext = extensionFor(file.type)
+  const detectedImageType = type === 'image' ? detectSupportedImageType(buffer) : null
+  if (type === 'image' && !detectedImageType) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'IMAGE_CONTENT_INVALID',
+      details: { message: '圖片內容必須是有效的 JPEG、PNG 或 WebP' },
+    })
+  }
+  // Use the bytes as the source of truth. A PNG mislabeled by the browser as
+  // image/jpeg must be stored as .png so R2 returns image/png to the preview.
+  const ext = detectedImageType?.extension ?? extensionFor(file.type)
   const keyPrefix = type === 'image'
     ? `images/playground-ref/${userId}/ref`
     : type === 'video'
@@ -143,7 +153,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   await uploadToCOS(buffer, key)
 
   _ulogInfo(
-    `✓ Playground reference uploaded: userId=${userId} type=${type} key=${key} size=${file.size}`,
+    `✓ Playground reference uploaded: userId=${userId} type=${type} key=${key} size=${file.size}${detectedImageType ? ` detectedMime=${detectedImageType.mime}` : ''}`,
   )
 
   return NextResponse.json({
