@@ -35,4 +35,28 @@ describe('buildReconstructionPrompt', () => {
     const prompt = buildReconstructionPrompt({ ...baseInput, dialogue: [] })
     expect(prompt).toContain('Do not invent or rewrite speech')
   })
+
+  it('binds named character and environment images to their exact roles', () => {
+    const prompt = buildReconstructionPrompt({
+      ...baseInput,
+      references: [
+        { imageIndex: 1, name: '女主角', role: 'character' },
+        { imageIndex: 2, name: '百樂門舞台', role: 'environment' },
+        { imageIndex: 3, name: '特效妝', role: 'wardrobe' },
+      ],
+    })
+    expect(prompt).toContain('Reference image 1 is bound to “女主角”')
+    expect(prompt).toContain('exact identity, face, body proportions')
+    expect(prompt).toContain('Reference image 2 is bound to “百樂門舞台”')
+    expect(prompt).toContain('exact architecture, layout, materials')
+    expect(prompt).toContain('Reference image 3 is bound to “特效妝”')
+    expect(prompt).toContain('exact wardrobe, hair, makeup, prosthetic makeup')
+  })
+
+  it('states the requested output duration separately from the source duration', () => {
+    const prompt = buildReconstructionPrompt({ ...baseInput, outputDurationSec: 8 })
+    expect(prompt).toContain('video 1 (12.00 seconds)')
+    expect(prompt).toContain('target duration of 8.00 seconds')
+    expect(prompt).toContain('Fit the source performance into the requested output duration')
+  })
 })

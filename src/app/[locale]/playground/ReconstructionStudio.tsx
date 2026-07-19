@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import { buildReconstructionPrompt } from '@/lib/playground/reconstruction-prompt'
 import type {
@@ -9,11 +8,19 @@ import type {
   ReconstructionAudioMode,
   ReconstructionCreativeBrief,
   ReconstructionDialogueLine,
+  ReconstructionReferenceBinding,
+  ReconstructionReferenceRole,
   ReconstructionVideoMetadata,
 } from '@/lib/playground/reconstruction-contract'
 import { useAnalyzePlaygroundVideo } from '@/lib/query/mutations/playground-mutations'
 import type { PlaygroundController } from './usePlaygroundController'
 import { REF_VIDEO_MAX_SEC, REF_VIDEO_MIN_SEC } from './usePlaygroundController'
+import {
+  ReconstructionGenerationControls,
+  ReconstructionPromptReview,
+} from './ReconstructionGenerationControls'
+import { ReconstructionBriefForm } from './ReconstructionBriefForm'
+import { ReconstructionResultStage } from './ReconstructionResultStage'
 
 interface ReconstructionStudioProps {
   ctrl: PlaygroundController
@@ -64,26 +71,13 @@ function readLocalMetadata(file: File): Promise<ReconstructionVideoMetadata> {
   })
 }
 
-function Field(props: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  multiline?: boolean
-}) {
-  const className = 'w-full rounded-xl border border-white/[0.09] bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400/60'
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-xs text-text-secondary">{props.label}</span>
-      {props.multiline ? (
-        <textarea className={`${className} min-h-20 resize-y`} value={props.value} onChange={(event) => props.onChange(event.target.value)} />
-      ) : (
-        <input className={className} value={props.value} onChange={(event) => props.onChange(event.target.value)} />
-      )}
-    </label>
-  )
-}
-
 export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps) {
+  const {
+    modelKey: controllerModelKey,
+    setModelKey: setControllerModelKey,
+    setOutputType: setControllerOutputType,
+    setVideoRefMode: setControllerVideoRefMode,
+  } = ctrl
   const inputRef = useRef<HTMLInputElement | null>(null)
   const analyze = useAnalyzePlaygroundVideo()
   const [sourceName, setSourceName] = useState<string | null>(null)
@@ -92,13 +86,56 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
   const [brief, setBrief] = useState<ReconstructionCreativeBrief>(DEFAULT_BRIEF)
   const [dialogue, setDialogue] = useState<ReconstructionDialogueLine[]>([])
   const [audioMode, setAudioMode] = useState<ReconstructionAudioMode>('preserve-original')
+  const [durationMode, setDurationMode] = useState('source')
+  const [selectedModelKey, setSelectedModelKey] = useState('')
+  const [referenceRoles, setReferenceRoles] = useState<Record<string, ReconstructionReferenceRole>>({})
+  const [promptPreview, setPromptPreview] = useState('')
+  const [promptFingerprint, setPromptFingerprint] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reconstructionRunId, setReconstructionRunId] = useState<string | null>(null)
 
-  const seedanceModel = useMemo(() => (
-    ctrl.videoModels.find((model) => model.value === 'atlascloud::seedance-2.0-r2v')
-    ?? ctrl.videoModels.find((model) => /^atlascloud::seedance-2\.0-(?:fast-)?r2v$/.test(model.value))
+  const reconstructionModels = useMemo(() => (
+    ctrl.videoModels.filter((model) => /^atlascloud::seedance-2\.0-(?:fast-)?r2v$/.test(model.value))
   ), [ctrl.videoModels])
+  const defaultModel = reconstructionModels.find((model) => model.value === 'atlascloud::seedance-2.0-r2v')
+    ?? reconstructionModels[0]
+  const effectiveModelKey = reconstructionModels.some((model) => model.value === selectedModelKey)
+    ? selectedModelKey
+    : (defaultModel?.value ?? '')
+  const outputDurationSec = durationMode === 'source'
+    ? Math.max(4, Math.min(15, Math.round(metadata?.durationSec ?? 5)))
+    : Number(durationMode)
+  const referenceBindings = useMemo<ReconstructionReferenceBinding[]>(() => (
+    ctrl.refImages.map((reference, index) => ({
+      imageIndex: index + 1,
+      name: reference.name?.trim() ?? '',
+      role: referenceRoles[reference.key] ?? 'character',
+    }))
+  ), [ctrl.refImages, referenceRoles])
+  const currentFingerprint = useMemo(() => JSON.stringify({
+    analysisResult,
+    metadata,
+    brief,
+    dialogue,
+    audioMode,
+    durationMode,
+    outputDurationSec,
+    effectiveModelKey,
+    references: ctrl.refImages.map((reference) => ({
+      key: reference.key,
+      name: reference.name?.trim() ?? '',
+      role: referenceRoles[reference.key] ?? 'character',
+    })),
+  }), [analysisResult, metadata, brief, dialogue, audioMode, durationMode, outputDurationSec, effectiveModelKey, ctrl.refImages, referenceRoles])
+  const promptIsStale = promptFingerprint !== null && promptFingerprint !== currentFingerprint
+
+  useEffect(() => {
+    setControllerOutputType('video')
+    setControllerVideoRefMode('omni')
+    if (effectiveModelKey && controllerModelKey !== effectiveModelKey) {
+      setControllerModelKey(effectiveModelKey)
+    }
+  }, [effectiveModelKey, controllerModelKey, setControllerModelKey, setControllerOutputType, setControllerVideoRefMode])
   const generatedRun = ctrl.latestRun?.outputType === 'video' && ctrl.latestRun.id === reconstructionRunId
     ? ctrl.latestRun
     : null
@@ -113,13 +150,19 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       }
       const uploaded = await ctrl.upload.mutateAsync({ file, type: 'video' })
       ctrl.applyUploadedVideoReference({ key: uploaded.key, signedUrl: uploaded.signedUrl })
-      ctrl.setDurationSec(Math.max(4, Math.min(15, Math.round(local.durationSec))))
+      const sourceDuration = Math.max(4, Math.min(15, Math.round(local.durationSec)))
+      ctrl.setDurationSec(sourceDuration)
+      if (effectiveModelKey) ctrl.setModelKey(effectiveModelKey)
       ctrl.setAspectRatio(nearestAspectRatio(local.width, local.height))
       setSourceName(file.name)
       setMetadata(local)
       setAnalysisResult(null)
       setDialogue([])
-      setAudioMode('preserve-original')
+      setAudioMode(local.durationSec < 4 ? 'generate' : 'preserve-original')
+      setDurationMode(local.durationSec < 4 ? '4' : 'source')
+      setReferenceRoles({})
+      setPromptPreview('')
+      setPromptFingerprint(null)
       setReconstructionRunId(null)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '影片上傳失敗')
@@ -135,7 +178,8 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       setMetadata(result.metadata)
       ctrl.setDurationSec(Math.max(4, Math.min(15, Math.round(result.metadata.durationSec))))
       ctrl.setAspectRatio(nearestAspectRatio(result.metadata.width, result.metadata.height))
-      if (!result.metadata.hasAudio) setAudioMode('generate')
+      if (!result.metadata.hasAudio || result.metadata.durationSec < 4) setAudioMode('generate')
+      if (result.metadata.durationSec < 4) setDurationMode('4')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '鏡頭分析失敗')
     }
@@ -157,43 +201,99 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     setDialogue((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line))
   }
 
-  async function generate() {
-    if (!analysisResult || !metadata || !ctrl.refVideo) {
-      setError('請先上傳並完成鏡頭分析')
-      return
+  function selectModel(modelKey: string) {
+    setSelectedModelKey(modelKey)
+    ctrl.setModelKey(modelKey)
+    ctrl.setOutputType('video')
+    ctrl.setVideoRefMode('omni')
+  }
+
+  function selectDuration(mode: string) {
+    setDurationMode(mode)
+    const nextDuration = mode === 'source'
+      ? Math.max(4, Math.min(15, Math.round(metadata?.durationSec ?? 5)))
+      : Number(mode)
+    ctrl.setDurationSec(nextDuration)
+  }
+
+  function removeReferenceImage(index: number) {
+    const removedKey = ctrl.refImages[index]?.key
+    ctrl.removeRefImage(index)
+    if (removedKey) {
+      setReferenceRoles((current) => {
+        const next = { ...current }
+        delete next[removedKey]
+        return next
+      })
     }
-    if (!seedanceModel) {
-      setError('目前帳號尚未啟用 AtlasCloud Seedance 2.0 R2V，請先到設定中心啟用')
-      return
-    }
+  }
+
+  function validateConfiguration(): string | null {
+    if (!analysisResult || !metadata || !ctrl.refVideo) return '請先上傳並完成鏡頭分析'
+    if (!effectiveModelKey) return '目前帳號尚未啟用 AtlasCloud Seedance 2.0 R2V，請先到設定中心啟用'
     const required = [brief.era, brief.location, brief.story, brief.characterDesign, brief.wardrobe, brief.mood, brief.weatherAndTime, brief.backgroundMotion]
-    if (required.some((value) => !value.trim())) {
-      setError('重建設定不可留白，請補齊年代、場景、人物與動態背景描述')
-      return
-    }
+    if (required.some((value) => !value.trim())) return '重建設定不可留白，請補齊年代、場景、人物與動態背景描述'
     const invalidLine = dialogue.find((line) => !line.text.trim() || line.startSec < 0 || line.endSec <= line.startSec || line.endSec > metadata.durationSec + 0.1)
-    if (invalidLine) {
-      setError('對白內容與時間碼需完整，且不得超過原片長度')
+    if (invalidLine) return '對白內容與時間碼需完整，且不得超過原片長度'
+    if (audioMode === 'preserve-original' && durationMode !== 'source') return '保留原始對白音軌時，輸出秒數必須選擇「跟隨原片」'
+    if (!Number.isInteger(outputDurationSec) || outputDurationSec < 4 || outputDurationSec > 15) return '輸出秒數需介於 4–15 秒'
+    if (referenceBindings.some((reference) => !reference.name)) return '每張參考圖都必須填寫名稱，才能正確綁定人物或場景'
+    const normalizedNames = referenceBindings.map((reference) => reference.name.toLocaleLowerCase())
+    if (new Set(normalizedNames).size !== normalizedNames.length) return '參考圖名稱不可重複，請為人物、場景與服裝使用不同名稱'
+    return null
+  }
+
+  function buildPromptPreview() {
+    const validationError = validateConfiguration()
+    if (validationError) {
+      setError(validationError)
       return
     }
+    if (!analysisResult || !metadata) return
     const prompt = buildReconstructionPrompt({
       analysis: analysisResult.analysis,
       metadata,
       creative: brief,
       dialogue,
       audioMode,
+      references: referenceBindings,
+      outputDurationSec: durationMode === 'source' ? metadata.durationSec : outputDurationSec,
     })
     if (prompt.length > 6000) {
       setError(`重建提示詞為 ${prompt.length} 字，超過 6000 字上限；請縮短創作設定或對白`)
       return
     }
+    setError(null)
+    setPromptPreview(prompt)
+    setPromptFingerprint(currentFingerprint)
     ctrl.setPrompt(prompt)
-    ctrl.setModelKey(seedanceModel.value)
+  }
+
+  async function generate() {
+    const validationError = validateConfiguration()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+    if (!promptPreview.trim()) {
+      setError('請先產出並檢查 Prompt，再確認生成')
+      return
+    }
+    if (promptIsStale) {
+      setError('設定已變更，請重新產出 Prompt 後再生成')
+      return
+    }
+    if (promptPreview.length > 6000) {
+      setError(`重建提示詞為 ${promptPreview.length} 字，超過 6000 字上限；請精簡後再生成`)
+      return
+    }
+    ctrl.setPrompt(promptPreview)
+    ctrl.setModelKey(effectiveModelKey)
     ctrl.setOutputType('video')
     ctrl.setVideoRefMode('omni')
     ctrl.setSoundOn(audioMode === 'generate')
     setError(null)
-    const run = await ctrl.handleRun(seedanceModel.value, prompt, {
+    const run = await ctrl.handleRun(effectiveModelKey, promptPreview, {
       preserveSourceAudio: audioMode === 'preserve-original',
       preservePromptVerbatim: true,
     })
@@ -241,73 +341,64 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
               <div className="mt-2 text-text-tertiary">運鏡：{analysisResult.analysis.camera.movement}</div>
             </div>
 
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-white">重建設定</div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="年代" value={brief.era} onChange={(era) => setBrief((current) => ({ ...current, era }))} />
-                <Field label="時間／天氣" value={brief.weatherAndTime} onChange={(weatherAndTime) => setBrief((current) => ({ ...current, weatherAndTime }))} />
-              </div>
-              <Field label="新場景" value={brief.location} onChange={(location) => setBrief((current) => ({ ...current, location }))} />
-              <Field label="故事情境" value={brief.story} multiline onChange={(story) => setBrief((current) => ({ ...current, story }))} />
-              <Field label="新人物設計" value={brief.characterDesign} multiline onChange={(characterDesign) => setBrief((current) => ({ ...current, characterDesign }))} />
-              <Field label="服裝／髮妝／特效妝" value={brief.wardrobe} multiline onChange={(wardrobe) => setBrief((current) => ({ ...current, wardrobe }))} />
-              <Field label="影像氣氛" value={brief.mood} onChange={(mood) => setBrief((current) => ({ ...current, mood }))} />
-              <Field label="背景如何持續運動" value={brief.backgroundMotion} multiline onChange={(backgroundMotion) => setBrief((current) => ({ ...current, backgroundMotion }))} />
-              <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={brief.replacePeople} onChange={(event) => setBrief((current) => ({ ...current, replacePeople: event.target.checked }))} className="accent-cyan-400" />完整替換原演員外觀，只保留表情、情緒與動作</label>
-            </div>
+            <ReconstructionGenerationControls
+              models={reconstructionModels}
+              modelKey={effectiveModelKey}
+              onModelChange={selectModel}
+              durationMode={durationMode}
+              sourceDurationSec={metadata?.durationSec ?? 5}
+              onDurationChange={selectDuration}
+              refImages={ctrl.refImages}
+              refImagesCap={ctrl.refImagesCap}
+              referenceRoles={referenceRoles}
+              onRoleChange={(key, role) => setReferenceRoles((current) => ({ ...current, [key]: role }))}
+              onNameChange={ctrl.setRefImageName}
+              onRemoveImage={removeReferenceImage}
+              imageInputRef={ctrl.imageInputRef}
+              onImagePick={ctrl.handleImagePick}
+              isBusy={ctrl.isBusy || ctrl.isGenerating}
+              estimatedUsd={ctrl.costEstimate.data?.amountUsd ?? null}
+            />
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between"><div className="text-sm font-medium text-white">對白契約</div><button type="button" onClick={addDialogue} className="text-xs text-cyan-300 hover:text-cyan-200">＋ 新增對白</button></div>
-              <p className="text-xs leading-5 text-text-tertiary">AI 不會從抽幀猜台詞。可輸入逐句對白供模型理解；選擇保留原音時，輸出會重新封裝原片音軌，確保台詞不被改寫。</p>
-              {dialogue.map((line) => (
-                <div key={line.id} className="space-y-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-                  <div className="grid grid-cols-[1fr_72px_72px_auto] gap-2">
-                    <input aria-label="說話者" value={line.speaker} onChange={(event) => updateDialogue(line.id, { speaker: event.target.value })} className="min-w-0 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs" />
-                    <input aria-label="開始秒數" type="number" min="0" step="0.1" value={line.startSec} onChange={(event) => updateDialogue(line.id, { startSec: Number(event.target.value) })} className="rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs" />
-                    <input aria-label="結束秒數" type="number" min="0" step="0.1" value={line.endSec} onChange={(event) => updateDialogue(line.id, { endSec: Number(event.target.value) })} className="rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs" />
-                    <button type="button" aria-label="刪除對白" onClick={() => setDialogue((current) => current.filter((item) => item.id !== line.id))} className="text-text-tertiary hover:text-red-300">×</button>
-                  </div>
-                  <textarea aria-label="對白內容" placeholder="逐字輸入原本對白" value={line.text} onChange={(event) => updateDialogue(line.id, { text: event.target.value })} className="min-h-16 w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-sm" />
-                  <input aria-label="說話情緒" placeholder="情緒與語氣，例如：壓低聲音、焦急但克制" value={line.emotion} onChange={(event) => updateDialogue(line.id, { emotion: event.target.value })} className="w-full rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs" />
-                </div>
-              ))}
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" disabled={!metadata?.hasAudio} onClick={() => setAudioMode('preserve-original')} className={`rounded-xl border px-3 py-2.5 text-xs ${audioMode === 'preserve-original' ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-200' : 'border-white/10 text-text-tertiary'} disabled:opacity-40`}>保留原始對白音軌</button>
-                <button type="button" onClick={() => setAudioMode('generate')} className={`rounded-xl border px-3 py-2.5 text-xs ${audioMode === 'generate' ? 'border-violet-400/50 bg-violet-400/10 text-violet-200' : 'border-white/10 text-text-tertiary'}`}>讓模型生成聲音</button>
-              </div>
-            </div>
+            <ReconstructionBriefForm
+              brief={brief}
+              onBriefChange={setBrief}
+              dialogue={dialogue}
+              onAddDialogue={addDialogue}
+              onUpdateDialogue={updateDialogue}
+              onRemoveDialogue={(id) => setDialogue((current) => current.filter((item) => item.id !== id))}
+              audioMode={audioMode}
+              onAudioModeChange={setAudioMode}
+              hasAudio={Boolean(metadata?.hasAudio)}
+            />
+
+            <ReconstructionPromptReview
+              prompt={promptPreview}
+              isStale={promptIsStale}
+              isBusy={ctrl.isBusy}
+              isGenerating={ctrl.isGenerating}
+              onBuild={buildPromptPreview}
+              onPromptChange={(prompt) => {
+                setPromptPreview(prompt)
+                ctrl.setPrompt(prompt)
+              }}
+              onGenerate={() => void generate()}
+            />
 
             {error ? <div role="alert" className="rounded-xl border border-red-400/30 bg-red-950/40 p-3 text-sm text-red-200">{error}</div> : null}
-            <button type="button" onClick={() => void generate()} disabled={ctrl.isBusy || ctrl.isGenerating} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-violet-400 px-4 py-3.5 text-sm font-semibold text-black disabled:opacity-50">
-              <AppIcon name="sparkles" className="h-4 w-4" />
-              {ctrl.isGenerating ? 'Seedance 2.0 重建中…' : '生成實拍重建影片'}
-            </button>
           </div>
         ) : error ? <div role="alert" className="mt-4 rounded-xl border border-red-400/30 bg-red-950/40 p-3 text-sm text-red-200">{error}</div> : null}
       </section>
 
-      <section className="flex min-w-0 flex-1 flex-col p-5">
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-2">
-          <div className="flex min-h-[320px] flex-col rounded-2xl border border-white/[0.08] bg-black/30 p-3">
-            <div className="mb-3 flex items-center justify-between text-sm"><span className="text-white">原始表演參考</span>{metadata ? <span className="font-mono text-xs text-text-tertiary">{metadata.durationSec.toFixed(1)}s · {metadata.width}×{metadata.height}</span> : null}</div>
-            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-black">
-              {ctrl.refVideo ? <video src={ctrl.refVideo.signedUrl} controls playsInline className="max-h-full max-w-full" /> : <div className="text-center text-sm text-text-tertiary">上傳影片後，這裡會顯示原始鏡頭</div>}
-            </div>
-          </div>
-          <div className="flex min-h-[320px] flex-col rounded-2xl border border-white/[0.08] bg-black/30 p-3">
-            <div className="mb-3 flex items-center justify-between text-sm"><span className="text-white">重建結果</span><span className="text-xs text-text-tertiary">AtlasCloud · Seedance 2.0 R2V</span></div>
-            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-black">
-              {generatedUrl ? <video src={generatedUrl} controls playsInline className="max-h-full max-w-full" /> : generatedRun && generatedRun.status !== 'failed' ? <div className="animate-pulse text-sm text-cyan-300">正在保留運鏡、表演與時間關係…</div> : <div className="max-w-md text-center text-sm leading-6 text-text-tertiary">AI 分析不是最後輸出。完成設定後，系統會把鏡頭語言、演員表演、逐句對白、新人物與動態背景整理成固定契約再送給模型。</div>}
-            </div>
-          </div>
-        </div>
-        {generatedUrl && generatedRun ? (
-          <div className="mt-4 flex items-center justify-end gap-3">
-            <Link href={`/${locale}/live-composite?sourceRunId=${encodeURIComponent(generatedRun.id)}`} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-text-secondary hover:border-cyan-400/40 hover:text-white">送到專業合成修邊</Link>
-            <a href={generatedUrl} target="_blank" rel="noreferrer" className="rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-black">開啟結果</a>
-          </div>
-        ) : null}
-      </section>
+      <ReconstructionResultStage
+        locale={locale}
+        sourceVideoUrl={ctrl.refVideo?.signedUrl ?? null}
+        sourceDurationSec={metadata?.durationSec ?? null}
+        sourceWidth={metadata?.width ?? null}
+        sourceHeight={metadata?.height ?? null}
+        generatedRun={generatedRun}
+        generatedUrl={generatedUrl ?? null}
+      />
     </main>
   )
 }

@@ -1,6 +1,7 @@
 import type {
   ReconstructionDialogueLine,
   ReconstructionPromptInput,
+  ReconstructionReferenceBinding,
 } from './reconstruction-contract'
 
 function clean(value: string): string {
@@ -30,8 +31,28 @@ function dialogueSection(lines: ReconstructionDialogueLine[], preserveOriginal: 
   ].join('\n')
 }
 
+const REFERENCE_ROLE_INSTRUCTIONS: Record<ReconstructionReferenceBinding['role'], string> = {
+  character: 'Use this image as the exact identity, face, body proportions, hairstyle, and age reference for the named character.',
+  environment: 'Use this image as the exact architecture, layout, materials, palette, and atmosphere reference for the reconstructed environment.',
+  wardrobe: 'Use this image as the exact wardrobe, hair, makeup, prosthetic makeup, and accessory reference.',
+}
+
+function referenceSection(references: ReconstructionReferenceBinding[]): string {
+  if (references.length === 0) {
+    return 'No additional still-image identity or environment references were supplied.'
+  }
+  return references
+    .slice()
+    .sort((a, b) => a.imageIndex - b.imageIndex)
+    .map((reference) => (
+      `- Reference image ${reference.imageIndex} is bound to “${clean(reference.name)}”. ${REFERENCE_ROLE_INSTRUCTIONS[reference.role]} Do not transfer this image to any other subject or scene element.`
+    ))
+    .join('\n')
+}
+
 export function buildReconstructionPrompt(input: ReconstructionPromptInput): string {
-  const { analysis, creative, metadata, dialogue, audioMode } = input
+  const { analysis, creative, metadata, dialogue, audioMode, references = [] } = input
+  const outputDurationSec = input.outputDurationSec ?? metadata.durationSec
   const preserveOriginal = audioMode === 'preserve-original'
   const subjects = analysis.subjects.map((subject) => (
     `- ${clean(subject.id)}: ${clean(subject.description)}; action: ${clean(subject.action)}; position: ${clean(subject.position)}; relation: ${clean(subject.relation) || 'not specified'}.`
@@ -41,7 +62,10 @@ export function buildReconstructionPrompt(input: ReconstructionPromptInput): str
 
   return [
     'REFERENCE CONTRACT',
-    `Use video 1 as the exact source of performance, timing, blocking, camera motion, lens perspective, framing, subject scale changes, depth parallax, and shot duration (${metadata.durationSec.toFixed(2)} seconds). This is one continuous shot.`,
+    `Use video 1 (${metadata.durationSec.toFixed(2)} seconds) as the exact source of performance, timing, blocking, camera motion, lens perspective, framing, subject scale changes, and depth parallax. Produce one continuous shot with a target duration of ${outputDurationSec.toFixed(2)} seconds.`,
+    outputDurationSec === metadata.durationSec
+      ? 'Preserve the original action timing without retiming or truncation.'
+      : 'Fit the source performance into the requested output duration while preserving the action order, emotional beats, camera path, and relative timing. Do not invent replacement choreography.',
     preserveOriginal
       ? 'Use the reference audio from video 1 as the exact dialogue and timing contract. The final delivered audio must remain the original source audio.'
       : 'Generate synchronized production audio while following the dialogue contract below.',
@@ -63,6 +87,9 @@ export function buildReconstructionPrompt(input: ReconstructionPromptInput): str
     `Wardrobe, hair, and makeup: ${clean(creative.wardrobe)}.`,
     `Mood and visual language: ${clean(creative.mood)}. Weather and time: ${clean(creative.weatherAndTime)}.`,
     `The reconstructed environment must remain alive throughout the shot: ${clean(creative.backgroundMotion)}.`,
+    '',
+    'REFERENCE IMAGE BINDINGS',
+    referenceSection(references),
     '',
     'DIALOGUE AND PERFORMANCE CONTRACT',
     dialogueSection(dialogue, preserveOriginal),

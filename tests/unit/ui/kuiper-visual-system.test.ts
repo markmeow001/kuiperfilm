@@ -172,4 +172,18 @@ describe('Kuiper visual system', () => {
     expect(imageStudio).toContain('maxLength={4000}')
     expect(imageStudio).toContain('kuiper-primary-button')
   })
+
+  it('requires explicit generation controls and prompt review for live-action reconstruction', () => {
+    const studio = readFileSync('src/app/[locale]/playground/ReconstructionStudio.tsx', 'utf8')
+    const controls = readFileSync('src/app/[locale]/playground/ReconstructionGenerationControls.tsx', 'utf8')
+
+    expect(studio).toContain('ReconstructionGenerationControls')
+    expect(studio).toContain('ReconstructionPromptReview')
+    expect(studio).toContain("audioMode === 'preserve-original' && durationMode !== 'source'")
+    expect(controls).toContain('實拍重建模型')
+    expect(controls).toContain('實拍重建輸出秒數')
+    expect(controls).toContain('人物／場景參考圖')
+    expect(controls).toContain('生成前檢查 Prompt')
+    expect(controls).toContain('確認 Prompt 並生成影片')
+  })
 })

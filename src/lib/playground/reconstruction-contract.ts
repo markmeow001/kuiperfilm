@@ -52,6 +52,14 @@ export interface ReconstructionDialogueLine {
 
 export type ReconstructionAudioMode = 'preserve-original' | 'generate'
 
+export type ReconstructionReferenceRole = 'character' | 'environment' | 'wardrobe'
+
+export interface ReconstructionReferenceBinding {
+  imageIndex: number
+  name: string
+  role: ReconstructionReferenceRole
+}
+
 export interface ReconstructionCreativeBrief {
   era: string
   location: string
@@ -70,6 +78,8 @@ export interface ReconstructionPromptInput {
   creative: ReconstructionCreativeBrief
   dialogue: ReconstructionDialogueLine[]
   audioMode: ReconstructionAudioMode
+  references?: ReconstructionReferenceBinding[]
+  outputDurationSec?: number
 }
 
 export interface ReconstructionAnalysisResult extends Record<string, unknown> {
