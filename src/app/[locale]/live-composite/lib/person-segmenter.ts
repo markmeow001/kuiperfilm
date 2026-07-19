@@ -1,4 +1,4 @@
-import type { ImageSegmenter } from '@mediapipe/tasks-vision'
+import type { ImageSegmenter, MPMask } from '@mediapipe/tasks-vision'
 import { confidenceToMaskRaster, selectPersonSegmenterVariant, type PersonSegmenterVariant } from './mask-analysis'
 import type { MaskRaster } from '../live-composite-types'
 
@@ -7,9 +7,14 @@ const MODEL_PATHS: Record<PersonSegmenterVariant, string> = {
   landscape: '/models/live-composite/selfie-segmenter-landscape.tflite',
   square: '/models/live-composite/selfie-segmenter-square.tflite',
 }
-const PERSON_CONFIDENCE_INDEX = 1
-
 const segmenterPromises: Partial<Record<PersonSegmenterVariant, Promise<ImageSegmenter>>> = {}
+
+/** Selfie Segmenter emits one foreground probability mask, not a background/person pair. */
+export function selectPersonConfidenceMask(confidenceMasks: MPMask[] | undefined): MPMask {
+  const personMask = confidenceMasks?.[0]
+  if (!personMask) throw new Error('人物分割模型沒有回傳人物信心遮罩')
+  return personMask
+}
 
 async function createPersonSegmenter(variant: PersonSegmenterVariant): Promise<ImageSegmenter> {
   const { FilesetResolver, ImageSegmenter } = await import('@mediapipe/tasks-vision')
@@ -66,12 +71,9 @@ export async function segmentPersonFrame(
   const segmenter = await getPersonSegmenter(selectPersonSegmenterVariant(width, height))
   const result = segmenter.segment(source)
   const confidenceMasks = result.confidenceMasks
-  if (!confidenceMasks || confidenceMasks.length <= PERSON_CONFIDENCE_INDEX) {
-    throw new Error('人物分割模型沒有回傳人物信心遮罩')
-  }
 
   try {
-    const personMask = confidenceMasks[PERSON_CONFIDENCE_INDEX]
+    const personMask = selectPersonConfidenceMask(confidenceMasks)
     return confidenceToMaskRaster(
       personMask.getAsFloat32Array(),
       personMask.width,
@@ -80,7 +82,7 @@ export async function segmentPersonFrame(
       edgeSoftness,
     )
   } finally {
-    confidenceMasks.forEach((mask) => mask.close())
+    confidenceMasks?.forEach((mask) => mask.close())
     result.categoryMask?.close()
   }
 }

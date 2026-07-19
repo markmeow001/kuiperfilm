@@ -11,6 +11,10 @@ describe('live composite AI mask analysis', () => {
     expect(buildMaskAnalysisTimes(2.4, 1)).toEqual([0, 1, 2, 2.4])
   })
 
+  it('支援 0.25 秒精細取樣', () => {
+    expect(buildMaskAnalysisTimes(1, 0.25)).toEqual([0, 0.25, 0.5, 0.75, 1])
+  })
+
   it('分析影格超過安全上限 -> 明確拒絕而非偷偷減少取樣', () => {
     expect(() => buildMaskAnalysisTimes(100, 0.5, 10)).toThrow('超過上限 10')
   })

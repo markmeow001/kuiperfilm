@@ -1,4 +1,5 @@
 import type { MaskKeyframe, MaskRaster, MaskStroke } from '../live-composite-types'
+import { morphMaskRasters } from './mask-morph'
 
 export const MASK_KEYFRAME_TIME_EPSILON = 0.02
 
@@ -26,6 +27,32 @@ export function resolveMaskKeyframe(keyframes: MaskKeyframe[], time: number): Ma
     resolved = keyframe
   }
   return resolved
+}
+
+export function interpolateMaskRasters(
+  before: MaskRaster,
+  after: MaskRaster,
+  progress: number,
+): MaskRaster {
+  return morphMaskRasters(before, after, progress)
+}
+
+/**
+ * Resolve the visible timeline frame. Manual strokes intentionally stay on
+ * their owning keyframe, while compatible AI rasters dissolve into the next
+ * sample with coarse position/scale compensation so playback/export no longer
+ * hard-cuts or leaves two overlapping silhouettes at every analysis interval.
+ */
+export function resolveMaskFrame(keyframes: MaskKeyframe[], time: number): MaskKeyframe | null {
+  const sorted = sortMaskKeyframes(keyframes)
+  const before = resolveMaskKeyframe(sorted, time)
+  if (!before?.baseMask) return before
+  const after = sorted.find((keyframe) => keyframe.time > time + MASK_KEYFRAME_TIME_EPSILON && keyframe.baseMask)
+  if (!after?.baseMask || after.time <= before.time) return before
+  return {
+    ...before,
+    baseMask: interpolateMaskRasters(before.baseMask, after.baseMask, (time - before.time) / (after.time - before.time)),
+  }
 }
 
 export function upsertMaskKeyframe(

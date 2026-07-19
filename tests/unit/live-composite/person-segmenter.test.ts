@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { preloadPersonSegmenter, releasePersonSegmenters } from '@/app/[locale]/live-composite/lib/person-segmenter'
+import type { MPMask } from '@mediapipe/tasks-vision'
+import { preloadPersonSegmenter, releasePersonSegmenters, selectPersonConfidenceMask } from '@/app/[locale]/live-composite/lib/person-segmenter'
 
 const mocks = vi.hoisted(() => ({
   createFromOptions: vi.fn(),
@@ -53,5 +54,15 @@ describe('person segmenter release', () => {
 
     await expect(preloadPersonSegmenter('landscape')).rejects.toThrow('wasm load failed')
     await expect(releasePersonSegmenters()).resolves.toBeUndefined()
+  })
+
+  it('Selfie Segmenter 單一信心遮罩 -> 將第 0 張視為人物前景', () => {
+    const foreground = { width: 2, height: 1 } as MPMask
+    expect(selectPersonConfidenceMask([foreground])).toBe(foreground)
+  })
+
+  it('模型沒有信心遮罩 -> 回報明確錯誤', () => {
+    expect(() => selectPersonConfidenceMask(undefined)).toThrow('沒有回傳人物信心遮罩')
+    expect(() => selectPersonConfidenceMask([])).toThrow('沒有回傳人物信心遮罩')
   })
 })

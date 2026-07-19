@@ -36,7 +36,7 @@ export function MaskKeyframeRail({
       <div className="mb-2 flex items-center justify-between">
         <div>
           <span className="text-xs font-medium text-stone-300">遮罩關鍵影格</span>
-          <span className="ml-2 text-[11px] text-stone-600">每個遮罩會保持到下一個關鍵影格</span>
+          <span className="ml-2 text-[11px] text-stone-600">AI 遮罩平滑過渡；畫筆修正保持到下一關鍵影格</span>
         </div>
         <div className="flex gap-2">
           <button type="button" disabled={disabled} onClick={onApplyToStart} className="rounded-md border border-white/10 px-2.5 py-1 text-xs text-stone-400 hover:bg-white/[0.06] hover:text-white disabled:opacity-30">

@@ -3,7 +3,9 @@ import {
   applyMaskToEnd,
   applyMaskToStart,
   createMaskKeyframeFromCurrent,
+  interpolateMaskRasters,
   mergeAiMaskKeyframes,
+  resolveMaskFrame,
   resolveMaskKeyframe,
   upsertMaskKeyframe,
 } from '@/app/[locale]/live-composite/lib/mask-keyframes'
@@ -24,6 +26,53 @@ describe('live composite mask keyframes', () => {
     const second = keyframe('b', 5, [stroke('second')])
     expect(resolveMaskKeyframe([second, first], 3)?.id).toBe('a')
     expect(resolveMaskKeyframe([second, first], 5.1)?.strokes[0]?.id).toBe('second')
+  })
+
+  it('AI 遮罩位於兩個取樣點之間 -> 依位置形變且保留前一格手動畫筆', () => {
+    const first: MaskKeyframe = {
+      ...keyframe('a', 0, [stroke('manual')]),
+      baseMask: { width: 5, height: 1, alpha: new Uint8ClampedArray([200, 0, 0, 0, 0]) },
+    }
+    const second: MaskKeyframe = {
+      ...keyframe('b', 2, [stroke('future')]),
+      baseMask: { width: 5, height: 1, alpha: new Uint8ClampedArray([0, 0, 0, 0, 200]) },
+    }
+
+    const frame = resolveMaskFrame([first, second], 1)
+
+    expect(frame?.strokes[0]?.id).toBe('manual')
+    expect(Array.from(frame?.baseMask?.alpha ?? [])).toEqual([0, 0, 200, 0, 0])
+  })
+
+  it('AI 遮罩尺寸改變 -> 在中間影格同步縮放輪廓', () => {
+    const first: MaskKeyframe = {
+      ...keyframe('a', 0, []),
+      baseMask: { width: 5, height: 1, alpha: new Uint8ClampedArray([0, 0, 255, 0, 0]) },
+    }
+    const second: MaskKeyframe = {
+      ...keyframe('b', 2, []),
+      baseMask: { width: 5, height: 1, alpha: new Uint8ClampedArray([0, 255, 255, 255, 0]) },
+    }
+
+    const alpha = Array.from(resolveMaskFrame([first, second], 1)?.baseMask?.alpha ?? [])
+    expect(alpha[2]).toBe(255)
+    expect(alpha.filter((value) => value > 0).length).toBeGreaterThan(1)
+    expect(alpha[0]).toBe(0)
+    expect(alpha[4]).toBe(0)
+  })
+
+  it('其中一張 AI 遮罩為空 -> 平滑淡入而不是產生錯誤邊界', () => {
+    const empty = { width: 2, height: 1, alpha: new Uint8ClampedArray([0, 0]) }
+    const visible = { width: 2, height: 1, alpha: new Uint8ClampedArray([200, 100]) }
+
+    expect(Array.from(interpolateMaskRasters(empty, visible, 0.5).alpha)).toEqual([100, 50])
+  })
+
+  it('相鄰 AI 遮罩尺寸不一致 -> 明確沿用前一張而不產生變形資料', () => {
+    const first: MaskKeyframe = { ...keyframe('a', 0, []), baseMask: { width: 1, height: 1, alpha: new Uint8ClampedArray([40]) } }
+    const second: MaskKeyframe = { ...keyframe('b', 1, []), baseMask: { width: 2, height: 1, alpha: new Uint8ClampedArray([100, 200]) } }
+
+    expect(resolveMaskFrame([first, second], 0.5)?.baseMask).toBe(first.baseMask)
   })
 
   it('播放時間早於第一個關鍵影格 -> 顯示空遮罩而非偷用未來影格', () => {

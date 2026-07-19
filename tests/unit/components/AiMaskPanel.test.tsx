@@ -24,6 +24,25 @@ describe('AiMaskPanel', () => {
     expect(onAnalyzeClip).toHaveBeenCalledWith({ interval: 2, threshold: 0.6, edgeSoftness: 0.08 })
   })
 
+  it('選擇精細追蹤 -> 以 0.25 秒間隔掃描', () => {
+    const onAnalyzeClip = vi.fn()
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={0}
+        progress={{ status: 'idle', completed: 0, total: 0, message: '' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={onAnalyzeClip}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText('AI 遮罩取樣間隔'), { target: { value: '0.25' } })
+    fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
+
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ interval: 0.25, threshold: 0.5, edgeSoftness: 0.12 })
+  })
+
   it('分析進行中 -> 顯示具體進度並允許取消', () => {
     const onCancel = vi.fn()
     render(

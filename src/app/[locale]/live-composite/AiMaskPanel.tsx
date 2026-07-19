@@ -51,6 +51,7 @@ export function AiMaskPanel({
             onChange={(event) => setIntervalValue(Number(event.target.value))}
             className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-stone-300"
           >
+            <option value={0.25}>0.25 秒（精細追蹤）</option>
             <option value={0.5}>0.5 秒（較細緻）</option>
             <option value={1}>1 秒（建議）</option>
             <option value={2}>2 秒（較快速）</option>
@@ -124,7 +125,7 @@ export function AiMaskPanel({
         </p>
       ) : null}
 
-      <p className="mt-2 text-[11px] leading-5 text-stone-600">影片不會上傳；模型在瀏覽器內取樣人物輪廓。完成後仍可用保留／移除畫筆修邊。</p>
+      <p className="mt-2 text-[11px] leading-5 text-stone-600">影片不會上傳；模型在瀏覽器內取樣人物輪廓。0.25 秒模式適合快速動作，分析影格仍受本機安全上限保護。完成後可用保留／移除畫筆修邊。</p>
     </section>
   )
 }

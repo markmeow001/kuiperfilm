@@ -5,7 +5,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { segmentObjectAtPoint } from './lib/interactive-segmenter'
 import { paintMaskCanvas } from './lib/mask-canvas'
 import { canvasBlob, drawCover, seekVideoForAnalysis } from './lib/mask-stage-utils'
-import { resolveMaskKeyframe } from './lib/mask-keyframes'
+import { resolveMaskFrame } from './lib/mask-keyframes'
 import { appendStrokePoint, pointerToNormalizedPoint } from './lib/mask-strokes'
 import { segmentPersonFrame } from './lib/person-segmenter'
 import { shouldRenderPreview } from './lib/render-ownership'
@@ -247,8 +247,9 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     if (!shouldRenderPreview(Boolean(recordingSessionRef.current))) return
     if (!playing) {
       const pausedTime = videoRef.current?.currentTime ?? 0
-      const pausedKeyframe = resolveMaskKeyframe(keyframes, pausedTime)
-      const pausedOcclusion = resolveMaskKeyframe(occlusionKeyframes, pausedTime)
+      const pausedKeyframe = resolveMaskFrame(keyframes, pausedTime)
+      const pausedOcclusion = resolveMaskFrame(occlusionKeyframes, pausedTime)
+      paintMask(null, pausedKeyframe?.strokes ?? [], pausedKeyframe?.baseMask)
       paintOcclusionMask(null, pausedOcclusion?.strokes ?? [], pausedOcclusion?.baseMask)
       renderScene(undefined, overlayVisible, pausedKeyframe?.baseMask)
       return
@@ -257,8 +258,8 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     const tick = () => {
       if (!shouldRenderPreview(Boolean(recordingSessionRef.current))) return
       const playbackTime = videoRef.current?.currentTime ?? 0
-      const keyframe = resolveMaskKeyframe(keyframes, playbackTime)
-      const occlusionKeyframe = resolveMaskKeyframe(occlusionKeyframes, playbackTime)
+      const keyframe = resolveMaskFrame(keyframes, playbackTime)
+      const occlusionKeyframe = resolveMaskFrame(occlusionKeyframes, playbackTime)
       paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
       paintOcclusionMask(null, occlusionKeyframe?.strokes ?? [], occlusionKeyframe?.baseMask)
       renderScene(undefined, overlayVisible, keyframe?.baseMask)
@@ -286,12 +287,21 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     exportMask: async () => {
       const mask = editTarget === 'occlusion' ? occlusionCanvasRef.current : maskCanvasRef.current
       if (!mask || !metadata) throw new Error('請先載入影片並建立遮罩')
+      const time = videoRef.current?.currentTime ?? 0
+      const frame = resolveMaskFrame(editTarget === 'occlusion' ? occlusionKeyframes : keyframes, time)
+      if (editTarget === 'occlusion') paintOcclusionMask(null, frame?.strokes ?? [], frame?.baseMask)
+      else paintMask(null, frame?.strokes ?? [], frame?.baseMask)
       return canvasBlob(mask)
     },
     exportCompositeFrame: async () => {
       const display = displayCanvasRef.current
       if (!display || !metadata) throw new Error('請先載入影片')
-      renderScene('composite', false)
+      const time = videoRef.current?.currentTime ?? 0
+      const frame = resolveMaskFrame(keyframes, time)
+      const occlusionFrame = resolveMaskFrame(occlusionKeyframes, time)
+      paintMask(null, frame?.strokes ?? [], frame?.baseMask)
+      paintOcclusionMask(null, occlusionFrame?.strokes ?? [], occlusionFrame?.baseMask)
+      renderScene('composite', false, frame?.baseMask)
       const blob = await canvasBlob(display)
       renderScene()
       return blob
@@ -311,15 +321,15 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
         includeAudio,
         onProgress,
         onFrame: (time) => {
-          const keyframe = resolveMaskKeyframe(keyframes, time)
-          const occlusionKeyframe = resolveMaskKeyframe(occlusionKeyframes, time)
+          const keyframe = resolveMaskFrame(keyframes, time)
+          const occlusionKeyframe = resolveMaskFrame(occlusionKeyframes, time)
           paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
           paintOcclusionMask(null, occlusionKeyframe?.strokes ?? [], occlusionKeyframe?.baseMask)
           renderScene('composite', false, keyframe?.baseMask)
         },
         onRestore: () => {
-          const keyframe = resolveMaskKeyframe(keyframes, video.currentTime)
-          const occlusionKeyframe = resolveMaskKeyframe(occlusionKeyframes, video.currentTime)
+          const keyframe = resolveMaskFrame(keyframes, video.currentTime)
+          const occlusionKeyframe = resolveMaskFrame(occlusionKeyframes, video.currentTime)
           paintMask(null, keyframe?.strokes ?? [], keyframe?.baseMask)
           paintOcclusionMask(null, occlusionKeyframe?.strokes ?? [], occlusionKeyframe?.baseMask)
           renderScene(undefined, overlayVisible, keyframe?.baseMask)

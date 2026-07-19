@@ -6,6 +6,7 @@ import type { CompositeExportProgress, MaskAnalysisProgress, MaskKeyframe, Video
 import { UploadFileButton } from './UploadFileButton'
 import { VirtualCharacterPanel } from './VirtualCharacterPanel'
 import { OcclusionPanel } from './OcclusionPanel'
+import { BackgroundGeneratorPanel } from './BackgroundGeneratorPanel'
 
 interface CompositeAssetPanelProps {
   metadata: VideoMetadata | null
@@ -108,6 +109,8 @@ export function CompositeAssetPanel({
           <input type="color" value={backgroundColor} disabled={interactionDisabled} onChange={(event) => onBackgroundColorChange(event.target.value)} className="h-7 w-10 cursor-pointer rounded border-0 bg-transparent disabled:cursor-not-allowed" />
         </label>
       </div>
+
+      <BackgroundGeneratorPanel metadata={metadata} disabled={interactionDisabled} onGenerated={onBackgroundSelect} />
 
       <VirtualCharacterPanel
         layer={virtualCharacter}
