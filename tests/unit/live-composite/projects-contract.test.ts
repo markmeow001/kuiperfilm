@@ -124,6 +124,55 @@ describe('live-composite projects contract', () => {
     expect(liveCompositeTimelineSchema.safeParse(timeline({ virtualCharacter: { ...character, motionKeyframes: [{ id: 'pose-1', time: 1, x: 0.5, y: 0.6, scale: 1, rotation: 0, confidence: 2 }] } })).success).toBe(false)
   })
 
+  it('validates the optional face performance track with explicit caps', () => {
+    const faceTrack = {
+      version: 1,
+      sampledAt: [0, 0.5, 1],
+      entries: [
+        { time: 0, faceBox: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 }, blendshapes: { jawOpen: 0.812, mouthSmileLeft: 0.4 } },
+        { time: 1, faceBox: { x: 0.22, y: 0.21, w: 0.3, h: 0.3 }, blendshapes: { jawOpen: 0.1 } },
+      ],
+      problems: [0.5],
+    }
+    // Optional: timelines without a face track stay valid (old projects).
+    expect(liveCompositeTimelineSchema.safeParse(timeline()).success).toBe(true)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack })).success).toBe(true)
+
+    // Version is pinned; unknown fields are rejected, not silently dropped.
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: { ...faceTrack, version: 2 } })).success).toBe(false)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: { ...faceTrack, surprise: true } })).success).toBe(false)
+
+    // Box and score ranges.
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: {
+      ...faceTrack,
+      entries: [{ time: 0, faceBox: { x: 0.2, y: 0.2, w: 0, h: 0.3 }, blendshapes: {} }],
+    } })).success).toBe(false)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: {
+      ...faceTrack,
+      entries: [{ time: 0, faceBox: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 }, blendshapes: { jawOpen: 1.5 } }],
+    } })).success).toBe(false)
+
+    // Caps: ≤ 600 samples/entries/problems, ≤ 20 blendshape keys per entry.
+    const manyTimes = Array.from({ length: 601 }, (_, index) => index * 0.5)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: { ...faceTrack, sampledAt: manyTimes } })).success).toBe(false)
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: { ...faceTrack, problems: manyTimes } })).success).toBe(false)
+    const tooManyKeys = liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: {
+      ...faceTrack,
+      entries: [{
+        time: 0,
+        faceBox: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 },
+        blendshapes: Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`shape${index}`, 0.5])),
+      }],
+    } }))
+    expect(tooManyKeys.success).toBe(false)
+    if (!tooManyKeys.success) {
+      expect(JSON.stringify(tooManyKeys.error.issues)).toContain('臉部表情欄位數量超過上限 20')
+    }
+
+    // Empty sampledAt is meaningless — an empty track should be omitted.
+    expect(liveCompositeTimelineSchema.safeParse(timeline({ faceTrack: { ...faceTrack, sampledAt: [] } })).success).toBe(false)
+  })
+
   it('create schema requires timeline and validates the color format', () => {
     expect(liveCompositeProjectCreateSchema.safeParse({ timeline: timeline() }).success).toBe(true)
     expect(liveCompositeProjectCreateSchema.safeParse({}).success).toBe(false)

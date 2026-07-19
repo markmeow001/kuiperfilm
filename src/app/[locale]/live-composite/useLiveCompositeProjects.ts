@@ -22,7 +22,8 @@ import {
   listLiveCompositeProjects,
   updateLiveCompositeProject,
 } from './lib/project-api'
-import { collectBaseMaskKeys, deserializeOcclusionTimeline, deserializeTimeline, serializeTimeline } from './lib/timeline-serialization'
+import { collectBaseMaskKeys, deserializeFaceTrackFromTimeline, deserializeOcclusionTimeline, deserializeTimeline, serializeTimeline } from './lib/timeline-serialization'
+import type { FacePerformanceTrack } from './lib/face-performance'
 import type { MaskKeyframe, MaskRaster, VirtualCharacterLayer } from './live-composite-types'
 
 const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024
@@ -41,6 +42,7 @@ export interface SaveProjectInput {
   occlusionKeyframes: MaskKeyframe[]
   virtualCharacter: VirtualCharacterLayer | null
   virtualCharacterFile: File | null
+  faceTrack: FacePerformanceTrack | null
 }
 
 export interface SaveProjectResult {
@@ -62,6 +64,7 @@ export interface OpenedProject {
   keyframes: MaskKeyframe[]
   occlusionKeyframes: MaskKeyframe[]
   virtualCharacter: VirtualCharacterLayer | null
+  faceTrack: FacePerformanceTrack | null
 }
 
 export function useLiveCompositeProjects() {
@@ -140,6 +143,7 @@ export function useLiveCompositeProjects() {
         (keyframe) => keyframe.baseMask ? maskCache.get(keyframe.baseMask) : undefined,
         characterForSave,
         input.occlusionKeyframes,
+        input.faceTrack,
       )
 
       setBusyMessage('正在儲存合成專案…')
@@ -204,6 +208,7 @@ export function useLiveCompositeProjects() {
         backgroundColor: detail.backgroundColor,
         keyframes,
         occlusionKeyframes,
+        faceTrack: deserializeFaceTrackFromTimeline(detail.timeline),
         virtualCharacter: storedCharacter ? {
           ...storedCharacter,
           assetUrl: storedCharacter.assetUrl,

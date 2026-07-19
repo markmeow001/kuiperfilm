@@ -82,6 +82,7 @@ export const GET = apiHandler(async (_request: NextRequest, { params }: RouteCon
           assetUrl: getSignedUrl(timelineParsed.data.virtualCharacter.assetKey, SIGNED_URL_TTL_SECONDS),
         },
       } : {}),
+      ...(timelineParsed.data.faceTrack ? { faceTrack: timelineParsed.data.faceTrack } : {}),
     },
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),

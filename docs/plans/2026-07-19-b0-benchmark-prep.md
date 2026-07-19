@@ -133,7 +133,7 @@ Do not show the original performer. Do not alter shot length or camera language.
 
 ### 5.3 待辦
 
-- [ ] 書面確認函 → support@atlascloud.ai（cc sales@atlascloud.ai）——**由使用者本人發出**（2026-07-19 拍板）
+- [x] 書面確認函 → support@atlascloud.ai（cc sales@atlascloud.ai）——**已由使用者發出（2026-07-19）**
 - [ ] 收到回覆後把結論回填此處 + 更新 §0 前提勾選
 
 **書面確認函定稿（英文，發 support@atlascloud.ai，cc sales@atlascloud.ai）**：

@@ -153,6 +153,15 @@ describe('/api/live-composite/projects — persistence contract', () => {
         body: createBody({ timeline: validTimeline({
           virtualCharacter: virtualCharacter(),
           occlusionKeyframes: [{ id: 'depth-0', time: 0, baseMaskKey: OCCLUSION_KEY, strokes: [] }],
+          faceTrack: {
+            version: 1,
+            sampledAt: [0, 0.5, 1],
+            entries: [
+              { time: 0, faceBox: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 }, blendshapes: { jawOpen: 0.812 } },
+              { time: 1, faceBox: { x: 0.22, y: 0.21, w: 0.3, h: 0.3 }, blendshapes: { jawOpen: 0.1 } },
+            ],
+            problems: [0.5],
+          },
         }) }),
       }),
       { params: Promise.resolve({}) },
@@ -199,6 +208,16 @@ describe('/api/live-composite/projects — persistence contract', () => {
       assetUrl: `https://signed.example/${CHARACTER_KEY}`,
       anchor: 'person',
       depth: 'behind-person',
+    })
+    // Face performance track round-trips unchanged (no signing involved).
+    expect(detail.timeline.faceTrack).toEqual({
+      version: 1,
+      sampledAt: [0, 0.5, 1],
+      entries: [
+        { time: 0, faceBox: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 }, blendshapes: { jawOpen: 0.812 } },
+        { time: 1, faceBox: { x: 0.22, y: 0.21, w: 0.3, h: 0.3 }, blendshapes: { jawOpen: 0.1 } },
+      ],
+      problems: [0.5],
     })
   })
 

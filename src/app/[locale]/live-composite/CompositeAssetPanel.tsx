@@ -2,6 +2,8 @@
 
 import { AiMaskPanel, type AiMaskSettings } from './AiMaskPanel'
 import { CompositeExportPanel } from './CompositeExportPanel'
+import { FacePerformancePanel } from './FacePerformancePanel'
+import type { FacePerformanceTrack } from './lib/face-performance'
 import type { CompositeExportProgress, MaskAnalysisProgress, MaskKeyframe, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 import { UploadFileButton } from './UploadFileButton'
 import { VirtualCharacterPanel } from './VirtualCharacterPanel'
@@ -44,6 +46,12 @@ interface CompositeAssetPanelProps {
   onAnalyzeCurrent: (settings: AiMaskSettings) => void
   onAnalyzeClip: (settings: AiMaskSettings) => void
   onCancelAnalysis: () => void
+  canAnalyzeFace: boolean
+  faceProgress: MaskAnalysisProgress
+  faceTrack: FacePerformanceTrack | null
+  onAnalyzeFace: () => void
+  onCancelFaceAnalysis: () => void
+  onClearFaceTrack: () => void
   lastExportLabel?: string | null
   onSaveToLibrary?: () => void
   workflowStep: LiveCompositeWorkflowStep
@@ -75,7 +83,7 @@ function StepNavigation({ back, next, nextLabel = '下一步', onStepChange }: S
   )
 }
 
-export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
+export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
   return (
     <aside className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-stone-950/80">
       <LiveCompositeWorkflowGuide activeStep={workflowStep} completedSteps={completedWorkflowSteps} onStepChange={onWorkflowStepChange} />
@@ -104,6 +112,7 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
       {workflowStep === 2 ? (
         <>
           <AiMaskPanel canAnalyze={Boolean(metadata) && !interactionDisabled} currentTime={currentTime} progress={analysisProgress} onAnalyzeCurrent={onAnalyzeCurrent} onAnalyzeClip={onAnalyzeClip} onCancel={onCancelAnalysis} />
+          <FacePerformancePanel canAnalyze={canAnalyzeFace} progress={faceProgress} track={faceTrack} onAnalyze={onAnalyzeFace} onCancel={onCancelFaceAnalysis} onClear={onClearFaceTrack} />
           <StepNavigation back={1} next={completedWorkflowSteps.has(2) ? 3 : undefined} nextLabel="下一步：檢查人物邊緣" onStepChange={onWorkflowStepChange} />
         </>
       ) : null}

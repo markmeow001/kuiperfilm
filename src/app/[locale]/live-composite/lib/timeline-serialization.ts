@@ -8,12 +8,21 @@
  * by `baseMaskKey`; strokes stay vectors inside the JSON.
  */
 import type {
+  LiveCompositeSerializedFaceTrack,
   LiveCompositeSerializedKeyframe,
   LiveCompositeSerializedStroke,
   LiveCompositeSerializedTimeline,
 } from '@/app/api/live-composite/lib/projects-contract'
-import { LIVE_COMPOSITE_MAX_KEYFRAMES, LIVE_COMPOSITE_MAX_STROKES_PER_KEYFRAME } from '@/app/api/live-composite/lib/projects-contract'
+import {
+  LIVE_COMPOSITE_MAX_FACE_BLENDSHAPE_KEYS,
+  LIVE_COMPOSITE_MAX_FACE_TRACK_ENTRIES,
+  LIVE_COMPOSITE_MAX_KEYFRAMES,
+  LIVE_COMPOSITE_MAX_STROKES_PER_KEYFRAME,
+} from '@/app/api/live-composite/lib/projects-contract'
+import { detectFaceProblemTimecodes, type FacePerformanceTrack } from './face-performance'
 import type { MaskKeyframe, MaskRaster, MaskStroke, VirtualCharacterLayer } from '../live-composite-types'
+
+export const FACE_TRACK_VERSION = 1
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
@@ -58,6 +67,7 @@ export function serializeTimeline(
   resolveBaseMaskKey: (keyframe: MaskKeyframe) => string | undefined,
   virtualCharacter?: VirtualCharacterLayer | null,
   occlusionKeyframes?: MaskKeyframe[],
+  faceTrack?: FacePerformanceTrack | null,
 ): LiveCompositeSerializedTimeline {
   if (keyframes.length === 0) throw new Error('遮罩時間軸是空的，無法儲存')
   if (keyframes.length > LIVE_COMPOSITE_MAX_KEYFRAMES) {
@@ -90,6 +100,7 @@ export function serializeTimeline(
   return {
     keyframes: serializeKeyframes(keyframes, '人物遮罩'),
     ...(occlusionKeyframes ? { occlusionKeyframes: serializeKeyframes(occlusionKeyframes, '前景遮擋') } : {}),
+    ...(faceTrack ? { faceTrack: serializeFaceTrack(faceTrack) } : {}),
     ...(virtualCharacter?.assetKey ? {
       virtualCharacter: {
         assetType: virtualCharacter.assetType,
@@ -185,6 +196,72 @@ export function deserializeOcclusionTimeline(
     if (!raster) throw new Error(`前景遮擋 ${keyframe.time.toFixed(2)}s 的 AI 遮罩下載失敗，無法載入`)
     return { ...restored, baseMask: raster }
   })
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1_000) / 1_000
+}
+
+/**
+ * Face performance track -> wire format. `sampledAt` records every analyzed
+ * time (detected or not), `entries` only detected faces, `problems` the
+ * 漏檢/跳動 timecodes (recomputed here so the persisted value can never
+ * drift from the persisted samples). Caps mirror the projects contract and
+ * fail loudly — silently truncating an analysis track would corrupt it.
+ */
+export function serializeFaceTrack(track: FacePerformanceTrack): LiveCompositeSerializedFaceTrack {
+  if (track.samples.length === 0) throw new Error('臉部表演軌是空的，無法儲存')
+  if (track.samples.length > LIVE_COMPOSITE_MAX_FACE_TRACK_ENTRIES) {
+    throw new Error(`臉部表演取樣數 ${track.samples.length} 超過上限 ${LIVE_COMPOSITE_MAX_FACE_TRACK_ENTRIES}`)
+  }
+  const entries: LiveCompositeSerializedFaceTrack['entries'] = []
+  for (const sample of track.samples) {
+    if (!sample.faceBox) continue
+    const blendshapes = sample.blendshapeSummary ?? {}
+    const keyCount = Object.keys(blendshapes).length
+    if (keyCount > LIVE_COMPOSITE_MAX_FACE_BLENDSHAPE_KEYS) {
+      throw new Error(`臉部表情欄位數量 ${keyCount} 超過上限 ${LIVE_COMPOSITE_MAX_FACE_BLENDSHAPE_KEYS}（${sample.time.toFixed(2)}s）`)
+    }
+    const rounded: Record<string, number> = {}
+    for (const [key, value] of Object.entries(blendshapes)) rounded[key] = round3(value)
+    entries.push({
+      time: round4(sample.time),
+      faceBox: {
+        x: round4(clamp01(sample.faceBox.x)),
+        y: round4(clamp01(sample.faceBox.y)),
+        w: round4(Math.min(1, sample.faceBox.w)),
+        h: round4(Math.min(1, sample.faceBox.h)),
+      },
+      blendshapes: rounded,
+    })
+  }
+  return {
+    version: FACE_TRACK_VERSION,
+    sampledAt: track.samples.map((sample) => round4(sample.time)),
+    entries,
+    problems: detectFaceProblemTimecodes(track).map(round4),
+  }
+}
+
+/**
+ * Wire format -> in-memory track. Every sampledAt time becomes a sample;
+ * times without a matching entry are restored as 漏檢 (faceBox: null).
+ */
+export function deserializeFaceTrack(serialized: LiveCompositeSerializedFaceTrack): FacePerformanceTrack {
+  const entryByTime = new Map(serialized.entries.map((entry) => [entry.time, entry]))
+  return {
+    samples: serialized.sampledAt.map((time) => {
+      const entry = entryByTime.get(time)
+      return entry
+        ? { time, faceBox: { ...entry.faceBox }, blendshapeSummary: { ...entry.blendshapes } }
+        : { time, faceBox: null, blendshapeSummary: null }
+    }),
+  }
+}
+
+/** Face track stored on a persisted timeline, or null for older projects. */
+export function deserializeFaceTrackFromTimeline(timeline: LiveCompositeSerializedTimeline): FacePerformanceTrack | null {
+  return timeline.faceTrack ? deserializeFaceTrack(timeline.faceTrack) : null
 }
 
 /** All distinct baseMaskKeys referenced by a persisted timeline. */

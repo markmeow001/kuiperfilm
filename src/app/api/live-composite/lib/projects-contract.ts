@@ -17,6 +17,8 @@ import { z } from 'zod'
 export const LIVE_COMPOSITE_MAX_KEYFRAMES = 600
 export const LIVE_COMPOSITE_MAX_STROKES_PER_KEYFRAME = 500
 export const LIVE_COMPOSITE_MAX_POINTS_PER_STROKE = 5_000
+export const LIVE_COMPOSITE_MAX_FACE_TRACK_ENTRIES = 600
+export const LIVE_COMPOSITE_MAX_FACE_BLENDSHAPE_KEYS = 20
 /** Hard byte cap on the timeline JSON blob (defense beyond the count caps). */
 export const LIVE_COMPOSITE_MAX_TIMELINE_BYTES = 2_000_000
 export const LIVE_COMPOSITE_PROJECT_LIST_CAP = 100
@@ -96,16 +98,54 @@ const serializedKeyframeSchema = z
   })
   .strict()
 
+/** Normalized (0-1) face crop box, top-left origin. */
+const faceBoxSchema = z
+  .object({
+    x: z.number().finite().min(0).max(1),
+    y: z.number().finite().min(0).max(1),
+    w: z.number().finite().gt(0).max(1),
+    h: z.number().finite().gt(0).max(1),
+  })
+  .strict()
+
+const faceTrackEntrySchema = z
+  .object({
+    time: z.number().finite().min(0),
+    faceBox: faceBoxSchema,
+    /** Expression-relevant blendshape scores only (filtered client-side). */
+    blendshapes: z.record(z.string().trim().min(1).max(64), z.number().finite().min(0).max(1)),
+  })
+  .strict()
+  .refine((entry) => Object.keys(entry.blendshapes).length <= LIVE_COMPOSITE_MAX_FACE_BLENDSHAPE_KEYS, {
+    message: `臉部表情欄位數量超過上限 ${LIVE_COMPOSITE_MAX_FACE_BLENDSHAPE_KEYS}`,
+  })
+
+/**
+ * Face performance track (spec §3.2 表演分析 + §8.2 非破壞性資料).
+ * `sampledAt` lists every analyzed time; `entries` only the detected faces;
+ * `problems` the 漏檢/跳動 timecodes. Optional — old projects load fine.
+ */
+const faceTrackSchema = z
+  .object({
+    version: z.literal(1),
+    sampledAt: z.array(z.number().finite().min(0)).min(1).max(LIVE_COMPOSITE_MAX_FACE_TRACK_ENTRIES),
+    entries: z.array(faceTrackEntrySchema).max(LIVE_COMPOSITE_MAX_FACE_TRACK_ENTRIES),
+    problems: z.array(z.number().finite().min(0)).max(LIVE_COMPOSITE_MAX_FACE_TRACK_ENTRIES),
+  })
+  .strict()
+
 export const liveCompositeTimelineSchema = z
   .object({
     keyframes: z.array(serializedKeyframeSchema).min(1).max(LIVE_COMPOSITE_MAX_KEYFRAMES),
     occlusionKeyframes: z.array(serializedKeyframeSchema).min(1).max(LIVE_COMPOSITE_MAX_KEYFRAMES).optional(),
     virtualCharacter: virtualCharacterSchema.optional(),
+    faceTrack: faceTrackSchema.optional(),
   })
   .strict()
 
 export type LiveCompositeSerializedStroke = z.infer<typeof serializedStrokeSchema>
 export type LiveCompositeSerializedKeyframe = z.infer<typeof serializedKeyframeSchema>
+export type LiveCompositeSerializedFaceTrack = z.infer<typeof faceTrackSchema>
 export type LiveCompositeSerializedTimeline = z.infer<typeof liveCompositeTimelineSchema>
 
 const nameSchema = z.string().trim().min(1).max(120)
@@ -219,6 +259,7 @@ export interface LiveCompositeProjectDetail {
     keyframes: Array<LiveCompositeSerializedKeyframe & { baseMaskUrl?: string }>
     occlusionKeyframes?: Array<LiveCompositeSerializedKeyframe & { baseMaskUrl?: string }>
     virtualCharacter?: NonNullable<LiveCompositeSerializedTimeline['virtualCharacter']> & { assetUrl: string }
+    faceTrack?: LiveCompositeSerializedFaceTrack
   }
   createdAt: string
   updatedAt: string

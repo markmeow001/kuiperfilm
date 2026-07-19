@@ -14,6 +14,13 @@ import { releasePersonSegmenters } from './lib/person-segmenter'
 import { releaseInteractiveSegmenter } from './lib/interactive-segmenter'
 import { DEFAULT_CHARACTER_APPEARANCE } from './lib/character-appearance'
 import { releasePoseLandmarker } from './lib/pose-landmarker'
+import { releaseFaceLandmarker } from './lib/face-landmarker'
+import {
+  extractFacePerformance,
+  FACE_ANALYSIS_DEFAULT_INTERVAL,
+  FacePerformanceCancelledError,
+  type FacePerformanceTrack,
+} from './lib/face-performance'
 import { ProjectPanel } from './ProjectPanel'
 import { SaveToLibraryDialog, type ExportedAsset } from './SaveToLibraryDialog'
 import { useLiveCompositeProjects } from './useLiveCompositeProjects'
@@ -63,6 +70,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const stageRef = useRef<MaskStageHandle>(null)
   const analysisRunRef = useRef(0)
   const analysisRestoreTimeRef = useRef<number | null>(null)
+  const faceRunRef = useRef(0)
+  const faceRestoreTimeRef = useRef<number | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [videoName, setVideoName] = useState<string | null>(null)
   const [videoFile, setVideoFile] = useState<File | null>(null)
@@ -95,9 +104,15 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const [workflowStep, setWorkflowStep] = useState<LiveCompositeWorkflowStep>(1)
   const [exportError, setExportError] = useState<string | null>(null)
   const [analysisProgress, setAnalysisProgress] = useState<MaskAnalysisProgress>(INITIAL_ANALYSIS_PROGRESS)
+  const [faceProgress, setFaceProgress] = useState<MaskAnalysisProgress>(INITIAL_ANALYSIS_PROGRESS)
+  const [faceTrack, setFaceTrack] = useState<FacePerformanceTrack | null>(null)
   const [exportProgress, setExportProgress] = useState<CompositeExportProgress>(INITIAL_EXPORT_PROGRESS)
   const isVideoExporting = exportProgress.status === 'preparing' || exportProgress.status === 'recording'
-  const isAnalyzing = analysisProgress.status === 'loading-model' || analysisProgress.status === 'analyzing'
+  const isMaskAnalyzing = analysisProgress.status === 'loading-model' || analysisProgress.status === 'analyzing'
+  const isFaceAnalyzing = faceProgress.status === 'loading-model' || faceProgress.status === 'analyzing'
+  // Every existing "analysis running" gate also locks during face analysis.
+  const isAnalyzing = isMaskAnalyzing || isFaceAnalyzing
+  const canAnalyzeFace = Boolean(metadata) && !isVideoExporting && !isMaskAnalyzing && !occlusionBusy && !motionBusy
 
   useEffect(
     () => () => {
@@ -121,6 +136,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }, [virtualCharacter?.assetUrl, virtualCharacterFile])
 
   useEffect(() => () => releasePoseLandmarker(), [])
+  useEffect(() => () => releaseFaceLandmarker(), [])
 
   useEffect(
     () => () => {
@@ -136,6 +152,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     // user cancels the analysis or it completes.
     if (isVideoExporting || isAnalyzing || occlusionBusy) return
     analysisRunRef.current += 1
+    faceRunRef.current += 1
     setVideoUrl(URL.createObjectURL(file))
     setVideoName(file.name)
     setVideoFile(file)
@@ -150,6 +167,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     setView('source')
     setExportError(null)
     setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS)
+    setFaceProgress(INITIAL_ANALYSIS_PROGRESS)
+    setFaceTrack(null)
     setExportProgress(INITIAL_EXPORT_PROGRESS)
     setWorkflowStep(2)
   }
@@ -255,6 +274,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         occlusionKeyframes: occlusionTimeline.keyframes,
         virtualCharacter,
         virtualCharacterFile,
+        faceTrack,
       })
       setProjectId(saved.projectId)
       setVideoKey(saved.videoKey)
@@ -277,6 +297,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       const loaded = await projectStore.openProject(id)
       const loadedMaskReady = loaded.keyframes.some((keyframe) => Boolean(keyframe.baseMask))
       analysisRunRef.current += 1
+      faceRunRef.current += 1
       setProjectId(loaded.id)
       setProjectName(loaded.name)
       setVideoFile(null)
@@ -299,6 +320,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       setView(loaded.backgroundKey ? 'composite' : loadedMaskReady ? 'mask' : 'source')
       setExportError(null)
       setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS)
+      setFaceProgress(INITIAL_ANALYSIS_PROGRESS)
+      setFaceTrack(loaded.faceTrack)
       setExportProgress(INITIAL_EXPORT_PROGRESS)
       setWorkflowStep(loaded.backgroundKey ? 4 : loadedMaskReady ? 3 : 2)
     } catch {
@@ -521,6 +544,94 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     }
   }
 
+  const cancelFaceAnalysis = () => {
+    faceRunRef.current += 1
+    const restoreTime = faceRestoreTimeRef.current
+    faceRestoreTimeRef.current = null
+    if (restoreTime !== null) stageRef.current?.seekTo(restoreTime)
+    setFaceProgress({
+      status: 'idle',
+      completed: 0,
+      total: 0,
+      message: '已取消；未套用未完成的臉部分析結果。',
+    })
+  }
+
+  const analyzeFacePerformance = async () => {
+    const stage = stageRef.current
+    if (!stage || !metadata) {
+      setFaceProgress({
+        status: 'failed',
+        completed: 0,
+        total: 0,
+        message: '請先載入可分析的影片。',
+      })
+      return
+    }
+    let times: number[]
+    try {
+      times = buildMaskAnalysisTimes(metadata.duration, FACE_ANALYSIS_DEFAULT_INTERVAL)
+    } catch (error) {
+      setFaceProgress({
+        status: 'failed',
+        completed: 0,
+        total: 0,
+        message: error instanceof Error ? error.message : '無法建立臉部分析範圍',
+      })
+      return
+    }
+    const runId = faceRunRef.current + 1
+    faceRunRef.current = runId
+    const restoreTime = currentTime
+    faceRestoreTimeRef.current = restoreTime
+    setFaceProgress({
+      status: 'loading-model',
+      completed: 0,
+      total: times.length,
+      message: '正在載入本機臉部模型…',
+    })
+    try {
+      const track = await extractFacePerformance(
+        { analyzeFaceAt: (time) => stage.analyzeFaceAt(time) },
+        times,
+        {
+          shouldContinue: () => faceRunRef.current === runId,
+          onProgress: (completed, total) => {
+            setFaceProgress({
+              status: 'analyzing',
+              completed,
+              total,
+              message: `已完成 ${completed} / ${total} 個臉部影格`,
+            })
+          },
+        },
+      )
+      if (faceRunRef.current !== runId) return
+      setFaceTrack(track)
+      const detected = track.samples.filter((sample) => sample.faceBox !== null).length
+      setFaceProgress({
+        status: 'completed',
+        completed: times.length,
+        total: times.length,
+        message: `臉部表演分析完成：偵測 ${detected} / ${times.length} 個影格${detected < times.length ? `，${times.length - detected} 格未偵測到臉部` : ''}。`,
+      })
+    } catch (error) {
+      if (faceRunRef.current !== runId) return
+      if (error instanceof FacePerformanceCancelledError) return
+      setFaceProgress({
+        status: 'failed',
+        completed: 0,
+        total: times.length,
+        message: error instanceof Error ? error.message : '臉部表演分析失敗',
+      })
+    } finally {
+      if (faceRunRef.current === runId) {
+        faceRestoreTimeRef.current = null
+        stage.seekTo(restoreTime)
+      }
+    }
+  }
+
   const analyzeCurrent = (settings: AiMaskSettings) => {
     void runPersonAnalysis([currentTime], settings)
   }
@@ -698,6 +809,15 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           onAnalyzeCurrent={analyzeCurrent}
           onAnalyzeClip={analyzeClip}
           onCancelAnalysis={cancelAnalysis}
+          canAnalyzeFace={canAnalyzeFace}
+          faceProgress={faceProgress}
+          faceTrack={faceTrack}
+          onAnalyzeFace={() => void analyzeFacePerformance()}
+          onCancelFaceAnalysis={cancelFaceAnalysis}
+          onClearFaceTrack={() => {
+            setFaceTrack(null)
+            setFaceProgress(INITIAL_ANALYSIS_PROGRESS)
+          }}
           lastExportLabel={lastExport?.label ?? null}
           onSaveToLibrary={lastExport ? () => setLibraryDialogOpen(true) : undefined}
           workflowStep={workflowStep}

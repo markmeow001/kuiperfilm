@@ -12,6 +12,7 @@ import { shouldRenderPreview } from './lib/render-ownership'
 import { useVirtualCharacterMedia } from './useVirtualCharacterMedia'
 import { sampleVideoAppearance } from './lib/character-appearance'
 import { detectPoseAt } from './lib/pose-landmarker'
+import { detectFaceAt, type FaceFrameAnalysis } from './lib/face-landmarker'
 import {
   releaseCompositeRecordingAudio,
   startCompositeRecording,
@@ -34,6 +35,8 @@ export interface MaskStageHandle {
   analyzeOccluderAt: (time: number, point: NormalizedPoint) => Promise<MaskRaster>
   matchCharacterAppearance: () => Partial<VirtualCharacterAppearance>
   analyzePoseAt: (time: number) => Promise<VirtualCharacterMotionKeyframe>
+  /** null = no face at this time (漏檢 is track data, not an error). */
+  analyzeFaceAt: (time: number) => Promise<FaceFrameAnalysis | null>
 }
 interface MaskStageProps {
   videoUrl: string | null
@@ -369,6 +372,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     },
     matchCharacterAppearance: () => videoRef.current ? sampleVideoAppearance(videoRef.current) : (() => { throw new Error('請先載入影片') })(),
     analyzePoseAt: (time: number) => detectPoseAt(videoRef.current, metadata?.duration, time, (analysisAbortRef.current ??= new AbortController()).signal),
+    analyzeFaceAt: (time: number) => detectFaceAt(videoRef.current, metadata?.duration, time, (analysisAbortRef.current ??= new AbortController()).signal),
   }), [assertCharacterMediaReady, backgroundUrl, editTarget, keyframes, metadata, occlusionKeyframes, onTimeChange, overlayVisible, paintMask, paintOcclusionMask, renderScene])
   const pointFromEvent = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()

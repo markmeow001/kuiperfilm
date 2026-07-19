@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectBaseMaskKeys,
+  deserializeFaceTrack,
+  deserializeFaceTrackFromTimeline,
   deserializeOcclusionTimeline,
   deserializeMaskStroke,
   deserializeTimeline,
+  FACE_TRACK_VERSION,
+  serializeFaceTrack,
   serializeMaskStroke,
   serializeTimeline,
 } from '@/app/[locale]/live-composite/lib/timeline-serialization'
+import type { FacePerformanceTrack } from '@/app/[locale]/live-composite/lib/face-performance'
 import type { MaskKeyframe, MaskRaster, MaskStroke, VirtualCharacterLayer } from '@/app/[locale]/live-composite/live-composite-types'
 
 function makeRaster(seed: number): MaskRaster {
@@ -178,5 +183,80 @@ describe('live-composite timeline serialization', () => {
       () => undefined,
       { ...character, assetKey: null },
     )).toThrow('虛擬角色素材尚未上傳')
+  })
+})
+
+describe('live-composite face track serialization', () => {
+  const faceTrack: FacePerformanceTrack = {
+    samples: [
+      { time: 0, faceBox: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 }, blendshapeSummary: { jawOpen: 0.812, mouthSmileLeft: 0.4 } },
+      { time: 0.5, faceBox: null, blendshapeSummary: null },
+      { time: 1, faceBox: { x: 0.22, y: 0.21, w: 0.3, h: 0.3 }, blendshapeSummary: { jawOpen: 0.1 } },
+    ],
+  }
+
+  it('round trips: sampledAt 保留所有取樣、entries 只留偵測到的、漏檢還原為 null 樣本', () => {
+    const serialized = serializeFaceTrack(faceTrack)
+    expect(serialized.version).toBe(FACE_TRACK_VERSION)
+    expect(serialized.sampledAt).toEqual([0, 0.5, 1])
+    expect(serialized.entries.map((entry) => entry.time)).toEqual([0, 1])
+    expect(serialized.entries[0]).toEqual({
+      time: 0,
+      faceBox: { x: 0.2, y: 0.2, w: 0.3, h: 0.3 },
+      blendshapes: { jawOpen: 0.812, mouthSmileLeft: 0.4 },
+    })
+    // 漏檢時間 0.5 進 problems（detectFaceProblemTimecodes 重新計算）。
+    expect(serialized.problems).toContain(0.5)
+
+    expect(deserializeFaceTrack(serialized)).toEqual(faceTrack)
+  })
+
+  it('serializeTimeline 帶 faceTrack -> 寫進 timeline；未帶 -> 完全省略', () => {
+    const keyframes: MaskKeyframe[] = [{ id: 'kf-0', time: 0, strokes: [] }]
+    const withTrack = serializeTimeline(keyframes, () => undefined, null, undefined, faceTrack)
+    expect(withTrack.faceTrack?.sampledAt).toEqual([0, 0.5, 1])
+    expect(deserializeFaceTrackFromTimeline(withTrack)).toEqual(faceTrack)
+
+    const withoutTrack = serializeTimeline(keyframes, () => undefined)
+    expect(withoutTrack).not.toHaveProperty('faceTrack')
+    expect(deserializeFaceTrackFromTimeline(withoutTrack)).toBeNull()
+  })
+
+  it('數值截整：時間/裁切框 4 位、表情 3 位', () => {
+    const serialized = serializeFaceTrack({
+      samples: [{
+        time: 1.234567,
+        faceBox: { x: 0.123456, y: -0.01, w: 0.999999, h: 1.2 },
+        blendshapeSummary: { jawOpen: 0.55555 },
+      }],
+    })
+    expect(serialized.entries[0]).toEqual({
+      time: 1.2346,
+      faceBox: { x: 0.1235, y: 0, w: 1, h: 1 },
+      blendshapes: { jawOpen: 0.556 },
+    })
+    expect(serialized.sampledAt).toEqual([1.2346])
+  })
+
+  it('超過上限或空軌 -> 明確錯誤', () => {
+    expect(() => serializeFaceTrack({ samples: [] })).toThrow('臉部表演軌是空的')
+
+    const tooMany: FacePerformanceTrack = {
+      samples: Array.from({ length: 601 }, (_, index) => ({
+        time: index * 0.5,
+        faceBox: null,
+        blendshapeSummary: null,
+      })),
+    }
+    expect(() => serializeFaceTrack(tooMany)).toThrow('超過上限 600')
+
+    const tooManyKeys: FacePerformanceTrack = {
+      samples: [{
+        time: 0,
+        faceBox: { x: 0.1, y: 0.1, w: 0.2, h: 0.2 },
+        blendshapeSummary: Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`shape${index}`, 0.5])),
+      }],
+    }
+    expect(() => serializeFaceTrack(tooManyKeys)).toThrow('超過上限 20')
   })
 })
