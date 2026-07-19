@@ -16,6 +16,7 @@ describe('CompositeToolbar', () => {
         overlayVisible
         canUndo
         canRedo={false}
+        currentTime={2.25}
         onToolChange={onToolChange}
         onEditTargetChange={onEditTargetChange}
         onViewChange={onViewChange}
@@ -27,9 +28,9 @@ describe('CompositeToolbar', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '移除畫筆' }))
-    fireEvent.click(screen.getByRole('button', { name: '前景遮擋' }))
-    fireEvent.click(screen.getByRole('button', { name: '查看合成結果' }))
+    fireEvent.click(screen.getByRole('button', { name: '擦除錯選' }))
+    fireEvent.click(screen.getByRole('button', { name: '進階：前景遮擋' }))
+    fireEvent.click(screen.getByRole('button', { name: '3. 預覽合成結果' }))
     expect(onToolChange).toHaveBeenCalledWith('erase')
     expect(onEditTargetChange).toHaveBeenCalledWith('occlusion')
     expect(onViewChange).toHaveBeenCalledWith('composite')
@@ -46,6 +47,7 @@ describe('CompositeToolbar', () => {
         overlayVisible
         canUndo={false}
         canRedo={false}
+        currentTime={0}
         onToolChange={vi.fn()}
         onEditTargetChange={vi.fn()}
         onViewChange={vi.fn()}
@@ -57,7 +59,9 @@ describe('CompositeToolbar', () => {
       />,
     )
 
-    fireEvent.change(screen.getByRole('slider', { name: '筆刷大小' }), { target: { value: '12' } })
+    fireEvent.change(screen.getByRole('slider', { name: '筆刷大小' }), {
+      target: { value: '12' },
+    })
     expect(onBrushPercentChange).toHaveBeenCalledWith(12)
   })
 
@@ -71,6 +75,7 @@ describe('CompositeToolbar', () => {
         overlayVisible
         canUndo
         canRedo
+        currentTime={0}
         disabled
         onToolChange={vi.fn()}
         onEditTargetChange={vi.fn()}
@@ -83,8 +88,8 @@ describe('CompositeToolbar', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: '保留畫筆' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '查看合成結果' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '補回人物' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '3. 預覽合成結果' })).toBeDisabled()
     expect(screen.getByRole('slider', { name: '筆刷大小' })).toBeDisabled()
     expect(screen.getByRole('checkbox', { name: '顯示選區' })).toBeDisabled()
   })

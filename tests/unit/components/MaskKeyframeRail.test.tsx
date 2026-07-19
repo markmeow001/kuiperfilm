@@ -23,6 +23,7 @@ describe('MaskKeyframeRail', () => {
       />,
     )
 
+    fireEvent.click(screen.getByText('進階：時間遮罩修正'))
     fireEvent.click(screen.getByRole('button', { name: '前往遮罩關鍵影格 5.00 秒' }))
     expect(onSeek).toHaveBeenCalledWith(5)
   })
@@ -44,7 +45,8 @@ describe('MaskKeyframeRail', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: '套用到片頭' })).toBeDisabled()
+    fireEvent.click(screen.getByText('進階：時間遮罩修正'))
+    expect(screen.getByRole('button', { name: '從這裡套用到片頭' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '前往遮罩關鍵影格 1.00 秒' })).toBeDisabled()
   })
 
@@ -67,9 +69,10 @@ describe('MaskKeyframeRail', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '複製目前遮罩到 3.00s' }))
-    fireEvent.click(screen.getByRole('button', { name: '套用到片頭' }))
-    fireEvent.click(screen.getByRole('button', { name: '套用到片尾' }))
+    fireEvent.click(screen.getByText('進階：時間遮罩修正'))
+    fireEvent.click(screen.getByRole('button', { name: '在 3.00s 建立修正' }))
+    fireEvent.click(screen.getByRole('button', { name: '從這裡套用到片頭' }))
+    fireEvent.click(screen.getByRole('button', { name: '從這裡套用到片尾' }))
     expect(onAdd).toHaveBeenCalledTimes(1)
     expect(onApplyToStart).toHaveBeenCalledTimes(1)
     expect(onApplyToEnd).toHaveBeenCalledTimes(1)

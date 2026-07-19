@@ -19,6 +19,7 @@ import { SaveToLibraryDialog, type ExportedAsset } from './SaveToLibraryDialog'
 import { useLiveCompositeProjects } from './useLiveCompositeProjects'
 import { useMaskTimeline } from './useMaskTimeline'
 import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskEditTarget, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
+import type { LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
 
 interface LiveCompositeClientProps {
   locale: string
@@ -91,19 +92,26 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const [view, setView] = useState<CompositeView>('source')
   const [brushPercent, setBrushPercent] = useState(6)
   const [overlayVisible, setOverlayVisible] = useState(true)
+  const [workflowStep, setWorkflowStep] = useState<LiveCompositeWorkflowStep>(1)
   const [exportError, setExportError] = useState<string | null>(null)
   const [analysisProgress, setAnalysisProgress] = useState<MaskAnalysisProgress>(INITIAL_ANALYSIS_PROGRESS)
   const [exportProgress, setExportProgress] = useState<CompositeExportProgress>(INITIAL_EXPORT_PROGRESS)
   const isVideoExporting = exportProgress.status === 'preparing' || exportProgress.status === 'recording'
   const isAnalyzing = analysisProgress.status === 'loading-model' || analysisProgress.status === 'analyzing'
 
-  useEffect(() => () => {
-    if (videoUrl) URL.revokeObjectURL(videoUrl)
-  }, [videoUrl])
+  useEffect(
+    () => () => {
+      if (videoUrl) URL.revokeObjectURL(videoUrl)
+    },
+    [videoUrl],
+  )
 
-  useEffect(() => () => {
-    if (backgroundUrl) URL.revokeObjectURL(backgroundUrl)
-  }, [backgroundUrl])
+  useEffect(
+    () => () => {
+      if (backgroundUrl) URL.revokeObjectURL(backgroundUrl)
+    },
+    [backgroundUrl],
+  )
 
   useEffect(() => {
     const localUrl = virtualCharacterFile ? virtualCharacter?.assetUrl : null
@@ -114,10 +122,13 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
 
   useEffect(() => () => releasePoseLandmarker(), [])
 
-  useEffect(() => () => {
-    void releasePersonSegmenters()
-    void releaseInteractiveSegmenter()
-  }, [])
+  useEffect(
+    () => () => {
+      void releasePersonSegmenters()
+      void releaseInteractiveSegmenter()
+    },
+    [],
+  )
 
   const selectVideo = (file: File) => {
     // Swapping the video element's source while an analysis seek is pending
@@ -140,6 +151,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     setExportError(null)
     setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS)
     setExportProgress(INITIAL_EXPORT_PROGRESS)
+    setWorkflowStep(2)
   }
 
   const selectBackground = (file: File) => {
@@ -148,6 +160,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     setBackgroundFile(file)
     setBackgroundKey(null)
     setView('composite')
+    setWorkflowStep(4)
     setExportError(null)
   }
 
@@ -178,6 +191,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     })
     setVirtualCharacterFile(file)
     setView('composite')
+    setWorkflowStep(5)
     setOverlayVisible(false)
     setExportError(null)
   }
@@ -203,12 +217,19 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     let firstFailure: unknown = null
     try {
       for (let index = 0; index < times.length; index += 1) {
-        try { detected.push(await stage.analyzePoseAt(times[index])) } catch (error) { firstFailure ??= error }
+        try {
+          detected.push(await stage.analyzePoseAt(times[index]))
+        } catch (error) {
+          firstFailure ??= error
+        }
         setMotionMessage(`正在分析骨架 ${index + 1} / ${times.length}`)
       }
       if (detected.length === 0) throw firstFailure instanceof Error ? firstFailure : new Error('這段畫面沒有偵測到完整人體骨架')
       const previous = wholeClip ? [] : (virtualCharacter.motionKeyframes ?? []).filter((keyframe) => Math.abs(keyframe.time - currentTime) >= 0.05)
-      updateVirtualCharacter({ motionEnabled: true, motionKeyframes: [...previous, ...detected].sort((a, b) => a.time - b.time) })
+      updateVirtualCharacter({
+        motionEnabled: true,
+        motionKeyframes: [...previous, ...detected].sort((a, b) => a.time - b.time),
+      })
       setMotionMessage(`完成 ${detected.length} 個動作關鍵影格${detected.length < times.length ? `，${times.length - detected.length} 格未偵測到完整骨架` : ''}`)
     } catch (error) {
       setMotionMessage(error instanceof Error ? error.message : '骨架分析失敗')
@@ -239,7 +260,10 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       setVideoKey(saved.videoKey)
       setBackgroundKey(saved.backgroundKey)
       if (virtualCharacter && saved.virtualCharacterKey) {
-        setVirtualCharacter({ ...virtualCharacter, assetKey: saved.virtualCharacterKey })
+        setVirtualCharacter({
+          ...virtualCharacter,
+          assetKey: saved.virtualCharacterKey,
+        })
       }
     } catch {
       // Not silent: the hook already recorded the failure and ProjectPanel
@@ -251,6 +275,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     if (isVideoExporting || isAnalyzing || occlusionBusy) return
     try {
       const loaded = await projectStore.openProject(id)
+      const loadedMaskReady = loaded.keyframes.some((keyframe) => Boolean(keyframe.baseMask))
       analysisRunRef.current += 1
       setProjectId(loaded.id)
       setProjectName(loaded.name)
@@ -271,10 +296,11 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       setEditTarget('person')
       setOcclusionPicking(false)
       setOcclusionMessage(null)
-      setView(loaded.backgroundKey ? 'composite' : 'source')
+      setView(loaded.backgroundKey ? 'composite' : loadedMaskReady ? 'mask' : 'source')
       setExportError(null)
       setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS)
       setExportProgress(INITIAL_EXPORT_PROGRESS)
+      setWorkflowStep(loaded.backgroundKey ? 4 : loadedMaskReady ? 3 : 2)
     } catch {
       // Not silent: surfaced through projectStore.error in ProjectPanel.
     }
@@ -331,11 +357,21 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       return
     }
     if (isAnalyzing) {
-      setExportProgress({ status: 'failed', currentTime: 0, duration: metadata?.duration ?? 0, message: '分析進行中，請先取消或等待分析完成。' })
+      setExportProgress({
+        status: 'failed',
+        currentTime: 0,
+        duration: metadata?.duration ?? 0,
+        message: '分析進行中，請先取消或等待分析完成。',
+      })
       return
     }
     if (!stage || !metadata) {
-      setExportProgress({ status: 'failed', currentTime: 0, duration: 0, message: '請先載入影片。' })
+      setExportProgress({
+        status: 'failed',
+        currentTime: 0,
+        duration: 0,
+        message: '請先載入影片。',
+      })
       return
     }
 
@@ -376,6 +412,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         duration: metadata.duration,
         message: `合成影片已完成（${result.mimeType}）。`,
       })
+      setWorkflowStep(6)
     } catch (error) {
       if (error instanceof CompositeRecordingCancelledError) {
         setExportProgress({
@@ -404,13 +441,23 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     const restoreTime = analysisRestoreTimeRef.current
     analysisRestoreTimeRef.current = null
     if (restoreTime !== null) stageRef.current?.seekTo(restoreTime)
-    setAnalysisProgress({ status: 'idle', completed: 0, total: 0, message: '已取消；未套用未完成的分析結果。' })
+    setAnalysisProgress({
+      status: 'idle',
+      completed: 0,
+      total: 0,
+      message: '已取消；未套用未完成的分析結果。',
+    })
   }
 
   const runPersonAnalysis = async (times: number[], settings: AiMaskSettings) => {
     const stage = stageRef.current
     if (!stage || !metadata) {
-      setAnalysisProgress({ status: 'failed', completed: 0, total: 0, message: '請先載入可分析的影片。' })
+      setAnalysisProgress({
+        status: 'failed',
+        completed: 0,
+        total: 0,
+        message: '請先載入可分析的影片。',
+      })
       return
     }
 
@@ -418,7 +465,12 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     analysisRunRef.current = runId
     const restoreTime = currentTime
     analysisRestoreTimeRef.current = restoreTime
-    setAnalysisProgress({ status: 'loading-model', completed: 0, total: times.length, message: '正在載入本機人物分割模型…' })
+    setAnalysisProgress({
+      status: 'loading-model',
+      completed: 0,
+      total: times.length,
+      message: '正在載入本機人物分割模型…',
+    })
 
     try {
       const frames = []
@@ -444,7 +496,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       }
 
       maskTimeline.applyAiMasks(frames)
-      setView('composite')
+      setView('mask')
       setOverlayVisible(true)
       setAnalysisProgress({
         status: 'completed',
@@ -452,6 +504,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         total: times.length,
         message: `AI 人物遮罩完成：已建立 ${times.length} 個可手動修正的關鍵影格。`,
       })
+      setWorkflowStep(3)
     } catch (error) {
       if (analysisRunRef.current !== runId) return
       setAnalysisProgress({
@@ -514,6 +567,29 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }
 
   const activeTimeline = editTarget === 'occlusion' ? occlusionTimeline : maskTimeline
+  const maskReady = maskTimeline.keyframes.some((keyframe) => Boolean(keyframe.baseMask))
+  const completedWorkflowSteps = new Set<LiveCompositeWorkflowStep>()
+  if (metadata) completedWorkflowSteps.add(1)
+  if (maskReady) completedWorkflowSteps.add(2)
+  if (maskReady && workflowStep > 3) completedWorkflowSteps.add(3)
+  if (backgroundUrl || workflowStep > 4) completedWorkflowSteps.add(4)
+  if (virtualCharacter) completedWorkflowSteps.add(5)
+  if (lastExport) completedWorkflowSteps.add(6)
+
+  const changeWorkflowStep = (step: LiveCompositeWorkflowStep) => {
+    setWorkflowStep(step)
+    setOcclusionPicking(false)
+    if (step === 1 || step === 2) setView('source')
+    if (step === 3) {
+      setEditTarget('person')
+      setView('mask')
+      setOverlayVisible(true)
+    }
+    if (step >= 4) {
+      setView('composite')
+      setOverlayVisible(false)
+    }
+  }
 
   return (
     <main className="kuiper-studio-page flex h-dvh min-h-[680px] flex-col overflow-hidden">
@@ -523,50 +599,51 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             <AppIcon name="arrowLeft" className="h-4 w-4" />
           </Link>
           <div>
-            <div className="flex items-center gap-2 text-sm font-medium"><AppIcon name="sparklesAlt" className="h-4 w-4 text-cyan-300" />AI 實拍合成台</div>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <AppIcon name="sparklesAlt" className="h-4 w-4 text-cyan-300" />
+              AI 實拍合成台
+            </div>
             <div className="mt-0.5 text-xs text-stone-600">Live Composite Studio · Mask + Virtual Character</div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-5 text-xs text-stone-500">
-          <span className="flex items-center gap-1.5 text-emerald-400"><AppIcon name="circleCheck" className="h-3.5 w-3.5" />時間型遮罩 · {maskTimeline.keyframes.length} 個關鍵影格</span>
-          <span className="text-amber-300">前景遮擋 · {occlusionTimeline.keyframes.length} 個關鍵影格</span>
-          <span className="text-violet-300">AI 人物辨識 · 本機 MediaPipe</span>
-          <ProjectPanel
-            projectName={projectName}
-            hasProject={Boolean(projectId)}
-            projects={projectStore.projects}
-            busyMessage={projectStore.busyMessage}
-            error={projectStore.error}
-            disabled={isVideoExporting || isAnalyzing || occlusionBusy}
-            onProjectNameChange={setProjectName}
-            onSave={() => void saveProject()}
-            onOpen={(id) => void openProject(id)}
-            onRefreshList={() => void projectStore.refreshProjects()}
-          />
+        <div className="flex shrink-0 items-center gap-3 text-xs text-stone-500">
+          <span>{metadata ? `已載入影片 · ${metadata.duration.toFixed(1)} 秒` : '尚未載入影片'}</span>
+          <ProjectPanel projectName={projectName} hasProject={Boolean(projectId)} projects={projectStore.projects} busyMessage={projectStore.busyMessage} error={projectStore.error} disabled={isVideoExporting || isAnalyzing || occlusionBusy} onProjectNameChange={setProjectName} onSave={() => void saveProject()} onOpen={(id) => void openProject(id)} onRefreshList={() => void projectStore.refreshProjects()} />
         </div>
       </header>
 
-      <CompositeToolbar
-        tool={tool}
-        editTarget={editTarget}
-        view={view}
-        brushPercent={brushPercent}
-        overlayVisible={overlayVisible}
-        canUndo={activeTimeline.canUndo}
-        canRedo={activeTimeline.canRedo}
-        disabled={isVideoExporting || occlusionBusy}
-        onToolChange={setTool}
-        onEditTargetChange={(target) => {
-          setEditTarget(target)
-          setOcclusionPicking(false)
-        }}
-        onViewChange={setView}
-        onBrushPercentChange={setBrushPercent}
-        onOverlayVisibleChange={setOverlayVisible}
-        onUndo={activeTimeline.undo}
-        onRedo={activeTimeline.redo}
-        onClear={activeTimeline.clearCurrent}
-      />
+      {metadata && workflowStep >= 3 ? (
+        <CompositeToolbar
+          tool={tool}
+          editTarget={editTarget}
+          view={view}
+          brushPercent={brushPercent}
+          overlayVisible={overlayVisible}
+          canUndo={activeTimeline.canUndo}
+          canRedo={activeTimeline.canRedo}
+          currentTime={currentTime}
+          disabled={isVideoExporting || occlusionBusy}
+          onToolChange={(nextTool) => {
+            setTool(nextTool)
+            setView(editTarget === 'person' ? 'mask' : 'composite')
+            setOverlayVisible(true)
+          }}
+          onEditTargetChange={(target) => {
+            setEditTarget(target)
+            setOcclusionPicking(false)
+            setView(target === 'person' ? 'mask' : 'composite')
+            setOverlayVisible(true)
+          }}
+          onViewChange={setView}
+          onBrushPercentChange={setBrushPercent}
+          onOverlayVisibleChange={setOverlayVisible}
+          onUndo={activeTimeline.undo}
+          onRedo={activeTimeline.redo}
+          onClear={activeTimeline.clearCurrent}
+        />
+      ) : (
+        <div className="border-b border-white/10 bg-stone-950/90 px-5 py-3 text-sm text-stone-400">{metadata ? '下一步：在左側執行 AI 人物辨識，完成後才會顯示修邊工具。' : '先從左側上傳一段實拍影片。'}</div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         <CompositeAssetPanel
@@ -592,7 +669,14 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           onVirtualCharacterAutoMatch={() => {
             try {
               const patch = stageRef.current?.matchCharacterAppearance()
-              if (patch) updateVirtualCharacter({ appearance: { ...DEFAULT_CHARACTER_APPEARANCE, ...virtualCharacter?.appearance, ...patch } })
+              if (patch)
+                updateVirtualCharacter({
+                  appearance: {
+                    ...DEFAULT_CHARACTER_APPEARANCE,
+                    ...virtualCharacter?.appearance,
+                    ...patch,
+                  },
+                })
             } catch (error) {
               setExportError(error instanceof Error ? error.message : '畫面匹配失敗')
             }
@@ -616,6 +700,9 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           onCancelAnalysis={cancelAnalysis}
           lastExportLabel={lastExport?.label ?? null}
           onSaveToLibrary={lastExport ? () => setLibraryDialogOpen(true) : undefined}
+          workflowStep={workflowStep}
+          completedWorkflowSteps={completedWorkflowSteps}
+          onWorkflowStepChange={changeWorkflowStep}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <MaskStage
@@ -647,27 +734,15 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             onPickOccluder={(point) => void pickOccluder(point)}
             onTimeChange={setCurrentTime}
           />
-          {metadata ? (
-            <MaskKeyframeRail
-              duration={metadata.duration}
-              currentTime={currentTime}
-              keyframes={activeTimeline.keyframes}
-              activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null}
-              hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)}
-              disabled={isVideoExporting || occlusionBusy}
-              onAdd={activeTimeline.addKeyframe}
-              onDelete={activeTimeline.deleteKeyframe}
-              onApplyToStart={activeTimeline.applyToStart}
-              onApplyToEnd={activeTimeline.applyToEnd}
-              onSeek={(time) => stageRef.current?.seekTo(time)}
-            />
-          ) : null}
+          {metadata && maskReady ? <MaskKeyframeRail duration={metadata.duration} currentTime={currentTime} keyframes={activeTimeline.keyframes} activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null} hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)} disabled={isVideoExporting || occlusionBusy} onAdd={activeTimeline.addKeyframe} onDelete={activeTimeline.deleteKeyframe} onApplyToStart={activeTimeline.applyToStart} onApplyToEnd={activeTimeline.applyToEnd} onSeek={(time) => stageRef.current?.seekTo(time)} /> : null}
         </div>
       </div>
-      {exportError ? <div role="alert" className="absolute bottom-5 right-5 rounded-lg border border-red-400/30 bg-red-950 px-4 py-2 text-sm text-red-200">{exportError}</div> : null}
-      {libraryDialogOpen && lastExport ? (
-        <SaveToLibraryDialog asset={lastExport.asset} locale={locale} onClose={() => setLibraryDialogOpen(false)} />
+      {exportError ? (
+        <div role="alert" className="absolute bottom-5 right-5 rounded-lg border border-red-400/30 bg-red-950 px-4 py-2 text-sm text-red-200">
+          {exportError}
+        </div>
       ) : null}
+      {libraryDialogOpen && lastExport ? <SaveToLibraryDialog asset={lastExport.asset} locale={locale} onClose={() => setLibraryDialogOpen(false)} /> : null}
     </main>
   )
 }
