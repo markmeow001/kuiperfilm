@@ -89,4 +89,8 @@ export interface ReconstructionAnalysisResult extends Record<string, unknown> {
   analysis: ReconstructionAnalysis
   metadata: ReconstructionVideoMetadata
   model: string
+  sourceFrame: {
+    key: string
+    signedUrl: string
+  }
 }

@@ -13,6 +13,7 @@ import {
 import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive, toSignedUrlIfCos } from '@/lib/workers/utils'
+import { generateUniqueKey, getSignedUrl, uploadToCOS } from '@/lib/cos'
 
 const execFileAsync = promisify(execFile)
 const SAMPLE_COUNT = 6
@@ -64,7 +65,12 @@ async function probeVideo(inputUrl: string): Promise<ReconstructionVideoMetadata
   }
 }
 
-async function extractFrameDataUrls(inputUrl: string, durationSec: number): Promise<string[]> {
+async function extractFrameDataUrls(
+  inputUrl: string,
+  durationSec: number,
+  taskId: string,
+  userId: string,
+): Promise<{ imageUrls: string[]; sourceFrame: ReconstructionAnalysisResult['sourceFrame'] }> {
   const dir = await mkdtemp(path.join(tmpdir(), 'playground-reconstruction-'))
   try {
     const frameRate = Math.max(0.1, SAMPLE_COUNT / durationSec)
@@ -77,10 +83,21 @@ async function extractFrameDataUrls(inputUrl: string, durationSec: number): Prom
     ], { timeout: PROCESS_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 })
     const names = (await readdir(dir)).filter((name) => name.endsWith('.jpg')).sort()
     if (names.length < 2) throw new Error('PLAYGROUND_RECONSTRUCTION_FRAMES_MISSING')
-    return await Promise.all(names.map(async (name) => {
-      const frame = await readFile(path.join(dir, name))
+    const frames = await Promise.all(names.map((name) => readFile(path.join(dir, name))))
+    // The action frame becomes an input to a second Playground task. Store it
+    // in the caller's guarded reference namespace so it remains authorized.
+    const sourceFrameKey = generateUniqueKey(
+      `images/playground-ref/${userId}/reconstruction-${taskId}-source-frame`,
+      'jpg',
+    )
+    await uploadToCOS(frames[0] as Buffer, sourceFrameKey)
+    const imageUrls = frames.map((frame) => {
       return `data:image/jpeg;base64,${frame.toString('base64')}`
-    }))
+    })
+    return {
+      imageUrls,
+      sourceFrame: { key: sourceFrameKey, signedUrl: getSignedUrl(sourceFrameKey, 3600) },
+    }
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -108,7 +125,12 @@ export async function handlePlaygroundVideoAnalyzeTask(
   await reportTaskProgress(job, 15, { stage: 'probe_video', message: '正在讀取影片資料' })
   const metadata = await probeVideo(inputUrl)
   await reportTaskProgress(job, 35, { stage: 'extract_frames', message: '正在擷取代表畫面' })
-  const imageUrls = await extractFrameDataUrls(inputUrl, metadata.durationSec)
+  const { imageUrls, sourceFrame } = await extractFrameDataUrls(
+    inputUrl,
+    metadata.durationSec,
+    job.data.taskId,
+    job.data.userId,
+  )
   await assertTaskActive(job, 'playground_reconstruction_analyze')
   await reportTaskProgress(job, 55, { stage: 'analyze_frames', message: '正在分析運鏡與表演' })
 
@@ -136,5 +158,5 @@ export async function handlePlaygroundVideoAnalyzeTask(
   }
   const analysis = reconstructionAnalysisSchema.parse(raw)
   await reportTaskProgress(job, 95, { stage: 'analysis_ready', message: '鏡頭分析完成' })
-  return { analysis, metadata, model }
+  return { analysis, metadata, model, sourceFrame }
 }

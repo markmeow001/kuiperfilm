@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildReconstructionPrompt } from '@/lib/playground/reconstruction-prompt'
+import { buildReconstructionKeyframePrompt, buildReconstructionPrompt } from '@/lib/playground/reconstruction-prompt'
 
 const baseInput = {
   analysis: {
@@ -22,6 +22,19 @@ const baseInput = {
 }
 
 describe('buildReconstructionPrompt', () => {
+  it('builds a target keyframe edit that keeps source pose and maps character and scene references', () => {
+    const prompt = buildReconstructionKeyframePrompt({
+      analysis: baseInput.analysis,
+      creative: baseInput.creative,
+      hasSceneReference: true,
+    })
+    expect(prompt).toContain('Image 1 is the source-video frame')
+    expect(prompt).toContain('Preserve its exact body pose')
+    expect(prompt).toContain('Image 2 is the new character appearance reference')
+    expect(prompt).toContain('Image 3 is the new environment reference')
+    expect(prompt).toContain('not a new composition')
+  })
+
   it('pins camera motion, moving environment, actor replacement and exact dialogue', () => {
     const prompt = buildReconstructionPrompt(baseInput)
     expect(prompt).toContain('hand')

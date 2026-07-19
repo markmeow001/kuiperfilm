@@ -1,106 +1,56 @@
 'use client'
 
-import type { ChangeEvent, RefObject } from 'react'
+import type { ChangeEvent } from 'react'
 import { AppIcon } from '@/components/ui/icons'
-import type { ReconstructionReferenceRole, ReconstructionStrategy } from '@/lib/playground/reconstruction-contract'
 import type { PlaygroundController } from './usePlaygroundController'
 
 type ReconstructionModel = PlaygroundController['videoModels'][number]
-type ReferenceImage = PlaygroundController['refImages'][number]
 
-const ROLE_OPTIONS: Array<{ value: ReconstructionReferenceRole; label: string }> = [
-  { value: 'character', label: '人物外觀' },
-  { value: 'keyframe', label: '目標關鍵幀' },
-]
-
-const STRATEGY_OPTIONS: Array<{
-  value: ReconstructionStrategy
-  label: string
-  badge: string
-  description: string
-}> = [
-  {
-    value: 'motion-first',
-    label: '動作優先',
-    badge: '最穩定',
-    description: '只送原影片，不送圖片。最能保留舞蹈、表情、運鏡、節奏與背景音樂；人物外觀以文字改造。',
-  },
-  {
-    value: 'identity-first',
-    label: '人物外觀參考',
-    badge: '實驗性',
-    description: '原影片加一張人物圖。圖片只作外觀參考，但模型仍可能改變動作、構圖或人物身份。',
-  },
-  {
-    value: 'keyframe-guided',
-    label: '高一致性',
-    badge: '需目標幀',
-    description: '上傳一張已換好人物、服裝與場景，且姿勢和構圖貼近原片的目標關鍵幀，再由原影片驅動動作。',
-  },
-]
+export interface ReconstructionReferenceAsset {
+  key: string
+  signedUrl: string
+}
 
 interface ReconstructionGenerationControlsProps {
   models: ReconstructionModel[]
-  strategy: ReconstructionStrategy
-  onStrategyChange: (strategy: ReconstructionStrategy) => void
   modelKey: string
   onModelChange: (modelKey: string) => void
   durationMode: string
   sourceDurationSec: number
   onDurationChange: (mode: string) => void
-  refImages: ReferenceImage[]
-  refImagesCap: number
-  referenceRoles: Record<string, ReconstructionReferenceRole>
-  onRoleChange: (key: string, role: ReconstructionReferenceRole) => void
-  onNameChange: (key: string, name: string) => void
-  onRemoveImage: (index: number) => void
-  imageInputRef: RefObject<HTMLInputElement | null>
-  onImagePick: (event: ChangeEvent<HTMLInputElement>) => Promise<void>
+  sourceFrameUrl: string
+  characterReference: ReconstructionReferenceAsset | null
+  sceneReference: ReconstructionReferenceAsset | null
+  onReferencePick: (role: 'character' | 'environment', file: File) => Promise<void>
+  onRemoveReference: (role: 'character' | 'environment') => void
+  targetKeyframe: ReconstructionReferenceAsset | null
+  keyframeIsStale: boolean
+  keyframeModelLabel: string | null
+  onGenerateKeyframe: () => void
+  canGenerateKeyframe: boolean
+  isGeneratingKeyframe: boolean
   isBusy: boolean
   estimatedUsd: number | null
 }
 
 export function ReconstructionGenerationControls(props: ReconstructionGenerationControlsProps) {
-  const acceptsReferenceImage = props.strategy !== 'motion-first'
-  const referenceTitle = props.strategy === 'keyframe-guided' ? '目標關鍵幀' : '人物外觀參考圖'
-  const referenceHelp = props.strategy === 'keyframe-guided'
-    ? '不是一般人物照：畫面需包含目標人物、服裝與場景，姿勢和鏡頭構圖要貼近原片。'
-    : 'Seedance 沒有 API 級人物硬綁定；名稱只會作為 Prompt 的語義對應。建議使用全身、自然站姿、角度接近原片的單人照片。'
-  const expectedRole: ReconstructionReferenceRole = props.strategy === 'keyframe-guided' ? 'keyframe' : 'character'
+  function pickReference(role: 'character' | 'environment', event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) void props.onReferencePick(role, file)
+  }
 
   return (
     <div className="space-y-4 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.04] p-3">
       <div>
-        <div className="text-sm font-medium text-white">生成控制</div>
-        <p className="mt-1 text-xs leading-5 text-text-tertiary">只顯示可接收表演影片的 AtlasCloud Seedance 2.0 R2V 模型。</p>
+        <div className="text-sm font-medium text-white">角色與場景重建</div>
+        <p className="mt-1 text-xs leading-5 text-text-tertiary">原影片固定提供完整動作、表情、運鏡、節奏與音樂；新角色圖片只負責人物外觀。</p>
       </div>
 
-      <fieldset className="space-y-2">
-        <legend className="text-xs text-text-secondary">重建策略</legend>
-        <div className="grid gap-2">
-          {STRATEGY_OPTIONS.map((option) => {
-            const selected = props.strategy === option.value
-            return (
-              <label key={option.value} className={`cursor-pointer rounded-xl border p-3 transition ${selected ? 'border-cyan-400/50 bg-cyan-400/10' : 'border-white/[0.08] bg-black/20 hover:border-white/20'}`}>
-                <input
-                  type="radio"
-                  name="reconstruction-strategy"
-                  value={option.value}
-                  checked={selected}
-                  disabled={props.isBusy}
-                  onChange={() => props.onStrategyChange(option.value)}
-                  className="sr-only"
-                />
-                <span className="flex items-center justify-between gap-2">
-                  <span className={`text-xs font-medium ${selected ? 'text-cyan-200' : 'text-white'}`}>{option.label}</span>
-                  <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] text-text-tertiary">{option.badge}</span>
-                </span>
-                <span className="mt-1.5 block text-[11px] leading-5 text-text-tertiary">{option.description}</span>
-              </label>
-            )
-          })}
-        </div>
-      </fieldset>
+      <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.07] p-3">
+        <div className="flex items-center gap-2 text-xs font-medium text-emerald-200"><span aria-hidden="true">✓</span> 原始表演已鎖定</div>
+        <p className="mt-1.5 text-[11px] leading-5 text-text-tertiary">系統會一直保留原片的舞蹈／肢體動作、表情強度、鏡頭路徑與時間節奏，不需要另外選模式。</p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="space-y-1.5">
@@ -134,65 +84,92 @@ export function ReconstructionGenerationControls(props: ReconstructionGeneration
         </label>
       </div>
 
-      <div className="flex items-center justify-between border-t border-white/[0.07] pt-3">
+      <div className="space-y-3 border-t border-white/[0.07] pt-3">
         <div>
-          <div className="text-xs font-medium text-white">{referenceTitle}</div>
-          <div className="mt-1 text-[11px] leading-5 text-text-tertiary">{acceptsReferenceImage ? referenceHelp : '動作優先不會把任何參考圖送給模型，避免圖片蓋過原片的舞蹈與運鏡。'}</div>
+          <div className="text-xs font-medium text-white">1. 上傳新角色</div>
+          <p className="mt-1 text-[11px] leading-5 text-text-tertiary">必填。建議使用清楚的全身或半身單人照；這張圖只決定新角色的臉、身形、髮型與外觀。</p>
         </div>
-        <span className="font-mono text-[11px] text-cyan-300">{props.refImages.length}/{props.refImagesCap}</span>
+        <ReferenceUploadCard
+          label="新角色圖片"
+          asset={props.characterReference}
+          required
+          disabled={props.isBusy}
+          onPick={(event) => pickReference('character', event)}
+          onRemove={() => props.onRemoveReference('character')}
+        />
+
+        <div>
+          <div className="text-xs font-medium text-white">2. 新場景參考（可選）</div>
+          <p className="mt-1 text-[11px] leading-5 text-text-tertiary">不傳圖片時會依照下方的新場景文字建立背景；有明確美術設定圖時再上傳。</p>
+        </div>
+        <ReferenceUploadCard
+          label="新場景圖片"
+          asset={props.sceneReference}
+          disabled={props.isBusy}
+          onPick={(event) => pickReference('environment', event)}
+          onRemove={() => props.onRemoveReference('environment')}
+        />
       </div>
 
-      <input
-        ref={props.imageInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        className="hidden"
-        onChange={(event) => void props.onImagePick(event)}
-      />
-      <button
-        type="button"
-        onClick={() => props.imageInputRef.current?.click()}
-        disabled={props.isBusy || !acceptsReferenceImage || props.refImages.length >= props.refImagesCap}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/[0.14] px-3 py-3 text-xs text-text-secondary hover:border-cyan-400/40 hover:text-cyan-200 disabled:opacity-40"
-      >
-        <AppIcon name="upload" className="h-4 w-4" />
-        {props.strategy === 'keyframe-guided' ? '上傳目標關鍵幀' : '上傳一張人物外觀參考圖'}
-      </button>
-
-      {props.refImages.length > 0 ? (
-        <div className="space-y-2">
-          {props.refImages.map((reference, index) => (
-            <div key={reference.key} className="grid grid-cols-[52px_104px_1fr_auto] items-center gap-2 rounded-xl border border-white/[0.08] bg-black/20 p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={reference.signedUrl} alt={`參考圖片 ${index + 1}`} className="h-12 w-12 rounded-lg object-cover" />
-              <select
-                aria-label={`參考圖片 ${index + 1} 用途`}
-                value={props.referenceRoles[reference.key] ?? expectedRole}
-                onChange={(event) => props.onRoleChange(reference.key, event.target.value as ReconstructionReferenceRole)}
-                disabled={props.isBusy}
-                className="min-w-0 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-[11px] text-white"
-              >
-                {ROLE_OPTIONS.filter((role) => role.value === expectedRole).map((role) => <option key={role.value} value={role.value}>{role.label}</option>)}
-              </select>
-              <input
-                aria-label={`參考圖片 ${index + 1} 名稱`}
-                value={reference.name ?? ''}
-                onChange={(event) => props.onNameChange(reference.key, event.target.value)}
-                disabled={props.isBusy}
-                maxLength={80}
-                placeholder={props.strategy === 'keyframe-guided' ? '例如：民國街道目標幀' : '例如：女主角外觀'}
-                className="min-w-0 rounded-lg border border-white/10 bg-black/30 px-2 py-2 text-xs text-white outline-none placeholder:text-text-tertiary/70 focus:border-cyan-400/50"
-              />
-              <button type="button" aria-label={`移除參考圖片 ${index + 1}`} onClick={() => props.onRemoveImage(index)} disabled={props.isBusy} className="px-1 text-text-tertiary hover:text-red-300">×</button>
-            </div>
-          ))}
+      <div className="space-y-3 border-t border-white/[0.07] pt-3">
+        <div>
+          <div className="text-xs font-medium text-white">3. 建立定裝關鍵幀</div>
+          <p className="mt-1 text-[11px] leading-5 text-text-tertiary">AI 會以原片畫面的姿勢和構圖為底，先套用新角色、服裝與場景。確認這張畫面正確後，才會生成完整影片。</p>
         </div>
-      ) : null}
+        <div className="grid grid-cols-2 gap-2">
+          <KeyframeTile label="原片動作幀" imageUrl={props.sourceFrameUrl} />
+          <KeyframeTile label="定裝關鍵幀" imageUrl={props.targetKeyframe?.signedUrl ?? null} pending={props.isGeneratingKeyframe} />
+        </div>
+        {props.keyframeIsStale && props.targetKeyframe ? <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-200">角色、場景或重建設定已變更，請重新建立定裝關鍵幀。</div> : null}
+        <button type="button" onClick={props.onGenerateKeyframe} disabled={props.isBusy || props.isGeneratingKeyframe || !props.canGenerateKeyframe} className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-400/35 bg-cyan-400/10 px-3 py-3 text-xs font-medium text-cyan-200 hover:bg-cyan-400/15 disabled:opacity-40">
+          <AppIcon name="sparkles" className="h-4 w-4" />
+          {props.isGeneratingKeyframe ? '正在建立定裝關鍵幀…' : props.targetKeyframe ? '重新建立定裝關鍵幀' : '建立定裝關鍵幀'}
+        </button>
+        <div className="text-[10px] text-text-tertiary">定裝模型：{props.keyframeModelLabel ?? '尚未啟用可接收參考圖的 AtlasCloud 圖片模型'}；此步驟會產生一次圖片生成費用。</div>
+      </div>
 
       <div className="flex items-center justify-between border-t border-white/[0.07] pt-3 text-[11px]">
         <span className="text-text-tertiary">保留原音時必須選擇「跟隨原片」，避免音畫錯位。</span>
         <span className="font-mono text-cyan-300">{props.estimatedUsd === null ? '成本 —' : `預估 US$${props.estimatedUsd.toFixed(4)}`}</span>
       </div>
+    </div>
+  )
+}
+
+function ReferenceUploadCard(props: {
+  label: string
+  asset: ReconstructionReferenceAsset | null
+  required?: boolean
+  disabled: boolean
+  onPick: (event: ChangeEvent<HTMLInputElement>) => void
+  onRemove: () => void
+}) {
+  return props.asset ? (
+    <div className="flex items-center gap-3 rounded-xl border border-white/[0.09] bg-black/20 p-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={props.asset.signedUrl} alt={props.label} className="h-16 w-16 rounded-lg object-cover" />
+      <span className="min-w-0 flex-1 text-xs text-white">{props.label}<span className="mt-1 block text-[10px] text-emerald-300">已上傳</span></span>
+      <button type="button" onClick={props.onRemove} disabled={props.disabled} className="px-2 text-xs text-text-tertiary hover:text-red-300 disabled:opacity-40">移除</button>
+    </div>
+  ) : (
+    <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-3 py-3 text-xs transition ${props.required ? 'border-cyan-400/35 text-cyan-200' : 'border-white/[0.14] text-text-secondary'} hover:border-cyan-400/50`}>
+      <AppIcon name="upload" className="h-4 w-4" />
+      上傳{props.label}{props.required ? '（必填）' : ''}
+      <input type="file" accept="image/jpeg,image/png,image/webp" disabled={props.disabled} onChange={props.onPick} className="sr-only" />
+    </label>
+  )
+}
+
+function KeyframeTile(props: { label: string; imageUrl: string | null; pending?: boolean }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-white/[0.09] bg-black/25">
+      <div className="aspect-video bg-black/50">
+        {props.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={props.imageUrl} alt={props.label} className="h-full w-full object-cover" />
+        ) : <div className="flex h-full items-center justify-center px-3 text-center text-[10px] text-text-tertiary">{props.pending ? 'AI 生成中…' : '尚未建立'}</div>}
+      </div>
+      <div className="px-2 py-1.5 text-[10px] text-text-secondary">{props.label}</div>
     </div>
   )
 }

@@ -1,8 +1,36 @@
 import type {
+  ReconstructionAnalysis,
+  ReconstructionCreativeBrief,
   ReconstructionDialogueLine,
   ReconstructionPromptInput,
   ReconstructionReferenceBinding,
 } from './reconstruction-contract'
+
+export function buildReconstructionKeyframePrompt(input: {
+  analysis: ReconstructionAnalysis
+  creative: ReconstructionCreativeBrief
+  hasSceneReference: boolean
+}): string {
+  const { analysis, creative, hasSceneReference } = input
+  return [
+    'Create one photorealistic live-action target keyframe by editing the supplied references.',
+    'REFERENCE ORDER:',
+    '- Image 1 is the source-video frame. Preserve its exact body pose, limb positions, gesture, gaze direction, subject placement, camera framing, lens perspective, camera height, and composition.',
+    '- Image 2 is the new character appearance reference. Replace the original performer with this character while keeping only the pose, expression intensity, and physical action from image 1. Preserve the new character identity, facial anatomy, age, hairstyle, and body proportions.',
+    hasSceneReference
+      ? '- Image 3 is the new environment reference. Rebuild the background using its architecture, materials, palette, lighting language, and atmosphere while retaining the perspective and spatial composition of image 1.'
+      : '- Rebuild the background from the written environment brief while retaining the perspective and spatial composition of image 1.',
+    '',
+    `Source action and blocking: ${clean(analysis.summary)}.`,
+    `Target era and environment: ${clean(creative.era)}, ${clean(creative.location)}. ${clean(creative.weatherAndTime)}.`,
+    `Story context: ${clean(creative.story)}.`,
+    `New character: ${clean(creative.characterDesign)}.`,
+    `Wardrobe, hair, makeup, and prosthetics: ${clean(creative.wardrobe)}.`,
+    `Visual mood: ${clean(creative.mood)}.`,
+    '',
+    'This is a character-and-environment replacement keyframe, not a new composition. Do not change the source pose, crop, camera angle, camera distance, body orientation, number of people, or action. Do not create a portrait, character sheet, split screen, collage, text, logo, or watermark. Use natural skin texture, coherent anatomy, realistic hands, grounded feet, physically consistent lighting, and cinematic live-action detail.',
+  ].join('\n')
+}
 
 function clean(value: string): string {
   return value.trim().replace(/\s+/g, ' ')

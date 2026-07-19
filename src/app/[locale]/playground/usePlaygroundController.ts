@@ -314,7 +314,7 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     runOverrides?: {
       preserveSourceAudio?: boolean
       preservePromptVerbatim?: boolean
-      referenceImageKeys?: string[]
+      referenceImages?: Array<{ key: string; name?: string }>
     },
   ) {
     // promptOverride lets the lightbox re-run a finished run's OWN prompt
@@ -365,11 +365,7 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     // reference images (each becomes a single-image subject). Validate
     // before submit so failures are instant (route re-validates).
     const isKlingKey = /::kling-o3-/.test(useModelKey)
-    const submittedRefImages = runOverrides?.referenceImageKeys
-      ? runOverrides.referenceImageKeys
-        .map((key) => refImages.find((image) => image.key === key))
-        .filter((image): image is NonNullable<typeof image> => Boolean(image))
-      : refImages
+    const submittedRefImages = runOverrides?.referenceImages ?? refImages
     let klingSubmitElements: Array<{ name: string; imageKeys: string[] }> = []
     let klingPlainImageKeys: string[] = submittedRefImages.map((r) => r.key)
     if (isKlingKey) {

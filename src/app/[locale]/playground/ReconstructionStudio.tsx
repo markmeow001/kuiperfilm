@@ -2,23 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
-import { buildReconstructionPrompt } from '@/lib/playground/reconstruction-prompt'
+import { buildReconstructionKeyframePrompt, buildReconstructionPrompt } from '@/lib/playground/reconstruction-prompt'
 import type {
   ReconstructionAnalysisResult,
   ReconstructionAudioMode,
   ReconstructionCreativeBrief,
   ReconstructionDialogueLine,
   ReconstructionReferenceBinding,
-  ReconstructionReferenceRole,
-  ReconstructionStrategy,
   ReconstructionVideoMetadata,
 } from '@/lib/playground/reconstruction-contract'
-import { useAnalyzePlaygroundVideo } from '@/lib/query/mutations/playground-mutations'
+import { useAnalyzePlaygroundVideo, useSubmitPlaygroundRun } from '@/lib/query/mutations/playground-mutations'
+import { waitForTaskResult } from '@/lib/task/client'
 import type { PlaygroundController } from './usePlaygroundController'
 import { REF_VIDEO_MAX_SEC, REF_VIDEO_MIN_SEC } from './usePlaygroundController'
 import {
   ReconstructionGenerationControls,
   ReconstructionPromptReview,
+  type ReconstructionReferenceAsset,
 } from './ReconstructionGenerationControls'
 import { ReconstructionBriefForm } from './ReconstructionBriefForm'
 import { ReconstructionResultStage } from './ReconstructionResultStage'
@@ -81,16 +81,20 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
   } = ctrl
   const inputRef = useRef<HTMLInputElement | null>(null)
   const analyze = useAnalyzePlaygroundVideo()
+  const keyframeSubmit = useSubmitPlaygroundRun()
   const [sourceName, setSourceName] = useState<string | null>(null)
   const [metadata, setMetadata] = useState<ReconstructionVideoMetadata | null>(null)
   const [analysisResult, setAnalysisResult] = useState<ReconstructionAnalysisResult | null>(null)
   const [brief, setBrief] = useState<ReconstructionCreativeBrief>(DEFAULT_BRIEF)
   const [dialogue, setDialogue] = useState<ReconstructionDialogueLine[]>([])
   const [audioMode, setAudioMode] = useState<ReconstructionAudioMode>('preserve-original')
-  const [strategy, setStrategy] = useState<ReconstructionStrategy>('motion-first')
   const [durationMode, setDurationMode] = useState('source')
   const [selectedModelKey, setSelectedModelKey] = useState('')
-  const [referenceRoles, setReferenceRoles] = useState<Record<string, ReconstructionReferenceRole>>({})
+  const [characterReference, setCharacterReference] = useState<ReconstructionReferenceAsset | null>(null)
+  const [sceneReference, setSceneReference] = useState<ReconstructionReferenceAsset | null>(null)
+  const [targetKeyframe, setTargetKeyframe] = useState<ReconstructionReferenceAsset | null>(null)
+  const [targetKeyframeFingerprint, setTargetKeyframeFingerprint] = useState<string | null>(null)
+  const [isGeneratingKeyframe, setIsGeneratingKeyframe] = useState(false)
   const [promptPreview, setPromptPreview] = useState('')
   const [promptFingerprint, setPromptFingerprint] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -107,32 +111,43 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
   const outputDurationSec = durationMode === 'source'
     ? Math.max(4, Math.min(15, Math.round(metadata?.durationSec ?? 5)))
     : Number(durationMode)
-  const activeReferenceImages = useMemo(() => (
-    strategy === 'motion-first' ? [] : ctrl.refImages.slice(0, 1)
-  ), [strategy, ctrl.refImages])
-  const referenceBindings = useMemo<ReconstructionReferenceBinding[]>(() => (
-    activeReferenceImages.map((reference, index) => ({
-      imageIndex: index + 1,
-      name: reference.name?.trim() ?? '',
-      role: strategy === 'keyframe-guided' ? 'keyframe' : 'character',
-    }))
-  ), [activeReferenceImages, strategy])
+  const keyframeModels = useMemo(() => ctrl.imageModels.filter((model) => (
+    /^atlascloud::(?:gpt-image-[12]|nano-banana(?:-pro|-2)?|grok-imagine-image(?:-quality)?)$/.test(model.value)
+  )), [ctrl.imageModels])
+  const keyframeModel = [
+    'atlascloud::nano-banana-2',
+    'atlascloud::gpt-image-2',
+    'atlascloud::nano-banana-pro',
+    'atlascloud::grok-imagine-image-quality',
+    'atlascloud::gpt-image-1',
+    'atlascloud::nano-banana',
+    'atlascloud::grok-imagine-image',
+  ].map((key) => keyframeModels.find((model) => model.value === key)).find(Boolean) ?? keyframeModels[0] ?? null
+  const keyframeInputFingerprint = useMemo(() => JSON.stringify({
+    sourceFrameKey: analysisResult?.sourceFrame.key ?? null,
+    characterKey: characterReference?.key ?? null,
+    sceneKey: sceneReference?.key ?? null,
+    brief,
+    imageModelKey: keyframeModel?.value ?? null,
+  }), [analysisResult?.sourceFrame.key, characterReference?.key, sceneReference?.key, brief, keyframeModel?.value])
+  const keyframeIsStale = Boolean(targetKeyframe && targetKeyframeFingerprint !== keyframeInputFingerprint)
+  const referenceBindings = useMemo<ReconstructionReferenceBinding[]>(() => targetKeyframe ? [{
+    imageIndex: 1,
+    name: '已確認的角色與場景定裝關鍵幀',
+    role: 'keyframe',
+  }] : [], [targetKeyframe])
   const currentFingerprint = useMemo(() => JSON.stringify({
     analysisResult,
     metadata,
     brief,
     dialogue,
     audioMode,
-    strategy,
     durationMode,
     outputDurationSec,
     effectiveModelKey,
-    references: activeReferenceImages.map((reference) => ({
-      key: reference.key,
-      name: reference.name?.trim() ?? '',
-      role: strategy === 'keyframe-guided' ? 'keyframe' : 'character',
-    })),
-  }), [analysisResult, metadata, brief, dialogue, audioMode, strategy, durationMode, outputDurationSec, effectiveModelKey, activeReferenceImages])
+    targetKeyframeKey: targetKeyframe?.key ?? null,
+    targetKeyframeFingerprint,
+  }), [analysisResult, metadata, brief, dialogue, audioMode, durationMode, outputDurationSec, effectiveModelKey, targetKeyframe?.key, targetKeyframeFingerprint])
   const promptIsStale = promptFingerprint !== null && promptFingerprint !== currentFingerprint
 
   useEffect(() => {
@@ -165,9 +180,9 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       setAnalysisResult(null)
       setDialogue([])
       setAudioMode(local.durationSec < 4 ? 'generate' : 'preserve-original')
-      setStrategy('motion-first')
       setDurationMode(local.durationSec < 4 ? '4' : 'source')
-      setReferenceRoles({})
+      setTargetKeyframe(null)
+      setTargetKeyframeFingerprint(null)
       setPromptPreview('')
       setPromptFingerprint(null)
       setReconstructionRunId(null)
@@ -182,6 +197,8 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     try {
       const result = await analyze.mutateAsync({ videoKey: ctrl.refVideo.key, locale })
       setAnalysisResult(result)
+      setTargetKeyframe(null)
+      setTargetKeyframeFingerprint(null)
       setMetadata(result.metadata)
       ctrl.setDurationSec(Math.max(4, Math.min(15, Math.round(result.metadata.durationSec))))
       ctrl.setAspectRatio(nearestAspectRatio(result.metadata.width, result.metadata.height))
@@ -223,21 +240,77 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     ctrl.setDurationSec(nextDuration)
   }
 
-  function selectStrategy(nextStrategy: ReconstructionStrategy) {
-    setStrategy(nextStrategy)
-    const role: ReconstructionReferenceRole = nextStrategy === 'keyframe-guided' ? 'keyframe' : 'character'
-    setReferenceRoles(Object.fromEntries(ctrl.refImages.map((reference) => [reference.key, role])))
+  async function uploadReference(role: 'character' | 'environment', file: File) {
+    setError(null)
+    try {
+      const uploaded = await ctrl.upload.mutateAsync({ file, type: 'image' })
+      const asset = { key: uploaded.key, signedUrl: uploaded.signedUrl }
+      if (role === 'character') setCharacterReference(asset)
+      else setSceneReference(asset)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '參考圖片上傳失敗')
+    }
   }
 
-  function removeReferenceImage(index: number) {
-    const removedKey = ctrl.refImages[index]?.key
-    ctrl.removeRefImage(index)
-    if (removedKey) {
-      setReferenceRoles((current) => {
-        const next = { ...current }
-        delete next[removedKey]
-        return next
+  async function generateTargetKeyframe() {
+    if (!analysisResult?.sourceFrame) {
+      setError('請先完成原片分析，系統才能取得動作關鍵幀')
+      return
+    }
+    if (!characterReference) {
+      setError('請先上傳要套用的新角色圖片')
+      return
+    }
+    const required = [brief.era, brief.location, brief.story, brief.characterDesign, brief.wardrobe, brief.mood, brief.weatherAndTime]
+    if (required.some((value) => !value.trim())) {
+      setError('請先補齊年代、場景、故事、人物、服裝、時間與影像氣氛，再建立定裝關鍵幀')
+      return
+    }
+    if (!keyframeModel) {
+      setError('目前帳號尚未啟用可接收參考圖的 AtlasCloud 圖片模型')
+      return
+    }
+
+    setError(null)
+    setIsGeneratingKeyframe(true)
+    try {
+      const prompt = buildReconstructionKeyframePrompt({
+        analysis: analysisResult.analysis,
+        creative: brief,
+        hasSceneReference: Boolean(sceneReference),
       })
+      const submitted = await keyframeSubmit.mutateAsync({
+        prompt,
+        referenceImages: [
+          analysisResult.sourceFrame.key,
+          characterReference.key,
+          ...(sceneReference ? [sceneReference.key] : []),
+        ],
+        outputType: 'image',
+        modelKey: keyframeModel.value,
+        aspectRatio: nearestAspectRatio(analysisResult.metadata.width, analysisResult.metadata.height),
+      })
+      const taskResult = await waitForTaskResult(submitted.run.id, {
+        intervalMs: 1500,
+        timeoutMs: 15 * 60 * 1000,
+      })
+      const rawKey = Array.isArray(taskResult.resultUrls) && typeof taskResult.resultUrls[0] === 'string'
+        ? taskResult.resultUrls[0]
+        : null
+      if (!rawKey) throw new Error('定裝關鍵幀任務沒有回傳圖片')
+
+      const response = await fetch(`/api/playground/runs/${submitted.run.id}`, { cache: 'no-store' })
+      const payload = await response.json().catch(() => null) as { run?: { resultUrls?: string[] | null } } | null
+      const signedUrl = payload?.run?.resultUrls?.[0]
+      if (!response.ok || !signedUrl) throw new Error('定裝關鍵幀已產生，但無法取得預覽網址')
+      setTargetKeyframe({ key: rawKey, signedUrl })
+      setTargetKeyframeFingerprint(keyframeInputFingerprint)
+      setPromptPreview('')
+      setPromptFingerprint(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '定裝關鍵幀生成失敗')
+    } finally {
+      setIsGeneratingKeyframe(false)
     }
   }
 
@@ -250,14 +323,9 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     if (invalidLine) return '對白內容與時間碼需完整，且不得超過原片長度'
     if (audioMode === 'preserve-original' && durationMode !== 'source') return '保留原始對白音軌時，輸出秒數必須選擇「跟隨原片」'
     if (!Number.isInteger(outputDurationSec) || outputDurationSec < 4 || outputDurationSec > 15) return '輸出秒數需介於 4–15 秒'
-    if (strategy !== 'motion-first' && ctrl.refImages.length !== 1) {
-      return strategy === 'keyframe-guided'
-        ? '高一致性模式需要且只能上傳 1 張目標關鍵幀'
-        : '人物外觀參考模式需要且只能上傳 1 張人物圖片，避免多張圖片互相競爭'
-    }
-    if (referenceBindings.some((reference) => !reference.name)) return '請替參考圖片填寫名稱，讓 Prompt 能清楚指出它的用途'
-    const normalizedNames = referenceBindings.map((reference) => reference.name.toLocaleLowerCase())
-    if (new Set(normalizedNames).size !== normalizedNames.length) return '參考圖名稱不可重複，請為人物、場景與服裝使用不同名稱'
+    if (!characterReference) return '請先上傳要套用的新角色圖片'
+    if (!targetKeyframe) return '請先建立並確認定裝關鍵幀，再生成完整影片'
+    if (keyframeIsStale) return '角色、場景或重建設定已變更，請重新建立定裝關鍵幀'
     return null
   }
 
@@ -274,7 +342,7 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
       creative: brief,
       dialogue,
       audioMode,
-      strategy,
+      strategy: 'keyframe-guided',
       references: referenceBindings,
       outputDurationSec: durationMode === 'source' ? metadata.durationSec : outputDurationSec,
     })
@@ -315,7 +383,9 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
     const run = await ctrl.handleRun(effectiveModelKey, promptPreview, {
       preserveSourceAudio: audioMode === 'preserve-original',
       preservePromptVerbatim: true,
-      referenceImageKeys: activeReferenceImages.map((reference) => reference.key),
+      // The signed result URL proves this keyframe came through the caller's
+      // completed task while avoiding authorization of arbitrary run keys.
+      referenceImages: targetKeyframe ? [{ key: targetKeyframe.signedUrl, name: '已確認的角色與場景定裝關鍵幀' }] : [],
     })
     if (run) setReconstructionRunId(run.id)
   }
@@ -329,9 +399,15 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
           <p className="mt-2 text-sm leading-6 text-text-tertiary">保留演員表演、原始運鏡與對白節奏，完整改造人物造型與動態環境。</p>
         </div>
 
-        <div className="mb-5 grid grid-cols-4 gap-2 text-center text-xs">
-          {['影片', '分析', '設定', '生成'].map((label, index) => {
-            const reached = index === 0 ? Boolean(ctrl.refVideo) : index === 1 ? Boolean(analysisResult) : index === 2 ? Boolean(analysisResult) : Boolean(generatedRun)
+        <div className="mb-5 grid grid-cols-5 gap-1.5 text-center text-[11px]">
+          {['影片', '分析', '設定', '定裝', '生成'].map((label, index) => {
+            const reached = index === 0
+              ? Boolean(ctrl.refVideo)
+              : index <= 2
+                ? Boolean(analysisResult)
+                : index === 3
+                  ? Boolean(targetKeyframe && !keyframeIsStale)
+                  : Boolean(generatedRun)
             return <div key={label} className={`rounded-lg border px-2 py-2 ${reached ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300' : 'border-white/[0.08] text-text-tertiary'}`}>{index + 1} {label}</div>
           })}
         </div>
@@ -361,27 +437,6 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
               <div className="mt-2 text-text-tertiary">運鏡：{analysisResult.analysis.camera.movement}</div>
             </div>
 
-            <ReconstructionGenerationControls
-              models={reconstructionModels}
-              strategy={strategy}
-              onStrategyChange={selectStrategy}
-              modelKey={effectiveModelKey}
-              onModelChange={selectModel}
-              durationMode={durationMode}
-              sourceDurationSec={metadata?.durationSec ?? 5}
-              onDurationChange={selectDuration}
-              refImages={ctrl.refImages}
-              refImagesCap={strategy === 'motion-first' ? 0 : 1}
-              referenceRoles={referenceRoles}
-              onRoleChange={(key, role) => setReferenceRoles((current) => ({ ...current, [key]: role }))}
-              onNameChange={ctrl.setRefImageName}
-              onRemoveImage={removeReferenceImage}
-              imageInputRef={ctrl.imageInputRef}
-              onImagePick={ctrl.handleImagePick}
-              isBusy={ctrl.isBusy || ctrl.isGenerating}
-              estimatedUsd={ctrl.costEstimate.data?.amountUsd ?? null}
-            />
-
             <ReconstructionBriefForm
               brief={brief}
               onBriefChange={setBrief}
@@ -394,10 +449,35 @@ export function ReconstructionStudio({ ctrl, locale }: ReconstructionStudioProps
               hasAudio={Boolean(metadata?.hasAudio)}
             />
 
+            <ReconstructionGenerationControls
+              models={reconstructionModels}
+              modelKey={effectiveModelKey}
+              onModelChange={selectModel}
+              durationMode={durationMode}
+              sourceDurationSec={metadata?.durationSec ?? 5}
+              onDurationChange={selectDuration}
+              sourceFrameUrl={analysisResult.sourceFrame.signedUrl}
+              characterReference={characterReference}
+              sceneReference={sceneReference}
+              onReferencePick={uploadReference}
+              onRemoveReference={(role) => {
+                if (role === 'character') setCharacterReference(null)
+                else setSceneReference(null)
+              }}
+              targetKeyframe={targetKeyframe}
+              keyframeIsStale={keyframeIsStale}
+              keyframeModelLabel={keyframeModel?.label ?? null}
+              onGenerateKeyframe={() => void generateTargetKeyframe()}
+              canGenerateKeyframe={Boolean(characterReference && keyframeModel)}
+              isGeneratingKeyframe={isGeneratingKeyframe}
+              isBusy={ctrl.isBusy || ctrl.isGenerating || isGeneratingKeyframe}
+              estimatedUsd={ctrl.costEstimate.data?.amountUsd ?? null}
+            />
+
             <ReconstructionPromptReview
               prompt={promptPreview}
               isStale={promptIsStale}
-              isBusy={ctrl.isBusy}
+              isBusy={ctrl.isBusy || isGeneratingKeyframe}
               isGenerating={ctrl.isGenerating}
               onBuild={buildPromptPreview}
               onPromptChange={(prompt) => {
