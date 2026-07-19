@@ -160,6 +160,52 @@ describe('POST /api/playground/run — modelKey enablement gate (Phase 9.1 spine
     expect(payload.duration).toBe(5)
   })
 
+  it('video prompt between 4001 and 6000 chars -> accepted and submitted unchanged', async () => {
+    const prompt = 'v'.repeat(5000)
+    const { POST } = await loadRoute()
+    const req = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: { prompt, outputType: 'video', modelKey: 'atlascloud::seedance-2.0-r2v', durationSec: 12 },
+    })
+
+    const res = await POST(req, { params: Promise.resolve({}) })
+    expect(res.status).toBe(200)
+    const arg = submitterMock.submitTask.mock.calls[0]?.[0] as { payload?: Record<string, unknown> } | undefined
+    expect(arg?.payload?.prompt).toBe(prompt)
+  })
+
+  it('video prompt above 6000 chars -> 400 PROMPT_TOO_LONG with the video limit', async () => {
+    const { POST } = await loadRoute()
+    const req = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: { prompt: 'v'.repeat(6001), outputType: 'video', modelKey: 'atlascloud::seedance-2.0-r2v' },
+    })
+
+    const res = await POST(req, { params: Promise.resolve({}) })
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error.details.code).toBe('PROMPT_TOO_LONG')
+    expect(json.error.details.details).toMatchObject({ max: 6000, got: 6001 })
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
+  it('image prompt above 4000 chars -> keeps the existing image limit', async () => {
+    const { POST } = await loadRoute()
+    const req = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: { prompt: 'i'.repeat(4001), outputType: 'image', modelKey: 'atlascloud::nano-banana-pro' },
+    })
+
+    const res = await POST(req, { params: Promise.resolve({}) })
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error.details.details).toMatchObject({ max: 4000, got: 4001 })
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
   it('workspace run -> writes workspaceId into progress-safe payload meta', async () => {
     prismaMock.workspaceMember.findFirst.mockResolvedValueOnce({ workspaceId: 'ws-1' })
     const { POST } = await loadRoute()

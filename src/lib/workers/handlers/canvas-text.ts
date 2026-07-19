@@ -16,6 +16,7 @@ import type { TaskJobData } from '@/lib/task/types'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import { assertTaskActive } from '@/lib/workers/utils'
 import { parseCanvasAssistantPlan, type CanvasAssistantPlan } from '@/lib/canvas/assistant-contract'
+import { VIDEO_PROMPT_COMPRESSION_TARGET } from '@/lib/playground/video-prompt-limits'
 
 export const CANVAS_TEXT_MODES = {
   expand: '把下面的文字扩写得更丰富、更具体，补充画面感与细节，保持原意、结构与语言不变。只输出扩写后的正文，不要任何解释。',
@@ -24,7 +25,7 @@ export const CANVAS_TEXT_MODES = {
   continue: '顺着下面的文字自然续写一段，延续既有的风格、人物与语言。只输出续写的正文（不要重复原文），不要任何解释。',
   // Video-prompt compression (Seedance-class models dilute/ignore over-long
   // prompts): keep the essentials, hard-cap the output length.
-  compress: '把下面的视频生成提示词压缩到 1500 字符以内。硬性要求（要素保全优先于字数）：①出现的每个人物及其外观关键词一个都不能丢；②动作保持原有先后顺序；③关键道具、场景环境、镜头景别与运镜、光线氛围、风格关键词全部保留。只删除：重复的描述、纯叙事铺陈、不影响画面的修饰词。在满足以上前提下越精炼越好；保持原语言。只输出压缩后的提示词，不要任何解释。',
+  compress: `把下面的视频生成提示词压缩到 ${VIDEO_PROMPT_COMPRESSION_TARGET} 字符以内。硬性要求（要素保全优先于字数）：①出现的每个人物及其外观关键词一个都不能丢；②动作保持原有先后顺序；③关键道具、场景环境、镜头景别与运镜、光线氛围、风格关键词全部保留。只删除：重复的描述、纯叙事铺陈、不影响画面的修饰词。在满足以上前提下越精炼越好；保持原语言。只输出压缩后的提示词，不要任何解释。`,
   assistant: `你是影视制作无限画布的规划助手。输入是 JSON，包含用户要求、当前节点、选中节点与连线。
 只输出一个 JSON 对象，不要 Markdown，不要解释。格式：
 {"summary":"简短说明","operations":[...]}

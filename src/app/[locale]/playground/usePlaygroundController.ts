@@ -11,7 +11,11 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { VIDEO_PROMPT_SOFT_LIMIT, compressVideoPrompt } from '@/lib/playground/video-prompt-compress'
+import {
+  VIDEO_PROMPT_HARD_LIMIT,
+  VIDEO_PROMPT_SOFT_LIMIT,
+  compressVideoPrompt,
+} from '@/lib/playground/video-prompt-compress'
 import { variantKeyForMode, type VideoRefMode } from '@/lib/video-models/variant-for-mode'
 import { videoModelFamily } from '@/lib/playground/video-model-family'
 import {
@@ -308,6 +312,10 @@ export function usePlaygroundController(workspaceId: string | null = null) {
       alert(`提示詞過長（${basePrompt.length}/4000 字符），請精簡後再生成`)
       return
     }
+    if (outputType === 'video' && basePrompt.length > VIDEO_PROMPT_HARD_LIMIT) {
+      alert(`影片提示詞過長（${basePrompt.length}/${VIDEO_PROMPT_HARD_LIMIT} 字符），請精簡後再生成`)
+      return
+    }
     const useModelKey = overrideModelKey ?? modelKey
     if (!useModelKey) {
       alert('請先選擇模型')
@@ -319,8 +327,13 @@ export function usePlaygroundController(workspaceId: string | null = null) {
       try {
         effectivePrompt = await compressVideoPrompt(effectivePrompt)
       } catch (err) {
-        alert(`提示詞過長（${basePrompt.length} 字符）且自動壓縮失敗：${(err as Error)?.message ?? '未知錯誤'}`)
-        return
+        const reason = (err as Error)?.message ?? '未知錯誤'
+        const submitOriginal = confirm(
+          `提示詞為 ${basePrompt.length} 字符，自動壓縮失敗：${reason}\n\n` +
+          `是否直接送出原文？原文未超過 ${VIDEO_PROMPT_HARD_LIMIT} 字符，但過長的描述可能降低模型遵循度。`,
+        )
+        if (!submitOriginal) return
+        effectivePrompt = basePrompt
       } finally {
         setCompressing(false)
       }

@@ -27,6 +27,7 @@ import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { mapTaskStatusToPlayground } from '@/lib/playground/run-view'
 import { filterAuthorizedReferences } from '@/lib/playground/reference-guard'
+import { VIDEO_PROMPT_HARD_LIMIT } from '@/lib/playground/video-prompt-limits'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
@@ -121,15 +122,16 @@ export const POST = apiHandler(async (request: NextRequest) => {
   if (typeof prompt !== 'string' || !prompt.trim()) {
     throw new ApiError('INVALID_PARAMS', { code: 'PROMPT_REQUIRED', message: '请输入提示词' })
   }
-  if (prompt.length > 4000) {
-    throw new ApiError('INVALID_PARAMS', {
-      code: 'PROMPT_TOO_LONG',
-      message: `提示词过长（${prompt.length}/4000 字符），请精简后重试`,
-      details: { max: 4000, got: prompt.length },
-    })
-  }
   if (outputType !== 'image' && outputType !== 'video') {
     throw new ApiError('INVALID_PARAMS', { code: 'OUTPUT_TYPE_INVALID', message: '输出类型无效（image/video）' })
+  }
+  const promptHardLimit = outputType === 'video' ? VIDEO_PROMPT_HARD_LIMIT : 4000
+  if (prompt.length > promptHardLimit) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'PROMPT_TOO_LONG',
+      message: `提示词过长（${prompt.length}/${promptHardLimit} 字符），请精简后重试`,
+      details: { max: promptHardLimit, got: prompt.length },
+    })
   }
   if (typeof modelKey !== 'string' || !modelKey.trim()) {
     throw new ApiError('INVALID_PARAMS', { code: 'MODEL_KEY_REQUIRED', message: '请先选择模型' })

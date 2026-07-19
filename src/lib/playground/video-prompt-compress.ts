@@ -1,8 +1,9 @@
 /**
  * Client-side auto-compression for over-long VIDEO prompts.
  *
- * Seedance-class video models dilute or ignore prompt content past roughly a
- * thousand characters — a longer prompt doesn't fail, it just generates worse.
+ * Long Seedance-class prompts can dilute instruction priority even when the
+ * provider accepts them. Product limits live in video-prompt-limits.ts because
+ * AtlasCloud does not currently publish a prompt maxLength.
  * When a video submit exceeds VIDEO_PROMPT_SOFT_LIMIT, callers first run the
  * prompt through the CANVAS_TEXT task (mode 'compress', text worker, normally
  * billed) and submit the compressed result instead.
@@ -12,8 +13,7 @@
  * bypass the text-task billing/observe path.
  */
 
-/** Video prompts longer than this get auto-compressed before submit. */
-export const VIDEO_PROMPT_SOFT_LIMIT = 2000
+export { VIDEO_PROMPT_HARD_LIMIT, VIDEO_PROMPT_SOFT_LIMIT } from './video-prompt-limits'
 
 const POLL_INTERVAL_MS = 1500
 const TIMEOUT_MS = 90_000

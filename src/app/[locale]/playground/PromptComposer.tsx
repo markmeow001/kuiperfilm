@@ -9,6 +9,11 @@
  */
 
 import { useMemo, useRef, useState } from 'react'
+import {
+  VIDEO_PROMPT_COMPRESSION_TARGET,
+  VIDEO_PROMPT_HARD_LIMIT,
+  VIDEO_PROMPT_SOFT_LIMIT,
+} from '@/lib/playground/video-prompt-limits'
 import { PromptHighlightBackdrop, elementDotClass } from './PromptHighlight'
 import type { PlaygroundController } from './usePlaygroundController'
 
@@ -65,7 +70,7 @@ interface PromptComposerProps {
 }
 
 export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut }: PromptComposerProps) {
-  const { prompt, setPrompt, promptRef, refText, setRefText, isBusy } = ctrl
+  const { prompt, setPrompt, promptRef, refText, setRefText, isBusy, outputType } = ctrl
   const highlightRef = useRef<HTMLDivElement | null>(null)
   const [atMenuOpen, setAtMenuOpen] = useState(false)
   // Caret-anchored menu position (px, relative to the wrapper). null while
@@ -180,6 +185,12 @@ export function PromptComposer({ ctrl, candidates, boundNames, onSubmitShortcut 
             ))}
           </div>
         ) : null}
+      </div>
+
+      <div className="mt-1 flex justify-end font-mono text-[11px] text-stone-600">
+        {outputType === 'video'
+          ? `${prompt.length}/${VIDEO_PROMPT_HARD_LIMIT} · 超過 ${VIDEO_PROMPT_SOFT_LIMIT} 將壓縮至約 ${VIDEO_PROMPT_COMPRESSION_TARGET}`
+          : `${prompt.length}/4000`}
       </div>
 
       {/* 參考文字 — collapsed into a fold so the column stays short. */}
