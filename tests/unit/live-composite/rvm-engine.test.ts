@@ -6,6 +6,7 @@ import {
   releaseRvmSession,
   RVM_MODEL_PATH,
   rvmEpLabel,
+  segmentPersonFrameRvm,
   type RvmExecutionProvider,
   type RvmOrtModule,
   type RvmOrtSession,
@@ -171,5 +172,44 @@ describe('createRvmSession（快取與釋放）', () => {
     mockedCreate.mockResolvedValue(session)
     const engine = await createRvmSession()
     expect(engine.ep).toBe('webgpu')
+  })
+})
+
+describe('segmentPersonFrameRvm（soft alpha 直通合成）', () => {
+  beforeEach(() => {
+    mockedCreate.mockReset()
+    const fakeContext = {
+      drawImage: vi.fn(),
+      getImageData: (_x: number, _y: number, width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+    }
+    vi.stubGlobal('document', {
+      createElement: () => ({ width: 0, height: 0, getContext: () => fakeContext }),
+    })
+  })
+
+  afterEach(async () => {
+    await releaseRvmSession()
+    vi.unstubAllGlobals()
+  })
+
+  it('RVM matte 保留原生柔邊：門檻是 alpha floor，不再二值化成 0/255', async () => {
+    const run = vi.fn()
+      // 第一次呼叫是 EP warmup 推理。
+      .mockResolvedValueOnce({})
+      // 第二次是真正的影格推理：pha 帶柔邊信心值。
+      .mockResolvedValueOnce({
+        pha: { data: Float32Array.of(1, 0.6, 0.4, 0.2), dims: [1, 1, 1, 4], dispose: vi.fn() },
+        r1o: {}, r2o: {}, r3o: {}, r4o: {},
+      })
+    mockedCreate.mockResolvedValue({ run, release: vi.fn().mockResolvedValue(undefined) })
+    const video = { videoWidth: 4, videoHeight: 1 } as unknown as HTMLVideoElement
+
+    const { mask } = await segmentPersonFrameRvm(video, 0.5, 0)
+
+    expect({ width: mask.width, height: mask.height }).toEqual({ width: 4, height: 1 })
+    // 0.6 -> 153（柔邊保留）；0.4 / 0.2 低於門檻 -> 0（floor 裁掉）。
+    expect([...mask.alpha]).toEqual([255, 153, 0, 0])
   })
 })

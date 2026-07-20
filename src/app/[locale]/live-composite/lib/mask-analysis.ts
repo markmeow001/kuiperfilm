@@ -35,13 +35,13 @@ export function buildMaskAnalysisTimes(
   return times
 }
 
-export function confidenceToMaskRaster(
+function assertMaskConversionInput(
   confidence: Float32Array,
   width: number,
   height: number,
   threshold: number,
   edgeSoftness: number,
-): MaskRaster {
+): void {
   if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) {
     throw new Error('AI 遮罩尺寸無效')
   }
@@ -54,6 +54,16 @@ export function confidenceToMaskRaster(
   if (!Number.isFinite(edgeSoftness) || edgeSoftness < 0 || edgeSoftness > 0.5) {
     throw new Error('邊緣柔化必須介於 0 到 0.5')
   }
+}
+
+export function confidenceToMaskRaster(
+  confidence: Float32Array,
+  width: number,
+  height: number,
+  threshold: number,
+  edgeSoftness: number,
+): MaskRaster {
+  assertMaskConversionInput(confidence, width, height, threshold, edgeSoftness)
 
   const alpha = new Uint8ClampedArray(confidence.length)
   if (edgeSoftness === 0) {
@@ -69,6 +79,47 @@ export function confidenceToMaskRaster(
     const normalized = clamp01((value - lower) / range)
     const smooth = normalized * normalized * (3 - 2 * normalized)
     alpha[index] = Math.round(smooth * 255)
+  })
+  return { width, height, alpha }
+}
+
+/**
+ * RVM 專用的柔邊轉換：門檻是「透明度下限（alpha floor）」而非二值化開關。
+ *
+ * 語義：
+ * - alpha' = 模型原生 alpha（信心值 ×255），當信心 >= 門檻；否則 0。
+ *   門檻以上完整保留 RVM matte 的柔和漸層（頭髮絲、動態模糊邊）。
+ * - 邊緣柔化（edgeSoftness）是額外羽化：只在門檻 ± edgeSoftness 區間用
+ *   smoothstep 衰減原生 alpha，避免 cutoff 處出現硬階梯；高於
+ *   門檻 + edgeSoftness 的像素原生 alpha 1:1 通過。
+ * - edgeSoftness = 0 時是純 floor：低於門檻歸零、其餘保留原生柔邊。
+ *
+ * Selfie Segmenter 路徑仍走 confidenceToMaskRaster（二值／smoothstep
+ * 重映射行為不變）。
+ */
+export function confidenceToSoftMaskRaster(
+  confidence: Float32Array,
+  width: number,
+  height: number,
+  threshold: number,
+  edgeSoftness: number,
+): MaskRaster {
+  assertMaskConversionInput(confidence, width, height, threshold, edgeSoftness)
+
+  const alpha = new Uint8ClampedArray(confidence.length)
+  if (edgeSoftness === 0) {
+    confidence.forEach((value, index) => {
+      alpha[index] = value >= threshold ? Math.round(clamp01(value) * 255) : 0
+    })
+    return { width, height, alpha }
+  }
+
+  const lower = threshold - edgeSoftness
+  const range = edgeSoftness * 2
+  confidence.forEach((value, index) => {
+    const normalized = clamp01((value - lower) / range)
+    const feather = normalized * normalized * (3 - 2 * normalized)
+    alpha[index] = Math.round(clamp01(value) * feather * 255)
   })
   return { width, height, alpha }
 }

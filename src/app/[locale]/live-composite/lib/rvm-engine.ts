@@ -1,4 +1,4 @@
-import { confidenceToMaskRaster } from './mask-analysis'
+import { confidenceToSoftMaskRaster } from './mask-analysis'
 import { seekVideoForAnalysis } from './mask-stage-utils'
 import {
   buildRvmScanPlan,
@@ -240,7 +240,10 @@ function presentVideoFrame(video: HTMLVideoElement, time: number, signal: AbortS
 /**
  * Single-frame RVM matte (zeroed recurrent state) for the「目前影格」button.
  * Returns the same MaskRaster shape as the selfie path so downstream
- * keyframes / strokes / serialization are untouched.
+ * keyframes / strokes / serialization are untouched. Unlike the selfie path,
+ * the raster keeps RVM's native SOFT alpha (threshold = alpha floor, see
+ * confidenceToSoftMaskRaster) — the composite view multiplies by it via
+ * canvas destination-in, so edges stay soft in preview and export.
  */
 export async function segmentPersonFrameRvm(
   video: HTMLVideoElement,
@@ -258,7 +261,7 @@ export async function segmentPersonFrameRvm(
     const result = await runRvmFrame(engine, readFrame(), width, height, ratioTensor, states)
     disposeStates(result.states)
     return {
-      mask: confidenceToMaskRaster(result.confidence, result.width, result.height, threshold, edgeSoftness),
+      mask: confidenceToSoftMaskRaster(result.confidence, result.width, result.height, threshold, edgeSoftness),
       epLabel: engine.epLabel,
     }
   } finally {
@@ -319,7 +322,7 @@ export async function scanPersonMasksRvm(
       for (const commitTime of step.commitTimes) {
         frames.push({
           time: commitTime,
-          mask: confidenceToMaskRaster(result.confidence, result.width, result.height, options.threshold, options.edgeSoftness),
+          mask: confidenceToSoftMaskRaster(result.confidence, result.width, result.height, options.threshold, options.edgeSoftness),
         })
       }
       options.onProgress({

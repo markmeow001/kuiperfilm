@@ -91,6 +91,12 @@ export function AiMaskPanel({
           />
         </label>
 
+        {engine === 'rvm' ? (
+          <p className="text-[11px] leading-5 text-stone-600">
+            RVM 模式：門檻是透明度下限——低於門檻的像素會被去除，高於門檻保留模型原生的柔和邊緣（頭髮絲、動態模糊）；邊緣柔化只在門檻附近再加羽化。
+          </p>
+        ) : null}
+
         <label className="block text-xs text-stone-500">
           邊緣柔化 <span className="float-right font-mono text-stone-300">{edgeSoftness.toFixed(2)}</span>
           <input

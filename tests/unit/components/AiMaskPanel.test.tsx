@@ -79,6 +79,23 @@ describe('AiMaskPanel', () => {
     expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'selfie', interval: 1, threshold: 0.5, edgeSoftness: 0.12 })
   })
 
+  it('RVM 引擎 -> 顯示門檻＝透明度下限的說明；切到 Selfie 則隱藏', () => {
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={0}
+        progress={{ status: 'idle', completed: 0, total: 0, message: '' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText(/門檻是透明度下限/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('AI 遮罩引擎'), { target: { value: 'selfie' } })
+    expect(screen.queryByText(/門檻是透明度下限/)).not.toBeInTheDocument()
+  })
+
   it('分析進行中 -> 引擎選擇器鎖定', () => {
     render(
       <AiMaskPanel

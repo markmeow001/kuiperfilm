@@ -193,8 +193,22 @@ Do not show the original performer. Do not alter shot length or camera language.
 
 ## 7. 產出物清單（Phase 1 完成定義）
 
-- [ ] 本文件 §5 政策查核回填 + 確認函已發出（或已獲回覆）
-- [ ] 兩組素材入庫（asset ID 登記於此）
+### 7.1 AI 角色/場景參考資產（2026-07-20 已生成，nano-banana-pro 1k）
+
+身份錨點（跨鏡一致性評分用）：暗紅髮帶高馬尾、眉間朱砂痣、腰佩黑鞘短刀。
+
+| 槽位 | 內容 | playground run id |
+|---|---|---|
+| image 1 | 古裝女俠 正面全身（3:4） | `a949141b-d430-4948-a069-334eeeeb9ef0` |
+| image 2 | 側面全身（以 image 1 為參考生成） | `7e68c61c-4573-4cf2-8e53-fa4c85b63b6a` |
+| image 3 | 3/4 背面全身（以 image 1 為參考生成） | `dd4e06b1-dafc-42c7-ab26-f486ded2feab` |
+| image 6 | 竹林晨霧古道 場景概念圖（16:9） | `94f6bc8c-226a-4362-8beb-16cdc13fd611` |
+
+結果檔在 R2 `images/playground-runs/<run id>-…`，playground 歷史 rail 可直接取用。
+
+- [x] 本文件 §5 政策查核回填 + 確認函已發出（2026-07-19）
+- [x] AI 角色三視角 + 背景概念圖（§7.1）
+- [ ] 兩組表演素材入庫（asset ID 登記於此）——**表情組待拍**
 - [ ] 6 組最小集結果 + 評分表 + 成本實錄
 - [ ] 勝出配置與 prompt 模板定稿 → 回寫 v2.1 §3.5
 - [ ] 達標判定：通過 → 申請 Phase 2 開工；未達標 → 停在研究狀態（v2.1 §11 紅線）
