@@ -12,6 +12,8 @@ import { MaskStage, type MaskStageHandle } from './MaskStage'
 import { buildMaskAnalysisTimes } from './lib/mask-analysis'
 import { CompositeRecordingCancelledError } from './lib/composite-video-recorder'
 import { releasePersonSegmenters } from './lib/person-segmenter'
+import { releaseDepthSession } from './lib/depth-engine'
+import { formatDepthCleanupSummary, type DepthGateOutcome } from './lib/depth-gate'
 import { releaseRvmSession, RvmScanCancelledError } from './lib/rvm-engine'
 import { releaseInteractiveSegmenter } from './lib/interactive-segmenter'
 import { DEFAULT_CHARACTER_APPEARANCE } from './lib/character-appearance'
@@ -52,6 +54,14 @@ const INITIAL_EXPORT_PROGRESS: CompositeExportProgress = {
 interface LastExport {
   asset: ExportedAsset
   label: string
+}
+
+/** 掃描完成訊息的深度淨化彙總（未啟用時回空字串）。 */
+function depthCleanupSummary(enabled: boolean, outcomes: DepthGateOutcome[]): string {
+  if (!enabled) return ''
+  const applied = outcomes.filter((outcome) => outcome === 'applied').length
+  const unreliable = outcomes.filter((outcome) => outcome === 'unreliable').length
+  return `${formatDepthCleanupSummary(applied, outcomes.length, unreliable)}。`
 }
 
 function exportDefaultName(kind: string): string {
@@ -190,6 +200,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
       void releasePersonSegmenters()
       void releaseInteractiveSegmenter()
       void releaseRvmSession()
+      void releaseDepthSession()
     },
     [],
   )
@@ -545,6 +556,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
 
     try {
       const frames = []
+      const depthOutcomes: DepthGateOutcome[] = []
+      const depthLabel = settings.depthCleanup ? '＋深度' : ''
       for (let index = 0; index < times.length; index += 1) {
         if (analysisRunRef.current !== runId) return
         const time = times[index]
@@ -552,11 +565,12 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           status: 'analyzing',
           completed: index,
           total: times.length,
-          message: `分析 ${time.toFixed(2)} 秒的人物輪廓…`,
+          message: `分析 ${time.toFixed(2)} 秒的人物輪廓${depthLabel}…`,
         })
-        const mask = await stage.analyzePersonAt(time, settings.threshold, settings.edgeSoftness)
+        const { mask, depthOutcome } = await stage.analyzePersonAt(time, settings.threshold, settings.edgeSoftness, settings.depthCleanup)
         if (analysisRunRef.current !== runId) return
         frames.push({ time, mask })
+        depthOutcomes.push(depthOutcome)
         setAnalysisProgress({
           status: 'analyzing',
           completed: index + 1,
@@ -573,7 +587,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         status: 'completed',
         completed: times.length,
         total: times.length,
-        message: `AI 人物遮罩完成：已建立 ${times.length} 個可手動修正的關鍵影格。`,
+        message: `AI 人物遮罩完成：已建立 ${times.length} 個可手動修正的關鍵影格。${depthCleanupSummary(settings.depthCleanup, depthOutcomes)}`,
       })
       setWorkflowStep(3)
     } catch (error) {
@@ -633,12 +647,15 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
 
     try {
       let frames: Array<{ time: number; mask: MaskRaster }>
+      let depthOutcomes: DepthGateOutcome[]
       let epLabel = 'RVM'
+      const depthLabel = settings.depthCleanup ? '＋深度' : ''
       if (wholeClip) {
-        frames = await stage.analyzeRvmClip({
+        const scanned = await stage.analyzeRvmClip({
           commitTimes,
           threshold: settings.threshold,
           edgeSoftness: settings.edgeSoftness,
+          depthCleanup: settings.depthCleanup,
           shouldContinue: () => analysisRunRef.current === runId,
           onProgress: (progress) => {
             epLabel = progress.epLabel
@@ -646,13 +663,16 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
               status: 'analyzing',
               completed: progress.frameIndex,
               total: progress.frameCount,
-              message: `${progress.epLabel}｜已處理 ${progress.processedSeconds.toFixed(1)} / ${progress.totalSeconds.toFixed(1)} 秒`,
+              message: `${progress.epLabel}${depthLabel}｜已處理 ${progress.processedSeconds.toFixed(1)} / ${progress.totalSeconds.toFixed(1)} 秒`,
             })
           },
         })
+        frames = scanned.map(({ time, mask }) => ({ time, mask }))
+        depthOutcomes = scanned.map(({ depthOutcome }) => depthOutcome)
       } else {
-        const result = await stage.analyzeRvmPersonAt(commitTimes[0], settings.threshold, settings.edgeSoftness)
+        const result = await stage.analyzeRvmPersonAt(commitTimes[0], settings.threshold, settings.edgeSoftness, settings.depthCleanup)
         frames = [{ time: commitTimes[0], mask: result.mask }]
+        depthOutcomes = [result.depthOutcome]
         epLabel = result.epLabel
       }
       if (analysisRunRef.current !== runId) return
@@ -663,7 +683,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
         status: 'completed',
         completed: frames.length,
         total: frames.length,
-        message: `${epLabel}｜人物遮罩完成：已建立 ${frames.length} 個可手動修正的關鍵影格。`,
+        message: `${epLabel}｜人物遮罩完成：已建立 ${frames.length} 個可手動修正的關鍵影格。${depthCleanupSummary(settings.depthCleanup, depthOutcomes)}`,
       })
       setWorkflowStep(3)
     } catch (error) {

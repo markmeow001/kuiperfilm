@@ -8,7 +8,9 @@ import { canvasBlob, drawCover, seekVideoForAnalysis } from './lib/mask-stage-ut
 import { resolveMaskFrame } from './lib/mask-keyframes'
 import { appendStrokePoint, pointerToNormalizedPoint } from './lib/mask-strokes'
 import { segmentPersonFrame } from './lib/person-segmenter'
-import { scanPersonMasksRvm, segmentPersonFrameRvm, type RvmScanProgress } from './lib/rvm-engine'
+import { cleanMaskWithDepth } from './lib/depth-engine'
+import type { DepthGateOutcome } from './lib/depth-gate'
+import { scanPersonMasksRvm, segmentPersonFrameRvm, type RvmScanFrame, type RvmScanProgress } from './lib/rvm-engine'
 import { shouldRenderPreview } from './lib/render-ownership'
 import { useVirtualCharacterMedia } from './useVirtualCharacterMedia'
 import { sampleVideoAppearance } from './lib/character-appearance'
@@ -32,17 +34,18 @@ export interface MaskStageHandle {
   }) => Promise<CompositeRecordingResult>
   cancelCompositeVideo: () => void
   seekTo: (time: number) => void
-  analyzePersonAt: (time: number, threshold: number, edgeSoftness: number) => Promise<MaskRaster>
+  analyzePersonAt: (time: number, threshold: number, edgeSoftness: number, depthCleanup: boolean) => Promise<{ mask: MaskRaster; depthOutcome: DepthGateOutcome }>
   /** Single-frame RVM matte; returns the active execution-provider label for the UI. */
-  analyzeRvmPersonAt: (time: number, threshold: number, edgeSoftness: number) => Promise<{ mask: MaskRaster; epLabel: string }>
+  analyzeRvmPersonAt: (time: number, threshold: number, edgeSoftness: number, depthCleanup: boolean) => Promise<{ mask: MaskRaster; epLabel: string; depthOutcome: DepthGateOutcome }>
   /** Sequential RVM scan over the whole clip, committing keyframes at commitTimes. */
   analyzeRvmClip: (options: {
     commitTimes: number[]
     threshold: number
     edgeSoftness: number
+    depthCleanup: boolean
     shouldContinue: () => boolean
     onProgress: (progress: RvmScanProgress) => void
-  }) => Promise<Array<{ time: number; mask: MaskRaster }>>
+  }) => Promise<RvmScanFrame[]>
   analyzeOccluderAt: (time: number, point: NormalizedPoint) => Promise<MaskRaster>
   matchCharacterAppearance: () => Partial<VirtualCharacterAppearance>
   analyzePoseAt: (time: number) => Promise<VirtualCharacterMotionKeyframe>
@@ -365,23 +368,30 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       setCurrentTime(time)
       onTimeChange(time)
     },
-    analyzePersonAt: async (time: number, threshold: number, edgeSoftness: number) => {
+    analyzePersonAt: async (time: number, threshold: number, edgeSoftness: number, depthCleanup: boolean) => {
       const video = videoRef.current
       if (!video || !metadata) throw new Error('請先載入可分析的影片')
       analysisAbortRef.current ??= new AbortController()
       video.pause()
       await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
-      return segmentPersonFrame(video, threshold, edgeSoftness)
+      const mask = await segmentPersonFrame(video, threshold, edgeSoftness)
+      if (!depthCleanup) return { mask, depthOutcome: 'off' as const }
+      // Keyframe-commit-time depth gating: the video still presents `time`.
+      const gated = await cleanMaskWithDepth(video, mask)
+      return { mask: gated.mask, depthOutcome: gated.outcome }
     },
-    analyzeRvmPersonAt: async (time: number, threshold: number, edgeSoftness: number) => {
+    analyzeRvmPersonAt: async (time: number, threshold: number, edgeSoftness: number, depthCleanup: boolean) => {
       const video = videoRef.current
       if (!video || !metadata) throw new Error('請先載入可分析的影片')
       analysisAbortRef.current ??= new AbortController()
       video.pause()
       await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
-      return segmentPersonFrameRvm(video, threshold, edgeSoftness)
+      const { mask, epLabel } = await segmentPersonFrameRvm(video, threshold, edgeSoftness)
+      if (!depthCleanup) return { mask, epLabel, depthOutcome: 'off' as const }
+      const gated = await cleanMaskWithDepth(video, mask)
+      return { mask: gated.mask, epLabel, depthOutcome: gated.outcome }
     },
-    analyzeRvmClip: async (options) => {
+    analyzeRvmClip: async ({ depthCleanup, ...options }) => {
       const video = videoRef.current
       if (!video || !metadata) throw new Error('請先載入可分析的影片')
       analysisAbortRef.current ??= new AbortController()
@@ -389,6 +399,9 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
         ...options,
         duration: metadata.duration,
         signal: analysisAbortRef.current.signal,
+        // Runs at keyframe commit only, while the scan loop has the video
+        // presented on the committed frame.
+        gateMask: depthCleanup ? (mask) => cleanMaskWithDepth(video, mask) : undefined,
       })
     },
     analyzeOccluderAt: async (time: number, point: NormalizedPoint) => {

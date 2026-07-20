@@ -21,7 +21,7 @@ describe('AiMaskPanel', () => {
     fireEvent.change(screen.getByLabelText('AI 遮罩邊緣柔化'), { target: { value: '0.08' } })
     fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
 
-    expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'rvm', interval: 2, threshold: 0.6, edgeSoftness: 0.08 })
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'rvm', interval: 2, threshold: 0.6, edgeSoftness: 0.08, depthCleanup: true })
   })
 
   it('選擇精細追蹤 -> 以 0.25 秒間隔掃描', () => {
@@ -40,7 +40,7 @@ describe('AiMaskPanel', () => {
     fireEvent.change(screen.getByLabelText('AI 遮罩取樣間隔'), { target: { value: '0.25' } })
     fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
 
-    expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'rvm', interval: 0.25, threshold: 0.5, edgeSoftness: 0.12 })
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'rvm', interval: 0.25, threshold: 0.5, edgeSoftness: 0.12, depthCleanup: true })
   })
 
   it('引擎預設 RVM（推薦・逐幀時序）-> 掃描帶 engine rvm', () => {
@@ -58,7 +58,7 @@ describe('AiMaskPanel', () => {
 
     expect(screen.getByLabelText('AI 遮罩引擎')).toHaveValue('rvm')
     fireEvent.click(screen.getByRole('button', { name: '目前影格 0.0s' }))
-    expect(onAnalyzeCurrent).toHaveBeenCalledWith({ engine: 'rvm', interval: 1, threshold: 0.5, edgeSoftness: 0.12 })
+    expect(onAnalyzeCurrent).toHaveBeenCalledWith({ engine: 'rvm', interval: 1, threshold: 0.5, edgeSoftness: 0.12, depthCleanup: true })
   })
 
   it('切換回 Selfie Segmenter（舊版）-> 掃描帶 engine selfie', () => {
@@ -76,7 +76,7 @@ describe('AiMaskPanel', () => {
 
     fireEvent.change(screen.getByLabelText('AI 遮罩引擎'), { target: { value: 'selfie' } })
     fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
-    expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'selfie', interval: 1, threshold: 0.5, edgeSoftness: 0.12 })
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'selfie', interval: 1, threshold: 0.5, edgeSoftness: 0.12, depthCleanup: true })
   })
 
   it('RVM 引擎 -> 顯示門檻＝透明度下限的說明；切到 Selfie 則隱藏', () => {
@@ -94,6 +94,63 @@ describe('AiMaskPanel', () => {
     expect(screen.getByText(/門檻是透明度下限/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('AI 遮罩引擎'), { target: { value: 'selfie' } })
     expect(screen.queryByText(/門檻是透明度下限/)).not.toBeInTheDocument()
+  })
+
+  it('深度淨化預設開啟，取消勾選 -> 掃描帶 depthCleanup false', () => {
+    const onAnalyzeClip = vi.fn()
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={0}
+        progress={{ status: 'idle', completed: 0, total: 0, message: '' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={onAnalyzeClip}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    const checkbox = screen.getByLabelText('深度淨化')
+    expect(checkbox).toBeChecked()
+    expect(screen.getByText(/以深度圖排除與人物不同距離的誤判/)).toBeInTheDocument()
+
+    fireEvent.click(checkbox)
+    fireEvent.click(screen.getByRole('button', { name: '掃描整段影片' }))
+    expect(onAnalyzeClip).toHaveBeenCalledWith({ engine: 'rvm', interval: 1, threshold: 0.5, edgeSoftness: 0.12, depthCleanup: false })
+  })
+
+  it('分析進行中 -> 深度淨化開關鎖定', () => {
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={0}
+        progress={{ status: 'analyzing', completed: 1, total: 4, message: 'RVM · WebGPU＋深度｜已處理 2.0 / 8.0 秒' }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('深度淨化')).toBeDisabled()
+  })
+
+  it('完成訊息帶深度淨化彙總 -> 原樣顯示', () => {
+    render(
+      <AiMaskPanel
+        canAnalyze
+        currentTime={0}
+        progress={{
+          status: 'completed',
+          completed: 12,
+          total: 12,
+          message: 'RVM · WebGPU｜人物遮罩完成：已建立 12 個可手動修正的關鍵影格。9/12 影格已套用深度淨化（3 格深度帶不可靠未套用）。',
+        }}
+        onAnalyzeCurrent={vi.fn()}
+        onAnalyzeClip={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent('9/12 影格已套用深度淨化（3 格深度帶不可靠未套用）')
   })
 
   it('分析進行中 -> 引擎選擇器鎖定', () => {

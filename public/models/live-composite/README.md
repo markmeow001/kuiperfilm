@@ -27,6 +27,24 @@ videos remain in the browser and are not sent to a segmentation service.
     distribution**. Flagged deliberately — do not remove this note without a
     legal decision.
 
+## Depth Anything V2 Small（深度淨化）
+
+- `depth-anything-v2-small.onnx`
+  - Source: `https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model_fp16.onnx`
+    (fp16 weights export; input/output tensors remain float32:
+    `pixel_values` [1,3,H,W] → `predicted_depth` [1,H,W])
+  - SHA-256: `2df6223f206b5164e21f664ace61dabeb9bb6a49b8b5a3e00510b4807d0f5b04`
+  - **License: Apache-2.0** (Depth Anything V2 **Small** only — the Base/Large
+    checkpoints are CC-BY-NC and must NOT be used here).
+  - fp16 chosen over fp32 (99.1 MB → 49.6 MB): verified numerically equivalent on
+    CPU EP (onnxruntime 1.22, 518×392 input) — max |diff| of the per-frame
+    0-1 normalized depth vs fp32 is 0.0015, ~50× below the depth-band margin
+    (0.08) used by the 深度淨化 gate.
+  - Used by the AI 實拍重製 depth-assisted mask cleanup (深度淨化): runs once
+    per committed mask keyframe via onnxruntime-web (WebGPU, falling back to
+    single-threaded WASM). Inference stays entirely in the browser; frames
+    and depth maps are never uploaded.
+
 ## MediaPipe models
 
 - `selfie-segmenter-landscape.tflite`

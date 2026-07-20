@@ -11,6 +11,8 @@ export interface AiMaskSettings {
   interval: number
   threshold: number
   edgeSoftness: number
+  /** 深度淨化：以深度圖在關鍵影格 commit 時排除與人物不同距離的誤判。 */
+  depthCleanup: boolean
 }
 
 interface AiMaskPanelProps {
@@ -34,8 +36,9 @@ export function AiMaskPanel({
   const [interval, setIntervalValue] = useState(1)
   const [threshold, setThreshold] = useState(0.5)
   const [edgeSoftness, setEdgeSoftness] = useState(0.12)
+  const [depthCleanup, setDepthCleanup] = useState(true)
   const busy = progress.status === 'loading-model' || progress.status === 'analyzing'
-  const settings: AiMaskSettings = { engine, interval, threshold, edgeSoftness }
+  const settings: AiMaskSettings = { engine, interval, threshold, edgeSoftness, depthCleanup }
   const percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
 
   return (
@@ -111,6 +114,23 @@ export function AiMaskPanel({
             className="mt-2 w-full accent-violet-400"
           />
         </label>
+
+        <label className="flex items-start gap-2 text-xs text-stone-400">
+          <input
+            aria-label="深度淨化"
+            type="checkbox"
+            checked={depthCleanup}
+            disabled={busy}
+            onChange={(event) => setDepthCleanup(event.target.checked)}
+            className="mt-0.5 accent-violet-400"
+          />
+          <span>
+            深度淨化
+            <span className="mt-0.5 block text-[11px] leading-5 text-stone-600">
+              以深度圖排除與人物不同距離的誤判（建築/遠景）；深度帶不可靠時該影格自動跳過不裁切
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -149,7 +169,7 @@ export function AiMaskPanel({
         </p>
       ) : null}
 
-      <p className="mt-2 text-[11px] leading-5 text-stone-600">影片不會上傳；模型在瀏覽器內取樣人物輪廓。RVM 會從頭到尾逐幀掃描一次以保持時間穩定；0.25 秒模式適合快速動作，分析影格仍受本機安全上限保護。完成後可用保留／移除畫筆修邊。</p>
+      <p className="mt-2 text-[11px] leading-5 text-stone-600">影片不會上傳；模型（含深度淨化的深度分析）都在瀏覽器內運算。RVM 會從頭到尾逐幀掃描一次以保持時間穩定；深度淨化只在每個關鍵影格運算一次；0.25 秒模式適合快速動作，分析影格仍受本機安全上限保護。完成後可用保留／移除畫筆修邊。</p>
     </section>
   )
 }

@@ -1,43 +1,36 @@
 import { confidenceToSoftMaskRaster } from './mask-analysis'
 import { seekVideoForAnalysis } from './mask-stage-utils'
 import {
+  negotiateOnnxSession,
+  type OnnxExecutionProvider,
+  type OnnxModule,
+  type OnnxSession,
+  type OnnxTensor,
+} from './onnx-session'
+import {
   buildRvmScanPlan,
   chooseDownsampleRatio,
   DEFAULT_RVM_SCAN_FPS,
   nextRecurrentFeeds,
   type RvmRecurrentFeeds,
 } from './rvm-scan'
+import type { DepthGateOutcome } from './depth-gate'
 import type { MaskRaster } from '../live-composite-types'
 
 export const RVM_MODEL_PATH = '/models/live-composite/rvm-mobilenetv3-fp32.onnx'
-/** onnxruntime-web fetches its .wasm binaries from here (self-hosted, no CDN). */
-export const ORT_WASM_ASSET_PATH = '/onnxruntime/'
+export { ORT_WASM_ASSET_PATH } from './onnx-session'
 const FRAME_PRESENT_TIMEOUT_MS = 5_000
 
-export type RvmExecutionProvider = 'webgpu' | 'wasm'
+export type RvmExecutionProvider = OnnxExecutionProvider
 
 /**
- * Minimal structural view of onnxruntime-web used by this engine. Tests pass
- * a fake module implementing this shape instead of loading the real runtime.
+ * Minimal structural view of onnxruntime-web used by this engine (shared
+ * with the depth engine via onnx-session). Tests pass a fake module
+ * implementing this shape instead of loading the real runtime.
  */
-export interface RvmOrtTensor {
-  readonly data: unknown
-  readonly dims: readonly number[]
-  dispose?: () => void
-}
-
-export interface RvmOrtSession {
-  run: (feeds: Record<string, RvmOrtTensor>) => Promise<Record<string, RvmOrtTensor>>
-  release: () => Promise<void>
-}
-
-export interface RvmOrtModule {
-  env: { wasm: { numThreads?: number; wasmPaths?: string } }
-  Tensor: new (type: 'float32', data: Float32Array, dims: readonly number[]) => RvmOrtTensor
-  InferenceSession: {
-    create: (path: string, options: { executionProviders: RvmExecutionProvider[] }) => Promise<RvmOrtSession>
-  }
-}
+export type RvmOrtTensor = OnnxTensor
+export type RvmOrtSession = OnnxSession
+export type RvmOrtModule = OnnxModule
 
 export interface RvmEngine {
   ort: RvmOrtModule
@@ -72,31 +65,16 @@ async function warmupRvmSession(ort: RvmOrtModule, session: RvmOrtSession): Prom
  * pass a warmup inference, not just session creation. If both execution
  * providers fail, throws an explicit error carrying both reasons — there is
  * deliberately NO silent fallback to the Selfie Segmenter engine.
+ * (Negotiation loop shared with the depth engine via onnx-session.)
  */
 export async function negotiateRvmSession(
   ort: RvmOrtModule,
   modelPath: string,
 ): Promise<{ session: RvmOrtSession; ep: RvmExecutionProvider }> {
-  ort.env.wasm.numThreads = 1
-  ort.env.wasm.wasmPaths = ORT_WASM_ASSET_PATH
-  const failures: string[] = []
-  for (const ep of ['webgpu', 'wasm'] as const) {
-    let session: RvmOrtSession | null = null
-    try {
-      session = await ort.InferenceSession.create(modelPath, { executionProviders: [ep] })
-      await warmupRvmSession(ort, session)
-      return { session, ep }
-    } catch (error) {
-      failures.push(`${ep}：${error instanceof Error ? error.message : String(error)}`)
-      try {
-        await session?.release()
-      } catch {
-        // Failed-warmup session teardown is best-effort; the EP failure above
-        // is what we report.
-      }
-    }
-  }
-  throw new Error(`RVM 引擎無法初始化（WebGPU 與 WASM 皆失敗）— ${failures.join('；')}`)
+  return negotiateOnnxSession(ort, modelPath, {
+    warmup: warmupRvmSession,
+    buildFailureError: (failures) => `RVM 引擎無法初始化（WebGPU 與 WASM 皆失敗）— ${failures}`,
+  })
 }
 
 let enginePromise: Promise<RvmEngine> | null = null
@@ -288,6 +266,19 @@ export interface RvmScanOptions {
   signal: AbortSignal
   shouldContinue: () => boolean
   onProgress: (progress: RvmScanProgress) => void
+  /**
+   * 深度淨化 hook：只在 KEYFRAME commit 時呼叫（絕不逐掃描幀跑），且呼叫
+   * 當下 video 元素仍呈現該 commit 影格 — 深度必須估自遮罩來源的同一批
+   * 像素。未提供 = 不做深度淨化。
+   */
+  gateMask?: (mask: MaskRaster) => Promise<{ mask: MaskRaster; outcome: Exclude<DepthGateOutcome, 'off'> }>
+}
+
+export interface RvmScanFrame {
+  time: number
+  mask: MaskRaster
+  /** 深度淨化結果；'off' = 這次掃描未啟用深度淨化。 */
+  depthOutcome: DepthGateOutcome
 }
 
 /**
@@ -299,7 +290,7 @@ export interface RvmScanOptions {
 export async function scanPersonMasksRvm(
   video: HTMLVideoElement,
   options: RvmScanOptions,
-): Promise<Array<{ time: number; mask: MaskRaster }>> {
+): Promise<RvmScanFrame[]> {
   const engine = await createRvmSession()
   const width = video.videoWidth
   const height = video.videoHeight
@@ -308,7 +299,7 @@ export async function scanPersonMasksRvm(
   const readFrame = createFrameReader(video, width, height)
   const ratioTensor = new engine.ort.Tensor('float32', new Float32Array([chooseDownsampleRatio(width, height)]), [1])
   let states = createInitialStates(engine.ort)
-  const frames: Array<{ time: number; mask: MaskRaster }> = []
+  const frames: RvmScanFrame[] = []
   video.pause()
   try {
     for (let index = 0; index < plan.length; index += 1) {
@@ -319,11 +310,21 @@ export async function scanPersonMasksRvm(
       const result = await runRvmFrame(engine, readFrame(), width, height, ratioTensor, states)
       disposeStates(states)
       states = result.states
-      for (const commitTime of step.commitTimes) {
-        frames.push({
-          time: commitTime,
-          mask: confidenceToSoftMaskRaster(result.confidence, result.width, result.height, options.threshold, options.edgeSoftness),
-        })
+      if (step.commitTimes.length > 0) {
+        // Depth gating runs once per committed scan frame, while the video
+        // element still presents step.time (the pixels the matte came from).
+        let mask = confidenceToSoftMaskRaster(result.confidence, result.width, result.height, options.threshold, options.edgeSoftness)
+        let depthOutcome: DepthGateOutcome = 'off'
+        if (options.gateMask) {
+          const gated = await options.gateMask(mask)
+          mask = gated.mask
+          depthOutcome = gated.outcome
+        }
+        // Masks are immutable downstream, so commit times sharing one scan
+        // frame can safely share the same raster reference.
+        for (const commitTime of step.commitTimes) {
+          frames.push({ time: commitTime, mask, depthOutcome })
+        }
       }
       options.onProgress({
         frameIndex: index + 1,

@@ -6,11 +6,13 @@ import {
   releaseRvmSession,
   RVM_MODEL_PATH,
   rvmEpLabel,
+  scanPersonMasksRvm,
   segmentPersonFrameRvm,
   type RvmExecutionProvider,
   type RvmOrtModule,
   type RvmOrtSession,
 } from '@/app/[locale]/live-composite/lib/rvm-engine'
+import type { MaskRaster } from '@/app/[locale]/live-composite/live-composite-types'
 
 // createRvmSession dynamic-imports onnxruntime-web; the mock guarantees no
 // real WASM/WebGPU runtime is ever loaded in CI.
@@ -211,5 +213,101 @@ describe('segmentPersonFrameRvm（soft alpha 直通合成）', () => {
     expect({ width: mask.width, height: mask.height }).toEqual({ width: 4, height: 1 })
     // 0.6 -> 153（柔邊保留）；0.4 / 0.2 低於門檻 -> 0（floor 裁掉）。
     expect([...mask.alpha]).toEqual([255, 153, 0, 0])
+  })
+})
+
+describe('scanPersonMasksRvm（深度淨化 gate hook）', () => {
+  beforeEach(() => {
+    mockedCreate.mockReset()
+    const fakeContext = {
+      drawImage: vi.fn(),
+      getImageData: (_x: number, _y: number, width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
+    }
+    vi.stubGlobal('document', {
+      createElement: () => ({ width: 0, height: 0, getContext: () => fakeContext }),
+    })
+  })
+
+  afterEach(async () => {
+    await releaseRvmSession()
+    vi.unstubAllGlobals()
+  })
+
+  function fakeScanVideo(): HTMLVideoElement {
+    return {
+      videoWidth: 2,
+      videoHeight: 1,
+      readyState: 2,
+      currentTime: 0,
+      pause: vi.fn(),
+      requestVideoFrameCallback: (callback: () => void) => {
+        globalThis.setTimeout(callback, 0)
+        return 1
+      },
+      cancelVideoFrameCallback: vi.fn(),
+    } as unknown as HTMLVideoElement
+  }
+
+  function fakeScanSession() {
+    const states = { r1o: {}, r2o: {}, r3o: {}, r4o: {} }
+    const run = vi.fn()
+      // 第一次呼叫是 EP warmup 推理。
+      .mockResolvedValueOnce({})
+      .mockResolvedValue({
+        pha: { data: Float32Array.of(1, 0.9), dims: [1, 1, 1, 2], dispose: vi.fn() },
+        ...states,
+      })
+    mockedCreate.mockResolvedValue({ run, release: vi.fn().mockResolvedValue(undefined) })
+    return run
+  }
+
+  it('gateMask 只在 keyframe commit 時呼叫（不逐掃描幀跑），結果標 depthOutcome', async () => {
+    const run = fakeScanSession()
+    const gatedMask: MaskRaster = { width: 2, height: 1, alpha: Uint8ClampedArray.of(255, 0) }
+    const gateMask = vi.fn().mockResolvedValue({ mask: gatedMask, outcome: 'applied' as const })
+
+    // 0.2 秒 @10fps → 掃描 3 幀（0 / 0.1 / 0.2），只 commit 2 個關鍵影格。
+    const frames = await scanPersonMasksRvm(fakeScanVideo(), {
+      duration: 0.2,
+      fps: 10,
+      commitTimes: [0, 0.2],
+      threshold: 0.5,
+      edgeSoftness: 0,
+      signal: new AbortController().signal,
+      shouldContinue: () => true,
+      onProgress: vi.fn(),
+      gateMask,
+    })
+
+    // warmup + 3 幀推理。
+    expect(run).toHaveBeenCalledTimes(4)
+    expect(gateMask).toHaveBeenCalledTimes(2)
+    expect(frames).toHaveLength(2)
+    for (const frame of frames) {
+      expect(frame.mask).toBe(gatedMask)
+      expect(frame.depthOutcome).toBe('applied')
+    }
+  })
+
+  it('未提供 gateMask → depthOutcome = off，遮罩為 RVM 原生輸出', async () => {
+    fakeScanSession()
+
+    const frames = await scanPersonMasksRvm(fakeScanVideo(), {
+      duration: 0.1,
+      fps: 10,
+      commitTimes: [0.1],
+      threshold: 0.5,
+      edgeSoftness: 0,
+      signal: new AbortController().signal,
+      shouldContinue: () => true,
+      onProgress: vi.fn(),
+    })
+
+    expect(frames).toHaveLength(1)
+    expect(frames[0].depthOutcome).toBe('off')
+    // float32(0.9) ≈ 0.8999999762 → ×255 → round = 229。
+    expect([...frames[0].mask.alpha]).toEqual([255, 229])
   })
 })
