@@ -7,7 +7,14 @@ videos remain in the browser and are not sent to a segmentation service.
 
 - `rvm-mobilenetv3-fp32.onnx`
   - Source: `https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3_fp32.onnx` (official v1.0.0 release asset)
-  - SHA-256: `88d4531297118f595bf2fd60f6f566aec2e559393802d1f436c380f0cbbd2828`
+  - Original SHA-256: `88d4531297118f595bf2fd60f6f566aec2e559393802d1f436c380f0cbbd2828`
+  - **Patched (2026-07-20)** by `scripts/models/patch-rvm-avgpool-ceil.py`:
+    the 3 `AveragePool ceil_mode=1` nodes are rewritten to the mathematically
+    equivalent `ceil_mode=0 + pads=[0,0,1,1] + count_include_pad=0` form —
+    onnxruntime-web 1.27 WebGPU (JSEP) does not support ceil_mode. Verified
+    bit-exact (`max|pha diff| = 0.0`) vs the original on CPU EP at
+    1920×1080 / 1280×720 / 1918×1078 / 960×540.
+  - Patched SHA-256: `154e5125a7314ea5034f6a90fd75648d57c11f75fa1ec37b10e123b20b2018d2`
   - Runs via onnxruntime-web (WebGPU, falling back to single-threaded WASM);
     wasm binaries are self-hosted under `public/onnxruntime/`. Inference stays
     entirely in the browser.

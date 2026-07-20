@@ -29,7 +29,18 @@ vi.mock('onnxruntime-web', () => ({
 }))
 
 function fakeSession(): RvmOrtSession {
-  return { run: vi.fn(), release: vi.fn().mockResolvedValue(undefined) }
+  // Warmup 推理成功：回傳可 dispose 的空輸出集合。
+  return {
+    run: vi.fn().mockResolvedValue({ pha: { data: new Float32Array(1), dims: [1, 1, 1, 1], dispose: vi.fn() } }),
+    release: vi.fn().mockResolvedValue(undefined),
+  }
+}
+
+function fakeWarmupFailingSession(message: string): RvmOrtSession {
+  return {
+    run: vi.fn().mockRejectedValue(new Error(message)),
+    release: vi.fn().mockResolvedValue(undefined),
+  }
 }
 
 function fakeOrt(create: typeof mockedCreate): RvmOrtModule {
@@ -90,6 +101,29 @@ describe('negotiateRvmSession（EP 協商）', () => {
   it('EP 標籤對應 UI 顯示字串', () => {
     expect(rvmEpLabel('webgpu')).toBe('RVM · WebGPU')
     expect(rvmEpLabel('wasm')).toBe('RVM · WASM（較慢）')
+  })
+
+  it('session 建立成功但 warmup 推理失敗 -> 該 EP 視為失敗並釋放，回退下一個 EP（2026-07-20 AveragePool ceil 實戰）', async () => {
+    const broken = fakeWarmupFailingSession('using ceil() in shape computation is not yet supported for AveragePool')
+    const good = fakeSession()
+    const create = vi.fn().mockResolvedValueOnce(broken).mockResolvedValueOnce(good)
+
+    const negotiated = await negotiateRvmSession(fakeOrt(create), '/models/x.onnx')
+
+    expect(negotiated.ep).toBe('wasm')
+    expect(negotiated.session).toBe(good)
+    expect(broken.release).toHaveBeenCalledTimes(1)
+  })
+
+  it('兩個 EP 都在 warmup 失敗 -> 明確丟錯帶出兩個原因', async () => {
+    const create = vi
+      .fn()
+      .mockResolvedValueOnce(fakeWarmupFailingSession('ceil not supported'))
+      .mockResolvedValueOnce(fakeWarmupFailingSession('wasm op missing'))
+
+    await expect(negotiateRvmSession(fakeOrt(create), '/models/x.onnx')).rejects.toThrow(
+      /RVM 引擎無法初始化.*ceil not supported.*wasm op missing/,
+    )
   })
 })
 

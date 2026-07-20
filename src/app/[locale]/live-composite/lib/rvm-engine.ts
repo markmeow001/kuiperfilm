@@ -50,9 +50,26 @@ export function rvmEpLabel(ep: RvmExecutionProvider): string {
   return ep === 'webgpu' ? 'RVM · WebGPU' : 'RVM · WASM（較慢）'
 }
 
+/** Tiny zero-input inference forcing every op to actually resolve on the EP.
+ *  Session creation alone lies: JSEP resolves unsupported ops lazily at RUN
+ *  time (2026-07-20 field bug — AveragePool ceil_mode blew up on first real
+ *  frame while create() had succeeded). */
+async function warmupRvmSession(ort: RvmOrtModule, session: RvmOrtSession): Promise<void> {
+  const feeds: Record<string, RvmOrtTensor> = {
+    src: new ort.Tensor('float32', new Float32Array(3 * 32 * 32), [1, 3, 32, 32]),
+    downsample_ratio: new ort.Tensor('float32', new Float32Array([1]), [1]),
+  }
+  for (const name of ['r1i', 'r2i', 'r3i', 'r4i']) {
+    feeds[name] = new ort.Tensor('float32', new Float32Array([0]), [1, 1, 1, 1])
+  }
+  const outputs = await session.run(feeds)
+  for (const tensor of Object.values(outputs)) tensor.dispose?.()
+}
+
 /**
  * Tries WebGPU first, then single-threaded WASM (numThreads=1 so no
- * SharedArrayBuffer / COOP-COEP headers are required). If both execution
+ * SharedArrayBuffer / COOP-COEP headers are required). Each candidate must
+ * pass a warmup inference, not just session creation. If both execution
  * providers fail, throws an explicit error carrying both reasons — there is
  * deliberately NO silent fallback to the Selfie Segmenter engine.
  */
@@ -64,11 +81,19 @@ export async function negotiateRvmSession(
   ort.env.wasm.wasmPaths = ORT_WASM_ASSET_PATH
   const failures: string[] = []
   for (const ep of ['webgpu', 'wasm'] as const) {
+    let session: RvmOrtSession | null = null
     try {
-      const session = await ort.InferenceSession.create(modelPath, { executionProviders: [ep] })
+      session = await ort.InferenceSession.create(modelPath, { executionProviders: [ep] })
+      await warmupRvmSession(ort, session)
       return { session, ep }
     } catch (error) {
       failures.push(`${ep}：${error instanceof Error ? error.message : String(error)}`)
+      try {
+        await session?.release()
+      } catch {
+        // Failed-warmup session teardown is best-effort; the EP failure above
+        // is what we report.
+      }
     }
   }
   throw new Error(`RVM 引擎無法初始化（WebGPU 與 WASM 皆失敗）— ${failures.join('；')}`)
