@@ -12,6 +12,7 @@ import { MaskStage, type MaskStageHandle } from './MaskStage'
 import { buildMaskAnalysisTimes } from './lib/mask-analysis'
 import { CompositeRecordingCancelledError } from './lib/composite-video-recorder'
 import { releasePersonSegmenters } from './lib/person-segmenter'
+import { releaseRvmSession, RvmScanCancelledError } from './lib/rvm-engine'
 import { releaseInteractiveSegmenter } from './lib/interactive-segmenter'
 import { DEFAULT_CHARACTER_APPEARANCE } from './lib/character-appearance'
 import { releasePoseLandmarker } from './lib/pose-landmarker'
@@ -27,7 +28,7 @@ import { ProjectPanel } from './ProjectPanel'
 import { SaveToLibraryDialog, type ExportedAsset } from './SaveToLibraryDialog'
 import { useLiveCompositeProjects } from './useLiveCompositeProjects'
 import { useMaskTimeline } from './useMaskTimeline'
-import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskEditTarget, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
+import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskEditTarget, MaskRaster, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 import type { LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
 
 interface LiveCompositeClientProps {
@@ -188,6 +189,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     () => () => {
       void releasePersonSegmenters()
       void releaseInteractiveSegmenter()
+      void releaseRvmSession()
     },
     [],
   )
@@ -590,6 +592,98 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     }
   }
 
+  // RVM engine: one sequential pass over EVERY frame, threading recurrent
+  // state, committing keyframes only at the requested sampling times. Cancel
+  // and restore-time wiring mirrors runPersonAnalysis (analysisRunRef).
+  const runRvmAnalysis = async (wholeClip: boolean, settings: AiMaskSettings) => {
+    const stage = stageRef.current
+    if (!stage || !metadata) {
+      setAnalysisProgress({
+        status: 'failed',
+        completed: 0,
+        total: 0,
+        message: '請先載入可分析的影片。',
+      })
+      return
+    }
+
+    let commitTimes: number[]
+    try {
+      commitTimes = wholeClip ? buildMaskAnalysisTimes(metadata.duration, settings.interval) : [currentTime]
+    } catch (error) {
+      setAnalysisProgress({
+        status: 'failed',
+        completed: 0,
+        total: 0,
+        message: error instanceof Error ? error.message : '無法建立影片分析範圍',
+      })
+      return
+    }
+
+    const runId = analysisRunRef.current + 1
+    analysisRunRef.current = runId
+    const restoreTime = currentTime
+    analysisRestoreTimeRef.current = restoreTime
+    setAnalysisProgress({
+      status: 'loading-model',
+      completed: 0,
+      total: 0,
+      message: '正在載入本機 RVM 模型…',
+    })
+
+    try {
+      let frames: Array<{ time: number; mask: MaskRaster }>
+      let epLabel = 'RVM'
+      if (wholeClip) {
+        frames = await stage.analyzeRvmClip({
+          commitTimes,
+          threshold: settings.threshold,
+          edgeSoftness: settings.edgeSoftness,
+          shouldContinue: () => analysisRunRef.current === runId,
+          onProgress: (progress) => {
+            epLabel = progress.epLabel
+            setAnalysisProgress({
+              status: 'analyzing',
+              completed: progress.frameIndex,
+              total: progress.frameCount,
+              message: `${progress.epLabel}｜已處理 ${progress.processedSeconds.toFixed(1)} / ${progress.totalSeconds.toFixed(1)} 秒`,
+            })
+          },
+        })
+      } else {
+        const result = await stage.analyzeRvmPersonAt(commitTimes[0], settings.threshold, settings.edgeSoftness)
+        frames = [{ time: commitTimes[0], mask: result.mask }]
+        epLabel = result.epLabel
+      }
+      if (analysisRunRef.current !== runId) return
+      maskTimeline.applyAiMasks(frames)
+      setView('mask')
+      setOverlayVisible(true)
+      setAnalysisProgress({
+        status: 'completed',
+        completed: frames.length,
+        total: frames.length,
+        message: `${epLabel}｜人物遮罩完成：已建立 ${frames.length} 個可手動修正的關鍵影格。`,
+      })
+      setWorkflowStep(3)
+    } catch (error) {
+      if (analysisRunRef.current !== runId) return
+      // Cancellation already wrote its own idle message in cancelAnalysis.
+      if (error instanceof RvmScanCancelledError) return
+      setAnalysisProgress({
+        status: 'failed',
+        completed: 0,
+        total: 0,
+        message: error instanceof Error ? error.message : 'RVM 人物遮罩分析失敗',
+      })
+    } finally {
+      if (analysisRunRef.current === runId) {
+        analysisRestoreTimeRef.current = null
+        stage.seekTo(restoreTime)
+      }
+    }
+  }
+
   const cancelFaceAnalysis = () => {
     faceRunRef.current += 1
     const restoreTime = faceRestoreTimeRef.current
@@ -679,10 +773,18 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   }
 
   const analyzeCurrent = (settings: AiMaskSettings) => {
+    if (settings.engine === 'rvm') {
+      void runRvmAnalysis(false, settings)
+      return
+    }
     void runPersonAnalysis([currentTime], settings)
   }
 
   const analyzeClip = (settings: AiMaskSettings) => {
+    if (settings.engine === 'rvm') {
+      void runRvmAnalysis(true, settings)
+      return
+    }
     try {
       if (!metadata) throw new Error('請先載入可分析的影片')
       void runPersonAnalysis(buildMaskAnalysisTimes(metadata.duration, settings.interval), settings)

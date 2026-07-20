@@ -4,7 +4,10 @@ import { useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { MaskAnalysisProgress } from './live-composite-types'
 
+export type AiMaskEngine = 'rvm' | 'selfie'
+
 export interface AiMaskSettings {
+  engine: AiMaskEngine
   interval: number
   threshold: number
   edgeSoftness: number
@@ -27,11 +30,12 @@ export function AiMaskPanel({
   onAnalyzeClip,
   onCancel,
 }: AiMaskPanelProps) {
+  const [engine, setEngine] = useState<AiMaskEngine>('rvm')
   const [interval, setIntervalValue] = useState(1)
   const [threshold, setThreshold] = useState(0.5)
   const [edgeSoftness, setEdgeSoftness] = useState(0.12)
   const busy = progress.status === 'loading-model' || progress.status === 'analyzing'
-  const settings = { interval, threshold, edgeSoftness }
+  const settings: AiMaskSettings = { engine, interval, threshold, edgeSoftness }
   const percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0
 
   return (
@@ -42,6 +46,20 @@ export function AiMaskPanel({
       </div>
 
       <div className="mt-3 space-y-3">
+        <label className="block text-xs text-stone-500">
+          引擎
+          <select
+            aria-label="AI 遮罩引擎"
+            value={engine}
+            disabled={busy}
+            onChange={(event) => setEngine(event.target.value as AiMaskEngine)}
+            className="mt-1.5 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-stone-300"
+          >
+            <option value="rvm">RVM（推薦・逐幀時序）</option>
+            <option value="selfie">Selfie Segmenter（舊版・單幀）</option>
+          </select>
+        </label>
+
         <label className="block text-xs text-stone-500">
           取樣間隔
           <select
@@ -125,7 +143,7 @@ export function AiMaskPanel({
         </p>
       ) : null}
 
-      <p className="mt-2 text-[11px] leading-5 text-stone-600">影片不會上傳；模型在瀏覽器內取樣人物輪廓。0.25 秒模式適合快速動作，分析影格仍受本機安全上限保護。完成後可用保留／移除畫筆修邊。</p>
+      <p className="mt-2 text-[11px] leading-5 text-stone-600">影片不會上傳；模型在瀏覽器內取樣人物輪廓。RVM 會從頭到尾逐幀掃描一次以保持時間穩定；0.25 秒模式適合快速動作，分析影格仍受本機安全上限保護。完成後可用保留／移除畫筆修邊。</p>
     </section>
   )
 }

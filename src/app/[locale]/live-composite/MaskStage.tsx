@@ -8,6 +8,7 @@ import { canvasBlob, drawCover, seekVideoForAnalysis } from './lib/mask-stage-ut
 import { resolveMaskFrame } from './lib/mask-keyframes'
 import { appendStrokePoint, pointerToNormalizedPoint } from './lib/mask-strokes'
 import { segmentPersonFrame } from './lib/person-segmenter'
+import { scanPersonMasksRvm, segmentPersonFrameRvm, type RvmScanProgress } from './lib/rvm-engine'
 import { shouldRenderPreview } from './lib/render-ownership'
 import { useVirtualCharacterMedia } from './useVirtualCharacterMedia'
 import { sampleVideoAppearance } from './lib/character-appearance'
@@ -32,6 +33,16 @@ export interface MaskStageHandle {
   cancelCompositeVideo: () => void
   seekTo: (time: number) => void
   analyzePersonAt: (time: number, threshold: number, edgeSoftness: number) => Promise<MaskRaster>
+  /** Single-frame RVM matte; returns the active execution-provider label for the UI. */
+  analyzeRvmPersonAt: (time: number, threshold: number, edgeSoftness: number) => Promise<{ mask: MaskRaster; epLabel: string }>
+  /** Sequential RVM scan over the whole clip, committing keyframes at commitTimes. */
+  analyzeRvmClip: (options: {
+    commitTimes: number[]
+    threshold: number
+    edgeSoftness: number
+    shouldContinue: () => boolean
+    onProgress: (progress: RvmScanProgress) => void
+  }) => Promise<Array<{ time: number; mask: MaskRaster }>>
   analyzeOccluderAt: (time: number, point: NormalizedPoint) => Promise<MaskRaster>
   matchCharacterAppearance: () => Partial<VirtualCharacterAppearance>
   analyzePoseAt: (time: number) => Promise<VirtualCharacterMotionKeyframe>
@@ -361,6 +372,24 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
       video.pause()
       await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
       return segmentPersonFrame(video, threshold, edgeSoftness)
+    },
+    analyzeRvmPersonAt: async (time: number, threshold: number, edgeSoftness: number) => {
+      const video = videoRef.current
+      if (!video || !metadata) throw new Error('請先載入可分析的影片')
+      analysisAbortRef.current ??= new AbortController()
+      video.pause()
+      await seekVideoForAnalysis(video, Math.min(metadata.duration, Math.max(0, time)), analysisAbortRef.current.signal)
+      return segmentPersonFrameRvm(video, threshold, edgeSoftness)
+    },
+    analyzeRvmClip: async (options) => {
+      const video = videoRef.current
+      if (!video || !metadata) throw new Error('請先載入可分析的影片')
+      analysisAbortRef.current ??= new AbortController()
+      return scanPersonMasksRvm(video, {
+        ...options,
+        duration: metadata.duration,
+        signal: analysisAbortRef.current.signal,
+      })
     },
     analyzeOccluderAt: async (time: number, point: NormalizedPoint) => {
       const video = videoRef.current
