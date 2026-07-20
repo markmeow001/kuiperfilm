@@ -73,7 +73,11 @@ export const config = {
         // 匹配根路径和所有带语言前缀的路径
         '/',
         '/(zh|en)/:path*',
-        // 匹配所有其他路径（用于重定向到带语言前缀的路径）
-        '/((?!api|m|_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.gif|.*\\.ico).*)'
+        // 匹配所有其他路径（用于重定向到带语言前缀的路径）。
+        // onnxruntime = public/ 自托管的 ORT runtime（.mjs/.wasm）——不排除会被
+        // locale 307 到 /zh/onnxruntime → 404，RVM 引擎无法初始化（2026-07-20）。
+        // 注：/mediapipe、/models 一直能用纯属侥幸——lookahead 里为 /m 行动版
+        // 排除的裸 `m` 恰好挡掉了所有 m 开头路径。
+        '/((?!api|m|onnxruntime|_next/static|_next/image|favicon.ico|.*\\.png|.*\\.jpg|.*\\.jpeg|.*\\.svg|.*\\.gif|.*\\.ico).*)'
     ]
 };
