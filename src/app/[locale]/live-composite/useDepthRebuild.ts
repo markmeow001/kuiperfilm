@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { usePlaygroundCostEstimate } from '@/lib/query/mutations/playground-mutations'
 import {
+  MAX_REFERENCE_IMAGES,
   TRACK_B_MODEL_RESOLUTIONS,
   TRACK_B_STANDARD_MODEL,
   isAllowedTrackBModel,
@@ -16,6 +17,7 @@ import {
   fileToDepthRebuildFingerprint,
   getDepthRebuildValidationError,
 } from './lib/depth-rebuild-workflow'
+import { useDepthRebuildDescriptionAssist } from './useDepthRebuildDescriptionAssist'
 import { useDepthRebuildGeneration } from './useDepthRebuildGeneration'
 import { useDepthRebuildInputs } from './useDepthRebuildInputs'
 import type {
@@ -27,6 +29,8 @@ export type {
   DepthGuideStageHandle,
   LocalDepthGuide,
   LocalDepthReferenceImage,
+  DepthRebuildCharacterReference,
+  DepthRebuildSceneReference,
   DepthRebuildResult,
   DepthGuideStatus,
   DepthRebuildGenerationStatus,
@@ -35,9 +39,11 @@ export type {
 } from './depth-rebuild-assets'
 
 export function useDepthRebuild({
+  userId,
   stageRef,
   metadata,
   videoHasAudio,
+  locale = 'zh',
   workspaceId = null,
 }: UseDepthRebuildOptions): UseDepthRebuildResult {
   const modelsQuery = useUserModels()
@@ -46,10 +52,27 @@ export function useDepthRebuild({
   const [resolution, setResolution] = useState('720p')
   const [prompt, setPrompt] = useState('')
   const [promptFingerprint, setPromptFingerprint] = useState<string | null>(null)
+  const descriptionAssistScope = workspaceId ?? [
+    'source',
+    metadata?.name ?? 'none',
+    metadata?.duration ?? 0,
+    metadata?.width ?? 0,
+    metadata?.height ?? 0,
+  ].join(':')
+  const persistenceScope = [
+    `user:${userId}`,
+    `locale:${locale}`,
+    descriptionAssistScope,
+  ].join(':')
   const inputs = useDepthRebuildInputs({
     stageRef,
     metadata,
     videoHasAudio,
+    onError: setError,
+  })
+  const descriptionAssist = useDepthRebuildDescriptionAssist({
+    locale,
+    scopeKey: persistenceScope,
     onError: setError,
   })
 
@@ -86,13 +109,20 @@ export function useDepthRebuild({
     depthGuide: inputs.depthGuide
       ? fileToDepthRebuildFingerprint(inputs.depthGuide.file)
       : null,
-    characterImage: inputs.characterImage
-      ? fileToDepthRebuildFingerprint(inputs.characterImage.file)
-      : null,
-    sceneImage: inputs.sceneImage
-      ? fileToDepthRebuildFingerprint(inputs.sceneImage.file)
-      : null,
-    characterDescription: inputs.characterDescription,
+    characters: inputs.characters.map((character) => ({
+      id: character.id,
+      label: character.label,
+      sourceBinding: character.sourceBinding,
+      description: character.description,
+      image: character.image
+        ? fileToDepthRebuildFingerprint(character.image.file)
+        : null,
+    })),
+    sceneReferences: inputs.sceneReferences.map((scene) => ({
+      id: scene.id,
+      note: scene.note,
+      image: fileToDepthRebuildFingerprint(scene.image.file),
+    })),
     sceneDescription: inputs.sceneDescription,
     modelKey,
     resolution,
@@ -100,9 +130,8 @@ export function useDepthRebuild({
   }), [
     metadata,
     inputs.depthGuide,
-    inputs.characterImage,
-    inputs.sceneImage,
-    inputs.characterDescription,
+    inputs.characters,
+    inputs.sceneReferences,
     inputs.sceneDescription,
     modelKey,
     resolution,
@@ -114,9 +143,13 @@ export function useDepthRebuild({
     sourceDurationSeconds: metadata?.duration ?? null,
     depthGuideExists: Boolean(inputs.depthGuide),
     depthGuideSufficient: inputs.depthGuide?.sufficient === true,
-    characterImageExists: Boolean(inputs.characterImage),
-    sceneImageExists: Boolean(inputs.sceneImage),
-    characterDescription: inputs.characterDescription,
+    characters: inputs.characters.map((character) => ({
+      label: character.label,
+      sourceBinding: character.sourceBinding,
+      description: character.description,
+      imageExists: Boolean(character.image),
+    })),
+    sceneReferenceCount: inputs.sceneReferences.length,
     sceneDescription: inputs.sceneDescription,
     modelKey,
     resolution,
@@ -126,9 +159,8 @@ export function useDepthRebuild({
   }), [
     metadata?.duration,
     inputs.depthGuide,
-    inputs.characterImage,
-    inputs.sceneImage,
-    inputs.characterDescription,
+    inputs.characters,
+    inputs.sceneReferences.length,
     inputs.sceneDescription,
     modelKey,
     resolution,
@@ -152,19 +184,21 @@ export function useDepthRebuild({
               : null
 
   const generation = useDepthRebuildGeneration({
+    persistenceScopeKey: persistenceScope,
     metadata,
     videoHasAudio,
     workspaceId,
     depthGuide: inputs.depthGuide,
-    characterImage: inputs.characterImage,
-    sceneImage: inputs.sceneImage,
+    characters: inputs.characters,
+    sceneReferences: inputs.sceneReferences,
     prompt,
     modelKey,
     resolution,
     validationError,
     onError: setError,
   })
-  const isBusy = inputs.depthBusy || generation.generationBusy
+  const descriptionAssistBusy = descriptionAssist.target !== null
+  const isBusy = inputs.depthBusy || generation.generationBusy || descriptionAssistBusy
   const canGenerate = generation.canResume
     || (
       generation.submittedRunId === null
@@ -177,16 +211,21 @@ export function useDepthRebuild({
       setError('請先上傳原始表演影片')
       return
     }
-    if (!inputs.characterImage) {
-      setError('請先上傳新角色圖片')
+    const missingCharacterIndex = inputs.characters.findIndex((character) => !character.image)
+    if (missingCharacterIndex >= 0) {
+      setError(`請先上傳角色 ${missingCharacterIndex + 1} 的參考圖片，再建立 Prompt`)
       return
     }
     try {
       const nextPrompt = buildDepthRebuildPrompt({
         durationSeconds: metadata.duration,
-        characterDescription: inputs.characterDescription,
+        characters: inputs.characters.map((character) => ({
+          label: character.label,
+          sourceBinding: character.sourceBinding,
+          description: character.description,
+        })),
+        sceneReferences: inputs.sceneReferences.map((scene) => ({ note: scene.note })),
         sceneDescription: inputs.sceneDescription,
-        hasSceneImage: Boolean(inputs.sceneImage),
         preserveSourceAudio: videoHasAudio === true,
       })
       setPrompt(nextPrompt)
@@ -195,6 +234,18 @@ export function useDepthRebuild({
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Prompt 建立失敗')
     }
+  }
+
+  async function assistCharacterDescription(characterId: string): Promise<void> {
+    const character = inputs.characters.find((entry) => entry.id === characterId)
+    if (!character) return
+    const description = await descriptionAssist.assistCharacter(characterId, character.brief)
+    if (description) inputs.setCharacterDescription(characterId, description)
+  }
+
+  async function assistSceneDescription(): Promise<void> {
+    const description = await descriptionAssist.assistScene(inputs.sceneBrief)
+    if (description) inputs.setSceneDescription(description)
   }
 
   function resetSource(): void {
@@ -219,10 +270,13 @@ export function useDepthRebuild({
     depthGuide: inputs.depthGuide,
     depthGuideStatus: inputs.depthGuideStatus,
     depthGuideProgress: inputs.depthGuideProgress,
-    characterImage: inputs.characterImage,
-    sceneImage: inputs.sceneImage,
-    characterDescription: inputs.characterDescription,
+    characters: inputs.characters,
+    sceneReferences: inputs.sceneReferences,
+    sceneBrief: inputs.sceneBrief,
     sceneDescription: inputs.sceneDescription,
+    referenceImageCount: inputs.referenceImageCount,
+    maxReferenceImages: MAX_REFERENCE_IMAGES,
+    descriptionAssistTarget: descriptionAssist.target,
     modelKey,
     enabledModels,
     enabledModelsLoading: modelsQuery.isLoading,
@@ -243,17 +297,26 @@ export function useDepthRebuild({
     result: generation.result,
     error,
     isBusy,
+    addCharacter: inputs.addCharacter,
+    removeCharacter: inputs.removeCharacter,
+    setCharacterLabel: inputs.setCharacterLabel,
+    setCharacterSourceBinding: inputs.setCharacterSourceBinding,
+    setCharacterBrief: inputs.setCharacterBrief,
     setCharacterDescription: inputs.setCharacterDescription,
-    setSceneDescription: inputs.setSceneDescription,
-    setModelKey,
-    setResolution,
-    setPrompt,
     selectCharacterImage: inputs.selectCharacterImage,
     rejectCharacterImage: inputs.rejectCharacterImage,
     clearCharacterImage: inputs.clearCharacterImage,
-    selectSceneImage: inputs.selectSceneImage,
+    addSceneImages: inputs.addSceneImages,
+    removeSceneImage: inputs.removeSceneImage,
     rejectSceneImage: inputs.rejectSceneImage,
-    clearSceneImage: inputs.clearSceneImage,
+    setSceneReferenceNote: inputs.setSceneReferenceNote,
+    setSceneBrief: inputs.setSceneBrief,
+    setSceneDescription: inputs.setSceneDescription,
+    assistCharacterDescription,
+    assistSceneDescription,
+    setModelKey,
+    setResolution,
+    setPrompt,
     generateDepthGuide,
     cancelDepthGuide: inputs.cancelDepthGuide,
     clearDepthGuide: inputs.clearDepthGuide,

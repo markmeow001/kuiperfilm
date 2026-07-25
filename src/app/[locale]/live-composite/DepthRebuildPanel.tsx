@@ -1,6 +1,11 @@
 'use client'
 
 import { AppIcon } from '@/components/ui/icons'
+import { DepthRebuildReferenceSection } from './DepthRebuildReferenceSection'
+import type {
+  DepthRebuildCharacterView,
+  DepthRebuildSceneView,
+} from './depth-rebuild-ui-types'
 
 export interface DepthRebuildSourceSummary {
   name: string
@@ -13,11 +18,6 @@ export interface DepthGuideSummary {
   url: string
   effectiveFps: number
   sufficient: boolean
-}
-
-export interface DepthRebuildImageReference {
-  url: string
-  name: string
 }
 
 export interface DepthRebuildModelOption {
@@ -35,10 +35,13 @@ export interface DepthRebuildPanelProps {
   depthGuide: DepthGuideSummary | null
   depthProgress?: number | null
   depthBusy: boolean
-  characterReference: DepthRebuildImageReference | null
-  sceneReference: DepthRebuildImageReference | null
-  characterDescription: string
+  characters: readonly DepthRebuildCharacterView[]
+  sceneReferences: readonly DepthRebuildSceneView[]
+  sceneBrief: string
   sceneDescription: string
+  referenceImageCount: number
+  maxReferenceImages: number
+  descriptionAssistTarget: string | null
   modelOptions: readonly DepthRebuildModelOption[]
   modelKey: string
   resolutionOptions: readonly DepthRebuildResolutionOption[]
@@ -57,92 +60,28 @@ export interface DepthRebuildPanelProps {
   onVideoSelect: (file: File) => void
   onCreateDepthGuide: () => void
   onCancelDepthGuide?: () => void
-  onCharacterSelect: (file: File) => void
-  onCharacterPreviewError: () => void
-  onSceneSelect: (file: File) => void
-  onScenePreviewError: () => void
-  onRemoveCharacter: () => void
-  onRemoveScene: () => void
-  onCharacterDescriptionChange: (value: string) => void
+  onAddCharacter: () => void
+  onRemoveCharacter: (characterId: string) => void
+  onCharacterSelect: (characterId: string, file: File) => void
+  onCharacterPreviewError: (characterId: string) => void
+  onRemoveCharacterImage: (characterId: string) => void
+  onCharacterLabelChange: (characterId: string, value: string) => void
+  onCharacterSourceBindingChange: (characterId: string, value: string) => void
+  onCharacterBriefChange: (characterId: string, value: string) => void
+  onCharacterDescriptionChange: (characterId: string, value: string) => void
+  onAssistCharacter: (characterId: string) => void
+  onAddSceneImages: (files: readonly File[]) => void
+  onRemoveSceneImage: (sceneId: string) => void
+  onScenePreviewError: (sceneId: string) => void
+  onSceneNoteChange: (sceneId: string, value: string) => void
+  onSceneBriefChange: (value: string) => void
   onSceneDescriptionChange: (value: string) => void
+  onAssistScene: () => void
   onModelChange: (value: string) => void
   onResolutionChange: (value: string) => void
   onBuildPrompt: () => void
   onGenerate: () => void
   onResetSubmittedRun?: () => void
-}
-
-interface ReferenceUploadProps {
-  id: string
-  label: string
-  hint: string
-  required?: boolean
-  reference: DepthRebuildImageReference | null
-  onSelect: (file: File) => void
-  onPreviewError: () => void
-  onRemove: () => void
-  disabled: boolean
-}
-
-function ReferenceUpload({
-  id,
-  label,
-  hint,
-  required = false,
-  reference,
-  onSelect,
-  onPreviewError,
-  onRemove,
-  disabled,
-}: ReferenceUploadProps) {
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <label htmlFor={id} className="text-sm font-medium text-stone-200">
-          {label}
-        </label>
-        <span className={`text-xs ${required ? 'text-cyan-300' : 'text-stone-500'}`}>{required ? '必填' : '選填'}</span>
-      </div>
-      <p className="mb-2 text-xs leading-5 text-stone-500">{hint}</p>
-      {reference ? (
-        <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/20 p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={reference.url}
-            alt={`${label}預覽`}
-            onError={onPreviewError}
-            className="h-14 w-14 shrink-0 rounded-md object-cover"
-          />
-          <span className="min-w-0 flex-1 truncate text-xs text-stone-300">{reference.name}</span>
-          <button
-            type="button"
-            onClick={onRemove}
-            disabled={disabled}
-            className="rounded-md border border-white/10 px-2 py-1 text-xs text-stone-400 hover:border-rose-300/30 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/80 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            移除
-          </button>
-        </div>
-      ) : (
-        <label htmlFor={id} className={`flex h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-white/15 bg-white/[0.025] text-sm ${disabled ? 'cursor-not-allowed text-stone-600 opacity-50' : 'cursor-pointer text-stone-400 hover:border-cyan-300/30 hover:text-cyan-100'}`}>
-          <AppIcon name="imageEdit" className="h-4 w-4" />
-          上傳圖片
-        </label>
-      )}
-      <input
-        id={id}
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-        disabled={disabled}
-        className="sr-only"
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-          event.target.value = ''
-          if (file) onSelect(file)
-        }}
-      />
-    </div>
-  )
 }
 
 function StepHeading({ id, number, title, state }: { id: string; number: string; title: string; state?: string }) {
@@ -160,10 +99,13 @@ export function DepthRebuildPanel({
   depthGuide,
   depthProgress = null,
   depthBusy,
-  characterReference,
-  sceneReference,
-  characterDescription,
+  characters,
+  sceneReferences,
+  sceneBrief,
   sceneDescription,
+  referenceImageCount,
+  maxReferenceImages,
+  descriptionAssistTarget,
   modelOptions,
   modelKey,
   resolutionOptions,
@@ -182,22 +124,42 @@ export function DepthRebuildPanel({
   onVideoSelect,
   onCreateDepthGuide,
   onCancelDepthGuide,
+  onAddCharacter,
+  onRemoveCharacter,
   onCharacterSelect,
   onCharacterPreviewError,
-  onSceneSelect,
-  onScenePreviewError,
-  onRemoveCharacter,
-  onRemoveScene,
+  onRemoveCharacterImage,
+  onCharacterLabelChange,
+  onCharacterSourceBindingChange,
+  onCharacterBriefChange,
   onCharacterDescriptionChange,
+  onAssistCharacter,
+  onAddSceneImages,
+  onRemoveSceneImage,
+  onScenePreviewError,
+  onSceneNoteChange,
+  onSceneBriefChange,
   onSceneDescriptionChange,
+  onAssistScene,
   onModelChange,
   onResolutionChange,
   onBuildPrompt,
   onGenerate,
   onResetSubmittedRun,
 }: DepthRebuildPanelProps) {
-  const hasDescriptions = characterDescription.trim().length > 0 && sceneDescription.trim().length > 0
-  const canBuildPrompt = Boolean(source && depthGuide?.sufficient && characterReference && hasDescriptions)
+  const completeCharacters = characters.length > 0 && characters.every((character) => (
+    Boolean(character.reference)
+    && character.label.trim().length > 0
+    && character.sourceBinding.trim().length > 0
+    && character.description.trim().length > 0
+  ))
+  const canBuildPrompt = Boolean(
+    source
+    && depthGuide?.sufficient
+    && completeCharacters
+    && sceneDescription.trim()
+    && referenceImageCount <= maxReferenceImages,
+  )
   const hasEnabledModel = modelOptions.length > 0
   const selectedModelEnabled = modelOptions.some((option) => option.value === modelKey)
   const selectedResolutionAvailable = resolutionOptions.some((option) => option.value === resolution)
@@ -219,8 +181,18 @@ export function DepthRebuildPanel({
         <p className="mt-2 text-xs leading-5 text-stone-400">
           深度影片不是去背遮罩。它主要保留人物輪廓、走位、鏡頭構圖與節奏；臉部表情、口型、手指和前後遮擋仍可能被 AI 改寫，無法保證逐格一致。
         </p>
-        <p className="mt-2 text-xs leading-5 text-amber-200/80">目前一次鎖定一名主要新角色；多人交疊片段可保留整體走位，但其他人物的身份不保證精準。</p>
+        <p className="mt-2 text-xs leading-5 text-amber-200/80">
+          可依原片人物逐一指定新角色，人物與場景合計最多 9 張參考圖；深度影片另計、不占這 9 張。多人對應仍屬文字約束，交疊時無法保證百分之百不換人。
+        </p>
       </div>
+      {errorMessage ? (
+        <div
+          role="alert"
+          className="mx-4 mt-4 rounded-lg border border-rose-300/25 bg-rose-300/[0.06] px-3 py-2 text-xs leading-5 text-rose-200"
+        >
+          {errorMessage}
+        </div>
+      ) : null}
 
       <div className="divide-y divide-white/10">
         <section className="px-4 py-5" aria-labelledby="depth-step-1">
@@ -239,7 +211,7 @@ export function DepthRebuildPanel({
 
           <label
             htmlFor="depth-rebuild-video"
-            className={`mt-3 flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-sm transition-colors ${
+            className={`mt-3 flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-sm transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-200 ${
               controlsDisabled || depthBusy
                 ? 'cursor-not-allowed text-stone-600 opacity-50'
                 : 'cursor-pointer text-stone-300 hover:border-cyan-300/30 hover:text-cyan-100'
@@ -247,19 +219,20 @@ export function DepthRebuildPanel({
           >
             <AppIcon name="upload" className="h-4 w-4" />
             {source ? '更換表演影片' : '上傳 4–15 秒表演影片'}
+            <input
+              id="depth-rebuild-video"
+              type="file"
+              accept="video/*"
+              aria-label={source ? '更換表演影片' : '上傳 4–15 秒表演影片'}
+              disabled={controlsDisabled || depthBusy}
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                event.target.value = ''
+                if (file) onVideoSelect(file)
+              }}
+            />
           </label>
-          <input
-            id="depth-rebuild-video"
-            type="file"
-            accept="video/*"
-            disabled={controlsDisabled || depthBusy}
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              event.target.value = ''
-              if (file) onVideoSelect(file)
-            }}
-          />
 
           {depthBusy ? (
             <div className="mt-3">
@@ -297,49 +270,37 @@ export function DepthRebuildPanel({
 
         <section className="px-4 py-5" aria-labelledby="depth-step-2">
           <StepHeading id="depth-step-2" number="02" title="指定新角色與新場景" />
-          <p className="mt-2 text-xs leading-5 text-stone-500">參考圖可以先上傳，不必等深度分析完成，也不會在選圖時產生 AI 費用。</p>
-          <div className="mt-4 space-y-5">
-            <ReferenceUpload
-              id="depth-rebuild-character"
-              label="新角色圖片"
-              hint="建議清楚的單人全身或半身照；這張圖只定義外貌、髮型與服裝。"
-              required
-              reference={characterReference}
-              onSelect={onCharacterSelect}
-              onPreviewError={onCharacterPreviewError}
-              onRemove={onRemoveCharacter}
-              disabled={controlsDisabled}
+          <p className="mt-2 text-xs leading-5 text-stone-500">
+            參考圖可以先上傳，不必等深度分析完成，也不會在選圖時產生 AI 費用。圖片會依人物在前、場景在後的順序編成 image 1–9。
+          </p>
+          <div className="mt-4">
+            <DepthRebuildReferenceSection
+              characters={characters}
+              scenes={sceneReferences}
+              sceneBrief={sceneBrief}
+              sceneDescription={sceneDescription}
+              used={referenceImageCount}
+              max={maxReferenceImages}
+              assistTarget={descriptionAssistTarget}
+              controlsDisabled={controlsDisabled}
+              onAddCharacter={onAddCharacter}
+              onRemoveCharacter={onRemoveCharacter}
+              onCharacterSelect={onCharacterSelect}
+              onCharacterPreviewError={onCharacterPreviewError}
+              onRemoveCharacterImage={onRemoveCharacterImage}
+              onCharacterLabelChange={onCharacterLabelChange}
+              onCharacterSourceBindingChange={onCharacterSourceBindingChange}
+              onCharacterBriefChange={onCharacterBriefChange}
+              onCharacterDescriptionChange={onCharacterDescriptionChange}
+              onAssistCharacter={onAssistCharacter}
+              onAddSceneImages={onAddSceneImages}
+              onRemoveSceneImage={onRemoveSceneImage}
+              onScenePreviewError={onScenePreviewError}
+              onSceneNoteChange={onSceneNoteChange}
+              onSceneBriefChange={onSceneBriefChange}
+              onSceneDescriptionChange={onSceneDescriptionChange}
+              onAssistScene={onAssistScene}
             />
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-stone-200">角色補充描述</span>
-              <textarea
-                value={characterDescription}
-                disabled={controlsDisabled}
-                onChange={(event) => onCharacterDescriptionChange(event.target.value)}
-                placeholder="例如：電影寫實的 1930 年代女記者，深棕短髮，穿墨綠羊毛大衣；保留參考圖臉型與服裝細節"
-                className="min-h-24 w-full resize-y rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm leading-6 text-stone-200 outline-none placeholder:text-stone-600 focus:border-cyan-300/45"
-              />
-            </label>
-            <ReferenceUpload
-              id="depth-rebuild-scene"
-              label="新場景圖片"
-              hint="不傳圖也可以用文字描述場景；傳圖時用它固定主要建築、色調與構圖。"
-              reference={sceneReference}
-              onSelect={onSceneSelect}
-              onPreviewError={onScenePreviewError}
-              onRemove={onRemoveScene}
-              disabled={controlsDisabled}
-            />
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-stone-200">場景與動態描述</span>
-              <textarea
-                value={sceneDescription}
-                disabled={controlsDisabled}
-                onChange={(event) => onSceneDescriptionChange(event.target.value)}
-                placeholder="例如：雨夜的 1930 年代上海街口，電車與路人持續移動，霓虹倒影隨鏡頭自然變化，不要靜態照片背景"
-                className="min-h-24 w-full resize-y rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm leading-6 text-stone-200 outline-none placeholder:text-stone-600 focus:border-cyan-300/45"
-              />
-            </label>
           </div>
         </section>
 
@@ -413,7 +374,6 @@ export function DepthRebuildPanel({
               此帳號尚未啟用 AtlasCloud Seedance 2.0 Fast 或 Standard，請先到模型設定中心啟用後再生成。
             </div>
           ) : null}
-          {errorMessage ? <div role="alert" className="mt-3 rounded-lg border border-rose-300/25 bg-rose-300/[0.06] px-3 py-2 text-xs leading-5 text-rose-200">{errorMessage}</div> : null}
           {!errorMessage && blockingMessage ? (
             <div role="status" className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.045] px-3 py-2 text-xs leading-5 text-amber-100/80">
               尚未送出：{blockingMessage}

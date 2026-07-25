@@ -101,6 +101,7 @@ export async function submitTask(params: {
   targetId: string
   payload?: Record<string, unknown> | null
   dedupeKey?: string | null
+  dedupeMode?: 'active' | 'idempotent'
   priority?: number
   maxAttempts?: number
   billingInfo?: TaskBillingInfo | null
@@ -191,6 +192,7 @@ export async function submitTask(params: {
     targetId: params.targetId,
     payload: normalizedPayload,
     dedupeKey: params.dedupeKey || null,
+    dedupeMode: params.dedupeMode,
     priority: params.priority,
     maxAttempts: params.maxAttempts,
     billingInfo: resolvedBillingInfo || null,
@@ -323,6 +325,10 @@ export async function submitTask(params: {
         },
       }, {
         priority: typeof task.priority === 'number' ? task.priority : 0,
+        attempts:
+          typeof task.maxAttempts === 'number' && Number.isFinite(task.maxAttempts)
+            ? Math.max(1, Math.floor(task.maxAttempts))
+            : 5,
       })
       await markTaskEnqueued(task.id)
       logger.info({

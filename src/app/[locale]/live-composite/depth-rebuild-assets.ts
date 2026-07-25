@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import type {
   PlaygroundCostEstimate,
 } from '@/lib/query/mutations/playground-mutations'
+import type { Locale } from '@/i18n/routing'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
 import type {
   DepthGuideProgress,
@@ -34,6 +35,21 @@ export interface LocalDepthReferenceImage {
   previewUrl: string
 }
 
+export interface DepthRebuildCharacterReference {
+  id: string
+  label: string
+  sourceBinding: string
+  brief: string
+  description: string
+  image: LocalDepthReferenceImage | null
+}
+
+export interface DepthRebuildSceneReference {
+  id: string
+  note: string
+  image: LocalDepthReferenceImage
+}
+
 export interface DepthRebuildResult {
   runId: string
   url: string
@@ -49,9 +65,11 @@ export type DepthRebuildGenerationStatus =
   | 'failed'
 
 export interface UseDepthRebuildOptions {
+  userId: string
   stageRef: RefObject<DepthGuideStageHandle | null>
   metadata: VideoMetadata | null
   videoHasAudio: boolean | null
+  locale?: Locale
   workspaceId?: string | null
 }
 
@@ -59,10 +77,13 @@ export interface UseDepthRebuildResult {
   depthGuide: LocalDepthGuide | null
   depthGuideStatus: DepthGuideStatus
   depthGuideProgress: DepthGuideProgress | null
-  characterImage: LocalDepthReferenceImage | null
-  sceneImage: LocalDepthReferenceImage | null
-  characterDescription: string
+  characters: readonly DepthRebuildCharacterReference[]
+  sceneReferences: readonly DepthRebuildSceneReference[]
+  sceneBrief: string
   sceneDescription: string
+  referenceImageCount: number
+  maxReferenceImages: number
+  descriptionAssistTarget: string | null
   modelKey: TrackBModelKey
   enabledModels: ReadonlyArray<{ value: TrackBModelKey; label: string }>
   enabledModelsLoading: boolean
@@ -83,17 +104,26 @@ export interface UseDepthRebuildResult {
   result: DepthRebuildResult | null
   error: string | null
   isBusy: boolean
-  setCharacterDescription: (value: string) => void
+  addCharacter: () => void
+  removeCharacter: (characterId: string) => void
+  setCharacterLabel: (characterId: string, value: string) => void
+  setCharacterSourceBinding: (characterId: string, value: string) => void
+  setCharacterBrief: (characterId: string, value: string) => void
+  setCharacterDescription: (characterId: string, value: string) => void
+  selectCharacterImage: (characterId: string, file: File) => void
+  rejectCharacterImage: (characterId: string) => void
+  clearCharacterImage: (characterId: string) => void
+  addSceneImages: (files: readonly File[]) => void
+  removeSceneImage: (sceneId: string) => void
+  rejectSceneImage: (sceneId: string) => void
+  setSceneReferenceNote: (sceneId: string, value: string) => void
+  setSceneBrief: (value: string) => void
   setSceneDescription: (value: string) => void
+  assistCharacterDescription: (characterId: string) => Promise<void>
+  assistSceneDescription: () => Promise<void>
   setModelKey: (value: TrackBModelKey) => void
   setResolution: (value: string) => void
   setPrompt: (value: string) => void
-  selectCharacterImage: (file: File) => void
-  rejectCharacterImage: () => void
-  clearCharacterImage: () => void
-  selectSceneImage: (file: File) => void
-  rejectSceneImage: () => void
-  clearSceneImage: () => void
   generateDepthGuide: () => Promise<void>
   cancelDepthGuide: () => void
   clearDepthGuide: () => void

@@ -215,6 +215,13 @@ export async function hunyuanChatCompletion(input: {
   if (typeof input.options?.topP === 'number') {
     params.TopP = input.options.topP
   }
+  if (
+    typeof input.options?.maxTokens === 'number'
+    && Number.isFinite(input.options.maxTokens)
+    && input.options.maxTokens > 0
+  ) {
+    params.MaxTokens = Math.floor(input.options.maxTokens)
+  }
 
   const raw = await client.request('ChatCompletions', params)
   return tencentChatToOpenAi(raw, input.modelId)

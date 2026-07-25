@@ -55,16 +55,30 @@ export function DepthRebuildControls({
       } : null}
       depthProgress={progressFraction(controller)}
       depthBusy={controller.depthGuideStatus === 'generating'}
-      characterReference={controller.characterImage ? {
-        url: controller.characterImage.previewUrl,
-        name: controller.characterImage.file.name,
-      } : null}
-      sceneReference={controller.sceneImage ? {
-        url: controller.sceneImage.previewUrl,
-        name: controller.sceneImage.file.name,
-      } : null}
-      characterDescription={controller.characterDescription}
+      characters={controller.characters.map((character) => ({
+        id: character.id,
+        label: character.label,
+        sourceBinding: character.sourceBinding,
+        brief: character.brief,
+        description: character.description,
+        reference: character.image ? {
+          url: character.image.previewUrl,
+          name: character.image.file.name,
+        } : null,
+      }))}
+      sceneReferences={controller.sceneReferences.map((scene) => ({
+        id: scene.id,
+        note: scene.note,
+        reference: {
+          url: scene.image.previewUrl,
+          name: scene.image.file.name,
+        },
+      }))}
+      sceneBrief={controller.sceneBrief}
       sceneDescription={controller.sceneDescription}
+      referenceImageCount={controller.referenceImageCount}
+      maxReferenceImages={controller.maxReferenceImages}
+      descriptionAssistTarget={controller.descriptionAssistTarget}
       modelOptions={controller.enabledModels}
       modelKey={controller.modelKey}
       resolutionOptions={controller.availableResolutions.map((value) => ({ value, label: value }))}
@@ -83,14 +97,23 @@ export function DepthRebuildControls({
       onVideoSelect={onVideoSelect}
       onCreateDepthGuide={() => void controller.generateDepthGuide()}
       onCancelDepthGuide={controller.cancelDepthGuide}
+      onAddCharacter={controller.addCharacter}
+      onRemoveCharacter={controller.removeCharacter}
       onCharacterSelect={controller.selectCharacterImage}
       onCharacterPreviewError={controller.rejectCharacterImage}
-      onSceneSelect={controller.selectSceneImage}
-      onScenePreviewError={controller.rejectSceneImage}
-      onRemoveCharacter={controller.clearCharacterImage}
-      onRemoveScene={controller.clearSceneImage}
+      onRemoveCharacterImage={controller.clearCharacterImage}
+      onCharacterLabelChange={controller.setCharacterLabel}
+      onCharacterSourceBindingChange={controller.setCharacterSourceBinding}
+      onCharacterBriefChange={controller.setCharacterBrief}
       onCharacterDescriptionChange={controller.setCharacterDescription}
+      onAssistCharacter={(characterId) => void controller.assistCharacterDescription(characterId)}
+      onAddSceneImages={controller.addSceneImages}
+      onRemoveSceneImage={controller.removeSceneImage}
+      onScenePreviewError={controller.rejectSceneImage}
+      onSceneNoteChange={controller.setSceneReferenceNote}
+      onSceneBriefChange={controller.setSceneBrief}
       onSceneDescriptionChange={controller.setSceneDescription}
+      onAssistScene={() => void controller.assistSceneDescription()}
       onModelChange={(value) => {
         if (isAllowedTrackBModel(value)) controller.setModelKey(value)
       }}

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskJobData } from '@/lib/task/types'
 
 const aiMock = vi.hoisted(() => ({
-  executeAiTextStep: vi.fn(async () => ({ text: '', reasoning: '' })),
+  executeAiTextStep: vi.fn(async (..._args: unknown[]) => ({ text: '', reasoning: '' })),
 }))
 const workerMock = vi.hoisted(() => ({
   reportTaskProgress: vi.fn(async () => undefined),
@@ -14,11 +14,23 @@ vi.mock('@/lib/ai-runtime', () => ({ executeAiTextStep: aiMock.executeAiTextStep
 vi.mock('@/lib/workers/shared', () => ({ reportTaskProgress: workerMock.reportTaskProgress }))
 vi.mock('@/lib/workers/utils', () => ({ assertTaskActive: workerMock.assertTaskActive }))
 
-import { handleCanvasTextTask, CANVAS_TEXT_MODES } from '@/lib/workers/handlers/canvas-text'
+import {
+  handleCanvasTextTask,
+  CANVAS_TEXT_MODES,
+  R2V_CANVAS_TEXT_POLICIES,
+  isCanvasTextMode,
+} from '@/lib/workers/handlers/canvas-text'
 
-function makeJob(payload: Record<string, unknown>): Job<TaskJobData> {
+function makeJob(payload: Record<string, unknown>, locale: 'zh' | 'en' = 'zh'): Job<TaskJobData> {
   return {
-    data: { userId: 'user-1', projectId: 'playground', type: 'canvas_text', targetId: 't-1', payload },
+    data: {
+      userId: 'user-1',
+      projectId: 'playground',
+      type: 'canvas_text',
+      targetId: 't-1',
+      locale,
+      payload,
+    },
   } as unknown as Job<TaskJobData>
 }
 
@@ -45,9 +57,117 @@ describe('handleCanvasTextTask', () => {
   it('sends the whitelisted instruction for the mode', async () => {
     aiMock.executeAiTextStep.mockResolvedValueOnce({ text: 'x', reasoning: '' })
     await handleCanvasTextTask(makeJob({ text: 'T', mode: 'expand', model: 'm' }))
-    const call = (aiMock.executeAiTextStep.mock.calls as unknown as Array<[{ messages: Array<{ content: string }> }]>)[0]?.[0]
+    const call = (aiMock.executeAiTextStep.mock.calls as unknown as Array<[{
+      messages: Array<{ content: string }>
+      maxRetries?: number
+      maxOutputTokens?: number
+      stream?: boolean
+    }]>)[0]?.[0]
     expect(call?.messages[0]?.content).toContain(CANVAS_TEXT_MODES.expand)
     expect(call?.messages[0]?.content).toContain('T')
+    expect(call).not.toHaveProperty('maxRetries')
+    expect(call).not.toHaveProperty('maxOutputTokens')
+    expect(call).not.toHaveProperty('stream')
+  })
+
+  it('keeps every existing writing mode whitelisted while accepting the two R2V assist modes', () => {
+    for (const mode of [
+      'expand',
+      'rewrite',
+      'polish',
+      'continue',
+      'compress',
+      'assistant',
+      'r2v_character',
+      'r2v_scene_motion',
+    ]) {
+      expect(isCanvasTextMode(mode), mode).toBe(true)
+    }
+  })
+
+  it.each([
+    {
+      mode: 'r2v_character',
+      brief: '1930 年代女記者，深棕短髮與墨綠羊毛大衣',
+      expectedRules: [
+        '電影角色視覺設定師',
+        '參考圖負責鎖定人物身分',
+        '不要加入動作、走位、鏡頭、背景、對白或其他人物',
+        '繁體中文輸出 120–320 個字',
+      ],
+      maxOutputTokens: 800,
+    },
+    {
+      mode: 'r2v_scene_motion',
+      brief: '雨夜的上海街口，有電車與路人',
+      expectedRules: [
+        '電影美術指導與動態場景提示詞設計師',
+        '合理且持續運動的環境元素',
+        '透視與視差變化',
+        '不得改變原片人物數量、動作順序、走位、互動、對白或鏡頭軌跡',
+        '繁體中文輸出 150–420 個字',
+      ],
+      maxOutputTokens: 1000,
+    },
+  ] as const)('$mode separates its Traditional-Chinese system instruction from the brief', async ({
+    mode,
+    brief,
+    expectedRules,
+    maxOutputTokens,
+  }) => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: '整理後的描述', reasoning: '' })
+
+    const res = await handleCanvasTextTask(makeJob({ text: brief, mode, model: 'm' }))
+
+    expect(res).toEqual({ success: true, text: '整理後的描述' })
+    const call = (aiMock.executeAiTextStep.mock.calls as unknown as Array<[
+      {
+        messages: Array<{ role: string; content: string }>
+        maxRetries?: number
+        maxOutputTokens?: number
+        stream?: boolean
+      },
+    ]>)[0]?.[0]
+    expect(call?.messages).toEqual([
+      { role: 'system', content: CANVAS_TEXT_MODES[mode] },
+      { role: 'user', content: brief },
+    ])
+    expect(call).toMatchObject({
+      maxRetries: 0,
+      maxOutputTokens,
+      stream: false,
+    })
+    for (const rule of expectedRules) {
+      expect(call?.messages[0]?.content).toContain(rule)
+    }
+  })
+
+  it.each([
+    ['r2v_character', 800],
+    ['r2v_scene_motion', 1000],
+  ] as const)('%s uses the English system prompt when locale=en', async (mode, maxOutputTokens) => {
+    aiMock.executeAiTextStep.mockResolvedValueOnce({ text: 'Completed description', reasoning: '' })
+
+    await handleCanvasTextTask(makeJob({ text: '1930s newspaper reporter', mode, model: 'm' }, 'en'))
+
+    const call = aiMock.executeAiTextStep.mock.calls[0]?.[0] as unknown as {
+      messages: Array<{ role: string; content: string }>
+      maxOutputTokens: number
+    }
+    expect(call.messages).toEqual([
+      { role: 'system', content: R2V_CANVAS_TEXT_POLICIES[mode].systemPrompt.en },
+      { role: 'user', content: '1930s newspaper reporter' },
+    ])
+    expect(call.messages[0]?.content).toContain('English')
+    expect(call.messages[0]?.content).not.toContain('繁體中文')
+    if (mode === 'r2v_character') {
+      expect(call.messages[0]?.content).toContain('60–100')
+      expect(call.messages[0]?.content).toContain('600 characters')
+    } else {
+      expect(call.messages[0]?.content).toContain('100–160')
+      expect(call.messages[0]?.content).toContain('1,000 characters')
+    }
+    expect(call.maxOutputTokens).toBe(maxOutputTokens)
   })
 
   it('compress mode REPLACES with the compressed prompt and sends the length-cap instruction', async () => {
@@ -93,6 +213,12 @@ describe('handleCanvasTextTask', () => {
 
   it('throws when model is not resolved', async () => {
     await expect(handleCanvasTextTask(makeJob({ text: 't', mode: 'expand' }))).rejects.toThrow(/model not resolved/)
+  })
+
+  it('rejects task payloads with an unsupported locale', async () => {
+    const job = makeJob({ text: 't', mode: 'r2v_character', model: 'm' })
+    ;(job.data as { locale: string }).locale = 'ja'
+    await expect(handleCanvasTextTask(job)).rejects.toThrow(/invalid locale/)
   })
 
   it('throws on empty model output', async () => {

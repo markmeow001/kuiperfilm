@@ -173,6 +173,12 @@ export async function createTask(input: CreateTaskInput) {
     })
 
     if (existing) {
+      // HTTP idempotency keys identify one immutable attempt. Reuse the first
+      // DB row regardless of lifecycle state so overlapping requests cannot
+      // both bill/enqueue, and a lost response can replay the terminal result.
+      if (input.dedupeMode === 'idempotent') {
+        return { task: existing, deduped: true as const }
+      }
       if (isActiveStatus(existing.status)) {
         if (!hasTaskLocale(existing.payload)) {
           await failTaskWithMissingLocale(existing)
@@ -245,6 +251,12 @@ export async function createTask(input: CreateTaskInput) {
       })
 
       if (collided) {
+        // The unique DB constraint is the atomic winner for concurrent HTTP
+        // retries. In idempotent mode the losing request must reuse that row,
+        // even if the first request completed before this lookup.
+        if (input.dedupeMode === 'idempotent') {
+          return { task: collided, deduped: true as const }
+        }
         if (isActiveStatus(collided.status)) {
           if (!hasTaskLocale(collided.payload)) {
             await failTaskWithMissingLocale(collided)

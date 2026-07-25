@@ -1,5 +1,6 @@
 import {
   MAX_DURATION_SECONDS,
+  MAX_REFERENCE_IMAGES,
   MIN_DURATION_SECONDS,
   TRACK_B_MODEL_RESOLUTIONS,
   isAllowedTrackBModel,
@@ -19,9 +20,18 @@ export interface DepthRebuildFingerprintInput {
   sourceWidth: number | null
   sourceHeight: number | null
   depthGuide: DepthRebuildAssetFingerprint | null
-  characterImage: DepthRebuildAssetFingerprint | null
-  sceneImage: DepthRebuildAssetFingerprint | null
-  characterDescription: string
+  characters: ReadonlyArray<{
+    id: string
+    label: string
+    sourceBinding: string
+    description: string
+    image: DepthRebuildAssetFingerprint | null
+  }>
+  sceneReferences: ReadonlyArray<{
+    id: string
+    note: string
+    image: DepthRebuildAssetFingerprint
+  }>
   sceneDescription: string
   modelKey: string
   resolution: string
@@ -32,9 +42,13 @@ export interface DepthRebuildValidationInput {
   sourceDurationSeconds: number | null
   depthGuideExists: boolean
   depthGuideSufficient: boolean
-  characterImageExists: boolean
-  sceneImageExists: boolean
-  characterDescription: string
+  characters: ReadonlyArray<{
+    label: string
+    sourceBinding: string
+    description: string
+    imageExists: boolean
+  }>
+  sceneReferenceCount: number
   sceneDescription: string
   modelKey: string
   resolution: string
@@ -58,9 +72,18 @@ export function buildDepthRebuildFingerprint(input: DepthRebuildFingerprintInput
     sourceWidth: input.sourceWidth,
     sourceHeight: input.sourceHeight,
     depthGuide: input.depthGuide,
-    characterImage: input.characterImage,
-    sceneImage: input.sceneImage,
-    characterDescription: input.characterDescription.trim(),
+    characters: input.characters.map((character) => ({
+      id: character.id,
+      label: character.label.trim(),
+      sourceBinding: character.sourceBinding.trim(),
+      description: character.description.trim(),
+      image: character.image,
+    })),
+    sceneReferences: input.sceneReferences.map((scene) => ({
+      id: scene.id,
+      note: scene.note.trim(),
+      image: scene.image,
+    })),
     sceneDescription: input.sceneDescription.trim(),
     modelKey: input.modelKey,
     resolution: input.resolution,
@@ -107,6 +130,12 @@ export function depthRebuildResolutions(modelKey: TrackBModelKey): readonly stri
   return TRACK_B_MODEL_RESOLUTIONS[modelKey]
 }
 
+export const DEPTH_CHARACTER_LABEL_MAX_CHARS = 40
+export const DEPTH_CHARACTER_BINDING_MAX_CHARS = 120
+export const DEPTH_CHARACTER_DESCRIPTION_MAX_CHARS = 600
+export const DEPTH_SCENE_DESCRIPTION_MAX_CHARS = 1_000
+export const DEPTH_REFERENCE_NOTE_MAX_CHARS = 120
+
 export function getDepthRebuildValidationError(input: DepthRebuildValidationInput): string | null {
   if (input.sourceDurationSeconds === null) return '請先上傳原始表演影片'
   if (
@@ -118,9 +147,48 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
   }
   if (!input.depthGuideExists) return '請先產生深度引導影片'
   if (!input.depthGuideSufficient) return '深度引導影片有效幀率不足，請重新產生後再生成'
-  if (!input.characterImageExists) return '請上傳新角色圖片'
-  if (!input.characterDescription.trim()) return '請填寫新角色描述'
+  if (input.characters.length === 0) return '請至少新增一位新角色'
+  if (input.characters.length + input.sceneReferenceCount > MAX_REFERENCE_IMAGES) {
+    return `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
+  }
+  const normalizedLabels = new Set<string>()
+  const normalizedBindings = new Set<string>()
+  for (const [index, character] of input.characters.entries()) {
+    const ordinal = index + 1
+    const label = character.label.trim()
+    const binding = character.sourceBinding.trim()
+    const description = character.description.trim()
+    if (!character.imageExists) return `請上傳角色 ${ordinal} 的參考圖片`
+    if (!label) return `請填寫角色 ${ordinal} 的名稱`
+    if (label.length > DEPTH_CHARACTER_LABEL_MAX_CHARS) {
+      return `角色 ${ordinal} 名稱不可超過 ${DEPTH_CHARACTER_LABEL_MAX_CHARS} 字`
+    }
+    const normalizedLabel = label.toLocaleLowerCase()
+    if (normalizedLabels.has(normalizedLabel)) return `角色名稱「${label}」重複，請使用不同名稱`
+    normalizedLabels.add(normalizedLabel)
+    if (!binding) return `請描述「${label}」要替換原片中的哪一位人物`
+    if (binding.length > DEPTH_CHARACTER_BINDING_MAX_CHARS) {
+      return `「${label}」的人物對應不可超過 ${DEPTH_CHARACTER_BINDING_MAX_CHARS} 字`
+    }
+    const normalizedBinding = binding.replace(/\s+/g, ' ').toLocaleLowerCase()
+    if (normalizedBindings.has(normalizedBinding)) {
+      return `兩位角色都綁定「${binding}」，請分別指定不同的原片人物`
+    }
+    normalizedBindings.add(normalizedBinding)
+    if (!description) return `請填寫「${label}」的角色補充描述`
+    if (description.length > DEPTH_CHARACTER_DESCRIPTION_MAX_CHARS) {
+      return `「${label}」的角色描述不可超過 ${DEPTH_CHARACTER_DESCRIPTION_MAX_CHARS} 字`
+    }
+  }
   if (!input.sceneDescription.trim()) return '請填寫新場景描述'
+  if (input.sceneDescription.trim().length > DEPTH_SCENE_DESCRIPTION_MAX_CHARS) {
+    return `場景描述不可超過 ${DEPTH_SCENE_DESCRIPTION_MAX_CHARS} 字`
+  }
+  const referenceImageCount = input.characters.filter((character) => character.imageExists).length
+    + input.sceneReferenceCount
+  if (referenceImageCount > MAX_REFERENCE_IMAGES) {
+    return `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
+  }
   if (!isAllowedTrackBModel(input.modelKey)) {
     return '只支援 AtlasCloud Seedance 2.0 Fast／Standard R2V'
   }
@@ -132,7 +200,7 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
     modelKey: input.modelKey,
     durationSeconds: input.sourceDurationSeconds,
     resolution: input.resolution,
-    referenceImageCount: input.sceneImageExists ? 2 : 1,
+    referenceImageCount,
     referenceVideoDurationsSeconds: [input.sourceDurationSeconds],
   })
   if (!requestValidation.ok) return requestValidation.issues[0]?.message ?? '深度重建設定無效'

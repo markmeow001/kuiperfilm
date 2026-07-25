@@ -1,14 +1,17 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DepthGuideRecordingCancelledError, type DepthGuideProgress } from './lib/depth-guide-recorder'
 import { depthRebuildDurationSeconds } from './lib/depth-rebuild-workflow'
+import { MAX_REFERENCE_IMAGES } from './lib/atlascloud-r2v-contract'
 import {
   createDepthReferenceImage,
   revokeDepthReferenceImage,
   revokeLocalDepthGuide,
   type DepthGuideStageHandle,
   type DepthGuideStatus,
+  type DepthRebuildCharacterReference,
+  type DepthRebuildSceneReference,
   type LocalDepthGuide,
   type LocalDepthReferenceImage,
 } from './depth-rebuild-assets'
@@ -22,6 +25,25 @@ interface UseDepthRebuildInputsOptions {
   onError: (message: string | null) => void
 }
 
+function createEmptyCharacter(ordinal: number): DepthRebuildCharacterReference {
+  return {
+    id: `character-${ordinal}`,
+    label: `新角色 ${ordinal}`,
+    sourceBinding: '',
+    brief: '',
+    description: '',
+    image: null,
+  }
+}
+
+function revokeCharacterImages(characters: readonly DepthRebuildCharacterReference[]): void {
+  for (const character of characters) revokeDepthReferenceImage(character.image)
+}
+
+function revokeSceneImages(scenes: readonly DepthRebuildSceneReference[]): void {
+  for (const scene of scenes) revokeDepthReferenceImage(scene.image)
+}
+
 export function useDepthRebuildInputs({
   stageRef,
   metadata,
@@ -31,76 +53,183 @@ export function useDepthRebuildInputs({
   const [depthGuide, setDepthGuide] = useState<LocalDepthGuide | null>(null)
   const [depthGuideStatus, setDepthGuideStatus] = useState<DepthGuideStatus>('idle')
   const [depthGuideProgress, setDepthGuideProgress] = useState<DepthGuideProgress | null>(null)
-  const [characterImage, setCharacterImage] = useState<LocalDepthReferenceImage | null>(null)
-  const [sceneImage, setSceneImage] = useState<LocalDepthReferenceImage | null>(null)
-  const [characterDescription, setCharacterDescription] = useState('')
+  const [characters, setCharacters] = useState<DepthRebuildCharacterReference[]>(() => [
+    createEmptyCharacter(1),
+  ])
+  const [sceneReferences, setSceneReferences] = useState<DepthRebuildSceneReference[]>([])
+  const [sceneBrief, setSceneBrief] = useState('')
   const [sceneDescription, setSceneDescription] = useState('')
   const depthCancelRequestedRef = useRef(false)
   const depthGenerationInFlightRef = useRef(false)
   const depthGuideRef = useRef<LocalDepthGuide | null>(null)
-  const characterImageRef = useRef<LocalDepthReferenceImage | null>(null)
-  const sceneImageRef = useRef<LocalDepthReferenceImage | null>(null)
+  const charactersRef = useRef<DepthRebuildCharacterReference[]>(characters)
+  const sceneReferencesRef = useRef<DepthRebuildSceneReference[]>(sceneReferences)
+  const nextCharacterOrdinalRef = useRef(2)
+  const nextSceneOrdinalRef = useRef(1)
+
+  const referenceImageCount = useMemo(
+    () => characters.reduce((count, character) => count + (character.image ? 1 : 0), 0)
+      + sceneReferences.length,
+    [characters, sceneReferences],
+  )
 
   useEffect(() => {
     depthGuideRef.current = depthGuide
   }, [depthGuide])
-  useEffect(() => {
-    characterImageRef.current = characterImage
-  }, [characterImage])
-  useEffect(() => {
-    sceneImageRef.current = sceneImage
-  }, [sceneImage])
+
   useEffect(() => () => {
     stageRef.current?.cancelDepthGuideVideo()
     revokeLocalDepthGuide(depthGuideRef.current)
-    revokeDepthReferenceImage(characterImageRef.current)
-    revokeDepthReferenceImage(sceneImageRef.current)
+    revokeCharacterImages(charactersRef.current)
+    revokeSceneImages(sceneReferencesRef.current)
   }, [stageRef])
 
-  function selectCharacterImage(file: File): void {
+  function updateCharacters(
+    updater: (current: readonly DepthRebuildCharacterReference[]) => DepthRebuildCharacterReference[],
+  ): void {
+    const next = updater(charactersRef.current)
+    charactersRef.current = next
+    setCharacters(next)
+  }
+
+  function updateScenes(
+    updater: (current: readonly DepthRebuildSceneReference[]) => DepthRebuildSceneReference[],
+  ): void {
+    const next = updater(sceneReferencesRef.current)
+    sceneReferencesRef.current = next
+    setSceneReferences(next)
+  }
+
+  function currentReferenceCount(): number {
+    return charactersRef.current.reduce(
+      (count, character) => count + (character.image ? 1 : 0),
+      0,
+    ) + sceneReferencesRef.current.length
+  }
+
+  function currentAllocatedSlotCount(): number {
+    return charactersRef.current.length + sceneReferencesRef.current.length
+  }
+
+  function addCharacter(): void {
+    if (currentAllocatedSlotCount() >= MAX_REFERENCE_IMAGES) {
+      onError(`人物與場景共用 ${MAX_REFERENCE_IMAGES} 個參考位置；請先移除一張場景圖或一位角色`)
+      return
+    }
+    const ordinal = nextCharacterOrdinalRef.current
+    nextCharacterOrdinalRef.current += 1
+    updateCharacters((current) => [...current, createEmptyCharacter(ordinal)])
+    onError(null)
+  }
+
+  function removeCharacter(characterId: string): void {
+    const target = charactersRef.current.find((character) => character.id === characterId)
+    if (!target) return
+    if (charactersRef.current.length === 1) {
+      onError('至少保留一個新角色欄位')
+      return
+    }
+    updateCharacters((current) => current.filter((character) => character.id !== characterId))
+    revokeDepthReferenceImage(target.image)
+    onError(null)
+  }
+
+  function patchCharacter(
+    characterId: string,
+    patch: Partial<Omit<DepthRebuildCharacterReference, 'id' | 'image'>>,
+  ): void {
+    updateCharacters((current) => current.map((character) => (
+      character.id === characterId ? { ...character, ...patch } : character
+    )))
+  }
+
+  function selectCharacterImage(characterId: string, file: File): void {
+    const current = charactersRef.current.find((character) => character.id === characterId)
+    if (!current) return
+    if (!current.image && currentReferenceCount() >= MAX_REFERENCE_IMAGES) {
+      onError(`人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`)
+      return
+    }
     onError(null)
     try {
-      const next = createDepthReferenceImage(file)
-      revokeDepthReferenceImage(characterImageRef.current)
-      characterImageRef.current = next
-      setCharacterImage(next)
+      const nextImage = createDepthReferenceImage(file)
+      updateCharacters((all) => all.map((character) => (
+        character.id === characterId ? { ...character, image: nextImage } : character
+      )))
+      revokeDepthReferenceImage(current.image)
     } catch (caught) {
       onError(caught instanceof Error ? caught.message : '角色圖片讀取失敗')
     }
   }
 
-  function clearCharacterImage(): void {
-    revokeDepthReferenceImage(characterImageRef.current)
-    characterImageRef.current = null
-    setCharacterImage(null)
+  function clearCharacterImage(characterId: string): void {
+    const current = charactersRef.current.find((character) => character.id === characterId)
+    if (!current?.image) return
+    updateCharacters((all) => all.map((character) => (
+      character.id === characterId ? { ...character, image: null } : character
+    )))
+    revokeDepthReferenceImage(current.image)
   }
 
-  function rejectCharacterImage(): void {
-    clearCharacterImage()
+  function rejectCharacterImage(characterId: string): void {
+    clearCharacterImage(characterId)
     onError('角色圖片無法解碼，請改用有效的 JPG、PNG 或 WebP')
   }
 
-  function selectSceneImage(file: File): void {
-    onError(null)
-    try {
-      const next = createDepthReferenceImage(file)
-      revokeDepthReferenceImage(sceneImageRef.current)
-      sceneImageRef.current = next
-      setSceneImage(next)
-    } catch (caught) {
-      onError(caught instanceof Error ? caught.message : '場景圖片讀取失敗')
+  function addSceneImages(files: readonly File[]): void {
+    if (files.length === 0) return
+    // Every character card reserves one image slot even before its required
+    // portrait is uploaded. This prevents a user from filling all nine slots
+    // with scenes and getting stuck with an unfillable required character.
+    const remaining = MAX_REFERENCE_IMAGES - currentAllocatedSlotCount()
+    if (files.length > remaining) {
+      onError(
+        remaining > 0
+          ? `人物與場景合計最多 ${MAX_REFERENCE_IMAGES} 張；已替角色保留位置，目前還能加入 ${remaining} 張場景圖`
+          : `Seedance 的 ${MAX_REFERENCE_IMAGES} 個參考位置已分配完畢`,
+      )
+      return
     }
+
+    const created: LocalDepthReferenceImage[] = []
+    try {
+      for (const file of files) created.push(createDepthReferenceImage(file))
+    } catch (caught) {
+      for (const image of created) revokeDepthReferenceImage(image)
+      onError(caught instanceof Error ? caught.message : '場景圖片讀取失敗')
+      return
+    }
+
+    const additions = created.map((image): DepthRebuildSceneReference => {
+      const ordinal = nextSceneOrdinalRef.current
+      nextSceneOrdinalRef.current += 1
+      return {
+        id: `scene-${ordinal}`,
+        note: '',
+        image,
+      }
+    })
+    updateScenes((current) => [...current, ...additions])
+    onError(null)
   }
 
-  function clearSceneImage(): void {
-    revokeDepthReferenceImage(sceneImageRef.current)
-    sceneImageRef.current = null
-    setSceneImage(null)
+  function removeSceneImage(sceneId: string): void {
+    const target = sceneReferencesRef.current.find((scene) => scene.id === sceneId)
+    if (!target) return
+    updateScenes((current) => current.filter((scene) => scene.id !== sceneId))
+    revokeDepthReferenceImage(target.image)
+    onError(null)
   }
 
-  function rejectSceneImage(): void {
-    clearSceneImage()
+  function rejectSceneImage(sceneId: string): void {
+    removeSceneImage(sceneId)
     onError('場景圖片無法解碼，請改用有效的 JPG、PNG 或 WebP')
+  }
+
+  function setSceneReferenceNote(sceneId: string, value: string): void {
+    updateScenes((current) => current.map((scene) => (
+      scene.id === sceneId ? { ...scene, note: value } : scene
+    )))
   }
 
   function clearDepthGuide(): void {
@@ -194,19 +323,35 @@ export function useDepthRebuildInputs({
     depthGuide,
     depthGuideStatus,
     depthGuideProgress,
-    characterImage,
-    sceneImage,
-    characterDescription,
+    characters,
+    sceneReferences,
+    sceneBrief,
     sceneDescription,
+    referenceImageCount,
     depthBusy: depthGuideStatus === 'generating',
-    setCharacterDescription,
-    setSceneDescription,
+    addCharacter,
+    removeCharacter,
+    setCharacterLabel: (characterId: string, value: string) => {
+      patchCharacter(characterId, { label: value })
+    },
+    setCharacterSourceBinding: (characterId: string, value: string) => {
+      patchCharacter(characterId, { sourceBinding: value })
+    },
+    setCharacterBrief: (characterId: string, value: string) => {
+      patchCharacter(characterId, { brief: value })
+    },
+    setCharacterDescription: (characterId: string, value: string) => {
+      patchCharacter(characterId, { description: value })
+    },
     selectCharacterImage,
     rejectCharacterImage,
     clearCharacterImage,
-    selectSceneImage,
+    addSceneImages,
+    removeSceneImage,
     rejectSceneImage,
-    clearSceneImage,
+    setSceneReferenceNote,
+    setSceneBrief,
+    setSceneDescription,
     generateDepthGuide,
     cancelDepthGuide,
     clearDepthGuide,

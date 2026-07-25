@@ -185,6 +185,13 @@ export type CreateTaskInput = {
   targetId: string
   payload?: Record<string, unknown> | null
   dedupeKey?: string | null
+  /**
+   * `active` keeps the legacy behavior: an active task is reused, while a
+   * terminal task releases the key so the operation can be retried.
+   * `idempotent` treats the key as an HTTP idempotency key and always reuses
+   * the first row, including terminal outcomes.
+   */
+  dedupeMode?: 'active' | 'idempotent'
   priority?: number
   maxAttempts?: number
   billingInfo?: TaskBillingInfo | null

@@ -12,22 +12,32 @@ import {
   depthRebuildAspectRatio,
   depthRebuildDurationSeconds,
 } from './lib/depth-rebuild-workflow'
+import { buildDepthRebuildReferenceMap } from './lib/depth-rebuild-reference-map'
+import {
+  clearPendingDepthRebuildGeneration,
+  DEPTH_REBUILD_STORAGE_REQUIRED_MESSAGE,
+  depthRebuildGenerationStorageKey,
+  readPendingDepthRebuildGeneration,
+  writePendingDepthRebuildGeneration,
+} from './lib/depth-rebuild-generation-storage'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
 import type { VideoMetadata } from './live-composite-types'
 import type {
+  DepthRebuildCharacterReference,
   DepthRebuildGenerationStatus,
   DepthRebuildResult,
+  DepthRebuildSceneReference,
   LocalDepthGuide,
-  LocalDepthReferenceImage,
 } from './depth-rebuild-assets'
 
 interface UseDepthRebuildGenerationOptions {
+  persistenceScopeKey: string
   metadata: VideoMetadata | null
   videoHasAudio: boolean | null
   workspaceId: string | null
   depthGuide: LocalDepthGuide | null
-  characterImage: LocalDepthReferenceImage | null
-  sceneImage: LocalDepthReferenceImage | null
+  characters: readonly DepthRebuildCharacterReference[]
+  sceneReferences: readonly DepthRebuildSceneReference[]
   prompt: string
   modelKey: TrackBModelKey
   resolution: string
@@ -69,7 +79,11 @@ function resolveRunDetail(
   runId: string,
 ): DepthRebuildResult | null {
   const run = detail.run
-  if (!run) throw new Error(`找不到已提交的深度重建任務：${runId}`)
+  if (!run) {
+    throw new SubmittedRunTerminalError(
+      `找不到已提交的深度重建任務：${runId}；可清除這筆舊紀錄後重新建立`,
+    )
+  }
   if (run.status === 'failed') {
     throw new SubmittedRunTerminalError(
       run.errorMessage
@@ -86,39 +100,63 @@ function resolveRunDetail(
 }
 
 export function useDepthRebuildGeneration({
+  persistenceScopeKey,
   metadata,
   videoHasAudio,
   workspaceId,
   depthGuide,
-  characterImage,
-  sceneImage,
+  characters,
+  sceneReferences,
   prompt,
   modelKey,
   resolution,
   validationError,
   onError,
 }: UseDepthRebuildGenerationOptions) {
+  const persistenceStorageKey = depthRebuildGenerationStorageKey(persistenceScopeKey)
+  const [initialPending] = useState(() => (
+    readPendingDepthRebuildGeneration(persistenceStorageKey)
+  ))
   const upload = useUploadPlaygroundReference()
   const submit = useSubmitPlaygroundRun()
   const [generationStatus, setGenerationStatus] = useState<DepthRebuildGenerationStatus>('idle')
   const [generationProgress, setGenerationProgress] = useState<number | null>(null)
   const [result, setResult] = useState<DepthRebuildResult | null>(null)
-  const [submittedRunId, setSubmittedRunId] = useState<string | null>(null)
+  const [submittedRunId, setSubmittedRunId] = useState<string | null>(
+    initialPending?.runId ?? null,
+  )
   const [terminalFailure, setTerminalFailure] = useState(false)
   const inFlightRef = useRef(false)
-  const submittedRunIdRef = useRef<string | null>(null)
-  const clientRequestKeyRef = useRef<string | null>(null)
+  const submittedRunIdRef = useRef<string | null>(initialPending?.runId ?? null)
+  const clientRequestKeyRef = useRef<string | null>(initialPending?.requestKey ?? null)
+  const persistenceStorageKeyRef = useRef(persistenceStorageKey)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => {
     activeAbortControllerRef.current?.abort()
   }, [])
 
+  useEffect(() => {
+    if (persistenceStorageKeyRef.current === persistenceStorageKey) return
+    activeAbortControllerRef.current?.abort()
+    activeAbortControllerRef.current = null
+    const pending = readPendingDepthRebuildGeneration(persistenceStorageKey)
+    persistenceStorageKeyRef.current = persistenceStorageKey
+    submittedRunIdRef.current = pending?.runId ?? null
+    clientRequestKeyRef.current = pending?.requestKey ?? null
+    setSubmittedRunId(pending?.runId ?? null)
+    setTerminalFailure(false)
+    setResult(null)
+    setGenerationProgress(null)
+    setGenerationStatus('idle')
+  }, [persistenceStorageKey])
+
   function resetResult(): void {
     activeAbortControllerRef.current?.abort()
     activeAbortControllerRef.current = null
     submittedRunIdRef.current = null
     clientRequestKeyRef.current = null
+    clearPendingDepthRebuildGeneration(persistenceStorageKeyRef.current)
     setSubmittedRunId(null)
     setTerminalFailure(false)
     setResult(null)
@@ -208,48 +246,44 @@ export function useDepthRebuildGeneration({
         setGenerationStatus('failed')
         return null
       }
-      if (!metadata || !depthGuide || !characterImage) {
+      const referenceMap = buildDepthRebuildReferenceMap(characters, sceneReferences)
+      if (!metadata || !depthGuide || referenceMap.ordered.length === 0) {
         onError('深度重建設定不完整')
         setGenerationStatus('failed')
         return null
       }
 
+      const clientRequestKey =
+        clientRequestKeyRef.current ?? createClientRequestKey()
+      if (!clientRequestKeyRef.current) {
+        const stored = writePendingDepthRebuildGeneration(
+          persistenceStorageKeyRef.current,
+          { requestKey: clientRequestKey },
+        )
+        if (!stored) throw new Error(DEPTH_REBUILD_STORAGE_REQUIRED_MESSAGE)
+        clientRequestKeyRef.current = clientRequestKey
+      }
+
       setGenerationStatus('uploading')
-      const [uploadedDepth, uploadedCharacter, uploadedScene] = await Promise.all([
+      const [uploadedDepth, ...uploadedImages] = await Promise.all([
         upload.mutateAsync({
           file: depthGuide.file,
           type: 'video',
           signal: abortController.signal,
         }),
-        upload.mutateAsync({
-          file: characterImage.file,
+        ...referenceMap.ordered.map((reference) => upload.mutateAsync({
+          file: reference.image.file,
           type: 'image',
           signal: abortController.signal,
-        }),
-        sceneImage
-          ? upload.mutateAsync({
-              file: sceneImage.file,
-              type: 'image',
-              signal: abortController.signal,
-            })
-          : Promise.resolve(null),
+        })),
       ])
       throwIfAborted(abortController.signal)
       setGenerationStatus('submitting')
-      const clientRequestKey =
-        clientRequestKeyRef.current ?? createClientRequestKey()
-      clientRequestKeyRef.current = clientRequestKey
       const submitted = await submit.mutateAsync({
         prompt,
         referenceVideos: [uploadedDepth.key],
-        referenceImages: [
-          uploadedCharacter.key,
-          ...(uploadedScene ? [uploadedScene.key] : []),
-        ],
-        referenceImageNames: [
-          '新角色',
-          ...(uploadedScene ? ['新場景'] : []),
-        ],
+        referenceImages: uploadedImages.map((image) => image.key),
+        referenceImageNames: referenceMap.ordered.map((reference) => reference.name),
         outputType: 'video',
         modelKey,
         resolution,
@@ -264,6 +298,10 @@ export function useDepthRebuildGeneration({
       })
       const nextRunId = submitted.run.id
       submittedRunIdRef.current = nextRunId
+      writePendingDepthRebuildGeneration(
+        persistenceStorageKeyRef.current,
+        { requestKey: clientRequestKey, runId: nextRunId },
+      )
       setSubmittedRunId(nextRunId)
       setTerminalFailure(false)
       setGenerationStatus('generating')

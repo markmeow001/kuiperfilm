@@ -54,6 +54,11 @@ function supportsArkReasoningEffort(modelId: string): boolean {
   return modelId === 'doubao-seed-1-8-251228' || modelId.startsWith('doubao-seed-2-0-')
 }
 
+function normalizeMaxOutputTokens(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
+  return Math.floor(value)
+}
+
 export async function chatCompletionStream(
   userId: string,
   model: string | null | undefined,
@@ -76,6 +81,7 @@ export async function chatCompletionStream(
   const temperature = options.temperature ?? 0.7
   const reasoning = options.reasoning ?? true
   const reasoningEffort = options.reasoningEffort || 'high'
+  const maxOutputTokens = normalizeMaxOutputTokens(options.maxOutputTokens)
   const projectId =
     typeof options.projectId === 'string' && options.projectId.trim().length > 0
       ? options.projectId.trim()
@@ -131,6 +137,7 @@ export async function chatCompletionStream(
         contents,
         config: {
           temperature: options.temperature ?? 0.7,
+          ...(maxOutputTokens ? { maxOutputTokens } : {}),
           ...(systemInstruction ? { systemInstruction } : {}),
           ...(thinkingConfig ? { thinkingConfig } : {}),
         },
@@ -225,7 +232,7 @@ export async function chatCompletionStream(
         model: resolvedModelId,
         messages,
         temperature: options.temperature ?? 0.7,
-        max_completion_tokens: 65535,
+        max_completion_tokens: maxOutputTokens ?? 65535,
         stream: true,
         ...extraParams,
       } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming)
@@ -364,6 +371,7 @@ export async function chatCompletionStream(
           // 推理模型不支持 temperature，仅在非推理模式下传递
           ...(useReasoning ? {} : { temperature: options.temperature ?? 0.7 }),
           maxRetries: options.maxRetries ?? 2,
+          ...(maxOutputTokens ? { maxOutputTokens } : {}),
           ...(aiSdkProviderOptions ? { providerOptions: aiSdkProviderOptions } : {}),
         })
 
@@ -514,6 +522,7 @@ export async function chatCompletionStream(
               messages: getConversationMessages(messages) as ModelMessage[],
               temperature: options.temperature ?? 0.7,
               maxRetries: options.maxRetries ?? 2,
+              ...(maxOutputTokens ? { maxOutputTokens } : {}),
             })
             const fallbackReasoning = fallbackResult.reasoningText || ''
             const fallbackText = fallbackResult.text || ''
@@ -668,12 +677,18 @@ export async function chatCompletionStream(
         Number.isFinite(openRouterMaxTokens) && openRouterMaxTokens > 0
           ? Math.floor(openRouterMaxTokens)
           : 16384
+      const requestedMaxTokens =
+        maxOutputTokens ?? null
       const requestParams = {
         model: resolvedModelId,
         messages,
         // OpenRouter 推理模型不支持 temperature
         ...(isOpenRouterReasoning ? {} : { temperature: options.temperature ?? 0.7 }),
-        ...(isOpenRouter ? { max_tokens: cappedMaxTokens } : {}),
+        ...(isOpenRouter
+          ? { max_tokens: requestedMaxTokens ? Math.min(requestedMaxTokens, cappedMaxTokens) : cappedMaxTokens }
+          : requestedMaxTokens
+            ? { max_tokens: requestedMaxTokens }
+            : {}),
         stream: true as const,
         ...extraParams,
       } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming

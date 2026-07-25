@@ -6,6 +6,10 @@ export interface ChatCompletionOptions {
     reasoning?: boolean
     reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
     maxRetries?: number
+    maxOutputTokens?: number
+    // `false` opts out of the internal task-observer auto-stream path.
+    // Direct calls to chatCompletionStream remain streaming by definition.
+    stream?: boolean
     // 💰 计费相关
     projectId?: string   // 用于计费（如果不传，使用 'system' 作为默认值）
     action?: string      // 计费操作名称

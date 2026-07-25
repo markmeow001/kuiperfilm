@@ -6,13 +6,21 @@ import {
   getDepthRebuildValidationError,
 } from '@/app/[locale]/live-composite/lib/depth-rebuild-workflow'
 
+function validationCharacter(index: number) {
+  return {
+    label: `新角色 ${index}`,
+    sourceBinding: `替換原片開場畫面第 ${index} 位人物`,
+    description: `電影寫實的新角色 ${index}，服裝與髮型保持逐幀一致`,
+    imageExists: true,
+  }
+}
+
 const baseValidation = {
   sourceDurationSeconds: 12,
   depthGuideExists: true,
   depthGuideSufficient: true,
-  characterImageExists: true,
-  sceneImageExists: false,
-  characterDescription: '寫實民國女演員，短髮',
+  characters: [validationCharacter(1)],
+  sceneReferenceCount: 0,
   sceneDescription: '上海雨夜街道，車流與招牌持續運動',
   modelKey: 'atlascloud::seedance-2.0-r2v',
   resolution: '720p',
@@ -30,6 +38,61 @@ describe('depth rebuild workflow', () => {
     expect(depthRebuildAspectRatio(1440, 1080)).toBe('4:3')
     expect(depthRebuildAspectRatio(1080, 1440)).toBe('3:4')
     expect(depthRebuildAspectRatio(2520, 1080)).toBe('21:9')
+  })
+
+  it('角色缺少原片人物綁定 -> 明確阻擋付費生成', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      characters: [{
+        ...validationCharacter(1),
+        label: '女記者',
+        sourceBinding: '   ',
+      }],
+    })).toBe('請描述「女記者」要替換原片中的哪一位人物')
+  })
+
+  it('角色名稱重複 -> 阻擋含糊的多人圖片對應', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      characters: [
+        { ...validationCharacter(1), label: '女記者' },
+        { ...validationCharacter(2), label: '女記者' },
+      ],
+    })).toBe('角色名稱「女記者」重複，請使用不同名稱')
+  })
+
+  it('兩位新角色綁定同一位原片人物 -> 阻擋互相衝突的替換指令', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      characters: [
+        {
+          ...validationCharacter(1),
+          label: '新郎',
+          sourceBinding: ' 開場畫面左側男性 ',
+        },
+        {
+          ...validationCharacter(2),
+          label: '新娘',
+          sourceBinding: '開場畫面左側男性',
+        },
+      ],
+    })).toBe('兩位角色都綁定「開場畫面左側男性」，請分別指定不同的原片人物')
+  })
+
+  it('人物與場景共用 9 張上限 -> 9 張通過、10 張明確阻擋', () => {
+    const characters = [validationCharacter(1), validationCharacter(2)]
+
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      characters,
+      sceneReferenceCount: 7,
+    })).toBeNull()
+
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      characters,
+      sceneReferenceCount: 8,
+    })).toBe('人物與場景參考圖片合計最多 9 張')
   })
 
   it('深度有效幀率不足 -> 明確阻擋付費生成', () => {
@@ -57,23 +120,73 @@ describe('depth rebuild workflow', () => {
     expect(error).toContain('480p、720p')
   })
 
-  it('角色描述變更 -> 產生不同 fingerprint 使舊 Prompt 可被判定過期', () => {
+  it('角色順序、人物綁定或描述變更 -> fingerprint 改變使舊 Prompt 過期', () => {
+    const actorImageA = {
+      name: 'actor-a.png',
+      size: 20,
+      type: 'image/png',
+      lastModified: 2,
+    }
+    const actorImageB = {
+      name: 'actor-b.png',
+      size: 21,
+      type: 'image/png',
+      lastModified: 3,
+    }
     const base = {
       sourceDurationSeconds: 12,
       sourceWidth: 1920,
       sourceHeight: 1080,
       depthGuide: { name: 'depth.webm', size: 30, type: 'video/webm', lastModified: 1 },
-      characterImage: { name: 'actor.png', size: 20, type: 'image/png', lastModified: 2 },
-      sceneImage: null,
-      characterDescription: '角色 A',
+      characters: [
+        {
+          id: 'character-a',
+          label: '女記者',
+          sourceBinding: '替換原片開場畫面左側人物',
+          description: '短髮，墨綠羊毛大衣',
+          image: actorImageA,
+        },
+        {
+          id: 'character-b',
+          label: '男記者',
+          sourceBinding: '替換原片開場畫面右側人物',
+          description: '黑髮，深灰西裝',
+          image: actorImageB,
+        },
+      ],
+      sceneReferences: [{
+        id: 'scene-a',
+        note: '主要建築與色調',
+        image: { name: 'scene.png', size: 40, type: 'image/png', lastModified: 4 },
+      }],
       sceneDescription: '場景 A',
       modelKey: 'atlascloud::seedance-2.0-r2v',
       resolution: '720p',
       preserveSourceAudio: true,
     }
-    const before = buildDepthRebuildFingerprint(base)
-    const after = buildDepthRebuildFingerprint({ ...base, characterDescription: '角色 B' })
-    expect(after).not.toBe(before)
+    const original = buildDepthRebuildFingerprint(base)
+    const reordered = buildDepthRebuildFingerprint({
+      ...base,
+      characters: [base.characters[1], base.characters[0]],
+    })
+    const rebound = buildDepthRebuildFingerprint({
+      ...base,
+      characters: [
+        { ...base.characters[0], sourceBinding: '替換原片開場畫面中央人物' },
+        base.characters[1],
+      ],
+    })
+    const redescribed = buildDepthRebuildFingerprint({
+      ...base,
+      characters: [
+        { ...base.characters[0], description: '短髮，酒紅色羊毛大衣' },
+        base.characters[1],
+      ],
+    })
+
+    expect(reordered).not.toBe(original)
+    expect(rebound).not.toBe(original)
+    expect(redescribed).not.toBe(original)
   })
 
   it('超過 15 秒 -> 秒數正規化明確失敗', () => {

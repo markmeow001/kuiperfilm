@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AppIcon } from '@/components/ui/icons'
+import type { Locale } from '@/i18n/routing'
 import type { AiMaskSettings } from './AiMaskPanel'
 import { CompositeAssetPanel } from './CompositeAssetPanel'
 import { CompositeToolbar } from './CompositeToolbar'
@@ -38,7 +39,8 @@ import type { LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
 import type { LiveCompositeMode } from './LiveCompositeModeSelector'
 
 interface LiveCompositeClientProps {
-  locale: string
+  locale: Locale
+  userId: string
 }
 
 const INITIAL_ANALYSIS_PROGRESS: MaskAnalysisProgress = {
@@ -83,7 +85,7 @@ function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
+export function LiveCompositeClient({ locale, userId }: LiveCompositeClientProps) {
   const searchParams = useSearchParams()
   const sourceRunId = searchParams?.get('sourceRunId')?.trim() || null
   const stageRef = useRef<MaskStageHandle>(null)
@@ -136,9 +138,12 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const isAnalyzing = isMaskAnalyzing || isFaceAnalyzing
   const canAnalyzeFace = Boolean(metadata) && !isVideoExporting && !isMaskAnalyzing && !occlusionBusy && !motionBusy
   const depthRebuild = useDepthRebuild({
+    userId,
     stageRef,
     metadata,
     videoHasAudio,
+    locale,
+    workspaceId: projectId,
   })
   const interactionDisabled = isVideoExporting || isAnalyzing || occlusionBusy || depthRebuild.isBusy
 

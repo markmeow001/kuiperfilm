@@ -1,27 +1,64 @@
 /**
  * Canvas 无限画布 — Text node writing assistant (扩写/改写/润色/续写).
  *
- * POST { text, mode, locale? } → submits a CANVAS_TEXT task on the text worker
- * and returns { taskId }. The canvas polls GET /api/tasks/[taskId] and reads
- * task.result.text when completed.
+ * POST { text, mode, locale?, requestKey? } → submits a CANVAS_TEXT task on the
+ * text worker and returns { taskId } (plus requestKey/deduped for R2V assist
+ * modes). The canvas polls GET /api/tasks/[taskId] and reads task.result.text
+ * when completed.
  *
  * The route does NOT call the LLM directly (CLAUDE.md §3): it only resolves
  * the model + submitTask; the text worker handler runs the model. Mode is a
  * server-side whitelist (no free-form instructions from the client). Uses the
  * 'playground' virtual project id like the rest of the canvas.
  */
+import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
 import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { getProjectModelConfig } from '@/lib/config-service'
-import { isCanvasTextMode } from '@/lib/workers/handlers/canvas-text'
+import { prisma } from '@/lib/prisma'
+import {
+  getR2VCanvasTextPolicy,
+  isCanvasTextMode,
+  isR2VCanvasTextMode,
+  R2V_CANVAS_TEXT_MAX_CHARS,
+} from '@/lib/workers/handlers/canvas-text'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo } from '@/lib/logging/core'
 
 const CANVAS_PROJECT_ID = 'playground'
 const MAX_TEXT_CHARS = 20000
+const MAX_REQUEST_KEY_CHARS = 160
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function resolveR2VRequestKey(
+  rawRequestKey: unknown,
+  input: { mode: string; locale: Locale; text: string },
+): string {
+  if (rawRequestKey === undefined || rawRequestKey === null) {
+    return `auto-${sha256(`${input.mode}\0${input.locale}\0${input.text}`)}`
+  }
+  if (typeof rawRequestKey !== 'string') {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'INVALID_REQUEST_KEY',
+      message: 'requestKey 必须是文字',
+    })
+  }
+  const requestKey = rawRequestKey.trim()
+  if (!requestKey || requestKey.length > MAX_REQUEST_KEY_CHARS) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'INVALID_REQUEST_KEY',
+      message: `requestKey 长度必须为 1–${MAX_REQUEST_KEY_CHARS} 个字符`,
+      details: { max: MAX_REQUEST_KEY_CHARS, got: requestKey.length },
+    })
+  }
+  return requestKey
+}
 
 export const POST = apiHandler(async (request: NextRequest) => {
   const authResult = await requireUserAuth()
@@ -29,23 +66,65 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const { session } = authResult
   const userId = session.user.id
 
-  const body = (await request.json()) as { text?: unknown; mode?: unknown; locale?: unknown }
+  const body = (await request.json()) as {
+    text?: unknown
+    mode?: unknown
+    locale?: unknown
+    requestKey?: unknown
+  }
   const text = typeof body.text === 'string' ? body.text.trim() : ''
   const mode = body.mode
-  const locale = (typeof body.locale === 'string' ? body.locale : 'zh') as Locale
+  const rawLocale = body.locale === undefined ? 'zh' : body.locale
 
   if (!text) {
     throw new ApiError('INVALID_PARAMS', { code: 'TEXT_REQUIRED', message: '请输入文字内容' })
   }
-  if (text.length > MAX_TEXT_CHARS) {
-    throw new ApiError('INVALID_PARAMS', {
-      code: 'TEXT_TOO_LONG',
-      message: `文字过长（${text.length}/${MAX_TEXT_CHARS} 字符），请精简后重试`,
-      details: { max: MAX_TEXT_CHARS, got: text.length },
-    })
-  }
   if (!isCanvasTextMode(mode)) {
     throw new ApiError('INVALID_PARAMS', { code: 'INVALID_MODE', message: '写作模式无效' })
+  }
+  if (rawLocale !== 'zh' && rawLocale !== 'en') {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'INVALID_LOCALE',
+      message: 'locale 仅支持 zh 或 en',
+      details: { supported: ['zh', 'en'] },
+    })
+  }
+  const locale: Locale = rawLocale
+  const r2vPolicy = isR2VCanvasTextMode(mode)
+    ? getR2VCanvasTextPolicy(mode, locale)
+    : null
+  const maxTextChars = r2vPolicy ? R2V_CANVAS_TEXT_MAX_CHARS : MAX_TEXT_CHARS
+  if (text.length > maxTextChars) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'TEXT_TOO_LONG',
+      message: `文字过长（${text.length}/${maxTextChars} 字符），请精简后重试`,
+      details: { max: maxTextChars, got: text.length },
+    })
+  }
+
+  const requestKey = r2vPolicy
+    ? resolveR2VRequestKey(body.requestKey, { mode, locale, text })
+    : null
+  const dedupeKey = requestKey
+    ? `canvas-text-r2v:${sha256(`${userId}\0${mode}\0${locale}\0${text}\0${requestKey}`)}`
+    : null
+
+  if (dedupeKey) {
+    const existingTask = await prisma.task.findFirst({
+      where: { userId, dedupeKey },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (existingTask) {
+      _ulogInfo(
+        `[canvas.text] idempotent replay taskId=${existingTask.id} userId=${userId} mode=${mode}`,
+      )
+      return NextResponse.json({
+        taskId: existingTask.id,
+        requestKey,
+        deduped: true,
+      })
+    }
   }
 
   // Resolve the user's analysis (LLM) model — project → own /profile → admin
@@ -62,7 +141,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
   }
 
   const targetId = crypto.randomUUID()
-  const maxInputTokens = Math.min(8000, Math.ceil(text.length / 2) + 500)
+  const maxInputTokens = r2vPolicy
+    ? Math.min(2000, text.length * 2 + 800)
+    : Math.min(8000, Math.ceil(text.length / 2) + 500)
 
   const submitted = await submitTask({
     userId,
@@ -79,13 +160,24 @@ export const POST = apiHandler(async (request: NextRequest) => {
       analysisModel: model,
       model,
       maxInputTokens,
-      maxOutputTokens: 3000,
+      maxOutputTokens: r2vPolicy?.maxOutputTokens ?? 3000,
+      ...(requestKey ? { requestKey } : {}),
     },
+    ...(dedupeKey
+      ? {
+          dedupeKey,
+          dedupeMode: 'idempotent' as const,
+          maxAttempts: 1,
+        }
+      : {}),
   })
 
   _ulogInfo(
     `[canvas.text] submitted taskId=${submitted.taskId} userId=${userId} mode=${String(mode)} chars=${text.length}`,
   )
 
-  return NextResponse.json({ taskId: submitted.taskId })
+  return NextResponse.json({
+    taskId: submitted.taskId,
+    ...(requestKey ? { requestKey, deduped: submitted.deduped } : {}),
+  })
 })

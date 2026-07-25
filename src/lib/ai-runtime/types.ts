@@ -39,6 +39,9 @@ export type AiStepExecutionInput = {
   temperature?: number
   reasoning?: boolean
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
+  maxRetries?: number
+  maxOutputTokens?: number
+  stream?: boolean
 }
 
 export type AiStepExecutionResult = {

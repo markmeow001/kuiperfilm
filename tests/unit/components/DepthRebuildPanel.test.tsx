@@ -2,16 +2,33 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { DepthRebuildPanel, type DepthRebuildPanelProps } from '@/app/[locale]/live-composite/DepthRebuildPanel'
 
+function completeCharacter(
+  overrides: Partial<DepthRebuildPanelProps['characters'][number]> = {},
+): DepthRebuildPanelProps['characters'][number] {
+  return {
+    id: 'character-1',
+    label: '民國女記者',
+    sourceBinding: '開場畫面左側人物',
+    brief: '',
+    description: '寫實民國女記者，墨綠羊毛大衣',
+    reference: { url: 'blob:character', name: 'character.png' },
+    ...overrides,
+  }
+}
+
 function buildProps(overrides: Partial<DepthRebuildPanelProps> = {}): DepthRebuildPanelProps {
   return {
     source: { name: 'performance.mp4', duration: 10, width: 1080, height: 1920 },
     depthGuide: { url: 'blob:depth', effectiveFps: 9.5, sufficient: true },
     depthProgress: null,
     depthBusy: false,
-    characterReference: { url: 'blob:character', name: 'character.png' },
-    sceneReference: null,
-    characterDescription: '寫實民國女記者，墨綠羊毛大衣',
+    characters: [completeCharacter()],
+    sceneReferences: [],
+    sceneBrief: '',
     sceneDescription: '雨夜上海街口，電車和路人持續移動',
+    referenceImageCount: 1,
+    maxReferenceImages: 9,
+    descriptionAssistTarget: null,
     modelOptions: [{ value: 'seedance-fast', label: 'Seedance Fast' }],
     modelKey: 'seedance-fast',
     resolutionOptions: [{ value: '720p', label: '720p' }],
@@ -24,14 +41,23 @@ function buildProps(overrides: Partial<DepthRebuildPanelProps> = {}): DepthRebui
     estimatedCostLabel: 'US$1.25',
     onVideoSelect: vi.fn(),
     onCreateDepthGuide: vi.fn(),
+    onAddCharacter: vi.fn(),
+    onRemoveCharacter: vi.fn(),
     onCharacterSelect: vi.fn(),
     onCharacterPreviewError: vi.fn(),
-    onSceneSelect: vi.fn(),
-    onScenePreviewError: vi.fn(),
-    onRemoveCharacter: vi.fn(),
-    onRemoveScene: vi.fn(),
+    onRemoveCharacterImage: vi.fn(),
+    onCharacterLabelChange: vi.fn(),
+    onCharacterSourceBindingChange: vi.fn(),
+    onCharacterBriefChange: vi.fn(),
     onCharacterDescriptionChange: vi.fn(),
+    onAssistCharacter: vi.fn(),
+    onAddSceneImages: vi.fn(),
+    onRemoveSceneImage: vi.fn(),
+    onScenePreviewError: vi.fn(),
+    onSceneNoteChange: vi.fn(),
+    onSceneBriefChange: vi.fn(),
     onSceneDescriptionChange: vi.fn(),
+    onAssistScene: vi.fn(),
     onModelChange: vi.fn(),
     onResolutionChange: vi.fn(),
     onBuildPrompt: vi.fn(),
@@ -55,17 +81,23 @@ describe('DepthRebuildPanel', () => {
 
   it('角色與場景選圖 -> 分別傳回實際 File，且不需先等待深度分析', () => {
     const onCharacterSelect = vi.fn()
-    const onSceneSelect = vi.fn()
-    render(<DepthRebuildPanel {...buildProps({ depthGuide: null, characterReference: null, onCharacterSelect, onSceneSelect })} />)
+    const onAddSceneImages = vi.fn()
+    render(<DepthRebuildPanel {...buildProps({
+      depthGuide: null,
+      characters: [completeCharacter({ reference: null })],
+      referenceImageCount: 0,
+      onCharacterSelect,
+      onAddSceneImages,
+    })} />)
 
     const character = new File(['character'], 'character.png', { type: 'image/png' })
     const scene = new File(['scene'], 'scene.jpg', { type: 'image/jpeg' })
-    fireEvent.change(screen.getByLabelText('新角色圖片'), { target: { files: [character] } })
-    fireEvent.change(screen.getByLabelText('新場景圖片'), { target: { files: [scene] } })
+    fireEvent.change(screen.getByLabelText('上傳角色 01 參考圖片'), { target: { files: [character] } })
+    fireEvent.change(screen.getByLabelText('新增場景參考圖片'), { target: { files: [scene] } })
 
-    expect(onCharacterSelect).toHaveBeenCalledWith(character)
-    expect(onSceneSelect).toHaveBeenCalledWith(scene)
-    expect(screen.getByLabelText('新角色圖片')).toHaveAttribute(
+    expect(onCharacterSelect).toHaveBeenCalledWith('character-1', character)
+    expect(onAddSceneImages).toHaveBeenCalledWith([scene])
+    expect(screen.getByLabelText('上傳角色 01 參考圖片')).toHaveAttribute(
       'accept',
       '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp',
     )
@@ -75,9 +107,9 @@ describe('DepthRebuildPanel', () => {
     const onCharacterPreviewError = vi.fn()
     render(<DepthRebuildPanel {...buildProps({ onCharacterPreviewError })} />)
 
-    fireEvent.error(screen.getByAltText('新角色圖片預覽'))
+    fireEvent.error(screen.getByAltText('民國女記者參考預覽'))
 
-    expect(onCharacterPreviewError).toHaveBeenCalledTimes(1)
+    expect(onCharacterPreviewError).toHaveBeenCalledWith('character-1')
   })
 
   it('尚無原片 -> 可直接選擇 4–15 秒表演影片，不需先執行分析', () => {
@@ -85,23 +117,33 @@ describe('DepthRebuildPanel', () => {
     render(<DepthRebuildPanel {...buildProps({ source: null, depthGuide: null, onVideoSelect })} />)
 
     const video = new File(['video'], 'performance.mp4', { type: 'video/mp4' })
-    fireEvent.change(screen.getByLabelText('上傳 4–15 秒表演影片'), { target: { files: [video] } })
+    const videoInput = screen.getByLabelText('上傳 4–15 秒表演影片')
+    expect(videoInput.closest('label')).toHaveClass('focus-within:ring-2')
+    fireEvent.change(videoInput, { target: { files: [video] } })
 
     expect(onVideoSelect).toHaveBeenCalledWith(video)
     expect(onVideoSelect).toHaveBeenCalledTimes(1)
   })
 
   it('尚未備妥深度與角色 -> 建立 Prompt 與付費生成皆停用，但顯示可理解的灰色範例', () => {
-    render(<DepthRebuildPanel {...buildProps({ depthGuide: null, characterReference: null, prompt: '', canGenerate: false })} />)
+    render(<DepthRebuildPanel {...buildProps({
+      depthGuide: null,
+      characters: [completeCharacter({ reference: null })],
+      referenceImageCount: 0,
+      prompt: '',
+      canGenerate: false,
+    })} />)
 
     expect(screen.getByRole('button', { name: '建立 Prompt' })).toBeDisabled()
     expect(screen.getByRole('button', { name: '確認費用並生成影片' })).toBeDisabled()
-    expect(screen.getByPlaceholderText(/電影寫實的 1930 年代女記者/)).toBeInTheDocument()
-    expect(screen.getByPlaceholderText(/雨夜的 1930 年代上海街口/)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/1930 年代青年偵探/)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/雨夜上海法租界/)).toBeInTheDocument()
   })
 
   it('角色或場景描述留空 -> 即使素材齊全仍不能建立 Prompt', () => {
-    const { rerender } = render(<DepthRebuildPanel {...buildProps({ characterDescription: '' })} />)
+    const { rerender } = render(<DepthRebuildPanel {...buildProps({
+      characters: [completeCharacter({ description: '' })],
+    })} />)
     expect(screen.getByRole('button', { name: '重新建立 Prompt' })).toBeDisabled()
 
     rerender(<DepthRebuildPanel {...buildProps({ sceneDescription: '   ' })} />)

@@ -45,6 +45,11 @@ function supportsArkReasoningEffort(modelId: string): boolean {
   return modelId === 'doubao-seed-1-8-251228' || modelId.startsWith('doubao-seed-2-0-')
 }
 
+function normalizeMaxOutputTokens(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
+  return Math.floor(value)
+}
+
 export async function chatCompletion(
   userId: string,
   model: string | null | undefined,
@@ -52,7 +57,7 @@ export async function chatCompletion(
   options: ChatCompletionOptions = {},
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const internalCallbacks = getInternalLLMStreamCallbacks()
-  if (internalCallbacks && !options.__skipAutoStream) {
+  if (internalCallbacks && options.stream !== false && !options.__skipAutoStream) {
     const { chatCompletionStream } = await import('./chat-stream')
     return await chatCompletionStream(
       userId,
@@ -79,6 +84,7 @@ export async function chatCompletion(
     reasoningEffort = 'high',
     maxRetries = 2,
   } = options
+  const maxOutputTokens = normalizeMaxOutputTokens(options.maxOutputTokens)
   const projectId =
     typeof options.projectId === 'string' && options.projectId.trim().length > 0
       ? options.projectId.trim()
@@ -134,6 +140,7 @@ export async function chatCompletion(
           contents,
           config: {
             temperature,
+            ...(maxOutputTokens ? { maxOutputTokens } : {}),
             ...(systemInstruction ? { systemInstruction } : {}),
             ...(thinkingConfig ? { thinkingConfig } : {}),
           },
@@ -189,7 +196,7 @@ export async function chatCompletion(
           apiKey,
           modelId: resolvedModelId,
           messages,
-          options: { temperature },
+          options: { temperature, maxTokens: maxOutputTokens },
         })
         const completionParts = getCompletionParts(completion)
         logLlmRawOutput({
@@ -236,7 +243,7 @@ export async function chatCompletion(
           model: resolvedModelId,
           messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
           temperature,
-          max_completion_tokens: 65535,
+          max_completion_tokens: maxOutputTokens ?? 65535,
           ...extraParams,
         } as unknown as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming)
         const completionParts = getCompletionParts(completion)
@@ -302,6 +309,7 @@ export async function chatCompletion(
           // 推理模型不支持 temperature，仅在非推理模式下传递
           ...(reasoning ? {} : { temperature }),
           maxRetries,
+          ...(maxOutputTokens ? { maxOutputTokens } : {}),
           ...(aiSdkProviderOptions ? { providerOptions: aiSdkProviderOptions } : {}),
         }
         const aiSdkResult = await generateText(generateParams)
@@ -360,6 +368,7 @@ export async function chatCompletion(
         model: resolvedModelId,
         messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
         temperature,
+        ...(maxOutputTokens ? { max_tokens: maxOutputTokens } : {}),
         ...extraParams,
       })
       const normalizedCompletion = completion as OpenAI.Chat.Completions.ChatCompletion
