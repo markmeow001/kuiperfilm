@@ -91,4 +91,20 @@ describe('worker utils video generation resume', () => {
     expect(asyncPollMock.pollAsyncTask).toHaveBeenCalledWith(externalId, 'user-1')
     expect(generatorApiMock.generateVideo).not.toHaveBeenCalled()
   })
+
+  it('externalId lookup fails -> fails before provider submission instead of risking a duplicate charge', async () => {
+    prismaMock.task.findUnique.mockRejectedValueOnce(new Error('database unavailable'))
+
+    await expect(resolveVideoSourceFromGeneration(buildJob(), {
+      userId: 'user-1',
+      modelId: 'openai-compatible:oa-1::sora-2',
+      imageUrl: 'data:image/png;base64,QQ==',
+      options: {
+        prompt: 'animate this frame',
+      },
+    })).rejects.toThrow('database unavailable')
+
+    expect(generatorApiMock.generateVideo).not.toHaveBeenCalled()
+    expect(asyncPollMock.pollAsyncTask).not.toHaveBeenCalled()
+  })
 })

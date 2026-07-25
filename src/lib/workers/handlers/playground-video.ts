@@ -15,12 +15,22 @@
 import type { Job } from 'bullmq'
 import { generateVideo } from '@/lib/generator-api'
 import type { TaskJobData } from '@/lib/task/types'
-import { uploadVideoSourceToCos, waitExternalResult, toSignedUrlIfCos } from '../utils'
+import {
+  getTaskExistingExternalId,
+  uploadVideoSourceToCos,
+  waitExternalResult,
+  toSignedUrlIfCos,
+} from '../utils'
 import { extractVideoTailFrameToCos } from '@/lib/video-tail-frame'
 import { buildRefImageMapSection, replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 import { extractReferenceAudioToCos, muxGeneratedVideoWithSourceAudio } from '@/lib/playground/source-audio'
 import { reportTaskProgress } from '@/lib/workers/shared'
+import {
+  isSeedanceReferenceNormalizationModel,
+  normalizeSeedanceReferenceVideoToCos,
+} from '@/lib/playground/seedance-reference-video'
+import { filterAuthorizedStorageReferences } from '@/lib/playground/reference-guard'
 
 function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -60,15 +70,55 @@ export async function handlePlaygroundVideoTask(
   const lastFrameKey = typeof payload.lastFrameUrl === 'string' ? payload.lastFrameUrl : ''
   const signedLastFrameUrl = lastFrameKey ? (toSignedUrlIfCos(lastFrameKey, 7200) ?? lastFrameKey) : ''
   const signedImageUrls = refImageKeys.map((k) => toSignedUrlIfCos(k, 7200) ?? k)
-  const signedVideoUrls = refVideoKeys
-    .map((k) => toSignedUrlIfCos(k, 7200))
-    .filter((u): u is string => Boolean(u))
+  const normalizeSeedanceReferenceVideo = payload.normalizeSeedanceReferenceVideo === true
+  let signedVideoUrls: string[]
+  if (normalizeSeedanceReferenceVideo) {
+    if (!isSeedanceReferenceNormalizationModel(modelKey)) {
+      throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_MODEL_UNSUPPORTED')
+    }
+    if (refVideoKeys.length !== 1) {
+      throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_REQUIRES_ONE_VIDEO')
+    }
+    const storageGuard = await filterAuthorizedStorageReferences(refVideoKeys, userId)
+    if (storageGuard.safe.length !== 1 || storageGuard.rejected.length > 0) {
+      throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_NOT_TRUSTED')
+    }
+    const sourceVideoUrl = toSignedUrlIfCos(storageGuard.safe[0], 7200)
+    if (!sourceVideoUrl) {
+      throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_SOURCE_URL_INVALID')
+    }
+    signedVideoUrls = [sourceVideoUrl]
+  } else {
+    signedVideoUrls = refVideoKeys
+      .map((key) => toSignedUrlIfCos(key, 7200))
+      .filter((url): url is string => Boolean(url))
+  }
   const preserveSourceAudio = payload.preserveSourceAudio === true
   if (preserveSourceAudio && signedVideoUrls.length !== 1) {
     throw new Error('PLAYGROUND_SOURCE_AUDIO_REQUIRES_ONE_REFERENCE_VIDEO')
   }
+
+  // Queue retries must resume the provider task already paid for. Read this
+  // before local normalization/audio extraction so a transient polling
+  // failure cannot repeat either preprocessing or generateVideo().
+  const resumeExternalId = await getTaskExistingExternalId(taskId)
+  if (normalizeSeedanceReferenceVideo && !resumeExternalId) {
+    await reportTaskProgress(job, 8, {
+      stage: 'normalize_seedance_reference_video',
+      message: '正在將深度參考影片轉為 Seedance 相容格式',
+    })
+    const normalized = await normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: signedVideoUrls[0],
+      taskId,
+    })
+    const normalizedUrl = toSignedUrlIfCos(normalized.cosKey, 7200)
+    if (!normalizedUrl) {
+      throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_URL_INVALID')
+    }
+    signedVideoUrls = [normalizedUrl]
+  }
   let signedReferenceAudioUrl: string | null = null
-  if (preserveSourceAudio) {
+  if (preserveSourceAudio && !resumeExternalId) {
     await reportTaskProgress(job, 12, { stage: 'extract_source_audio', message: '正在保留原始對白音軌' })
     const audioKey = await extractReferenceAudioToCos(signedVideoUrls[0], taskId)
     signedReferenceAudioUrl = toSignedUrlIfCos(audioKey, 7200)
@@ -115,8 +165,6 @@ export async function handlePlaygroundVideoTask(
 
   // i2v / r2v vendors take a leading image; pure t2v generators ignore it.
   const leadImageUrl = signedImageUrls[0] ?? ''
-  // modelKey format: provider::modelId (e.g. atlascloud::kling-o3-pro-r2v)
-  const isKlingO3ModelKey = /::kling-o3-/.test(modelKey)
   // Vendors whose r2v endpoints consume the FULL ordered list via
   // referenceImages and NEVER merge the imageUrl arg back in (AtlasCloud
   // seedance r2v uses imageUrl only as an empty-list fallback; fal seedance
@@ -131,49 +179,58 @@ export async function handlePlaygroundVideoTask(
     `[playground-video] start taskId=${taskId} model=${modelKey} refImages=${refImageKeys.length} refVideos=${refVideoKeys.length} elements=${klingElements.length}`,
   )
 
-  // generateVideo's options interface is typed for scalar values but the
-  // underlying generators accept array fields (referenceImages /
-  // referenceVideos) for r2v endpoints — each vendor's switch unpacks them
-  // into its schema. Cast bypasses the index-signature mismatch.
-  const result = await generateVideo(userId, modelKey, leadImageUrl, {
-    prompt: effectivePrompt,
-    ...(duration ? { duration } : {}),
-    ...(aspectRatio ? { aspectRatio } : {}),
-    ...(resolution ? { resolution } : {}),
-    // 🔊 audio toggle (2026-07-12) — absent = generator default (on).
-    ...(typeof payload.generateAudio === 'boolean' ? { generateAudio: payload.generateAudio } : {}),
-    // 首尾帧: the leading image is the first frame; this is the last frame.
-    // Generators that support it (fal / Minimax / BobAPI) read lastFrameImageUrl
-    // and switch to first-last-frame mode; others ignore the extra option.
-    ...(signedLastFrameUrl ? { lastFrameImageUrl: signedLastFrameUrl } : {}),
-    // Full ordered list for full-list vendors (incl. Kling O3); the
-    // slice(1) branch remains for vendors whose lead image rides the
-    // imageUrl arg and would otherwise be duplicated (taijiai/BobAPI).
-    ...(passFullImageList
-      ? (signedImageUrls.length > 0
-        ? { referenceImages: signedImageUrls as unknown as string }
-        : {})
-      : (signedImageUrls.length > 1
-        ? { referenceImages: signedImageUrls.slice(1) as unknown as string }
-        : {})),
-    ...(klingElements.length > 0
-      ? { klingElements: klingElements as unknown as string }
-      : {}),
-    ...(signedVideoUrls.length > 0
-      ? { referenceVideos: signedVideoUrls as unknown as string }
-      : {}),
-    ...(signedReferenceAudioUrl
-      ? { referenceAudios: [signedReferenceAudioUrl] as unknown as string }
-      : {}),
-  })
+  let externalId = resumeExternalId
+  if (externalId) {
+    _ulogInfo(`[playground-video] resume taskId=${taskId} externalId=${externalId}`)
+  } else {
+    // generateVideo's options interface is typed for scalar values but the
+    // underlying generators accept array fields (referenceImages /
+    // referenceVideos) for r2v endpoints — each vendor's switch unpacks them
+    // into its schema. Cast bypasses the index-signature mismatch.
+    const result = await generateVideo(userId, modelKey, leadImageUrl, {
+      prompt: effectivePrompt,
+      ...(duration ? { duration } : {}),
+      ...(aspectRatio ? { aspectRatio } : {}),
+      ...(resolution ? { resolution } : {}),
+      // 🔊 audio toggle (2026-07-12) — absent = generator default (on).
+      ...(typeof payload.generateAudio === 'boolean' ? { generateAudio: payload.generateAudio } : {}),
+      // 首尾帧: the leading image is the first frame; this is the last frame.
+      // Generators that support it (fal / Minimax / BobAPI) read lastFrameImageUrl
+      // and switch to first-last-frame mode; others ignore the extra option.
+      ...(signedLastFrameUrl ? { lastFrameImageUrl: signedLastFrameUrl } : {}),
+      // Full ordered list for full-list vendors (incl. Kling O3); the
+      // slice(1) branch remains for vendors whose lead image rides the
+      // imageUrl arg and would otherwise be duplicated (taijiai/BobAPI).
+      ...(passFullImageList
+        ? (signedImageUrls.length > 0
+          ? { referenceImages: signedImageUrls as unknown as string }
+          : {})
+        : (signedImageUrls.length > 1
+          ? { referenceImages: signedImageUrls.slice(1) as unknown as string }
+          : {})),
+      ...(klingElements.length > 0
+        ? { klingElements: klingElements as unknown as string }
+        : {}),
+      ...(signedVideoUrls.length > 0
+        ? { referenceVideos: signedVideoUrls as unknown as string }
+        : {}),
+      ...(signedReferenceAudioUrl
+        ? { referenceAudios: [signedReferenceAudioUrl] as unknown as string }
+        : {}),
+    })
 
-  if (!result.success || !result.externalId) {
-    const errMsg = result.error ?? 'video generation failed (no externalId)'
-    _ulogError(`[playground-video] submit failed taskId=${taskId} err=${errMsg}`)
-    throw new Error(`PLAYGROUND_VIDEO_SUBMIT_FAILED: ${errMsg}`)
+    if (!result.success || !result.externalId) {
+      const errMsg = result.error ?? 'video generation failed (no externalId)'
+      _ulogError(`[playground-video] submit failed taskId=${taskId} err=${errMsg}`)
+      throw new Error(`PLAYGROUND_VIDEO_SUBMIT_FAILED: ${errMsg}`)
+    }
+    externalId = result.externalId
+  }
+  if (!externalId) {
+    throw new Error('PLAYGROUND_VIDEO_EXTERNAL_ID_REQUIRED')
   }
 
-  const polled = await waitExternalResult(job as unknown as Job, result.externalId, userId, {
+  const polled = await waitExternalResult(job as unknown as Job, externalId, userId, {
     timeoutMs: 15 * 60 * 1000,
     progressStart: 30,
     progressEnd: 90,

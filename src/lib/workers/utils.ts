@@ -77,17 +77,13 @@ export async function ensureImageWithinKieAILimits(
 /**
  * 查询 DB 中任务是否已有 externalId（服务重启后续接轮询用，避免重复提交外部 API）
  */
-async function getTaskExistingExternalId(taskId: string): Promise<string | null> {
-  try {
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      select: { externalId: true },
-    })
-    const val = task?.externalId?.trim()
-    return val || null
-  } catch {
-    return null
-  }
+export async function getTaskExistingExternalId(taskId: string): Promise<string | null> {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { externalId: true },
+  })
+  const value = task?.externalId?.trim()
+  return value || null
 }
 
 function scopedWorkerUtilLogger(job: Job<TaskJobData>, action: string) {

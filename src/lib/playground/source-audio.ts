@@ -8,17 +8,29 @@ import { uploadAudioSourceToCos } from '@/lib/workers/utils'
 const execFileAsync = promisify(execFile)
 const FFMPEG_TIMEOUT_MS = 120_000
 
+export function buildReferenceAudioFfmpegArgs(
+  sourceVideoUrl: string,
+  outputPath: string,
+): string[] {
+  return [
+    '-y', '-hide_banner', '-loglevel', 'error', '-i', sourceVideoUrl,
+    '-map', '0:a:0', '-vn', '-c:a', 'libmp3lame', '-b:a', '192k',
+    '-ar', '48000', outputPath,
+  ]
+}
+
 export async function extractReferenceAudioToCos(
   sourceVideoUrl: string,
   taskId: string,
 ): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), 'playground-source-audio-'))
-  const output = path.join(dir, 'reference.m4a')
+  const output = path.join(dir, 'reference.mp3')
   try {
-    await execFileAsync('ffmpeg', [
-      '-y', '-hide_banner', '-loglevel', 'error', '-i', sourceVideoUrl,
-      '-map', '0:a:0', '-vn', '-c:a', 'aac', '-b:a', '192k', output,
-    ], { timeout: FFMPEG_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 })
+    await execFileAsync(
+      'ffmpeg',
+      buildReferenceAudioFfmpegArgs(sourceVideoUrl, output),
+      { timeout: FFMPEG_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 },
+    )
     const audio = await readFile(output)
     if (audio.length === 0) throw new Error('PLAYGROUND_SOURCE_AUDIO_EMPTY')
     return await uploadAudioSourceToCos(audio, 'playground-runs/source-audio', taskId)

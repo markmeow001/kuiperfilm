@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { isSafeReference, filterSafeReferences } from '@/lib/playground/reference-guard'
+import {
+  filterAuthorizedStorageReferences,
+  filterSafeReferences,
+  isSafeReference,
+} from '@/lib/playground/reference-guard'
 
 const U = 'user-123'
 
@@ -45,5 +49,18 @@ describe('reference guard', () => {
   it('rejects empty / non-string', () => {
     expect(isSafeReference('', U)).toBe(false)
     expect(isSafeReference('   ', U)).toBe(false)
+  })
+
+  it('storage-only guard accepts the caller upload key but rejects an external HTTPS URL', async () => {
+    const ownKey = `video/playground-ref/${U}/depth.webm`
+    const result = await filterAuthorizedStorageReferences([
+      ownKey,
+      'https://attacker.example/depth.webm',
+    ], U)
+
+    expect(result).toEqual({
+      safe: [ownKey],
+      rejected: ['https://attacker.example/depth.webm'],
+    })
   })
 })

@@ -111,6 +111,37 @@ async function canReadRegisteredCanvasAsset(storageKey: string, userId: string):
   return Boolean(workspace)
 }
 
+async function canReadBareStorageKey(storageKey: string, userId: string): Promise<boolean> {
+  if (!isBareStorageKey(storageKey)) return false
+  if (isSafeReference(storageKey, userId)) return true
+  return await canReadRegisteredCanvasAsset(storageKey, userId)
+}
+
+/**
+ * Strict storage-only authorization for server-side media processing.
+ *
+ * Unlike normal Playground references, this intentionally rejects absolute
+ * URLs and local app paths. ffprobe/ffmpeg must only receive a URL that the
+ * worker derived from an authorized first-party storage key; otherwise an
+ * attacker-controlled URL would become an SSRF-capable media input.
+ */
+export async function filterAuthorizedStorageReferences(
+  entries: string[],
+  userId: string,
+): Promise<{ safe: string[]; rejected: string[] }> {
+  const safe: string[] = []
+  const rejected: string[] = []
+  for (const entry of entries) {
+    const normalized = entry.trim()
+    if (normalized && await canReadBareStorageKey(normalized, userId)) {
+      safe.push(normalized)
+      continue
+    }
+    rejected.push(entry)
+  }
+  return { safe, rejected }
+}
+
 /**
  * Playground boundary authorization. Normal safe references keep the cheap
  * synchronous path; otherwise a bare durable key is accepted only when it is
@@ -128,7 +159,7 @@ export async function filterAuthorizedReferences(
       continue
     }
     const normalized = entry.trim()
-    if (isBareStorageKey(normalized) && await canReadRegisteredCanvasAsset(normalized, userId)) {
+    if (await canReadBareStorageKey(normalized, userId)) {
       safe.push(normalized)
       continue
     }

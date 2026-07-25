@@ -17,23 +17,36 @@
  * still writes BalanceTransaction).
  */
 
+import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
-import { apiHandler, ApiError } from '@/lib/api-errors'
+import { apiHandler, ApiError, getIdempotencyKey } from '@/lib/api-errors'
 import { resolveModelSelection } from '@/lib/api-config'
 import { resolveBuiltinCapabilitiesByModelKey } from '@/lib/model-capabilities/lookup'
 import { submitTask } from '@/lib/task/submitter'
 import { TASK_TYPE } from '@/lib/task/types'
 import { mapTaskStatusToPlayground } from '@/lib/playground/run-view'
-import { filterAuthorizedReferences } from '@/lib/playground/reference-guard'
+import {
+  filterAuthorizedReferences,
+  filterAuthorizedStorageReferences,
+} from '@/lib/playground/reference-guard'
 import { VIDEO_PROMPT_HARD_LIMIT } from '@/lib/playground/video-prompt-limits'
+import { isSeedanceReferenceNormalizationModel } from '@/lib/playground/seedance-reference-video'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
 const PLAYGROUND_PROJECT_ID = 'playground'
 const MAX_REFERENCE_IMAGES = 9
 const MAX_REFERENCE_VIDEOS = 1 // Per feedback_kuiperfilm_ref_video_lowest_common_denominator
+const MAX_IDEMPOTENCY_KEY_LENGTH = 128
+
+function buildPlaygroundDedupeKey(userId: string, idempotencyKey: string): string {
+  const digest = createHash('sha256')
+    .update(`${userId}\u0000${idempotencyKey}`)
+    .digest('hex')
+  return `playground_http:${digest}`
+}
 
 function parseStringArray(value: unknown, fieldName: string, cap: number): string[] {
   if (value === undefined || value === null) return []
@@ -88,6 +101,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     lastFrameUrl: rawLastFrame,
     outputType,
     preserveSourceAudio,
+    normalizeSeedanceReferenceVideo: rawNormalizeSeedanceReferenceVideo,
     modelKey,
     resolution,
     aspectRatio,
@@ -106,6 +120,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     lastFrameUrl?: unknown
     outputType?: unknown
     preserveSourceAudio?: unknown
+    normalizeSeedanceReferenceVideo?: unknown
     modelKey?: unknown
     resolution?: unknown
     aspectRatio?: unknown
@@ -133,6 +148,15 @@ export const POST = apiHandler(async (request: NextRequest) => {
       message: '保留原始音軌設定無效',
     })
   }
+  if (
+    rawNormalizeSeedanceReferenceVideo !== undefined
+    && typeof rawNormalizeSeedanceReferenceVideo !== 'boolean'
+  ) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'SEEDANCE_REFERENCE_NORMALIZATION_INVALID',
+      message: '參考影片正規化設定無效',
+    })
+  }
   const promptHardLimit = outputType === 'video' ? VIDEO_PROMPT_HARD_LIMIT : 4000
   if (prompt.length > promptHardLimit) {
     throw new ApiError('INVALID_PARAMS', {
@@ -145,6 +169,20 @@ export const POST = apiHandler(async (request: NextRequest) => {
     throw new ApiError('INVALID_PARAMS', { code: 'MODEL_KEY_REQUIRED', message: '请先选择模型' })
   }
   const trimmedModelKey = modelKey.trim()
+  const idempotencyKey = getIdempotencyKey(request)
+  if (idempotencyKey && idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'IDEMPOTENCY_KEY_TOO_LONG',
+      message: `請求識別碼不可超過 ${MAX_IDEMPOTENCY_KEY_LENGTH} 字元`,
+      details: {
+        max: MAX_IDEMPOTENCY_KEY_LENGTH,
+        got: idempotencyKey.length,
+      },
+    })
+  }
+  const dedupeKey = idempotencyKey
+    ? buildPlaygroundDedupeKey(userId, idempotencyKey)
+    : null
 
   // Verify the model is in the user's enabled catalog AND matches outputType.
   // resolveModelSelection threads admin-inheritance + type validation, so a
@@ -163,6 +201,47 @@ export const POST = apiHandler(async (request: NextRequest) => {
       code: 'MODEL_NOT_ENABLED',
       details: { modelKey: trimmedModelKey, outputType, message: errMsg },
     })
+  }
+  const type = outputType === 'video'
+    ? TASK_TYPE.PLAYGROUND_VIDEO
+    : TASK_TYPE.PLAYGROUND_IMAGE
+
+  // An HTTP response can disappear after submitTask has already created,
+  // frozen and enqueued the task. Keep terminal rows idempotent too: a retry
+  // with the same client request key returns that exact task instead of
+  // calling createTask, whose reusable functional dedupe keys intentionally
+  // release after terminal states.
+  if (dedupeKey) {
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        userId,
+        dedupeKey,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        finishedAt: true,
+      },
+    })
+    if (existingTask) {
+      _ulogInfo(
+        `[playground.run] idempotent replay taskId=${existingTask.id} userId=${userId}`,
+      )
+      return NextResponse.json({
+        success: true,
+        run: {
+          id: existingTask.id,
+          status: mapTaskStatusToPlayground(existingTask.status),
+          resultUrl: null,
+          outputType,
+          modelKey: trimmedModelKey,
+          createdAt: existingTask.createdAt,
+          completedAt: existingTask.finishedAt,
+        },
+      })
+    }
   }
 
   const rawRefImages = parseStringArray(rawImages, 'referenceImages', MAX_REFERENCE_IMAGES)
@@ -191,6 +270,35 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const referenceImages = imgGuard.safe
   const lastFrameSafe = lastFrameGuard.safe[0] ?? null
   const referenceVideos = vidGuard.safe
+  if (rawNormalizeSeedanceReferenceVideo === true) {
+    if (outputType !== 'video') {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'SEEDANCE_REFERENCE_NORMALIZATION_REQUIRES_VIDEO_OUTPUT',
+        message: 'Seedance 參考影片正規化僅支援影片輸出',
+      })
+    }
+    if (!isSeedanceReferenceNormalizationModel(trimmedModelKey)) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'SEEDANCE_REFERENCE_NORMALIZATION_MODEL_UNSUPPORTED',
+        message: '參考影片正規化僅支援 AtlasCloud Seedance 2.0 R2V 與 Fast R2V',
+        details: { modelKey: trimmedModelKey },
+      })
+    }
+    if (referenceVideos.length !== 1) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'SEEDANCE_REFERENCE_NORMALIZATION_REQUIRES_ONE_VIDEO',
+        message: 'Seedance 參考影片正規化需要且只能綁定一支影片',
+        details: { got: referenceVideos.length },
+      })
+    }
+    const storageGuard = await filterAuthorizedStorageReferences(referenceVideos, userId)
+    if (storageGuard.safe.length !== 1 || storageGuard.rejected.length > 0) {
+      throw new ApiError('FORBIDDEN', {
+        code: 'SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_NOT_TRUSTED',
+        message: '深度參考影片必須先上傳到本平台，不能使用外部網址',
+      })
+    }
+  }
   if (preserveSourceAudio === true && (outputType !== 'video' || referenceVideos.length !== 1)) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'PRESERVE_SOURCE_AUDIO_REQUIRES_VIDEO',
@@ -380,7 +488,6 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ? Math.round(durationSec)
     : null
 
-  const type = outputType === 'video' ? TASK_TYPE.PLAYGROUND_VIDEO : TASK_TYPE.PLAYGROUND_IMAGE
   const targetId = crypto.randomUUID()
 
   // payload carries everything the worker handler + billing policy need.
@@ -394,6 +501,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceImages,
     referenceVideos,
     ...(preserveSourceAudio === true ? { preserveSourceAudio: true } : {}),
+    ...(rawNormalizeSeedanceReferenceVideo === true
+      ? { normalizeSeedanceReferenceVideo: true }
+      : {}),
     ...(refText ? { referenceText: refText } : {}),
     ...(lastFrameSafe ? { lastFrameUrl: lastFrameSafe } : {}),
     ...(maskImageSafe ? { maskImage: maskImageSafe } : {}),
@@ -426,6 +536,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     targetType: 'playground',
     targetId,
     payload,
+    dedupeKey,
   })
 
   _ulogInfo(

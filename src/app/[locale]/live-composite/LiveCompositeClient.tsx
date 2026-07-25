@@ -9,6 +9,9 @@ import { CompositeAssetPanel } from './CompositeAssetPanel'
 import { CompositeToolbar } from './CompositeToolbar'
 import { MaskKeyframeRail } from './MaskKeyframeRail'
 import { MaskStage, type MaskStageHandle } from './MaskStage'
+import { DepthSignalRail } from './DepthSignalRail'
+import { DepthRebuildControls } from './DepthRebuildControls'
+import { useDepthRebuild } from './useDepthRebuild'
 import { buildMaskAnalysisTimes } from './lib/mask-analysis'
 import { CompositeRecordingCancelledError } from './lib/composite-video-recorder'
 import { releasePersonSegmenters } from './lib/person-segmenter'
@@ -32,6 +35,7 @@ import { useLiveCompositeProjects } from './useLiveCompositeProjects'
 import { useMaskTimeline } from './useMaskTimeline'
 import type { CompositeExportProgress, CompositeView, MaskAnalysisProgress, MaskEditTarget, MaskRaster, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterLayer } from './live-composite-types'
 import type { LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
+import type { LiveCompositeMode } from './LiveCompositeModeSelector'
 
 interface LiveCompositeClientProps {
   locale: string
@@ -116,6 +120,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   const [view, setView] = useState<CompositeView>('source')
   const [brushPercent, setBrushPercent] = useState(6)
   const [overlayVisible, setOverlayVisible] = useState(true)
+  const [workflowMode, setWorkflowMode] = useState<LiveCompositeMode>('depth-rebuild')
   const [workflowStep, setWorkflowStep] = useState<LiveCompositeWorkflowStep>(1)
   const [exportError, setExportError] = useState<string | null>(null)
   const [analysisProgress, setAnalysisProgress] = useState<MaskAnalysisProgress>(INITIAL_ANALYSIS_PROGRESS)
@@ -130,6 +135,12 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
   // Every existing "analysis running" gate also locks during face analysis.
   const isAnalyzing = isMaskAnalyzing || isFaceAnalyzing
   const canAnalyzeFace = Boolean(metadata) && !isVideoExporting && !isMaskAnalyzing && !occlusionBusy && !motionBusy
+  const depthRebuild = useDepthRebuild({
+    stageRef,
+    metadata,
+    videoHasAudio,
+  })
+  const interactionDisabled = isVideoExporting || isAnalyzing || occlusionBusy || depthRebuild.isBusy
 
   useEffect(() => {
     if (!sourceRunId || videoUrl) return
@@ -209,7 +220,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     // Swapping the video element's source while an analysis seek is pending
     // would leave that seek waiting forever, so uploads stay locked until the
     // user cancels the analysis or it completes.
-    if (isVideoExporting || isAnalyzing || occlusionBusy) return
+    if (interactionDisabled) return
+    depthRebuild.resetSource()
     analysisRunRef.current += 1
     faceRunRef.current += 1
     setVideoUrl(URL.createObjectURL(file))
@@ -354,6 +366,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     if (isVideoExporting || isAnalyzing || occlusionBusy) return
     try {
       const loaded = await projectStore.openProject(id)
+      depthRebuild.resetSource()
       const loadedMaskReady = loaded.keyframes.some((keyframe) => Boolean(keyframe.baseMask))
       analysisRunRef.current += 1
       faceRunRef.current += 1
@@ -870,6 +883,15 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
     }
   }
 
+  const changeWorkflowMode = (mode: LiveCompositeMode) => {
+    if (interactionDisabled || mode === workflowMode) return
+    setWorkflowMode(mode)
+    setOcclusionPicking(false)
+    setView('source')
+    setOverlayVisible(false)
+    if (mode === 'mask-composite') setWorkflowStep(metadata ? 2 : 1)
+  }
+
   return (
     <main className="kuiper-studio-page flex h-dvh min-h-[680px] flex-col overflow-hidden">
       <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 overflow-x-auto border-b border-white/10 bg-[#0B0B0D]/95 px-4 py-2 sm:px-5">
@@ -882,16 +904,24 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
               <AppIcon name="sparklesAlt" className="h-4 w-4 text-cyan-300" />
               AI 實拍重製
             </div>
-            <div className="mt-0.5 text-xs text-stone-600">表演驅動角色重製 · 真人提供表演，AI 重新生成角色與場景</div>
+            <div className="mt-0.5 text-xs text-stone-600">
+              {workflowMode === 'depth-rebuild'
+                ? '深度引導全畫面重建 · 換角色、服裝與場景'
+                : '進階遮罩合成 · 保留原演員像素並精修邊緣'}
+            </div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-xs text-stone-500">
           <span>{metadata ? `已載入影片 · ${metadata.duration.toFixed(1)} 秒` : '尚未載入影片'}</span>
-          <ProjectPanel projectName={projectName} hasProject={Boolean(projectId)} projects={projectStore.projects} busyMessage={projectStore.busyMessage} error={projectStore.error} disabled={isVideoExporting || isAnalyzing || occlusionBusy} onProjectNameChange={setProjectName} onSave={() => void saveProject()} onOpen={(id) => void openProject(id)} onRefreshList={() => void projectStore.refreshProjects()} />
+          {workflowMode === 'mask-composite' ? (
+            <ProjectPanel projectName={projectName} hasProject={Boolean(projectId)} projects={projectStore.projects} busyMessage={projectStore.busyMessage} error={projectStore.error} disabled={interactionDisabled} onProjectNameChange={setProjectName} onSave={() => void saveProject()} onOpen={(id) => void openProject(id)} onRefreshList={() => void projectStore.refreshProjects()} />
+          ) : (
+            <span>深度重建設定只保留在目前頁面，尚未存入合成專案</span>
+          )}
         </div>
       </header>
 
-      {metadata && workflowStep >= 3 ? (
+      {workflowMode === 'mask-composite' && metadata && workflowStep >= 3 ? (
         <CompositeToolbar
           tool={tool}
           editTarget={editTarget}
@@ -921,11 +951,29 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           onClear={activeTimeline.clearCurrent}
         />
       ) : (
-        <div className="border-b border-white/10 bg-stone-950/90 px-5 py-3 text-sm text-stone-400">{metadata ? '下一步：在左側執行 AI 人物辨識，完成後才會顯示修邊工具。' : '先從左側上傳一段實拍影片。'}</div>
+        <div className="border-b border-white/10 bg-stone-950/90 px-5 py-3 text-sm text-stone-400">
+          {workflowMode === 'depth-rebuild'
+            ? metadata
+              ? '原片已就緒：在左側免費產生深度影片，再指定新角色與場景。'
+              : '先從左側上傳 4–15 秒表演影片；角色圖可以同時先準備。'
+            : metadata
+              ? '下一步：在左側執行 AI 人物辨識，完成後才會顯示修邊工具。'
+              : '先從左側上傳一段實拍影片。'}
+        </div>
       )}
 
       <div className="flex min-h-0 flex-1">
         <CompositeAssetPanel
+          mode={workflowMode}
+          onModeChange={changeWorkflowMode}
+          depthRebuild={(
+            <DepthRebuildControls
+              controller={depthRebuild}
+              metadata={metadata}
+              interactionDisabled={interactionDisabled}
+              onVideoSelect={selectVideo}
+            />
+          )}
           metadata={metadata}
           backgroundColor={backgroundColor}
           hasBackgroundImage={Boolean(backgroundUrl)}
@@ -933,7 +981,7 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
           currentTime={currentTime}
           analysisProgress={analysisProgress}
           exportProgress={exportProgress}
-          interactionDisabled={isVideoExporting || isAnalyzing || occlusionBusy}
+          interactionDisabled={interactionDisabled}
           virtualCharacter={virtualCharacter}
           maskKeyframes={maskTimeline.keyframes}
           occlusionPicking={occlusionPicking}
@@ -1014,7 +1062,8 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             view={view}
             overlayVisible={overlayVisible}
             virtualCharacter={virtualCharacter}
-            editingDisabled={isVideoExporting || occlusionBusy}
+            editingDisabled={isVideoExporting || occlusionBusy || depthRebuild.depthGuideStatus === 'generating'}
+            maskEditingEnabled={workflowMode === 'mask-composite'}
             onMetadata={setMetadata}
             onCommitStroke={(target, stroke) => {
               if (target === 'occlusion') occlusionTimeline.commitStroke(stroke)
@@ -1023,7 +1072,16 @@ export function LiveCompositeClient({ locale }: LiveCompositeClientProps) {
             onPickOccluder={(point) => void pickOccluder(point)}
             onTimeChange={setCurrentTime}
           />
-          {metadata && maskReady ? <MaskKeyframeRail duration={metadata.duration} currentTime={currentTime} keyframes={activeTimeline.keyframes} activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null} hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)} disabled={isVideoExporting || occlusionBusy} onAdd={activeTimeline.addKeyframe} onDelete={activeTimeline.deleteKeyframe} onApplyToStart={activeTimeline.applyToStart} onApplyToEnd={activeTimeline.applyToEnd} onSeek={(time) => stageRef.current?.seekTo(time)} /> : null}
+          {workflowMode === 'depth-rebuild' ? (
+            <DepthSignalRail
+              sourceUrl={videoUrl}
+              depthUrl={depthRebuild.depthGuide?.previewUrl ?? null}
+              resultUrl={depthRebuild.result?.url ?? null}
+              depthDownloadName={depthRebuild.depthGuide?.file.name}
+            />
+          ) : metadata && maskReady ? (
+            <MaskKeyframeRail duration={metadata.duration} currentTime={currentTime} keyframes={activeTimeline.keyframes} activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null} hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)} disabled={isVideoExporting || occlusionBusy} onAdd={activeTimeline.addKeyframe} onDelete={activeTimeline.deleteKeyframe} onApplyToStart={activeTimeline.applyToStart} onApplyToEnd={activeTimeline.applyToEnd} onSeek={(time) => stageRef.current?.seekTo(time)} />
+          ) : null}
         </div>
       </div>
       {exportError ? (

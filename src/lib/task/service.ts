@@ -444,13 +444,16 @@ export async function isTaskActive(taskId: string | undefined | null) {
 
 export async function tryMarkTaskProcessing(taskId: string | undefined | null, externalId?: string | null) {
   if (!taskId) return false
+  const externalIdUpdate = externalId === undefined
+    ? {}
+    : { externalId: typeof externalId === 'string' && externalId.trim() ? externalId.trim() : null }
   const result = await taskModel.updateMany({
     where: activeTaskWhere(taskId),
     data: {
       status: TASK_STATUS.PROCESSING,
       startedAt: new Date(),
       heartbeatAt: new Date(),
-      externalId: externalId || null,
+      ...externalIdUpdate,
       attempt: { increment: 1 },
     },
   })

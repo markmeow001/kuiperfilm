@@ -27,16 +27,18 @@ export function useUploadPlaygroundReference() {
     mutationFn: async ({
       file,
       type,
+      signal,
     }: {
       file: File
       type: 'image' | 'video' | 'audio'
+      signal?: AbortSignal
     }): Promise<UploadResult> => {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('type', type)
       return await requestJsonWithError(
         '/api/playground/upload-reference',
-        { method: 'POST', body: formData },
+        { method: 'POST', body: formData, signal },
         '參考素材上傳失敗',
       ) as UploadResult
     },
@@ -85,6 +87,8 @@ export interface PlaygroundRunSubmission {
   generateAudio?: boolean
   /** 實拍重建：抽出參考影片音軌供模型遵循，並在結果上重新封裝原始對白音軌。 */
   preserveSourceAudio?: boolean
+  /** 深度重建：worker 將唯一參考影片正規化為 AtlasCloud Seedance 2.0 可接受的 MP4/H264。 */
+  normalizeSeedanceReferenceVideo?: boolean
   /** 局部重绘遮罩（own COS key；透明区=重绘区）。需搭配 referenceImages[0] 底图。 */
   maskImage?: string
   outputType: 'image' | 'video'
@@ -93,6 +97,12 @@ export interface PlaygroundRunSubmission {
   aspectRatio?: string
   durationSec?: number
   workspaceId?: string | null
+}
+
+export interface PlaygroundRunRequest extends PlaygroundRunSubmission {
+  /** HTTP 重試沿用同一值；只送 header，不進入 provider payload。 */
+  idempotencyKey?: string
+  signal?: AbortSignal
 }
 
 export interface PlaygroundRunResult {
@@ -112,21 +122,30 @@ export function useSubmitPlaygroundRun() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (
-      submission: PlaygroundRunSubmission,
+      request: PlaygroundRunRequest,
     ): Promise<PlaygroundRunResult> => {
+      const {
+        idempotencyKey,
+        signal,
+        ...submission
+      } = request
       return await requestJsonWithError(
         '/api/playground/run',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+          },
           body: JSON.stringify(submission),
+          signal,
         },
         '生成失敗',
       ) as PlaygroundRunResult
     },
-    onSuccess: (_data, submission) => {
+    onSuccess: (_data, request) => {
       queryClient.invalidateQueries({
-        queryKey: ['playgroundRuns', submission.workspaceId ?? 'personal'],
+        queryKey: ['playgroundRuns', request.workspaceId ?? 'personal'],
       })
     },
   })

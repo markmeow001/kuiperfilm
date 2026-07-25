@@ -815,6 +815,10 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 - ⚠️ 本轮无新 BLOCK 问题；pre-existing Q-002 / Q-003 / Q-004（Phase 11.5 同步阶段已登记）仍挡 `npm run test:regression` 完整链路，不在 Phase 11.1 范围内
 
 ## 当前问题登记（必须先记录再推进）
+- ✅ Live Composite 深度引導全畫面重建（2026-07-24）：預設流程改為「原始表演影片 → 本機 Depth Anything V2 深度影片 → 新角色／場景參考 → Prompt 預覽 → AtlasCloud Seedance 2.0 R2V」。此流程用深度傳遞走位、輪廓、構圖與節奏，不宣稱為 alpha 去背；原本逐段保留演員像素的遮罩合成保留為進階模式。
+- ✅ 深度重建發布安全：參考影片在伺服器正規化為 Seedance 可接受的 MP4／H.264／24fps／最長 15 秒並保留音訊；只接受本平台授權儲存來源，外部 URL 顯式拒絕；HTTP 與 worker 重試皆沿用同一任務／供應商 request id，避免斷線或重試造成重複送單與扣費。
+- ✅ 2026-07-24 驗證：深度重建定向 80 tests、DOM 18 tests；完整 regression 為 unit 2219、billing integration 20、API integration 331、chain integration 14，全部通過；`npm run build` 成功。瀏覽器已驗證預設深度模式、遮罩模式往返切換、人物 PNG 在分析前上傳與預覽，無 console error。
+- ⚠️ 尚未執行 AtlasCloud 付費生成端到端驗收；部署後先做不扣費的圖片上傳／模式切換 smoke check，再由使用者明確決定是否以短片執行付費驗收。
 - ✅ Live Composite 虛擬角色合成 MVP（2026-07-18 working tree）：透明角色圖片／影片、人物遮罩中心追蹤與關鍵影格位置插值、人物前後景遮擋、時間／transform 控制、專案 timeline 保存與簽名讀取、影格／影片輸出及既有 Canvas handoff 已完成程式整合；未新增 AI provider、資料表或旁路 runtime。高階場景深度遮擋、光影匹配與動作生成留待後續切片。
 - ✅ 本輪驗證：`tests/unit/live-composite`（12 files / 61 tests）、完整 unit、完整 API integration（含 live-composite project 5 tests）、guards、`npx tsc --noEmit`、lint（0 errors／23 既有 warnings）及 production build 全通過。
 - ✅ 本輪瀏覽器驗收：localhost 登入後確認 Live Composite 非空白、無 Next.js error overlay／console error；3 秒 640×360 測試影片與角色 PNG 首次上傳成功，角色 transform／時間／遮擋控制完整呈現並在 Canvas 合成顯示。雲端素材上傳與 UI 保存／重開未在未確認下觸發，保存契約由 API integration 覆蓋。

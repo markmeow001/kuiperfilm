@@ -19,10 +19,33 @@ type WaitTaskOptions = {
   intervalMs?: number
   timeoutMs?: number
   onTaskUpdate?: (task: TaskSnapshot) => void
+  signal?: AbortSignal
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function abortError(): Error {
+  const error = new Error('Task polling aborted')
+  error.name = 'AbortError'
+  return error
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError()
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    throwIfAborted(signal)
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    function onAbort(): void {
+      clearTimeout(timeout)
+      signal?.removeEventListener('abort', onAbort)
+      reject(abortError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 export function isAsyncTaskResponse(data: unknown): data is { async: true; taskId: string } {
@@ -35,9 +58,11 @@ export async function waitForTaskResult(taskId: string, options: WaitTaskOptions
   const intervalMs = options.intervalMs ?? 1500
   const timeoutMs = options.timeoutMs ?? 0
   const onTaskUpdate = options.onTaskUpdate
+  const signal = options.signal
   const startedAt = Date.now()
 
   while (true) {
+    throwIfAborted(signal)
     if (timeoutMs > 0 && Date.now() - startedAt > timeoutMs) {
       throw new Error(`Task timeout: ${taskId}`)
     }
@@ -45,6 +70,7 @@ export async function waitForTaskResult(taskId: string, options: WaitTaskOptions
     const response = await fetch(`/api/tasks/${taskId}`, {
       method: 'GET',
       cache: 'no-store',
+      signal,
     })
     if (!response.ok) {
       const errorPayload = await response.json().catch(() => null)
@@ -52,6 +78,7 @@ export async function waitForTaskResult(taskId: string, options: WaitTaskOptions
     }
 
     const payload = (await response.json()) as TaskSnapshotResponse
+    throwIfAborted(signal)
     const task = payload.task
     if (!task) {
       throw new Error(`Task not found: ${taskId}`)
@@ -69,7 +96,7 @@ export async function waitForTaskResult(taskId: string, options: WaitTaskOptions
       throw new Error(resolveTaskErrorMessage(task, `Task ${task.status}`))
     }
 
-    await sleep(intervalMs)
+    await sleep(intervalMs, signal)
   }
 }
 

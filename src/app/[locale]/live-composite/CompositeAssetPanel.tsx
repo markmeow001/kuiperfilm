@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { AiMaskPanel, type AiMaskSettings } from './AiMaskPanel'
 import { CompositeExportPanel } from './CompositeExportPanel'
 import { FacePerformancePanel } from './FacePerformancePanel'
@@ -10,9 +11,13 @@ import { VirtualCharacterPanel } from './VirtualCharacterPanel'
 import { OcclusionPanel } from './OcclusionPanel'
 import { BackgroundGeneratorPanel } from './BackgroundGeneratorPanel'
 import { LiveCompositeWorkflowGuide, type LiveCompositeWorkflowStep } from './LiveCompositeWorkflowGuide'
+import { LiveCompositeModeSelector, type LiveCompositeMode } from './LiveCompositeModeSelector'
 import { MaterialReadinessCard } from './MaterialReadinessCard'
 
 interface CompositeAssetPanelProps {
+  mode: LiveCompositeMode
+  onModeChange: (mode: LiveCompositeMode) => void
+  depthRebuild: ReactNode
   metadata: VideoMetadata | null
   backgroundColor: string
   hasBackgroundImage: boolean
@@ -86,12 +91,18 @@ function StepNavigation({ back, next, nextLabel = '下一步', onStepChange }: S
   )
 }
 
-export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, videoHasAudio, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
+export function CompositeAssetPanel({ mode, onModeChange, depthRebuild, metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, videoHasAudio, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
   return (
     <aside className="flex w-[360px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-stone-950/80">
-      <LiveCompositeWorkflowGuide activeStep={workflowStep} completedSteps={completedWorkflowSteps} onStepChange={onWorkflowStepChange} />
+      <LiveCompositeModeSelector value={mode} onChange={onModeChange} disabled={interactionDisabled} />
 
-      {workflowStep === 1 ? (
+      {mode === 'depth-rebuild' ? (
+        depthRebuild
+      ) : (
+        <>
+          <LiveCompositeWorkflowGuide activeStep={workflowStep} completedSteps={completedWorkflowSteps} onStepChange={onWorkflowStepChange} />
+
+          {workflowStep === 1 ? (
         <>
           <div className="border-b border-white/10 px-4 py-5">
             <p className="mb-4 text-sm leading-6 text-stone-400">先上傳要處理的實拍影片。影片只在瀏覽器中分析，不會因人物辨識而上傳。</p>
@@ -111,18 +122,18 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
           <MaterialReadinessCard metadata={metadata} videoHasAudio={videoHasAudio} faceTrack={faceTrack} />
           {metadata ? <StepNavigation next={2} nextLabel="下一步：AI 辨識人物" onStepChange={onWorkflowStepChange} /> : null}
         </>
-      ) : null}
+          ) : null}
 
-      {workflowStep === 2 ? (
+          {workflowStep === 2 ? (
         <>
           <AiMaskPanel canAnalyze={Boolean(metadata) && !interactionDisabled} currentTime={currentTime} progress={analysisProgress} onAnalyzeCurrent={onAnalyzeCurrent} onAnalyzeClip={onAnalyzeClip} onCancel={onCancelAnalysis} />
           <FacePerformancePanel canAnalyze={canAnalyzeFace} progress={faceProgress} track={faceTrack} onAnalyze={onAnalyzeFace} onCancel={onCancelFaceAnalysis} onClear={onClearFaceTrack} />
           <MaterialReadinessCard metadata={metadata} videoHasAudio={videoHasAudio} faceTrack={faceTrack} />
           <StepNavigation back={1} next={completedWorkflowSteps.has(2) ? 3 : undefined} nextLabel="下一步：檢查人物邊緣" onStepChange={onWorkflowStepChange} />
         </>
-      ) : null}
+          ) : null}
 
-      {workflowStep === 3 ? (
+          {workflowStep === 3 ? (
         <>
           <section className="border-b border-white/10 px-4 py-5">
             <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4">
@@ -146,9 +157,9 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
           </section>
           <StepNavigation back={2} next={4} nextLabel="遮罩沒問題，下一步換背景" onStepChange={onWorkflowStepChange} />
         </>
-      ) : null}
+          ) : null}
 
-      {workflowStep === 4 ? (
+          {workflowStep === 4 ? (
         <>
           <section className="border-b border-white/10 px-4 py-5">
             <p className="mb-4 text-sm leading-6 text-stone-400">選擇一張現成背景、使用純色，或生成一張「背景概念圖」作為構圖預覽／概念參考。</p>
@@ -161,9 +172,9 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
           <BackgroundGeneratorPanel metadata={metadata} disabled={interactionDisabled} onGenerated={onBackgroundSelect} />
           <StepNavigation back={3} next={5} nextLabel="下一步：虛擬角色（可略過）" onStepChange={onWorkflowStepChange} />
         </>
-      ) : null}
+          ) : null}
 
-      {workflowStep === 5 ? (
+          {workflowStep === 5 ? (
         <>
           <section className="border-b border-white/10 px-4 py-4 text-xs leading-5 text-stone-500">這一步是選用功能。只換背景時可以直接前往輸出；需要廣告角色或動畫角色互動時，再上傳透明素材。</section>
           <VirtualCharacterPanel layer={virtualCharacter} keyframes={maskKeyframes} currentTime={currentTime} duration={metadata?.duration ?? 0} disabled={interactionDisabled || !metadata} onSelect={onVirtualCharacterSelect} onChange={onVirtualCharacterChange} onRemove={onVirtualCharacterRemove} onAutoMatch={onVirtualCharacterAutoMatch} motionBusy={motionBusy} motionMessage={motionMessage} onAnalyzeMotionCurrent={onAnalyzeMotionCurrent} onAnalyzeMotionClip={onAnalyzeMotionClip} />
@@ -175,15 +186,17 @@ export function CompositeAssetPanel({ metadata, backgroundColor, hasBackgroundIm
           ) : null}
           <StepNavigation back={4} next={6} nextLabel={virtualCharacter ? '下一步：預覽與輸出' : '略過角色，前往輸出'} onStepChange={onWorkflowStepChange} />
         </>
-      ) : null}
+          ) : null}
 
-      {workflowStep === 6 ? (
+          {workflowStep === 6 ? (
         <>
           <section className="border-b border-white/10 px-4 py-4 text-xs leading-5 text-stone-500">先在右上角切換「3 合成預覽」確認畫面，再輸出單格或完整影片。</section>
           <CompositeExportPanel canExport={canExport} progress={exportProgress} onExportMask={onExportMask} onExportFrame={onExportFrame} onExportVideo={onExportVideo} onCancelVideo={onCancelVideoExport} lastExportLabel={lastExportLabel} onSaveToLibrary={onSaveToLibrary} />
           <StepNavigation back={5} onStepChange={onWorkflowStepChange} />
         </>
-      ) : null}
+          ) : null}
+        </>
+      )}
     </aside>
   )
 }

@@ -23,6 +23,12 @@ import {
   type CompositeRecordingResult,
   type CompositeRecordingSession,
 } from './lib/composite-video-recorder'
+import {
+  startDepthGuideRecording,
+  type DepthGuideProgress,
+  type DepthGuideRecordingResult,
+  type DepthGuideRecordingSession,
+} from './lib/depth-guide-recorder'
 import type { CompositeView, MaskEditTarget, MaskKeyframe, MaskRaster, MaskStroke, MaskTool, NormalizedPoint, VideoMetadata, VirtualCharacterAppearance, VirtualCharacterLayer, VirtualCharacterMotionKeyframe } from './live-composite-types'
 
 export interface MaskStageHandle {
@@ -32,7 +38,12 @@ export interface MaskStageHandle {
     includeAudio: boolean
     onProgress: (progress: CompositeRecordingProgress) => void
   }) => Promise<CompositeRecordingResult>
+  exportDepthGuideVideo: (options: {
+    includeAudio: boolean
+    onProgress: (progress: DepthGuideProgress) => void
+  }) => Promise<DepthGuideRecordingResult>
   cancelCompositeVideo: () => void
+  cancelDepthGuideVideo: () => void
   seekTo: (time: number) => void
   analyzePersonAt: (time: number, threshold: number, edgeSoftness: number, depthCleanup: boolean) => Promise<{ mask: MaskRaster; depthOutcome: DepthGateOutcome }>
   /** Single-frame RVM matte; returns the active execution-provider label for the UI. */
@@ -72,6 +83,7 @@ interface MaskStageProps {
   overlayVisible: boolean
   virtualCharacter: VirtualCharacterLayer | null
   editingDisabled?: boolean
+  maskEditingEnabled?: boolean
   onMetadata: (metadata: VideoMetadata) => void
   onCommitStroke: (target: MaskEditTarget, stroke: MaskStroke) => void
   onPickOccluder: (point: NormalizedPoint) => void
@@ -97,6 +109,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   overlayVisible,
   virtualCharacter,
   editingDisabled = false,
+  maskEditingEnabled = true,
   onMetadata,
   onCommitStroke,
   onPickOccluder,
@@ -111,6 +124,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
   const renderSceneRef = useRef<() => void>(() => undefined)
   const currentStrokeRef = useRef<MaskStroke | null>(null)
   const recordingSessionRef = useRef<CompositeRecordingSession | null>(null)
+  const depthGuideSessionRef = useRef<DepthGuideRecordingSession | null>(null)
   const analysisAbortRef = useRef<AbortController | null>(null)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -288,10 +302,18 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
 
   useEffect(() => () => {
     analysisAbortRef.current?.abort()
+    const depthGuideSession = depthGuideSessionRef.current
+    depthGuideSession?.cancel()
     const recordingSession = recordingSessionRef.current
     recordingSession?.cancel()
     const video = videoRef.current
     if (!video) return
+    if (depthGuideSession) {
+      void depthGuideSession.result
+        .catch(() => undefined)
+        .finally(() => releaseCompositeRecordingAudio(video))
+      return
+    }
     if (recordingSession) {
       void recordingSession.result
         .catch(() => undefined)
@@ -359,7 +381,28 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
         if (recordingSessionRef.current === session) recordingSessionRef.current = null
       }
     },
+    exportDepthGuideVideo: async ({ includeAudio, onProgress }) => {
+      const video = videoRef.current
+      if (!video || !metadata) throw new Error('請先載入影片')
+      if (recordingSessionRef.current || depthGuideSessionRef.current) {
+        throw new Error('目前已有影片正在處理')
+      }
+      const session = startDepthGuideRecording({
+        video,
+        duration: metadata.duration,
+        includeAudio,
+        onProgress,
+      })
+      depthGuideSessionRef.current = session
+      try {
+        return await session.result
+      } finally {
+        if (depthGuideSessionRef.current === session) depthGuideSessionRef.current = null
+        renderScene()
+      }
+    },
     cancelCompositeVideo: () => recordingSessionRef.current?.cancel(),
+    cancelDepthGuideVideo: () => depthGuideSessionRef.current?.cancel(),
     seekTo: (time: number) => {
       const video = videoRef.current
       if (!video) return
@@ -421,7 +464,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
     return pointerToNormalizedPoint(event.clientX, event.clientY, rect)
   }
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!metadata || editingDisabled) return
+    if (!metadata || editingDisabled || !maskEditingEnabled) return
     videoRef.current?.pause()
     const point = pointFromEvent(event)
     if (objectPickEnabled) {
@@ -469,16 +512,16 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
 
   const canvasStyle = useMemo(() => ({
     aspectRatio: metadata ? `${metadata.width} / ${metadata.height}` : '16 / 9',
-    cursor: editingDisabled ? 'not-allowed' : objectPickEnabled ? 'copy' : tool === 'keep' ? 'crosshair' : 'cell',
-  }), [editingDisabled, metadata, objectPickEnabled, tool])
+    cursor: editingDisabled ? 'not-allowed' : !maskEditingEnabled ? 'default' : objectPickEnabled ? 'copy' : tool === 'keep' ? 'crosshair' : 'cell',
+  }), [editingDisabled, maskEditingEnabled, metadata, objectPickEnabled, tool])
 
   if (!videoUrl) {
     return (
       <div className="grid min-h-0 flex-1 place-items-center bg-[#09090b] p-10">
         <div className="max-w-md text-center">
           <div className="mx-auto grid h-20 w-20 place-items-center rounded-full border border-dashed border-cyan-400/30 bg-cyan-400/5 text-3xl text-cyan-300">＋</div>
-          <h2 className="mt-6 text-xl font-medium text-stone-100">上傳一段實拍影片開始</h2>
-          <p className="mt-3 text-sm leading-6 text-stone-500">第一版支援人物保留遮罩、背景圖片替換、逐幀檢查，以及原始解析度遮罩輸出。</p>
+          <h2 className="mt-6 text-xl font-medium text-stone-100">從左側上傳一段實拍影片</h2>
+          <p className="mt-3 text-sm leading-6 text-stone-500">可以用深度影片重建角色與場景，或切換到進階遮罩，保留原演員像素做傳統合成。</p>
         </div>
       </div>
     )
@@ -515,7 +558,7 @@ export const MaskStage = forwardRef<MaskStageHandle, MaskStageProps>(function Ma
         {characterMediaElement}
         <canvas
           ref={displayCanvasRef}
-          aria-label="影片遮罩編輯畫布"
+          aria-label={maskEditingEnabled ? '影片遮罩編輯畫布' : '實拍影片預覽畫布'}
           className="max-h-full max-w-full touch-none rounded-lg border border-white/10 bg-black shadow-2xl"
           style={canvasStyle}
           onPointerDown={handlePointerDown}

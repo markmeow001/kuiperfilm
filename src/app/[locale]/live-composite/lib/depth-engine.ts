@@ -1,7 +1,8 @@
 /**
- * Depth Anything V2 Small（ONNX，Apache-2.0）— 深度淨化引擎。
+ * Depth Anything V2 Small（ONNX，Apache-2.0）— 共用深度估算引擎。
  *
- * 只在關鍵影格 commit 時執行（每段影片 12–45 次推理），絕不逐掃描幀跑。
+ * 傳統遮罩流程只在關鍵影格 commit 時執行；深度重建流程則依固定取樣率
+ * 逐格建立灰階引導影片。兩者共用同一個 lazy session，不重複載入模型。
  * 推理契約（DA-V2 ViT-S）：
  * - 輸入 `pixel_values` [1,3,H,W]，RGB 經 ImageNet mean/std 正規化，
  *   H/W 必須是 14 的倍數（長邊 ≈ 518）。
@@ -122,7 +123,7 @@ export async function negotiateDepthSession(
 
 let enginePromise: Promise<DepthEngine> | null = null
 
-/** 首次啟用深度淨化的掃描才載入模型（lazy），之後快取共用同一 session。 */
+/** 首次使用任一深度功能才載入模型（lazy），之後快取共用同一 session。 */
 export function createDepthSession(): Promise<DepthEngine> {
   enginePromise ??= (async () => {
     const ort = (await import('onnxruntime-web')) as unknown as OnnxModule
