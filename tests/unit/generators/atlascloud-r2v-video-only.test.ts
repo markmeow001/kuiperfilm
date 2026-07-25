@@ -91,6 +91,34 @@ describe('AtlasCloud R2V — reference-video-only', () => {
     expect(body.reference_images).toBeUndefined()
   })
 
+  it('preserves the ordered RGB then Depth reference_videos contract', async () => {
+    const { bodies } = stubFetchCapturing()
+    const generator = new AtlasCloudSeedanceVideoGenerator()
+
+    const result = await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://r2.example.com/images/playground-ref/u/actor.jpg?sig=fake',
+      prompt: 'video 1 controls performance and camera; video 2 controls geometry only',
+      options: {
+        modelId: 'seedance-2.0-r2v',
+        duration: 5.5,
+        aspectRatio: '16:9',
+        resolution: '720p',
+        referenceVideos: [
+          'https://r2.example.com/video/playground-ref/u/rgb.mp4?sig=fake',
+          'https://r2.example.com/video/playground-ref/u/depth.mp4?sig=fake',
+        ],
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(bodies.at(0)?.reference_videos).toEqual([
+      'https://r2.example.com/video/playground-ref/u/rgb.mp4?sig=fake',
+      'https://r2.example.com/video/playground-ref/u/depth.mp4?sig=fake',
+    ])
+    expect(bodies.at(0)?.duration).toBe(5.5)
+  })
+
   it('fails fast with a clear message when NO visual reference (no images, no videos)', async () => {
     stubFetchCapturing()
     const generator = new AtlasCloudSeedanceVideoGenerator()

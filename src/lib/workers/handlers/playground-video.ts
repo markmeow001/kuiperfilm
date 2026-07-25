@@ -36,6 +36,82 @@ import {
 } from '@/lib/playground/seedance-reference-video'
 import { filterAuthorizedStorageReferences } from '@/lib/playground/reference-guard'
 import { isSourceAudioMode } from '@/lib/playground/source-audio-contract'
+import { persistTaskExternalIdOrThrow } from '@/lib/task/service'
+
+const JOB_EXTERNAL_ID_PERSIST_ATTEMPTS = 5
+
+function jobProviderExternalId(job: Job<TaskJobData>): string | null {
+  const value = job.data.providerExternalId?.trim()
+  return value || null
+}
+
+async function persistProviderExternalIdToJob(
+  job: Job<TaskJobData>,
+  externalId: string,
+): Promise<void> {
+  const nextData: TaskJobData = {
+    ...job.data,
+    providerExternalId: externalId,
+  }
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < JOB_EXTERNAL_ID_PERSIST_ATTEMPTS; attempt += 1) {
+    try {
+      await job.updateData(nextData)
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt + 1 < JOB_EXTERNAL_ID_PERSIST_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)))
+      }
+    }
+  }
+  throw new Error('PLAYGROUND_VIDEO_JOB_EXTERNAL_ID_PERSIST_FAILED', {
+    cause: lastError,
+  })
+}
+
+async function persistSubmittedProviderExternalId(
+  job: Job<TaskJobData>,
+  externalId: string,
+): Promise<void> {
+  let jobPersistenceError: unknown = null
+  try {
+    await persistProviderExternalIdToJob(job, externalId)
+  } catch (error) {
+    jobPersistenceError = error
+  }
+
+  try {
+    await persistTaskExternalIdOrThrow(job.data.taskId, externalId)
+  } catch (databaseError) {
+    // If BullMQ persistence succeeded, stop now: the next retry will resume
+    // from job.data and retry the database hand-off without re-submitting.
+    if (!jobPersistenceError) {
+      const retryableError = databaseError instanceof Error
+        ? databaseError
+        : new Error(String(databaseError))
+      const errorWithCode = retryableError as Error & { code?: string }
+      if (!errorWithCode.code) errorWithCode.code = 'WORKER_EXECUTION_ERROR'
+      throw retryableError
+    }
+    throw new Error('PLAYGROUND_VIDEO_EXTERNAL_ID_DURABILITY_FAILED', {
+      cause: databaseError,
+    })
+  }
+
+  // Database persistence is independently durable, so a BullMQ write failure
+  // does not open a duplicate-charge window once the DB write has succeeded.
+  if (jobPersistenceError) {
+    _ulogError(
+      `[playground-video] BullMQ externalId checkpoint failed but DB checkpoint succeeded taskId=${job.data.taskId}`,
+    )
+  }
+}
+import { toFetchableUrl } from '@/lib/cos'
+import {
+  depthRebuildTimesEqual,
+  isDepthRebuildSegmentIdentity,
+} from '@/lib/live-composite/depth-rebuild-server-contract'
 
 function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -50,6 +126,29 @@ function parseStringArray(value: unknown): string[] {
     }
   }
   return []
+}
+
+function parseReferenceVideoWindow(value: unknown): {
+  startSeconds: number
+  durationSeconds: number
+} | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  const startSeconds = record.startSeconds
+  const durationSeconds = record.durationSeconds
+  if (
+    typeof startSeconds !== 'number'
+    || !Number.isFinite(startSeconds)
+    || startSeconds < 0
+    || typeof durationSeconds !== 'number'
+    || !Number.isFinite(durationSeconds)
+    || durationSeconds < 4
+    || durationSeconds > 7.5
+    || startSeconds + durationSeconds > 15
+  ) {
+    return null
+  }
+  return { startSeconds, durationSeconds }
 }
 
 export async function handlePlaygroundVideoTask(
@@ -76,23 +175,38 @@ export async function handlePlaygroundVideoTask(
   const signedLastFrameUrl = lastFrameKey ? (toSignedUrlIfCos(lastFrameKey, 7200) ?? lastFrameKey) : ''
   const signedImageUrls = refImageKeys.map((k) => toSignedUrlIfCos(k, 7200) ?? k)
   const normalizeSeedanceReferenceVideo = payload.normalizeSeedanceReferenceVideo === true
+  const depthRebuildDualGuide = payload.depthRebuildDualGuide === true
+  const referenceVideoWindow = parseReferenceVideoWindow(payload.referenceVideoWindow)
+  const hasDepthRebuildSegmentIdentity = Object.prototype.hasOwnProperty.call(payload, 'workflowId')
+    || Object.prototype.hasOwnProperty.call(payload, 'segmentIndex')
+    || Object.prototype.hasOwnProperty.call(payload, 'segmentCount')
+  const depthRebuildSegmentIdentity = {
+    workflowId: payload.workflowId,
+    segmentIndex: payload.segmentIndex,
+    segmentCount: payload.segmentCount,
+  }
   let signedVideoUrls: string[]
   if (normalizeSeedanceReferenceVideo) {
     if (!isSeedanceReferenceNormalizationModel(modelKey)) {
       throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_MODEL_UNSUPPORTED')
     }
-    if (refVideoKeys.length !== 1) {
-      throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_REQUIRES_ONE_VIDEO')
+    const expectedReferenceCount = depthRebuildDualGuide ? 2 : 1
+    if (refVideoKeys.length !== expectedReferenceCount) {
+      throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_COUNT_INVALID')
     }
     const storageGuard = await filterAuthorizedStorageReferences(refVideoKeys, userId)
-    if (storageGuard.safe.length !== 1 || storageGuard.rejected.length > 0) {
+    if (storageGuard.safe.length !== expectedReferenceCount || storageGuard.rejected.length > 0) {
       throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_NOT_TRUSTED')
     }
     const sourceVideoUrl = toSignedUrlIfCos(storageGuard.safe[0], 7200)
     if (!sourceVideoUrl) {
       throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_SOURCE_URL_INVALID')
     }
-    signedVideoUrls = [sourceVideoUrl]
+    signedVideoUrls = storageGuard.safe.map((key) => {
+      const signedUrl = toSignedUrlIfCos(key, 7200)
+      if (!signedUrl) throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_SOURCE_URL_INVALID')
+      return signedUrl
+    })
   } else {
     signedVideoUrls = refVideoKeys
       .map((key) => toSignedUrlIfCos(key, 7200))
@@ -105,6 +219,22 @@ export async function handlePlaygroundVideoTask(
   const sourceAudioMode = isSourceAudioMode(rawSourceAudioMode)
     ? rawSourceAudioMode
     : null
+  if (depthRebuildDualGuide) {
+    if (
+      sourceAudioMode === null
+      || sourceAudioMode === 'preserve'
+      || !referenceVideoWindow
+      || !isDepthRebuildSegmentIdentity(depthRebuildSegmentIdentity)
+      || duration === null
+      || !depthRebuildTimesEqual(duration, referenceVideoWindow.durationSeconds)
+      || !resolution
+      || !aspectRatio
+    ) {
+      throw new Error('PLAYGROUND_DEPTH_REBUILD_DUAL_GUIDE_CONTRACT_INVALID')
+    }
+  } else if (hasDepthRebuildSegmentIdentity) {
+    throw new Error('PLAYGROUND_DEPTH_REBUILD_SEGMENT_IDENTITY_REQUIRES_DUAL_GUIDE')
+  }
   if (
     sourceAudioMode !== null
     && (
@@ -121,36 +251,68 @@ export async function handlePlaygroundVideoTask(
     || (sourceAudioMode === null && payload.preserveSourceAudio === true)
   const referenceSourceAudio = preserveSourceAudio || sourceAudioMode === 'reference-only'
   const stripFinalAudio = sourceAudioMode === 'reference-only'
-  if ((referenceSourceAudio || sourceAudioMode === 'generate') && signedVideoUrls.length !== 1) {
-    throw new Error('PLAYGROUND_SOURCE_AUDIO_REQUIRES_ONE_REFERENCE_VIDEO')
+  const expectedAudioContractVideoCount = depthRebuildDualGuide ? 2 : 1
+  if (
+    (referenceSourceAudio || sourceAudioMode === 'generate')
+    && signedVideoUrls.length !== expectedAudioContractVideoCount
+  ) {
+    throw new Error('PLAYGROUND_SOURCE_AUDIO_REFERENCE_COUNT_INVALID')
   }
 
   // Queue retries must resume the provider task already paid for. Read this
   // before local normalization/audio extraction so a transient polling
   // failure cannot repeat either preprocessing or generateVideo().
-  const resumeExternalId = await getTaskExistingExternalId(taskId)
+  const resumeJobExternalId = jobProviderExternalId(job)
+  const resumeExternalId = resumeJobExternalId ?? await getTaskExistingExternalId(taskId)
+  if (resumeJobExternalId) {
+    // A previous attempt reached the provider while the DB was unavailable.
+    // Repair the DB checkpoint before doing any preprocessing or polling.
+    await persistTaskExternalIdOrThrow(taskId, resumeJobExternalId)
+  }
   if (normalizeSeedanceReferenceVideo && !resumeExternalId) {
     await reportTaskProgress(job, 8, {
       stage: 'normalize_seedance_reference_video',
-      message: '正在將深度參考影片轉為 Seedance 相容格式',
+      message: depthRebuildDualGuide
+        ? '正在同步裁切 RGB 原片與 Depth，並轉為 Seedance 相容格式'
+        : '正在將參考影片轉為 Seedance 相容格式',
     })
-    const normalized = await normalizeSeedanceReferenceVideoToCos({
-      sourceVideoUrl: signedVideoUrls[0],
+    const normalizedRgb = await normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: toFetchableUrl(signedVideoUrls[0]),
       taskId,
       requireAudio: referenceSourceAudio,
       ...(sourceAudioMode !== null ? { sourceAudioMode } : {}),
+      ...(referenceVideoWindow ? { trim: referenceVideoWindow } : {}),
+      ...(depthRebuildDualGuide ? { outputId: 'rgb' } : {}),
     })
-    if (referenceSourceAudio && !normalized.probe.hasAudio) {
+    if (referenceSourceAudio && !normalizedRgb.probe.hasAudio) {
       throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION')
     }
-    if (sourceAudioMode === 'generate' && normalized.probe.hasAudio) {
+    if (sourceAudioMode === 'generate' && normalizedRgb.probe.hasAudio) {
       throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_PRESENT_AFTER_NORMALIZATION')
     }
-    const normalizedUrl = toSignedUrlIfCos(normalized.cosKey, 7200)
-    if (!normalizedUrl) {
+    const normalizedRgbUrl = toSignedUrlIfCos(normalizedRgb.cosKey, 7200)
+    if (!normalizedRgbUrl) {
       throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_URL_INVALID')
     }
-    signedVideoUrls = [normalizedUrl]
+    if (depthRebuildDualGuide) {
+      const normalizedDepth = await normalizeSeedanceReferenceVideoToCos({
+        sourceVideoUrl: toFetchableUrl(signedVideoUrls[1]),
+        taskId,
+        sourceAudioMode: 'generate',
+        trim: referenceVideoWindow as { startSeconds: number; durationSeconds: number },
+        outputId: 'depth',
+      })
+      if (normalizedDepth.probe.hasAudio) {
+        throw new Error('PLAYGROUND_DEPTH_REFERENCE_AUDIO_TRACK_PRESENT')
+      }
+      const normalizedDepthUrl = toSignedUrlIfCos(normalizedDepth.cosKey, 7200)
+      if (!normalizedDepthUrl) {
+        throw new Error('PLAYGROUND_SEEDANCE_DEPTH_NORMALIZATION_URL_INVALID')
+      }
+      signedVideoUrls = [normalizedRgbUrl, normalizedDepthUrl]
+    } else {
+      signedVideoUrls = [normalizedRgbUrl]
+    }
   }
   let signedReferenceAudioUrl: string | null = null
   if (referenceSourceAudio && !resumeExternalId) {
@@ -265,6 +427,10 @@ export async function handlePlaygroundVideoTask(
       throw new Error(`PLAYGROUND_VIDEO_SUBMIT_FAILED: ${errMsg}`)
     }
     externalId = result.externalId
+    // The provider request is already billable at this point. Persist its id
+    // before entering any polling code so a worker crash/retry resumes the
+    // same request instead of paying for a second submission.
+    await persistSubmittedProviderExternalId(job, externalId)
   }
   if (!externalId) {
     throw new Error('PLAYGROUND_VIDEO_EXTERNAL_ID_REQUIRED')

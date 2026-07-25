@@ -6,6 +6,12 @@ import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import type { Locale } from '@/i18n/routing'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
 import type {
+  CameraDirection,
+  DepthRebuildMotionSettings,
+  FramingCrop,
+  SubjectMotionDirection,
+} from './lib/depth-rebuild-motion-contract'
+import type {
   DepthGuideProgress,
   DepthGuideRecordingResult,
 } from './lib/depth-guide-recorder'
@@ -69,6 +75,8 @@ export interface UseDepthRebuildOptions {
   userId: string
   stageRef: RefObject<DepthGuideStageHandle | null>
   metadata: VideoMetadata | null
+  sourceVideoFile?: File | null
+  sourceVideoStorageKey?: string | null
   videoHasAudio: boolean | null
   locale?: Locale
   workspaceId?: string | null
@@ -93,6 +101,9 @@ export interface UseDepthRebuildResult {
   availableResolutions: readonly string[]
   sourceAudioMode: SourceAudioMode
   sourceAudioDetected: boolean | null
+  motionSettings: DepthRebuildMotionSettings
+  segmentCount: number
+  segmentSummary: string
   prompt: string
   promptIsStale: boolean
   promptValidationError: string | null
@@ -128,6 +139,15 @@ export interface UseDepthRebuildResult {
   setModelKey: (value: TrackBModelKey) => void
   setResolution: (value: string) => void
   setSourceAudioMode: (value: SourceAudioMode) => void
+  setCameraDirection: (value: CameraDirection) => void
+  setFramingCrop: (value: FramingCrop) => void
+  setSubjectDirection: (value: SubjectMotionDirection) => void
+  setSingleTake: (value: boolean) => void
+  setLockFraming: (value: boolean) => void
+  setNoDirectionReversal: (value: boolean) => void
+  setGazeSourceCharacterId: (value: string | null) => void
+  setGazeTargetCharacterId: (value: string | null) => void
+  setInteractionDescription: (value: string) => void
   setPrompt: (value: string) => void
   generateDepthGuide: () => Promise<void>
   cancelDepthGuide: () => void

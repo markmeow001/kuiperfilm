@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   useSubmitPlaygroundRun,
   useUploadPlaygroundReference,
@@ -8,10 +8,7 @@ import {
 } from '@/lib/query/mutations/playground-mutations'
 import { requestJsonWithError } from '@/lib/query/mutations/mutation-shared'
 import { waitForTaskResult } from '@/lib/task/client'
-import {
-  depthRebuildAspectRatio,
-  depthRebuildDurationSeconds,
-} from './lib/depth-rebuild-workflow'
+import { depthRebuildAspectRatio } from './lib/depth-rebuild-workflow'
 import { buildDepthRebuildReferenceMap } from './lib/depth-rebuild-reference-map'
 import {
   clearPendingDepthRebuildGeneration,
@@ -19,8 +16,12 @@ import {
   depthRebuildGenerationStorageKey,
   readPendingDepthRebuildGeneration,
   writePendingDepthRebuildGeneration,
+  type PendingDepthRebuildGeneration,
+  type PendingDepthRebuildSegment,
+  type PendingDepthRebuildUploads,
 } from './lib/depth-rebuild-generation-storage'
 import { formatDepthRebuildTerminalError } from './lib/depth-rebuild-errors'
+import type { DepthRebuildSegmentPlanItem } from './lib/depth-rebuild-segment-plan'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
 import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import type { VideoMetadata } from './live-composite-types'
@@ -35,12 +36,15 @@ import type {
 interface UseDepthRebuildGenerationOptions {
   persistenceScopeKey: string
   metadata: VideoMetadata | null
+  sourceVideoFile: File | null
+  sourceVideoStorageKey: string | null
   sourceAudioMode: SourceAudioMode
   workspaceId: string | null
   depthGuide: LocalDepthGuide | null
   characters: readonly DepthRebuildCharacterReference[]
   sceneReferences: readonly DepthRebuildSceneReference[]
-  prompt: string
+  segmentPlan: readonly DepthRebuildSegmentPlanItem[] | null
+  segmentPrompts: readonly string[]
   modelKey: TrackBModelKey
   resolution: string
   validationError: string | null
@@ -49,6 +53,21 @@ interface UseDepthRebuildGenerationOptions {
 
 interface RunDetailResponse {
   run?: PlaygroundRunRow | null
+}
+
+interface CompletedSegmentResult extends DepthRebuildResult {
+  tailFrameUrl: string | null
+}
+
+interface FinalizeResponse {
+  runId: string
+  resultKey: string
+  url: string
+}
+
+interface SignedFinalResultResponse {
+  resultKey: string
+  url: string
 }
 
 class SubmittedRunTerminalError extends Error {
@@ -76,10 +95,19 @@ function createClientRequestKey(): string {
   return crypto.randomUUID()
 }
 
+function latestRunId(pending: PendingDepthRebuildGeneration | null): string | null {
+  if (!pending) return null
+  for (let index = pending.segments.length - 1; index >= 0; index -= 1) {
+    const runId = pending.segments[index]?.runId
+    if (runId) return runId
+  }
+  return null
+}
+
 function resolveRunDetail(
   detail: RunDetailResponse,
   runId: string,
-): DepthRebuildResult | null {
+): CompletedSegmentResult | null {
   const run = detail.run
   if (!run) {
     throw new SubmittedRunTerminalError(
@@ -96,18 +124,25 @@ function resolveRunDetail(
   if (!resultUrl) {
     throw new Error('重建任務已完成，但結果影片尚未可用；請稍後恢復同一任務')
   }
-  return { runId, url: resultUrl }
+  return {
+    runId,
+    url: resultUrl,
+    tailFrameUrl: run.tailFrameUrl ?? null,
+  }
 }
 
 export function useDepthRebuildGeneration({
   persistenceScopeKey,
   metadata,
+  sourceVideoFile,
+  sourceVideoStorageKey,
   sourceAudioMode,
   workspaceId,
   depthGuide,
   characters,
   sceneReferences,
-  prompt,
+  segmentPlan,
+  segmentPrompts,
   modelKey,
   resolution,
   validationError,
@@ -119,43 +154,111 @@ export function useDepthRebuildGeneration({
   ))
   const upload = useUploadPlaygroundReference()
   const submit = useSubmitPlaygroundRun()
-  const [generationStatus, setGenerationStatus] = useState<DepthRebuildGenerationStatus>('idle')
-  const [generationProgress, setGenerationProgress] = useState<number | null>(null)
+  const [generationStatus, setGenerationStatus] = useState<DepthRebuildGenerationStatus>(
+    initialPending?.finalResult ? 'generating' : 'idle',
+  )
+  const [generationProgress, setGenerationProgress] = useState<number | null>(
+    initialPending?.finalResult ? 99 : null,
+  )
   const [result, setResult] = useState<DepthRebuildResult | null>(null)
   const [submittedRunId, setSubmittedRunId] = useState<string | null>(
-    initialPending?.runId ?? null,
+    latestRunId(initialPending),
   )
   const [terminalFailure, setTerminalFailure] = useState(false)
   const inFlightRef = useRef(false)
-  const submittedRunIdRef = useRef<string | null>(initialPending?.runId ?? null)
-  const clientRequestKeyRef = useRef<string | null>(initialPending?.requestKey ?? null)
+  const pendingRef = useRef<PendingDepthRebuildGeneration | null>(initialPending)
   const persistenceStorageKeyRef = useRef(persistenceStorageKey)
   const activeAbortControllerRef = useRef<AbortController | null>(null)
+  const resultRefreshAbortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => () => {
     activeAbortControllerRef.current?.abort()
+    resultRefreshAbortControllerRef.current?.abort()
   }, [])
 
   useEffect(() => {
     if (persistenceStorageKeyRef.current === persistenceStorageKey) return
     activeAbortControllerRef.current?.abort()
     activeAbortControllerRef.current = null
+    resultRefreshAbortControllerRef.current?.abort()
+    resultRefreshAbortControllerRef.current = null
     const pending = readPendingDepthRebuildGeneration(persistenceStorageKey)
     persistenceStorageKeyRef.current = persistenceStorageKey
-    submittedRunIdRef.current = pending?.runId ?? null
-    clientRequestKeyRef.current = pending?.requestKey ?? null
-    setSubmittedRunId(pending?.runId ?? null)
+    pendingRef.current = pending
+    setSubmittedRunId(latestRunId(pending))
     setTerminalFailure(false)
     setResult(null)
-    setGenerationProgress(null)
-    setGenerationStatus('idle')
+    setGenerationProgress(pending?.finalResult ? 99 : null)
+    setGenerationStatus(pending?.finalResult ? 'generating' : 'idle')
   }, [persistenceStorageKey])
+
+  const persistPending = useCallback((pending: PendingDepthRebuildGeneration): void => {
+    const stored = writePendingDepthRebuildGeneration(
+      persistenceStorageKeyRef.current,
+      pending,
+    )
+    if (!stored) throw new Error(DEPTH_REBUILD_STORAGE_REQUIRED_MESSAGE)
+    pendingRef.current = pending
+  }, [])
+
+  const refreshFinalResultUrl = useCallback(async (
+    pending: PendingDepthRebuildGeneration,
+    signal: AbortSignal,
+  ): Promise<DepthRebuildResult> => {
+    const stored = pending.finalResult
+    if (!stored) throw new Error('找不到已完成的深度重建結果紀錄')
+    const params = new URLSearchParams({ resultKey: stored.resultKey })
+    const refreshed = await requestJsonWithError<SignedFinalResultResponse>(
+      `/api/live-composite/depth-rebuild/finalize?${params.toString()}`,
+      { method: 'GET', cache: 'no-store', signal },
+      '深度重建已完成，但無法更新結果影片網址',
+    )
+    throwIfAborted(signal)
+    if (refreshed.resultKey !== stored.resultKey) {
+      throw new Error('伺服器回傳的深度重建結果與已保存紀錄不一致')
+    }
+    const finalResult = { ...stored, url: refreshed.url }
+    persistPending({ ...pending, finalResult })
+    return { runId: finalResult.runId, url: finalResult.url }
+  }, [persistPending])
+
+  useEffect(() => {
+    const pending = pendingRef.current
+    if (!pending?.finalResult) return
+    const abortController = new AbortController()
+    resultRefreshAbortControllerRef.current = abortController
+    setGenerationStatus('generating')
+    setGenerationProgress(99)
+    void refreshFinalResultUrl(pending, abortController.signal)
+      .then((refreshed) => {
+        setResult(refreshed)
+        setGenerationStatus('succeeded')
+        setGenerationProgress(100)
+        setTerminalFailure(false)
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught)) return
+        setGenerationStatus('failed')
+        setGenerationProgress(null)
+        setTerminalFailure(false)
+        onError(caught instanceof Error
+          ? caught.message
+          : '深度重建已完成，但無法更新結果影片網址')
+      })
+      .finally(() => {
+        if (resultRefreshAbortControllerRef.current === abortController) {
+          resultRefreshAbortControllerRef.current = null
+        }
+      })
+    return () => abortController.abort()
+  }, [onError, persistenceStorageKey, refreshFinalResultUrl])
 
   function resetResult(): void {
     activeAbortControllerRef.current?.abort()
     activeAbortControllerRef.current = null
-    submittedRunIdRef.current = null
-    clientRequestKeyRef.current = null
+    resultRefreshAbortControllerRef.current?.abort()
+    resultRefreshAbortControllerRef.current = null
+    pendingRef.current = null
     clearPendingDepthRebuildGeneration(persistenceStorageKeyRef.current)
     setSubmittedRunId(null)
     setTerminalFailure(false)
@@ -179,7 +282,9 @@ export function useDepthRebuildGeneration({
     runId: string,
     signal: AbortSignal,
     preflight: boolean,
-  ): Promise<DepthRebuildResult> {
+    segmentIndex: number,
+    segmentCount: number,
+  ): Promise<CompletedSegmentResult> {
     if (preflight) {
       const existing = resolveRunDetail(await fetchRunDetail(runId, signal), runId)
       if (existing) return existing
@@ -191,7 +296,10 @@ export function useDepthRebuildGeneration({
         timeoutMs: 30 * 60 * 1000,
         signal,
         onTaskUpdate: (task) => {
-          setGenerationProgress(typeof task.progress === 'number' ? task.progress : null)
+          if (typeof task.progress !== 'number') return
+          setGenerationProgress(
+            Math.min(99, ((segmentIndex * 100) + task.progress) / segmentCount),
+          )
         },
       })
     } catch (pollError) {
@@ -214,6 +322,111 @@ export function useDepthRebuildGeneration({
     return completed
   }
 
+  function createPendingWorkflow(): PendingDepthRebuildGeneration {
+    if (!metadata || !segmentPlan || segmentPlan.length === 0) {
+      throw new Error('RGB＋Depth 分段計畫尚未建立')
+    }
+    if (segmentPrompts.length !== segmentPlan.length) {
+      throw new Error('RGB＋Depth 分段 Prompt 與送出計畫不一致，請重新建立 Prompt')
+    }
+    const pending: PendingDepthRebuildGeneration = {
+      workflowId: createClientRequestKey(),
+      segments: segmentPlan.map(() => ({ requestKey: createClientRequestKey() })),
+      submission: {
+        segmentPrompts: [...segmentPrompts],
+        segmentWindows: segmentPlan.map((segment) => ({
+          startSeconds: segment.sourceStart,
+          durationSeconds: segment.outputDuration,
+        })),
+        modelKey,
+        resolution,
+        aspectRatio: depthRebuildAspectRatio(metadata.width, metadata.height),
+        sourceAudioMode,
+        ...(workspaceId ? { workspaceId } : {}),
+      },
+    }
+    persistPending(pending)
+    return pending
+  }
+
+  async function ensureUploads(
+    pending: PendingDepthRebuildGeneration,
+    signal: AbortSignal,
+  ): Promise<PendingDepthRebuildUploads> {
+    if (pending.uploads) return pending.uploads
+    const referenceMap = buildDepthRebuildReferenceMap(characters, sceneReferences)
+    if (!depthGuide || referenceMap.ordered.length === 0) {
+      throw new Error('本機素材尚未完整上傳；請清除舊任務並重新建立')
+    }
+    if (!sourceVideoStorageKey && !sourceVideoFile) {
+      throw new Error('找不到可信的原始 RGB 影片；請清除舊任務並重新上傳原片')
+    }
+
+    setGenerationStatus('uploading')
+    const sourceUpload = sourceVideoStorageKey
+      ? Promise.resolve({ key: sourceVideoStorageKey })
+      : upload.mutateAsync({
+        file: sourceVideoFile as File,
+        type: 'video',
+        signal,
+      })
+    const [uploadedSource, uploadedDepth, ...uploadedImages] = await Promise.all([
+      sourceUpload,
+      upload.mutateAsync({
+        file: depthGuide.file,
+        type: 'video',
+        signal,
+      }),
+      ...referenceMap.ordered.map((reference) => upload.mutateAsync({
+        file: reference.image.file,
+        type: 'image',
+        signal,
+      })),
+    ])
+    throwIfAborted(signal)
+    const uploads: PendingDepthRebuildUploads = {
+      sourceVideoKey: uploadedSource.key,
+      depthVideoKey: uploadedDepth.key,
+      imageKeys: uploadedImages.map((image) => image.key),
+      imageNames: referenceMap.ordered.map((reference) => reference.name),
+    }
+    persistPending({ ...pending, uploads })
+    return uploads
+  }
+
+  async function finalizeWorkflow(
+    pending: PendingDepthRebuildGeneration,
+    uploads: PendingDepthRebuildUploads,
+    signal: AbortSignal,
+  ): Promise<DepthRebuildResult> {
+    const segmentRunIds = pending.segments.map((segment) => segment.runId)
+    if (segmentRunIds.some((runId) => !runId)) {
+      throw new Error('RGB＋Depth 分段任務尚未全部完成，不能合併')
+    }
+    const finalized = await requestJsonWithError<FinalizeResponse>(
+      '/api/live-composite/depth-rebuild/finalize',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workflowId: pending.workflowId,
+          segmentRunIds,
+          sourceVideoKey: uploads.sourceVideoKey,
+          sourceAudioMode: pending.submission.sourceAudioMode,
+        }),
+        signal,
+      },
+      '分段影片已完成，但最終合併失敗',
+    )
+    const finalResult = {
+      runId: finalized.runId,
+      resultKey: finalized.resultKey,
+      url: finalized.url,
+    }
+    persistPending({ ...pending, uploads, finalResult })
+    return { runId: finalResult.runId, url: finalResult.url }
+  }
+
   async function generate(): Promise<DepthRebuildResult | null> {
     if (inFlightRef.current) {
       onError('已有一個深度重建任務正在送出或生成，請勿重複提交')
@@ -226,92 +439,107 @@ export function useDepthRebuildGeneration({
     const abortController = new AbortController()
     activeAbortControllerRef.current = abortController
     try {
-      const existingRunId = submittedRunIdRef.current
-      if (existingRunId) {
+      let pending = pendingRef.current
+      if (pending?.finalResult) {
         setGenerationStatus('generating')
-        const resumedResult = await waitForSubmittedRun(
-          existingRunId,
-          abortController.signal,
-          true,
-        )
-        setResult(resumedResult)
+        setGenerationProgress(99)
+        const refreshed = await refreshFinalResultUrl(pending, abortController.signal)
+        setResult(refreshed)
         setGenerationProgress(100)
         setGenerationStatus('succeeded')
-        setTerminalFailure(false)
-        return resumedResult
+        return refreshed
       }
-
-      if (validationError) {
+      if (!pending && validationError) {
         onError(validationError)
         setGenerationStatus('failed')
         return null
       }
-      const referenceMap = buildDepthRebuildReferenceMap(characters, sceneReferences)
-      if (!metadata || !depthGuide || referenceMap.ordered.length === 0) {
-        onError('深度重建設定不完整')
-        setGenerationStatus('failed')
-        return null
-      }
+      pending ??= createPendingWorkflow()
+      const uploads = await ensureUploads(pending, abortController.signal)
+      pending = pendingRef.current ?? { ...pending, uploads }
 
-      const clientRequestKey =
-        clientRequestKeyRef.current ?? createClientRequestKey()
-      if (!clientRequestKeyRef.current) {
-        const stored = writePendingDepthRebuildGeneration(
-          persistenceStorageKeyRef.current,
-          { requestKey: clientRequestKey },
+      let previousSegment: CompletedSegmentResult | null = null
+      for (let index = 0; index < pending.segments.length; index += 1) {
+        throwIfAborted(abortController.signal)
+        const segment: PendingDepthRebuildSegment | undefined = pending.segments[index]
+        const window = pending.submission.segmentWindows[index]
+        const segmentPrompt = pending.submission.segmentPrompts[index]
+        if (!segment || !window || !segmentPrompt) {
+          throw new Error(`第 ${index + 1} 段的已保存送出設定不完整；請清除後重新建立`)
+        }
+
+        let runId: string | undefined = segment.runId
+        if (!runId) {
+          if (index > 0 && !previousSegment?.tailFrameUrl) {
+            throw new Error(
+              `第 ${index} 段已完成，但沒有可用尾幀；為避免付費生成錯位，已停止送出下一段`,
+            )
+          }
+          setGenerationStatus('submitting')
+          const submitted = await submit.mutateAsync({
+            prompt: segmentPrompt,
+            referenceVideos: [uploads.sourceVideoKey, uploads.depthVideoKey],
+            referenceImages: [
+              ...uploads.imageKeys,
+              ...(previousSegment?.tailFrameUrl ? [previousSegment.tailFrameUrl] : []),
+            ],
+            referenceImageNames: [
+              ...uploads.imageNames,
+              ...(previousSegment?.tailFrameUrl ? ['前段末幀連續性參考'] : []),
+            ],
+            outputType: 'video',
+            modelKey: pending.submission.modelKey,
+            resolution: pending.submission.resolution,
+            normalizeSeedanceReferenceVideo: true,
+            depthRebuildDualGuide: true,
+            referenceVideoWindow: window,
+            workflowId: pending.workflowId,
+            segmentIndex: index,
+            segmentCount: pending.segments.length,
+            aspectRatio: pending.submission.aspectRatio,
+            durationSec: window.durationSeconds,
+            sourceAudioMode: pending.submission.sourceAudioMode === 'preserve'
+              ? 'reference-only'
+              : pending.submission.sourceAudioMode,
+            ...(pending.submission.workspaceId
+              ? { workspaceId: pending.submission.workspaceId }
+              : {}),
+            idempotencyKey: segment.requestKey,
+            signal: abortController.signal,
+          })
+          runId = submitted.run.id
+          pending = {
+            ...pending,
+            segments: pending.segments.map((
+              entry: PendingDepthRebuildSegment,
+              segmentIndex: number,
+            ): PendingDepthRebuildSegment => (
+              segmentIndex === index ? { ...entry, runId } : entry
+            )),
+          }
+          persistPending(pending)
+          setSubmittedRunId(runId)
+        } else {
+          setSubmittedRunId(runId)
+        }
+
+        setTerminalFailure(false)
+        setGenerationStatus('generating')
+        previousSegment = await waitForSubmittedRun(
+          runId,
+          abortController.signal,
+          Boolean(segment.runId),
+          index,
+          pending.segments.length,
         )
-        if (!stored) throw new Error(DEPTH_REBUILD_STORAGE_REQUIRED_MESSAGE)
-        clientRequestKeyRef.current = clientRequestKey
       }
 
-      setGenerationStatus('uploading')
-      const [uploadedDepth, ...uploadedImages] = await Promise.all([
-        upload.mutateAsync({
-          file: depthGuide.file,
-          type: 'video',
-          signal: abortController.signal,
-        }),
-        ...referenceMap.ordered.map((reference) => upload.mutateAsync({
-          file: reference.image.file,
-          type: 'image',
-          signal: abortController.signal,
-        })),
-      ])
-      throwIfAborted(abortController.signal)
-      setGenerationStatus('submitting')
-      const submitted = await submit.mutateAsync({
-        prompt,
-        referenceVideos: [uploadedDepth.key],
-        referenceImages: uploadedImages.map((image) => image.key),
-        referenceImageNames: referenceMap.ordered.map((reference) => reference.name),
-        outputType: 'video',
-        modelKey,
-        resolution,
-        normalizeSeedanceReferenceVideo: true,
-        aspectRatio: depthRebuildAspectRatio(metadata.width, metadata.height),
-        durationSec: depthRebuildDurationSeconds(metadata.duration),
-        sourceAudioMode,
-        ...(workspaceId ? { workspaceId } : {}),
-        idempotencyKey: clientRequestKey,
-        signal: abortController.signal,
-      })
-      const nextRunId = submitted.run.id
-      submittedRunIdRef.current = nextRunId
-      writePendingDepthRebuildGeneration(
-        persistenceStorageKeyRef.current,
-        { requestKey: clientRequestKey, runId: nextRunId },
-      )
-      setSubmittedRunId(nextRunId)
-      setTerminalFailure(false)
       setGenerationStatus('generating')
-      const nextResult = await waitForSubmittedRun(
-        nextRunId,
-        abortController.signal,
-        false,
-      )
+      const nextResult = await finalizeWorkflow(pending, uploads, abortController.signal)
       setResult(nextResult)
       setGenerationProgress(100)
       setGenerationStatus('succeeded')
+      setTerminalFailure(false)
       return nextResult
     } catch (caught) {
       if (isAbortError(caught)) return null
@@ -328,15 +556,16 @@ export function useDepthRebuildGeneration({
   }
 
   const generationBusy =
-    generationStatus === 'uploading' ||
-    generationStatus === 'submitting' ||
-    generationStatus === 'generating'
+    generationStatus === 'uploading'
+    || generationStatus === 'submitting'
+    || generationStatus === 'generating'
+  const hasPendingWorkflow = pendingRef.current !== null
 
   return {
     generationStatus,
     generationProgress,
     submittedRunId,
-    canResume: Boolean(submittedRunId && !result && !terminalFailure && !generationBusy),
+    canResume: Boolean(hasPendingWorkflow && !result && !terminalFailure && !generationBusy),
     result,
     generationBusy,
     generate,

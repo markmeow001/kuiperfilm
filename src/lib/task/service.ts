@@ -494,6 +494,39 @@ export async function trySetTaskExternalId(taskId: string | undefined | null, ex
   return result.count > 0
 }
 
+/**
+ * Durable provider hand-off for paid asynchronous tasks.
+ *
+ * Once a provider has accepted a request, losing its external id opens a
+ * duplicate-charge window on queue retry. This helper therefore retries
+ * transient database failures and only returns after the exact id is known to
+ * be stored. A false conditional update is accepted only when another worker
+ * already persisted the same id; every other outcome fails loudly.
+ */
+export async function persistTaskExternalIdOrThrow(
+  taskId: string | undefined | null,
+  externalId: string,
+): Promise<void> {
+  const value = typeof externalId === 'string' ? externalId.trim() : ''
+  if (!taskId || !value) {
+    throw new Error('TASK_EXTERNAL_ID_PERSIST_INPUT_INVALID')
+  }
+
+  const stored = await withPrismaRetry(
+    () => trySetTaskExternalId(taskId, value),
+    { maxRetries: 4, initialDelayMs: 100 },
+  )
+  if (stored) return
+
+  const current = await withPrismaRetry(() => taskModel.findUnique({
+    where: { id: taskId },
+    select: { externalId: true },
+  }), { maxRetries: 4, initialDelayMs: 100 })
+  if (current?.externalId?.trim() === value) return
+
+  throw new Error('TASK_EXTERNAL_ID_PERSIST_FAILED')
+}
+
 export async function touchTaskHeartbeat(taskId: string | undefined | null) {
   if (!taskId) return false
   const result = await taskModel.updateMany({

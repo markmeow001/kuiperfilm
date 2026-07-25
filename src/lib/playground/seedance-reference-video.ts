@@ -65,11 +65,46 @@ const MAX_FPS = 60
 const MIN_DURATION_SEC = 2
 const MAX_DURATION_SEC = 15
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+const MIN_TRIM_DURATION_SEC = 4
+const MAX_OUTPUT_ID_LENGTH = 64
+const TRIM_DURATION_TOLERANCE_SEC = 0.125
+
+export interface SeedanceReferenceVideoTrim {
+  startSeconds: number
+  durationSeconds: number
+}
 
 export function isSeedanceReferenceNormalizationModel(
   modelKey: string,
 ): modelKey is SeedanceReferenceNormalizationModelKey {
   return SEEDANCE_REFERENCE_NORMALIZATION_MODEL_KEYS.some((allowed) => allowed === modelKey)
+}
+
+function assertSeedanceReferenceOutputId(outputId: string): void {
+  const isSafe = outputId.length <= MAX_OUTPUT_ID_LENGTH
+    && /^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?$/.test(outputId)
+  if (!isSafe) {
+    throw new Error('SEEDANCE_REFERENCE_OUTPUT_ID_INVALID')
+  }
+}
+
+export function assertSeedanceReferenceVideoTrim(
+  trim: SeedanceReferenceVideoTrim,
+): void {
+  if (!Number.isFinite(trim.startSeconds) || trim.startSeconds < 0) {
+    throw new Error('SEEDANCE_REFERENCE_TRIM_START_INVALID')
+  }
+  if (
+    !Number.isFinite(trim.durationSeconds)
+    || trim.durationSeconds < MIN_TRIM_DURATION_SEC
+    || trim.durationSeconds > MAX_DURATION_SEC
+  ) {
+    throw new Error('SEEDANCE_REFERENCE_TRIM_DURATION_INVALID')
+  }
+  const endSeconds = trim.startSeconds + trim.durationSeconds
+  if (!Number.isFinite(endSeconds) || endSeconds > MAX_DURATION_SEC) {
+    throw new Error('SEEDANCE_REFERENCE_TRIM_RANGE_OUT_OF_RANGE')
+  }
 }
 
 function parseFiniteNumber(value: unknown, fieldName: string): number {
@@ -206,24 +241,40 @@ export function buildSeedanceReferenceFfmpegArgs(input: {
   sourceWidth: number
   sourceHeight: number
   includeAudio?: boolean
+  trim?: SeedanceReferenceVideoTrim
 }): string[] {
   if (input.sourceWidth <= 0 || input.sourceHeight <= 0) {
     throw new Error('SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID')
   }
+  if (input.trim) assertSeedanceReferenceVideoTrim(input.trim)
   const scale = input.sourceWidth >= input.sourceHeight ? '-2:720' : '720:-2'
   const audioMapArgs = input.includeAudio === false ? [] : ['-map', '0:a:0?']
   const audioCodecArgs = input.includeAudio === false
     ? ['-an']
     : ['-c:a', 'aac', '-b:a', '192k', '-ar', '48000']
+  const trimArgs = input.trim
+    ? ['-ss', String(input.trim.startSeconds), '-t', String(input.trim.durationSeconds)]
+    : []
+  const videoFilter = input.trim
+    ? `fps=24,scale=${scale},setpts=PTS-STARTPTS`
+    : `fps=24,scale=${scale}`
+  const audioTimestampArgs = input.trim && input.includeAudio !== false
+    ? ['-af', 'asetpts=PTS-STARTPTS']
+    : []
+  const outputTimestampArgs = input.trim
+    ? ['-avoid_negative_ts', 'make_zero']
+    : ['-t', String(MAX_DURATION_SEC)]
   return [
     '-y', '-hide_banner', '-loglevel', 'error',
     '-i', input.sourceVideoUrl,
+    ...trimArgs,
     '-map', '0:v:0', ...audioMapArgs,
-    '-vf', `fps=24,scale=${scale}`,
+    '-vf', videoFilter,
     '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
     '-preset', 'medium', '-crf', '20',
     ...audioCodecArgs,
-    '-t', String(MAX_DURATION_SEC),
+    ...audioTimestampArgs,
+    ...outputTimestampArgs,
     '-movflags', '+faststart',
     input.outputPath,
   ]
@@ -284,10 +335,16 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
   taskId: string
   requireAudio?: boolean
   sourceAudioMode?: SourceAudioMode
+  trim?: SeedanceReferenceVideoTrim
+  outputId?: string
 }): Promise<{
   cosKey: string
   probe: SeedanceReferenceVideoProbe
 }> {
+  if (input.outputId !== undefined) {
+    assertSeedanceReferenceOutputId(input.outputId)
+  }
+  if (input.trim) assertSeedanceReferenceVideoTrim(input.trim)
   if (input.sourceAudioMode === 'generate' && input.requireAudio === true) {
     throw new Error('PLAYGROUND_SOURCE_AUDIO_MODE_NORMALIZATION_CONFLICT')
   }
@@ -296,8 +353,19 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
     || input.sourceAudioMode === 'preserve'
     || input.sourceAudioMode === 'reference-only'
   const sourceProbe = await probeReferenceVideoSource(input.sourceVideoUrl)
+  if (
+    input.trim
+    && sourceProbe.durationSec !== null
+    && input.trim.startSeconds + input.trim.durationSeconds
+      > sourceProbe.durationSec + TRIM_DURATION_TOLERANCE_SEC
+  ) {
+    throw new Error('SEEDANCE_REFERENCE_TRIM_EXCEEDS_SOURCE_DURATION')
+  }
   const dir = await mkdtemp(path.join(tmpdir(), 'seedance-reference-video-'))
-  const outputPath = path.join(dir, 'reference.mp4')
+  const outputPath = path.join(
+    dir,
+    input.outputId ? `reference-${input.outputId}.mp4` : 'reference.mp4',
+  )
   try {
     await execFileAsync(
       'ffmpeg',
@@ -307,11 +375,19 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
         sourceWidth: sourceProbe.width,
         sourceHeight: sourceProbe.height,
         includeAudio,
+        trim: input.trim,
       }),
       { timeout: MEDIA_TOOL_TIMEOUT_MS, maxBuffer: MEDIA_TOOL_MAX_BUFFER },
     )
     const normalizedProbe = await probeReferenceVideo(outputPath)
     assertAtlasCloudSeedanceReferenceVideo(normalizedProbe)
+    if (
+      input.trim
+      && Math.abs(normalizedProbe.durationSec - input.trim.durationSeconds)
+        > TRIM_DURATION_TOLERANCE_SEC
+    ) {
+      throw new Error('SEEDANCE_REFERENCE_TRIM_DURATION_MISMATCH')
+    }
     if (requireAudio && !normalizedProbe.hasAudio) {
       throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION')
     }
@@ -326,7 +402,7 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
     const cosKey = await uploadVideoSourceToCos(
       video,
       'playground-runs/seedance-reference',
-      input.taskId,
+      input.outputId ? `${input.taskId}-${input.outputId}` : input.taskId,
     )
     return { cosKey, probe: normalizedProbe }
   } finally {

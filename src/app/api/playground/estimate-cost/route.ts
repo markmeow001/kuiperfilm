@@ -47,9 +47,11 @@ export const GET = apiHandler(async (request: NextRequest) => {
   const modelKey = searchParams.get('modelKey') || ''
   const outputType = (searchParams.get('outputType') || 'image') as 'image' | 'video'
   const durationParam = searchParams.get('durationSec')
-  const durationSec = durationParam ? Number.parseInt(durationParam, 10) : undefined
+  const durationSec = durationParam ? Number(durationParam) : undefined
   const resolution = searchParams.get('resolution') || undefined
   const generationMode = searchParams.get('generationMode') || undefined
+  const countParam = searchParams.get('count')
+  const count = countParam ? Number.parseInt(countParam, 10) : 1
 
   const parsed = parseModelKey(modelKey)
   if (!parsed) {
@@ -61,17 +63,21 @@ export const GET = apiHandler(async (request: NextRequest) => {
     const empty: EstimateResult = { amountUsd: null, unit: 'unknown', detail: 'invalid outputType' }
     return NextResponse.json(empty)
   }
+  if (!Number.isFinite(count) || count < 1 || count > 4) {
+    const empty: EstimateResult = { amountUsd: null, unit: 'unknown', detail: 'invalid count' }
+    return NextResponse.json(empty)
+  }
 
   // Both preview and billing freeze call the MONEY layer. Keeping all catalog
   // resolution, capability matching and markup here prevents the image and
   // video UI estimates from drifting away from the amount actually frozen.
   try {
     const amountUsd = outputType === 'video'
-      ? calcVideo(parsed.modelId, resolution || '720p', 1, {
+      ? calcVideo(parsed.modelId, resolution || '720p', count, {
         ...(typeof durationSec === 'number' && durationSec > 0 ? { duration: durationSec } : {}),
         ...(generationMode ? { generationMode } : {}),
       })
-      : calcImage(parsed.modelId, 1, resolution ? { resolution } : undefined)
+      : calcImage(parsed.modelId, count, resolution ? { resolution } : undefined)
     const result: EstimateResult = {
       amountUsd,
       unit: 'capability',

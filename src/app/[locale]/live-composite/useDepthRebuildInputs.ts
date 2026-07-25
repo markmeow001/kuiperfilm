@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DepthGuideRecordingCancelledError, type DepthGuideProgress } from './lib/depth-guide-recorder'
 import { depthRebuildDurationSeconds } from './lib/depth-rebuild-workflow'
-import { MAX_REFERENCE_IMAGES } from './lib/atlascloud-r2v-contract'
 import {
   createDepthReferenceImage,
   revokeDepthReferenceImage,
@@ -22,6 +21,7 @@ interface UseDepthRebuildInputsOptions {
   stageRef: RefObject<DepthGuideStageHandle | null>
   metadata: VideoMetadata | null
   videoHasAudio: boolean | null
+  maxReferenceImages: number
   onError: (message: string | null) => void
 }
 
@@ -48,6 +48,7 @@ export function useDepthRebuildInputs({
   stageRef,
   metadata,
   videoHasAudio,
+  maxReferenceImages,
   onError,
 }: UseDepthRebuildInputsOptions) {
   const [depthGuide, setDepthGuide] = useState<LocalDepthGuide | null>(null)
@@ -112,8 +113,8 @@ export function useDepthRebuildInputs({
   }
 
   function addCharacter(): void {
-    if (currentAllocatedSlotCount() >= MAX_REFERENCE_IMAGES) {
-      onError(`人物與場景共用 ${MAX_REFERENCE_IMAGES} 個參考位置；請先移除一張場景圖或一位角色`)
+    if (currentAllocatedSlotCount() >= maxReferenceImages) {
+      onError(`人物與場景共用 ${maxReferenceImages} 個參考位置；請先移除一張場景圖或一位角色`)
       return
     }
     const ordinal = nextCharacterOrdinalRef.current
@@ -146,8 +147,8 @@ export function useDepthRebuildInputs({
   function selectCharacterImage(characterId: string, file: File): void {
     const current = charactersRef.current.find((character) => character.id === characterId)
     if (!current) return
-    if (!current.image && currentReferenceCount() >= MAX_REFERENCE_IMAGES) {
-      onError(`人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`)
+    if (!current.image && currentReferenceCount() >= maxReferenceImages) {
+      onError(`人物與場景參考圖片合計最多 ${maxReferenceImages} 張`)
       return
     }
     onError(null)
@@ -181,12 +182,12 @@ export function useDepthRebuildInputs({
     // Every character card reserves one image slot even before its required
     // portrait is uploaded. This prevents a user from filling all nine slots
     // with scenes and getting stuck with an unfillable required character.
-    const remaining = MAX_REFERENCE_IMAGES - currentAllocatedSlotCount()
+    const remaining = maxReferenceImages - currentAllocatedSlotCount()
     if (files.length > remaining) {
       onError(
         remaining > 0
-          ? `人物與場景合計最多 ${MAX_REFERENCE_IMAGES} 張；已替角色保留位置，目前還能加入 ${remaining} 張場景圖`
-          : `Seedance 的 ${MAX_REFERENCE_IMAGES} 個參考位置已分配完畢`,
+          ? `人物與場景合計最多 ${maxReferenceImages} 張；已替角色保留位置，目前還能加入 ${remaining} 張場景圖`
+          : `Seedance 的 ${maxReferenceImages} 個參考位置已分配完畢`,
       )
       return
     }

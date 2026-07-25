@@ -8,6 +8,8 @@ import {
   type TrackBModelKey,
 } from './atlascloud-r2v-contract'
 import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
+import type { DepthRebuildMotionSettings } from './depth-rebuild-motion-contract'
+import { buildDepthRebuildSegmentPlan } from './depth-rebuild-segment-plan'
 
 export interface DepthRebuildAssetFingerprint {
   name: string
@@ -37,10 +39,12 @@ export interface DepthRebuildFingerprintInput {
   modelKey: string
   resolution: string
   sourceAudioMode: SourceAudioMode
+  motionSettings: DepthRebuildMotionSettings
 }
 
 export interface DepthRebuildValidationInput {
   sourceDurationSeconds: number | null
+  sourceVideoAvailable?: boolean
   depthGuideExists: boolean
   depthGuideSufficient: boolean
   characters: ReadonlyArray<{
@@ -50,6 +54,7 @@ export interface DepthRebuildValidationInput {
     imageExists: boolean
   }>
   sceneReferenceCount: number
+  reservedReferenceImageCount?: number
   sceneDescription: string
   modelKey: string
   resolution: string
@@ -57,6 +62,7 @@ export interface DepthRebuildValidationInput {
   sourceAudioMode: SourceAudioMode
   sourceAudioDetected: boolean | null
   prompt: string
+  segmentPromptCount?: number
   promptIsFresh: boolean
 }
 
@@ -64,6 +70,7 @@ export interface DepthRebuildPromptValidationInput {
   sourceDurationSeconds: number | null
   characters: DepthRebuildValidationInput['characters']
   sceneReferenceCount: number
+  reservedReferenceImageCount?: number
   sceneDescription: string
 }
 
@@ -98,6 +105,7 @@ export function buildDepthRebuildFingerprint(input: DepthRebuildFingerprintInput
     modelKey: input.modelKey,
     resolution: input.resolution,
     sourceAudioMode: input.sourceAudioMode,
+    motionSettings: input.motionSettings,
   })
 }
 
@@ -161,12 +169,16 @@ function getSourceDurationValidationError(sourceDurationSeconds: number | null):
 function getReferenceSetupValidationError(
   input: Pick<
     DepthRebuildPromptValidationInput,
-    'characters' | 'sceneReferenceCount' | 'sceneDescription'
+    'characters' | 'sceneReferenceCount' | 'sceneDescription' | 'reservedReferenceImageCount'
   >,
 ): string | null {
   if (input.characters.length === 0) return '請至少新增一位新角色'
-  if (input.characters.length + input.sceneReferenceCount > MAX_REFERENCE_IMAGES) {
-    return `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
+  const reservedReferenceImageCount = input.reservedReferenceImageCount ?? 0
+  const userReferenceImageLimit = MAX_REFERENCE_IMAGES - reservedReferenceImageCount
+  if (input.characters.length + input.sceneReferenceCount > userReferenceImageLimit) {
+    return reservedReferenceImageCount > 0
+      ? `長片分段需保留 1 張銜接末幀，人物與場景參考圖片合計最多 ${userReferenceImageLimit} 張`
+      : `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
   }
   const normalizedLabels = new Set<string>()
   const normalizedBindings = new Set<string>()
@@ -203,8 +215,10 @@ function getReferenceSetupValidationError(
   }
   const referenceImageCount = input.characters.filter((character) => character.imageExists).length
     + input.sceneReferenceCount
-  if (referenceImageCount > MAX_REFERENCE_IMAGES) {
-    return `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
+  if (referenceImageCount > userReferenceImageLimit) {
+    return reservedReferenceImageCount > 0
+      ? `長片分段需保留 1 張銜接末幀，人物與場景參考圖片合計最多 ${userReferenceImageLimit} 張`
+      : `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
   }
   return null
 }
@@ -225,6 +239,9 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
   if (sourceDurationSeconds === null) return '請先上傳原始表演影片'
   const sourceError = getSourceDurationValidationError(sourceDurationSeconds)
   if (sourceError) return sourceError
+  if (input.sourceVideoAvailable === false) {
+    return '目前只找到預覽網址，缺少可安全送出的 RGB 原片；請重新上傳原始表演影片'
+  }
   if (
     input.sourceAudioMode !== 'generate'
     && input.sourceAudioDetected !== true
@@ -247,14 +264,30 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
     return `目前帳號尚未啟用模型「${input.modelKey}」，請先到設定中心啟用`
   }
 
-  const requestValidation = validateR2VRequest({
-    modelKey: input.modelKey,
-    durationSeconds: sourceDurationSeconds,
-    resolution: input.resolution,
-    referenceImageCount,
-    referenceVideoDurationsSeconds: [sourceDurationSeconds],
-  })
-  if (!requestValidation.ok) return requestValidation.issues[0]?.message ?? '深度重建設定無效'
+  let segmentPlan: ReturnType<typeof buildDepthRebuildSegmentPlan>
+  try {
+    segmentPlan = buildDepthRebuildSegmentPlan(sourceDurationSeconds)
+  } catch (caught) {
+    return caught instanceof Error ? caught.message : '無法建立 RGB＋Depth 分段計畫'
+  }
+  for (const segment of segmentPlan) {
+    const requestValidation = validateR2VRequest({
+      modelKey: input.modelKey,
+      durationSeconds: segment.outputDuration,
+      resolution: input.resolution,
+      referenceImageCount,
+      referenceVideoDurationsSeconds: [segment.outputDuration, segment.outputDuration],
+    })
+    if (!requestValidation.ok) {
+      return requestValidation.issues[0]?.message ?? '深度重建設定無效'
+    }
+  }
+  if (
+    input.segmentPromptCount !== undefined
+    && input.segmentPromptCount !== segmentPlan.length
+  ) {
+    return '生成分段或 Prompt 已變更，請重新建立 Prompt'
+  }
   if (!input.prompt.trim()) return '請先建立並檢查 Prompt'
   if (!input.promptIsFresh) return '設定或參考素材已變更，請重新建立 Prompt'
   return null

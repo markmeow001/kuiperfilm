@@ -48,15 +48,26 @@ const referenceGuardMock = vi.hoisted(() => ({
   })),
 }))
 
+const taskServiceMock = vi.hoisted(() => ({
+  persistTaskExternalIdOrThrow: vi.fn(async () => undefined),
+}))
+
 vi.mock('@/lib/generator-api', () => generatorMock)
 vi.mock('@/lib/workers/utils', () => utilsMock)
 vi.mock('@/lib/workers/shared', () => ({ reportTaskProgress: vi.fn() }))
 vi.mock('@/lib/playground/source-audio', () => sourceAudioMock)
 vi.mock('@/lib/playground/seedance-reference-video', () => seedanceReferenceMock)
 vi.mock('@/lib/playground/reference-guard', () => referenceGuardMock)
+vi.mock('@/lib/task/service', () => taskServiceMock)
 vi.mock('@/lib/logging/core', () => ({
   logInfo: vi.fn(),
   logError: vi.fn(),
+  createScopedLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
 }))
 // 尾帧抽取走真实 ffmpeg + @/lib/cos(其 import 链会拉进未 mock 的模块),
 // 单测里直接 mock 掉;续镜链行为由 canvas-refs 单测覆盖。
@@ -68,8 +79,7 @@ import { handlePlaygroundImageTask } from '@/lib/workers/handlers/playground-ima
 import { handlePlaygroundVideoTask } from '@/lib/workers/handlers/playground-video'
 
 function makeJob(payload: Record<string, unknown>): Job<TaskJobData> {
-  return {
-    data: {
+  const data: TaskJobData = {
       taskId: 'task-1',
       type: 'playground_image',
       locale: 'zh',
@@ -78,8 +88,14 @@ function makeJob(payload: Record<string, unknown>): Job<TaskJobData> {
       targetId: 'task-1',
       userId: 'user-1',
       payload,
-    },
-  } as unknown as Job<TaskJobData>
+  }
+  const job = {
+    data,
+    updateData: vi.fn(async (nextData: TaskJobData) => {
+      job.data = nextData
+    }),
+  }
+  return job as unknown as Job<TaskJobData>
 }
 
 describe('handlePlaygroundImageTask (Phase 9.1 Task-spine handler)', () => {
@@ -185,6 +201,7 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     utilsMock.getTaskExistingExternalId.mockResolvedValue(null)
+    taskServiceMock.persistTaskExternalIdOrThrow.mockResolvedValue(undefined)
     utilsMock.uploadVideoSourceToCos.mockResolvedValue('cos/video-key')
     utilsMock.toSignedUrlIfCos.mockImplementation((key: string) => `signed:${key}`)
     referenceGuardMock.filterAuthorizedStorageReferences.mockImplementation(async (refs: string[]) => ({
@@ -218,11 +235,94 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
     // 一并写进 result,供画布 video→下游 连线做首尾帧接力。
     expect(result).toEqual({ resultUrls: ['cos/video-key'], tailFrameKey: 'cos/tail-frame-key' })
     expect(generatorMock.generateVideo).toHaveBeenCalledOnce()
+    expect(taskServiceMock.persistTaskExternalIdOrThrow).toHaveBeenCalledWith(
+      'task-1',
+      'vid-1',
+    )
+    const submittedJob = utilsMock.waitExternalResult.mock.calls[0]?.[0] as Job<TaskJobData>
+    expect(submittedJob.data.providerExternalId).toBe('vid-1')
+    expect(
+      taskServiceMock.persistTaskExternalIdOrThrow.mock.invocationCallOrder[0],
+    ).toBeLessThan(utilsMock.waitExternalResult.mock.invocationCallOrder[0] ?? 0)
     expect(utilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
       'https://prov/clip.mp4',
       'playground-runs/task-1',
       'task-1',
       undefined,
+    )
+  })
+
+  it('供應商已收件但 externalId 無法持久化 -> 停止輪詢與後續處理，避免 retry 重複付費', async () => {
+    generatorMock.generateVideo.mockResolvedValue({
+      success: true,
+      externalId: 'ATLASCLOUD:VIDEO:paid-request',
+    })
+    taskServiceMock.persistTaskExternalIdOrThrow.mockRejectedValue(
+      new Error('TASK_EXTERNAL_ID_PERSIST_FAILED'),
+    )
+
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'preserve the camera motion',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+    }))).rejects.toThrow('TASK_EXTERNAL_ID_PERSIST_FAILED')
+
+    expect(taskServiceMock.persistTaskExternalIdOrThrow).toHaveBeenCalledWith(
+      'task-1',
+      'ATLASCLOUD:VIDEO:paid-request',
+    )
+    expect(utilsMock.waitExternalResult).not.toHaveBeenCalled()
+    expect(utilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+  })
+
+  it('provider 回傳後 DB 暫時失敗 -> queue retry 從 BullMQ externalId 恢復且不重複付費', async () => {
+    generatorMock.generateVideo.mockResolvedValue({
+      success: true,
+      externalId: 'ATLASCLOUD:VIDEO:paid-request',
+    })
+    taskServiceMock.persistTaskExternalIdOrThrow
+      .mockRejectedValueOnce(new Error('database unavailable'))
+      .mockResolvedValue(undefined)
+    utilsMock.waitExternalResult.mockResolvedValue({ url: 'https://prov/resumed.mp4' })
+    const payload = {
+      prompt: 'preserve the camera motion',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      meta: {
+        workflowId: 'workflow-keep',
+        segmentIndex: 0,
+      },
+    }
+    const job = makeJob(payload)
+
+    const firstAttempt = handlePlaygroundVideoTask(job)
+    await expect(firstAttempt).rejects.toMatchObject({
+      message: 'database unavailable',
+      code: 'WORKER_EXECUTION_ERROR',
+    })
+    expect(job.data.providerExternalId).toBe('ATLASCLOUD:VIDEO:paid-request')
+    expect(job.data.payload).toEqual(payload)
+    expect(utilsMock.waitExternalResult).not.toHaveBeenCalled()
+
+    const result = await handlePlaygroundVideoTask(job)
+
+    expect(result).toEqual({
+      resultUrls: ['cos/video-key'],
+      tailFrameKey: 'cos/tail-frame-key',
+    })
+    expect(generatorMock.generateVideo).toHaveBeenCalledTimes(1)
+    expect(utilsMock.getTaskExistingExternalId).toHaveBeenCalledTimes(1)
+    expect(taskServiceMock.persistTaskExternalIdOrThrow).toHaveBeenLastCalledWith(
+      'task-1',
+      'ATLASCLOUD:VIDEO:paid-request',
+    )
+    expect(utilsMock.waitExternalResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          providerExternalId: 'ATLASCLOUD:VIDEO:paid-request',
+        }),
+      }),
+      'ATLASCLOUD:VIDEO:paid-request',
+      'user-1',
+      expect.objectContaining({ progressStart: 30, progressEnd: 90 }),
     )
   })
 
@@ -260,6 +360,70 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
       'task-1',
       undefined,
     )
+  })
+
+  it('RGB＋Depth 已有 externalId 的 retry -> 不重做兩支影片正規化', async () => {
+    utilsMock.getTaskExistingExternalId.mockResolvedValue('ATLASCLOUD:VIDEO:dual-existing')
+    utilsMock.waitExternalResult.mockResolvedValue({ url: 'https://prov/resumed-dual.mp4' })
+
+    await handlePlaygroundVideoTask(makeJob({
+      prompt: 'resume dual guide',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source-rgb.mp4', 'cos/source-depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      depthRebuildDualGuide: true,
+      workflowId: 'workflow_retry',
+      segmentIndex: 0,
+      segmentCount: 2,
+      referenceVideoWindow: { startSeconds: 0, durationSeconds: 5.5 },
+      duration: 5.5,
+      resolution: '720p',
+      aspectRatio: '16:9',
+      sourceAudioMode: 'reference-only',
+    }))
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+    expect(utilsMock.waitExternalResult).toHaveBeenCalledWith(
+      expect.anything(),
+      'ATLASCLOUD:VIDEO:dual-existing',
+      'user-1',
+      expect.any(Object),
+    )
+  })
+
+  it('RGB＋Depth 的秒數與同步窗不一致 -> 正規化前失敗', async () => {
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'dual guide',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source-rgb.mp4', 'cos/source-depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      depthRebuildDualGuide: true,
+      workflowId: 'workflow_1',
+      segmentIndex: 0,
+      segmentCount: 2,
+      referenceVideoWindow: { startSeconds: 0, durationSeconds: 5.5 },
+      duration: 5.4,
+      resolution: '720p',
+      aspectRatio: '16:9',
+      sourceAudioMode: 'reference-only',
+    }))).rejects.toThrow('PLAYGROUND_DEPTH_REBUILD_DUAL_GUIDE_CONTRACT_INVALID')
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it('一般影片任務夾帶工作流分段身分 -> 顯式拒絕', async () => {
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'ordinary task',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      workflowId: 'workflow_1',
+      segmentIndex: 0,
+      segmentCount: 1,
+    }))).rejects.toThrow('PLAYGROUND_DEPTH_REBUILD_SEGMENT_IDENTITY_REQUIRES_DUAL_GUIDE')
+
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
   })
 
   it('throws when the generator returns no externalId', async () => {
@@ -431,6 +595,231 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
       'task-1',
       { Authorization: 'Bearer generated' },
     )
+  })
+
+  it('本機 /api/files 參考 -> 轉成 ffmpeg 可取得的絕對網址再正規化', async () => {
+    utilsMock.toSignedUrlIfCos.mockImplementation((key: string) => `/api/files/${key}`)
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValue({
+      cosKey: 'video/playground-runs/normalized.mp4',
+      probe: {
+        formatNames: ['mov', 'mp4'],
+        sizeBytes: 1_000_000,
+        durationSec: 5,
+        videoCodec: 'h264',
+        width: 1280,
+        height: 720,
+        fps: 24,
+        hasAudio: false,
+      },
+    })
+    generatorMock.generateVideo.mockResolvedValue({ success: true, externalId: 'vid-local-ref' })
+    utilsMock.waitExternalResult.mockResolvedValue({ url: 'https://prov/result.mp4' })
+
+    await handlePlaygroundVideoTask(makeJob({
+      prompt: 'local reference',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['video/playground-ref/user-1/source.mp4'],
+      normalizeSeedanceReferenceVideo: true,
+      sourceAudioMode: 'generate',
+    }))
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenCalledWith({
+      sourceVideoUrl: 'http://localhost:3000/api/files/video/playground-ref/user-1/source.mp4',
+      taskId: 'task-1',
+      requireAudio: false,
+      sourceAudioMode: 'generate',
+    })
+  })
+
+  it('RGB＋Depth -> 依序正規化 RGB 再 Depth，且音訊只能取自 RGB', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce({
+        cosKey: 'video/playground-runs/task-1-rgb.mp4',
+        probe: {
+          formatNames: ['mov', 'mp4'],
+          sizeBytes: 2_000_000,
+          durationSec: 5.5,
+          videoCodec: 'h264',
+          width: 1280,
+          height: 720,
+          fps: 24,
+          hasAudio: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        cosKey: 'video/playground-runs/task-1-depth.mp4',
+        probe: {
+          formatNames: ['mov', 'mp4'],
+          sizeBytes: 1_200_000,
+          durationSec: 5.5,
+          videoCodec: 'h264',
+          width: 1280,
+          height: 720,
+          fps: 24,
+          hasAudio: false,
+        },
+      })
+    generatorMock.generateVideo.mockResolvedValue({
+      success: true,
+      externalId: 'vid-dual-guide',
+    })
+    utilsMock.waitExternalResult.mockResolvedValue({
+      url: 'https://prov/generated-dual-guide.mp4',
+      downloadHeaders: { Authorization: 'Bearer generated' },
+    })
+
+    await handlePlaygroundVideoTask(makeJob({
+      prompt: 'video 1 controls RGB motion; video 2 controls depth geometry',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source-rgb.mp4', 'cos/source-depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      depthRebuildDualGuide: true,
+      workflowId: 'workflow_1',
+      segmentIndex: 0,
+      segmentCount: 2,
+      referenceVideoWindow: { startSeconds: 0, durationSeconds: 5.5 },
+      duration: 5.5,
+      resolution: '720p',
+      aspectRatio: '16:9',
+      sourceAudioMode: 'reference-only',
+    }))
+
+    expect(referenceGuardMock.filterAuthorizedStorageReferences).toHaveBeenCalledWith(
+      ['cos/source-rgb.mp4', 'cos/source-depth.webm'],
+      'user-1',
+    )
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenNthCalledWith(1, {
+      sourceVideoUrl: 'signed:cos/source-rgb.mp4',
+      taskId: 'task-1',
+      requireAudio: true,
+      sourceAudioMode: 'reference-only',
+      trim: { startSeconds: 0, durationSeconds: 5.5 },
+      outputId: 'rgb',
+    })
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenNthCalledWith(2, {
+      sourceVideoUrl: 'signed:cos/source-depth.webm',
+      taskId: 'task-1',
+      sourceAudioMode: 'generate',
+      trim: { startSeconds: 0, durationSeconds: 5.5 },
+      outputId: 'depth',
+    })
+    const [rgbNormalizeOrder, depthNormalizeOrder] =
+      seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mock.invocationCallOrder
+    const [audioExtractOrder] = sourceAudioMock.extractReferenceAudioToCos.mock.invocationCallOrder
+    expect(rgbNormalizeOrder).toBeLessThan(depthNormalizeOrder)
+    expect(depthNormalizeOrder).toBeLessThan(audioExtractOrder)
+    expect(sourceAudioMock.extractReferenceAudioToCos).toHaveBeenCalledOnce()
+    expect(sourceAudioMock.extractReferenceAudioToCos).toHaveBeenCalledWith(
+      'signed:video/playground-runs/task-1-rgb.mp4',
+      'task-1',
+    )
+    const options = generatorMock.generateVideo.mock.calls.at(-1)?.[3] as Record<string, unknown>
+    expect(options).toMatchObject({
+      generateAudio: false,
+      referenceVideos: [
+        'signed:video/playground-runs/task-1-rgb.mp4',
+        'signed:video/playground-runs/task-1-depth.mp4',
+      ],
+      referenceAudios: ['signed:cos/source-audio.mp3'],
+    })
+    expect(sourceAudioMock.muxGeneratedVideoWithSourceAudio).not.toHaveBeenCalled()
+    expect(sourceAudioMock.stripGeneratedVideoAudio).toHaveBeenCalledWith({
+      generatedVideoUrl: 'https://prov/generated-dual-guide.mp4',
+      generatedDownloadHeaders: { Authorization: 'Bearer generated' },
+    })
+    expect(JSON.stringify(sourceAudioMock.extractReferenceAudioToCos.mock.calls))
+      .not.toContain('task-1-depth.mp4')
+    expect(JSON.stringify(sourceAudioMock.stripGeneratedVideoAudio.mock.calls))
+      .not.toContain('task-1-depth.mp4')
+  })
+
+  it('RGB＋Depth 的任一 storage 參考未授權 -> 正規化與付費生成前失敗', async () => {
+    referenceGuardMock.filterAuthorizedStorageReferences.mockResolvedValue({
+      safe: ['cos/source-rgb.mp4'],
+      rejected: ['cos/other-user-depth.webm'],
+    })
+
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'dual guide',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source-rgb.mp4', 'cos/other-user-depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      depthRebuildDualGuide: true,
+      workflowId: 'workflow_1',
+      segmentIndex: 0,
+      segmentCount: 2,
+      referenceVideoWindow: { startSeconds: 0, durationSeconds: 5.5 },
+      duration: 5.5,
+      resolution: '720p',
+      aspectRatio: '16:9',
+      sourceAudioMode: 'reference-only',
+    }))).rejects.toThrow(
+      'PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_NOT_TRUSTED',
+    )
+
+    expect(referenceGuardMock.filterAuthorizedStorageReferences).toHaveBeenCalledWith(
+      ['cos/source-rgb.mp4', 'cos/other-user-depth.webm'],
+      'user-1',
+    )
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      label: '缺少同步窗',
+      referenceVideoWindow: undefined,
+    },
+    {
+      label: '雙參考總長超過 15 秒',
+      referenceVideoWindow: { startSeconds: 0, durationSeconds: 7.51 },
+    },
+    {
+      label: '同步窗結束點超過 15 秒',
+      referenceVideoWindow: { startSeconds: 10, durationSeconds: 5.5 },
+    },
+  ])('RGB＋Depth $label -> 正規化與付費生成前失敗', async ({ referenceVideoWindow }) => {
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'dual guide',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source-rgb.mp4', 'cos/source-depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      depthRebuildDualGuide: true,
+      workflowId: 'workflow_1',
+      segmentIndex: 0,
+      segmentCount: 2,
+      ...(referenceVideoWindow ? { referenceVideoWindow } : {}),
+      duration: referenceVideoWindow?.durationSeconds ?? 5.5,
+      resolution: '720p',
+      aspectRatio: '16:9',
+      sourceAudioMode: 'reference-only',
+    }))).rejects.toThrow('PLAYGROUND_DEPTH_REBUILD_DUAL_GUIDE_CONTRACT_INVALID')
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it('RGB＋Depth + 非 Atlas Seedance 模型 -> 轉檔與付費生成前失敗', async () => {
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'dual guide',
+      modelKey: 'fal::bytedance/seedance-2.0/reference-to-video',
+      referenceVideos: ['cos/source-rgb.mp4', 'cos/source-depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      depthRebuildDualGuide: true,
+      workflowId: 'workflow_1',
+      segmentIndex: 0,
+      segmentCount: 2,
+      referenceVideoWindow: { startSeconds: 0, durationSeconds: 5.5 },
+      duration: 5.5,
+      resolution: '720p',
+      aspectRatio: '16:9',
+      sourceAudioMode: 'reference-only',
+    }))).rejects.toThrow('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_MODEL_UNSUPPORTED')
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
   })
 
   it.each([

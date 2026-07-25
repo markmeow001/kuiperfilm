@@ -6,6 +6,7 @@ import {
   getDepthRebuildPromptValidationError,
   getDepthRebuildValidationError,
 } from '@/app/[locale]/live-composite/lib/depth-rebuild-workflow'
+import { DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS } from '@/app/[locale]/live-composite/lib/depth-rebuild-motion-contract'
 
 function validationCharacter(index: number) {
   return {
@@ -18,10 +19,12 @@ function validationCharacter(index: number) {
 
 const baseValidation = {
   sourceDurationSeconds: 12,
+  sourceVideoAvailable: true,
   depthGuideExists: true,
   depthGuideSufficient: true,
   characters: [validationCharacter(1)],
   sceneReferenceCount: 0,
+  reservedReferenceImageCount: 1,
   sceneDescription: '上海雨夜街道，車流與招牌持續運動',
   modelKey: 'atlascloud::seedance-2.0-r2v',
   resolution: '720p',
@@ -29,6 +32,7 @@ const baseValidation = {
   sourceAudioMode: 'preserve',
   sourceAudioDetected: true,
   prompt: 'depth-guided reconstruction prompt',
+  segmentPromptCount: 2,
   promptIsFresh: true,
 } as const
 
@@ -74,6 +78,13 @@ describe('depth rebuild workflow', () => {
       ...baseValidation,
       depthGuideSufficient: false,
     })).toBe('深度引導影片有效幀率不足，請重新產生後再生成')
+  })
+
+  it('只有預覽網址而沒有 RGB 原始檔 -> 付費前明確阻擋雙引導生成', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      sourceVideoAvailable: false,
+    })).toBe('目前只找到預覽網址，缺少可安全送出的 RGB 原片；請重新上傳原始表演影片')
   })
 
   it.each([
@@ -143,20 +154,39 @@ describe('depth rebuild workflow', () => {
     })).toBe('兩位角色都綁定「開場畫面左側男性」，請分別指定不同的原片人物')
   })
 
-  it('人物與場景共用 9 張上限 -> 9 張通過、10 張明確阻擋', () => {
+  it('長片分段需保留銜接末幀 -> 使用者參考圖 8 張通過、9 張明確阻擋', () => {
     const characters = [validationCharacter(1), validationCharacter(2)]
 
     expect(getDepthRebuildValidationError({
       ...baseValidation,
       characters,
-      sceneReferenceCount: 7,
+      sceneReferenceCount: 6,
     })).toBeNull()
 
     expect(getDepthRebuildValidationError({
       ...baseValidation,
       characters,
-      sceneReferenceCount: 8,
-    })).toBe('人物與場景參考圖片合計最多 9 張')
+      sceneReferenceCount: 7,
+    })).toBe('長片分段需保留 1 張銜接末幀，人物與場景參考圖片合計最多 8 張')
+  })
+
+  it('12 秒 RGB＋Depth -> 需要兩份分段 Prompt；數量不符時阻擋舊 Prompt', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      segmentPromptCount: 2,
+    })).toBeNull()
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      segmentPromptCount: 1,
+    })).toBe('生成分段或 Prompt 已變更，請重新建立 Prompt')
+  })
+
+  it('7.6 秒無法拆成合法雙引導段 -> 付費前顯式阻擋且不裁短尾段', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      sourceDurationSeconds: 7.6,
+      segmentPromptCount: 1,
+    })).toContain('無法在不裁短的前提下建立合法雙引導分段')
   })
 
   it('深度有效幀率不足 -> 明確阻擋付費生成', () => {
@@ -198,7 +228,7 @@ describe('depth rebuild workflow', () => {
     expect(error).toContain('480p、720p')
   })
 
-  it('角色順序、人物綁定或描述變更 -> fingerprint 改變使舊 Prompt 過期', () => {
+  it('角色、音訊或運鏡設定變更 -> fingerprint 改變使舊 Prompt 過期', () => {
     const actorImageA = {
       name: 'actor-a.png',
       size: 20,
@@ -241,6 +271,7 @@ describe('depth rebuild workflow', () => {
       modelKey: 'atlascloud::seedance-2.0-r2v',
       resolution: '720p',
       sourceAudioMode: 'preserve' as const,
+      motionSettings: DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS,
     }
     const original = buildDepthRebuildFingerprint(base)
     const reordered = buildDepthRebuildFingerprint({
@@ -265,11 +296,20 @@ describe('depth rebuild workflow', () => {
       ...base,
       sourceAudioMode: 'reference-only',
     })
+    const changedMotionSettings = buildDepthRebuildFingerprint({
+      ...base,
+      motionSettings: {
+        ...base.motionSettings,
+        cameraDirection: 'forward',
+        noDirectionReversal: false,
+      },
+    })
 
     expect(reordered).not.toBe(original)
     expect(rebound).not.toBe(original)
     expect(redescribed).not.toBe(original)
     expect(changedAudioMode).not.toBe(original)
+    expect(changedMotionSettings).not.toBe(original)
   })
 
   it('超過 15 秒 -> 秒數正規化明確失敗', () => {

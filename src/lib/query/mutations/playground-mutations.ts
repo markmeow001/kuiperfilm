@@ -93,8 +93,18 @@ export interface PlaygroundRunSubmission {
    * preserveSourceAudio / generateAudio；舊流程未傳時維持既有行為。
    */
   sourceAudioMode?: SourceAudioMode
-  /** 深度重建：worker 將唯一參考影片正規化為 AtlasCloud Seedance 2.0 可接受的 MP4/H264。 */
+  /** 深度重建：worker 將參考影片正規化為 AtlasCloud Seedance 2.0 可接受的 MP4/H264。 */
   normalizeSeedanceReferenceVideo?: boolean
+  /** Live Composite 專用：video 1=RGB、video 2=同步 Depth。 */
+  depthRebuildDualGuide?: boolean
+  /** Server 以同一時間窗裁切 RGB 與 Depth，避免瀏覽器轉碼漂移。 */
+  referenceVideoWindow?: { startSeconds: number; durationSeconds: number }
+  /** Live Composite 付費分段的不可變 workflow 識別碼。 */
+  workflowId?: string
+  /** 分段在 workflow 中的零起算序號。 */
+  segmentIndex?: number
+  /** workflow 預期的完整分段數。 */
+  segmentCount?: number
   /** 局部重绘遮罩（own COS key；透明区=重绘区）。需搭配 referenceImages[0] 底图。 */
   maskImage?: string
   outputType: 'image' | 'video'
@@ -190,16 +200,18 @@ export function usePlaygroundCostEstimate(params: {
   durationSec?: number
   resolution?: string
   generationMode?: string
+  count?: number
 }) {
-  const { modelKey, outputType, durationSec, resolution, generationMode } = params
+  const { modelKey, outputType, durationSec, resolution, generationMode, count } = params
   return useQuery({
-    queryKey: ['playgroundCostEstimate', modelKey, outputType, durationSec, resolution, generationMode],
+    queryKey: ['playgroundCostEstimate', modelKey, outputType, durationSec, resolution, generationMode, count],
     enabled: Boolean(modelKey),
     queryFn: async (): Promise<PlaygroundCostEstimate> => {
       const sp = new URLSearchParams({ modelKey, outputType })
       if (durationSec) sp.set('durationSec', String(durationSec))
       if (resolution) sp.set('resolution', resolution)
       if (generationMode) sp.set('generationMode', generationMode)
+      if (typeof count === 'number' && Number.isFinite(count)) sp.set('count', String(count))
       return await requestJsonWithError(
         `/api/playground/estimate-cost?${sp.toString()}`,
         { method: 'GET' },

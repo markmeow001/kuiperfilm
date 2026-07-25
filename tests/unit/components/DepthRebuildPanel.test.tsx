@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DepthRebuildPanel, type DepthRebuildPanelProps } from '@/app/[locale]/live-composite/DepthRebuildPanel'
+import { DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS } from '@/app/[locale]/live-composite/lib/depth-rebuild-motion-contract'
 
 function completeCharacter(
   overrides: Partial<DepthRebuildPanelProps['characters'][number]> = {},
@@ -35,6 +36,9 @@ function buildProps(overrides: Partial<DepthRebuildPanelProps> = {}): DepthRebui
     resolution: '720p',
     sourceAudioMode: 'preserve',
     sourceAudioDetected: true,
+    motionSettings: { ...DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS },
+    segmentCount: 2,
+    segmentSummary: '5.0 + 5.0 秒',
     prompt: 'Use video 1 as depth guidance.',
     promptStale: false,
     promptBlockingMessage: null,
@@ -64,6 +68,15 @@ function buildProps(overrides: Partial<DepthRebuildPanelProps> = {}): DepthRebui
     onModelChange: vi.fn(),
     onResolutionChange: vi.fn(),
     onSourceAudioModeChange: vi.fn(),
+    onCameraDirectionChange: vi.fn(),
+    onFramingCropChange: vi.fn(),
+    onSubjectDirectionChange: vi.fn(),
+    onSingleTakeChange: vi.fn(),
+    onLockFramingChange: vi.fn(),
+    onNoDirectionReversalChange: vi.fn(),
+    onGazeSourceCharacterIdChange: vi.fn(),
+    onGazeTargetCharacterIdChange: vi.fn(),
+    onInteractionDescriptionChange: vi.fn(),
     onBuildPrompt: vi.fn(),
     onGenerate: vi.fn(),
     ...overrides,

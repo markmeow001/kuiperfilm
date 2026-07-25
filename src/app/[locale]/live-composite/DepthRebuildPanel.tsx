@@ -5,6 +5,13 @@ import { AppIcon } from '@/components/ui/icons'
 import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import { DepthRebuildAudioModeSelector } from './DepthRebuildAudioModeSelector'
 import { DepthRebuildReferenceSection } from './DepthRebuildReferenceSection'
+import { DepthRebuildMotionContractPanel } from './DepthRebuildMotionContractPanel'
+import type {
+  CameraDirection,
+  DepthRebuildMotionSettings,
+  FramingCrop,
+  SubjectMotionDirection,
+} from './lib/depth-rebuild-motion-contract'
 import type {
   DepthRebuildCharacterView,
   DepthRebuildSceneView,
@@ -51,6 +58,9 @@ export interface DepthRebuildPanelProps {
   resolution: string
   sourceAudioMode: SourceAudioMode
   sourceAudioDetected: boolean | null
+  motionSettings: DepthRebuildMotionSettings
+  segmentCount: number
+  segmentSummary: string
   prompt: string
   promptStale: boolean
   promptBlockingMessage?: string | null
@@ -86,6 +96,15 @@ export interface DepthRebuildPanelProps {
   onModelChange: (value: string) => void
   onResolutionChange: (value: string) => void
   onSourceAudioModeChange: (value: SourceAudioMode) => void
+  onCameraDirectionChange: (value: CameraDirection) => void
+  onFramingCropChange: (value: FramingCrop) => void
+  onSubjectDirectionChange: (value: SubjectMotionDirection) => void
+  onSingleTakeChange: (value: boolean) => void
+  onLockFramingChange: (value: boolean) => void
+  onNoDirectionReversalChange: (value: boolean) => void
+  onGazeSourceCharacterIdChange: (value: string | null) => void
+  onGazeTargetCharacterIdChange: (value: string | null) => void
+  onInteractionDescriptionChange: (value: string) => void
   onBuildPrompt: () => void
   onGenerate: () => void
   onResetSubmittedRun?: () => void
@@ -119,6 +138,9 @@ export function DepthRebuildPanel({
   resolution,
   sourceAudioMode,
   sourceAudioDetected,
+  motionSettings,
+  segmentCount,
+  segmentSummary,
   prompt,
   promptStale,
   promptBlockingMessage = null,
@@ -154,6 +176,15 @@ export function DepthRebuildPanel({
   onModelChange,
   onResolutionChange,
   onSourceAudioModeChange,
+  onCameraDirectionChange,
+  onFramingCropChange,
+  onSubjectDirectionChange,
+  onSingleTakeChange,
+  onLockFramingChange,
+  onNoDirectionReversalChange,
+  onGazeSourceCharacterIdChange,
+  onGazeTargetCharacterIdChange,
+  onInteractionDescriptionChange,
   onBuildPrompt,
   onGenerate,
   onResetSubmittedRun,
@@ -281,7 +312,7 @@ export function DepthRebuildPanel({
         <section className="px-4 py-5" aria-labelledby="depth-step-2">
           <StepHeading id="depth-step-2" number="02" title="指定新角色與新場景" />
           <p className="mt-2 text-xs leading-5 text-stone-500">
-            參考圖可以先上傳，不必等深度分析完成，也不會在選圖時產生 AI 費用。圖片會依人物在前、場景在後的順序編成 image 1–9。
+            參考圖可以先上傳，不必等深度分析完成，也不會在選圖時產生 AI 費用。圖片會依人物在前、場景在後的順序編成 image 1–{maxReferenceImages}；長片另保留 1 張給前段末幀銜接。
           </p>
           <div className="mt-4">
             <DepthRebuildReferenceSection
@@ -312,6 +343,33 @@ export function DepthRebuildPanel({
               onAssistScene={onAssistScene}
             />
           </div>
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <DepthRebuildMotionContractPanel
+              cameraDirection={motionSettings.cameraDirection}
+              framingCrop={motionSettings.framingCrop}
+              subjectDirection={motionSettings.subjectDirection}
+              singleTake={motionSettings.singleTake}
+              lockFraming={motionSettings.lockFraming}
+              noDirectionReversal={motionSettings.noDirectionReversal}
+              characters={characters.map((character) => ({
+                id: character.id,
+                label: character.label.trim() || '未命名角色',
+              }))}
+              gazeSourceCharacterId={motionSettings.gazeSourceCharacterId}
+              gazeTargetCharacterId={motionSettings.gazeTargetCharacterId}
+              interactionDescription={motionSettings.interactionDescription}
+              disabled={controlsDisabled}
+              onCameraDirectionChange={onCameraDirectionChange}
+              onFramingCropChange={onFramingCropChange}
+              onSubjectDirectionChange={onSubjectDirectionChange}
+              onSingleTakeChange={onSingleTakeChange}
+              onLockFramingChange={onLockFramingChange}
+              onNoDirectionReversalChange={onNoDirectionReversalChange}
+              onGazeSourceCharacterIdChange={onGazeSourceCharacterIdChange}
+              onGazeTargetCharacterIdChange={onGazeTargetCharacterIdChange}
+              onInteractionDescriptionChange={onInteractionDescriptionChange}
+            />
+          </div>
         </section>
 
         <section className="px-4 py-5" aria-labelledby="depth-step-3">
@@ -319,6 +377,12 @@ export function DepthRebuildPanel({
           <p className="mt-2 text-xs leading-5 text-stone-500">
             先檢查角色、場景與 image 對應。深度影片品質會在最後付費生成前檢查，不會阻止您先建立 Prompt。
           </p>
+          <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.045] px-3 py-2 text-xs leading-5 text-cyan-100/85">
+            <span className="font-medium">RGB＋Depth 送出計畫：</span>
+            {segmentCount > 0
+              ? `${segmentCount} 段（${segmentSummary}）。每段同步使用 RGB 原片與 Depth；長片會依序生成後再拼接。`
+              : segmentSummary}
+          </div>
           <div
             id="depth-rebuild-prompt-readiness"
             aria-live="polite"

@@ -153,6 +153,12 @@ export type TaskJobData = {
   trace?: {
     requestId?: string | null
   } | null
+  /**
+   * Provider hand-off checkpoint stored in BullMQ job data. It mirrors
+   * Task.externalId so a retry can resume even when the database was
+   * temporarily unavailable immediately after a paid provider submission.
+   */
+  providerExternalId?: string | null
   // Phase 2.5 (2026-06-11) — when set, worker loads Skill.config and
   // uses it for prompt overlays + constraint context. videoModel is
   // already pinned in payload by submitTask (so billing freezes on

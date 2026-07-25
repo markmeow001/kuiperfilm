@@ -141,6 +141,8 @@ export function LiveCompositeClient({ locale, userId }: LiveCompositeClientProps
     userId,
     stageRef,
     metadata,
+    sourceVideoFile: videoFile,
+    sourceVideoStorageKey: videoKey && !/^https?:\/\//i.test(videoKey) ? videoKey : null,
     videoHasAudio,
     locale,
     workspaceId: projectId,
@@ -165,6 +167,23 @@ export function LiveCompositeClient({ locale, userId }: LiveCompositeClientProps
         setVideoFile(null)
         setVideoKey(sourceUrl)
         setWorkflowStep(2)
+        // The signed preview URL cannot be handed to server-side FFmpeg. Keep
+        // a local File copy so Depth Rebuild can upload it into this user's
+        // trusted playground-ref namespace before any paid generation.
+        const sourceResponse = await fetch(sourceUrl)
+        if (!sourceResponse.ok) {
+          throw new Error(`影片可預覽，但 RGB 原片下載失敗（HTTP ${sourceResponse.status}）`)
+        }
+        const sourceBlob = await sourceResponse.blob()
+        if (sourceBlob.size === 0 || sourceBlob.size > 150 * 1024 * 1024) {
+          throw new Error('影片可預覽，但 RGB 原片必須介於 1 byte–150 MB 才能進入雙引導重建')
+        }
+        if (cancelled) return
+        setVideoFile(new File(
+          [sourceBlob],
+          'playground-live-composite-source.mp4',
+          { type: sourceBlob.type || 'video/mp4' },
+        ))
       })
       .catch((caught: unknown) => {
         if (!cancelled) setExportError(caught instanceof Error ? caught.message : '無法載入 Playground 影片')

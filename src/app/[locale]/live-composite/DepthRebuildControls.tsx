@@ -85,6 +85,9 @@ export function DepthRebuildControls({
       resolution={controller.resolution}
       sourceAudioMode={controller.sourceAudioMode}
       sourceAudioDetected={controller.sourceAudioDetected}
+      motionSettings={controller.motionSettings}
+      segmentCount={controller.segmentCount}
+      segmentSummary={controller.segmentSummary}
       prompt={controller.prompt}
       promptStale={controller.promptIsStale}
       promptBlockingMessage={controller.promptValidationError}
@@ -122,6 +125,15 @@ export function DepthRebuildControls({
       }}
       onResolutionChange={controller.setResolution}
       onSourceAudioModeChange={controller.setSourceAudioMode}
+      onCameraDirectionChange={controller.setCameraDirection}
+      onFramingCropChange={controller.setFramingCrop}
+      onSubjectDirectionChange={controller.setSubjectDirection}
+      onSingleTakeChange={controller.setSingleTake}
+      onLockFramingChange={controller.setLockFraming}
+      onNoDirectionReversalChange={controller.setNoDirectionReversal}
+      onGazeSourceCharacterIdChange={controller.setGazeSourceCharacterId}
+      onGazeTargetCharacterIdChange={controller.setGazeTargetCharacterId}
+      onInteractionDescriptionChange={controller.setInteractionDescription}
       onBuildPrompt={controller.buildPrompt}
       onGenerate={() => void controller.generate()}
       onResetSubmittedRun={controller.resetResult}

@@ -298,6 +298,69 @@ describe('Seedance reference-video media contract', () => {
     ])
   })
 
+  it('分段裁切 -> ffmpeg 以精確 -ss/-t 同步裁切，並將影音 timestamp 歸零', () => {
+    const args = buildSeedanceReferenceFfmpegArgs({
+      sourceVideoUrl: 'source.mov',
+      outputPath: 'segment.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      trim: { startSeconds: 5.5, durationSeconds: 5.5 },
+    })
+
+    expect(args).toEqual([
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-i', 'source.mov',
+      '-ss', '5.5', '-t', '5.5',
+      '-map', '0:v:0', '-map', '0:a:0?',
+      '-vf', 'fps=24,scale=-2:720,setpts=PTS-STARTPTS',
+      '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
+      '-preset', 'medium', '-crf', '20',
+      '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
+      '-af', 'asetpts=PTS-STARTPTS',
+      '-avoid_negative_ts', 'make_zero',
+      '-movflags', '+faststart',
+      'segment.mp4',
+    ])
+  })
+
+  it('depth 分段 + generate 模式 -> 保留精確影像裁切但完全不建立音訊輸出', () => {
+    const args = buildSeedanceReferenceFfmpegArgs({
+      sourceVideoUrl: 'depth.webm',
+      outputPath: 'depth-segment.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      includeAudio: false,
+      trim: { startSeconds: 0, durationSeconds: 5.5 },
+    })
+
+    expect(args).toContain('-an')
+    expect(args).not.toContain('0:a:0?')
+    expect(args).not.toContain('-af')
+    expect(args.slice(args.indexOf('-ss'), args.indexOf('-ss') + 4)).toEqual([
+      '-ss', '0', '-t', '5.5',
+    ])
+    expect(args[args.indexOf('-vf') + 1]).toBe(
+      'fps=24,scale=-2:720,setpts=PTS-STARTPTS',
+    )
+  })
+
+  it.each([
+    ['負數起點', { startSeconds: -0.1, durationSeconds: 5 }, 'SEEDANCE_REFERENCE_TRIM_START_INVALID'],
+    ['無限起點', { startSeconds: Number.POSITIVE_INFINITY, durationSeconds: 5 }, 'SEEDANCE_REFERENCE_TRIM_START_INVALID'],
+    ['少於 4 秒', { startSeconds: 0, durationSeconds: 3.99 }, 'SEEDANCE_REFERENCE_TRIM_DURATION_INVALID'],
+    ['無限長度', { startSeconds: 0, durationSeconds: Number.POSITIVE_INFINITY }, 'SEEDANCE_REFERENCE_TRIM_DURATION_INVALID'],
+    ['結束超過 15 秒', { startSeconds: 11, durationSeconds: 5 }, 'SEEDANCE_REFERENCE_TRIM_RANGE_OUT_OF_RANGE'],
+  ])('分段裁切 %s -> 媒體工具執行前顯式拒絕', async (_label, trim, expectedError) => {
+    await expect(normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/reference.mov',
+      taskId: 'task-invalid-trim',
+      trim,
+    })).rejects.toThrow(expectedError)
+
+    expect(mediaToolMock.execFile).not.toHaveBeenCalled()
+    expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+  })
+
   it('ffprobe 呼叫 -> 只讀契約所需欄位且不使用 shell string', () => {
     expect(buildSeedanceReferenceFfprobeArgs('/tmp/reference.mp4')).toEqual([
       '-v', 'error',
@@ -469,6 +532,82 @@ describe('Seedance reference-video media contract', () => {
       'playground-runs/seedance-reference',
       'task-generate-audio',
     )
+  })
+
+  it('同一任務的 RGB 分段 -> outputId 進入暫存檔與 COS target，避免和 depth/其他分段碰撞', async () => {
+    queueMediaToolOutputs(
+      {
+        ...mediaRecorderWebmProbe(),
+        format: {
+          ...mediaRecorderWebmProbe().format,
+          duration: '11.000000',
+        },
+      },
+      '',
+      normalizedMp4Probe({ duration: '5.500000' }),
+    )
+
+    await normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/source-performance.mov',
+      taskId: 'task-segmented-reference',
+      outputId: 'rgb-segment-02',
+      trim: { startSeconds: 5.5, durationSeconds: 5.5 },
+    })
+
+    expect(mediaToolMock.execFile.mock.calls[1]?.[1]).toEqual(
+      buildSeedanceReferenceFfmpegArgs({
+        sourceVideoUrl: 'https://storage.example/source-performance.mov',
+        outputPath: '/tmp/seedance-reference-video-test/reference-rgb-segment-02.mp4',
+        sourceWidth: 518,
+        sourceHeight: 294,
+        includeAudio: true,
+        trim: { startSeconds: 5.5, durationSeconds: 5.5 },
+      }),
+    )
+    expect(workerUtilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      Buffer.from('video'),
+      'playground-runs/seedance-reference',
+      'task-segmented-reference-rgb-segment-02',
+    )
+  })
+
+  it.each([
+    '',
+    '../rgb-segment-01',
+    'rgb/segment/01',
+    'rgb segment 01',
+    '-rgb-segment-01',
+    'rgb-segment-01-',
+    'a'.repeat(65),
+  ])('不安全 outputId「%s」-> 探測與上傳前顯式拒絕', async (outputId) => {
+    await expect(normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/reference.mov',
+      taskId: 'task-unsafe-output-id',
+      outputId,
+    })).rejects.toThrow('SEEDANCE_REFERENCE_OUTPUT_ID_INVALID')
+
+    expect(mediaToolMock.execFile).not.toHaveBeenCalled()
+    expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+  })
+
+  it('裁切結束點超過已知來源秒數 -> ffmpeg 與上傳前顯式拒絕', async () => {
+    queueMediaToolOutputs({
+      ...mediaRecorderWebmProbe(),
+      format: {
+        ...mediaRecorderWebmProbe().format,
+        duration: '11.000000',
+      },
+    })
+
+    await expect(normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/reference.mov',
+      taskId: 'task-trim-outside-source',
+      trim: { startSeconds: 7, durationSeconds: 5 },
+    })).rejects.toThrow('SEEDANCE_REFERENCE_TRIM_EXCEEDS_SOURCE_DURATION')
+
+    expect(mediaToolMock.execFile).toHaveBeenCalledTimes(1)
+    expect(mediaToolMock.mkdtemp).not.toHaveBeenCalled()
+    expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
   })
 
   it('generate 模式但正規化輸出仍含音軌 -> 付費生成前顯式失敗', async () => {

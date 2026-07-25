@@ -10,7 +10,15 @@ import {
   isAllowedTrackBModel,
   type TrackBModelKey,
 } from './lib/atlascloud-r2v-contract'
-import { buildDepthRebuildPrompt } from './lib/depth-rebuild-prompt'
+import { buildDepthRebuildSegmentPrompt } from './lib/depth-rebuild-prompt'
+import {
+  DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS,
+  createDepthRebuildMotionContract,
+  type CameraDirection,
+  type FramingCrop,
+  type SubjectMotionDirection,
+} from './lib/depth-rebuild-motion-contract'
+import { buildDepthRebuildSegmentPlan } from './lib/depth-rebuild-segment-plan'
 import {
   buildDepthRebuildFingerprint,
   depthRebuildDurationSeconds,
@@ -44,6 +52,8 @@ export function useDepthRebuild({
   userId,
   stageRef,
   metadata,
+  sourceVideoFile = null,
+  sourceVideoStorageKey = null,
   videoHasAudio,
   locale = 'zh',
   workspaceId = null,
@@ -57,7 +67,11 @@ export function useDepthRebuild({
   )
   const sourceAudioModeWasChosenRef = useRef(false)
   const [prompt, setPrompt] = useState('')
+  const [segmentPrompts, setSegmentPrompts] = useState<readonly string[]>([])
   const [promptFingerprint, setPromptFingerprint] = useState<string | null>(null)
+  const [motionSettings, setMotionSettings] = useState(() => ({
+    ...DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS,
+  }))
   const descriptionAssistScope = workspaceId ?? [
     'source',
     metadata?.name ?? 'none',
@@ -70,10 +84,21 @@ export function useDepthRebuild({
     `locale:${locale}`,
     descriptionAssistScope,
   ].join(':')
+  const segmentPlan = useMemo(() => {
+    if (!metadata) return null
+    try {
+      return buildDepthRebuildSegmentPlan(metadata.duration)
+    } catch {
+      return null
+    }
+  }, [metadata])
+  const segmentCount = segmentPlan?.length ?? 0
+  const maxUserReferenceImages = MAX_REFERENCE_IMAGES - (segmentCount > 1 ? 1 : 0)
   const inputs = useDepthRebuildInputs({
     stageRef,
     metadata,
     videoHasAudio,
+    maxReferenceImages: maxUserReferenceImages,
     onError: setError,
   })
   const descriptionAssist = useDepthRebuildDescriptionAssist({
@@ -81,6 +106,29 @@ export function useDepthRebuild({
     scopeKey: persistenceScope,
     onError: setError,
   })
+
+  useEffect(() => {
+    const characterIds = new Set(inputs.characters.map((character) => character.id))
+    setMotionSettings((current) => {
+      const gazeSourceCharacterId = current.gazeSourceCharacterId
+        && characterIds.has(current.gazeSourceCharacterId)
+        ? current.gazeSourceCharacterId
+        : null
+      const gazeTargetCharacterId = gazeSourceCharacterId
+        && current.gazeTargetCharacterId
+        && characterIds.has(current.gazeTargetCharacterId)
+        && current.gazeTargetCharacterId !== gazeSourceCharacterId
+        ? current.gazeTargetCharacterId
+        : null
+      if (
+        gazeSourceCharacterId === current.gazeSourceCharacterId
+        && gazeTargetCharacterId === current.gazeTargetCharacterId
+      ) {
+        return current
+      }
+      return { ...current, gazeSourceCharacterId, gazeTargetCharacterId }
+    })
+  }, [inputs.characters])
 
   useEffect(() => {
     if (sourceAudioModeWasChosenRef.current || videoHasAudio === null) return
@@ -111,11 +159,15 @@ export function useDepthRebuild({
       return null
     }
   }, [metadata])
+  const segmentSummary = segmentPlan
+    ? segmentPlan.map((segment) => segment.outputDuration.toFixed(1)).join(' + ') + ' 秒'
+    : '尚未建立合法分段'
   const costQuery = usePlaygroundCostEstimate({
     modelKey: outputDurationSeconds !== null && enabledModelKeys.includes(modelKey) ? modelKey : '',
     outputType: 'video',
-    durationSec: outputDurationSeconds ?? undefined,
+    durationSec: segmentPlan?.[0]?.outputDuration ?? outputDurationSeconds ?? undefined,
     resolution,
+    count: Math.max(1, segmentCount),
   })
 
   const currentFingerprint = useMemo(() => buildDepthRebuildFingerprint({
@@ -143,6 +195,7 @@ export function useDepthRebuild({
     modelKey,
     resolution,
     sourceAudioMode,
+    motionSettings,
   }), [
     metadata,
     inputs.characters,
@@ -151,6 +204,7 @@ export function useDepthRebuild({
     modelKey,
     resolution,
     sourceAudioMode,
+    motionSettings,
   ])
   const promptIsStale =
     promptFingerprint !== null && promptFingerprint !== currentFingerprint
@@ -163,15 +217,18 @@ export function useDepthRebuild({
       imageExists: Boolean(character.image),
     })),
     sceneReferenceCount: inputs.sceneReferences.length,
+    reservedReferenceImageCount: segmentCount > 1 ? 1 : 0,
     sceneDescription: inputs.sceneDescription,
   }), [
     metadata?.duration,
     inputs.characters,
     inputs.sceneReferences.length,
     inputs.sceneDescription,
+    segmentCount,
   ])
   const workflowValidationError = useMemo(() => getDepthRebuildValidationError({
     sourceDurationSeconds: metadata?.duration ?? null,
+    sourceVideoAvailable: Boolean(sourceVideoFile || sourceVideoStorageKey),
     depthGuideExists: Boolean(inputs.depthGuide),
     depthGuideSufficient: inputs.depthGuide?.sufficient === true,
     characters: inputs.characters.map((character) => ({
@@ -181,6 +238,7 @@ export function useDepthRebuild({
       imageExists: Boolean(character.image),
     })),
     sceneReferenceCount: inputs.sceneReferences.length,
+    reservedReferenceImageCount: segmentCount > 1 ? 1 : 0,
     sceneDescription: inputs.sceneDescription,
     modelKey,
     resolution,
@@ -188,9 +246,12 @@ export function useDepthRebuild({
     sourceAudioMode,
     sourceAudioDetected: videoHasAudio,
     prompt,
+    segmentPromptCount: segmentPrompts.length,
     promptIsFresh: promptFingerprint === currentFingerprint,
   }), [
     metadata?.duration,
+    sourceVideoFile,
+    sourceVideoStorageKey,
     inputs.depthGuide,
     inputs.characters,
     inputs.sceneReferences.length,
@@ -201,8 +262,10 @@ export function useDepthRebuild({
     sourceAudioMode,
     videoHasAudio,
     prompt,
+    segmentPrompts.length,
     promptFingerprint,
     currentFingerprint,
+    segmentCount,
   ])
   const validationError = modelsQuery.isLoading
     ? '模型清單尚未載入完成'
@@ -221,12 +284,15 @@ export function useDepthRebuild({
   const generation = useDepthRebuildGeneration({
     persistenceScopeKey: persistenceScope,
     metadata,
+    sourceVideoFile,
+    sourceVideoStorageKey,
     sourceAudioMode,
     workspaceId,
     depthGuide: inputs.depthGuide,
     characters: inputs.characters,
     sceneReferences: inputs.sceneReferences,
-    prompt,
+    segmentPlan,
+    segmentPrompts,
     modelKey,
     resolution,
     validationError,
@@ -250,9 +316,14 @@ export function useDepthRebuild({
       setError('請先上傳原始表演影片')
       return
     }
+    if (!segmentPlan) {
+      setError('目前秒數無法建立合法的 RGB＋Depth 雙引導分段；請將原片調整為 4–7.5 秒或 8–15 秒')
+      return
+    }
     try {
-      const nextPrompt = buildDepthRebuildPrompt({
-        durationSeconds: metadata.duration,
+      const continuityImageToken = `image ${inputs.characters.length + inputs.sceneReferences.length + 1}`
+      const nextSegmentPrompts = segmentPlan.map((segment, index) => buildDepthRebuildSegmentPrompt({
+        durationSeconds: segment.outputDuration,
         characters: inputs.characters.map((character) => ({
           label: character.label,
           sourceBinding: character.sourceBinding,
@@ -260,9 +331,30 @@ export function useDepthRebuild({
         })),
         sceneReferences: inputs.sceneReferences.map((scene) => ({ note: scene.note })),
         sceneDescription: inputs.sceneDescription,
+        // Prompt describes the finished workflow. The per-segment transport
+        // still uses reference-only for preserve mode, then the server restores
+        // the original RGB audio exactly once after hard concat.
         sourceAudioMode,
-      })
-      setPrompt(nextPrompt)
+        motionContract: createDepthRebuildMotionContract({
+          durationSeconds: segment.outputDuration,
+          characters: inputs.characters.map((character) => ({
+            id: character.id,
+            label: character.label,
+            sourceBinding: character.sourceBinding,
+          })),
+          settings: motionSettings,
+        }),
+      }, {
+        index,
+        count: segmentPlan.length,
+        sourceStartSeconds: segment.sourceStart,
+        sourceEndSeconds: segment.sourceEnd,
+        ...(index > 0 ? { continuityImageToken } : {}),
+      }))
+      setSegmentPrompts(nextSegmentPrompts)
+      setPrompt(nextSegmentPrompts.map((segmentPrompt, index) => (
+        `===== 生成分段 ${index + 1} / ${nextSegmentPrompts.length} =====\n${segmentPrompt}`
+      )).join('\n\n'))
       setPromptFingerprint(currentFingerprint)
       setError(null)
     } catch (caught) {
@@ -286,7 +378,9 @@ export function useDepthRebuild({
     inputs.resetDepthSource()
     sourceAudioModeWasChosenRef.current = false
     setSourceAudioModeState('generate')
+    setMotionSettings({ ...DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS })
     setPrompt('')
+    setSegmentPrompts([])
     setPromptFingerprint(null)
     generation.resetResult()
     setError(null)
@@ -311,7 +405,7 @@ export function useDepthRebuild({
     sceneBrief: inputs.sceneBrief,
     sceneDescription: inputs.sceneDescription,
     referenceImageCount: inputs.referenceImageCount,
-    maxReferenceImages: MAX_REFERENCE_IMAGES,
+    maxReferenceImages: maxUserReferenceImages,
     descriptionAssistTarget: descriptionAssist.target,
     modelKey,
     enabledModels,
@@ -321,6 +415,9 @@ export function useDepthRebuild({
     availableResolutions,
     sourceAudioMode,
     sourceAudioDetected: videoHasAudio,
+    motionSettings,
+    segmentCount,
+    segmentSummary,
     prompt,
     promptIsStale,
     promptValidationError,
@@ -356,6 +453,45 @@ export function useDepthRebuild({
     setModelKey,
     setResolution,
     setSourceAudioMode,
+    setCameraDirection: (value: CameraDirection) => {
+      setMotionSettings((current) => ({ ...current, cameraDirection: value }))
+    },
+    setFramingCrop: (value: FramingCrop) => {
+      setMotionSettings((current) => ({ ...current, framingCrop: value }))
+    },
+    setSubjectDirection: (value: SubjectMotionDirection) => {
+      setMotionSettings((current) => ({ ...current, subjectDirection: value }))
+    },
+    setSingleTake: (value: boolean) => {
+      setMotionSettings((current) => ({ ...current, singleTake: value }))
+    },
+    setLockFraming: (value: boolean) => {
+      setMotionSettings((current) => ({ ...current, lockFraming: value }))
+    },
+    setNoDirectionReversal: (value: boolean) => {
+      setMotionSettings((current) => ({ ...current, noDirectionReversal: value }))
+    },
+    setGazeSourceCharacterId: (value: string | null) => {
+      setMotionSettings((current) => ({
+        ...current,
+        gazeSourceCharacterId: value,
+        gazeTargetCharacterId: value === null || value === current.gazeTargetCharacterId
+          ? null
+          : current.gazeTargetCharacterId,
+      }))
+    },
+    setGazeTargetCharacterId: (value: string | null) => {
+      setMotionSettings((current) => ({
+        ...current,
+        gazeTargetCharacterId: current.gazeSourceCharacterId !== null
+          && value !== current.gazeSourceCharacterId
+          ? value
+          : null,
+      }))
+    },
+    setInteractionDescription: (value: string) => {
+      setMotionSettings((current) => ({ ...current, interactionDescription: value }))
+    },
     setPrompt,
     generateDepthGuide,
     cancelDepthGuide: inputs.cancelDepthGuide,
