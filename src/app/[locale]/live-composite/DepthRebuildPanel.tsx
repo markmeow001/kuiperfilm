@@ -48,6 +48,7 @@ export interface DepthRebuildPanelProps {
   resolution: string
   prompt: string
   promptStale: boolean
+  promptBlockingMessage?: string | null
   generating: boolean
   interactionDisabled: boolean
   canGenerate: boolean
@@ -112,6 +113,7 @@ export function DepthRebuildPanel({
   resolution,
   prompt,
   promptStale,
+  promptBlockingMessage = null,
   generating,
   interactionDisabled,
   canGenerate,
@@ -147,19 +149,6 @@ export function DepthRebuildPanel({
   onGenerate,
   onResetSubmittedRun,
 }: DepthRebuildPanelProps) {
-  const completeCharacters = characters.length > 0 && characters.every((character) => (
-    Boolean(character.reference)
-    && character.label.trim().length > 0
-    && character.sourceBinding.trim().length > 0
-    && character.description.trim().length > 0
-  ))
-  const canBuildPrompt = Boolean(
-    source
-    && depthGuide?.sufficient
-    && completeCharacters
-    && sceneDescription.trim()
-    && referenceImageCount <= maxReferenceImages,
-  )
   const hasEnabledModel = modelOptions.length > 0
   const selectedModelEnabled = modelOptions.some((option) => option.value === modelKey)
   const selectedResolutionAvailable = resolutionOptions.some((option) => option.value === resolution)
@@ -307,16 +296,31 @@ export function DepthRebuildPanel({
         <section className="px-4 py-5" aria-labelledby="depth-step-3">
           <StepHeading id="depth-step-3" number="03" title="建立並檢查 Prompt" state="免費" />
           <p className="mt-2 text-xs leading-5 text-stone-500">
-            先把「深度影片、角色圖、場景圖」的用途寫清楚。修改任何素材或設定後，請重新建立 Prompt。
+            先檢查角色、場景與 image 對應。深度影片品質會在最後付費生成前檢查，不會阻止您先建立 Prompt。
           </p>
+          <div
+            id="depth-rebuild-prompt-readiness"
+            aria-live="polite"
+            className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${
+              promptBlockingMessage
+                ? 'border-amber-300/20 bg-amber-300/[0.045] text-amber-100/85'
+                : 'border-emerald-300/20 bg-emerald-300/[0.045] text-emerald-100/85'
+            }`}
+          >
+            <span className="font-medium">
+              {promptBlockingMessage ? '下一步：' : '資料已完成：'}
+            </span>
+            {promptBlockingMessage ?? '可以建立 Prompt；完成有效的深度影片後即可進入付費生成。'}
+          </div>
           <button
             type="button"
-            disabled={!canBuildPrompt || controlsDisabled}
+            aria-describedby="depth-rebuild-prompt-readiness"
+            disabled={controlsDisabled}
             onClick={onBuildPrompt}
             className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-cyan-300/35 bg-cyan-300/[0.07] px-3 text-sm font-medium text-cyan-100 hover:bg-cyan-300/[0.12] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.025] disabled:text-stone-600"
           >
             <AppIcon name="fileText" className="h-4 w-4" />
-            {prompt ? '重新建立 Prompt' : '建立 Prompt'}
+            {prompt ? '重新檢查並建立 Prompt' : '檢查並建立 Prompt'}
           </button>
           <label className="mt-3 block">
             <span className="mb-2 flex items-center justify-between text-xs text-stone-500">
@@ -326,7 +330,7 @@ export function DepthRebuildPanel({
             <textarea
               readOnly
               value={prompt}
-              placeholder="完成深度影片並上傳新角色後，按「建立 Prompt」；系統不會在這一步送出生成。"
+              placeholder="完成角色與場景設定後，按「檢查並建立 Prompt」；系統不會在這一步送出生成。"
               className={`min-h-40 w-full resize-y rounded-lg border bg-black/25 px-3 py-2 font-mono text-xs leading-5 outline-none placeholder:text-stone-600 ${
                 promptStale && prompt ? 'border-amber-300/40 text-stone-500' : 'border-white/10 text-stone-300'
               }`}
@@ -391,6 +395,11 @@ export function DepthRebuildPanel({
                   ? '這個版本已完成。若要套用新的角色、場景或 Prompt，請先開始另一個版本。'
                   : '這筆已送出的任務已確認失敗。清除後才能依目前設定建立另一筆任務。'}
               </p>
+              {!hasResult && errorMessage ? (
+                <p role="alert" className="mt-2 text-rose-200">
+                  失敗原因：{errorMessage}
+                </p>
+              ) : null}
               <button
                 type="button"
                 onClick={onResetSubmittedRun}

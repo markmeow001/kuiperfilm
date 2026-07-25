@@ -4,17 +4,98 @@ const workerUtilsMock = vi.hoisted(() => ({
   uploadVideoSourceToCos: vi.fn(),
 }))
 
+const mediaToolMock = vi.hoisted(() => ({
+  execFile: vi.fn(),
+  mkdtemp: vi.fn(),
+  readFile: vi.fn(),
+  rm: vi.fn(),
+}))
+
 vi.mock('@/lib/workers/utils', () => workerUtilsMock)
+vi.mock('node:child_process', () => ({ execFile: mediaToolMock.execFile }))
+vi.mock('node:fs/promises', () => ({
+  mkdtemp: mediaToolMock.mkdtemp,
+  readFile: mediaToolMock.readFile,
+  rm: mediaToolMock.rm,
+}))
 
 import {
   assertAtlasCloudSeedanceReferenceVideo,
   buildSeedanceReferenceFfmpegArgs,
   buildSeedanceReferenceFfprobeArgs,
+  buildSeedanceReferenceSourceFfprobeArgs,
   isSeedanceReferenceNormalizationModel,
+  normalizeSeedanceReferenceVideoToCos,
   parseFps,
   parseSeedanceReferenceProbe,
+  parseSeedanceReferenceSourceProbe,
   type SeedanceReferenceVideoProbe,
 } from '@/lib/playground/seedance-reference-video'
+
+function mediaRecorderWebmProbe() {
+  return {
+    format: {
+      format_name: 'matroska,webm',
+      size: '1694826',
+    },
+    streams: [
+      {
+        codec_type: 'video',
+        codec_name: 'vp9',
+        width: 518,
+        height: 294,
+        avg_frame_rate: '12/1',
+        r_frame_rate: '12/1',
+      },
+      { codec_type: 'audio', codec_name: 'opus' },
+    ],
+  }
+}
+
+function normalizedMp4Probe(overrides: {
+  duration?: string | null
+  formatName?: string
+  codecName?: string
+  fps?: string
+  size?: string
+} = {}) {
+  return {
+    format: {
+      format_name: overrides.formatName ?? 'mov,mp4,m4a,3gp,3g2,mj2',
+      size: overrides.size ?? '5',
+      ...(overrides.duration === null
+        ? {}
+        : { duration: overrides.duration ?? '11.000000' }),
+    },
+    streams: [
+      {
+        codec_type: 'video',
+        codec_name: overrides.codecName ?? 'h264',
+        width: 1268,
+        height: 720,
+        avg_frame_rate: overrides.fps ?? '24/1',
+        r_frame_rate: overrides.fps ?? '24/1',
+      },
+      { codec_type: 'audio', codec_name: 'aac' },
+    ],
+  }
+}
+
+function queueMediaToolOutputs(...outputs: readonly unknown[]): void {
+  const queue = [...outputs]
+  mediaToolMock.execFile.mockImplementation((...args: unknown[]) => {
+    const callback = args.at(-1)
+    if (typeof callback !== 'function') throw new Error('execFile callback missing')
+    const output = queue.shift()
+    if (output === undefined) throw new Error('unexpected media tool call')
+    const stdout = typeof output === 'string' ? output : JSON.stringify(output)
+    const resolve = callback as (
+      error: Error | null,
+      result: { stdout: string; stderr: string },
+    ) => void
+    resolve(null, { stdout, stderr: '' })
+  })
+}
 
 function validProbe(overrides: Partial<SeedanceReferenceVideoProbe> = {}): SeedanceReferenceVideoProbe {
   return {
@@ -33,6 +114,10 @@ function validProbe(overrides: Partial<SeedanceReferenceVideoProbe> = {}): Seeda
 describe('Seedance reference-video media contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mediaToolMock.mkdtemp.mockResolvedValue('/tmp/seedance-reference-video-test')
+    mediaToolMock.readFile.mockResolvedValue(Buffer.from('video'))
+    mediaToolMock.rm.mockResolvedValue(undefined)
+    workerUtilsMock.uploadVideoSourceToCos.mockResolvedValue('video/normalized.mp4')
   })
 
   it('AtlasCloud Seedance 2.0 R2V 白名單 -> 只接受 Standard 與 Fast 兩個完整 model key', () => {
@@ -79,6 +164,82 @@ describe('Seedance reference-video media contract', () => {
     })
   })
 
+  it('MediaRecorder WebM 缺少 duration -> 輸入探測仍取得尺寸，嚴格輸出探測仍拒絕缺秒數影片', () => {
+    const mediaRecorderWebm = mediaRecorderWebmProbe()
+
+    expect(parseSeedanceReferenceSourceProbe(mediaRecorderWebm)).toEqual({
+      width: 518,
+      height: 294,
+      durationSec: null,
+    })
+    expect(() => parseSeedanceReferenceProbe(mediaRecorderWebm))
+      .toThrow('SEEDANCE_REFERENCE_PROBE_DURATION_INVALID')
+  })
+
+  it.each([
+    [
+      '沒有 video stream',
+      { streams: [{ codec_type: 'audio', codec_name: 'opus' }] },
+      'SEEDANCE_REFERENCE_VIDEO_STREAM_MISSING',
+    ],
+    [
+      '缺少寬度',
+      { streams: [{ codec_type: 'video', height: 294 }] },
+      'SEEDANCE_REFERENCE_PROBE_SOURCE_WIDTH_INVALID',
+    ],
+    [
+      '寬度為 0',
+      { streams: [{ codec_type: 'video', width: 0, height: 294 }] },
+      'SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID',
+    ],
+    [
+      '高度為負數',
+      { streams: [{ codec_type: 'video', width: 518, height: -1 }] },
+      'SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID',
+    ],
+    [
+      '單邊超過 8192',
+      { streams: [{ codec_type: 'video', width: 9000, height: 5000 }] },
+      'SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID',
+    ],
+    [
+      '極端比例',
+      { streams: [{ codec_type: 'video', width: 2000, height: 200 }] },
+      'SEEDANCE_REFERENCE_SOURCE_ASPECT_RATIO_OUT_OF_RANGE',
+    ],
+    [
+      '來源總像素過高',
+      { streams: [{ codec_type: 'video', width: 8192, height: 5000 }] },
+      'SEEDANCE_REFERENCE_SOURCE_PIXEL_COUNT_OUT_OF_RANGE',
+    ],
+    [
+      '時長小於 2 秒',
+      {
+        format: { duration: '1.99' },
+        streams: [{ codec_type: 'video', width: 518, height: 294 }],
+      },
+      'SEEDANCE_REFERENCE_SOURCE_DURATION_OUT_OF_RANGE',
+    ],
+    [
+      '時長超過 15 秒',
+      {
+        format: { duration: '15.01' },
+        streams: [{ codec_type: 'video', width: 518, height: 294 }],
+      },
+      'SEEDANCE_REFERENCE_SOURCE_DURATION_OUT_OF_RANGE',
+    ],
+    [
+      '時長欄位無效',
+      {
+        format: { duration: 'N/A' },
+        streams: [{ codec_type: 'video', width: 518, height: 294 }],
+      },
+      'SEEDANCE_REFERENCE_PROBE_SOURCE_DURATION_INVALID',
+    ],
+  ])('來源 %s -> 在 FFmpeg 前顯式拒絕', (_label, input, expectedError) => {
+    expect(() => parseSeedanceReferenceSourceProbe(input)).toThrow(expectedError)
+  })
+
   it('橫式來源 -> ffmpeg 使用 argv 轉 H264/24fps/短邊720、可選音軌與 faststart', () => {
     const args = buildSeedanceReferenceFfmpegArgs({
       sourceVideoUrl: 'https://storage.example/depth.webm',
@@ -119,6 +280,139 @@ describe('Seedance reference-video media contract', () => {
       '-of', 'json',
       '/tmp/reference.mp4',
     ])
+  })
+
+  it('來源 ffprobe -> 讀取尺寸與可選 duration，不要求 WebM 一定提供 duration', () => {
+    expect(buildSeedanceReferenceSourceFfprobeArgs('/tmp/depth-guide.webm')).toEqual([
+      '-v', 'error',
+      '-show_entries',
+      'format=duration:stream=codec_type,width,height',
+      '-of', 'json',
+      '/tmp/depth-guide.webm',
+    ])
+  })
+
+  it('線上同型 durationless WebM -> 先讀尺寸、轉 MP4、嚴格驗證後才上傳', async () => {
+    queueMediaToolOutputs(
+      mediaRecorderWebmProbe(),
+      '',
+      normalizedMp4Probe(),
+    )
+
+    const result = await normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/depth-guide.webm',
+      taskId: 'task-durationless-webm',
+    })
+
+    expect(mediaToolMock.execFile.mock.calls.map((call) => call[0])).toEqual([
+      'ffprobe',
+      'ffmpeg',
+      'ffprobe',
+    ])
+    expect(mediaToolMock.execFile.mock.calls[0]?.[1]).toEqual(
+      buildSeedanceReferenceSourceFfprobeArgs(
+        'https://storage.example/depth-guide.webm',
+      ),
+    )
+    expect(mediaToolMock.execFile.mock.calls[1]?.[1]).toEqual(
+      buildSeedanceReferenceFfmpegArgs({
+        sourceVideoUrl: 'https://storage.example/depth-guide.webm',
+        outputPath: '/tmp/seedance-reference-video-test/reference.mp4',
+        sourceWidth: 518,
+        sourceHeight: 294,
+      }),
+    )
+    expect(mediaToolMock.execFile.mock.calls[2]?.[1]).toEqual(
+      buildSeedanceReferenceFfprobeArgs(
+        '/tmp/seedance-reference-video-test/reference.mp4',
+      ),
+    )
+    expect(workerUtilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      Buffer.from('video'),
+      'playground-runs/seedance-reference',
+      'task-durationless-webm',
+    )
+    expect(result).toEqual({
+      cosKey: 'video/normalized.mp4',
+      probe: {
+        formatNames: ['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2'],
+        sizeBytes: 5,
+        durationSec: 11,
+        videoCodec: 'h264',
+        width: 1268,
+        height: 720,
+        fps: 24,
+        hasAudio: true,
+      },
+    })
+    expect(mediaToolMock.rm).toHaveBeenCalledWith(
+      '/tmp/seedance-reference-video-test',
+      { recursive: true, force: true },
+    )
+  })
+
+  it('來源明確超過 15 秒 -> 轉檔與上傳前拒絕，不得靜默截短', async () => {
+    queueMediaToolOutputs({
+      ...mediaRecorderWebmProbe(),
+      format: {
+        ...mediaRecorderWebmProbe().format,
+        duration: '16.000000',
+      },
+    })
+
+    await expect(normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/too-long-depth-guide.webm',
+      taskId: 'task-too-long-source',
+    })).rejects.toThrow('SEEDANCE_REFERENCE_SOURCE_DURATION_OUT_OF_RANGE')
+
+    expect(mediaToolMock.execFile).toHaveBeenCalledTimes(1)
+    expect(mediaToolMock.mkdtemp).not.toHaveBeenCalled()
+    expect(mediaToolMock.readFile).not.toHaveBeenCalled()
+    expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+  })
+
+  it('正規化輸出仍缺 duration -> 顯式失敗且不得上傳', async () => {
+    queueMediaToolOutputs(
+      mediaRecorderWebmProbe(),
+      '',
+      normalizedMp4Probe({ duration: null }),
+    )
+
+    await expect(normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/depth-guide.webm',
+      taskId: 'task-invalid-normalized-output',
+    })).rejects.toThrow('SEEDANCE_REFERENCE_PROBE_DURATION_INVALID')
+
+    expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+    expect(mediaToolMock.rm).toHaveBeenCalledWith(
+      '/tmp/seedance-reference-video-test',
+      { recursive: true, force: true },
+    )
+  })
+
+  it('要求保留原音但正規化輸出沒有音軌 -> 上傳前拒絕並清理暫存檔', async () => {
+    const outputWithoutAudio = normalizedMp4Probe()
+    outputWithoutAudio.streams = outputWithoutAudio.streams.filter(
+      (stream) => stream.codec_type !== 'audio',
+    )
+    queueMediaToolOutputs(
+      mediaRecorderWebmProbe(),
+      '',
+      outputWithoutAudio,
+    )
+
+    await expect(normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/depth-guide-with-audio.webm',
+      taskId: 'task-audio-required',
+      requireAudio: true,
+    })).rejects.toThrow('PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION')
+
+    expect(mediaToolMock.readFile).not.toHaveBeenCalled()
+    expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+    expect(mediaToolMock.rm).toHaveBeenCalledWith(
+      '/tmp/seedance-reference-video-test',
+      { recursive: true, force: true },
+    )
   })
 
   it('符合 AtlasCloud 邊界 -> 允許 2 秒與 15 秒、24fps、MP4/H264 的 720p 影片', () => {

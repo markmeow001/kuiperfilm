@@ -110,7 +110,11 @@ export async function handlePlaygroundVideoTask(
     const normalized = await normalizeSeedanceReferenceVideoToCos({
       sourceVideoUrl: signedVideoUrls[0],
       taskId,
+      requireAudio: preserveSourceAudio,
     })
+    if (preserveSourceAudio && !normalized.probe.hasAudio) {
+      throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION')
+    }
     const normalizedUrl = toSignedUrlIfCos(normalized.cosKey, 7200)
     if (!normalizedUrl) {
       throw new Error('PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_URL_INVALID')

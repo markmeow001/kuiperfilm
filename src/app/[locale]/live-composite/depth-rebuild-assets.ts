@@ -92,6 +92,7 @@ export interface UseDepthRebuildResult {
   availableResolutions: readonly string[]
   prompt: string
   promptIsStale: boolean
+  promptValidationError: string | null
   validationError: string | null
   canGenerate: boolean
   costEstimate: PlaygroundCostEstimate | null

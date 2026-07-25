@@ -85,6 +85,7 @@ export function DepthRebuildControls({
       resolution={controller.resolution}
       prompt={controller.prompt}
       promptStale={controller.promptIsStale}
+      promptBlockingMessage={controller.promptValidationError}
       generating={generating}
       interactionDisabled={interactionDisabled}
       canGenerate={controller.canGenerate}

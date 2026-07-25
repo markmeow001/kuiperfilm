@@ -27,6 +27,12 @@ export interface SeedanceReferenceVideoProbe {
   hasAudio: boolean
 }
 
+export interface SeedanceReferenceSourceProbe {
+  width: number
+  height: number
+  durationSec: number | null
+}
+
 interface FfprobeStream {
   codec_type?: unknown
   codec_name?: unknown
@@ -51,6 +57,8 @@ const MIN_ASPECT_RATIO = 0.4
 const MAX_ASPECT_RATIO = 2.5
 const MIN_PIXELS = 409_600
 const MAX_PIXELS = 2_086_876
+const MAX_SOURCE_DIMENSION = 8192
+const MAX_SOURCE_PIXELS = 7680 * 4320
 const MIN_FPS = 24
 const MAX_FPS = 60
 const MIN_DURATION_SEC = 2
@@ -113,6 +121,49 @@ export function parseSeedanceReferenceProbe(raw: unknown): SeedanceReferenceVide
     fps: parseFps(fpsSource),
     hasAudio: streams.some((stream) => stream.codec_type === 'audio'),
   }
+}
+
+/**
+ * Browser MediaRecorder WebM files can omit container-level duration metadata.
+ * The source pass only needs dimensions for the deterministic FFmpeg scale;
+ * the normalized MP4 is still checked with the full provider contract below.
+ */
+export function parseSeedanceReferenceSourceProbe(raw: unknown): SeedanceReferenceSourceProbe {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_PROBE_INVALID')
+  }
+  const payload = raw as FfprobePayload
+  const streams = Array.isArray(payload.streams) ? payload.streams : []
+  const video = streams.find((stream) => stream.codec_type === 'video')
+  if (!video) throw new Error('SEEDANCE_REFERENCE_VIDEO_STREAM_MISSING')
+
+  const width = parseFiniteNumber(video.width, 'source_width')
+  const height = parseFiniteNumber(video.height, 'source_height')
+  if (
+    width <= 0
+    || height <= 0
+    || width > MAX_SOURCE_DIMENSION
+    || height > MAX_SOURCE_DIMENSION
+  ) {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID')
+  }
+  const aspectRatio = width / height
+  if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_ASPECT_RATIO_OUT_OF_RANGE')
+  }
+  if (width * height > MAX_SOURCE_PIXELS) {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_PIXEL_COUNT_OUT_OF_RANGE')
+  }
+  const durationSec = payload.format?.duration === undefined
+    ? null
+    : parseFiniteNumber(payload.format.duration, 'source_duration')
+  if (
+    durationSec !== null
+    && (durationSec < MIN_DURATION_SEC || durationSec > MAX_DURATION_SEC)
+  ) {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_DURATION_OUT_OF_RANGE')
+  }
+  return { width, height, durationSec }
 }
 
 export function assertAtlasCloudSeedanceReferenceVideo(
@@ -182,6 +233,31 @@ export function buildSeedanceReferenceFfprobeArgs(source: string): string[] {
   ]
 }
 
+export function buildSeedanceReferenceSourceFfprobeArgs(source: string): string[] {
+  return [
+    '-v', 'error',
+    '-show_entries',
+    'format=duration:stream=codec_type,width,height',
+    '-of', 'json',
+    source,
+  ]
+}
+
+async function probeReferenceVideoSource(source: string): Promise<SeedanceReferenceSourceProbe> {
+  const { stdout } = await execFileAsync(
+    'ffprobe',
+    buildSeedanceReferenceSourceFfprobeArgs(source),
+    { timeout: MEDIA_TOOL_TIMEOUT_MS, maxBuffer: MEDIA_TOOL_MAX_BUFFER },
+  )
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_FFPROBE_JSON_INVALID')
+  }
+  return parseSeedanceReferenceSourceProbe(parsed)
+}
+
 async function probeReferenceVideo(source: string): Promise<SeedanceReferenceVideoProbe> {
   const { stdout } = await execFileAsync(
     'ffprobe',
@@ -200,11 +276,12 @@ async function probeReferenceVideo(source: string): Promise<SeedanceReferenceVid
 export async function normalizeSeedanceReferenceVideoToCos(input: {
   sourceVideoUrl: string
   taskId: string
+  requireAudio?: boolean
 }): Promise<{
   cosKey: string
   probe: SeedanceReferenceVideoProbe
 }> {
-  const sourceProbe = await probeReferenceVideo(input.sourceVideoUrl)
+  const sourceProbe = await probeReferenceVideoSource(input.sourceVideoUrl)
   const dir = await mkdtemp(path.join(tmpdir(), 'seedance-reference-video-'))
   const outputPath = path.join(dir, 'reference.mp4')
   try {
@@ -220,6 +297,9 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
     )
     const normalizedProbe = await probeReferenceVideo(outputPath)
     assertAtlasCloudSeedanceReferenceVideo(normalizedProbe)
+    if (input.requireAudio && !normalizedProbe.hasAudio) {
+      throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION')
+    }
     const video = await readFile(outputPath)
     if (video.length !== normalizedProbe.sizeBytes || video.length === 0) {
       throw new Error('SEEDANCE_REFERENCE_NORMALIZED_SIZE_MISMATCH')

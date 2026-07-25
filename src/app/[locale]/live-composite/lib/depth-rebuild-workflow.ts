@@ -57,6 +57,13 @@ export interface DepthRebuildValidationInput {
   promptIsFresh: boolean
 }
 
+export interface DepthRebuildPromptValidationInput {
+  sourceDurationSeconds: number | null
+  characters: DepthRebuildValidationInput['characters']
+  sceneReferenceCount: number
+  sceneDescription: string
+}
+
 export function fileToDepthRebuildFingerprint(file: File): DepthRebuildAssetFingerprint {
   return {
     name: file.name,
@@ -136,17 +143,24 @@ export const DEPTH_CHARACTER_DESCRIPTION_MAX_CHARS = 600
 export const DEPTH_SCENE_DESCRIPTION_MAX_CHARS = 1_000
 export const DEPTH_REFERENCE_NOTE_MAX_CHARS = 120
 
-export function getDepthRebuildValidationError(input: DepthRebuildValidationInput): string | null {
-  if (input.sourceDurationSeconds === null) return '請先上傳原始表演影片'
+function getSourceDurationValidationError(sourceDurationSeconds: number | null): string | null {
+  if (sourceDurationSeconds === null) return '請先上傳原始表演影片'
   if (
-    !Number.isFinite(input.sourceDurationSeconds) ||
-    input.sourceDurationSeconds < MIN_DURATION_SECONDS ||
-    input.sourceDurationSeconds > MAX_DURATION_SECONDS
+    !Number.isFinite(sourceDurationSeconds) ||
+    sourceDurationSeconds < MIN_DURATION_SECONDS ||
+    sourceDurationSeconds > MAX_DURATION_SECONDS
   ) {
     return `原片需介於 ${MIN_DURATION_SECONDS}–${MAX_DURATION_SECONDS} 秒`
   }
-  if (!input.depthGuideExists) return '請先產生深度引導影片'
-  if (!input.depthGuideSufficient) return '深度引導影片有效幀率不足，請重新產生後再生成'
+  return null
+}
+
+function getReferenceSetupValidationError(
+  input: Pick<
+    DepthRebuildPromptValidationInput,
+    'characters' | 'sceneReferenceCount' | 'sceneDescription'
+  >,
+): string | null {
   if (input.characters.length === 0) return '請至少新增一位新角色'
   if (input.characters.length + input.sceneReferenceCount > MAX_REFERENCE_IMAGES) {
     return `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
@@ -189,6 +203,32 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
   if (referenceImageCount > MAX_REFERENCE_IMAGES) {
     return `人物與場景參考圖片合計最多 ${MAX_REFERENCE_IMAGES} 張`
   }
+  return null
+}
+
+/**
+ * 免費建立 Prompt 只檢查會影響文字與 image 對應的資料。
+ * 深度影片、模型與費用留到最後付費生成前才驗證。
+ */
+export function getDepthRebuildPromptValidationError(
+  input: DepthRebuildPromptValidationInput,
+): string | null {
+  return getSourceDurationValidationError(input.sourceDurationSeconds)
+    ?? getReferenceSetupValidationError(input)
+}
+
+export function getDepthRebuildValidationError(input: DepthRebuildValidationInput): string | null {
+  const sourceDurationSeconds = input.sourceDurationSeconds
+  if (sourceDurationSeconds === null) return '請先上傳原始表演影片'
+  const sourceError = getSourceDurationValidationError(sourceDurationSeconds)
+  if (sourceError) return sourceError
+  if (!input.depthGuideExists) return '請先產生深度引導影片'
+  if (!input.depthGuideSufficient) return '深度引導影片有效幀率不足，請重新產生後再生成'
+  const referenceError = getReferenceSetupValidationError(input)
+  if (referenceError) return referenceError
+
+  const referenceImageCount = input.characters.filter((character) => character.imageExists).length
+    + input.sceneReferenceCount
   if (!isAllowedTrackBModel(input.modelKey)) {
     return '只支援 AtlasCloud Seedance 2.0 Fast／Standard R2V'
   }
@@ -198,10 +238,10 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
 
   const requestValidation = validateR2VRequest({
     modelKey: input.modelKey,
-    durationSeconds: input.sourceDurationSeconds,
+    durationSeconds: sourceDurationSeconds,
     resolution: input.resolution,
     referenceImageCount,
-    referenceVideoDurationsSeconds: [input.sourceDurationSeconds],
+    referenceVideoDurationsSeconds: [sourceDurationSeconds],
   })
   if (!requestValidation.ok) return requestValidation.issues[0]?.message ?? '深度重建設定無效'
   if (!input.prompt.trim()) return '請先建立並檢查 Prompt'

@@ -308,6 +308,7 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
     expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenCalledWith({
       sourceVideoUrl: 'signed:cos/depth.webm',
       taskId: 'task-1',
+      requireAudio: true,
     })
     expect(sourceAudioMock.extractReferenceAudioToCos).toHaveBeenCalledWith(
       'signed:video/playground-runs/seedance-reference-task-1.mp4',
@@ -317,6 +318,53 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
     expect(generateOptions.referenceVideos).toEqual([
       'signed:video/playground-runs/seedance-reference-task-1.mp4',
     ])
+  })
+
+  it('深度影片正規化失敗 -> 不呼叫付費生成或音軌處理', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockRejectedValue(
+      new Error('SEEDANCE_REFERENCE_PROBE_DURATION_INVALID'),
+    )
+
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'follow the grayscale depth motion',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      preserveSourceAudio: true,
+    }))).rejects.toThrow('SEEDANCE_REFERENCE_PROBE_DURATION_INVALID')
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+    expect(utilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+  })
+
+  it('要求保留原音但正規化結果沒有音軌 -> 付費生成前顯式失敗', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValue({
+      cosKey: 'video/playground-runs/seedance-reference-task-1.mp4',
+      probe: {
+        formatNames: ['mov', 'mp4'],
+        sizeBytes: 2_000_000,
+        durationSec: 12,
+        videoCodec: 'h264',
+        width: 720,
+        height: 1280,
+        fps: 24,
+        hasAudio: false,
+      },
+    })
+
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'follow the grayscale depth motion',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/depth.webm'],
+      normalizeSeedanceReferenceVideo: true,
+      preserveSourceAudio: true,
+    }))).rejects.toThrow(
+      'PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION',
+    )
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
   })
 
   it('深度正規化收到外部 HTTPS -> 在 ffprobe 與付費生成前顯式拒絕', async () => {

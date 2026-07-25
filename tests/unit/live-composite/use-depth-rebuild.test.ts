@@ -216,6 +216,73 @@ describe('useDepthRebuild', () => {
     expect(mocks.submit).toHaveBeenCalledTimes(0)
   })
 
+  it('尚未產生深度影片 -> 可先檢查並建立 Prompt，但不能送出付費生成', async () => {
+    const stageRef = { current: createStage() }
+    const { result } = renderHook(() => useDepthRebuild({
+      stageRef,
+      metadata,
+      videoHasAudio: false,
+    }))
+
+    act(() => {
+      result.current.selectCharacterImage(
+        'character-1',
+        new File(['character'], 'character.png', { type: 'image/png' }),
+      )
+      result.current.setCharacterSourceBinding('character-1', '原片主要人物')
+      result.current.setCharacterDescription('character-1', '寫實電影角色，深色羊毛大衣')
+      result.current.setSceneDescription('雨夜街道，車流與招牌持續移動')
+    })
+
+    expect(result.current.promptValidationError).toBeNull()
+    act(() => result.current.buildPrompt())
+
+    expect(result.current.prompt).toContain('video 1 = grayscale inverse-depth performance guide')
+    expect(result.current.promptIsStale).toBe(false)
+    expect(result.current.depthGuide).toBeNull()
+    expect(result.current.validationError).toBe('請先產生深度引導影片')
+    expect(result.current.canGenerate).toBe(false)
+
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    expect(result.current.error).toBe('請先產生深度引導影片')
+    expect(mocks.upload).not.toHaveBeenCalled()
+    expect(mocks.submit).not.toHaveBeenCalled()
+    expect(mocks.waitForTaskResult).not.toHaveBeenCalled()
+  })
+
+  it('先建立 Prompt、後產生深度影片 -> Prompt 不會無故過期', async () => {
+    const stageRef = { current: createStage() }
+    const { result } = renderHook(() => useDepthRebuild({
+      stageRef,
+      metadata,
+      videoHasAudio: false,
+    }))
+
+    act(() => {
+      result.current.selectCharacterImage(
+        'character-1',
+        new File(['character'], 'character.png', { type: 'image/png' }),
+      )
+      result.current.setCharacterSourceBinding('character-1', '原片主要人物')
+      result.current.setCharacterDescription('character-1', '寫實電影角色，深色羊毛大衣')
+      result.current.setSceneDescription('雨夜街道，車流與招牌持續移動')
+    })
+    act(() => result.current.buildPrompt())
+    const reviewedPrompt = result.current.prompt
+
+    await act(async () => {
+      await result.current.generateDepthGuide()
+    })
+
+    expect(result.current.prompt).toBe(reviewedPrompt)
+    expect(result.current.promptIsStale).toBe(false)
+    expect(result.current.validationError).toBeNull()
+    expect(result.current.canGenerate).toBe(true)
+  })
+
   it('明確按下生成 -> 只送一支 depth video，圖片固定 character、scene 順序並保留原音', async () => {
     const stage = createStage()
     const stageRef = { current: stage }
@@ -380,7 +447,7 @@ describe('useDepthRebuild', () => {
       await result.current.generate()
     })
 
-    expect(result.current.error).toBe('深度重建供應商執行失敗：provider rejected reference video')
+    expect(result.current.error).toBe('深度重建執行失敗：provider rejected reference video')
     expect(result.current.submittedRunId).toBe('run-depth-1')
     expect(result.current.canResume).toBe(false)
 
@@ -388,7 +455,7 @@ describe('useDepthRebuild', () => {
       await result.current.generate()
     })
 
-    expect(result.current.error).toBe('深度重建供應商執行失敗：provider rejected reference video')
+    expect(result.current.error).toBe('深度重建執行失敗：provider rejected reference video')
     expect(mocks.upload).toHaveBeenCalledTimes(2)
     expect(mocks.submit).toHaveBeenCalledTimes(1)
   })
@@ -838,6 +905,8 @@ describe('useDepthRebuild', () => {
         'character-1',
         new File(['character'], 'character.png', { type: 'image/png' }),
       )
+      result.current.setCharacterSourceBinding('character-1', '原片主要人物')
+      result.current.setCharacterDescription('character-1', '寫實電影角色，深色羊毛大衣')
       result.current.addCharacter()
       result.current.setSceneDescription('雨夜街道持續有車流')
     })
@@ -846,7 +915,8 @@ describe('useDepthRebuild', () => {
     })
 
     expect(result.current.prompt).toBe('')
-    expect(result.current.error).toBe('請先上傳角色 2 的參考圖片，再建立 Prompt')
+    expect(result.current.error).toBe('請上傳角色 2 的參考圖片')
+    expect(result.current.promptValidationError).toBe('請上傳角色 2 的參考圖片')
   })
 
   it('角色 AI 補全 -> 由使用者按下後建立文字任務並套回指定角色', async () => {

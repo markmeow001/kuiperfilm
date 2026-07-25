@@ -3,6 +3,7 @@ import {
   buildDepthRebuildFingerprint,
   depthRebuildAspectRatio,
   depthRebuildDurationSeconds,
+  getDepthRebuildPromptValidationError,
   getDepthRebuildValidationError,
 } from '@/app/[locale]/live-composite/lib/depth-rebuild-workflow'
 
@@ -29,6 +30,16 @@ const baseValidation = {
   promptIsFresh: true,
 } as const
 
+function promptValidation(overrides: Partial<Parameters<typeof getDepthRebuildPromptValidationError>[0]> = {}) {
+  return getDepthRebuildPromptValidationError({
+    sourceDurationSeconds: baseValidation.sourceDurationSeconds,
+    characters: baseValidation.characters,
+    sceneReferenceCount: baseValidation.sceneReferenceCount,
+    sceneDescription: baseValidation.sceneDescription,
+    ...overrides,
+  })
+}
+
 describe('depth rebuild workflow', () => {
   it('完整有效設定 -> 通過提交前驗證', () => {
     expect(getDepthRebuildValidationError(baseValidation)).toBeNull()
@@ -49,6 +60,57 @@ describe('depth rebuild workflow', () => {
         sourceBinding: '   ',
       }],
     })).toBe('請描述「女記者」要替換原片中的哪一位人物')
+  })
+
+  it('免費 Prompt 驗證 -> 不依賴深度影片、模型、估價或既有 Prompt', () => {
+    expect(promptValidation()).toBeNull()
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      depthGuideExists: false,
+    })).toBe('請先產生深度引導影片')
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      depthGuideSufficient: false,
+    })).toBe('深度引導影片有效幀率不足，請重新產生後再生成')
+  })
+
+  it.each([
+    {
+      label: '缺少原片',
+      overrides: { sourceDurationSeconds: null },
+      expected: '請先上傳原始表演影片',
+    },
+    {
+      label: '角色缺圖',
+      overrides: { characters: [{ ...validationCharacter(1), imageExists: false }] },
+      expected: '請上傳角色 1 的參考圖片',
+    },
+    {
+      label: '角色缺名稱',
+      overrides: { characters: [{ ...validationCharacter(1), label: ' ' }] },
+      expected: '請填寫角色 1 的名稱',
+    },
+    {
+      label: '角色缺人物對應',
+      overrides: {
+        characters: [{ ...validationCharacter(1), label: '女記者', sourceBinding: ' ' }],
+      },
+      expected: '請描述「女記者」要替換原片中的哪一位人物',
+    },
+    {
+      label: '角色缺正式描述',
+      overrides: {
+        characters: [{ ...validationCharacter(1), label: '女記者', description: ' ' }],
+      },
+      expected: '請填寫「女記者」的角色補充描述',
+    },
+    {
+      label: '缺場景描述',
+      overrides: { sceneDescription: ' ' },
+      expected: '請填寫新場景描述',
+    },
+  ])('$label -> Step 03 回傳第一個可修正缺項', ({ overrides, expected }) => {
+    expect(promptValidation(overrides)).toBe(expected)
   })
 
   it('角色名稱重複 -> 阻擋含糊的多人圖片對應', () => {

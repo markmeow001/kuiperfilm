@@ -20,6 +20,7 @@ import {
   readPendingDepthRebuildGeneration,
   writePendingDepthRebuildGeneration,
 } from './lib/depth-rebuild-generation-storage'
+import { formatDepthRebuildTerminalError } from './lib/depth-rebuild-errors'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
 import type { VideoMetadata } from './live-composite-types'
 import type {
@@ -86,9 +87,7 @@ function resolveRunDetail(
   }
   if (run.status === 'failed') {
     throw new SubmittedRunTerminalError(
-      run.errorMessage
-        ? `深度重建供應商執行失敗：${run.errorMessage}`
-        : `深度重建供應商執行失敗（任務 ${runId}）`,
+      formatDepthRebuildTerminalError(run.errorMessage, runId),
     )
   }
   if (run.status !== 'succeeded') return null

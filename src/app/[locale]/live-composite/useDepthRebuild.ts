@@ -15,6 +15,7 @@ import {
   buildDepthRebuildFingerprint,
   depthRebuildDurationSeconds,
   fileToDepthRebuildFingerprint,
+  getDepthRebuildPromptValidationError,
   getDepthRebuildValidationError,
 } from './lib/depth-rebuild-workflow'
 import { useDepthRebuildDescriptionAssist } from './useDepthRebuildDescriptionAssist'
@@ -106,9 +107,9 @@ export function useDepthRebuild({
     sourceDurationSeconds: metadata?.duration ?? null,
     sourceWidth: metadata?.width ?? null,
     sourceHeight: metadata?.height ?? null,
-    depthGuide: inputs.depthGuide
-      ? fileToDepthRebuildFingerprint(inputs.depthGuide.file)
-      : null,
+    // Prompt 內容不依賴實際深度檔；先建立 Prompt、後產生或重產深度影片
+    // 不應讓已檢查的角色／場景文字無故過期。
+    depthGuide: null,
     characters: inputs.characters.map((character) => ({
       id: character.id,
       label: character.label,
@@ -129,7 +130,6 @@ export function useDepthRebuild({
     preserveSourceAudio: videoHasAudio === true,
   }), [
     metadata,
-    inputs.depthGuide,
     inputs.characters,
     inputs.sceneReferences,
     inputs.sceneDescription,
@@ -139,6 +139,22 @@ export function useDepthRebuild({
   ])
   const promptIsStale =
     promptFingerprint !== null && promptFingerprint !== currentFingerprint
+  const promptValidationError = useMemo(() => getDepthRebuildPromptValidationError({
+    sourceDurationSeconds: metadata?.duration ?? null,
+    characters: inputs.characters.map((character) => ({
+      label: character.label,
+      sourceBinding: character.sourceBinding,
+      description: character.description,
+      imageExists: Boolean(character.image),
+    })),
+    sceneReferenceCount: inputs.sceneReferences.length,
+    sceneDescription: inputs.sceneDescription,
+  }), [
+    metadata?.duration,
+    inputs.characters,
+    inputs.sceneReferences.length,
+    inputs.sceneDescription,
+  ])
   const workflowValidationError = useMemo(() => getDepthRebuildValidationError({
     sourceDurationSeconds: metadata?.duration ?? null,
     depthGuideExists: Boolean(inputs.depthGuide),
@@ -207,13 +223,12 @@ export function useDepthRebuild({
     )
 
   function buildPrompt(): void {
-    if (!metadata) {
-      setError('請先上傳原始表演影片')
+    if (promptValidationError) {
+      setError(promptValidationError)
       return
     }
-    const missingCharacterIndex = inputs.characters.findIndex((character) => !character.image)
-    if (missingCharacterIndex >= 0) {
-      setError(`請先上傳角色 ${missingCharacterIndex + 1} 的參考圖片，再建立 Prompt`)
+    if (!metadata) {
+      setError('請先上傳原始表演影片')
       return
     }
     try {
@@ -285,6 +300,7 @@ export function useDepthRebuild({
     availableResolutions,
     prompt,
     promptIsStale,
+    promptValidationError,
     validationError,
     canGenerate,
     costEstimate: costQuery.data ?? null,

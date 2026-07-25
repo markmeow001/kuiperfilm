@@ -50,7 +50,9 @@ export function DepthDescriptionAssist({
           {busy ? '補全中…' : 'AI 補全'}
         </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-stone-600">主動按下才會使用文字分析模型，可能產生少量費用。</p>
+      <p className="mt-1.5 text-[11px] leading-5 text-stone-600">
+        這裡只填簡短構想；按「AI 補全」後才會寫入下方正式描述。主動按下可能產生少量文字分析費用。
+      </p>
     </div>
   )
 }
