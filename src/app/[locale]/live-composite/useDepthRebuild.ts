@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { usePlaygroundCostEstimate } from '@/lib/query/mutations/playground-mutations'
 import {
@@ -25,6 +25,7 @@ import type {
   UseDepthRebuildOptions,
   UseDepthRebuildResult,
 } from './depth-rebuild-assets'
+import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 
 export type {
   DepthGuideStageHandle,
@@ -51,6 +52,10 @@ export function useDepthRebuild({
   const [error, setError] = useState<string | null>(null)
   const [modelKey, setModelKey] = useState<TrackBModelKey>(TRACK_B_STANDARD_MODEL)
   const [resolution, setResolution] = useState('720p')
+  const [sourceAudioMode, setSourceAudioModeState] = useState<SourceAudioMode>(
+    videoHasAudio === true ? 'preserve' : 'generate',
+  )
+  const sourceAudioModeWasChosenRef = useRef(false)
   const [prompt, setPrompt] = useState('')
   const [promptFingerprint, setPromptFingerprint] = useState<string | null>(null)
   const descriptionAssistScope = workspaceId ?? [
@@ -76,6 +81,16 @@ export function useDepthRebuild({
     scopeKey: persistenceScope,
     onError: setError,
   })
+
+  useEffect(() => {
+    if (sourceAudioModeWasChosenRef.current || videoHasAudio === null) return
+    setSourceAudioModeState(videoHasAudio ? 'preserve' : 'generate')
+  }, [videoHasAudio])
+
+  function setSourceAudioMode(value: SourceAudioMode): void {
+    sourceAudioModeWasChosenRef.current = true
+    setSourceAudioModeState(value)
+  }
 
   const enabledModels = useMemo(() => (
     (modelsQuery.data?.video ?? [])
@@ -127,7 +142,7 @@ export function useDepthRebuild({
     sceneDescription: inputs.sceneDescription,
     modelKey,
     resolution,
-    preserveSourceAudio: videoHasAudio === true,
+    sourceAudioMode,
   }), [
     metadata,
     inputs.characters,
@@ -135,7 +150,7 @@ export function useDepthRebuild({
     inputs.sceneDescription,
     modelKey,
     resolution,
-    videoHasAudio,
+    sourceAudioMode,
   ])
   const promptIsStale =
     promptFingerprint !== null && promptFingerprint !== currentFingerprint
@@ -170,6 +185,8 @@ export function useDepthRebuild({
     modelKey,
     resolution,
     enabledModelKeys,
+    sourceAudioMode,
+    sourceAudioDetected: videoHasAudio,
     prompt,
     promptIsFresh: promptFingerprint === currentFingerprint,
   }), [
@@ -181,6 +198,8 @@ export function useDepthRebuild({
     modelKey,
     resolution,
     enabledModelKeys,
+    sourceAudioMode,
+    videoHasAudio,
     prompt,
     promptFingerprint,
     currentFingerprint,
@@ -202,7 +221,7 @@ export function useDepthRebuild({
   const generation = useDepthRebuildGeneration({
     persistenceScopeKey: persistenceScope,
     metadata,
-    videoHasAudio,
+    sourceAudioMode,
     workspaceId,
     depthGuide: inputs.depthGuide,
     characters: inputs.characters,
@@ -241,7 +260,7 @@ export function useDepthRebuild({
         })),
         sceneReferences: inputs.sceneReferences.map((scene) => ({ note: scene.note })),
         sceneDescription: inputs.sceneDescription,
-        preserveSourceAudio: videoHasAudio === true,
+        sourceAudioMode,
       })
       setPrompt(nextPrompt)
       setPromptFingerprint(currentFingerprint)
@@ -265,6 +284,8 @@ export function useDepthRebuild({
 
   function resetSource(): void {
     inputs.resetDepthSource()
+    sourceAudioModeWasChosenRef.current = false
+    setSourceAudioModeState('generate')
     setPrompt('')
     setPromptFingerprint(null)
     generation.resetResult()
@@ -298,6 +319,8 @@ export function useDepthRebuild({
     enabledModelsError: modelsQuery.isError ? '模型清單讀取失敗' : null,
     resolution,
     availableResolutions,
+    sourceAudioMode,
+    sourceAudioDetected: videoHasAudio,
     prompt,
     promptIsStale,
     promptValidationError,
@@ -332,6 +355,7 @@ export function useDepthRebuild({
     assistSceneDescription,
     setModelKey,
     setResolution,
+    setSourceAudioMode,
     setPrompt,
     generateDepthGuide,
     cancelDepthGuide: inputs.cancelDepthGuide,

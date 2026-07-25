@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import {
   DEPTH_REFERENCE_NOTE_MAX_CHARS,
@@ -40,6 +41,8 @@ export function DepthSceneReferenceGallery({
   onAssist,
 }: DepthSceneReferenceGalleryProps) {
   const inputId = 'depth-rebuild-scenes'
+  const inputRef = useRef<HTMLInputElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   return (
     <section className="rounded-xl border border-violet-300/15 bg-violet-300/[0.025] p-3" aria-labelledby="depth-scene-title">
@@ -96,31 +99,41 @@ export function DepthSceneReferenceGallery({
         </div>
       ) : null}
 
-      <label
-        htmlFor={inputId}
-        className={`mt-3 flex h-11 items-center justify-center gap-2 rounded-lg border border-dashed focus-within:outline-none focus-within:ring-2 focus-within:ring-violet-200 ${
-          uploadDisabled || controlsDisabled
-            ? 'cursor-not-allowed border-white/10 text-stone-600 opacity-50'
-            : 'cursor-pointer border-violet-300/25 text-stone-400 hover:border-violet-200/45 hover:text-violet-100'
-        }`}
-      >
-        <AppIcon name="plus" className="h-4 w-4" />
-        新增場景參考圖片
+      <div className="relative mt-3">
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={uploadDisabled || controlsDisabled}
+          onClick={() => inputRef.current?.click()}
+          className={`flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-dashed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${
+            uploadDisabled || controlsDisabled
+              ? 'cursor-not-allowed border-white/10 text-stone-600 opacity-50'
+              : 'border-violet-300/25 text-stone-400 hover:border-violet-200/45 hover:text-violet-100'
+          }`}
+        >
+          <AppIcon name="plus" className="h-4 w-4" />
+          新增場景參考圖片
+        </button>
         <input
+          ref={inputRef}
           id={inputId}
           type="file"
           multiple
           accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
           aria-label="新增場景參考圖片"
+          tabIndex={-1}
           disabled={controlsDisabled || uploadDisabled}
           className="sr-only"
           onChange={(event) => {
-            const files = Array.from(event.target.files ?? [])
-            event.target.value = ''
-            if (files.length > 0) onAddImages(files)
+            const files = Array.from(event.currentTarget.files ?? [])
+            event.currentTarget.value = ''
+            if (files.length > 0) {
+              onAddImages(files)
+              triggerRef.current?.focus({ preventScroll: true })
+            }
           }}
         />
-      </label>
+      </div>
 
       <div className="mt-4">
         <DepthDescriptionAssist

@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DepthRebuildReferenceSection } from '@/app/[locale]/live-composite/DepthRebuildReferenceSection'
 
 type ReferenceSectionProps = ComponentProps<typeof DepthRebuildReferenceSection>
@@ -68,6 +68,10 @@ function buildProps(
 }
 
 describe('DepthRebuildReferenceSection', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('尚未上傳圖片 -> 顯示 0/9 配額並明示 AI 補全可能產生文字模型費用', () => {
     render(<DepthRebuildReferenceSection {...buildProps()} />)
 
@@ -75,7 +79,7 @@ describe('DepthRebuildReferenceSection', () => {
     expect(screen.getByLabelText('已使用 0 / 9 張參考圖片')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'AI 補全角色 1的外觀' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'AI 補全新場景與持續動態' })).toBeInTheDocument()
-    expect(screen.getAllByText(/主動按下才會使用文字分析模型，可能產生少量費用/)).toHaveLength(2)
+    expect(screen.getAllByText(/主動按下可能產生少量文字分析費用/)).toHaveLength(2)
     expect(screen.getByText(/另為 1 位待上傳角色預留位置/)).toBeInTheDocument()
     expect(screen.getByTitle('image 1（人物待上傳）')).toBeInTheDocument()
   })
@@ -154,12 +158,48 @@ describe('DepthRebuildReferenceSection', () => {
     expect(screen.getByRole('button', { name: '移除新郎的參考圖片' })).toBeInTheDocument()
     const replaceGroomImage = screen.getByLabelText('更換新郎的參考圖片')
     expect(replaceGroomImage).toHaveAttribute('type', 'file')
-    expect(replaceGroomImage.closest('label')).toHaveClass('focus-within:ring-2')
+    expect(replaceGroomImage).toHaveAttribute('tabindex', '-1')
+    expect(replaceGroomImage.parentElement).toHaveClass('relative')
+    expect(screen.getByRole('button', { name: '更換' })).toHaveClass('focus-visible:ring-2')
     const uploadBrideImage = screen.getByLabelText('上傳角色 02 參考圖片')
-    expect(uploadBrideImage.closest('label')).toHaveClass('focus-within:ring-2')
+    expect(uploadBrideImage).toHaveAttribute('tabindex', '-1')
+    expect(uploadBrideImage.parentElement).toHaveClass('relative')
+    expect(screen.getByRole('button', { name: '上傳角色 02 參考圖片' })).toHaveClass('focus-visible:ring-2')
     expect(screen.getByLabelText('場景參考 1 的用途')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '移除場景參考 1' })).toBeInTheDocument()
     const addSceneImages = screen.getByLabelText('新增場景參考圖片')
-    expect(addSceneImages.closest('label')).toHaveClass('focus-within:ring-2')
+    expect(addSceneImages).toHaveAttribute('tabindex', '-1')
+    expect(addSceneImages.parentElement).toHaveClass('relative')
+    expect(screen.getByRole('button', { name: '新增場景參考圖片' })).toHaveClass('focus-visible:ring-2')
+  })
+
+  it('角色圖片建立預覽 -> 保留同一個 file input，且焦點回到可見控制不捲動頁面', () => {
+    const onCharacterSelect = vi.fn()
+    const focusSpy = vi.spyOn(HTMLButtonElement.prototype, 'focus')
+    const initialProps = buildProps({ onCharacterSelect })
+    const { rerender } = render(<DepthRebuildReferenceSection {...initialProps} />)
+    const inputBeforePreview = screen.getByLabelText('上傳角色 01 參考圖片')
+    const triggerBeforePreview = screen.getByRole('button', { name: '上傳角色 01 參考圖片' })
+    const file = new File(['character'], 'character.png', { type: 'image/png' })
+
+    fireEvent.change(inputBeforePreview, { target: { files: [file] } })
+
+    expect(onCharacterSelect).toHaveBeenCalledWith('character-1', file)
+    expect(focusSpy).toHaveBeenLastCalledWith({ preventScroll: true })
+    expect(document.activeElement).toBe(triggerBeforePreview)
+
+    rerender(<DepthRebuildReferenceSection {...buildProps({
+      characters: [character('character-1', {
+        label: '新娘',
+        reference: { url: 'blob:bride', name: 'bride.png' },
+      })],
+      used: 1,
+      onCharacterSelect,
+    })} />)
+
+    const inputAfterPreview = screen.getByLabelText('更換新娘的參考圖片')
+    expect(inputAfterPreview).toBe(inputBeforePreview)
+    expect(inputAfterPreview.parentElement).toHaveClass('relative')
+    expect(screen.getByRole('button', { name: '更換' })).toBe(triggerBeforePreview)
   })
 })

@@ -1,4 +1,5 @@
 import { VIDEO_PROMPT_HARD_LIMIT } from '@/lib/playground/video-prompt-limits'
+import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 
 export interface DepthRebuildPromptCharacter {
   label: string
@@ -15,7 +16,7 @@ export interface DepthRebuildPromptInput {
   characters: readonly DepthRebuildPromptCharacter[]
   sceneReferences: readonly DepthRebuildPromptSceneReference[]
   sceneDescription: string
-  preserveSourceAudio: boolean
+  sourceAudioMode: SourceAudioMode
 }
 
 function required(value: string, field: string): string {
@@ -56,18 +57,25 @@ export function buildDepthRebuildPrompt(input: DepthRebuildPromptInput): string 
   }))
   const sceneTokens = sceneReferences.map((reference) => reference.token)
   const sceneBinding = sceneReferences.length > 0
-    ? `Use ${joinTokens(sceneTokens)} together as visual references for the new environment, architecture, lighting, palette, materials and composition.`
+    ? (
+        `Use ${joinTokens(sceneTokens)} together only as visual references for the new environment's ` +
+        'architecture, lighting, palette and materials. Do not use scene reference images to control or change ' +
+        'composition, crop, framing, camera path, lens, camera distance, headroom, subject scale or subject screen position.'
+      )
     : 'Build the new environment strictly from the scene direction below.'
-  const audioBinding = input.preserveSourceAudio
-    ? 'The original audio is carried by video 1. Preserve its dialogue timing, pauses, rhythm and emotional intensity; keep visible mouth timing aligned with that audio.'
-    : 'Do not invent spoken dialogue. Generate only natural environmental sound when appropriate.'
+  const audioBinding = input.sourceAudioMode === 'preserve'
+    ? 'The original audio is carried by video 1 and must remain in the final output. Preserve its dialogue, music, pauses, rhythm and emotional intensity; keep visible mouth timing aligned with that audio. Do not clean, replace or reinterpret the source recording.'
+    : input.sourceAudioMode === 'reference-only'
+      ? 'Use the original audio carried by video 1 only as a timing reference for dialogue, pauses, rhythm, emotion and visible mouth motion. The final output must be silent so dialogue and sound can be replaced in post-production.'
+      : 'The source audio has been removed. Generate new natural diegetic sound for the rebuilt scene. Do not claim to preserve the original dialogue; spoken words may differ unless they are explicitly supplied in the written direction.'
 
   const prompt = [
     '[REFERENCE MAP]',
     'video 1 = grayscale inverse-depth performance guide; white is nearer to camera and black is farther away.',
     ...characters.map((character) => (
       `${character.token} = identity, face, hair, body proportions, costume and styling for "${character.label}". ` +
-      `This character replaces only: ${character.sourceBinding}.`
+      `This character replaces only: ${character.sourceBinding}. Use ${character.token} only for appearance. ` +
+      `Ignore its pose, action, original background, camera distance, lens, framing and full-body crop or composition.`
     )),
     ...sceneReferences.map((reference) => (
       `${reference.token} = new environment reference (${reference.note}).`
@@ -77,6 +85,16 @@ export function buildDepthRebuildPrompt(input: DepthRebuildPromptInput): string 
     `Create one continuous ${input.durationSeconds.toFixed(1)}-second cinematic live-action shot.`,
     'Use video 1 only for body silhouettes, action order, walk paths, spatial depth, subject scale, framing, camera movement and exact timing.',
     'Do not copy grayscale color, original clothing, original faces, original background texture, signage or lighting from video 1.',
+    '',
+    '[HIGH PRIORITY FRAMING LOCK]',
+    'This is a high-priority prompt constraint, not an API-level camera lock.',
+    'Treat video 1 as the sole reference for shot geometry. In every frame, follow video 1 exactly for camera path, lens perspective, camera-to-subject distance, headroom, lead room, subject screen position, subject pixel height, subject screen occupancy and anatomical crop.',
+    'Keep the same frame boundaries and the same anatomical cutoff for every performer at the same moment.',
+    'Never zoom out, dolly out, reframe, widen the shot or reveal a full body when video 1 does not.',
+    'Lower legs, feet, arms, props or any other body parts outside video 1 at a given moment must remain outside the output frame at that moment. Do not invent visible space beyond the source crop.',
+    'Build the new environment behind the source framing without changing that framing to fit a scene or character reference image.',
+    '',
+    '[IDENTITY AND ENVIRONMENT CONTRACT]',
     ...characters.map((character) => (
       `Replace only the performer identified as "${character.sourceBinding}" with "${character.label}" from ${character.token}. ` +
       `Keep that performer's original motion, balance, gesture trajectory, screen position and interaction timing. ` +

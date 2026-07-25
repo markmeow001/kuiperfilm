@@ -26,6 +26,8 @@ const baseValidation = {
   modelKey: 'atlascloud::seedance-2.0-r2v',
   resolution: '720p',
   enabledModelKeys: ['atlascloud::seedance-2.0-r2v'],
+  sourceAudioMode: 'preserve',
+  sourceAudioDetected: true,
   prompt: 'depth-guided reconstruction prompt',
   promptIsFresh: true,
 } as const
@@ -171,6 +173,20 @@ describe('depth rebuild workflow', () => {
     })).toBe('設定或參考素材已變更，請重新建立 Prompt')
   })
 
+  it('需要原音但尚未偵測到音軌 -> 在付費前阻擋；重新生成聲音則可繼續', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      sourceAudioMode: 'preserve',
+      sourceAudioDetected: false,
+    })).toBe('原片未偵測到音軌；請改選「AI 重新生成聲音」')
+
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      sourceAudioMode: 'generate',
+      sourceAudioDetected: false,
+    })).toBeNull()
+  })
+
   it('Fast 選到 1080p -> 回傳供應商解析度錯誤而非靜默降級', () => {
     const error = getDepthRebuildValidationError({
       ...baseValidation,
@@ -224,7 +240,7 @@ describe('depth rebuild workflow', () => {
       sceneDescription: '場景 A',
       modelKey: 'atlascloud::seedance-2.0-r2v',
       resolution: '720p',
-      preserveSourceAudio: true,
+      sourceAudioMode: 'preserve' as const,
     }
     const original = buildDepthRebuildFingerprint(base)
     const reordered = buildDepthRebuildFingerprint({
@@ -245,10 +261,15 @@ describe('depth rebuild workflow', () => {
         base.characters[1],
       ],
     })
+    const changedAudioMode = buildDepthRebuildFingerprint({
+      ...base,
+      sourceAudioMode: 'reference-only',
+    })
 
     expect(reordered).not.toBe(original)
     expect(rebound).not.toBe(original)
     expect(redescribed).not.toBe(original)
+    expect(changedAudioMode).not.toBe(original)
   })
 
   it('超過 15 秒 -> 秒數正規化明確失敗', () => {

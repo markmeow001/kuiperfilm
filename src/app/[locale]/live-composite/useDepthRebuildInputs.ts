@@ -274,7 +274,11 @@ export function useDepthRebuildInputs({
     depthGenerationInFlightRef.current = true
     try {
       const exported = await stage.exportDepthGuideVideo({
-        includeAudio: videoHasAudio === true,
+        // Audio probing is asynchronous and may still be unknown when the
+        // user starts this local export. Keep the track unless the source is
+        // positively known to be silent; the server strips it later when
+        // sourceAudioMode="generate".
+        includeAudio: videoHasAudio !== false,
         onProgress: setDepthGuideProgress,
       })
       if (depthCancelRequestedRef.current) return

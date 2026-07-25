@@ -83,6 +83,8 @@ export function DepthRebuildControls({
       modelKey={controller.modelKey}
       resolutionOptions={controller.availableResolutions.map((value) => ({ value, label: value }))}
       resolution={controller.resolution}
+      sourceAudioMode={controller.sourceAudioMode}
+      sourceAudioDetected={controller.sourceAudioDetected}
       prompt={controller.prompt}
       promptStale={controller.promptIsStale}
       promptBlockingMessage={controller.promptValidationError}
@@ -119,6 +121,7 @@ export function DepthRebuildControls({
         if (isAllowedTrackBModel(value)) controller.setModelKey(value)
       }}
       onResolutionChange={controller.setResolution}
+      onSourceAudioModeChange={controller.setSourceAudioMode}
       onBuildPrompt={controller.buildPrompt}
       onGenerate={() => void controller.generate()}
       onResetSubmittedRun={controller.resetResult}

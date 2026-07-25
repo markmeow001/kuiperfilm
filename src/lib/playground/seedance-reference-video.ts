@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import type { SourceAudioMode } from './source-audio-contract'
 
 const execFileAsync = promisify(execFile)
 const MEDIA_TOOL_TIMEOUT_MS = 240_000
@@ -204,19 +205,24 @@ export function buildSeedanceReferenceFfmpegArgs(input: {
   outputPath: string
   sourceWidth: number
   sourceHeight: number
+  includeAudio?: boolean
 }): string[] {
   if (input.sourceWidth <= 0 || input.sourceHeight <= 0) {
     throw new Error('SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID')
   }
   const scale = input.sourceWidth >= input.sourceHeight ? '-2:720' : '720:-2'
+  const audioMapArgs = input.includeAudio === false ? [] : ['-map', '0:a:0?']
+  const audioCodecArgs = input.includeAudio === false
+    ? ['-an']
+    : ['-c:a', 'aac', '-b:a', '192k', '-ar', '48000']
   return [
     '-y', '-hide_banner', '-loglevel', 'error',
     '-i', input.sourceVideoUrl,
-    '-map', '0:v:0', '-map', '0:a:0?',
+    '-map', '0:v:0', ...audioMapArgs,
     '-vf', `fps=24,scale=${scale}`,
     '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
     '-preset', 'medium', '-crf', '20',
-    '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
+    ...audioCodecArgs,
     '-t', String(MAX_DURATION_SEC),
     '-movflags', '+faststart',
     input.outputPath,
@@ -277,10 +283,18 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
   sourceVideoUrl: string
   taskId: string
   requireAudio?: boolean
+  sourceAudioMode?: SourceAudioMode
 }): Promise<{
   cosKey: string
   probe: SeedanceReferenceVideoProbe
 }> {
+  if (input.sourceAudioMode === 'generate' && input.requireAudio === true) {
+    throw new Error('PLAYGROUND_SOURCE_AUDIO_MODE_NORMALIZATION_CONFLICT')
+  }
+  const includeAudio = input.sourceAudioMode !== 'generate'
+  const requireAudio = input.requireAudio === true
+    || input.sourceAudioMode === 'preserve'
+    || input.sourceAudioMode === 'reference-only'
   const sourceProbe = await probeReferenceVideoSource(input.sourceVideoUrl)
   const dir = await mkdtemp(path.join(tmpdir(), 'seedance-reference-video-'))
   const outputPath = path.join(dir, 'reference.mp4')
@@ -292,13 +306,17 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
         outputPath,
         sourceWidth: sourceProbe.width,
         sourceHeight: sourceProbe.height,
+        includeAudio,
       }),
       { timeout: MEDIA_TOOL_TIMEOUT_MS, maxBuffer: MEDIA_TOOL_MAX_BUFFER },
     )
     const normalizedProbe = await probeReferenceVideo(outputPath)
     assertAtlasCloudSeedanceReferenceVideo(normalizedProbe)
-    if (input.requireAudio && !normalizedProbe.hasAudio) {
+    if (requireAudio && !normalizedProbe.hasAudio) {
       throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION')
+    }
+    if (input.sourceAudioMode === 'generate' && normalizedProbe.hasAudio) {
+      throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_PRESENT_AFTER_NORMALIZATION')
     }
     const video = await readFile(outputPath)
     if (video.length !== normalizedProbe.sizeBytes || video.length === 0) {

@@ -58,6 +58,7 @@ function normalizedMp4Probe(overrides: {
   codecName?: string
   fps?: string
   size?: string
+  hasAudio?: boolean
 } = {}) {
   return {
     format: {
@@ -76,7 +77,9 @@ function normalizedMp4Probe(overrides: {
         avg_frame_rate: overrides.fps ?? '24/1',
         r_frame_rate: overrides.fps ?? '24/1',
       },
-      { codec_type: 'audio', codec_name: 'aac' },
+      ...(overrides.hasAudio === false
+        ? []
+        : [{ codec_type: 'audio', codec_name: 'aac' }]),
     ],
   }
 }
@@ -272,6 +275,29 @@ describe('Seedance reference-video media contract', () => {
     expect(args[args.indexOf('-vf') + 1]).toBe('fps=24,scale=720:-2')
   })
 
+  it('generate 模式 -> ffmpeg 明確移除來源音軌，不留下可選 audio map 或編碼器', () => {
+    const args = buildSeedanceReferenceFfmpegArgs({
+      sourceVideoUrl: 'source.mov',
+      outputPath: 'output.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      includeAudio: false,
+    })
+
+    expect(args).toEqual([
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-i', 'source.mov',
+      '-map', '0:v:0',
+      '-vf', 'fps=24,scale=-2:720',
+      '-c:v', 'libx264', '-profile:v', 'high', '-pix_fmt', 'yuv420p',
+      '-preset', 'medium', '-crf', '20',
+      '-an',
+      '-t', '15',
+      '-movflags', '+faststart',
+      'output.mp4',
+    ])
+  })
+
   it('ffprobe 呼叫 -> 只讀契約所需欄位且不使用 shell string', () => {
     expect(buildSeedanceReferenceFfprobeArgs('/tmp/reference.mp4')).toEqual([
       '-v', 'error',
@@ -413,6 +439,52 @@ describe('Seedance reference-video media contract', () => {
       '/tmp/seedance-reference-video-test',
       { recursive: true, force: true },
     )
+  })
+
+  it('generate 模式 + 有聲來源 -> 正規化輸出無音軌後才上傳', async () => {
+    queueMediaToolOutputs(
+      mediaRecorderWebmProbe(),
+      '',
+      normalizedMp4Probe({ hasAudio: false }),
+    )
+
+    const result = await normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/depth-guide-with-audio.webm',
+      taskId: 'task-generate-audio',
+      sourceAudioMode: 'generate',
+    })
+
+    expect(mediaToolMock.execFile.mock.calls[1]?.[1]).toEqual(
+      buildSeedanceReferenceFfmpegArgs({
+        sourceVideoUrl: 'https://storage.example/depth-guide-with-audio.webm',
+        outputPath: '/tmp/seedance-reference-video-test/reference.mp4',
+        sourceWidth: 518,
+        sourceHeight: 294,
+        includeAudio: false,
+      }),
+    )
+    expect(result.probe.hasAudio).toBe(false)
+    expect(workerUtilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      Buffer.from('video'),
+      'playground-runs/seedance-reference',
+      'task-generate-audio',
+    )
+  })
+
+  it('generate 模式但正規化輸出仍含音軌 -> 付費生成前顯式失敗', async () => {
+    queueMediaToolOutputs(
+      mediaRecorderWebmProbe(),
+      '',
+      normalizedMp4Probe({ hasAudio: true }),
+    )
+
+    await expect(normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/depth-guide-with-audio.webm',
+      taskId: 'task-generate-audio-leak',
+      sourceAudioMode: 'generate',
+    })).rejects.toThrow('PLAYGROUND_SOURCE_AUDIO_TRACK_PRESENT_AFTER_NORMALIZATION')
+
+    expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
   })
 
   it('符合 AtlasCloud 邊界 -> 允許 2 秒與 15 秒、24fps、MP4/H264 的 720p 影片', () => {

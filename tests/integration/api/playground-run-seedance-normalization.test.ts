@@ -127,6 +127,87 @@ describe('POST /api/playground/run — Seedance reference-video normalization co
     )
   })
 
+  it.each([
+    'preserve',
+    'reference-only',
+    'generate',
+  ])('sourceAudioMode=%s -> payload 只傳新契約，不混入舊音訊旗標', async (sourceAudioMode) => {
+    const { POST } = await loadRoute()
+    const request = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: body({ sourceAudioMode }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(200)
+    const payload = submitterMock.submitTask.mock.calls.at(-1)?.[0]?.payload as
+      | Record<string, unknown>
+      | undefined
+    expect(payload).toMatchObject({
+      sourceAudioMode,
+      normalizeSeedanceReferenceVideo: true,
+      referenceVideos: ['video/playground-ref/user-1/depth.webm'],
+    })
+    expect(payload).not.toHaveProperty('preserveSourceAudio')
+    expect(payload).not.toHaveProperty('generateAudio')
+  })
+
+  it('未知 sourceAudioMode -> 400 且不建立任務', async () => {
+    const { POST } = await loadRoute()
+    const request = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: body({ sourceAudioMode: 'copy-maybe' }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error.details.code).toBe('SOURCE_AUDIO_MODE_INVALID')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'preserveSourceAudio', preserveSourceAudio: false },
+    { label: 'generateAudio', generateAudio: false },
+  ])('新模式混用舊旗標 $label -> 400', async ({ label: _label, ...legacyFlag }) => {
+    const { POST } = await loadRoute()
+    const request = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: body({ sourceAudioMode: 'preserve', ...legacyFlag }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error.details.code).toBe('SOURCE_AUDIO_MODE_LEGACY_FLAGS_CONFLICT')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
+  it('新模式沒有要求影片正規化 -> 400，不允許隱式降級', async () => {
+    const { POST } = await loadRoute()
+    const request = buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: body({
+        sourceAudioMode: 'preserve',
+        normalizeSeedanceReferenceVideo: false,
+      }),
+    })
+
+    const response = await POST(request, { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(400)
+    const json = await response.json()
+    expect(json.error.details.code).toBe('SOURCE_AUDIO_MODE_REQUIRES_NORMALIZATION')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
   it('外部 HTTPS 影片要求正規化 -> 403 且不讓 ffmpeg 取得任意網址', async () => {
     guardMock.filterAuthorizedStorageReferences.mockResolvedValue({
       safe: [],

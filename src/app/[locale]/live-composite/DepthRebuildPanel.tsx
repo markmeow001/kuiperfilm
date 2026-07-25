@@ -1,6 +1,9 @@
 'use client'
 
+import { useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
+import { DepthRebuildAudioModeSelector } from './DepthRebuildAudioModeSelector'
 import { DepthRebuildReferenceSection } from './DepthRebuildReferenceSection'
 import type {
   DepthRebuildCharacterView,
@@ -46,6 +49,8 @@ export interface DepthRebuildPanelProps {
   modelKey: string
   resolutionOptions: readonly DepthRebuildResolutionOption[]
   resolution: string
+  sourceAudioMode: SourceAudioMode
+  sourceAudioDetected: boolean | null
   prompt: string
   promptStale: boolean
   promptBlockingMessage?: string | null
@@ -80,6 +85,7 @@ export interface DepthRebuildPanelProps {
   onAssistScene: () => void
   onModelChange: (value: string) => void
   onResolutionChange: (value: string) => void
+  onSourceAudioModeChange: (value: SourceAudioMode) => void
   onBuildPrompt: () => void
   onGenerate: () => void
   onResetSubmittedRun?: () => void
@@ -111,6 +117,8 @@ export function DepthRebuildPanel({
   modelKey,
   resolutionOptions,
   resolution,
+  sourceAudioMode,
+  sourceAudioDetected,
   prompt,
   promptStale,
   promptBlockingMessage = null,
@@ -145,10 +153,13 @@ export function DepthRebuildPanel({
   onAssistScene,
   onModelChange,
   onResolutionChange,
+  onSourceAudioModeChange,
   onBuildPrompt,
   onGenerate,
   onResetSubmittedRun,
 }: DepthRebuildPanelProps) {
+  const videoInputRef = useRef<HTMLInputElement>(null)
+  const videoTriggerRef = useRef<HTMLButtonElement>(null)
   const hasEnabledModel = modelOptions.length > 0
   const selectedModelEnabled = modelOptions.some((option) => option.value === modelKey)
   const selectedResolutionAvailable = resolutionOptions.some((option) => option.value === resolution)
@@ -198,30 +209,40 @@ export function DepthRebuildPanel({
             <div className="mt-3 rounded-lg border border-dashed border-white/10 px-3 py-3 text-xs text-stone-500">選擇 4–15 秒的原始表演影片；上傳本身不會產生 AI 費用。</div>
           )}
 
-          <label
-            htmlFor="depth-rebuild-video"
-            className={`mt-3 flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-sm transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-200 ${
-              controlsDisabled || depthBusy
-                ? 'cursor-not-allowed text-stone-600 opacity-50'
-                : 'cursor-pointer text-stone-300 hover:border-cyan-300/30 hover:text-cyan-100'
-            }`}
-          >
-            <AppIcon name="upload" className="h-4 w-4" />
-            {source ? '更換表演影片' : '上傳 4–15 秒表演影片'}
+          <div className="relative mt-3">
+            <button
+              ref={videoTriggerRef}
+              type="button"
+              disabled={controlsDisabled || depthBusy}
+              onClick={() => videoInputRef.current?.click()}
+              className={`flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 ${
+                controlsDisabled || depthBusy
+                  ? 'cursor-not-allowed text-stone-600 opacity-50'
+                  : 'text-stone-300 hover:border-cyan-300/30 hover:text-cyan-100'
+              }`}
+            >
+              <AppIcon name="upload" className="h-4 w-4" />
+              {source ? '更換表演影片' : '上傳 4–15 秒表演影片'}
+            </button>
             <input
+              ref={videoInputRef}
               id="depth-rebuild-video"
               type="file"
               accept="video/*"
               aria-label={source ? '更換表演影片' : '上傳 4–15 秒表演影片'}
+              tabIndex={-1}
               disabled={controlsDisabled || depthBusy}
               className="sr-only"
               onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file) onVideoSelect(file)
+                const file = event.currentTarget.files?.[0]
+                event.currentTarget.value = ''
+                if (file) {
+                  onVideoSelect(file)
+                  videoTriggerRef.current?.focus({ preventScroll: true })
+                }
               }}
             />
-          </label>
+          </div>
 
           {depthBusy ? (
             <div className="mt-3">
@@ -341,6 +362,12 @@ export function DepthRebuildPanel({
         <section className="px-4 py-5" aria-labelledby="depth-step-4">
           <StepHeading id="depth-step-4" number="04" title="選擇品質並付費生成" />
           <p className="mt-2 text-xs leading-5 text-stone-500">只有按下最下方按鈕才會送出 AtlasCloud Seedance 2.0 任務並產生費用。</p>
+          <DepthRebuildAudioModeSelector
+            value={sourceAudioMode}
+            sourceAudioDetected={sourceAudioDetected}
+            disabled={controlsDisabled}
+            onChange={onSourceAudioModeChange}
+          />
           <div className="mt-4 grid grid-cols-2 gap-2">
             <label className="text-xs text-stone-500">
               模型

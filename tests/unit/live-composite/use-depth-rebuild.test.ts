@@ -216,6 +216,32 @@ describe('useDepthRebuild', () => {
     expect(mocks.submit).toHaveBeenCalledTimes(0)
   })
 
+  it('音軌仍在偵測中 -> 深度片先保留可能存在的音軌，偵測完成後可安全切到保留原音', async () => {
+    const stage = createStage()
+    const stageRef = { current: stage }
+    const initialProps: { videoHasAudio: boolean | null } = { videoHasAudio: null }
+    const { result, rerender } = renderHook(
+      ({ videoHasAudio }: { videoHasAudio: boolean | null }) => useDepthRebuild({
+        stageRef,
+        metadata,
+        videoHasAudio,
+      }),
+      { initialProps },
+    )
+
+    expect(result.current.sourceAudioMode).toBe('generate')
+    await act(async () => {
+      await result.current.generateDepthGuide()
+    })
+    expect(stage.exportDepthGuideVideo).toHaveBeenCalledWith({
+      includeAudio: true,
+      onProgress: expect.any(Function),
+    })
+
+    rerender({ videoHasAudio: true })
+    expect(result.current.sourceAudioMode).toBe('preserve')
+  })
+
   it('尚未產生深度影片 -> 可先檢查並建立 Prompt，但不能送出付費生成', async () => {
     const stageRef = { current: createStage() }
     const { result } = renderHook(() => useDepthRebuild({
@@ -336,8 +362,7 @@ describe('useDepthRebuild', () => {
       normalizeSeedanceReferenceVideo: true,
       aspectRatio: '16:9',
       durationSec: 12,
-      generateAudio: false,
-      preserveSourceAudio: true,
+      sourceAudioMode: 'preserve',
       workspaceId: 'workspace-1',
       idempotencyKey: expect.any(String),
       signal: expect.any(AbortSignal),
@@ -352,6 +377,58 @@ describe('useDepthRebuild', () => {
     expect(result.current.generationProgress).toBe(100)
     expect(result.current.submittedRunId).toBe('run-depth-1')
     expect(result.current.canResume).toBe(false)
+  })
+
+  it.each([
+    {
+      mode: 'reference-only' as const,
+      promptFragment: 'The final output must be silent',
+    },
+    {
+      mode: 'generate' as const,
+      promptFragment: 'The source audio has been removed',
+    },
+  ])('聲音模式 $mode -> Prompt 與送出契約一致，且不混用舊旗標', async ({
+    mode,
+    promptFragment,
+  }) => {
+    const stage = createStage()
+    const stageRef = { current: stage }
+    const { result } = renderHook(() => useDepthRebuild({
+      stageRef,
+      metadata,
+      videoHasAudio: true,
+    }))
+
+    act(() => {
+      result.current.setSourceAudioMode(mode)
+      result.current.selectCharacterImage(
+        'character-1',
+        new File(['character'], 'character.png', { type: 'image/png' }),
+      )
+      result.current.setCharacterSourceBinding('character-1', '原片唯一人物')
+      result.current.setCharacterDescription('character-1', '電影寫實的新角色')
+      result.current.setSceneDescription('具有持續自然動態的電影場景')
+    })
+    await act(async () => {
+      await result.current.generateDepthGuide()
+    })
+    act(() => result.current.buildPrompt())
+
+    expect(result.current.prompt).toContain(promptFragment)
+    expect(stage.exportDepthGuideVideo).toHaveBeenCalledWith({
+      includeAudio: true,
+      onProgress: expect.any(Function),
+    })
+
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    const submission = mocks.submit.mock.calls[0]?.[0]
+    expect(submission).toEqual(expect.objectContaining({ sourceAudioMode: mode }))
+    expect(submission).not.toHaveProperty('preserveSourceAudio')
+    expect(submission).not.toHaveProperty('generateAudio')
   })
 
   it('提交成功後輪詢與結果查詢暫時失敗 -> 再按生成只恢復同一 run，不重複上傳或提交', async () => {

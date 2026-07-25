@@ -93,7 +93,7 @@ function StepNavigation({ back, next, nextLabel = '下一步', onStepChange }: S
 
 export function CompositeAssetPanel({ mode, onModeChange, depthRebuild, metadata, backgroundColor, hasBackgroundImage, canExport, currentTime, analysisProgress, exportProgress, interactionDisabled, virtualCharacter, maskKeyframes, occlusionPicking, occlusionBusy, occlusionMessage, occlusionKeyframeCount, onVideoSelect, onBackgroundSelect, onBackgroundColorChange, onVirtualCharacterSelect, onVirtualCharacterChange, onVirtualCharacterRemove, onVirtualCharacterAutoMatch, motionBusy, motionMessage, onAnalyzeMotionCurrent, onAnalyzeMotionClip, onStartOcclusionPicking, onCancelOcclusionPicking, onExportMask, onExportFrame, onExportVideo, onCancelVideoExport, onAnalyzeCurrent, onAnalyzeClip, onCancelAnalysis, canAnalyzeFace, faceProgress, faceTrack, videoHasAudio, onAnalyzeFace, onCancelFaceAnalysis, onClearFaceTrack, lastExportLabel = null, onSaveToLibrary, workflowStep, completedWorkflowSteps, onWorkflowStepChange }: CompositeAssetPanelProps) {
   return (
-    <aside className="flex w-[min(360px,100vw)] max-w-full shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-stone-950/80">
+    <aside className="flex min-h-0 w-[min(360px,100vw)] max-w-full shrink-0 flex-col overflow-y-auto overscroll-contain border-r border-white/10 bg-stone-950/80">
       <LiveCompositeModeSelector value={mode} onChange={onModeChange} disabled={interactionDisabled} />
 
       {mode === 'depth-rebuild' ? (

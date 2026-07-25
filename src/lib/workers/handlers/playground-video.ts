@@ -24,13 +24,18 @@ import {
 import { extractVideoTailFrameToCos } from '@/lib/video-tail-frame'
 import { buildRefImageMapSection, replaceElementNamesWithTokens } from '@/lib/playground/element-tokens'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
-import { extractReferenceAudioToCos, muxGeneratedVideoWithSourceAudio } from '@/lib/playground/source-audio'
+import {
+  extractReferenceAudioToCos,
+  muxGeneratedVideoWithSourceAudio,
+  stripGeneratedVideoAudio,
+} from '@/lib/playground/source-audio'
 import { reportTaskProgress } from '@/lib/workers/shared'
 import {
   isSeedanceReferenceNormalizationModel,
   normalizeSeedanceReferenceVideoToCos,
 } from '@/lib/playground/seedance-reference-video'
 import { filterAuthorizedStorageReferences } from '@/lib/playground/reference-guard'
+import { isSourceAudioMode } from '@/lib/playground/source-audio-contract'
 
 function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -93,8 +98,30 @@ export async function handlePlaygroundVideoTask(
       .map((key) => toSignedUrlIfCos(key, 7200))
       .filter((url): url is string => Boolean(url))
   }
-  const preserveSourceAudio = payload.preserveSourceAudio === true
-  if (preserveSourceAudio && signedVideoUrls.length !== 1) {
+  const rawSourceAudioMode = payload.sourceAudioMode
+  if (rawSourceAudioMode !== undefined && !isSourceAudioMode(rawSourceAudioMode)) {
+    throw new Error('PLAYGROUND_SOURCE_AUDIO_MODE_INVALID')
+  }
+  const sourceAudioMode = isSourceAudioMode(rawSourceAudioMode)
+    ? rawSourceAudioMode
+    : null
+  if (
+    sourceAudioMode !== null
+    && (
+      Object.prototype.hasOwnProperty.call(payload, 'preserveSourceAudio')
+      || Object.prototype.hasOwnProperty.call(payload, 'generateAudio')
+    )
+  ) {
+    throw new Error('PLAYGROUND_SOURCE_AUDIO_MODE_LEGACY_FLAGS_CONFLICT')
+  }
+  if (sourceAudioMode !== null && normalizeSeedanceReferenceVideo !== true) {
+    throw new Error('PLAYGROUND_SOURCE_AUDIO_MODE_REQUIRES_NORMALIZATION')
+  }
+  const preserveSourceAudio = sourceAudioMode === 'preserve'
+    || (sourceAudioMode === null && payload.preserveSourceAudio === true)
+  const referenceSourceAudio = preserveSourceAudio || sourceAudioMode === 'reference-only'
+  const stripFinalAudio = sourceAudioMode === 'reference-only'
+  if ((referenceSourceAudio || sourceAudioMode === 'generate') && signedVideoUrls.length !== 1) {
     throw new Error('PLAYGROUND_SOURCE_AUDIO_REQUIRES_ONE_REFERENCE_VIDEO')
   }
 
@@ -110,10 +137,14 @@ export async function handlePlaygroundVideoTask(
     const normalized = await normalizeSeedanceReferenceVideoToCos({
       sourceVideoUrl: signedVideoUrls[0],
       taskId,
-      requireAudio: preserveSourceAudio,
+      requireAudio: referenceSourceAudio,
+      ...(sourceAudioMode !== null ? { sourceAudioMode } : {}),
     })
-    if (preserveSourceAudio && !normalized.probe.hasAudio) {
+    if (referenceSourceAudio && !normalized.probe.hasAudio) {
       throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_MISSING_AFTER_NORMALIZATION')
+    }
+    if (sourceAudioMode === 'generate' && normalized.probe.hasAudio) {
+      throw new Error('PLAYGROUND_SOURCE_AUDIO_TRACK_PRESENT_AFTER_NORMALIZATION')
     }
     const normalizedUrl = toSignedUrlIfCos(normalized.cosKey, 7200)
     if (!normalizedUrl) {
@@ -122,7 +153,7 @@ export async function handlePlaygroundVideoTask(
     signedVideoUrls = [normalizedUrl]
   }
   let signedReferenceAudioUrl: string | null = null
-  if (preserveSourceAudio && !resumeExternalId) {
+  if (referenceSourceAudio && !resumeExternalId) {
     await reportTaskProgress(job, 12, { stage: 'extract_source_audio', message: '正在保留原始對白音軌' })
     const audioKey = await extractReferenceAudioToCos(signedVideoUrls[0], taskId)
     signedReferenceAudioUrl = toSignedUrlIfCos(audioKey, 7200)
@@ -180,7 +211,7 @@ export async function handlePlaygroundVideoTask(
   const passFullImageList = /^(atlascloud|fal)::/.test(modelKey)
 
   _ulogInfo(
-    `[playground-video] start taskId=${taskId} model=${modelKey} refImages=${refImageKeys.length} refVideos=${refVideoKeys.length} elements=${klingElements.length}`,
+    `[playground-video] start taskId=${taskId} model=${modelKey} refImages=${refImageKeys.length} refVideos=${refVideoKeys.length} elements=${klingElements.length} sourceAudioMode=${sourceAudioMode ?? 'legacy'}`,
   )
 
   let externalId = resumeExternalId
@@ -196,8 +227,13 @@ export async function handlePlaygroundVideoTask(
       ...(duration ? { duration } : {}),
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(resolution ? { resolution } : {}),
-      // 🔊 audio toggle (2026-07-12) — absent = generator default (on).
-      ...(typeof payload.generateAudio === 'boolean' ? { generateAudio: payload.generateAudio } : {}),
+      // New depth-rebuild runs use one explicit sourceAudioMode. Legacy
+      // Playground runs omit it and retain the prior generateAudio behavior.
+      ...(sourceAudioMode !== null
+        ? { generateAudio: sourceAudioMode === 'generate' }
+        : (typeof payload.generateAudio === 'boolean'
+          ? { generateAudio: payload.generateAudio }
+          : {})),
       // 首尾帧: the leading image is the first frame; this is the last frame.
       // Generators that support it (fal / Minimax / BobAPI) read lastFrameImageUrl
       // and switch to first-last-frame mode; others ignore the extra option.
@@ -250,12 +286,17 @@ export async function handlePlaygroundVideoTask(
         generatedDownloadHeaders: polled.downloadHeaders,
         sourceVideoUrl: signedVideoUrls[0],
       })
-    : polled.url
+    : stripFinalAudio
+      ? await stripGeneratedVideoAudio({
+          generatedVideoUrl: polled.url,
+          generatedDownloadHeaders: polled.downloadHeaders,
+        })
+      : polled.url
   const cosKey = await uploadVideoSourceToCos(
     finalSource,
     `playground-runs/${taskId}`,
     taskId,
-    preserveSourceAudio ? undefined : polled.downloadHeaders,
+    preserveSourceAudio || stripFinalAudio ? undefined : polled.downloadHeaders,
   )
 
   // 尾帧抽取(画布续镜链用)— 非致命:视频本体已成功,抽帧挂了只损失

@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { requestJsonWithError } from './mutation-shared'
 import { waitForTaskResult } from '@/lib/task/client'
 import type { ReconstructionAnalysisResult } from '@/lib/playground/reconstruction-contract'
+import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 
 interface UploadResult {
   success: boolean
@@ -87,6 +88,11 @@ export interface PlaygroundRunSubmission {
   generateAudio?: boolean
   /** 實拍重建：抽出參考影片音軌供模型遵循，並在結果上重新封裝原始對白音軌。 */
   preserveSourceAudio?: boolean
+  /**
+   * 深度重建來源音訊策略。新流程只傳這個欄位，不可再同時傳
+   * preserveSourceAudio / generateAudio；舊流程未傳時維持既有行為。
+   */
+  sourceAudioMode?: SourceAudioMode
   /** 深度重建：worker 將唯一參考影片正規化為 AtlasCloud Seedance 2.0 可接受的 MP4/H264。 */
   normalizeSeedanceReferenceVideo?: boolean
   /** 局部重绘遮罩（own COS key；透明区=重绘区）。需搭配 referenceImages[0] 底图。 */

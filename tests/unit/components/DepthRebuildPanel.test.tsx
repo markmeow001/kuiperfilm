@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DepthRebuildPanel, type DepthRebuildPanelProps } from '@/app/[locale]/live-composite/DepthRebuildPanel'
 
 function completeCharacter(
@@ -33,6 +33,8 @@ function buildProps(overrides: Partial<DepthRebuildPanelProps> = {}): DepthRebui
     modelKey: 'seedance-fast',
     resolutionOptions: [{ value: '720p', label: '720p' }],
     resolution: '720p',
+    sourceAudioMode: 'preserve',
+    sourceAudioDetected: true,
     prompt: 'Use video 1 as depth guidance.',
     promptStale: false,
     promptBlockingMessage: null,
@@ -61,6 +63,7 @@ function buildProps(overrides: Partial<DepthRebuildPanelProps> = {}): DepthRebui
     onAssistScene: vi.fn(),
     onModelChange: vi.fn(),
     onResolutionChange: vi.fn(),
+    onSourceAudioModeChange: vi.fn(),
     onBuildPrompt: vi.fn(),
     onGenerate: vi.fn(),
     ...overrides,
@@ -68,6 +71,10 @@ function buildProps(overrides: Partial<DepthRebuildPanelProps> = {}): DepthRebui
 }
 
 describe('DepthRebuildPanel', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('初次渲染 -> 不自行觸發付費或本機處理，並如實揭露深度限制', () => {
     const props = buildProps()
     render(<DepthRebuildPanel {...props} />)
@@ -83,6 +90,7 @@ describe('DepthRebuildPanel', () => {
   it('角色與場景選圖 -> 分別傳回實際 File，且不需先等待深度分析', () => {
     const onCharacterSelect = vi.fn()
     const onAddSceneImages = vi.fn()
+    const focusSpy = vi.spyOn(HTMLButtonElement.prototype, 'focus')
     render(<DepthRebuildPanel {...buildProps({
       depthGuide: null,
       characters: [completeCharacter({ reference: null })],
@@ -93,8 +101,18 @@ describe('DepthRebuildPanel', () => {
 
     const character = new File(['character'], 'character.png', { type: 'image/png' })
     const scene = new File(['scene'], 'scene.jpg', { type: 'image/jpeg' })
-    fireEvent.change(screen.getByLabelText('上傳角色 01 參考圖片'), { target: { files: [character] } })
-    fireEvent.change(screen.getByLabelText('新增場景參考圖片'), { target: { files: [scene] } })
+    const characterInput = screen.getByLabelText('上傳角色 01 參考圖片')
+    const sceneInput = screen.getByLabelText('新增場景參考圖片')
+    expect(characterInput.parentElement).toHaveClass('relative')
+    expect(sceneInput.parentElement).toHaveClass('relative')
+
+    fireEvent.change(characterInput, { target: { files: [character] } })
+    expect(focusSpy).toHaveBeenLastCalledWith({ preventScroll: true })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '上傳角色 01 參考圖片' }))
+
+    fireEvent.change(sceneInput, { target: { files: [scene] } })
+    expect(focusSpy).toHaveBeenLastCalledWith({ preventScroll: true })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '新增場景參考圖片' }))
 
     expect(onCharacterSelect).toHaveBeenCalledWith('character-1', character)
     expect(onAddSceneImages).toHaveBeenCalledWith([scene])
@@ -115,15 +133,20 @@ describe('DepthRebuildPanel', () => {
 
   it('尚無原片 -> 可直接選擇 4–15 秒表演影片，不需先執行分析', () => {
     const onVideoSelect = vi.fn()
+    const focusSpy = vi.spyOn(HTMLButtonElement.prototype, 'focus')
     render(<DepthRebuildPanel {...buildProps({ source: null, depthGuide: null, onVideoSelect })} />)
 
     const video = new File(['video'], 'performance.mp4', { type: 'video/mp4' })
     const videoInput = screen.getByLabelText('上傳 4–15 秒表演影片')
-    expect(videoInput.closest('label')).toHaveClass('focus-within:ring-2')
+    expect(videoInput.parentElement).toHaveClass('relative')
+    expect(videoInput).toHaveAttribute('tabindex', '-1')
+    expect(screen.getByRole('button', { name: '上傳 4–15 秒表演影片' })).toHaveClass('focus-visible:ring-2')
     fireEvent.change(videoInput, { target: { files: [video] } })
 
     expect(onVideoSelect).toHaveBeenCalledWith(video)
     expect(onVideoSelect).toHaveBeenCalledTimes(1)
+    expect(focusSpy).toHaveBeenLastCalledWith({ preventScroll: true })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '上傳 4–15 秒表演影片' }))
   })
 
   it('Prompt 資料不完整 -> 仍可點擊檢查，並在 Step 03 就近顯示第一個缺項', () => {
@@ -199,6 +222,16 @@ describe('DepthRebuildPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '確認費用並生成影片' }))
     expect(onGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('原片有音軌 -> 可在付費前明確選擇只參考節奏，且揭露成片會靜音', () => {
+    const onSourceAudioModeChange = vi.fn()
+    render(<DepthRebuildPanel {...buildProps({ onSourceAudioModeChange })} />)
+
+    expect(screen.getByText(/成片保持靜音，方便後期配音與混音/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: /只拿原音對口型/ }))
+
+    expect(onSourceAudioModeChange).toHaveBeenCalledWith('reference-only')
   })
 
   it('Prompt 已過期 -> 阻止付費生成並提示重新建立', () => {

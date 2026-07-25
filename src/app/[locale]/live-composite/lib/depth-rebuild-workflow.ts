@@ -7,6 +7,7 @@ import {
   validateR2VRequest,
   type TrackBModelKey,
 } from './atlascloud-r2v-contract'
+import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 
 export interface DepthRebuildAssetFingerprint {
   name: string
@@ -35,7 +36,7 @@ export interface DepthRebuildFingerprintInput {
   sceneDescription: string
   modelKey: string
   resolution: string
-  preserveSourceAudio: boolean
+  sourceAudioMode: SourceAudioMode
 }
 
 export interface DepthRebuildValidationInput {
@@ -53,6 +54,8 @@ export interface DepthRebuildValidationInput {
   modelKey: string
   resolution: string
   enabledModelKeys: readonly string[]
+  sourceAudioMode: SourceAudioMode
+  sourceAudioDetected: boolean | null
   prompt: string
   promptIsFresh: boolean
 }
@@ -94,7 +97,7 @@ export function buildDepthRebuildFingerprint(input: DepthRebuildFingerprintInput
     sceneDescription: input.sceneDescription.trim(),
     modelKey: input.modelKey,
     resolution: input.resolution,
-    preserveSourceAudio: input.preserveSourceAudio,
+    sourceAudioMode: input.sourceAudioMode,
   })
 }
 
@@ -222,6 +225,14 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
   if (sourceDurationSeconds === null) return '請先上傳原始表演影片'
   const sourceError = getSourceDurationValidationError(sourceDurationSeconds)
   if (sourceError) return sourceError
+  if (
+    input.sourceAudioMode !== 'generate'
+    && input.sourceAudioDetected !== true
+  ) {
+    return input.sourceAudioDetected === null
+      ? '正在確認原片音軌；若不需要原音，可改選「AI 重新生成聲音」'
+      : '原片未偵測到音軌；請改選「AI 重新生成聲音」'
+  }
   if (!input.depthGuideExists) return '請先產生深度引導影片'
   if (!input.depthGuideSufficient) return '深度引導影片有效幀率不足，請重新產生後再生成'
   const referenceError = getReferenceSetupValidationError(input)

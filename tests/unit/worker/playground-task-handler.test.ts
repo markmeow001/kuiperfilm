@@ -18,6 +18,7 @@ const utilsMock = vi.hoisted(() => ({
 const sourceAudioMock = vi.hoisted(() => ({
   extractReferenceAudioToCos: vi.fn(async () => 'cos/source-audio.mp3'),
   muxGeneratedVideoWithSourceAudio: vi.fn(async () => Buffer.from('muxed-video')),
+  stripGeneratedVideoAudio: vi.fn(async () => Buffer.from('silent-video')),
 }))
 
 const seedanceReferenceMock = vi.hoisted(() => ({
@@ -291,6 +292,171 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
       'task-1',
       undefined,
     )
+  })
+
+  it('sourceAudioMode=preserve -> 參考原音、關閉模型生音，最後封裝原始音軌', async () => {
+    generatorMock.generateVideo.mockResolvedValue({ success: true, externalId: 'vid-preserve-mode' })
+    utilsMock.waitExternalResult.mockResolvedValue({
+      url: 'https://prov/generated-preserve.mp4',
+      downloadHeaders: { Authorization: 'Bearer generated' },
+    })
+
+    await handlePlaygroundVideoTask(makeJob({
+      prompt: 'keep the original dialogue',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source.mp4'],
+      normalizeSeedanceReferenceVideo: true,
+      sourceAudioMode: 'preserve',
+    }))
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenCalledWith({
+      sourceVideoUrl: 'signed:cos/source.mp4',
+      taskId: 'task-1',
+      requireAudio: true,
+      sourceAudioMode: 'preserve',
+    })
+    expect(sourceAudioMock.extractReferenceAudioToCos).toHaveBeenCalledWith(
+      'signed:video/playground-runs/seedance-reference-task-1.mp4',
+      'task-1',
+    )
+    const options = generatorMock.generateVideo.mock.calls.at(-1)?.[3] as Record<string, unknown>
+    expect(options).toMatchObject({
+      generateAudio: false,
+      referenceVideos: ['signed:video/playground-runs/seedance-reference-task-1.mp4'],
+      referenceAudios: ['signed:cos/source-audio.mp3'],
+    })
+    expect(sourceAudioMock.muxGeneratedVideoWithSourceAudio).toHaveBeenCalledWith({
+      generatedVideoUrl: 'https://prov/generated-preserve.mp4',
+      generatedDownloadHeaders: { Authorization: 'Bearer generated' },
+      sourceVideoUrl: 'signed:video/playground-runs/seedance-reference-task-1.mp4',
+    })
+    expect(sourceAudioMock.stripGeneratedVideoAudio).not.toHaveBeenCalled()
+    expect(utilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      Buffer.from('muxed-video'),
+      'playground-runs/task-1',
+      'task-1',
+      undefined,
+    )
+  })
+
+  it('sourceAudioMode=reference-only -> 參考原音、關閉模型生音，成片明確移除音軌', async () => {
+    generatorMock.generateVideo.mockResolvedValue({
+      success: true,
+      externalId: 'vid-reference-only-mode',
+    })
+    utilsMock.waitExternalResult.mockResolvedValue({
+      url: 'https://prov/generated-reference-only.mp4',
+      downloadHeaders: { Authorization: 'Bearer generated' },
+    })
+
+    await handlePlaygroundVideoTask(makeJob({
+      prompt: 'use the source dialogue only as performance guidance',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source.mp4'],
+      normalizeSeedanceReferenceVideo: true,
+      sourceAudioMode: 'reference-only',
+    }))
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenCalledWith({
+      sourceVideoUrl: 'signed:cos/source.mp4',
+      taskId: 'task-1',
+      requireAudio: true,
+      sourceAudioMode: 'reference-only',
+    })
+    expect(sourceAudioMock.extractReferenceAudioToCos).toHaveBeenCalledWith(
+      'signed:video/playground-runs/seedance-reference-task-1.mp4',
+      'task-1',
+    )
+    const options = generatorMock.generateVideo.mock.calls.at(-1)?.[3] as Record<string, unknown>
+    expect(options).toMatchObject({
+      generateAudio: false,
+      referenceAudios: ['signed:cos/source-audio.mp3'],
+    })
+    expect(sourceAudioMock.muxGeneratedVideoWithSourceAudio).not.toHaveBeenCalled()
+    expect(sourceAudioMock.stripGeneratedVideoAudio).toHaveBeenCalledWith({
+      generatedVideoUrl: 'https://prov/generated-reference-only.mp4',
+      generatedDownloadHeaders: { Authorization: 'Bearer generated' },
+    })
+    expect(utilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      Buffer.from('silent-video'),
+      'playground-runs/task-1',
+      'task-1',
+      undefined,
+    )
+  })
+
+  it('sourceAudioMode=generate -> 正規化先移除來源音軌，只讓模型生成新聲音', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValue({
+      cosKey: 'video/playground-runs/seedance-reference-task-1.mp4',
+      probe: {
+        formatNames: ['mov', 'mp4'],
+        sizeBytes: 2_000_000,
+        durationSec: 12,
+        videoCodec: 'h264',
+        width: 720,
+        height: 1280,
+        fps: 24,
+        hasAudio: false,
+      },
+    })
+    generatorMock.generateVideo.mockResolvedValue({ success: true, externalId: 'vid-generate-mode' })
+    utilsMock.waitExternalResult.mockResolvedValue({
+      url: 'https://prov/generated-audio.mp4',
+      downloadHeaders: { Authorization: 'Bearer generated' },
+    })
+
+    await handlePlaygroundVideoTask(makeJob({
+      prompt: 'generate new ambience and dialogue',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source.mp4'],
+      normalizeSeedanceReferenceVideo: true,
+      sourceAudioMode: 'generate',
+    }))
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenCalledWith({
+      sourceVideoUrl: 'signed:cos/source.mp4',
+      taskId: 'task-1',
+      requireAudio: false,
+      sourceAudioMode: 'generate',
+    })
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    const options = generatorMock.generateVideo.mock.calls.at(-1)?.[3] as Record<string, unknown>
+    expect(options.generateAudio).toBe(true)
+    expect(options).not.toHaveProperty('referenceAudios')
+    expect(sourceAudioMock.muxGeneratedVideoWithSourceAudio).not.toHaveBeenCalled()
+    expect(sourceAudioMock.stripGeneratedVideoAudio).not.toHaveBeenCalled()
+    expect(utilsMock.uploadVideoSourceToCos).toHaveBeenCalledWith(
+      'https://prov/generated-audio.mp4',
+      'playground-runs/task-1',
+      'task-1',
+      { Authorization: 'Bearer generated' },
+    )
+  })
+
+  it.each([
+    {
+      payload: { sourceAudioMode: 'unknown' },
+      code: 'PLAYGROUND_SOURCE_AUDIO_MODE_INVALID',
+    },
+    {
+      payload: { sourceAudioMode: 'preserve', preserveSourceAudio: false },
+      code: 'PLAYGROUND_SOURCE_AUDIO_MODE_LEGACY_FLAGS_CONFLICT',
+    },
+    {
+      payload: { sourceAudioMode: 'preserve', generateAudio: false },
+      code: 'PLAYGROUND_SOURCE_AUDIO_MODE_LEGACY_FLAGS_CONFLICT',
+    },
+  ])('來源音訊契約錯誤 $code -> 付費生成前顯式失敗', async ({ payload, code }) => {
+    await expect(handlePlaygroundVideoTask(makeJob({
+      prompt: 'rebuild',
+      modelKey: 'atlascloud::seedance-2.0-r2v',
+      referenceVideos: ['cos/source.mp4'],
+      normalizeSeedanceReferenceVideo: true,
+      ...payload,
+    }))).rejects.toThrow(code)
+
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
   })
 
   it('深度重建旗標開啟 -> 先正規化唯一參考影片，再把相同 MP4 用於生成與音軌保留', async () => {

@@ -22,6 +22,7 @@ import {
 } from './lib/depth-rebuild-generation-storage'
 import { formatDepthRebuildTerminalError } from './lib/depth-rebuild-errors'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
+import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import type { VideoMetadata } from './live-composite-types'
 import type {
   DepthRebuildCharacterReference,
@@ -34,7 +35,7 @@ import type {
 interface UseDepthRebuildGenerationOptions {
   persistenceScopeKey: string
   metadata: VideoMetadata | null
-  videoHasAudio: boolean | null
+  sourceAudioMode: SourceAudioMode
   workspaceId: string | null
   depthGuide: LocalDepthGuide | null
   characters: readonly DepthRebuildCharacterReference[]
@@ -101,7 +102,7 @@ function resolveRunDetail(
 export function useDepthRebuildGeneration({
   persistenceScopeKey,
   metadata,
-  videoHasAudio,
+  sourceAudioMode,
   workspaceId,
   depthGuide,
   characters,
@@ -289,8 +290,7 @@ export function useDepthRebuildGeneration({
         normalizeSeedanceReferenceVideo: true,
         aspectRatio: depthRebuildAspectRatio(metadata.width, metadata.height),
         durationSec: depthRebuildDurationSeconds(metadata.duration),
-        generateAudio: videoHasAudio !== true,
-        ...(videoHasAudio === true ? { preserveSourceAudio: true } : {}),
+        sourceAudioMode,
         ...(workspaceId ? { workspaceId } : {}),
         idempotencyKey: clientRequestKey,
         signal: abortController.signal,

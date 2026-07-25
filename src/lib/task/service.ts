@@ -379,8 +379,9 @@ export async function updateTaskBillingInfo(taskId: string, billingInfo: TaskBil
  * Read existing task.payload, deep-merge meta sub-object so callers that
  * only know "their slice" of meta don't blow away unrelated meta keys
  * (locale, route, userTier, runId, provider, etc.) written by upstream
- * layers. Other top-level fields are still replaced — callers that want
- * to extend a top-level field must spread it explicitly.
+ * layers. Callers may additionally preserve existing top-level fields when
+ * writing runtime progress: the standalone watchdog rebuilds stalled jobs
+ * from this payload, so prompt/model/media/audio contracts must survive.
  *
  * Adds one DB read per call; only callers that pass non-null payload
  * pay it.
@@ -388,6 +389,7 @@ export async function updateTaskBillingInfo(taskId: string, billingInfo: TaskBil
 async function mergePayloadMetaWithExisting(
   taskId: string | undefined | null,
   payload: Record<string, unknown> | null,
+  options?: { preserveExistingTopLevel?: boolean },
 ): Promise<Record<string, unknown> | null> {
   if (!payload) return payload
   // Defensive: a job without a taskId has no Task row to merge against, so
@@ -412,6 +414,7 @@ async function mergePayloadMetaWithExisting(
       ? (payload.meta as Record<string, unknown>)
       : {}
   return {
+    ...(options?.preserveExistingTopLevel ? existingPayload : {}),
     ...payload,
     meta: { ...existingMeta, ...incomingMeta },
   }
@@ -506,11 +509,12 @@ export async function tryUpdateTaskProgress(taskId: string | undefined | null, p
   // blowing up. (Pre-9.1 this covered the bespoke playground path; post-9.1
   // playground rides the Task spine and always has a taskId.)
   if (!taskId) return false
-  // payload meta keys (locale, route, userTier, runId, provider, etc.)
-  // are owned across multiple layers — merge instead of replace so
-  // worker progress events don't blow away upstream writes. See
-  // mergePayloadMetaWithExisting for the canonical merge behaviour.
-  const merged = payload ? await mergePayloadMetaWithExisting(taskId, payload) : payload
+  // Progress is presentation data layered onto the durable task contract.
+  // Preserve all existing top-level inputs as well as meta so a watchdog
+  // requeue can reconstruct the original BullMQ job after a worker restart.
+  const merged = payload
+    ? await mergePayloadMetaWithExisting(taskId, payload, { preserveExistingTopLevel: true })
+    : payload
   const result = await taskModel.updateMany({
     where: activeTaskWhere(taskId),
     data: {

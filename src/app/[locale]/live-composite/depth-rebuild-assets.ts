@@ -2,6 +2,7 @@ import type { RefObject } from 'react'
 import type {
   PlaygroundCostEstimate,
 } from '@/lib/query/mutations/playground-mutations'
+import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import type { Locale } from '@/i18n/routing'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
 import type {
@@ -90,6 +91,8 @@ export interface UseDepthRebuildResult {
   enabledModelsError: string | null
   resolution: string
   availableResolutions: readonly string[]
+  sourceAudioMode: SourceAudioMode
+  sourceAudioDetected: boolean | null
   prompt: string
   promptIsStale: boolean
   promptValidationError: string | null
@@ -124,6 +127,7 @@ export interface UseDepthRebuildResult {
   assistSceneDescription: () => Promise<void>
   setModelKey: (value: TrackBModelKey) => void
   setResolution: (value: string) => void
+  setSourceAudioMode: (value: SourceAudioMode) => void
   setPrompt: (value: string) => void
   generateDepthGuide: () => Promise<void>
   cancelDepthGuide: () => void

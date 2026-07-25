@@ -33,6 +33,7 @@ import {
 } from '@/lib/playground/reference-guard'
 import { VIDEO_PROMPT_HARD_LIMIT } from '@/lib/playground/video-prompt-limits'
 import { isSeedanceReferenceNormalizationModel } from '@/lib/playground/seedance-reference-video'
+import { isSourceAudioMode } from '@/lib/playground/source-audio-contract'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
@@ -101,6 +102,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     lastFrameUrl: rawLastFrame,
     outputType,
     preserveSourceAudio,
+    sourceAudioMode: rawSourceAudioMode,
     normalizeSeedanceReferenceVideo: rawNormalizeSeedanceReferenceVideo,
     modelKey,
     resolution,
@@ -120,6 +122,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     lastFrameUrl?: unknown
     outputType?: unknown
     preserveSourceAudio?: unknown
+    sourceAudioMode?: unknown
     normalizeSeedanceReferenceVideo?: unknown
     modelKey?: unknown
     resolution?: unknown
@@ -146,6 +149,25 @@ export const POST = apiHandler(async (request: NextRequest) => {
     throw new ApiError('INVALID_PARAMS', {
       code: 'PRESERVE_SOURCE_AUDIO_INVALID',
       message: '保留原始音軌設定無效',
+    })
+  }
+  if (rawSourceAudioMode !== undefined && !isSourceAudioMode(rawSourceAudioMode)) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'SOURCE_AUDIO_MODE_INVALID',
+      message: '來源音訊模式無效（preserve/reference-only/generate）',
+      details: { got: rawSourceAudioMode },
+    })
+  }
+  const sourceAudioMode = isSourceAudioMode(rawSourceAudioMode)
+    ? rawSourceAudioMode
+    : null
+  if (
+    sourceAudioMode !== null
+    && (preserveSourceAudio !== undefined || rawGenerateAudio !== undefined)
+  ) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'SOURCE_AUDIO_MODE_LEGACY_FLAGS_CONFLICT',
+      message: 'sourceAudioMode 不可與 preserveSourceAudio 或 generateAudio 同時傳入',
     })
   }
   if (
@@ -270,6 +292,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const referenceImages = imgGuard.safe
   const lastFrameSafe = lastFrameGuard.safe[0] ?? null
   const referenceVideos = vidGuard.safe
+  if (sourceAudioMode !== null) {
+    if (outputType !== 'video') {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'SOURCE_AUDIO_MODE_REQUIRES_VIDEO_OUTPUT',
+        message: '來源音訊模式僅支援影片輸出',
+      })
+    }
+    if (referenceVideos.length !== 1) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'SOURCE_AUDIO_MODE_REQUIRES_ONE_VIDEO',
+        message: '來源音訊模式需要且只能綁定一支參考影片',
+        details: { got: referenceVideos.length },
+      })
+    }
+    if (rawNormalizeSeedanceReferenceVideo !== true) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'SOURCE_AUDIO_MODE_REQUIRES_NORMALIZATION',
+        message: '來源音訊模式必須搭配 Seedance 參考影片正規化',
+      })
+    }
+  }
   if (rawNormalizeSeedanceReferenceVideo === true) {
     if (outputType !== 'video') {
       throw new ApiError('INVALID_PARAMS', {
@@ -501,6 +544,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceImages,
     referenceVideos,
     ...(preserveSourceAudio === true ? { preserveSourceAudio: true } : {}),
+    ...(sourceAudioMode !== null ? { sourceAudioMode } : {}),
     ...(rawNormalizeSeedanceReferenceVideo === true
       ? { normalizeSeedanceReferenceVideo: true }
       : {}),

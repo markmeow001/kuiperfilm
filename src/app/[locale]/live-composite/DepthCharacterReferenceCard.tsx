@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import {
   DEPTH_CHARACTER_BINDING_MAX_CHARS,
@@ -45,6 +46,11 @@ export function DepthCharacterReferenceCard({
   const imageInputId = `depth-rebuild-character-${character.id}`
   const titleId = `depth-rebuild-character-title-${character.id}`
   const displayName = character.label.trim() || `角色 ${ordinal}`
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const imageTriggerRef = useRef<HTMLButtonElement>(null)
+  const imageInputLabel = character.reference
+    ? `更換${displayName}的參考圖片`
+    : `上傳角色 ${String(ordinal).padStart(2, '0')} 參考圖片`
 
   return (
     <article aria-labelledby={titleId} className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -66,9 +72,15 @@ export function DepthCharacterReferenceCard({
         </button>
       </div>
 
-      <div className="mt-3">
+      <div
+        className={`relative mt-3 ${
+          character.reference
+            ? 'flex items-center gap-3 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.035] p-2'
+            : ''
+        }`}
+      >
         {character.reference ? (
-          <div className="flex items-center gap-3 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.035] p-2">
+          <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={character.reference.url}
@@ -77,63 +89,57 @@ export function DepthCharacterReferenceCard({
               className="h-16 w-16 shrink-0 rounded-md object-cover"
             />
             <span className="min-w-0 flex-1 truncate text-xs text-stone-300">{character.reference.name}</span>
-            <label
-              htmlFor={imageInputId}
-              className={`rounded-md border border-white/10 px-2 py-1 text-xs focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-200 ${
-                controlsDisabled ? 'cursor-not-allowed text-stone-600' : 'cursor-pointer text-stone-400 hover:text-cyan-100'
-              }`}
-            >
-              更換
-              <input
-                id={imageInputId}
-                type="file"
-                accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-                aria-label={`更換${displayName}的參考圖片`}
-                disabled={controlsDisabled}
-                className="sr-only"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  event.target.value = ''
-                  if (file) onSelectImage(file)
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              aria-label={`移除${displayName}的參考圖片`}
-              onClick={onRemoveImage}
-              disabled={controlsDisabled}
-              className="rounded-md border border-white/10 px-2 py-1 text-xs text-stone-400 hover:text-rose-200 disabled:opacity-40"
-            >
-              移除圖片
-            </button>
-          </div>
-        ) : (
-          <label
-            htmlFor={imageInputId}
-            className={`flex h-14 items-center justify-center gap-2 rounded-lg border border-dashed ${
-              controlsDisabled
-                ? 'cursor-not-allowed border-white/10 text-stone-600 opacity-50'
-                : 'cursor-pointer border-cyan-300/25 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100'
-            } focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-200`}
+          </>
+        ) : null}
+        <button
+          ref={imageTriggerRef}
+          type="button"
+          disabled={controlsDisabled}
+          onClick={() => imageInputRef.current?.click()}
+          className={
+            character.reference
+              ? `rounded-md border border-white/10 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 ${
+                  controlsDisabled ? 'cursor-not-allowed text-stone-600' : 'text-stone-400 hover:text-cyan-100'
+                }`
+              : `flex h-14 w-full items-center justify-center gap-2 rounded-lg border border-dashed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 ${
+                  controlsDisabled
+                    ? 'cursor-not-allowed border-white/10 text-stone-600 opacity-50'
+                    : 'border-cyan-300/25 text-stone-400 hover:border-cyan-200/45 hover:text-cyan-100'
+                }`
+          }
+        >
+          {!character.reference ? <AppIcon name="imageEdit" className="h-4 w-4" /> : null}
+          {character.reference ? '更換' : `上傳角色 ${String(ordinal).padStart(2, '0')} 參考圖片`}
+        </button>
+        {character.reference ? (
+          <button
+            type="button"
+            aria-label={`移除${displayName}的參考圖片`}
+            onClick={onRemoveImage}
+            disabled={controlsDisabled}
+            className="rounded-md border border-white/10 px-2 py-1 text-xs text-stone-400 hover:text-rose-200 disabled:opacity-40"
           >
-            <AppIcon name="imageEdit" className="h-4 w-4" />
-            上傳角色 {String(ordinal).padStart(2, '0')} 參考圖片
-            <input
-              id={imageInputId}
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
-              aria-label={`上傳角色 ${String(ordinal).padStart(2, '0')} 參考圖片`}
-              disabled={controlsDisabled}
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ''
-                if (file) onSelectImage(file)
-              }}
-            />
-          </label>
-        )}
+            移除圖片
+          </button>
+        ) : null}
+        <input
+          ref={imageInputRef}
+          id={imageInputId}
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+          aria-label={imageInputLabel}
+          tabIndex={-1}
+          disabled={controlsDisabled}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0]
+            event.currentTarget.value = ''
+            if (file) {
+              onSelectImage(file)
+              imageTriggerRef.current?.focus({ preventScroll: true })
+            }
+          }}
+        />
       </div>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
