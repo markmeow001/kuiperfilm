@@ -290,6 +290,22 @@ describe('DepthRebuildPanel', () => {
     expect(onGenerate).toHaveBeenCalledTimes(1)
   })
 
+  it('送出回應遺失且尚未取得任務編號 -> 沿用同一請求安全恢復，不建立第二筆付費任務', () => {
+    const onGenerate = vi.fn()
+    render(<DepthRebuildPanel {...buildProps({
+      submittedRunId: null,
+      canResume: true,
+      canGenerate: true,
+      promptStale: true,
+      onGenerate,
+    })} />)
+
+    expect(screen.getByRole('status')).toHaveTextContent(/網路回應中斷/)
+    expect(screen.getByRole('status')).toHaveTextContent(/不會建立第二筆付費任務/)
+    fireEvent.click(screen.getByRole('button', { name: '安全恢復上次送出（不重複扣費）' }))
+    expect(onGenerate).toHaveBeenCalledTimes(1)
+  })
+
   it('已完成的任務 -> 需明確開始另一版本後才可再次付費生成', () => {
     const onResetSubmittedRun = vi.fn()
     render(<DepthRebuildPanel {...buildProps({

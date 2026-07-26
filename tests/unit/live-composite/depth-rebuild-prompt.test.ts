@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAdaptiveDepthRebuildPrompt,
   buildDepthRebuildPrompt,
   buildDepthRebuildSegmentPrompt,
   type DepthRebuildPromptInput,
@@ -9,6 +10,7 @@ import {
   DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS,
   type DepthRebuildMotionSettings,
 } from '@/app/[locale]/live-composite/lib/depth-rebuild-motion-contract'
+import { buildDepthRebuildGuidePlan } from '@/app/[locale]/live-composite/lib/depth-rebuild-guide-plan'
 
 const DEFAULT_CHARACTERS: DepthRebuildPromptInput['characters'] = [{
   label: '新角色',
@@ -48,6 +50,56 @@ function buildPromptInput(
 }
 
 describe('深度引導 Seedance prompt', () => {
+  it('11.2 秒自適應單筆生成 -> video 1 完整 Depth、video 2 只映射關鍵 RGB 且 12 秒後裁回', () => {
+    const characters = [
+      {
+        label: '新郎',
+        sourceBinding: '原片左側男性',
+        description: '深色西裝的電影寫實男性',
+      },
+      {
+        label: '新娘',
+        sourceBinding: '原片右側女性',
+        description: '象牙白洋裝的電影寫實女性',
+      },
+    ]
+    const guidePlan = buildDepthRebuildGuidePlan(11.2, { criticalCenterSeconds: 8 })
+    const prompt = buildAdaptiveDepthRebuildPrompt({
+      guidePlan,
+      characters,
+      sceneReferences: [{ note: '老宅庭院' }],
+      sceneDescription: '有微風吹動樹葉的老宅庭院',
+      sourceAudioMode: 'preserve',
+      motionContract: createDepthRebuildMotionContract({
+        durationSeconds: 11.2,
+        characters: characters.map((character, index) => ({
+          id: `character-${index + 1}`,
+          label: character.label,
+          sourceBinding: character.sourceBinding,
+        })),
+        settings: {
+          ...DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS,
+          cameraDirection: 'backward',
+          framingCrop: 'thigh-up',
+          subjectDirection: 'forward',
+          noDirectionReversal: true,
+          gazeSourceCharacterId: 'character-1',
+          gazeTargetCharacterId: 'character-2',
+        },
+      }),
+    })
+
+    expect(prompt).toContain('[SINGLE ADAPTIVE DEPTH REBUILD — ONE REQUEST]')
+    expect(prompt).toContain('Generate exactly 12.00s')
+    expect(prompt).toContain('platform will trim this safety tail and deliver exactly 11.20s')
+    expect(prompt).toContain('video 1 = the complete synchronized inverse-depth guide')
+    expect(prompt).toContain('video 2 = the original RGB detail clip for source 6.35s–9.65s')
+    expect(prompt).toContain('local time 0.00s–3.30s maps exactly to that same interval')
+    expect(prompt).toContain('Never add an establishing shot, push in before pulling back')
+    expect(prompt).toContain('platform will restore that exact original audio')
+    expect(prompt).not.toContain('[SEGMENT 1 OF 2]')
+  })
+
   it('兩名角色與兩張場景圖 -> RGB 掌管表演、Depth 只管幾何，image 1–4 綁定正確', () => {
     const prompt = buildDepthRebuildPrompt(buildPromptInput({
       durationSeconds: 8,

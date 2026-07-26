@@ -21,14 +21,18 @@ vi.mock('node:fs/promises', () => ({
 
 import {
   assertAtlasCloudSeedanceReferenceVideo,
+  assertDepthRebuildGuideReferenceBindingsV2,
+  assertSeedanceReferenceVideoTrim,
   buildSeedanceReferenceFfmpegArgs,
   buildSeedanceReferenceFfprobeArgs,
   buildSeedanceReferenceSourceFfprobeArgs,
   isSeedanceReferenceNormalizationModel,
   normalizeSeedanceReferenceVideoToCos,
+  parseDepthRebuildGuideContractV2,
   parseFps,
   parseSeedanceReferenceProbe,
   parseSeedanceReferenceSourceProbe,
+  resolveSeedanceReferenceTargetDimensions,
   type SeedanceReferenceVideoProbe,
 } from '@/lib/playground/seedance-reference-video'
 
@@ -59,6 +63,8 @@ function normalizedMp4Probe(overrides: {
   fps?: string
   size?: string
   hasAudio?: boolean
+  width?: number
+  height?: number
 } = {}) {
   return {
     format: {
@@ -72,8 +78,8 @@ function normalizedMp4Probe(overrides: {
       {
         codec_type: 'video',
         codec_name: overrides.codecName ?? 'h264',
-        width: 1268,
-        height: 720,
+        width: overrides.width ?? 1268,
+        height: overrides.height ?? 720,
         avg_frame_rate: overrides.fps ?? '24/1',
         r_frame_rate: overrides.fps ?? '24/1',
       },
@@ -130,6 +136,113 @@ describe('Seedance reference-video media contract', () => {
     expect(isSeedanceReferenceNormalizationModel('fal::bytedance/seedance-2.0/reference-to-video')).toBe(false)
   })
 
+  it('v2 完整 Depth＋關鍵 RGB -> 解析獨立 trim windows 與整數輸出契約', () => {
+    const contract = parseDepthRebuildGuideContractV2({
+      version: 2,
+      strategy: 'full-depth-critical-rgb',
+      sourceVideoKey: 'video/playground-ref/user-1/source.mp4',
+      sourceDurationSeconds: 11.2,
+      outputDurationSeconds: 12,
+      referenceVideoWindows: [
+        { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+        { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+      ],
+    })
+
+    expect(contract).toEqual({
+      version: 2,
+      strategy: 'full-depth-critical-rgb',
+      sourceVideoKey: 'video/playground-ref/user-1/source.mp4',
+      sourceDurationSeconds: 11.2,
+      outputDurationSeconds: 12,
+      referenceVideoWindows: [
+        { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+        { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+      ],
+    })
+    expect(() => assertDepthRebuildGuideReferenceBindingsV2(contract, [
+      'video/playground-ref/user-1/depth.webm',
+      'video/playground-ref/user-1/source.mp4',
+    ])).not.toThrow()
+  })
+
+  it.each([
+    [
+      '輸出秒數不是來源秒數向上取整',
+      { outputDurationSeconds: 11 },
+      'DEPTH_REBUILD_GUIDE_OUTPUT_DURATION_MISMATCH',
+    ],
+    [
+      'Depth 不是完整來源',
+      {
+        referenceVideoWindows: [
+          { role: 'depth', startSeconds: 0, durationSeconds: 10 },
+          { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+        ],
+      },
+      'DEPTH_REBUILD_GUIDE_FULL_DEPTH_REQUIRED',
+    ],
+    [
+      'RGB 少於 2 秒',
+      {
+        referenceVideoWindows: [
+          { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+          { role: 'rgb', startSeconds: 4.6, durationSeconds: 1.99 },
+        ],
+      },
+      'DEPTH_REBUILD_GUIDE_REFERENCE_DURATION_INVALID',
+    ],
+    [
+      '雙參考超過 14.5 秒安全額度',
+      {
+        sourceDurationSeconds: 7.3,
+        outputDurationSeconds: 8,
+        strategy: 'full-depth-full-rgb',
+        referenceVideoWindows: [
+          { role: 'depth', startSeconds: 0, durationSeconds: 7.3 },
+          { role: 'rgb', startSeconds: 0, durationSeconds: 7.3 },
+        ],
+      },
+      'DEPTH_REBUILD_GUIDE_REFERENCE_TOTAL_OVER_SAFE_LIMIT',
+    ],
+  ])('v2 %s -> 在 worker/供應商前顯式拒絕', (_label, overrides, errorCode) => {
+    expect(() => parseDepthRebuildGuideContractV2({
+      version: 2,
+      strategy: 'full-depth-critical-rgb',
+      sourceVideoKey: 'video/playground-ref/user-1/source.mp4',
+      sourceDurationSeconds: 11.2,
+      outputDurationSeconds: 12,
+      referenceVideoWindows: [
+        { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+        { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+      ],
+      ...overrides,
+    })).toThrow(errorCode)
+  })
+
+  it('v2 綁定順序 -> video 1 必須是 Depth，video 2 必須是 sourceVideoKey', () => {
+    const contract = parseDepthRebuildGuideContractV2({
+      version: 2,
+      strategy: 'full-depth-full-rgb',
+      sourceVideoKey: 'cos/source.mp4',
+      sourceDurationSeconds: 7.2,
+      outputDurationSeconds: 8,
+      referenceVideoWindows: [
+        { role: 'depth', startSeconds: 0, durationSeconds: 7.2 },
+        { role: 'rgb', startSeconds: 0, durationSeconds: 7.2 },
+      ],
+    })
+
+    expect(() => assertDepthRebuildGuideReferenceBindingsV2(
+      contract,
+      ['cos/source.mp4', 'cos/depth.webm'],
+    )).toThrow('DEPTH_REBUILD_GUIDE_DEPTH_REFERENCE_INVALID')
+    expect(() => assertDepthRebuildGuideReferenceBindingsV2(
+      contract,
+      ['cos/depth.webm', 'cos/other-rgb.mp4'],
+    )).toThrow('DEPTH_REBUILD_GUIDE_RGB_REFERENCE_MUST_MATCH_SOURCE')
+  })
+
   it('ffprobe 分數影格率 -> 解析成精確數值', () => {
     expect(parseFps('24/1')).toBe(24)
     expect(parseFps('30000/1001')).toBeCloseTo(29.97002997, 7)
@@ -177,6 +290,19 @@ describe('Seedance reference-video media contract', () => {
     })
     expect(() => parseSeedanceReferenceProbe(mediaRecorderWebm))
       .toThrow('SEEDANCE_REFERENCE_PROBE_DURATION_INVALID')
+  })
+
+  it('v2 目標尺寸 -> 由 1920×1080 RGB 決定合法偶數 1280×720', () => {
+    expect(resolveSeedanceReferenceTargetDimensions(1920, 1080)).toEqual({
+      width: 1280,
+      height: 720,
+    })
+    expect(resolveSeedanceReferenceTargetDimensions(1080, 1920)).toEqual({
+      width: 720,
+      height: 1280,
+    })
+    expect(() => resolveSeedanceReferenceTargetDimensions(2000, 200))
+      .toThrow('SEEDANCE_REFERENCE_SOURCE_ASPECT_RATIO_OUT_OF_RANGE')
   })
 
   it.each([
@@ -275,6 +401,22 @@ describe('Seedance reference-video media contract', () => {
     expect(args[args.indexOf('-vf') + 1]).toBe('fps=24,scale=720:-2')
   })
 
+  it('v2 518×294 Depth -> ffmpeg 強制使用 RGB resolver 的 1280×720', () => {
+    const args = buildSeedanceReferenceFfmpegArgs({
+      sourceVideoUrl: 'depth.webm',
+      outputPath: 'depth-normalized.mp4',
+      sourceWidth: 518,
+      sourceHeight: 294,
+      includeAudio: false,
+      trim: { startSeconds: 0, durationSeconds: 11.2 },
+      targetDimensions: resolveSeedanceReferenceTargetDimensions(1920, 1080),
+    })
+
+    expect(args[args.indexOf('-vf') + 1]).toBe(
+      'fps=24,scale=1280:720,setpts=PTS-STARTPTS',
+    )
+  })
+
   it('generate 模式 -> ffmpeg 明確移除來源音軌，不留下可選 audio map 或編碼器', () => {
     const args = buildSeedanceReferenceFfmpegArgs({
       sourceVideoUrl: 'source.mov',
@@ -347,7 +489,7 @@ describe('Seedance reference-video media contract', () => {
   it.each([
     ['負數起點', { startSeconds: -0.1, durationSeconds: 5 }, 'SEEDANCE_REFERENCE_TRIM_START_INVALID'],
     ['無限起點', { startSeconds: Number.POSITIVE_INFINITY, durationSeconds: 5 }, 'SEEDANCE_REFERENCE_TRIM_START_INVALID'],
-    ['少於 4 秒', { startSeconds: 0, durationSeconds: 3.99 }, 'SEEDANCE_REFERENCE_TRIM_DURATION_INVALID'],
+    ['少於 2 秒', { startSeconds: 0, durationSeconds: 1.99 }, 'SEEDANCE_REFERENCE_TRIM_DURATION_INVALID'],
     ['無限長度', { startSeconds: 0, durationSeconds: Number.POSITIVE_INFINITY }, 'SEEDANCE_REFERENCE_TRIM_DURATION_INVALID'],
     ['結束超過 15 秒', { startSeconds: 11, durationSeconds: 5 }, 'SEEDANCE_REFERENCE_TRIM_RANGE_OUT_OF_RANGE'],
   ])('分段裁切 %s -> 媒體工具執行前顯式拒絕', async (_label, trim, expectedError) => {
@@ -359,6 +501,24 @@ describe('Seedance reference-video media contract', () => {
 
     expect(mediaToolMock.execFile).not.toHaveBeenCalled()
     expect(workerUtilsMock.uploadVideoSourceToCos).not.toHaveBeenCalled()
+  })
+
+  it('v2 關鍵 RGB trim 剛好 2 秒 -> 允許建立精確 ffmpeg 時間窗', () => {
+    expect(() => assertSeedanceReferenceVideoTrim({
+      startSeconds: 9.2,
+      durationSeconds: 2,
+    })).not.toThrow()
+    const args = buildSeedanceReferenceFfmpegArgs({
+      sourceVideoUrl: 'source.mov',
+      outputPath: 'rgb-critical.mp4',
+      sourceWidth: 1920,
+      sourceHeight: 1080,
+      includeAudio: false,
+      trim: { startSeconds: 9.2, durationSeconds: 2 },
+    })
+    expect(args.slice(args.indexOf('-ss'), args.indexOf('-ss') + 4)).toEqual([
+      '-ss', '9.2', '-t', '2',
+    ])
   })
 
   it('ffprobe 呼叫 -> 只讀契約所需欄位且不使用 shell string', () => {
@@ -423,6 +583,11 @@ describe('Seedance reference-video media contract', () => {
     )
     expect(result).toEqual({
       cosKey: 'video/normalized.mp4',
+      sourceProbe: {
+        width: 518,
+        height: 294,
+        durationSec: null,
+      },
       probe: {
         formatNames: ['mov', 'mp4', 'm4a', '3gp', '3g2', 'mj2'],
         sizeBytes: 5,
@@ -438,6 +603,40 @@ describe('Seedance reference-video media contract', () => {
       '/tmp/seedance-reference-video-test',
       { recursive: true, force: true },
     )
+  })
+
+  it('v2 targetDimensions -> normalize 將 518×294 Depth 實際轉成 RGB 的 1280×720', async () => {
+    queueMediaToolOutputs(
+      mediaRecorderWebmProbe(),
+      '',
+      normalizedMp4Probe({
+        duration: '11.200000',
+        hasAudio: false,
+        width: 1280,
+        height: 720,
+      }),
+    )
+
+    const result = await normalizeSeedanceReferenceVideoToCos({
+      sourceVideoUrl: 'https://storage.example/depth-guide.webm',
+      taskId: 'task-v2-shared-geometry',
+      sourceAudioMode: 'generate',
+      trim: { startSeconds: 0, durationSeconds: 11.2 },
+      targetDimensions: { width: 1280, height: 720 },
+    })
+
+    expect(mediaToolMock.execFile.mock.calls[1]?.[1]).toEqual(
+      buildSeedanceReferenceFfmpegArgs({
+        sourceVideoUrl: 'https://storage.example/depth-guide.webm',
+        outputPath: '/tmp/seedance-reference-video-test/reference.mp4',
+        sourceWidth: 518,
+        sourceHeight: 294,
+        includeAudio: false,
+        trim: { startSeconds: 0, durationSeconds: 11.2 },
+        targetDimensions: { width: 1280, height: 720 },
+      }),
+    )
+    expect(result.probe).toMatchObject({ width: 1280, height: 720 })
   })
 
   it('來源明確超過 15 秒 -> 轉檔與上傳前拒絕，不得靜默截短', async () => {
@@ -547,11 +746,17 @@ describe('Seedance reference-video media contract', () => {
       normalizedMp4Probe({ duration: '5.500000' }),
     )
 
-    await normalizeSeedanceReferenceVideoToCos({
+    const result = await normalizeSeedanceReferenceVideoToCos({
       sourceVideoUrl: 'https://storage.example/source-performance.mov',
       taskId: 'task-segmented-reference',
       outputId: 'rgb-segment-02',
       trim: { startSeconds: 5.5, durationSeconds: 5.5 },
+    })
+
+    expect(result.sourceProbe).toEqual({
+      width: 518,
+      height: 294,
+      durationSec: 11,
     })
 
     expect(mediaToolMock.execFile.mock.calls[1]?.[1]).toEqual(

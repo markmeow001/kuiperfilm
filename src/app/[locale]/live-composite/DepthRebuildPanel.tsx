@@ -6,6 +6,8 @@ import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import { DepthRebuildAudioModeSelector } from './DepthRebuildAudioModeSelector'
 import { DepthRebuildReferenceSection } from './DepthRebuildReferenceSection'
 import { DepthRebuildMotionContractPanel } from './DepthRebuildMotionContractPanel'
+import { DepthRebuildGuidePlanPanel } from './DepthRebuildGuidePlanPanel'
+import type { DepthRebuildGuidePlan } from './lib/depth-rebuild-guide-plan'
 import type {
   CameraDirection,
   DepthRebuildMotionSettings,
@@ -59,6 +61,8 @@ export interface DepthRebuildPanelProps {
   sourceAudioMode: SourceAudioMode
   sourceAudioDetected: boolean | null
   motionSettings: DepthRebuildMotionSettings
+  guidePlan?: DepthRebuildGuidePlan | null
+  criticalCenterSeconds?: number
   segmentCount: number
   segmentSummary: string
   prompt: string
@@ -105,6 +109,7 @@ export interface DepthRebuildPanelProps {
   onGazeSourceCharacterIdChange: (value: string | null) => void
   onGazeTargetCharacterIdChange: (value: string | null) => void
   onInteractionDescriptionChange: (value: string) => void
+  onCriticalCenterChange?: (value: number) => void
   onBuildPrompt: () => void
   onGenerate: () => void
   onResetSubmittedRun?: () => void
@@ -139,8 +144,8 @@ export function DepthRebuildPanel({
   sourceAudioMode,
   sourceAudioDetected,
   motionSettings,
-  segmentCount,
-  segmentSummary,
+  guidePlan = null,
+  criticalCenterSeconds = 0,
   prompt,
   promptStale,
   promptBlockingMessage = null,
@@ -185,6 +190,7 @@ export function DepthRebuildPanel({
   onGazeSourceCharacterIdChange,
   onGazeTargetCharacterIdChange,
   onInteractionDescriptionChange,
+  onCriticalCenterChange,
   onBuildPrompt,
   onGenerate,
   onResetSubmittedRun,
@@ -312,7 +318,7 @@ export function DepthRebuildPanel({
         <section className="px-4 py-5" aria-labelledby="depth-step-2">
           <StepHeading id="depth-step-2" number="02" title="指定新角色與新場景" />
           <p className="mt-2 text-xs leading-5 text-stone-500">
-            參考圖可以先上傳，不必等深度分析完成，也不會在選圖時產生 AI 費用。圖片會依人物在前、場景在後的順序編成 image 1–{maxReferenceImages}；長片另保留 1 張給前段末幀銜接。
+            參考圖可以先上傳，不必等深度分析完成，也不會在選圖時產生 AI 費用。圖片會依人物在前、場景在後的順序編成 image 1–{maxReferenceImages}；單次重建不再占用銜接末幀名額。
           </p>
           <div className="mt-4">
             <DepthRebuildReferenceSection
@@ -375,14 +381,33 @@ export function DepthRebuildPanel({
         <section className="px-4 py-5" aria-labelledby="depth-step-3">
           <StepHeading id="depth-step-3" number="03" title="建立並檢查 Prompt" state="免費" />
           <p className="mt-2 text-xs leading-5 text-stone-500">
-            先檢查角色、場景與 image 對應。深度影片品質會在最後付費生成前檢查，不會阻止您先建立 Prompt。
+            先檢查角色、場景、image 對應與引導片段。深度影片品質會在最後付費生成前檢查，不會阻止您先建立 Prompt。
           </p>
-          <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/[0.045] px-3 py-2 text-xs leading-5 text-cyan-100/85">
-            <span className="font-medium">RGB＋Depth 送出計畫：</span>
-            {segmentCount > 0
-              ? `${segmentCount} 段（${segmentSummary}）。每段同步使用 RGB 原片與 Depth；長片會依序生成後再拼接。`
-              : segmentSummary}
-          </div>
+          {guidePlan ? (
+            <div className="mt-3">
+              <DepthRebuildGuidePlanPanel
+                strategy={guidePlan.strategy === 'full-depth-full-rgb'
+                  ? 'full-dual'
+                  : guidePlan.strategy === 'full-depth-critical-rgb'
+                    ? 'depth-plus-detail'
+                    : 'depth-only'}
+                sourceDuration={guidePlan.sourceDurationSeconds}
+                outputDuration={guidePlan.outputDurationSeconds}
+                primaryDuration={guidePlan.fullDepth.durationSeconds}
+                secondaryStart={guidePlan.secondary?.sourceStartSeconds ?? 0}
+                secondaryDuration={guidePlan.secondary?.durationSeconds ?? 0}
+                totalReferenceDuration={guidePlan.totalReferenceSeconds}
+                maxReferenceDuration={guidePlan.budget.hardLimitSeconds}
+                criticalCenterSeconds={criticalCenterSeconds}
+                disabled={controlsDisabled}
+                onCriticalCenterChange={onCriticalCenterChange ?? (() => undefined)}
+              />
+            </div>
+          ) : (
+            <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.045] px-3 py-2 text-xs leading-5 text-amber-100/85">
+              尚未建立合法引導計畫；原片需介於 4–15 秒。
+            </div>
+          )}
           <div
             id="depth-rebuild-prompt-readiness"
             aria-live="polite"
@@ -479,6 +504,11 @@ export function DepthRebuildPanel({
               這筆付費任務已經送出（{submittedRunId}）。再次按下只會查詢同一筆任務，不會重新上傳或重複送出。
             </div>
           ) : null}
+          {canResume && !submittedRunId ? (
+            <div role="status" className="mt-3 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.055] px-3 py-2 text-xs leading-5 text-cyan-100">
+              上次送出時網路回應中斷，任務可能已經建立。按下後會沿用同一個請求安全恢復，不會重新上傳，也不會建立第二筆付費任務。
+            </div>
+          ) : null}
           {hasSettledSubmittedRun && onResetSubmittedRun ? (
             <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-3 text-xs leading-5 text-stone-400">
               <p>
@@ -515,7 +545,9 @@ export function DepthRebuildPanel({
             {generating
               ? 'AI 重建中…'
               : canResume
-                ? '恢復查詢同一筆任務（不重複扣費）'
+                ? submittedRunId
+                  ? '恢復查詢同一筆任務（不重複扣費）'
+                  : '安全恢復上次送出（不重複扣費）'
                 : hasResult
                   ? '本次重建已完成'
                   : submittedRunId

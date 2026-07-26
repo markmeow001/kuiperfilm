@@ -117,13 +117,22 @@ export interface SegmentTaskRow {
 export interface ResolvedDepthRebuildSegment {
   taskId: string
   resultKey: string
+  contractVersion: 1 | 2
   workflowId: string
   segmentIndex: number
   segmentCount: number
   sourceVideoKey: string
   depthVideoKey: string
   startSeconds: number
+  /** 供應商實際生成秒數；v2 可能比來源多一小段安全尾幀。 */
   durationSeconds: number
+  sourceDurationSeconds: number
+  outputDurationSeconds: number
+  referenceVideoWindows: Array<{
+    role: 'depth' | 'rgb'
+    startSeconds: number
+    durationSeconds: number
+  }>
   modelKey: string
   resolution: string
   aspectRatio: string
@@ -285,6 +294,142 @@ function parseNonEmptyPayloadString(
   return value.trim()
 }
 
+function parseAdaptiveSegmentTaskContract(
+  task: SegmentTaskRow,
+  resultKey: string,
+  payload: Record<string, unknown>,
+): ResolvedDepthRebuildSegment {
+  const identity = {
+    workflowId: payload.workflowId,
+    segmentIndex: payload.segmentIndex,
+    segmentCount: payload.segmentCount,
+  }
+  const referenceVideos = Array.isArray(payload.referenceVideos)
+    ? payload.referenceVideos
+    : []
+  const rawWindows = Array.isArray(payload.referenceVideoWindows)
+    ? payload.referenceVideoWindows
+    : []
+  const strategy = payload.strategy
+  const sourceVideoKey = typeof payload.sourceVideoKey === 'string'
+    ? payload.sourceVideoKey.trim()
+    : ''
+  const sourceDurationSeconds = payload.sourceDurationSeconds
+  const outputDurationSeconds = payload.outputDurationSeconds
+  const taskDuration = payload.duration
+  if (
+    payload.normalizeSeedanceReferenceVideo !== true
+    || !isDepthRebuildSegmentIdentity(identity)
+    || identity.segmentIndex !== 0
+    || identity.segmentCount !== 1
+    || !['full-depth-full-rgb', 'full-depth-critical-rgb', 'full-depth-only'].includes(String(strategy))
+    || !isFirstPartyStorageKey(sourceVideoKey)
+    || typeof sourceDurationSeconds !== 'number'
+    || !Number.isFinite(sourceDurationSeconds)
+    || sourceDurationSeconds < 4
+    || sourceDurationSeconds > 15
+    || typeof outputDurationSeconds !== 'number'
+    || !Number.isInteger(outputDurationSeconds)
+    || outputDurationSeconds < 4
+    || outputDurationSeconds > 15
+    || outputDurationSeconds !== Math.ceil(sourceDurationSeconds)
+    || typeof taskDuration !== 'number'
+    || !Number.isFinite(taskDuration)
+    || !depthRebuildTimesEqual(taskDuration, outputDurationSeconds)
+    || referenceVideos.length < 1
+    || referenceVideos.length > 2
+    || referenceVideos.some((value) => typeof value !== 'string' || !isFirstPartyStorageKey(value))
+    || new Set(referenceVideos).size !== referenceVideos.length
+    || referenceVideos[0] === sourceVideoKey
+    || rawWindows.length !== referenceVideos.length
+    || !isSourceAudioMode(payload.sourceAudioMode)
+  ) {
+    throw new DepthRebuildFinalizeError(
+      'DEPTH_REBUILD_FINALIZE_SEGMENT_CONTRACT_INVALID',
+      `任務「${task.id}」不是可完稿的自適應 Depth 工作流`,
+    )
+  }
+
+  const referenceVideoWindows: ResolvedDepthRebuildSegment['referenceVideoWindows'] = []
+  for (let index = 0; index < rawWindows.length; index += 1) {
+    const rawWindow = rawWindows[index]
+    const expectedRole = index === 0 ? 'depth' : 'rgb'
+    if (!isRecord(rawWindow)) {
+      throw new DepthRebuildFinalizeError(
+        'DEPTH_REBUILD_FINALIZE_SEGMENT_CONTRACT_INVALID',
+        `任務「${task.id}」的參考影片時間窗格式無效`,
+      )
+    }
+    const startSeconds = rawWindow.startSeconds
+    const durationSeconds = rawWindow.durationSeconds
+    if (
+      rawWindow.role !== expectedRole
+      || typeof startSeconds !== 'number'
+      || !Number.isFinite(startSeconds)
+      || startSeconds < 0
+      || typeof durationSeconds !== 'number'
+      || !Number.isFinite(durationSeconds)
+      || durationSeconds < (expectedRole === 'depth' ? 4 : 2)
+      || durationSeconds > 15
+      || startSeconds + durationSeconds > sourceDurationSeconds + 0.001
+    ) {
+      throw new DepthRebuildFinalizeError(
+        'DEPTH_REBUILD_FINALIZE_SEGMENT_CONTRACT_INVALID',
+        `任務「${task.id}」的 ${expectedRole.toUpperCase()} 時間窗無效`,
+      )
+    }
+    referenceVideoWindows.push({ role: expectedRole, startSeconds, durationSeconds })
+  }
+
+  const depthWindow = referenceVideoWindows[0]
+  const rgbWindow = referenceVideoWindows[1]
+  const totalReferenceDuration = referenceVideoWindows.reduce(
+    (sum, window) => sum + window.durationSeconds,
+    0,
+  )
+  const fullRgb = Boolean(
+    rgbWindow
+    && depthRebuildTimesEqual(rgbWindow.startSeconds, 0)
+    && depthRebuildTimesEqual(rgbWindow.durationSeconds, sourceDurationSeconds),
+  )
+  if (
+    !depthWindow
+    || !depthRebuildTimesEqual(depthWindow.startSeconds, 0)
+    || !depthRebuildTimesEqual(depthWindow.durationSeconds, sourceDurationSeconds)
+    || totalReferenceDuration > 15.001
+    || (referenceVideoWindows.length === 2 && totalReferenceDuration > 14.501)
+    || (rgbWindow && referenceVideos[1] !== sourceVideoKey)
+    || (strategy === 'full-depth-only' && rgbWindow !== undefined)
+    || (strategy === 'full-depth-full-rgb' && !fullRgb)
+    || (strategy === 'full-depth-critical-rgb' && (!rgbWindow || fullRgb))
+  ) {
+    throw new DepthRebuildFinalizeError(
+      'DEPTH_REBUILD_FINALIZE_SEGMENT_CONTRACT_INVALID',
+      `任務「${task.id}」的自適應引導策略、順序或總秒數不一致`,
+    )
+  }
+
+  return {
+    taskId: task.id,
+    resultKey,
+    contractVersion: 2,
+    workflowId: identity.workflowId,
+    segmentIndex: identity.segmentIndex,
+    segmentCount: identity.segmentCount,
+    sourceVideoKey,
+    depthVideoKey: referenceVideos[0] as string,
+    startSeconds: 0,
+    durationSeconds: outputDurationSeconds,
+    sourceDurationSeconds,
+    outputDurationSeconds,
+    referenceVideoWindows,
+    modelKey: parseNonEmptyPayloadString(payload, 'modelKey', task.id),
+    resolution: parseNonEmptyPayloadString(payload, 'resolution', task.id),
+    aspectRatio: parseNonEmptyPayloadString(payload, 'aspectRatio', task.id),
+    sourceAudioMode: payload.sourceAudioMode,
+  }
+}
+
 function parseSegmentTaskContract(
   task: SegmentTaskRow,
   resultKey: string,
@@ -299,11 +444,14 @@ function parseSegmentTaskContract(
   const payload = taskMeta && isRecord(taskMeta.depthRebuildContract)
     ? taskMeta.depthRebuildContract
     : null
-  if (!payload || payload.version !== 1) {
+  if (!payload || (payload.version !== 1 && payload.version !== 2)) {
     throw new DepthRebuildFinalizeError(
       'DEPTH_REBUILD_FINALIZE_SEGMENT_CONTRACT_INVALID',
       `片段任務「${task.id}」沒有持久化的 RGB＋Depth 工作流契約`,
     )
+  }
+  if (payload.version === 2) {
+    return parseAdaptiveSegmentTaskContract(task, resultKey, payload)
   }
   const identity = {
     workflowId: payload.workflowId,
@@ -353,6 +501,7 @@ function parseSegmentTaskContract(
   return {
     taskId: task.id,
     resultKey,
+    contractVersion: 1,
     workflowId: identity.workflowId,
     segmentIndex: identity.segmentIndex,
     segmentCount: identity.segmentCount,
@@ -360,6 +509,12 @@ function parseSegmentTaskContract(
     depthVideoKey: referenceVideos[1] as string,
     startSeconds,
     durationSeconds,
+    sourceDurationSeconds: durationSeconds,
+    outputDurationSeconds: durationSeconds,
+    referenceVideoWindows: [
+      { role: 'rgb', startSeconds, durationSeconds },
+      { role: 'depth', startSeconds, durationSeconds },
+    ],
     modelKey: parseNonEmptyPayloadString(payload, 'modelKey', task.id),
     resolution: parseNonEmptyPayloadString(payload, 'resolution', task.id),
     aspectRatio: parseNonEmptyPayloadString(payload, 'aspectRatio', task.id),
@@ -378,12 +533,16 @@ function buildDepthRebuildInputFingerprint(
     segments: segments.map((segment) => ({
       taskId: segment.taskId,
       resultKey: segment.resultKey,
+      contractVersion: segment.contractVersion,
       segmentIndex: segment.segmentIndex,
       segmentCount: segment.segmentCount,
       sourceVideoKey: segment.sourceVideoKey,
       depthVideoKey: segment.depthVideoKey,
       startSeconds: segment.startSeconds,
       durationSeconds: segment.durationSeconds,
+      sourceDurationSeconds: segment.sourceDurationSeconds,
+      outputDurationSeconds: segment.outputDurationSeconds,
+      referenceVideoWindows: segment.referenceVideoWindows,
       modelKey: segment.modelKey,
       resolution: segment.resolution,
       aspectRatio: segment.aspectRatio,
@@ -437,6 +596,7 @@ export function resolveDepthRebuildWorkflowContract(
   for (const segment of segments) {
     if (
       !first
+      || segment.contractVersion !== first.contractVersion
       || segment.depthVideoKey !== first.depthVideoKey
       || segment.modelKey !== first.modelKey
       || segment.resolution !== first.resolution
@@ -449,7 +609,7 @@ export function resolveDepthRebuildWorkflowContract(
         'RGB＋Depth 片段的來源、模型、畫質、音訊策略或連續時間窗不一致',
       )
     }
-    expectedStartSeconds += segment.durationSeconds
+    expectedStartSeconds += segment.sourceDurationSeconds
   }
   if (expectedStartSeconds > DEPTH_REBUILD_MAX_SOURCE_DURATION_SEC) {
     throw new DepthRebuildFinalizeError(
@@ -495,6 +655,7 @@ export function assertDepthRebuildMediaLimits(input: {
   segmentMedia: readonly FinalizeMediaProbe[]
   sourceMedia: FinalizeMediaProbe | null
   expectedDurations: readonly number[]
+  targetDurationSec?: number
 }): void {
   if (
     input.segmentMedia.length < 1
@@ -534,13 +695,25 @@ export function assertDepthRebuildMediaLimits(input: {
       '完稿片段總秒數超過工作流上限',
     )
   }
+  const targetDurationSec = input.targetDurationSec ?? expectedTotalDuration
+  if (
+    !Number.isFinite(targetDurationSec)
+    || targetDurationSec <= 0
+    || targetDurationSec > DEPTH_REBUILD_MAX_SOURCE_DURATION_SEC
+    || targetDurationSec > expectedTotalDuration + MEDIA_DURATION_TOLERANCE_SEC
+  ) {
+    throw new DepthRebuildFinalizeError(
+      'DEPTH_REBUILD_FINALIZE_MEDIA_LIMIT_EXCEEDED',
+      '完稿目標秒數與已驗證的工作流不一致',
+    )
+  }
   if (input.sourceMedia) {
     assertMediaDimensions(input.sourceMedia, '原始影片')
     if (
       !Number.isFinite(input.sourceMedia.durationSec)
       || input.sourceMedia.durationSec <= 0
       || input.sourceMedia.durationSec > DEPTH_REBUILD_MAX_SOURCE_DURATION_SEC + MEDIA_DURATION_TOLERANCE_SEC
-      || Math.abs(input.sourceMedia.durationSec - expectedTotalDuration) > MEDIA_DURATION_TOLERANCE_SEC
+      || Math.abs(input.sourceMedia.durationSec - targetDurationSec) > MEDIA_DURATION_TOLERANCE_SEC
     ) {
       throw new DepthRebuildFinalizeError(
         'DEPTH_REBUILD_FINALIZE_MEDIA_LIMIT_EXCEEDED',
@@ -557,6 +730,7 @@ export function buildDepthRebuildFinalizeFfmpegArgs(input: {
   sourceVideoPath: string | null
   sourceMedia: FinalizeMediaProbe | null
   sourceAudioMode: SourceAudioMode
+  targetDurationSec?: number
   outputPath: string
 }): string[] {
   if (input.segmentPaths.length === 0 || input.segmentPaths.length !== input.segmentMedia.length) {
@@ -591,24 +765,30 @@ export function buildDepthRebuildFinalizeFfmpegArgs(input: {
   const height = evenDimension(input.segmentMedia[0]?.height ?? 0)
   const durations = input.segmentMedia.map((media) => media.durationSec)
   const segmentDuration = durations.reduce((sum, duration) => sum + duration, 0)
-  const outputDuration = input.sourceAudioMode === 'preserve'
-    ? input.sourceMedia!.durationSec
-    : segmentDuration
+  const outputDuration = input.targetDurationSec
+    ?? (input.sourceAudioMode === 'preserve' ? input.sourceMedia!.durationSec : segmentDuration)
+  if (
+    !Number.isFinite(outputDuration)
+    || outputDuration <= 0
+    || outputDuration > DEPTH_REBUILD_MAX_SOURCE_DURATION_SEC
+  ) {
+    throw new DepthRebuildFinalizeError(
+      'DEPTH_REBUILD_FINALIZE_MEDIA_LIMIT_EXCEEDED',
+      '完稿輸出秒數超過工作流上限',
+    )
+  }
   const videoNormalize = input.segmentPaths.map((_, index) => (
     `[${index}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,` +
     `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,fps=24,format=yuv420p,` +
     `settb=AVTB,setpts=PTS-STARTPTS[v${index}]`
   ))
-  const videoConcatOutput = input.sourceAudioMode === 'preserve' ? 'joinedv' : 'outv'
-  const videoConcat = `${input.segmentPaths.map((_, index) => `[v${index}]`).join('')}concat=n=${input.segmentPaths.length}:v=1:a=0[${videoConcatOutput}]`
-  const filters = [...videoNormalize, videoConcat]
-
-  if (input.sourceAudioMode === 'preserve') {
-    filters.push(
-      `[joinedv]tpad=stop_mode=clone:stop_duration=${outputDuration.toFixed(3)},` +
+  const videoConcat = `${input.segmentPaths.map((_, index) => `[v${index}]`).join('')}concat=n=${input.segmentPaths.length}:v=1:a=0[joinedv]`
+  const filters = [
+    ...videoNormalize,
+    videoConcat,
+    `[joinedv]tpad=stop_mode=clone:stop_duration=${outputDuration.toFixed(3)},` +
       `trim=duration=${outputDuration.toFixed(3)},setpts=PTS-STARTPTS[outv]`,
-    )
-  }
+  ]
 
   if (input.sourceAudioMode === 'generate') {
     const audioNormalize = durations.map((duration, index) => (
@@ -844,6 +1024,7 @@ export async function finalizeDepthRebuildWorkflow(
       segmentMedia,
       sourceMedia,
       expectedDurations: workflow.segments.map((segment) => segment.durationSeconds),
+      targetDurationSec: workflow.totalDurationSec,
     })
     const outputPath = path.join(dir, 'final.mp4')
     try {
@@ -855,6 +1036,7 @@ export async function finalizeDepthRebuildWorkflow(
           sourceVideoPath,
           sourceMedia,
           sourceAudioMode: input.sourceAudioMode,
+          targetDurationSec: workflow.totalDurationSec,
           outputPath,
         }),
         { timeout: MEDIA_TOOL_TIMEOUT_MS, maxBuffer: MEDIA_TOOL_MAX_BUFFER },
@@ -889,8 +1071,7 @@ export async function finalizeDepthRebuildWorkflow(
       workflowId: input.workflowId,
       inputFingerprint: workflow.inputFingerprint,
       resultKey,
-      durationSec: sourceMedia?.durationSec
-        ?? segmentMedia.reduce((sum, media) => sum + media.durationSec, 0),
+      durationSec: workflow.totalDurationSec,
     }
   } finally {
     await rm(dir, { recursive: true, force: true })

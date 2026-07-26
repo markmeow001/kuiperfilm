@@ -260,10 +260,10 @@ describe('useDepthRebuild', () => {
       onProgress: expect.any(Function),
     })
     expect(result.current.depthGuide?.effectiveDepthFps).toBe(12)
-    expect(result.current.prompt).toContain('video 1 = original RGB performance video')
-    expect(result.current.prompt).toContain('video 2 = synchronized grayscale inverse-depth geometry guide')
-    expect(result.current.prompt).toContain('[SEGMENT 1 OF 2]')
-    expect(result.current.prompt).toContain('[SEGMENT 2 OF 2]')
+    expect(result.current.prompt).toContain('video 1 = the complete synchronized inverse-depth guide')
+    expect(result.current.prompt).toContain('video 2 = the original RGB detail clip')
+    expect(result.current.prompt).toContain('[SINGLE ADAPTIVE DEPTH REBUILD — ONE REQUEST]')
+    expect(result.current.prompt).not.toContain('[SEGMENT 1 OF 2]')
     expect(result.current.prompt).toContain('image 1 = identity, face, hair')
     expect(result.current.prompt).toContain('image 2 = new environment reference')
     expect(result.current.promptIsStale).toBe(false)
@@ -319,8 +319,8 @@ describe('useDepthRebuild', () => {
     expect(result.current.promptValidationError).toBeNull()
     act(() => result.current.buildPrompt())
 
-    expect(result.current.prompt).toContain('video 1 = original RGB performance video')
-    expect(result.current.prompt).toContain('video 2 = synchronized grayscale inverse-depth geometry guide')
+    expect(result.current.prompt).toContain('video 1 = the complete synchronized inverse-depth guide')
+    expect(result.current.prompt).toContain('video 2 = the original RGB detail clip')
     expect(result.current.promptIsStale).toBe(false)
     expect(result.current.depthGuide).toBeNull()
     expect(result.current.validationError).toBe('請先產生深度引導影片')
@@ -366,7 +366,7 @@ describe('useDepthRebuild', () => {
     expect(result.current.canGenerate).toBe(true)
   })
 
-  it('12 秒雙引導生成 -> 素材只上傳一次、兩段各自送出並以 tail frame 銜接後 finalize', async () => {
+  it('12 秒自適應引導 -> 素材只上傳一次、只送一筆任務再裁回來源秒數', async () => {
     const stage = createStage()
     const stageRef = { current: stage }
     const { result } = renderHook(() => useDepthRebuild({
@@ -393,9 +393,9 @@ describe('useDepthRebuild', () => {
     })
     act(() => result.current.buildPrompt())
     const reviewedPrompt = result.current.prompt
-    expect(result.current.segmentCount).toBe(2)
-    expect(reviewedPrompt).toContain('[SEGMENT 1 OF 2]')
-    expect(reviewedPrompt).toContain('[SEGMENT 2 OF 2]')
+    expect(result.current.segmentCount).toBe(1)
+    expect(reviewedPrompt).toContain('[SINGLE ADAPTIVE DEPTH REBUILD — ONE REQUEST]')
+    expect(reviewedPrompt).not.toContain('[SEGMENT')
 
     let generated = null
     await act(async () => {
@@ -412,14 +412,13 @@ describe('useDepthRebuild', () => {
       { type: 'image', name: 'character.png' },
       { type: 'image', name: 'scene.jpg' },
     ])
-    expect(mocks.submit).toHaveBeenCalledTimes(2)
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
     const firstSubmission = mocks.submit.mock.calls[0]?.[0]
-    const secondSubmission = mocks.submit.mock.calls[1]?.[0]
     expect(firstSubmission).toEqual({
-      prompt: expect.stringContaining('[SEGMENT 1 OF 2]'),
+      prompt: expect.stringContaining('[SINGLE ADAPTIVE DEPTH REBUILD — ONE REQUEST]'),
       referenceVideos: [
-        'video/performance.mp4',
         expect.stringMatching(/^video\/depth-guide-\d+\.webm$/),
+        'video/performance.mp4',
       ],
       referenceImages: ['image/character.png', 'image/scene.jpg'],
       referenceImageNames: ['角色：新角色 1', '場景參考 1'],
@@ -427,61 +426,39 @@ describe('useDepthRebuild', () => {
       modelKey: 'atlascloud::seedance-2.0-r2v',
       resolution: '720p',
       normalizeSeedanceReferenceVideo: true,
-      depthRebuildDualGuide: true,
+      depthRebuildGuideContract: {
+        version: 2,
+        strategy: 'full-depth-critical-rgb',
+        sourceVideoKey: 'video/performance.mp4',
+        sourceDurationSeconds: 12,
+        outputDurationSeconds: 12,
+        referenceVideoWindows: [
+          { role: 'depth', startSeconds: 0, durationSeconds: 12 },
+          { role: 'rgb', startSeconds: 4.75, durationSeconds: 2.5 },
+        ],
+      },
       workflowId: expect.any(String),
-      segmentIndex: 0,
-      segmentCount: 2,
-      referenceVideoWindow: { startSeconds: 0, durationSeconds: 6 },
       aspectRatio: '16:9',
-      durationSec: 6,
+      durationSec: 12,
       sourceAudioMode: 'reference-only',
       workspaceId: 'workspace-1',
       idempotencyKey: expect.any(String),
       signal: expect.any(AbortSignal),
     })
-    expect(secondSubmission).toEqual({
-      prompt: expect.stringContaining('[SEGMENT 2 OF 2]'),
-      referenceVideos: [
-        'video/performance.mp4',
-        expect.stringMatching(/^video\/depth-guide-\d+\.webm$/),
-      ],
-      referenceImages: [
-        'image/character.png',
-        'image/scene.jpg',
-        'https://media.example/segment-1-tail.jpg',
-      ],
-      referenceImageNames: ['角色：新角色 1', '場景參考 1', '前段末幀連續性參考'],
-      outputType: 'video',
-      modelKey: 'atlascloud::seedance-2.0-r2v',
-      resolution: '720p',
-      normalizeSeedanceReferenceVideo: true,
-      depthRebuildDualGuide: true,
-      workflowId: expect.any(String),
-      segmentIndex: 1,
-      segmentCount: 2,
-      referenceVideoWindow: { startSeconds: 6, durationSeconds: 6 },
-      aspectRatio: '16:9',
-      durationSec: 6,
-      sourceAudioMode: 'reference-only',
-      workspaceId: 'workspace-1',
-      idempotencyKey: expect.any(String),
-      signal: expect.any(AbortSignal),
-    })
-    expect(firstSubmission?.idempotencyKey).not.toBe(secondSubmission?.idempotencyKey)
-    expect(firstSubmission?.workflowId).toBe(secondSubmission?.workflowId)
     expect(mocks.waitForTaskResult.mock.calls.map(([runId]) => runId)).toEqual([
       'run-depth-1',
-      'run-depth-2',
     ])
     expect(mocks.requestJsonWithError.mock.calls.map(([url]) => url)).toEqual([
       '/api/playground/runs/run-depth-1',
-      '/api/playground/runs/run-depth-2',
       '/api/live-composite/depth-rebuild/finalize',
     ])
-    const finalizeOptions = mocks.requestJsonWithError.mock.calls[2]?.[1] as RequestInit
+    const finalizeCall = mocks.requestJsonWithError.mock.calls.find(
+      ([url]) => url === '/api/live-composite/depth-rebuild/finalize',
+    )
+    const finalizeOptions = finalizeCall?.[1] as RequestInit
     expect(JSON.parse(String(finalizeOptions.body))).toEqual({
       workflowId: expect.any(String),
-      segmentRunIds: ['run-depth-1', 'run-depth-2'],
+      segmentRunIds: ['run-depth-1'],
       sourceVideoKey: 'video/performance.mp4',
       sourceAudioMode: 'preserve',
     })
@@ -491,7 +468,7 @@ describe('useDepthRebuild', () => {
     })
     expect(result.current.generationStatus).toBe('succeeded')
     expect(result.current.generationProgress).toBe(100)
-    expect(result.current.submittedRunId).toBe('run-depth-2')
+    expect(result.current.submittedRunId).toBe('run-depth-1')
     expect(result.current.canResume).toBe(false)
     const storedWorkflow = Array.from(
       { length: sessionStorage.length },
@@ -507,11 +484,11 @@ describe('useDepthRebuild', () => {
   it.each([
     {
       mode: 'reference-only' as const,
-      promptFragment: 'The final output must be silent',
+      promptFragment: 'The generated result must remain silent',
     },
     {
       mode: 'generate' as const,
-      promptFragment: 'The source audio has been removed',
+      promptFragment: 'Generate natural diegetic sound',
     },
   ])('聲音模式 $mode -> Prompt 與送出契約一致，且不混用舊旗標', async ({
     mode,
@@ -551,7 +528,7 @@ describe('useDepthRebuild', () => {
     })
 
     const submissions = mocks.submit.mock.calls.map(([submission]) => submission)
-    expect(submissions).toHaveLength(2)
+    expect(submissions).toHaveLength(1)
     for (const submission of submissions) {
       expect(submission).toEqual(expect.objectContaining({ sourceAudioMode: mode }))
       expect(submission).not.toHaveProperty('preserveSourceAudio')
@@ -607,12 +584,11 @@ describe('useDepthRebuild', () => {
       url: 'https://media.example/final-result.mp4',
     })
     expect(mocks.upload).toHaveBeenCalledTimes(3)
-    expect(mocks.submit).toHaveBeenCalledTimes(2)
-    expect(mocks.waitForTaskResult).toHaveBeenCalledTimes(2)
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
+    expect(mocks.waitForTaskResult).toHaveBeenCalledTimes(1)
     expect(mocks.requestJsonWithError.mock.calls.map(([url]) => url)).toEqual([
       '/api/playground/runs/run-depth-1',
       '/api/playground/runs/run-depth-1',
-      '/api/playground/runs/run-depth-2',
       '/api/live-composite/depth-rebuild/finalize',
     ])
   })
@@ -797,13 +773,9 @@ describe('useDepthRebuild', () => {
       url: 'https://media.example/final-result.mp4',
     })
     expect(mocks.upload).toHaveBeenCalledTimes(3)
-    expect(mocks.submit).toHaveBeenCalledTimes(2)
-    expect(mocks.submit.mock.calls[1]?.[0].referenceImages).toContain(
-      'https://media.example/resumed-tail.jpg',
-    )
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
     expect(mocks.requestJsonWithError.mock.calls.map(([url]) => url)).toEqual([
       '/api/playground/runs/run-depth-1',
-      '/api/playground/runs/run-depth-2',
       '/api/live-composite/depth-rebuild/finalize',
     ])
   })
@@ -893,6 +865,262 @@ describe('useDepthRebuild', () => {
     expect(result.current.submittedRunId).toBeNull()
   })
 
+  it('尚未送出的 v1 分段草稿 -> 自動清除並依目前 UI 重建 v2 單次生成', async () => {
+    const stageRef = { current: createStage() }
+    const { result, rerender } = renderHook(
+      ({ workspaceId }: { workspaceId: string | null }) => useDepthRebuild({
+        stageRef,
+        metadata,
+        videoHasAudio: false,
+        workspaceId,
+      }),
+      { initialProps: { workspaceId: null as string | null } },
+    )
+    act(() => {
+      result.current.selectCharacterImage(
+        'character-1',
+        new File(['character'], 'current-character.png', { type: 'image/png' }),
+      )
+      result.current.setCharacterSourceBinding('character-1', '原片主要人物')
+      result.current.setCharacterDescription('character-1', '目前 UI 的寫實電影角色')
+      result.current.setSceneDescription('目前 UI 的雨夜街道與持續車流')
+    })
+    await act(async () => {
+      await result.current.generateDepthGuide()
+    })
+    act(() => result.current.buildPrompt())
+    const currentPrompt = result.current.prompt
+
+    const scope = 'user:user-1:locale:zh:legacy-unsent-workspace'
+    const storageKey = depthRebuildGenerationStorageKey(scope)
+    sessionStorage.setItem(storageKey, JSON.stringify({
+      workflowId: 'legacy-unsent-workflow',
+      segments: [
+        { requestKey: 'legacy-segment-request-1' },
+        { requestKey: 'legacy-segment-request-2' },
+      ],
+      submission: {
+        segmentPrompts: ['legacy segment prompt 1', 'legacy segment prompt 2'],
+        segmentWindows: [
+          { startSeconds: 0, durationSeconds: 6 },
+          { startSeconds: 6, durationSeconds: 6 },
+        ],
+        modelKey: 'atlascloud::seedance-2.0-r2v',
+        resolution: '720p',
+        aspectRatio: '16:9',
+        sourceAudioMode: 'generate',
+      },
+    }))
+    rerender({ workspaceId: 'legacy-unsent-workspace' })
+
+    expect(result.current.canResume).toBe(false)
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    expect(result.current.error).toBeNull()
+    expect(result.current.canResume).toBe(false)
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
+    expect(mocks.submit.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      prompt: currentPrompt,
+      workflowId: expect.not.stringMatching(/^legacy-unsent-workflow$/),
+      depthRebuildGuideContract: expect.objectContaining({ version: 2 }),
+    }))
+    const rebuilt = JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')
+    expect(rebuilt.workflowId).not.toBe('legacy-unsent-workflow')
+    expect(rebuilt.submission.contractVersion).toBe(2)
+    expect(rebuilt.submission.segmentPrompts).toEqual([currentPrompt])
+    expect(rebuilt.segments).toHaveLength(1)
+  })
+
+  it('舊版 v1 已完整上傳但無 runId -> 保守沿用原 workflow 與 request keys', async () => {
+    const scope = 'user:user-1:locale:zh:source:performance.mp4:12:1920:1080'
+    const storageKey = depthRebuildGenerationStorageKey(scope)
+    sessionStorage.setItem(storageKey, JSON.stringify({
+      workflowId: 'legacy-uploaded-workflow',
+      segments: [
+        { requestKey: 'legacy-request-1' },
+        { requestKey: 'legacy-request-2' },
+      ],
+      submission: {
+        segmentPrompts: ['legacy prompt 1', 'legacy prompt 2'],
+        segmentWindows: [
+          { startSeconds: 0, durationSeconds: 6 },
+          { startSeconds: 6, durationSeconds: 6 },
+        ],
+        modelKey: 'atlascloud::seedance-2.0-r2v',
+        resolution: '720p',
+        aspectRatio: '16:9',
+        sourceAudioMode: 'generate',
+      },
+      uploads: {
+        sourceVideoKey: 'video/legacy-source.mp4',
+        depthVideoKey: 'video/legacy-depth.webm',
+        imageKeys: ['image/legacy-character.png'],
+        imageNames: ['角色：舊版角色'],
+      },
+    }))
+
+    const { result } = renderHook(() => useDepthRebuild({
+      stageRef: { current: createStage() },
+      metadata,
+      videoHasAudio: false,
+    }))
+
+    expect(result.current.canResume).toBe(true)
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    expect(result.current.error).toBeNull()
+    expect(mocks.upload).not.toHaveBeenCalled()
+    expect(mocks.submit).toHaveBeenCalledTimes(2)
+    const firstSubmission = mocks.submit.mock.calls[0]?.[0]
+    const secondSubmission = mocks.submit.mock.calls[1]?.[0]
+    expect(firstSubmission).toEqual(expect.objectContaining({
+      workflowId: 'legacy-uploaded-workflow',
+      idempotencyKey: 'legacy-request-1',
+      prompt: 'legacy prompt 1',
+      referenceVideos: ['video/legacy-source.mp4', 'video/legacy-depth.webm'],
+    }))
+    expect(secondSubmission).toEqual(expect.objectContaining({
+      workflowId: 'legacy-uploaded-workflow',
+      idempotencyKey: 'legacy-request-2',
+      prompt: 'legacy prompt 2',
+      referenceVideos: ['video/legacy-source.mp4', 'video/legacy-depth.webm'],
+    }))
+    const recovered = JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')
+    expect(recovered.workflowId).toBe('legacy-uploaded-workflow')
+    expect(recovered.segments.map((segment: { requestKey: string }) => segment.requestKey)).toEqual([
+      'legacy-request-1',
+      'legacy-request-2',
+    ])
+  })
+
+  it('上傳失敗的未送出 v2 草稿 -> 不可恢復，下次依新設定與新 Prompt 重建', async () => {
+    const stageRef = { current: createStage() }
+    const { result } = renderHook(() => useDepthRebuild({
+      stageRef,
+      metadata,
+      videoHasAudio: false,
+    }))
+    act(() => {
+      result.current.selectCharacterImage(
+        'character-1',
+        new File(['character'], 'character.png', { type: 'image/png' }),
+      )
+      result.current.setCharacterSourceBinding('character-1', '原片主要人物')
+      result.current.setCharacterDescription('character-1', '寫實電影角色')
+      result.current.setSceneDescription('舊場景：雨夜街道')
+    })
+    await act(async () => {
+      await result.current.generateDepthGuide()
+    })
+    act(() => result.current.buildPrompt())
+    const oldPrompt = result.current.prompt
+    mocks.upload.mockRejectedValueOnce(new Error('參考素材上傳失敗'))
+
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    expect(result.current.error).toBe('參考素材上傳失敗')
+    expect(result.current.submittedRunId).toBeNull()
+    expect(result.current.canResume).toBe(false)
+    expect(mocks.submit).not.toHaveBeenCalled()
+    const storageKey = depthRebuildGenerationStorageKey(
+      'user:user-1:locale:zh:source:performance.mp4:12:1920:1080',
+    )
+    const failedDraft = JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')
+    expect(failedDraft.submission.contractVersion).toBe(2)
+    expect(failedDraft.submission.segmentPrompts).toEqual([oldPrompt])
+
+    act(() => result.current.setSceneDescription('新場景：清晨車站與移動人群'))
+    act(() => result.current.buildPrompt())
+    const newPrompt = result.current.prompt
+    expect(newPrompt).not.toBe(oldPrompt)
+
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    expect(result.current.error).toBeNull()
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
+    expect(mocks.submit.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      prompt: newPrompt,
+      workflowId: expect.not.stringMatching(new RegExp(`^${failedDraft.workflowId}$`)),
+      depthRebuildGuideContract: expect.objectContaining({ version: 2 }),
+    }))
+    const rebuilt = JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')
+    expect(rebuilt.workflowId).not.toBe(failedDraft.workflowId)
+    expect(rebuilt.submission.segmentPrompts).toEqual([newPrompt])
+  })
+
+  it('submit 回應遺失 -> 保留已上傳素材並以相同 workflow 與冪等 key 重試', async () => {
+    const stageRef = { current: createStage() }
+    const { result } = renderHook(() => useDepthRebuild({
+      stageRef,
+      metadata,
+      videoHasAudio: false,
+    }))
+    act(() => {
+      result.current.selectCharacterImage(
+        'character-1',
+        new File(['character'], 'character.png', { type: 'image/png' }),
+      )
+      result.current.setCharacterSourceBinding('character-1', '原片主要人物')
+      result.current.setCharacterDescription('character-1', '寫實電影角色')
+      result.current.setSceneDescription('雨夜街道持續有車流')
+    })
+    await act(async () => {
+      await result.current.generateDepthGuide()
+    })
+    act(() => result.current.buildPrompt())
+    mocks.submit.mockRejectedValueOnce(new Error('任務可能已建立，但網路回應遺失'))
+
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    expect(result.current.error).toBe('任務可能已建立，但網路回應遺失')
+    expect(result.current.submittedRunId).toBeNull()
+    expect(result.current.canResume).toBe(true)
+    expect(mocks.upload).toHaveBeenCalledTimes(3)
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
+    const firstSubmission = mocks.submit.mock.calls[0]?.[0]
+    const storageKey = depthRebuildGenerationStorageKey(
+      'user:user-1:locale:zh:source:performance.mp4:12:1920:1080',
+    )
+    const attempted = JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')
+    expect(attempted.segments).toEqual([expect.objectContaining({
+      requestKey: firstSubmission.idempotencyKey,
+      submissionAttempted: true,
+    })])
+    expect(attempted.uploads).toEqual(expect.objectContaining({
+      sourceVideoKey: 'video/performance.mp4',
+      imageKeys: ['image/character.png'],
+    }))
+
+    await act(async () => {
+      await result.current.generate()
+    })
+
+    expect(result.current.error).toBeNull()
+    expect(mocks.upload).toHaveBeenCalledTimes(3)
+    expect(mocks.submit).toHaveBeenCalledTimes(2)
+    const retriedSubmission = mocks.submit.mock.calls[1]?.[0]
+    expect(retriedSubmission.workflowId).toBe(firstSubmission.workflowId)
+    expect(retriedSubmission.idempotencyKey).toBe(firstSubmission.idempotencyKey)
+    expect(retriedSubmission.prompt).toBe(firstSubmission.prompt)
+    const recovered = JSON.parse(sessionStorage.getItem(storageKey) ?? '{}')
+    expect(recovered.workflowId).toBe(firstSubmission.workflowId)
+    expect(recovered.segments[0]).toEqual(expect.objectContaining({
+      requestKey: firstSubmission.idempotencyKey,
+      submissionAttempted: true,
+      runId: 'run-depth-2',
+    }))
+  })
+
   it('session 中已完成結果的 signed URL 過期 -> 以 durable resultKey 自動取得新網址', async () => {
     const scope = 'user:user-1:locale:zh:source:performance.mp4:12:1920:1080'
     const storageKey = depthRebuildGenerationStorageKey(scope)
@@ -980,7 +1208,7 @@ describe('useDepthRebuild', () => {
     await act(async () => {
       await result.current.generate()
     })
-    expect(result.current.submittedRunId).toBe('run-depth-2')
+    expect(result.current.submittedRunId).toBe('run-depth-1')
 
     act(() => result.current.resetResult())
 
@@ -1118,7 +1346,7 @@ describe('useDepthRebuild', () => {
     expect(mocks.submit).toHaveBeenCalledTimes(0)
   })
 
-  it('兩段生成保留一張 tail frame -> 人物與場景共用 8 張，超額整批拒絕', () => {
+  it('單次生成不保留 tail frame -> 人物與場景可共用完整 9 張', () => {
     const stageRef = { current: createStage() }
     const { result } = renderHook(() => useDepthRebuild({
       stageRef,
@@ -1137,16 +1365,16 @@ describe('useDepthRebuild', () => {
         new File(['character-2'], 'character-2.png', { type: 'image/png' }),
       )
       result.current.addSceneImages(
-        Array.from({ length: 6 }, (_, index) => (
+        Array.from({ length: 7 }, (_, index) => (
           new File([`scene-${index + 1}`], `scene-${index + 1}.jpg`, { type: 'image/jpeg' })
         )),
       )
     })
 
-    expect(result.current.maxReferenceImages).toBe(8)
-    expect(result.current.referenceImageCount).toBe(8)
+    expect(result.current.maxReferenceImages).toBe(9)
+    expect(result.current.referenceImageCount).toBe(9)
     expect(result.current.characters.filter((character) => character.image).length).toBe(2)
-    expect(result.current.sceneReferences).toHaveLength(6)
+    expect(result.current.sceneReferences).toHaveLength(7)
 
     act(() => {
       result.current.addSceneImages([
@@ -1155,13 +1383,13 @@ describe('useDepthRebuild', () => {
       ])
     })
 
-    expect(result.current.referenceImageCount).toBe(8)
-    expect(result.current.sceneReferences).toHaveLength(6)
-    expect(result.current.error).toBe('Seedance 的 8 個參考位置已分配完畢')
-    expect(mocks.createObjectUrl).toHaveBeenCalledTimes(8)
+    expect(result.current.referenceImageCount).toBe(9)
+    expect(result.current.sceneReferences).toHaveLength(7)
+    expect(result.current.error).toBe('Seedance 的 9 個參考位置已分配完畢')
+    expect(mocks.createObjectUrl).toHaveBeenCalledTimes(9)
   })
 
-  it('兩段生成同時保留角色與 tail frame -> 場景最多先放七張，之後仍可補角色圖', () => {
+  it('單次生成 -> 可先放八張場景，之後仍可補一張角色圖', () => {
     const stageRef = { current: createStage() }
     const { result } = renderHook(() => useDepthRebuild({
       stageRef,
@@ -1174,20 +1402,19 @@ describe('useDepthRebuild', () => {
 
     act(() => result.current.addSceneImages(eightScenes))
 
-    expect(result.current.sceneReferences).toHaveLength(0)
-    expect(result.current.error).toContain('已替角色保留位置，目前還能加入 7 張場景圖')
+    expect(result.current.sceneReferences).toHaveLength(8)
+    expect(result.current.error).toBeNull()
 
     act(() => {
-      result.current.addSceneImages(eightScenes.slice(0, 7))
       result.current.selectCharacterImage(
         'character-1',
         new File(['character'], 'character.png', { type: 'image/png' }),
       )
     })
 
-    expect(result.current.sceneReferences).toHaveLength(7)
+    expect(result.current.sceneReferences).toHaveLength(8)
     expect(result.current.characters[0]?.image?.file.name).toBe('character.png')
-    expect(result.current.referenceImageCount).toBe(8)
+    expect(result.current.referenceImageCount).toBe(9)
   })
 
   it('仍有角色卡缺圖 -> 即使直接呼叫也不建立錯位 Prompt', () => {

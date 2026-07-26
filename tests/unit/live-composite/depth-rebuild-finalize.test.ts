@@ -51,6 +51,34 @@ function segmentPayload(
   }
 }
 
+function adaptivePayload(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const depthRebuildContract = {
+    version: 2,
+    workflowId: 'workflow_v2',
+    segmentIndex: 0,
+    segmentCount: 1,
+    normalizeSeedanceReferenceVideo: true,
+    strategy: 'full-depth-critical-rgb',
+    sourceVideoKey: sourceKey,
+    sourceDurationSeconds: 11.2,
+    outputDurationSeconds: 12,
+    referenceVideos: [depthKey, sourceKey],
+    referenceVideoWindows: [
+      { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+      { role: 'rgb', startSeconds: 6.35, durationSeconds: 3.3 },
+    ],
+    duration: 12,
+    modelKey: 'atlascloud::seedance-2.0-r2v',
+    resolution: '720p',
+    aspectRatio: '16:9',
+    sourceAudioMode: 'reference-only',
+    ...overrides,
+  }
+  return { stage: 'completed', meta: { depthRebuildContract } }
+}
+
 function task(id: string, overrides: Partial<SegmentTaskRow> = {}): SegmentTaskRow {
   return {
     id,
@@ -160,6 +188,54 @@ describe('Depth Rebuild server finalize contract', () => {
     expect(first.totalDurationSec).toBe(10)
     expect(first.inputFingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(retry.inputFingerprint).toBe(first.inputFingerprint)
+  })
+
+  it('v2 單筆自適應任務 -> 生成 12 秒但完稿目標維持原片 11.2 秒', () => {
+    const input = parseDepthRebuildFinalizeInput({
+      workflowId: 'workflow_v2',
+      segmentRunIds: ['run-v2'],
+      sourceVideoKey: sourceKey,
+      sourceAudioMode: 'preserve',
+    })
+    const workflow = resolveDepthRebuildWorkflowContract([
+      task('run-v2', { payload: adaptivePayload() }),
+    ], input, 'user-1')
+
+    expect(workflow.totalDurationSec).toBe(11.2)
+    expect(workflow.segments).toHaveLength(1)
+    expect(workflow.segments[0]).toEqual(expect.objectContaining({
+      contractVersion: 2,
+      sourceVideoKey: sourceKey,
+      depthVideoKey: depthKey,
+      sourceDurationSeconds: 11.2,
+      outputDurationSeconds: 12,
+      durationSeconds: 12,
+    }))
+  })
+
+  it('v2 參考順序或安全秒數被竄改 -> 完稿前顯式拒絕', () => {
+    const input = parseDepthRebuildFinalizeInput({
+      workflowId: 'workflow_v2',
+      segmentRunIds: ['run-v2'],
+      sourceVideoKey: sourceKey,
+      sourceAudioMode: 'preserve',
+    })
+    expect(errorCode(() => resolveDepthRebuildWorkflowContract([
+      task('run-v2', {
+        payload: adaptivePayload({ referenceVideos: [sourceKey, depthKey] }),
+      }),
+    ], input, 'user-1'))).toBe('DEPTH_REBUILD_FINALIZE_SEGMENT_CONTRACT_INVALID')
+
+    expect(errorCode(() => resolveDepthRebuildWorkflowContract([
+      task('run-v2', {
+        payload: adaptivePayload({
+          referenceVideoWindows: [
+            { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+            { role: 'rgb', startSeconds: 5.2, durationSeconds: 4 },
+          ],
+        }),
+      }),
+    ], input, 'user-1'))).toBe('DEPTH_REBUILD_FINALIZE_SEGMENT_CONTRACT_INVALID')
   })
 
   it('ordinary Playground task -> cannot be finalized as RGB＋Depth', () => {
@@ -285,6 +361,23 @@ describe('Depth Rebuild server finalize contract', () => {
     expect(args).not.toContain('[outa]')
     expect(filter).not.toContain('[0:a]')
     expect(filter).not.toContain('xfade')
+  })
+
+  it('v2 reference-only -> 單支 12 秒結果精準裁回 11.2 秒且保持靜音', () => {
+    const args = buildDepthRebuildFinalizeFfmpegArgs({
+      segmentPaths: ['/tmp/generated.mp4'],
+      segmentMedia: [{ ...video(), durationSec: 12 }],
+      sourceVideoPath: null,
+      sourceMedia: null,
+      sourceAudioMode: 'reference-only',
+      targetDurationSec: 11.2,
+      outputPath: '/tmp/final.mp4',
+    })
+    const filter = args[args.indexOf('-filter_complex') + 1]
+    expect(filter).toContain('concat=n=1:v=1:a=0[joinedv]')
+    expect(filter).toContain('trim=duration=11.200')
+    expect(args[args.indexOf('-t') + 1]).toBe('11.200')
+    expect(args).toContain('-an')
   })
 
   it('generate mode -> concats segment audio and rejects missing audio', () => {

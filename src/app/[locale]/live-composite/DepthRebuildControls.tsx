@@ -86,6 +86,8 @@ export function DepthRebuildControls({
       sourceAudioMode={controller.sourceAudioMode}
       sourceAudioDetected={controller.sourceAudioDetected}
       motionSettings={controller.motionSettings}
+      guidePlan={controller.guidePlan}
+      criticalCenterSeconds={controller.criticalCenterSeconds}
       segmentCount={controller.segmentCount}
       segmentSummary={controller.segmentSummary}
       prompt={controller.prompt}
@@ -134,6 +136,7 @@ export function DepthRebuildControls({
       onGazeSourceCharacterIdChange={controller.setGazeSourceCharacterId}
       onGazeTargetCharacterIdChange={controller.setGazeTargetCharacterId}
       onInteractionDescriptionChange={controller.setInteractionDescription}
+      onCriticalCenterChange={controller.setCriticalCenterSeconds}
       onBuildPrompt={controller.buildPrompt}
       onGenerate={() => void controller.generate()}
       onResetSubmittedRun={controller.resetResult}

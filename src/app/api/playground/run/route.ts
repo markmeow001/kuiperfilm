@@ -32,12 +32,18 @@ import {
   filterAuthorizedStorageReferences,
 } from '@/lib/playground/reference-guard'
 import { VIDEO_PROMPT_HARD_LIMIT } from '@/lib/playground/video-prompt-limits'
-import { isSeedanceReferenceNormalizationModel } from '@/lib/playground/seedance-reference-video'
+import {
+  assertDepthRebuildGuideReferenceBindingsV2,
+  isSeedanceReferenceNormalizationModel,
+  parseDepthRebuildGuideContractV2,
+  type DepthRebuildGuideContractV2,
+} from '@/lib/playground/seedance-reference-video'
 import { isSourceAudioMode } from '@/lib/playground/source-audio-contract'
 import {
   DEPTH_REBUILD_MAX_SEGMENTS,
   depthRebuildTimesEqual,
   isDepthRebuildSegmentIdentity,
+  isDepthRebuildWorkflowId,
 } from '@/lib/live-composite/depth-rebuild-server-contract'
 import type { Locale } from '@/i18n/routing'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
@@ -110,6 +116,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     sourceAudioMode: rawSourceAudioMode,
     normalizeSeedanceReferenceVideo: rawNormalizeSeedanceReferenceVideo,
     depthRebuildDualGuide: rawDepthRebuildDualGuide,
+    depthRebuildGuideContract: rawDepthRebuildGuideContract,
     referenceVideoWindow: rawReferenceVideoWindow,
     workflowId: rawWorkflowId,
     segmentIndex: rawSegmentIndex,
@@ -135,6 +142,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     sourceAudioMode?: unknown
     normalizeSeedanceReferenceVideo?: unknown
     depthRebuildDualGuide?: unknown
+    depthRebuildGuideContract?: unknown
     referenceVideoWindow?: unknown
     workflowId?: unknown
     segmentIndex?: unknown
@@ -183,6 +191,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
     })
   }
   const depthRebuildDualGuide = rawDepthRebuildDualGuide === true
+  let depthRebuildGuideContract: DepthRebuildGuideContractV2 | null = null
+  if (rawDepthRebuildGuideContract !== undefined && rawDepthRebuildGuideContract !== null) {
+    try {
+      depthRebuildGuideContract = parseDepthRebuildGuideContractV2(
+        rawDepthRebuildGuideContract,
+      )
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new ApiError('INVALID_PARAMS', {
+        code: reason,
+        message: 'Depth Rebuild 自適應引導契約無效',
+        details: { reason },
+      })
+    }
+  }
+  if (depthRebuildGuideContract && depthRebuildDualGuide) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'DEPTH_REBUILD_GUIDE_CONTRACT_CONFLICT',
+      message: 'Depth Rebuild v2 自適應引導不可與 v1 雙引導旗標混用',
+    })
+  }
   let referenceVideoWindow: { startSeconds: number; durationSeconds: number } | null = null
   if (rawReferenceVideoWindow !== undefined && rawReferenceVideoWindow !== null) {
     if (!rawReferenceVideoWindow || typeof rawReferenceVideoWindow !== 'object' || Array.isArray(rawReferenceVideoWindow)) {
@@ -219,7 +248,18 @@ export const POST = apiHandler(async (request: NextRequest) => {
     segmentIndex: rawSegmentIndex,
     segmentCount: rawSegmentCount,
   }
-  if (depthRebuildDualGuide) {
+  if (depthRebuildGuideContract) {
+    if (
+      !isDepthRebuildWorkflowId(depthRebuildSegmentIdentity.workflowId)
+      || rawSegmentIndex !== undefined
+      || rawSegmentCount !== undefined
+    ) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'DEPTH_REBUILD_GUIDE_WORKFLOW_ID_INVALID',
+        message: 'Depth Rebuild v2 必須提供有效 workflowId，且不可混入舊版分段序號',
+      })
+    }
+  } else if (depthRebuildDualGuide) {
     if (!isDepthRebuildSegmentIdentity(depthRebuildSegmentIdentity)) {
       throw new ApiError('INVALID_PARAMS', {
         code: 'DEPTH_REBUILD_SEGMENT_IDENTITY_INVALID',
@@ -363,6 +403,27 @@ export const POST = apiHandler(async (request: NextRequest) => {
   const referenceImages = imgGuard.safe
   const lastFrameSafe = lastFrameGuard.safe[0] ?? null
   const referenceVideos = vidGuard.safe
+  if (depthRebuildGuideContract) {
+    try {
+      assertDepthRebuildGuideReferenceBindingsV2(
+        depthRebuildGuideContract,
+        referenceVideos,
+      )
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new ApiError('INVALID_PARAMS', {
+        code: reason,
+        message: 'Depth Rebuild v2 的參考影片順序或來源綁定無效',
+        details: { reason },
+      })
+    }
+    if (rawReferenceVideoWindow !== undefined) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'DEPTH_REBUILD_GUIDE_LEGACY_WINDOW_CONFLICT',
+        message: 'Depth Rebuild v2 必須使用各支影片獨立時間窗，不可混入 v1 同步窗',
+      })
+    }
+  }
   if (sourceAudioMode !== null) {
     if (outputType !== 'video') {
       throw new ApiError('INVALID_PARAMS', {
@@ -370,12 +431,16 @@ export const POST = apiHandler(async (request: NextRequest) => {
         message: '來源音訊模式僅支援影片輸出',
       })
     }
-    const expectedVideoCount = depthRebuildDualGuide ? 2 : 1
+    const expectedVideoCount = depthRebuildGuideContract
+      ? depthRebuildGuideContract.referenceVideoWindows.length
+      : depthRebuildDualGuide ? 2 : 1
     if (referenceVideos.length !== expectedVideoCount) {
       throw new ApiError('INVALID_PARAMS', {
         code: 'SOURCE_AUDIO_MODE_REFERENCE_COUNT_INVALID',
-        message: depthRebuildDualGuide
-          ? 'RGB＋Depth 模式需要依序綁定兩支參考影片'
+        message: depthRebuildGuideContract
+          ? 'Depth Rebuild v2 的參考影片數量必須符合自適應引導契約'
+          : depthRebuildDualGuide
+            ? 'RGB＋Depth 模式需要依序綁定兩支參考影片'
           : '來源音訊模式需要且只能綁定一支參考影片',
         details: { got: referenceVideos.length, expected: expectedVideoCount },
       })
@@ -401,12 +466,16 @@ export const POST = apiHandler(async (request: NextRequest) => {
         details: { modelKey: trimmedModelKey },
       })
     }
-    const expectedVideoCount = depthRebuildDualGuide ? 2 : 1
+    const expectedVideoCount = depthRebuildGuideContract
+      ? depthRebuildGuideContract.referenceVideoWindows.length
+      : depthRebuildDualGuide ? 2 : 1
     if (referenceVideos.length !== expectedVideoCount) {
       throw new ApiError('INVALID_PARAMS', {
         code: 'SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_COUNT_INVALID',
-        message: depthRebuildDualGuide
-          ? 'RGB＋Depth 正規化需要依序綁定兩支影片'
+        message: depthRebuildGuideContract
+          ? 'Depth Rebuild v2 的參考影片數量必須符合自適應引導契約'
+          : depthRebuildDualGuide
+            ? 'RGB＋Depth 正規化需要依序綁定兩支影片'
           : 'Seedance 參考影片正規化需要且只能綁定一支影片',
         details: { got: referenceVideos.length, expected: expectedVideoCount },
       })
@@ -416,6 +485,21 @@ export const POST = apiHandler(async (request: NextRequest) => {
       throw new ApiError('FORBIDDEN', {
         code: 'SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_NOT_TRUSTED',
         message: '深度參考影片必須先上傳到本平台，不能使用外部網址',
+      })
+    }
+  }
+  if (depthRebuildGuideContract) {
+    const sourceStorageGuard = await filterAuthorizedStorageReferences(
+      [depthRebuildGuideContract.sourceVideoKey],
+      userId,
+    )
+    if (
+      sourceStorageGuard.safe.length !== 1
+      || sourceStorageGuard.rejected.length > 0
+    ) {
+      throw new ApiError('FORBIDDEN', {
+        code: 'DEPTH_REBUILD_GUIDE_SOURCE_VIDEO_NOT_TRUSTED',
+        message: 'Depth Rebuild 原始 RGB 影片必須是本人上傳的平台素材',
       })
     }
   }
@@ -468,6 +552,30 @@ export const POST = apiHandler(async (request: NextRequest) => {
       throw new ApiError('INVALID_PARAMS', {
         code: 'DEPTH_REBUILD_OUTPUT_CONTRACT_REQUIRED',
         message: 'RGB＋Depth 分段必須固定輸出解析度與畫面比例',
+      })
+    }
+  } else if (depthRebuildGuideContract) {
+    if (
+      outputType !== 'video'
+      || rawNormalizeSeedanceReferenceVideo !== true
+      || !isSeedanceReferenceNormalizationModel(trimmedModelKey)
+      || sourceAudioMode === null
+      || sourceAudioMode === 'preserve'
+      || typeof durationSec !== 'number'
+      || !Number.isInteger(durationSec)
+      || durationSec !== depthRebuildGuideContract.outputDurationSeconds
+      || typeof resolution !== 'string'
+      || !resolution.trim()
+      || typeof aspectRatio !== 'string'
+      || !aspectRatio.trim()
+    ) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'DEPTH_REBUILD_GUIDE_OUTPUT_CONTRACT_INVALID',
+        message: 'Depth Rebuild v2 必須使用 AtlasCloud Seedance R2V、reference-only 或 generate 音訊策略、固定解析度/比例，以及 4–15 秒整數輸出',
+        details: {
+          durationSec,
+          expectedDurationSec: depthRebuildGuideContract.outputDurationSeconds,
+        },
       })
     }
   } else if (referenceVideos.length > 1 || referenceVideoWindow) {
@@ -662,36 +770,58 @@ export const POST = apiHandler(async (request: NextRequest) => {
     if (opts && opts.length > 0) normalizedResolution = opts[0]
   }
   const normalizedDuration = typeof durationSec === 'number' && Number.isFinite(durationSec)
-    ? depthRebuildDualGuide ? durationSec : Math.round(durationSec)
+    ? depthRebuildDualGuide || depthRebuildGuideContract
+      ? durationSec
+      : Math.round(durationSec)
     : null
-  const depthRebuildMetaContract = depthRebuildDualGuide
-    && isDepthRebuildSegmentIdentity(depthRebuildSegmentIdentity)
-    && referenceVideoWindow
+  const depthRebuildMetaContract = depthRebuildGuideContract
+    && isDepthRebuildWorkflowId(depthRebuildSegmentIdentity.workflowId)
     && sourceAudioMode !== null
     && normalizedResolution
     && normalizedDuration !== null
     && typeof aspectRatio === 'string'
     && aspectRatio.trim()
-    ? {
-        version: 1,
-        workflowId: depthRebuildSegmentIdentity.workflowId,
-        segmentIndex: depthRebuildSegmentIdentity.segmentIndex,
-        segmentCount: depthRebuildSegmentIdentity.segmentCount,
-        depthRebuildDualGuide: true,
-        normalizeSeedanceReferenceVideo: true,
+      ? {
+          ...depthRebuildGuideContract,
+          workflowId: depthRebuildSegmentIdentity.workflowId,
+          segmentIndex: 0,
+          segmentCount: 1,
+          normalizeSeedanceReferenceVideo: true,
         referenceVideos,
-        referenceVideoWindow,
         duration: normalizedDuration,
         modelKey: trimmedModelKey,
         resolution: normalizedResolution,
         aspectRatio: aspectRatio.trim(),
         sourceAudioMode,
       }
-    : null
-  if (depthRebuildDualGuide && !depthRebuildMetaContract) {
+    : depthRebuildDualGuide
+      && isDepthRebuildSegmentIdentity(depthRebuildSegmentIdentity)
+      && referenceVideoWindow
+      && sourceAudioMode !== null
+      && normalizedResolution
+      && normalizedDuration !== null
+      && typeof aspectRatio === 'string'
+      && aspectRatio.trim()
+      ? {
+          version: 1,
+          workflowId: depthRebuildSegmentIdentity.workflowId,
+          segmentIndex: depthRebuildSegmentIdentity.segmentIndex,
+          segmentCount: depthRebuildSegmentIdentity.segmentCount,
+          depthRebuildDualGuide: true,
+          normalizeSeedanceReferenceVideo: true,
+          referenceVideos,
+          referenceVideoWindow,
+          duration: normalizedDuration,
+          modelKey: trimmedModelKey,
+          resolution: normalizedResolution,
+          aspectRatio: aspectRatio.trim(),
+          sourceAudioMode,
+        }
+      : null
+  if ((depthRebuildDualGuide || depthRebuildGuideContract) && !depthRebuildMetaContract) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'DEPTH_REBUILD_PERSISTED_CONTRACT_INVALID',
-      message: 'RGB＋Depth 的不可變工作流契約無法建立',
+      message: 'Depth Rebuild 的不可變工作流契約無法建立',
     })
   }
 
@@ -713,6 +843,12 @@ export const POST = apiHandler(async (request: NextRequest) => {
       ? { normalizeSeedanceReferenceVideo: true }
       : {}),
     ...(depthRebuildDualGuide ? { depthRebuildDualGuide: true } : {}),
+    ...(depthRebuildGuideContract
+      ? {
+          sourceVideoKey: depthRebuildGuideContract.sourceVideoKey,
+          depthRebuildGuideContract,
+        }
+      : {}),
     ...(depthRebuildDualGuide && isDepthRebuildSegmentIdentity(depthRebuildSegmentIdentity)
       ? {
           workflowId: depthRebuildSegmentIdentity.workflowId,
@@ -755,6 +891,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
     targetId,
     payload,
     dedupeKey,
+    ...(dedupeKey ? { dedupeMode: 'idempotent' as const } : {}),
   })
 
   _ulogInfo(

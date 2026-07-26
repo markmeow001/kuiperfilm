@@ -15,6 +15,7 @@ import type {
   DepthGuideProgress,
   DepthGuideRecordingResult,
 } from './lib/depth-guide-recorder'
+import type { DepthRebuildGuidePlan } from './lib/depth-rebuild-guide-plan'
 import type { VideoMetadata } from './live-composite-types'
 
 /**
@@ -102,6 +103,8 @@ export interface UseDepthRebuildResult {
   sourceAudioMode: SourceAudioMode
   sourceAudioDetected: boolean | null
   motionSettings: DepthRebuildMotionSettings
+  guidePlan: DepthRebuildGuidePlan | null
+  criticalCenterSeconds: number
   segmentCount: number
   segmentSummary: string
   prompt: string
@@ -148,6 +151,7 @@ export interface UseDepthRebuildResult {
   setGazeSourceCharacterId: (value: string | null) => void
   setGazeTargetCharacterId: (value: string | null) => void
   setInteractionDescription: (value: string) => void
+  setCriticalCenterSeconds: (value: number) => void
   setPrompt: (value: string) => void
   generateDepthGuide: () => Promise<void>
   cancelDepthGuide: () => void

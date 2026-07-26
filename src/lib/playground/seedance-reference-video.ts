@@ -34,6 +34,11 @@ export interface SeedanceReferenceSourceProbe {
   durationSec: number | null
 }
 
+export interface SeedanceReferenceTargetDimensions {
+  width: number
+  height: number
+}
+
 interface FfprobeStream {
   codec_type?: unknown
   codec_name?: unknown
@@ -65,13 +70,291 @@ const MAX_FPS = 60
 const MIN_DURATION_SEC = 2
 const MAX_DURATION_SEC = 15
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
-const MIN_TRIM_DURATION_SEC = 4
+const MIN_TRIM_DURATION_SEC = 2
 const MAX_OUTPUT_ID_LENGTH = 64
 const TRIM_DURATION_TOLERANCE_SEC = 0.125
+
+export const DEPTH_REBUILD_GUIDE_CONTRACT_VERSION = 2 as const
+export const DEPTH_REBUILD_GUIDE_HARD_REFERENCE_LIMIT_SEC = 15
+export const DEPTH_REBUILD_GUIDE_DUAL_REFERENCE_SAFE_LIMIT_SEC = 14.5
+export const DEPTH_REBUILD_GUIDE_MIN_SOURCE_DURATION_SEC = 4
+export const DEPTH_REBUILD_GUIDE_MAX_SOURCE_DURATION_SEC = 15
+export const DEPTH_REBUILD_GUIDE_MIN_REFERENCE_DURATION_SEC = 2
+// Three 24fps frames. This absorbs normal container timestamp/frame rounding
+// without allowing a materially shorter or longer source to masquerade as the
+// immutable guide duration.
+export const DEPTH_REBUILD_GUIDE_SOURCE_DURATION_TOLERANCE_SEC = 0.125
+
+function assertSeedanceReferenceSourceDimensions(
+  width: number,
+  height: number,
+): void {
+  if (
+    !Number.isFinite(width)
+    || !Number.isFinite(height)
+    || width <= 0
+    || height <= 0
+    || width > MAX_SOURCE_DIMENSION
+    || height > MAX_SOURCE_DIMENSION
+  ) {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID')
+  }
+  const aspectRatio = width / height
+  if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_ASPECT_RATIO_OUT_OF_RANGE')
+  }
+  if (width * height > MAX_SOURCE_PIXELS) {
+    throw new Error('SEEDANCE_REFERENCE_SOURCE_PIXEL_COUNT_OUT_OF_RANGE')
+  }
+}
+
+function assertSeedanceReferenceTargetDimensions(
+  dimensions: SeedanceReferenceTargetDimensions,
+): void {
+  const { width, height } = dimensions
+  const aspectRatio = width / height
+  const pixels = width * height
+  if (
+    !Number.isInteger(width)
+    || !Number.isInteger(height)
+    || width % 2 !== 0
+    || height % 2 !== 0
+    || width < MIN_DIMENSION
+    || width > MAX_DIMENSION
+    || height < MIN_DIMENSION
+    || height > MAX_DIMENSION
+    || aspectRatio < MIN_ASPECT_RATIO
+    || aspectRatio > MAX_ASPECT_RATIO
+    || pixels < MIN_PIXELS
+    || pixels > MAX_PIXELS
+  ) {
+    throw new Error('SEEDANCE_REFERENCE_TARGET_DIMENSIONS_INVALID')
+  }
+}
+
+/**
+ * Resolve one deterministic AtlasCloud-safe frame size from the original RGB.
+ * Adaptive Depth Rebuild passes this same size to both reference encodes so
+ * small browser-capture aspect-ratio differences cannot create 1268x720 vs
+ * 1280x720 provider inputs.
+ */
+export function resolveSeedanceReferenceTargetDimensions(
+  sourceWidth: number,
+  sourceHeight: number,
+): SeedanceReferenceTargetDimensions {
+  assertSeedanceReferenceSourceDimensions(sourceWidth, sourceHeight)
+  const dimensions = sourceWidth >= sourceHeight
+    ? {
+        width: Math.round((sourceWidth / sourceHeight) * 360) * 2,
+        height: 720,
+      }
+    : {
+        width: 720,
+        height: Math.round((sourceHeight / sourceWidth) * 360) * 2,
+      }
+  assertSeedanceReferenceTargetDimensions(dimensions)
+  return dimensions
+}
+
+export type DepthRebuildGuideStrategyV2 =
+  | 'full-depth-full-rgb'
+  | 'full-depth-critical-rgb'
+  | 'full-depth-only'
+
+export interface DepthRebuildGuideReferenceWindowV2 {
+  role: 'depth' | 'rgb'
+  startSeconds: number
+  durationSeconds: number
+}
+
+export interface DepthRebuildGuideContractV2 {
+  version: typeof DEPTH_REBUILD_GUIDE_CONTRACT_VERSION
+  strategy: DepthRebuildGuideStrategyV2
+  sourceVideoKey: string
+  sourceDurationSeconds: number
+  outputDurationSeconds: number
+  referenceVideoWindows: DepthRebuildGuideReferenceWindowV2[]
+}
 
 export interface SeedanceReferenceVideoTrim {
   startSeconds: number
   durationSeconds: number
+}
+
+function depthRebuildGuideNumbersEqual(left: number, right: number): boolean {
+  return Math.abs(left - right) <= 0.001
+}
+
+function parseDepthRebuildGuideWindowV2(
+  value: unknown,
+  index: number,
+  sourceDurationSeconds: number,
+): DepthRebuildGuideReferenceWindowV2 {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_WINDOW_INVALID')
+  }
+  const record = value as Record<string, unknown>
+  const expectedRole = index === 0 ? 'depth' : 'rgb'
+  if (record.role !== expectedRole) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_ORDER_INVALID')
+  }
+  const startSeconds = record.startSeconds
+  const durationSeconds = record.durationSeconds
+  if (
+    typeof startSeconds !== 'number'
+    || !Number.isFinite(startSeconds)
+    || startSeconds < 0
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_START_INVALID')
+  }
+  if (
+    typeof durationSeconds !== 'number'
+    || !Number.isFinite(durationSeconds)
+    || durationSeconds < DEPTH_REBUILD_GUIDE_MIN_REFERENCE_DURATION_SEC
+    || durationSeconds > DEPTH_REBUILD_GUIDE_HARD_REFERENCE_LIMIT_SEC
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_DURATION_INVALID')
+  }
+  if (startSeconds + durationSeconds > sourceDurationSeconds + 0.001) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_WINDOW_EXCEEDS_SOURCE')
+  }
+  return { role: expectedRole, startSeconds, durationSeconds }
+}
+
+/**
+ * Parse the immutable adaptive Depth Rebuild guide contract.
+ *
+ * This is intentionally shared by the HTTP boundary and the worker: the
+ * route rejects malformed requests before billing, while the worker repeats
+ * the validation because queued payloads are an independent trust boundary.
+ */
+export function parseDepthRebuildGuideContractV2(
+  value: unknown,
+): DepthRebuildGuideContractV2 {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('DEPTH_REBUILD_GUIDE_CONTRACT_INVALID')
+  }
+  const record = value as Record<string, unknown>
+  if (record.version !== DEPTH_REBUILD_GUIDE_CONTRACT_VERSION) {
+    throw new Error('DEPTH_REBUILD_GUIDE_VERSION_UNSUPPORTED')
+  }
+  const strategy = record.strategy
+  if (
+    strategy !== 'full-depth-full-rgb'
+    && strategy !== 'full-depth-critical-rgb'
+    && strategy !== 'full-depth-only'
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_STRATEGY_INVALID')
+  }
+  const sourceVideoKey = typeof record.sourceVideoKey === 'string'
+    ? record.sourceVideoKey.trim()
+    : ''
+  if (!sourceVideoKey) {
+    throw new Error('DEPTH_REBUILD_GUIDE_SOURCE_VIDEO_KEY_REQUIRED')
+  }
+  const sourceDurationSeconds = record.sourceDurationSeconds
+  if (
+    typeof sourceDurationSeconds !== 'number'
+    || !Number.isFinite(sourceDurationSeconds)
+    || sourceDurationSeconds < DEPTH_REBUILD_GUIDE_MIN_SOURCE_DURATION_SEC
+    || sourceDurationSeconds > DEPTH_REBUILD_GUIDE_MAX_SOURCE_DURATION_SEC
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_SOURCE_DURATION_INVALID')
+  }
+  const outputDurationSeconds = record.outputDurationSeconds
+  if (
+    typeof outputDurationSeconds !== 'number'
+    || !Number.isInteger(outputDurationSeconds)
+    || outputDurationSeconds < DEPTH_REBUILD_GUIDE_MIN_SOURCE_DURATION_SEC
+    || outputDurationSeconds > DEPTH_REBUILD_GUIDE_MAX_SOURCE_DURATION_SEC
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_OUTPUT_DURATION_INVALID')
+  }
+  if (outputDurationSeconds !== Math.ceil(sourceDurationSeconds)) {
+    throw new Error('DEPTH_REBUILD_GUIDE_OUTPUT_DURATION_MISMATCH')
+  }
+  if (!Array.isArray(record.referenceVideoWindows)) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_WINDOWS_INVALID')
+  }
+  const expectedReferenceCount = strategy === 'full-depth-only' ? 1 : 2
+  if (record.referenceVideoWindows.length !== expectedReferenceCount) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_COUNT_INVALID')
+  }
+  const referenceVideoWindows = record.referenceVideoWindows.map((window, index) => (
+    parseDepthRebuildGuideWindowV2(window, index, sourceDurationSeconds)
+  ))
+  const depthWindow = referenceVideoWindows[0]
+  if (
+    !depthWindow
+    || depthWindow.role !== 'depth'
+    || !depthRebuildGuideNumbersEqual(depthWindow.startSeconds, 0)
+    || !depthRebuildGuideNumbersEqual(
+      depthWindow.durationSeconds,
+      sourceDurationSeconds,
+    )
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_FULL_DEPTH_REQUIRED')
+  }
+  const rgbWindow = referenceVideoWindows[1]
+  if (strategy === 'full-depth-full-rgb') {
+    if (
+      !rgbWindow
+      || !depthRebuildGuideNumbersEqual(rgbWindow.startSeconds, 0)
+      || !depthRebuildGuideNumbersEqual(
+        rgbWindow.durationSeconds,
+        sourceDurationSeconds,
+      )
+    ) {
+      throw new Error('DEPTH_REBUILD_GUIDE_FULL_RGB_REQUIRED')
+    }
+  }
+  if (
+    strategy === 'full-depth-critical-rgb'
+    && (!rgbWindow || rgbWindow.durationSeconds >= sourceDurationSeconds)
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_CRITICAL_RGB_WINDOW_INVALID')
+  }
+  const totalReferenceSeconds = referenceVideoWindows.reduce(
+    (sum, window) => sum + window.durationSeconds,
+    0,
+  )
+  if (totalReferenceSeconds > DEPTH_REBUILD_GUIDE_HARD_REFERENCE_LIMIT_SEC + 0.001) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_TOTAL_OVER_HARD_LIMIT')
+  }
+  if (
+    referenceVideoWindows.length === 2
+    && totalReferenceSeconds
+      > DEPTH_REBUILD_GUIDE_DUAL_REFERENCE_SAFE_LIMIT_SEC + 0.001
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_TOTAL_OVER_SAFE_LIMIT')
+  }
+  return {
+    version: DEPTH_REBUILD_GUIDE_CONTRACT_VERSION,
+    strategy,
+    sourceVideoKey,
+    sourceDurationSeconds,
+    outputDurationSeconds,
+    referenceVideoWindows,
+  }
+}
+
+export function assertDepthRebuildGuideReferenceBindingsV2(
+  contract: DepthRebuildGuideContractV2,
+  referenceVideos: readonly string[],
+): void {
+  if (referenceVideos.length !== contract.referenceVideoWindows.length) {
+    throw new Error('DEPTH_REBUILD_GUIDE_REFERENCE_COUNT_INVALID')
+  }
+  const depthVideoKey = referenceVideos[0]
+  if (!depthVideoKey || depthVideoKey === contract.sourceVideoKey) {
+    throw new Error('DEPTH_REBUILD_GUIDE_DEPTH_REFERENCE_INVALID')
+  }
+  if (
+    contract.referenceVideoWindows.length === 2
+    && referenceVideos[1] !== contract.sourceVideoKey
+  ) {
+    throw new Error('DEPTH_REBUILD_GUIDE_RGB_REFERENCE_MUST_MATCH_SOURCE')
+  }
 }
 
 export function isSeedanceReferenceNormalizationModel(
@@ -175,21 +458,7 @@ export function parseSeedanceReferenceSourceProbe(raw: unknown): SeedanceReferen
 
   const width = parseFiniteNumber(video.width, 'source_width')
   const height = parseFiniteNumber(video.height, 'source_height')
-  if (
-    width <= 0
-    || height <= 0
-    || width > MAX_SOURCE_DIMENSION
-    || height > MAX_SOURCE_DIMENSION
-  ) {
-    throw new Error('SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID')
-  }
-  const aspectRatio = width / height
-  if (aspectRatio < MIN_ASPECT_RATIO || aspectRatio > MAX_ASPECT_RATIO) {
-    throw new Error('SEEDANCE_REFERENCE_SOURCE_ASPECT_RATIO_OUT_OF_RANGE')
-  }
-  if (width * height > MAX_SOURCE_PIXELS) {
-    throw new Error('SEEDANCE_REFERENCE_SOURCE_PIXEL_COUNT_OUT_OF_RANGE')
-  }
+  assertSeedanceReferenceSourceDimensions(width, height)
   const durationSec = payload.format?.duration === undefined
     ? null
     : parseFiniteNumber(payload.format.duration, 'source_duration')
@@ -242,12 +511,18 @@ export function buildSeedanceReferenceFfmpegArgs(input: {
   sourceHeight: number
   includeAudio?: boolean
   trim?: SeedanceReferenceVideoTrim
+  targetDimensions?: SeedanceReferenceTargetDimensions
 }): string[] {
   if (input.sourceWidth <= 0 || input.sourceHeight <= 0) {
     throw new Error('SEEDANCE_REFERENCE_SOURCE_DIMENSIONS_INVALID')
   }
   if (input.trim) assertSeedanceReferenceVideoTrim(input.trim)
-  const scale = input.sourceWidth >= input.sourceHeight ? '-2:720' : '720:-2'
+  if (input.targetDimensions) {
+    assertSeedanceReferenceTargetDimensions(input.targetDimensions)
+  }
+  const scale = input.targetDimensions
+    ? `${input.targetDimensions.width}:${input.targetDimensions.height}`
+    : input.sourceWidth >= input.sourceHeight ? '-2:720' : '720:-2'
   const audioMapArgs = input.includeAudio === false ? [] : ['-map', '0:a:0?']
   const audioCodecArgs = input.includeAudio === false
     ? ['-an']
@@ -300,7 +575,9 @@ export function buildSeedanceReferenceSourceFfprobeArgs(source: string): string[
   ]
 }
 
-async function probeReferenceVideoSource(source: string): Promise<SeedanceReferenceSourceProbe> {
+export async function probeSeedanceReferenceVideoSource(
+  source: string,
+): Promise<SeedanceReferenceSourceProbe> {
   const { stdout } = await execFileAsync(
     'ffprobe',
     buildSeedanceReferenceSourceFfprobeArgs(source),
@@ -337,9 +614,11 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
   sourceAudioMode?: SourceAudioMode
   trim?: SeedanceReferenceVideoTrim
   outputId?: string
+  targetDimensions?: SeedanceReferenceTargetDimensions
 }): Promise<{
   cosKey: string
   probe: SeedanceReferenceVideoProbe
+  sourceProbe: SeedanceReferenceSourceProbe
 }> {
   if (input.outputId !== undefined) {
     assertSeedanceReferenceOutputId(input.outputId)
@@ -352,7 +631,7 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
   const requireAudio = input.requireAudio === true
     || input.sourceAudioMode === 'preserve'
     || input.sourceAudioMode === 'reference-only'
-  const sourceProbe = await probeReferenceVideoSource(input.sourceVideoUrl)
+  const sourceProbe = await probeSeedanceReferenceVideoSource(input.sourceVideoUrl)
   if (
     input.trim
     && sourceProbe.durationSec !== null
@@ -376,11 +655,23 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
         sourceHeight: sourceProbe.height,
         includeAudio,
         trim: input.trim,
+        ...(input.targetDimensions
+          ? { targetDimensions: input.targetDimensions }
+          : {}),
       }),
       { timeout: MEDIA_TOOL_TIMEOUT_MS, maxBuffer: MEDIA_TOOL_MAX_BUFFER },
     )
     const normalizedProbe = await probeReferenceVideo(outputPath)
     assertAtlasCloudSeedanceReferenceVideo(normalizedProbe)
+    if (
+      input.targetDimensions
+      && (
+        normalizedProbe.width !== input.targetDimensions.width
+        || normalizedProbe.height !== input.targetDimensions.height
+      )
+    ) {
+      throw new Error('SEEDANCE_REFERENCE_TARGET_DIMENSIONS_MISMATCH')
+    }
     if (
       input.trim
       && Math.abs(normalizedProbe.durationSec - input.trim.durationSeconds)
@@ -404,7 +695,7 @@ export async function normalizeSeedanceReferenceVideoToCos(input: {
       'playground-runs/seedance-reference',
       input.outputId ? `${input.taskId}-${input.outputId}` : input.taskId,
     )
-    return { cosKey, probe: normalizedProbe }
+    return { cosKey, probe: normalizedProbe, sourceProbe }
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

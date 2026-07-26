@@ -116,6 +116,288 @@ describe('POST /api/playground/run — Seedance reference-video normalization co
     })
   }
 
+  function adaptiveGuideBody(overrides: Record<string, unknown> = {}) {
+    return body({
+      prompt: 'video 1 is the complete depth guide; video 2 is the critical RGB guide',
+      referenceVideos: [
+        'video/playground-ref/user-1/source-depth.webm',
+        'video/playground-ref/user-1/source-rgb.mp4',
+      ],
+      sourceAudioMode: 'reference-only',
+      workflowId: 'workflow_v2',
+      depthRebuildGuideContract: {
+        version: 2,
+        strategy: 'full-depth-critical-rgb',
+        sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+        sourceDurationSeconds: 11.2,
+        outputDurationSeconds: 12,
+        referenceVideoWindows: [
+          { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+          { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+        ],
+      },
+      durationSec: 12,
+      resolution: '720p',
+      aspectRatio: '16:9',
+      ...overrides,
+    })
+  }
+
+  it('v2 完整 Depth＋關鍵 RGB -> 固定 Depth-first、獨立 trim 並保存 immutable meta', async () => {
+    const { POST } = await loadRoute()
+    const response = await POST(buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: adaptiveGuideBody(),
+    }), { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(200)
+    expect(guardMock.filterAuthorizedStorageReferences).toHaveBeenCalledWith(
+      [
+        'video/playground-ref/user-1/source-depth.webm',
+        'video/playground-ref/user-1/source-rgb.mp4',
+      ],
+      'user-1',
+    )
+    expect(guardMock.filterAuthorizedStorageReferences).toHaveBeenCalledWith(
+      ['video/playground-ref/user-1/source-rgb.mp4'],
+      'user-1',
+    )
+    const payload = submitterMock.submitTask.mock.calls.at(-1)?.[0]?.payload as
+      | Record<string, unknown>
+      | undefined
+    const contract = {
+      version: 2,
+      strategy: 'full-depth-critical-rgb',
+      sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+      sourceDurationSeconds: 11.2,
+      outputDurationSeconds: 12,
+      referenceVideoWindows: [
+        { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+        { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+      ],
+    }
+    expect(payload).toMatchObject({
+      referenceVideos: [
+        'video/playground-ref/user-1/source-depth.webm',
+        'video/playground-ref/user-1/source-rgb.mp4',
+      ],
+      sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+      depthRebuildGuideContract: contract,
+      normalizeSeedanceReferenceVideo: true,
+      sourceAudioMode: 'reference-only',
+      duration: 12,
+      meta: {
+        depthRebuildContract: {
+          ...contract,
+          workflowId: 'workflow_v2',
+          segmentIndex: 0,
+          segmentCount: 1,
+          referenceVideos: [
+            'video/playground-ref/user-1/source-depth.webm',
+            'video/playground-ref/user-1/source-rgb.mp4',
+          ],
+          normalizeSeedanceReferenceVideo: true,
+          duration: 12,
+          modelKey: 'atlascloud::seedance-2.0-r2v',
+          resolution: '720p',
+          aspectRatio: '16:9',
+          sourceAudioMode: 'reference-only',
+        },
+      },
+    })
+    expect(payload).not.toHaveProperty('depthRebuildDualGuide')
+    expect(payload).not.toHaveProperty('referenceVideoWindow')
+  })
+
+  it('v2 15 秒 Depth-only -> 單一完整 Depth 可使用 15 秒硬上限', async () => {
+    const { POST } = await loadRoute()
+    const response = await POST(buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: adaptiveGuideBody({
+        referenceVideos: ['video/playground-ref/user-1/source-depth.webm'],
+        sourceAudioMode: 'generate',
+        depthRebuildGuideContract: {
+          version: 2,
+          strategy: 'full-depth-only',
+          sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+          sourceDurationSeconds: 15,
+          outputDurationSeconds: 15,
+          referenceVideoWindows: [
+            { role: 'depth', startSeconds: 0, durationSeconds: 15 },
+          ],
+        },
+        durationSec: 15,
+      }),
+    }), { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(200)
+    const payload = submitterMock.submitTask.mock.calls.at(-1)?.[0]?.payload as
+      | Record<string, unknown>
+      | undefined
+    expect(payload?.referenceVideos).toEqual([
+      'video/playground-ref/user-1/source-depth.webm',
+    ])
+    expect(payload?.duration).toBe(15)
+  })
+
+  it('v2 7.2 秒完整 Depth＋完整 RGB -> 合計 14.4 秒可建立任務', async () => {
+    const { POST } = await loadRoute()
+    const response = await POST(buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: adaptiveGuideBody({
+        depthRebuildGuideContract: {
+          version: 2,
+          strategy: 'full-depth-full-rgb',
+          sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+          sourceDurationSeconds: 7.2,
+          outputDurationSeconds: 8,
+          referenceVideoWindows: [
+            { role: 'depth', startSeconds: 0, durationSeconds: 7.2 },
+            { role: 'rgb', startSeconds: 0, durationSeconds: 7.2 },
+          ],
+        },
+        durationSec: 8,
+      }),
+    }), { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(200)
+    expect(submitterMock.submitTask.mock.calls.at(-1)?.[0]?.payload)
+      .toMatchObject({ duration: 8 })
+  })
+
+  it.each([
+    {
+      label: '雙參考合計超過 14.5 秒',
+      overrides: {
+        depthRebuildGuideContract: {
+          version: 2,
+          strategy: 'full-depth-full-rgb',
+          sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+          sourceDurationSeconds: 7.3,
+          outputDurationSeconds: 8,
+          referenceVideoWindows: [
+            { role: 'depth', startSeconds: 0, durationSeconds: 7.3 },
+            { role: 'rgb', startSeconds: 0, durationSeconds: 7.3 },
+          ],
+        },
+        durationSec: 8,
+      },
+      code: 'DEPTH_REBUILD_GUIDE_REFERENCE_TOTAL_OVER_SAFE_LIMIT',
+    },
+    {
+      label: 'RGB trim 少於 2 秒',
+      overrides: {
+        depthRebuildGuideContract: {
+          version: 2,
+          strategy: 'full-depth-critical-rgb',
+          sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+          sourceDurationSeconds: 11.2,
+          outputDurationSeconds: 12,
+          referenceVideoWindows: [
+            { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+            { role: 'rgb', startSeconds: 5, durationSeconds: 1.99 },
+          ],
+        },
+      },
+      code: 'DEPTH_REBUILD_GUIDE_REFERENCE_DURATION_INVALID',
+    },
+    {
+      label: '輸出不是來源秒數向上取整',
+      overrides: {
+        depthRebuildGuideContract: {
+          version: 2,
+          strategy: 'full-depth-critical-rgb',
+          sourceVideoKey: 'video/playground-ref/user-1/source-rgb.mp4',
+          sourceDurationSeconds: 11.2,
+          outputDurationSeconds: 11,
+          referenceVideoWindows: [
+            { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+            { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+          ],
+        },
+        durationSec: 11,
+      },
+      code: 'DEPTH_REBUILD_GUIDE_OUTPUT_DURATION_MISMATCH',
+    },
+    {
+      label: '混入 v1 同步窗',
+      overrides: { referenceVideoWindow: { startSeconds: 0, durationSeconds: 5 } },
+      code: 'DEPTH_REBUILD_GUIDE_LEGACY_WINDOW_CONFLICT',
+    },
+    {
+      label: '混入 v1 雙引導旗標',
+      overrides: { depthRebuildDualGuide: true },
+      code: 'DEPTH_REBUILD_GUIDE_CONTRACT_CONFLICT',
+    },
+    {
+      label: '缺少 v2 workflowId',
+      overrides: { workflowId: undefined },
+      code: 'DEPTH_REBUILD_GUIDE_WORKFLOW_ID_INVALID',
+    },
+    {
+      label: '混入 v1 分段序號',
+      overrides: { segmentIndex: 0, segmentCount: 1 },
+      code: 'DEPTH_REBUILD_GUIDE_WORKFLOW_ID_INVALID',
+    },
+    {
+      label: '直接送 preserve 而未交由完稿恢復原音',
+      overrides: { sourceAudioMode: 'preserve' },
+      code: 'DEPTH_REBUILD_GUIDE_OUTPUT_CONTRACT_INVALID',
+    },
+  ])('v2 $label -> 400 且付費任務不建立', async ({ overrides, code }) => {
+    const { POST } = await loadRoute()
+    const response = await POST(buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: adaptiveGuideBody(overrides),
+    }), { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(400)
+    expect((await response.json()).error.details.code).toBe(code)
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
+  it('v2 referenceVideos 不是 Depth-first / RGB-source-second -> 400', async () => {
+    const { POST } = await loadRoute()
+    const response = await POST(buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: adaptiveGuideBody({
+        referenceVideos: [
+          'video/playground-ref/user-1/source-rgb.mp4',
+          'video/playground-ref/user-1/source-depth.webm',
+        ],
+      }),
+    }), { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(400)
+    expect((await response.json()).error.details.code)
+      .toBe('DEPTH_REBUILD_GUIDE_DEPTH_REFERENCE_INVALID')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
+  it('v2 sourceVideoKey 未通過本人 storage ownership -> 403', async () => {
+    guardMock.filterAuthorizedStorageReferences.mockImplementation(async (refs: string[]) => (
+      refs.length === 1 && refs[0] === 'video/playground-ref/user-1/source-rgb.mp4'
+        ? { safe: [], rejected: refs }
+        : { safe: refs, rejected: [] }
+    ))
+    const { POST } = await loadRoute()
+    const response = await POST(buildMockRequest({
+      path: '/api/playground/run',
+      method: 'POST',
+      body: adaptiveGuideBody(),
+    }), { params: Promise.resolve({}) })
+
+    expect(response.status).toBe(403)
+    expect((await response.json()).error.details.code)
+      .toBe('DEPTH_REBUILD_GUIDE_SOURCE_VIDEO_NOT_TRUSTED')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
   it.each([
     'atlascloud::seedance-2.0-r2v',
     'atlascloud::seedance-2.0-fast-r2v',
@@ -603,6 +885,7 @@ describe('POST /api/playground/run — Seedance reference-video normalization co
     expect(submitterMock.submitTask).toHaveBeenCalledWith(
       expect.objectContaining({
         dedupeKey: expect.stringMatching(/^playground_http:[a-f0-9]{64}$/),
+        dedupeMode: 'idempotent',
       }),
     )
   })

@@ -21,7 +21,7 @@ import {
   type PendingDepthRebuildUploads,
 } from './lib/depth-rebuild-generation-storage'
 import { formatDepthRebuildTerminalError } from './lib/depth-rebuild-errors'
-import type { DepthRebuildSegmentPlanItem } from './lib/depth-rebuild-segment-plan'
+import type { DepthRebuildGuidePlan } from './lib/depth-rebuild-guide-plan'
 import type { TrackBModelKey } from './lib/atlascloud-r2v-contract'
 import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import type { VideoMetadata } from './live-composite-types'
@@ -43,7 +43,7 @@ interface UseDepthRebuildGenerationOptions {
   depthGuide: LocalDepthGuide | null
   characters: readonly DepthRebuildCharacterReference[]
   sceneReferences: readonly DepthRebuildSceneReference[]
-  segmentPlan: readonly DepthRebuildSegmentPlanItem[] | null
+  guidePlan: DepthRebuildGuidePlan | null
   segmentPrompts: readonly string[]
   modelKey: TrackBModelKey
   resolution: string
@@ -104,6 +104,15 @@ function latestRunId(pending: PendingDepthRebuildGeneration | null): string | nu
   return null
 }
 
+function hasSubmittedWorkflow(pending: PendingDepthRebuildGeneration | null): boolean {
+  return Boolean(
+    pending?.finalResult
+    || pending?.uploads
+    || latestRunId(pending)
+    || pending?.segments.some((segment) => segment.submissionAttempted),
+  )
+}
+
 function resolveRunDetail(
   detail: RunDetailResponse,
   runId: string,
@@ -141,7 +150,7 @@ export function useDepthRebuildGeneration({
   depthGuide,
   characters,
   sceneReferences,
-  segmentPlan,
+  guidePlan,
   segmentPrompts,
   modelKey,
   resolution,
@@ -323,21 +332,42 @@ export function useDepthRebuildGeneration({
   }
 
   function createPendingWorkflow(): PendingDepthRebuildGeneration {
-    if (!metadata || !segmentPlan || segmentPlan.length === 0) {
-      throw new Error('RGB＋Depth 分段計畫尚未建立')
+    if (!metadata || !guidePlan) {
+      throw new Error('自適應 Depth 引導計畫尚未建立')
     }
-    if (segmentPrompts.length !== segmentPlan.length) {
-      throw new Error('RGB＋Depth 分段 Prompt 與送出計畫不一致，請重新建立 Prompt')
+    if (segmentPrompts.length !== 1 || !segmentPrompts[0]) {
+      throw new Error('自適應 Depth Prompt 與送出計畫不一致，請重新建立 Prompt')
     }
     const pending: PendingDepthRebuildGeneration = {
       workflowId: createClientRequestKey(),
-      segments: segmentPlan.map(() => ({ requestKey: createClientRequestKey() })),
+      segments: [{ requestKey: createClientRequestKey() }],
       submission: {
+        contractVersion: 2,
         segmentPrompts: [...segmentPrompts],
-        segmentWindows: segmentPlan.map((segment) => ({
-          startSeconds: segment.sourceStart,
-          durationSeconds: segment.outputDuration,
-        })),
+        segmentWindows: [{
+          startSeconds: 0,
+          durationSeconds: guidePlan.sourceDurationSeconds,
+        }],
+        guidePlan: {
+          version: 2,
+          strategy: guidePlan.strategy,
+          sourceDurationSeconds: guidePlan.sourceDurationSeconds,
+          outputDurationSeconds: guidePlan.outputDurationSeconds,
+          criticalCenterSeconds: guidePlan.secondary?.criticalCenterSeconds
+            ?? guidePlan.sourceDurationSeconds / 2,
+          referenceVideoWindows: [
+            {
+              role: 'depth',
+              startSeconds: guidePlan.fullDepth.sourceStartSeconds,
+              durationSeconds: guidePlan.fullDepth.durationSeconds,
+            },
+            ...(guidePlan.secondary ? [{
+              role: 'rgb' as const,
+              startSeconds: guidePlan.secondary.sourceStartSeconds,
+              durationSeconds: guidePlan.secondary.durationSeconds,
+            }] : []),
+          ],
+        },
         modelKey,
         resolution,
         aspectRatio: depthRebuildAspectRatio(metadata.width, metadata.height),
@@ -449,6 +479,13 @@ export function useDepthRebuildGeneration({
         setGenerationStatus('succeeded')
         return refreshed
       }
+      if (pending && !hasSubmittedWorkflow(pending)) {
+        clearPendingDepthRebuildGeneration(persistenceStorageKeyRef.current)
+        pendingRef.current = null
+        pending = null
+        setSubmittedRunId(null)
+        setTerminalFailure(false)
+      }
       if (!pending && validationError) {
         onError(validationError)
         setGenerationStatus('failed')
@@ -470,34 +507,77 @@ export function useDepthRebuildGeneration({
 
         let runId: string | undefined = segment.runId
         if (!runId) {
-          if (index > 0 && !previousSegment?.tailFrameUrl) {
+          const adaptiveGuide = pending.submission.contractVersion === 2
+            ? pending.submission.guidePlan
+            : undefined
+          if (pending.submission.contractVersion === 2 && !adaptiveGuide) {
+            throw new Error('已保存的自適應 Depth 引導契約不完整；請清除後重新建立')
+          }
+          if (!adaptiveGuide && index > 0 && !previousSegment?.tailFrameUrl) {
             throw new Error(
               `第 ${index} 段已完成，但沒有可用尾幀；為避免付費生成錯位，已停止送出下一段`,
             )
           }
+          if (!segment.submissionAttempted) {
+            pending = {
+              ...pending,
+              segments: pending.segments.map((entry, segmentIndex) => (
+                segmentIndex === index
+                  ? { ...entry, submissionAttempted: true }
+                  : entry
+              )),
+            }
+            persistPending(pending)
+          }
           setGenerationStatus('submitting')
+          const adaptiveReferenceVideos = adaptiveGuide
+            ? [
+                uploads.depthVideoKey,
+                ...(adaptiveGuide.referenceVideoWindows.length === 2
+                  ? [uploads.sourceVideoKey]
+                  : []),
+              ]
+            : null
           const submitted = await submit.mutateAsync({
             prompt: segmentPrompt,
-            referenceVideos: [uploads.sourceVideoKey, uploads.depthVideoKey],
+            referenceVideos: adaptiveReferenceVideos
+              ?? [uploads.sourceVideoKey, uploads.depthVideoKey],
             referenceImages: [
               ...uploads.imageKeys,
-              ...(previousSegment?.tailFrameUrl ? [previousSegment.tailFrameUrl] : []),
+              ...(!adaptiveGuide && previousSegment?.tailFrameUrl
+                ? [previousSegment.tailFrameUrl]
+                : []),
             ],
             referenceImageNames: [
               ...uploads.imageNames,
-              ...(previousSegment?.tailFrameUrl ? ['前段末幀連續性參考'] : []),
+              ...(!adaptiveGuide && previousSegment?.tailFrameUrl
+                ? ['前段末幀連續性參考']
+                : []),
             ],
             outputType: 'video',
             modelKey: pending.submission.modelKey,
             resolution: pending.submission.resolution,
             normalizeSeedanceReferenceVideo: true,
-            depthRebuildDualGuide: true,
-            referenceVideoWindow: window,
+            ...(adaptiveGuide ? {
+              depthRebuildGuideContract: {
+                version: 2 as const,
+                strategy: adaptiveGuide.strategy,
+                sourceVideoKey: uploads.sourceVideoKey,
+                sourceDurationSeconds: adaptiveGuide.sourceDurationSeconds,
+                outputDurationSeconds: adaptiveGuide.outputDurationSeconds,
+                referenceVideoWindows: adaptiveGuide.referenceVideoWindows,
+              },
+            } : {
+              depthRebuildDualGuide: true,
+              referenceVideoWindow: window,
+            }),
             workflowId: pending.workflowId,
-            segmentIndex: index,
-            segmentCount: pending.segments.length,
+            ...(!adaptiveGuide ? {
+              segmentIndex: index,
+              segmentCount: pending.segments.length,
+            } : {}),
             aspectRatio: pending.submission.aspectRatio,
-            durationSec: window.durationSeconds,
+            durationSec: adaptiveGuide?.outputDurationSeconds ?? window.durationSeconds,
             sourceAudioMode: pending.submission.sourceAudioMode === 'preserve'
               ? 'reference-only'
               : pending.submission.sourceAudioMode,
@@ -559,13 +639,15 @@ export function useDepthRebuildGeneration({
     generationStatus === 'uploading'
     || generationStatus === 'submitting'
     || generationStatus === 'generating'
-  const hasPendingWorkflow = pendingRef.current !== null
+  const hasRecoverableWorkflow = hasSubmittedWorkflow(pendingRef.current)
 
   return {
     generationStatus,
     generationProgress,
     submittedRunId,
-    canResume: Boolean(hasPendingWorkflow && !result && !terminalFailure && !generationBusy),
+    canResume: Boolean(
+      hasRecoverableWorkflow && !result && !terminalFailure && !generationBusy
+    ),
     result,
     generationBusy,
     generate,

@@ -28,6 +28,11 @@ const seedanceReferenceMock = vi.hoisted(() => ({
   ),
   normalizeSeedanceReferenceVideoToCos: vi.fn(async () => ({
     cosKey: 'video/playground-runs/seedance-reference-task-1.mp4',
+    sourceProbe: {
+      width: 1920,
+      height: 1080,
+      durationSec: 12 as number | null,
+    },
     probe: {
       formatNames: ['mov', 'mp4'],
       sizeBytes: 2_000_000,
@@ -38,6 +43,11 @@ const seedanceReferenceMock = vi.hoisted(() => ({
       fps: 24,
       hasAudio: true,
     },
+  })),
+  probeSeedanceReferenceVideoSource: vi.fn(async () => ({
+    width: 1920,
+    height: 1080,
+    durationSec: 12 as number | null,
   })),
 }))
 
@@ -56,7 +66,10 @@ vi.mock('@/lib/generator-api', () => generatorMock)
 vi.mock('@/lib/workers/utils', () => utilsMock)
 vi.mock('@/lib/workers/shared', () => ({ reportTaskProgress: vi.fn() }))
 vi.mock('@/lib/playground/source-audio', () => sourceAudioMock)
-vi.mock('@/lib/playground/seedance-reference-video', () => seedanceReferenceMock)
+vi.mock('@/lib/playground/seedance-reference-video', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/playground/seedance-reference-video')>(),
+  ...seedanceReferenceMock,
+}))
 vi.mock('@/lib/playground/reference-guard', () => referenceGuardMock)
 vi.mock('@/lib/task/service', () => taskServiceMock)
 vi.mock('@/lib/logging/core', () => ({
@@ -96,6 +109,60 @@ function makeJob(payload: Record<string, unknown>): Job<TaskJobData> {
     }),
   }
   return job as unknown as Job<TaskJobData>
+}
+
+function adaptiveGuidePayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    prompt: 'video 1 is complete depth; video 2 is critical RGB',
+    modelKey: 'atlascloud::seedance-2.0-r2v',
+    referenceVideos: ['cos/source-depth.webm', 'cos/source-rgb.mp4'],
+    normalizeSeedanceReferenceVideo: true,
+    sourceAudioMode: 'reference-only',
+    duration: 12,
+    resolution: '720p',
+    aspectRatio: '16:9',
+    sourceVideoKey: 'cos/source-rgb.mp4',
+    depthRebuildGuideContract: {
+      version: 2,
+      strategy: 'full-depth-critical-rgb',
+      sourceVideoKey: 'cos/source-rgb.mp4',
+      sourceDurationSeconds: 11.2,
+      outputDurationSeconds: 12,
+      referenceVideoWindows: [
+        { role: 'depth', startSeconds: 0, durationSeconds: 11.2 },
+        { role: 'rgb', startSeconds: 4.6, durationSeconds: 3.3 },
+      ],
+    },
+    ...overrides,
+  }
+}
+
+function adaptiveNormalizedResult(input: {
+  role: 'depth' | 'rgb'
+  normalizedDuration: number
+  sourceDuration: number | null
+  width?: number
+  height?: number
+  fps?: number
+}) {
+  return {
+    cosKey: `video/playground-runs/task-1-${input.role}.mp4`,
+    sourceProbe: {
+      width: 1920,
+      height: 1080,
+      durationSec: input.sourceDuration,
+    },
+    probe: {
+      formatNames: ['mov', 'mp4'],
+      sizeBytes: 1_000_000,
+      durationSec: input.normalizedDuration,
+      videoCodec: 'h264',
+      width: input.width ?? 1280,
+      height: input.height ?? 720,
+      fps: input.fps ?? 24,
+      hasAudio: false,
+    },
+  }
 }
 
 describe('handlePlaygroundImageTask (Phase 9.1 Task-spine handler)', () => {
@@ -210,6 +277,11 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
     }))
     seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValue({
       cosKey: 'video/playground-runs/seedance-reference-task-1.mp4',
+      sourceProbe: {
+        width: 1920,
+        height: 1080,
+        durationSec: 12,
+      },
       probe: {
         formatNames: ['mov', 'mp4'],
         sizeBytes: 2_000_000,
@@ -220,6 +292,11 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
         fps: 24,
         hasAudio: true,
       },
+    })
+    seedanceReferenceMock.probeSeedanceReferenceVideoSource.mockResolvedValue({
+      width: 1920,
+      height: 1080,
+      durationSec: 12,
     })
   })
 
@@ -552,6 +629,11 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
   it('sourceAudioMode=generate -> 正規化先移除來源音軌，只讓模型生成新聲音', async () => {
     seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValue({
       cosKey: 'video/playground-runs/seedance-reference-task-1.mp4',
+      sourceProbe: {
+        width: 1920,
+        height: 1080,
+        durationSec: 12,
+      },
       probe: {
         formatNames: ['mov', 'mp4'],
         sizeBytes: 2_000_000,
@@ -601,6 +683,11 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
     utilsMock.toSignedUrlIfCos.mockImplementation((key: string) => `/api/files/${key}`)
     seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValue({
       cosKey: 'video/playground-runs/normalized.mp4',
+      sourceProbe: {
+        width: 1920,
+        height: 1080,
+        durationSec: 5,
+      },
       probe: {
         formatNames: ['mov', 'mp4'],
         sizeBytes: 1_000_000,
@@ -635,6 +722,11 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
     seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
       .mockResolvedValueOnce({
         cosKey: 'video/playground-runs/task-1-rgb.mp4',
+        sourceProbe: {
+          width: 1920,
+          height: 1080,
+          durationSec: 5.5,
+        },
         probe: {
           formatNames: ['mov', 'mp4'],
           sizeBytes: 2_000_000,
@@ -648,6 +740,11 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
       })
       .mockResolvedValueOnce({
         cosKey: 'video/playground-runs/task-1-depth.mp4',
+        sourceProbe: {
+          width: 1920,
+          height: 1080,
+          durationSec: null,
+        },
         probe: {
           formatNames: ['mov', 'mp4'],
           sizeBytes: 1_200_000,
@@ -731,6 +828,428 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
       .not.toContain('task-1-depth.mp4')
     expect(JSON.stringify(sourceAudioMock.stripGeneratedVideoAudio.mock.calls))
       .not.toContain('task-1-depth.mp4')
+  })
+
+  it('v2 1920×1080 RGB＋518×294 Depth -> 共用 1280×720、Depth-first 且只送一次 provider', async () => {
+    seedanceReferenceMock.probeSeedanceReferenceVideoSource.mockResolvedValue({
+      width: 1920,
+      height: 1080,
+      durationSec: 11.2,
+    })
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce({
+        cosKey: 'video/playground-runs/task-1-depth.mp4',
+        sourceProbe: {
+          width: 518,
+          height: 294,
+          durationSec: null,
+        },
+        probe: {
+          formatNames: ['mov', 'mp4'],
+          sizeBytes: 2_000_000,
+          durationSec: 11.2,
+          videoCodec: 'h264',
+          width: 1280,
+          height: 720,
+          fps: 24,
+          hasAudio: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        cosKey: 'video/playground-runs/task-1-rgb.mp4',
+        sourceProbe: {
+          width: 1920,
+          height: 1080,
+          durationSec: 11.2,
+        },
+        probe: {
+          formatNames: ['mov', 'mp4'],
+          sizeBytes: 800_000,
+          durationSec: 3.3,
+          videoCodec: 'h264',
+          width: 1280,
+          height: 720,
+          fps: 24,
+          hasAudio: false,
+        },
+      })
+    generatorMock.generateVideo.mockResolvedValue({
+      success: true,
+      externalId: 'vid-adaptive-guide-v2',
+    })
+    utilsMock.waitExternalResult.mockResolvedValue({
+      url: 'https://prov/generated-adaptive-v2.mp4',
+      downloadHeaders: { Authorization: 'Bearer generated' },
+    })
+
+    await handlePlaygroundVideoTask(makeJob(adaptiveGuidePayload()))
+
+    expect(referenceGuardMock.filterAuthorizedStorageReferences).toHaveBeenCalledWith(
+      ['cos/source-depth.webm', 'cos/source-rgb.mp4'],
+      'user-1',
+    )
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos)
+      .toHaveBeenNthCalledWith(1, {
+        sourceVideoUrl: 'signed:cos/source-depth.webm',
+        taskId: 'task-1',
+        sourceAudioMode: 'generate',
+        trim: { startSeconds: 0, durationSeconds: 11.2 },
+        outputId: 'depth',
+        targetDimensions: { width: 1280, height: 720 },
+      })
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos)
+      .toHaveBeenNthCalledWith(2, {
+        sourceVideoUrl: 'signed:cos/source-rgb.mp4',
+        taskId: 'task-1',
+        sourceAudioMode: 'generate',
+        trim: { startSeconds: 4.6, durationSeconds: 3.3 },
+        outputId: 'rgb',
+        targetDimensions: { width: 1280, height: 720 },
+      })
+    expect(sourceAudioMock.extractReferenceAudioToCos).toHaveBeenCalledWith(
+      'signed:cos/source-rgb.mp4',
+      'task-1',
+    )
+    expect(seedanceReferenceMock.probeSeedanceReferenceVideoSource).toHaveBeenCalledOnce()
+    expect(seedanceReferenceMock.probeSeedanceReferenceVideoSource).toHaveBeenCalledWith(
+      'signed:cos/source-rgb.mp4',
+    )
+    const options = generatorMock.generateVideo.mock.calls.at(-1)?.[3] as Record<string, unknown>
+    expect(options).toMatchObject({
+      duration: 12,
+      generateAudio: false,
+      referenceVideos: [
+        'signed:video/playground-runs/task-1-depth.mp4',
+        'signed:video/playground-runs/task-1-rgb.mp4',
+      ],
+      referenceAudios: ['signed:cos/source-audio.mp3'],
+    })
+    expect(generatorMock.generateVideo).toHaveBeenCalledTimes(1)
+    expect(sourceAudioMock.muxGeneratedVideoWithSourceAudio).not.toHaveBeenCalled()
+    expect(sourceAudioMock.stripGeneratedVideoAudio).toHaveBeenCalledWith({
+      generatedVideoUrl: 'https://prov/generated-adaptive-v2.mp4',
+      generatedDownloadHeaders: { Authorization: 'Bearer generated' },
+    })
+  })
+
+  it('v2 名義 11.2＋3.3 秒、24fps 轉碼後約 14.541 秒 -> 仍只送出一次 provider', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'depth',
+        normalizedDuration: 11.208,
+        sourceDuration: 11.2,
+      }))
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'rgb',
+        normalizedDuration: 3.333,
+        sourceDuration: 11.2,
+      }))
+    generatorMock.generateVideo.mockResolvedValue({
+      success: true,
+      externalId: 'vid-adaptive-frame-rounded',
+    })
+    utilsMock.waitExternalResult.mockResolvedValue({
+      url: 'https://prov/generated-frame-rounded.mp4',
+      downloadHeaders: { Authorization: 'Bearer generated' },
+    })
+
+    await handlePlaygroundVideoTask(makeJob(adaptiveGuidePayload()))
+
+    expect(generatorMock.generateVideo).toHaveBeenCalledTimes(1)
+    expect(generatorMock.generateVideo).toHaveBeenCalledWith(
+      'user-1',
+      'atlascloud::seedance-2.0-r2v',
+      '',
+      expect.objectContaining({
+        duration: 12,
+        referenceVideos: [
+          'signed:video/playground-runs/task-1-depth.mp4',
+          'signed:video/playground-runs/task-1-rgb.mp4',
+        ],
+      }),
+    )
+    expect(utilsMock.waitExternalResult).toHaveBeenCalledWith(
+      expect.anything(),
+      'vid-adaptive-frame-rounded',
+      'user-1',
+      expect.any(Object),
+    )
+  })
+
+  it(
+    'v2 reference-only 已有 externalId 的 retry -> 不重做前處理、不重送 provider',
+    async () => {
+      utilsMock.getTaskExistingExternalId.mockResolvedValue(
+        'ATLASCLOUD:VIDEO:adaptive-existing',
+      )
+      utilsMock.waitExternalResult.mockResolvedValue({
+        url: 'https://prov/resumed-adaptive-v2.mp4',
+        downloadHeaders: { Authorization: 'Bearer generated' },
+      })
+
+      await handlePlaygroundVideoTask(makeJob(adaptiveGuidePayload()))
+
+      expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+      expect(seedanceReferenceMock.probeSeedanceReferenceVideoSource).not.toHaveBeenCalled()
+      expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+      expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+      expect(utilsMock.waitExternalResult).toHaveBeenCalledWith(
+        expect.anything(),
+        'ATLASCLOUD:VIDEO:adaptive-existing',
+        'user-1',
+        expect.any(Object),
+      )
+      expect(sourceAudioMock.stripGeneratedVideoAudio).toHaveBeenCalledWith({
+        generatedVideoUrl: 'https://prov/resumed-adaptive-v2.mp4',
+        generatedDownloadHeaders: { Authorization: 'Bearer generated' },
+      })
+      expect(sourceAudioMock.muxGeneratedVideoWithSourceAudio).not.toHaveBeenCalled()
+      expect(JSON.stringify(sourceAudioMock.stripGeneratedVideoAudio.mock.calls))
+        .not.toContain('source-depth.webm')
+    },
+  )
+
+  it('v2 preserve -> worker fail closed，不做正規化或付費送單', async () => {
+    await expect(handlePlaygroundVideoTask(makeJob(adaptiveGuidePayload({
+      sourceAudioMode: 'preserve',
+    })))).rejects.toThrow('PLAYGROUND_DEPTH_REBUILD_GUIDE_CONTRACT_INVALID')
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it('v2 15 秒 Depth-only + generate -> provider 只收到完整 Depth，不抽取來源音訊', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValueOnce({
+      cosKey: 'video/playground-runs/task-1-depth-only.mp4',
+      sourceProbe: {
+        width: 1920,
+        height: 1080,
+        durationSec: null,
+      },
+      probe: {
+        formatNames: ['mov', 'mp4'],
+        sizeBytes: 2_000_000,
+        durationSec: 15,
+        videoCodec: 'h264',
+        width: 1280,
+        height: 720,
+        fps: 24,
+        hasAudio: false,
+      },
+    })
+    generatorMock.generateVideo.mockResolvedValue({ success: true, externalId: 'vid-depth-only' })
+    utilsMock.waitExternalResult.mockResolvedValue({ url: 'https://prov/depth-only.mp4' })
+    seedanceReferenceMock.probeSeedanceReferenceVideoSource.mockResolvedValue({
+      width: 1920,
+      height: 1080,
+      durationSec: 15,
+    })
+
+    await handlePlaygroundVideoTask(makeJob(adaptiveGuidePayload({
+      referenceVideos: ['cos/source-depth.webm'],
+      sourceAudioMode: 'generate',
+      duration: 15,
+      depthRebuildGuideContract: {
+        version: 2,
+        strategy: 'full-depth-only',
+        sourceVideoKey: 'cos/source-rgb.mp4',
+        sourceDurationSeconds: 15,
+        outputDurationSeconds: 15,
+        referenceVideoWindows: [
+          { role: 'depth', startSeconds: 0, durationSeconds: 15 },
+        ],
+      },
+    })))
+
+    expect(referenceGuardMock.filterAuthorizedStorageReferences).toHaveBeenCalledWith(
+      ['cos/source-depth.webm', 'cos/source-rgb.mp4'],
+      'user-1',
+    )
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).toHaveBeenCalledWith({
+      sourceVideoUrl: 'signed:cos/source-depth.webm',
+      taskId: 'task-1',
+      sourceAudioMode: 'generate',
+      trim: { startSeconds: 0, durationSeconds: 15 },
+      outputId: 'depth',
+      targetDimensions: { width: 1280, height: 720 },
+    })
+    expect(seedanceReferenceMock.probeSeedanceReferenceVideoSource).toHaveBeenCalledWith(
+      'signed:cos/source-rgb.mp4',
+    )
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    const options = generatorMock.generateVideo.mock.calls.at(-1)?.[3] as Record<string, unknown>
+    expect(options.referenceVideos).toEqual([
+      'signed:video/playground-runs/task-1-depth-only.mp4',
+    ])
+    expect(options.generateAudio).toBe(true)
+  })
+
+  it('v2 正規化後 probe 與 trim 不一致 -> fail closed，不送付費 provider', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce({
+        cosKey: 'video/playground-runs/task-1-depth.mp4',
+        sourceProbe: {
+          width: 1920,
+          height: 1080,
+          durationSec: 11.2,
+        },
+        probe: {
+          formatNames: ['mov', 'mp4'],
+          sizeBytes: 2_000_000,
+          durationSec: 10.9,
+          videoCodec: 'h264',
+          width: 1280,
+          height: 720,
+          fps: 24,
+          hasAudio: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        cosKey: 'video/playground-runs/task-1-rgb.mp4',
+        sourceProbe: {
+          width: 1920,
+          height: 1080,
+          durationSec: 11.2,
+        },
+        probe: {
+          formatNames: ['mov', 'mp4'],
+          sizeBytes: 800_000,
+          durationSec: 3.3,
+          videoCodec: 'h264',
+          width: 1280,
+          height: 720,
+          fps: 24,
+          hasAudio: false,
+        },
+      })
+
+    await expect(handlePlaygroundVideoTask(
+      makeJob(adaptiveGuidePayload()),
+    )).rejects.toThrow(
+      'PLAYGROUND_DEPTH_REBUILD_GUIDE_NORMALIZED_DURATION_MISMATCH',
+    )
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it('v2 contract 低報原片秒數 -> raw Depth/RGB probe 不符時付費前 fail closed', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'depth',
+        normalizedDuration: 11.2,
+        sourceDuration: 12,
+      }))
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'rgb',
+        normalizedDuration: 3.3,
+        sourceDuration: 12,
+      }))
+
+    await expect(handlePlaygroundVideoTask(
+      makeJob(adaptiveGuidePayload()),
+    )).rejects.toThrow(
+      'PLAYGROUND_DEPTH_REBUILD_GUIDE_RGB_SOURCE_DURATION_MISMATCH',
+    )
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it('v2 RGB 原片缺 duration metadata -> 付費前 fail closed', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'depth',
+        normalizedDuration: 11.2,
+        sourceDuration: null,
+      }))
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'rgb',
+        normalizedDuration: 3.3,
+        sourceDuration: null,
+      }))
+
+    await expect(handlePlaygroundVideoTask(
+      makeJob(adaptiveGuidePayload()),
+    )).rejects.toThrow(
+      'PLAYGROUND_DEPTH_REBUILD_GUIDE_RGB_SOURCE_DURATION_MISSING',
+    )
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it('v2 raw Depth/RGB 各自在容差內但彼此未對齊 -> 付費前 fail closed', async () => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'depth',
+        normalizedDuration: 11.2,
+        sourceDuration: 11.1,
+      }))
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'rgb',
+        normalizedDuration: 3.3,
+        sourceDuration: 11.3,
+      }))
+
+    await expect(handlePlaygroundVideoTask(
+      makeJob(adaptiveGuidePayload()),
+    )).rejects.toThrow(
+      'PLAYGROUND_DEPTH_REBUILD_GUIDE_SOURCE_DURATION_ALIGNMENT_MISMATCH',
+    )
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      label: '尺寸不同',
+      rgbOverrides: { width: 720, height: 1280 },
+      error: 'PLAYGROUND_DEPTH_REBUILD_GUIDE_NORMALIZED_GEOMETRY_MISMATCH',
+    },
+    {
+      label: 'fps 不同',
+      rgbOverrides: { fps: 25 },
+      error: 'PLAYGROUND_DEPTH_REBUILD_GUIDE_NORMALIZED_FPS_MISMATCH',
+    },
+  ])('v2 正規化後 $label -> 付費前 fail closed', async ({ rgbOverrides, error }) => {
+    seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'depth',
+        normalizedDuration: 11.2,
+        sourceDuration: 11.2,
+      }))
+      .mockResolvedValueOnce(adaptiveNormalizedResult({
+        role: 'rgb',
+        normalizedDuration: 3.3,
+        sourceDuration: 11.2,
+        ...rgbOverrides,
+      }))
+
+    await expect(handlePlaygroundVideoTask(
+      makeJob(adaptiveGuidePayload()),
+    )).rejects.toThrow(error)
+
+    expect(sourceAudioMock.extractReferenceAudioToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
+  })
+
+  it('v2 sourceVideoKey 未授權 -> 正規化與付費 provider 前失敗', async () => {
+    referenceGuardMock.filterAuthorizedStorageReferences.mockResolvedValue({
+      safe: ['cos/source-depth.webm'],
+      rejected: ['cos/source-rgb.mp4'],
+    })
+
+    await expect(handlePlaygroundVideoTask(
+      makeJob(adaptiveGuidePayload()),
+    )).rejects.toThrow(
+      'PLAYGROUND_SEEDANCE_REFERENCE_NORMALIZATION_REFERENCE_NOT_TRUSTED',
+    )
+
+    expect(seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos).not.toHaveBeenCalled()
+    expect(generatorMock.generateVideo).not.toHaveBeenCalled()
   })
 
   it('RGB＋Depth 的任一 storage 參考未授權 -> 正規化與付費生成前失敗', async () => {
@@ -896,6 +1415,11 @@ describe('handlePlaygroundVideoTask (Phase 9.1 Task-spine handler)', () => {
   it('要求保留原音但正規化結果沒有音軌 -> 付費生成前顯式失敗', async () => {
     seedanceReferenceMock.normalizeSeedanceReferenceVideoToCos.mockResolvedValue({
       cosKey: 'video/playground-runs/seedance-reference-task-1.mp4',
+      sourceProbe: {
+        width: 1920,
+        height: 1080,
+        durationSec: 12,
+      },
       probe: {
         formatNames: ['mov', 'mp4'],
         sizeBytes: 2_000_000,

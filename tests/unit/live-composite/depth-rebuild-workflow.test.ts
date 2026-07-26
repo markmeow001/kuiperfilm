@@ -24,7 +24,7 @@ const baseValidation = {
   depthGuideSufficient: true,
   characters: [validationCharacter(1)],
   sceneReferenceCount: 0,
-  reservedReferenceImageCount: 1,
+  reservedReferenceImageCount: 0,
   sceneDescription: '上海雨夜街道，車流與招牌持續運動',
   modelKey: 'atlascloud::seedance-2.0-r2v',
   resolution: '720p',
@@ -32,7 +32,7 @@ const baseValidation = {
   sourceAudioMode: 'preserve',
   sourceAudioDetected: true,
   prompt: 'depth-guided reconstruction prompt',
-  segmentPromptCount: 2,
+  segmentPromptCount: 1,
   promptIsFresh: true,
 } as const
 
@@ -49,7 +49,7 @@ function promptValidation(overrides: Partial<Parameters<typeof getDepthRebuildPr
 describe('depth rebuild workflow', () => {
   it('完整有效設定 -> 通過提交前驗證', () => {
     expect(getDepthRebuildValidationError(baseValidation)).toBeNull()
-    expect(depthRebuildDurationSeconds(12.4)).toBe(12)
+    expect(depthRebuildDurationSeconds(12.4)).toBe(13)
     expect(depthRebuildAspectRatio(1920, 1080)).toBe('16:9')
     expect(depthRebuildAspectRatio(1080, 1920)).toBe('9:16')
     expect(depthRebuildAspectRatio(1440, 1080)).toBe('4:3')
@@ -154,39 +154,39 @@ describe('depth rebuild workflow', () => {
     })).toBe('兩位角色都綁定「開場畫面左側男性」，請分別指定不同的原片人物')
   })
 
-  it('長片分段需保留銜接末幀 -> 使用者參考圖 8 張通過、9 張明確阻擋', () => {
+  it('單次生成不保留銜接末幀 -> 使用者參考圖 9 張通過、10 張明確阻擋', () => {
     const characters = [validationCharacter(1), validationCharacter(2)]
 
     expect(getDepthRebuildValidationError({
       ...baseValidation,
       characters,
-      sceneReferenceCount: 6,
+      sceneReferenceCount: 7,
     })).toBeNull()
 
     expect(getDepthRebuildValidationError({
       ...baseValidation,
       characters,
-      sceneReferenceCount: 7,
-    })).toBe('長片分段需保留 1 張銜接末幀，人物與場景參考圖片合計最多 8 張')
+      sceneReferenceCount: 8,
+    })).toBe('人物與場景參考圖片合計最多 9 張')
   })
 
-  it('12 秒 RGB＋Depth -> 需要兩份分段 Prompt；數量不符時阻擋舊 Prompt', () => {
-    expect(getDepthRebuildValidationError({
-      ...baseValidation,
-      segmentPromptCount: 2,
-    })).toBeNull()
+  it('12 秒自適應引導 -> 只需要一份 Prompt；舊分段 Prompt 數量會被阻擋', () => {
     expect(getDepthRebuildValidationError({
       ...baseValidation,
       segmentPromptCount: 1,
-    })).toBe('生成分段或 Prompt 已變更，請重新建立 Prompt')
+    })).toBeNull()
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      segmentPromptCount: 2,
+    })).toBe('自適應引導計畫或 Prompt 已變更，請重新建立 Prompt')
   })
 
-  it('7.6 秒無法拆成合法雙引導段 -> 付費前顯式阻擋且不裁短尾段', () => {
+  it('7.6 秒不再平均拆段 -> 完整 Depth 加關鍵 RGB 可直接通過', () => {
     expect(getDepthRebuildValidationError({
       ...baseValidation,
       sourceDurationSeconds: 7.6,
       segmentPromptCount: 1,
-    })).toContain('無法在不裁短的前提下建立合法雙引導分段')
+    })).toBeNull()
   })
 
   it('深度有效幀率不足 -> 明確阻擋付費生成', () => {
@@ -313,6 +313,6 @@ describe('depth rebuild workflow', () => {
   })
 
   it('超過 15 秒 -> 秒數正規化明確失敗', () => {
-    expect(() => depthRebuildDurationSeconds(15.1)).toThrow('深度重建只支援 4–15 秒影片')
+    expect(() => depthRebuildDurationSeconds(15.1)).toThrow('原片需介於 4–15 秒')
   })
 })

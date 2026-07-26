@@ -23,6 +23,20 @@ interface UploadResult {
   signedUrl: string
 }
 
+export interface DepthRebuildAdaptiveGuideContractV2 {
+  version: 2
+  strategy: 'full-depth-full-rgb' | 'full-depth-critical-rgb' | 'full-depth-only'
+  /** 原始 RGB key；獨立保存供音訊參考與完稿，不由 referenceVideos 位置推導。 */
+  sourceVideoKey: string
+  sourceDurationSeconds: number
+  outputDurationSeconds: number
+  referenceVideoWindows: Array<{
+    role: 'depth' | 'rgb'
+    startSeconds: number
+    durationSeconds: number
+  }>
+}
+
 export function useUploadPlaygroundReference() {
   return useMutation({
     mutationFn: async ({
@@ -99,7 +113,9 @@ export interface PlaygroundRunSubmission {
   depthRebuildDualGuide?: boolean
   /** Server 以同一時間窗裁切 RGB 與 Depth，避免瀏覽器轉碼漂移。 */
   referenceVideoWindow?: { startSeconds: number; durationSeconds: number }
-  /** Live Composite 付費分段的不可變 workflow 識別碼。 */
+  /** Live Composite v2：完整 Depth 優先、可選關鍵 RGB 的單筆自適應引導。 */
+  depthRebuildGuideContract?: DepthRebuildAdaptiveGuideContractV2
+  /** Live Composite 的不可變 workflow 識別碼；v2 單筆生成仍用它綁定安全完稿。 */
   workflowId?: string
   /** 分段在 workflow 中的零起算序號。 */
   segmentIndex?: number

@@ -9,7 +9,7 @@ import {
 } from './atlascloud-r2v-contract'
 import type { SourceAudioMode } from '@/lib/playground/source-audio-contract'
 import type { DepthRebuildMotionSettings } from './depth-rebuild-motion-contract'
-import { buildDepthRebuildSegmentPlan } from './depth-rebuild-segment-plan'
+import { buildDepthRebuildGuidePlan } from './depth-rebuild-guide-plan'
 
 export interface DepthRebuildAssetFingerprint {
   name: string
@@ -40,6 +40,7 @@ export interface DepthRebuildFingerprintInput {
   resolution: string
   sourceAudioMode: SourceAudioMode
   motionSettings: DepthRebuildMotionSettings
+  criticalCenterSeconds?: number
 }
 
 export interface DepthRebuildValidationInput {
@@ -64,6 +65,7 @@ export interface DepthRebuildValidationInput {
   prompt: string
   segmentPromptCount?: number
   promptIsFresh: boolean
+  criticalCenterSeconds?: number
 }
 
 export interface DepthRebuildPromptValidationInput {
@@ -106,17 +108,12 @@ export function buildDepthRebuildFingerprint(input: DepthRebuildFingerprintInput
     resolution: input.resolution,
     sourceAudioMode: input.sourceAudioMode,
     motionSettings: input.motionSettings,
+    criticalCenterSeconds: input.criticalCenterSeconds ?? null,
   })
 }
 
 export function depthRebuildDurationSeconds(sourceDurationSeconds: number): number {
-  if (!Number.isFinite(sourceDurationSeconds)) {
-    throw new Error('無法讀取原片秒數')
-  }
-  if (sourceDurationSeconds < MIN_DURATION_SECONDS || sourceDurationSeconds > MAX_DURATION_SECONDS) {
-    throw new Error(`深度重建只支援 ${MIN_DURATION_SECONDS}–${MAX_DURATION_SECONDS} 秒影片`)
-  }
-  return Math.round(sourceDurationSeconds)
+  return buildDepthRebuildGuidePlan(sourceDurationSeconds).outputDurationSeconds
 }
 
 const DEPTH_REBUILD_RATIOS = [
@@ -264,29 +261,34 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
     return `目前帳號尚未啟用模型「${input.modelKey}」，請先到設定中心啟用`
   }
 
-  let segmentPlan: ReturnType<typeof buildDepthRebuildSegmentPlan>
+  let guidePlan: ReturnType<typeof buildDepthRebuildGuidePlan>
   try {
-    segmentPlan = buildDepthRebuildSegmentPlan(sourceDurationSeconds)
-  } catch (caught) {
-    return caught instanceof Error ? caught.message : '無法建立 RGB＋Depth 分段計畫'
-  }
-  for (const segment of segmentPlan) {
-    const requestValidation = validateR2VRequest({
-      modelKey: input.modelKey,
-      durationSeconds: segment.outputDuration,
-      resolution: input.resolution,
-      referenceImageCount,
-      referenceVideoDurationsSeconds: [segment.outputDuration, segment.outputDuration],
+    guidePlan = buildDepthRebuildGuidePlan(sourceDurationSeconds, {
+      ...(input.criticalCenterSeconds === undefined
+        ? {}
+        : { criticalCenterSeconds: input.criticalCenterSeconds }),
     })
-    if (!requestValidation.ok) {
-      return requestValidation.issues[0]?.message ?? '深度重建設定無效'
-    }
+  } catch (caught) {
+    return caught instanceof Error ? caught.message : '無法建立自適應 Depth 引導計畫'
+  }
+  const requestValidation = validateR2VRequest({
+    modelKey: input.modelKey,
+    durationSeconds: guidePlan.outputDurationSeconds,
+    resolution: input.resolution,
+    referenceImageCount,
+    referenceVideoDurationsSeconds: [
+      guidePlan.fullDepth.durationSeconds,
+      ...(guidePlan.secondary ? [guidePlan.secondary.durationSeconds] : []),
+    ],
+  })
+  if (!requestValidation.ok) {
+    return requestValidation.issues[0]?.message ?? '深度重建設定無效'
   }
   if (
     input.segmentPromptCount !== undefined
-    && input.segmentPromptCount !== segmentPlan.length
+    && input.segmentPromptCount !== 1
   ) {
-    return '生成分段或 Prompt 已變更，請重新建立 Prompt'
+    return '自適應引導計畫或 Prompt 已變更，請重新建立 Prompt'
   }
   if (!input.prompt.trim()) return '請先建立並檢查 Prompt'
   if (!input.promptIsFresh) return '設定或參考素材已變更，請重新建立 Prompt'
