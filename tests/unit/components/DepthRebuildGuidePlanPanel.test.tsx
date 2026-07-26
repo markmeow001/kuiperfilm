@@ -33,6 +33,7 @@ describe('DepthRebuildGuidePlanPanel', () => {
     expect(within(depthRow as HTMLElement).getByText('11.2 秒')).toBeInTheDocument()
     expect(screen.getByText('3.3 秒')).toBeInTheDocument()
     expect(screen.getByText('14.5 / 15 秒')).toBeInTheDocument()
+    expect(screen.getByText(/不代表本機深度影片已產生/)).toBeInTheDocument()
     expect(screen.getByText(/先用模型需要的整數片長生成 12 秒，再自動裁回原片 11.2 秒/)).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: '參考影片總長' })).toHaveAttribute(
       'aria-valuenow',

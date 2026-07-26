@@ -71,6 +71,7 @@ export interface DepthRebuildPanelProps {
   generating: boolean
   interactionDisabled: boolean
   canGenerate: boolean
+  willPrepareDepthGuide?: boolean
   estimatedCostLabel?: string | null
   errorMessage?: string | null
   blockingMessage?: string | null
@@ -152,6 +153,7 @@ export function DepthRebuildPanel({
   generating,
   interactionDisabled,
   canGenerate,
+  willPrepareDepthGuide = false,
   estimatedCostLabel = null,
   errorMessage = null,
   blockingMessage = null,
@@ -420,7 +422,7 @@ export function DepthRebuildPanel({
             <span className="font-medium">
               {promptBlockingMessage ? '下一步：' : '資料已完成：'}
             </span>
-            {promptBlockingMessage ?? '可以建立 Prompt；完成有效的深度影片後即可進入付費生成。'}
+            {promptBlockingMessage ?? '可以建立 Prompt；送出時會先在本機建立深度引導，成功後才進入付費生成。'}
           </div>
           <button
             type="button"
@@ -494,9 +496,14 @@ export function DepthRebuildPanel({
               此帳號尚未啟用 AtlasCloud Seedance 2.0 Fast 或 Standard，請先到模型設定中心啟用後再生成。
             </div>
           ) : null}
-          {!errorMessage && blockingMessage ? (
+          {!errorMessage && blockingMessage && !willPrepareDepthGuide ? (
             <div role="status" className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.045] px-3 py-2 text-xs leading-5 text-amber-100/80">
               尚未送出：{blockingMessage}
+            </div>
+          ) : null}
+          {!errorMessage && willPrepareDepthGuide ? (
+            <div role="status" className="mt-3 rounded-lg border border-cyan-300/25 bg-cyan-300/[0.055] px-3 py-2 text-xs leading-5 text-cyan-100">
+              按下後會先在本機建立深度引導影片（不扣點），成功後才會自動送出下方顯示的付費任務。
             </div>
           ) : null}
           {canResume && submittedRunId ? (
@@ -542,7 +549,9 @@ export function DepthRebuildPanel({
             className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-violet-300 px-3 text-sm font-semibold text-violet-950 hover:bg-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-100 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-600"
           >
             <AppIcon name={generating ? 'loader' : 'sparkles'} className={`h-4 w-4 ${generating ? 'animate-spin' : ''}`} />
-            {generating
+            {depthBusy
+              ? '正在建立深度引導影片…'
+              : generating
               ? 'AI 重建中…'
               : canResume
                 ? submittedRunId
@@ -552,7 +561,9 @@ export function DepthRebuildPanel({
                   ? '本次重建已完成'
                   : submittedRunId
                     ? '這筆任務已失敗'
-                    : '確認費用並生成影片'}
+                    : willPrepareDepthGuide
+                      ? '建立深度引導並生成影片'
+                      : '確認費用並生成影片'}
           </button>
         </section>
       </div>

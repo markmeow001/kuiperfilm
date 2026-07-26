@@ -111,6 +111,7 @@ export interface UseDepthRebuildResult {
   promptIsStale: boolean
   promptValidationError: string | null
   validationError: string | null
+  willPrepareDepthGuide: boolean
   canGenerate: boolean
   costEstimate: PlaygroundCostEstimate | null
   costEstimateLoading: boolean

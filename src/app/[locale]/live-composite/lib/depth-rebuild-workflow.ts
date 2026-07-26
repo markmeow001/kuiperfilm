@@ -150,6 +150,7 @@ export const DEPTH_CHARACTER_BINDING_MAX_CHARS = 120
 export const DEPTH_CHARACTER_DESCRIPTION_MAX_CHARS = 600
 export const DEPTH_SCENE_DESCRIPTION_MAX_CHARS = 1_000
 export const DEPTH_REFERENCE_NOTE_MAX_CHARS = 120
+export const DEPTH_GUIDE_REQUIRED_MESSAGE = '請先產生深度引導影片'
 
 function getSourceDurationValidationError(sourceDurationSeconds: number | null): string | null {
   if (sourceDurationSeconds === null) return '請先上傳原始表演影片'
@@ -247,7 +248,7 @@ export function getDepthRebuildValidationError(input: DepthRebuildValidationInpu
       ? '正在確認原片音軌；若不需要原音，可改選「AI 重新生成聲音」'
       : '原片未偵測到音軌；請改選「AI 重新生成聲音」'
   }
-  if (!input.depthGuideExists) return '請先產生深度引導影片'
+  if (!input.depthGuideExists) return DEPTH_GUIDE_REQUIRED_MESSAGE
   if (!input.depthGuideSufficient) return '深度引導影片有效幀率不足，請重新產生後再生成'
   const referenceError = getReferenceSetupValidationError(input)
   if (referenceError) return referenceError

@@ -200,19 +200,26 @@ describe('DepthRebuildPanel', () => {
     expect(screen.getByText('請填寫新場景描述')).toBeInTheDocument()
   })
 
-  it('Prompt 資料完整但尚無深度影片 -> 可先建立 Prompt，付費生成仍保持鎖定', () => {
+  it('Prompt 與費用都完成但尚無深度影片 -> 一鍵先免費建立深度再送出', () => {
+    const onGenerate = vi.fn()
     render(<DepthRebuildPanel {...buildProps({
       depthGuide: null,
-      prompt: '',
+      prompt: 'Use the complete depth guide and original performance timing exactly.',
       promptBlockingMessage: null,
       blockingMessage: '請先產生深度引導影片',
-      canGenerate: false,
+      willPrepareDepthGuide: true,
+      canGenerate: true,
+      onGenerate,
     })} />)
 
     expect(screen.getByText(/資料已完成：/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '檢查並建立 Prompt' })).toBeEnabled()
-    expect(screen.getByText(/尚未送出：請先產生深度引導影片/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '確認費用並生成影片' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '重新檢查並建立 Prompt' })).toBeEnabled()
+    expect(screen.queryByText(/尚未送出：請先產生深度引導影片/)).not.toBeInTheDocument()
+    expect(screen.getByText(/先在本機建立深度引導影片（不扣點）/)).toBeInTheDocument()
+    const generateButton = screen.getByRole('button', { name: '建立深度引導並生成影片' })
+    expect(generateButton).toBeEnabled()
+    fireEvent.click(generateButton)
+    expect(onGenerate).toHaveBeenCalledTimes(1)
   })
 
   it('正在處理 -> 暫停重複檢查 Prompt', () => {

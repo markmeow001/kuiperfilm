@@ -298,8 +298,9 @@ describe('useDepthRebuild', () => {
     expect(result.current.sourceAudioMode).toBe('preserve')
   })
 
-  it('尚未產生深度影片 -> 可先檢查並建立 Prompt，但不能送出付費生成', async () => {
-    const stageRef = { current: createStage() }
+  it('深度影片尚未建立但其餘設定完成 -> 一次點擊先免費建立深度再只送一筆付費任務', async () => {
+    const stage = createStage()
+    const stageRef = { current: stage }
     const { result } = renderHook(() => useDepthRebuild({
       stageRef,
       metadata,
@@ -324,13 +325,64 @@ describe('useDepthRebuild', () => {
     expect(result.current.promptIsStale).toBe(false)
     expect(result.current.depthGuide).toBeNull()
     expect(result.current.validationError).toBe('請先產生深度引導影片')
-    expect(result.current.canGenerate).toBe(false)
+    expect(result.current.willPrepareDepthGuide).toBe(true)
+    expect(result.current.canGenerate).toBe(true)
 
+    let generated = null
     await act(async () => {
-      await result.current.generate()
+      generated = await result.current.generate()
     })
 
-    expect(result.current.error).toBe('請先產生深度引導影片')
+    expect(stage.exportDepthGuideVideo).toHaveBeenCalledTimes(1)
+    expect(result.current.depthGuide?.sufficient).toBe(true)
+    expect(mocks.upload.mock.calls.map(([input]) => ({
+      type: input.type as string,
+      name: (input.file as File).name,
+    }))).toEqual([
+      { type: 'video', name: 'performance.mp4' },
+      { type: 'video', name: expect.stringMatching(/^depth-guide-\d+\.webm$/) },
+      { type: 'image', name: 'character.png' },
+    ])
+    expect(mocks.submit).toHaveBeenCalledTimes(1)
+    expect(mocks.waitForTaskResult).toHaveBeenCalledTimes(1)
+    expect(generated).toEqual({
+      runId: 'run-depth-final',
+      url: 'https://media.example/final-result.mp4',
+    })
+    expect(result.current.error).toBeNull()
+  })
+
+  it('一鍵送出前本機深度建立失敗 -> 不上傳且不建立付費任務', async () => {
+    const stage = createStage(async () => {
+      throw new Error('本機深度建立失敗')
+    })
+    const { result } = renderHook(() => useDepthRebuild({
+      stageRef: { current: stage },
+      metadata,
+      videoHasAudio: false,
+    }))
+
+    act(() => {
+      result.current.selectCharacterImage(
+        'character-1',
+        new File(['character'], 'character.png', { type: 'image/png' }),
+      )
+      result.current.setCharacterSourceBinding('character-1', '原片主要人物')
+      result.current.setCharacterDescription('character-1', '寫實電影角色，深色羊毛大衣')
+      result.current.setSceneDescription('雨夜街道，車流與招牌持續移動')
+    })
+    act(() => result.current.buildPrompt())
+
+    expect(result.current.willPrepareDepthGuide).toBe(true)
+    expect(result.current.canGenerate).toBe(true)
+
+    let generated = null
+    await act(async () => {
+      generated = await result.current.generate()
+    })
+
+    expect(generated).toBeNull()
+    expect(result.current.error).toBe('本機深度建立失敗')
     expect(mocks.upload).not.toHaveBeenCalled()
     expect(mocks.submit).not.toHaveBeenCalled()
     expect(mocks.waitForTaskResult).not.toHaveBeenCalled()
@@ -931,6 +983,63 @@ describe('useDepthRebuild', () => {
     expect(rebuilt.submission.contractVersion).toBe(2)
     expect(rebuilt.submission.segmentPrompts).toEqual([currentPrompt])
     expect(rebuilt.segments).toHaveLength(1)
+  })
+
+  it('切換到已上傳但尚未取得 runId 的工作區 -> 立即顯示可安全恢復', async () => {
+    const workspaceId = 'recoverable-workspace'
+    const storageKey = depthRebuildGenerationStorageKey(
+      `user:user-1:locale:zh:${workspaceId}`,
+    )
+    sessionStorage.setItem(storageKey, JSON.stringify({
+      workflowId: 'recoverable-workflow',
+      segments: [
+        { requestKey: 'recoverable-request-1', submissionAttempted: true },
+      ],
+      submission: {
+        contractVersion: 2,
+        segmentPrompts: ['persisted adaptive prompt'],
+        segmentWindows: [{ startSeconds: 0, durationSeconds: 12 }],
+        modelKey: 'atlascloud::seedance-2.0-r2v',
+        resolution: '720p',
+        aspectRatio: '16:9',
+        sourceAudioMode: 'generate',
+        workspaceId,
+        guidePlan: {
+          version: 2,
+          strategy: 'full-depth-critical-rgb',
+          sourceDurationSeconds: 12,
+          outputDurationSeconds: 12,
+          criticalCenterSeconds: 6,
+          referenceVideoWindows: [
+            { role: 'depth', startSeconds: 0, durationSeconds: 12 },
+            { role: 'rgb', startSeconds: 4.75, durationSeconds: 2.5 },
+          ],
+        },
+      },
+      uploads: {
+        sourceVideoKey: 'video/persisted-source.mp4',
+        depthVideoKey: 'video/persisted-depth.webm',
+        imageKeys: ['image/persisted-character.png'],
+        imageNames: ['角色：已上傳角色'],
+      },
+    }))
+
+    const { result, rerender } = renderHook(
+      ({ activeWorkspaceId }: { activeWorkspaceId: string }) => useDepthRebuild({
+        stageRef: { current: createStage() },
+        metadata,
+        videoHasAudio: false,
+        workspaceId: activeWorkspaceId,
+      }),
+      { initialProps: { activeWorkspaceId: 'empty-workspace' } },
+    )
+    expect(result.current.canResume).toBe(false)
+
+    rerender({ activeWorkspaceId: workspaceId })
+
+    await waitFor(() => expect(result.current.canResume).toBe(true))
+    expect(result.current.submittedRunId).toBeNull()
+    expect(result.current.canGenerate).toBe(true)
   })
 
   it('舊版 v1 已完整上傳但無 runId -> 保守沿用原 workflow 與 request keys', async () => {

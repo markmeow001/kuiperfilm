@@ -96,9 +96,12 @@ export function DepthRebuildControls({
       generating={generating}
       interactionDisabled={interactionDisabled}
       canGenerate={controller.canGenerate}
+      willPrepareDepthGuide={controller.willPrepareDepthGuide}
       estimatedCostLabel={controller.submittedRunId ? '已送出，不重複計費' : estimatedCostLabel(controller)}
       errorMessage={controller.error}
-      blockingMessage={metadata && !controller.submittedRunId ? controller.validationError : null}
+      blockingMessage={metadata && !controller.submittedRunId && !controller.canResume
+        ? controller.validationError
+        : null}
       submittedRunId={controller.submittedRunId}
       canResume={controller.canResume}
       hasResult={Boolean(controller.result)}

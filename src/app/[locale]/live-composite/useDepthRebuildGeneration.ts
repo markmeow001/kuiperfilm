@@ -51,6 +51,11 @@ interface UseDepthRebuildGenerationOptions {
   onError: (message: string | null) => void
 }
 
+interface GenerateDepthRebuildOptions {
+  depthGuideOverride?: LocalDepthGuide
+  validationErrorOverride?: string | null
+}
+
 interface RunDetailResponse {
   run?: PlaygroundRunRow | null
 }
@@ -170,6 +175,9 @@ export function useDepthRebuildGeneration({
     initialPending?.finalResult ? 99 : null,
   )
   const [result, setResult] = useState<DepthRebuildResult | null>(null)
+  const [pendingSnapshot, setPendingSnapshot] = useState<PendingDepthRebuildGeneration | null>(
+    initialPending,
+  )
   const [submittedRunId, setSubmittedRunId] = useState<string | null>(
     latestRunId(initialPending),
   )
@@ -194,6 +202,7 @@ export function useDepthRebuildGeneration({
     const pending = readPendingDepthRebuildGeneration(persistenceStorageKey)
     persistenceStorageKeyRef.current = persistenceStorageKey
     pendingRef.current = pending
+    setPendingSnapshot(pending)
     setSubmittedRunId(latestRunId(pending))
     setTerminalFailure(false)
     setResult(null)
@@ -208,6 +217,7 @@ export function useDepthRebuildGeneration({
     )
     if (!stored) throw new Error(DEPTH_REBUILD_STORAGE_REQUIRED_MESSAGE)
     pendingRef.current = pending
+    setPendingSnapshot(pending)
   }, [])
 
   const refreshFinalResultUrl = useCallback(async (
@@ -268,6 +278,7 @@ export function useDepthRebuildGeneration({
     resultRefreshAbortControllerRef.current?.abort()
     resultRefreshAbortControllerRef.current = null
     pendingRef.current = null
+    setPendingSnapshot(null)
     clearPendingDepthRebuildGeneration(persistenceStorageKeyRef.current)
     setSubmittedRunId(null)
     setTerminalFailure(false)
@@ -382,10 +393,11 @@ export function useDepthRebuildGeneration({
   async function ensureUploads(
     pending: PendingDepthRebuildGeneration,
     signal: AbortSignal,
+    activeDepthGuide: LocalDepthGuide | null,
   ): Promise<PendingDepthRebuildUploads> {
     if (pending.uploads) return pending.uploads
     const referenceMap = buildDepthRebuildReferenceMap(characters, sceneReferences)
-    if (!depthGuide || referenceMap.ordered.length === 0) {
+    if (!activeDepthGuide || referenceMap.ordered.length === 0) {
       throw new Error('本機素材尚未完整上傳；請清除舊任務並重新建立')
     }
     if (!sourceVideoStorageKey && !sourceVideoFile) {
@@ -403,7 +415,7 @@ export function useDepthRebuildGeneration({
     const [uploadedSource, uploadedDepth, ...uploadedImages] = await Promise.all([
       sourceUpload,
       upload.mutateAsync({
-        file: depthGuide.file,
+        file: activeDepthGuide.file,
         type: 'video',
         signal,
       }),
@@ -457,7 +469,9 @@ export function useDepthRebuildGeneration({
     return { runId: finalResult.runId, url: finalResult.url }
   }
 
-  async function generate(): Promise<DepthRebuildResult | null> {
+  async function generate(
+    options: GenerateDepthRebuildOptions = {},
+  ): Promise<DepthRebuildResult | null> {
     if (inFlightRef.current) {
       onError('已有一個深度重建任務正在送出或生成，請勿重複提交')
       return null
@@ -482,17 +496,25 @@ export function useDepthRebuildGeneration({
       if (pending && !hasSubmittedWorkflow(pending)) {
         clearPendingDepthRebuildGeneration(persistenceStorageKeyRef.current)
         pendingRef.current = null
+        setPendingSnapshot(null)
         pending = null
         setSubmittedRunId(null)
         setTerminalFailure(false)
       }
-      if (!pending && validationError) {
-        onError(validationError)
+      const activeValidationError = options.validationErrorOverride !== undefined
+        ? options.validationErrorOverride
+        : validationError
+      if (!pending && activeValidationError) {
+        onError(activeValidationError)
         setGenerationStatus('failed')
         return null
       }
       pending ??= createPendingWorkflow()
-      const uploads = await ensureUploads(pending, abortController.signal)
+      const uploads = await ensureUploads(
+        pending,
+        abortController.signal,
+        options.depthGuideOverride ?? depthGuide,
+      )
       pending = pendingRef.current ?? { ...pending, uploads }
 
       let previousSegment: CompletedSegmentResult | null = null
@@ -639,7 +661,7 @@ export function useDepthRebuildGeneration({
     generationStatus === 'uploading'
     || generationStatus === 'submitting'
     || generationStatus === 'generating'
-  const hasRecoverableWorkflow = hasSubmittedWorkflow(pendingRef.current)
+  const hasRecoverableWorkflow = hasSubmittedWorkflow(pendingSnapshot)
 
   return {
     generationStatus,

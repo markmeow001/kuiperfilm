@@ -247,25 +247,25 @@ export function useDepthRebuildInputs({
     stageRef.current?.cancelDepthGuideVideo()
   }
 
-  async function generateDepthGuide(): Promise<void> {
+  async function generateDepthGuide(): Promise<LocalDepthGuide | null> {
     if (depthGenerationInFlightRef.current) {
       onError('深度影片正在產生，請先等待完成或按「停止處理」')
-      return
+      return null
     }
     if (!metadata) {
       onError('請先上傳原始表演影片')
-      return
+      return null
     }
     try {
       depthRebuildDurationSeconds(metadata.duration)
     } catch (caught) {
       onError(caught instanceof Error ? caught.message : '原片秒數無效')
-      return
+      return null
     }
     const stage = stageRef.current
     if (!stage) {
       onError('影片預覽尚未準備完成，請稍後再試')
-      return
+      return null
     }
 
     onError(null)
@@ -282,7 +282,7 @@ export function useDepthRebuildInputs({
         includeAudio: videoHasAudio !== false,
         onProgress: setDepthGuideProgress,
       })
-      if (depthCancelRequestedRef.current) return
+      if (depthCancelRequestedRef.current) return null
       const extension = exported.extension.replace(/^\./, '') || 'webm'
       const file = new File(
         [exported.blob],
@@ -305,14 +305,16 @@ export function useDepthRebuildInputs({
           `深度影片有效幀率只有 ${exported.effectiveDepthFps.toFixed(1)} fps，低於生成品質門檻；請重新產生`,
         )
       }
+      return next
     } catch (caught) {
       if (caught instanceof DepthGuideRecordingCancelledError || depthCancelRequestedRef.current) {
         setDepthGuideStatus(depthGuideRef.current ? 'ready' : 'idle')
         onError(null)
-        return
+        return null
       }
       setDepthGuideStatus('failed')
       onError(caught instanceof Error ? caught.message : '深度影片產生失敗')
+      return null
     } finally {
       depthCancelRequestedRef.current = false
       depthGenerationInFlightRef.current = false

@@ -95,6 +95,9 @@ export function DepthRebuildGuidePlanPanel({
           {copy.title}
         </h3>
         <p className="mt-1 text-xs leading-5 text-stone-400">{copy.summary}</p>
+        <p className="mt-2 text-[11px] leading-4 text-stone-500">
+          這是送出時的預計參考配置，不代表本機深度影片已產生。
+        </p>
       </header>
 
       <div className="px-4 py-2">

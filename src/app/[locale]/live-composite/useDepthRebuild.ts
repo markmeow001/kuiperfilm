@@ -21,9 +21,11 @@ import {
 import { buildDepthRebuildGuidePlan } from './lib/depth-rebuild-guide-plan'
 import {
   buildDepthRebuildFingerprint,
+  DEPTH_GUIDE_REQUIRED_MESSAGE,
   fileToDepthRebuildFingerprint,
   getDepthRebuildPromptValidationError,
   getDepthRebuildValidationError,
+  type DepthRebuildValidationInput,
 } from './lib/depth-rebuild-workflow'
 import { useDepthRebuildDescriptionAssist } from './useDepthRebuildDescriptionAssist'
 import { useDepthRebuildGeneration } from './useDepthRebuildGeneration'
@@ -231,11 +233,12 @@ export function useDepthRebuild({
     inputs.sceneReferences.length,
     inputs.sceneDescription,
   ])
-  const workflowValidationError = useMemo(() => getDepthRebuildValidationError({
+  const validationInputBase = useMemo<Omit<
+    DepthRebuildValidationInput,
+    'depthGuideExists' | 'depthGuideSufficient'
+  >>(() => ({
     sourceDurationSeconds: metadata?.duration ?? null,
     sourceVideoAvailable: Boolean(sourceVideoFile || sourceVideoStorageKey),
-    depthGuideExists: Boolean(inputs.depthGuide),
-    depthGuideSufficient: inputs.depthGuide?.sufficient === true,
     characters: inputs.characters.map((character) => ({
       label: character.label,
       sourceBinding: character.sourceBinding,
@@ -258,7 +261,6 @@ export function useDepthRebuild({
     metadata?.duration,
     sourceVideoFile,
     sourceVideoStorageKey,
-    inputs.depthGuide,
     inputs.characters,
     inputs.sceneReferences.length,
     inputs.sceneDescription,
@@ -273,19 +275,35 @@ export function useDepthRebuild({
     currentFingerprint,
     criticalCenterSeconds,
   ])
-  const validationError = modelsQuery.isLoading
-    ? '模型清單尚未載入完成'
-    : modelsQuery.isError
-      ? '模型清單讀取失敗，無法確認 AtlasCloud Seedance 2.0 是否已啟用'
-      : workflowValidationError
-        ? workflowValidationError
-        : costQuery.isLoading
-          ? '正在取得本次生成費用'
-          : costQuery.isError
-            ? '估價失敗，請勿在價格未知時送出'
-            : costQuery.data?.amountUsd === null || costQuery.data === undefined
-              ? '目前無法取得本次生成費用，已停止送出'
-              : null
+  const workflowValidationError = useMemo(() => getDepthRebuildValidationError({
+    ...validationInputBase,
+    depthGuideExists: Boolean(inputs.depthGuide),
+    depthGuideSufficient: inputs.depthGuide?.sufficient === true,
+  }), [inputs.depthGuide, validationInputBase])
+  const workflowValidationAfterDepthError = useMemo(() => getDepthRebuildValidationError({
+    ...validationInputBase,
+    depthGuideExists: true,
+    depthGuideSufficient: true,
+  }), [validationInputBase])
+
+  function resolveSubmissionValidationError(workflowError: string | null): string | null {
+    if (modelsQuery.isLoading) return '模型清單尚未載入完成'
+    if (modelsQuery.isError) {
+      return '模型清單讀取失敗，無法確認 AtlasCloud Seedance 2.0 是否已啟用'
+    }
+    if (workflowError) return workflowError
+    if (costQuery.isLoading) return '正在取得本次生成費用'
+    if (costQuery.isError) return '估價失敗，請勿在價格未知時送出'
+    if (costQuery.data?.amountUsd === null || costQuery.data === undefined) {
+      return '目前無法取得本次生成費用，已停止送出'
+    }
+    return null
+  }
+
+  const validationError = resolveSubmissionValidationError(workflowValidationError)
+  const validationAfterDepthError = resolveSubmissionValidationError(
+    workflowValidationAfterDepthError,
+  )
 
   const generation = useDepthRebuildGeneration({
     persistenceScopeKey: persistenceScope,
@@ -306,11 +324,18 @@ export function useDepthRebuild({
   })
   const descriptionAssistBusy = descriptionAssist.target !== null
   const isBusy = inputs.depthBusy || generation.generationBusy || descriptionAssistBusy
+  const willPrepareDepthGuide = Boolean(
+    !generation.canResume
+    && generation.submittedRunId === null
+    && !inputs.depthGuide
+    && workflowValidationError === DEPTH_GUIDE_REQUIRED_MESSAGE
+    && validationAfterDepthError === null
+  )
   const canGenerate = generation.canResume
     || (
       generation.submittedRunId === null
-      && validationError === null
       && !isBusy
+      && (validationError === null || willPrepareDepthGuide)
     )
 
   function buildPrompt(): void {
@@ -386,6 +411,36 @@ export function useDepthRebuild({
     await inputs.generateDepthGuide()
   }
 
+  async function generate(): Promise<UseDepthRebuildResult['result']> {
+    if (generation.canResume || inputs.depthGuide) {
+      return generation.generate()
+    }
+    if (!willPrepareDepthGuide) {
+      setError(validationError ?? '目前的設定還不能送出')
+      return null
+    }
+
+    generation.resetResult()
+    const preparedDepthGuide = await inputs.generateDepthGuide()
+    if (!preparedDepthGuide) return null
+
+    const preparedValidationError = resolveSubmissionValidationError(
+      getDepthRebuildValidationError({
+        ...validationInputBase,
+        depthGuideExists: true,
+        depthGuideSufficient: preparedDepthGuide.sufficient,
+      }),
+    )
+    if (preparedValidationError) {
+      setError(preparedValidationError)
+      return null
+    }
+    return generation.generate({
+      depthGuideOverride: preparedDepthGuide,
+      validationErrorOverride: null,
+    })
+  }
+
   function resetGenerationResult(): void {
     generation.resetResult()
     setError(null)
@@ -419,6 +474,7 @@ export function useDepthRebuild({
     promptIsStale,
     promptValidationError,
     validationError,
+    willPrepareDepthGuide,
     canGenerate,
     costEstimate: costQuery.data ?? null,
     costEstimateLoading: costQuery.isLoading,
@@ -498,7 +554,7 @@ export function useDepthRebuild({
     cancelDepthGuide: inputs.cancelDepthGuide,
     clearDepthGuide: inputs.clearDepthGuide,
     buildPrompt,
-    generate: generation.generate,
+    generate,
     resetSource,
     resetResult: resetGenerationResult,
   }
