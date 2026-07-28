@@ -2964,7 +2964,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -2980,7 +2981,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -2997,7 +2999,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3013,7 +3016,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3029,7 +3033,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3045,7 +3050,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3056,7 +3062,8 @@
     "capabilities": {
       "image": {
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3071,7 +3078,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3086,7 +3094,8 @@
           "3K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3101,7 +3110,8 @@
           "2k"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3116,7 +3126,8 @@
           "2k"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3131,7 +3142,8 @@
           "2k"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3146,7 +3158,8 @@
           "2k"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3162,7 +3175,8 @@
           "4K"
         ],
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3173,7 +3187,8 @@
     "capabilities": {
       "image": {
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -3184,7 +3199,8 @@
     "capabilities": {
       "image": {
         "supportNegativePrompt": true,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportSeed": true
       }
     }
   }

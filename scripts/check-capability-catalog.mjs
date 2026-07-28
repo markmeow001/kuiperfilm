@@ -15,6 +15,7 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
     'supportNegativePrompt',
     'supportReferenceImage',
     'supportMaskEdit',
+    'supportSeed',
     'fieldI18n',
   ]),
   video: new Set([

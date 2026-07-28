@@ -46,6 +46,12 @@ export function V2HomeRail({ locale }: V2HomeRailProps) {
       shortLabel: t('playground'),
     },
     {
+      href: `/${locale}/visual-development`,
+      icon: 'brain',
+      label: t('visualDevelopmentLabel'),
+      shortLabel: t('visualDevelopment'),
+    },
+    {
       href: `/${locale}/live-composite`,
       icon: 'video',
       label: t('compositeLabel'),

@@ -63,6 +63,7 @@ const IMAGE_TYPES = new Set<string>([
   'reference_to_character',
   // Phase 9.1 — Playground image rides the Task spine.
   'playground_image',
+  'visual_development_image',
 ])
 
 const ANALYZE_TYPES = new Set<string>([

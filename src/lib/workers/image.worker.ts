@@ -45,6 +45,7 @@ async function processImageTask(job: Job<TaskJobData>) {
     case TASK_TYPE.PANEL_VARIANT:
       return await handlePanelVariantTask(job)
     case TASK_TYPE.PLAYGROUND_IMAGE:
+    case TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE:
       return await handlePlaygroundImageTask(job)
     default:
       throw new Error(`Unsupported image task type: ${job.data.type}`)

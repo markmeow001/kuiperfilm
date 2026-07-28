@@ -33,6 +33,7 @@ export async function generateImage(
         keepOriginalAspectRatio?: boolean  // 🔥 编辑时保持原图比例
         size?: string  // 🔥 直接指定像素尺寸如 "5016x3344"（优先于 aspectRatio）
         negativePrompt?: string  // 🎨 styleProfile 注入后的 negative prompt（仅 capability 支持时透传）
+        seed?: number  // Explicit image seed; callers must gate this via model capability.
     }
 ): Promise<GenerateResult> {
     const selection = await resolveModelSelection(userId, modelKey, 'image')

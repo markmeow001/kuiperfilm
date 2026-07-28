@@ -36,6 +36,8 @@ export interface ImageCapabilities {
   aspectRatioOptions?: string[]
   supportNegativePrompt?: boolean
   supportReferenceImage?: boolean
+  /** The provider accepts an explicit deterministic/noise seed for image generation. */
+  supportSeed?: boolean
   /** 局部重绘：接受遮罩图（透明区=重绘区）。目前仅 AtlasCloud gpt-image-1。 */
   supportMaskEdit?: boolean
   fieldI18n?: CapabilityFieldI18nMap
@@ -97,6 +99,7 @@ const IMAGE_ALLOWED_FIELDS = new Set<keyof ImageCapabilities>([
   'aspectRatioOptions',
   'supportNegativePrompt',
   'supportReferenceImage',
+  'supportSeed',
   'supportMaskEdit',
   'fieldI18n',
 ])
@@ -325,6 +328,14 @@ function validateImageCapabilities(issues: CapabilityValidationIssue[], raw: unk
       code: 'CAPABILITY_FIELD_INVALID',
       field: 'capabilities.image.supportReferenceImage',
       message: 'supportReferenceImage must be boolean',
+    })
+  }
+
+  if (raw.supportSeed !== undefined && typeof raw.supportSeed !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.image.supportSeed',
+      message: 'supportSeed must be boolean',
     })
   }
 

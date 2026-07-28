@@ -56,7 +56,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
         v2Final,
         v2Subjects,
         v2Storyboard,
-        playground
+        playground,
+        visualDevelopment
     ] = await Promise.all([
         import(`../messages/${locale}/common.json`),
         import(`../messages/${locale}/stages.json`),
@@ -97,7 +98,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
         import(`../messages/${locale}/v2Final.json`),
         import(`../messages/${locale}/v2Subjects.json`),
         import(`../messages/${locale}/v2Storyboard.json`),
-        import(`../messages/${locale}/playground.json`)
+        import(`../messages/${locale}/playground.json`),
+        import(`../messages/${locale}/visualDevelopment.json`)
     ]);
 
     return {
@@ -142,7 +144,8 @@ export default getRequestConfig(async ({ requestLocale }) => {
             v2Final: v2Final.default,
             v2Subjects: v2Subjects.default,
             v2Storyboard: v2Storyboard.default,
-            playground: playground.default
+            playground: playground.default,
+            visualDevelopment: visualDevelopment.default
         }
     };
 });

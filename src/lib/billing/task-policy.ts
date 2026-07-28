@@ -53,6 +53,7 @@ const BILLABLE_TASK_TYPES = new Set<TaskType>([
   TASK_TYPE.ASSET_HUB_REFERENCE_TO_CHARACTER,
   TASK_TYPE.VIDEO_MULTI_SHOT,
   TASK_TYPE.PLAYGROUND_IMAGE,
+  TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE,
   TASK_TYPE.PLAYGROUND_VIDEO,
   TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE,
   TASK_TYPE.CANVAS_STORYBOARD,
@@ -269,6 +270,7 @@ export function buildDefaultTaskBillingInfo(taskType: TaskType, payload: AnyPayl
     case TASK_TYPE.PLAYGROUND_VIDEO:
       return buildVideoTaskInfo(taskType, payload)
     case TASK_TYPE.PLAYGROUND_IMAGE:
+    case TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE:
       return buildImageTaskInfo(taskType, payload)
     case TASK_TYPE.LIP_SYNC: {
       const lipSyncModel = pickFirstString([payload?.lipSyncModel]) || 'kling'

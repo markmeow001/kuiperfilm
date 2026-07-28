@@ -21,6 +21,8 @@
     "canvasLabel": "无限画布",
     "playground": "创作",
     "playgroundLabel": "创作 Playground",
+    "visualDevelopment": "角色",
+    "visualDevelopmentLabel": "角色視覺開發",
     "composite": "重制",
     "compositeLabel": "AI 实拍重制",
     "skills": "技能",
@@ -60,6 +62,11 @@
       "title": "自由创作 Playground",
       "description": "不建立完整专案，直接用图片、影片和参考素材快速实验想法。",
       "meta": "QUICK CREATE"
+    },
+    "visualDevelopment": {
+      "title": "角色視覺開發",
+      "description": "從世界 Bible、Casting 與 Face Lock，一路建立可供電影製作使用的角色 Canon。",
+      "meta": "CASTING → CANON"
     }
   },
   "grid": {

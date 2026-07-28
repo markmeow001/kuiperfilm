@@ -52,6 +52,7 @@ const TASK_TYPE_OWNER_MAP = {
   [TASK_TYPE.EPISODE_STITCH_MP4]: 'tests/unit/worker/episode-package-zip.test.ts',
   [TASK_TYPE.REGISTER_ARK_ASSET]: 'tests/unit/worker/register-ark-asset.test.ts',
   [TASK_TYPE.PLAYGROUND_IMAGE]: 'tests/unit/worker/playground-task-handler.test.ts',
+  [TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE]: 'tests/unit/worker/visual-development-image-task.test.ts',
   [TASK_TYPE.PLAYGROUND_VIDEO]: 'tests/unit/worker/playground-task-handler.test.ts',
   [TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE]: 'tests/unit/worker/playground-video-analyze.test.ts',
   [TASK_TYPE.CANVAS_STORYBOARD]: 'tests/unit/worker/canvas-storyboard-handler.test.ts',

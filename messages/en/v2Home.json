@@ -21,6 +21,8 @@
     "canvasLabel": "Infinite Canvas",
     "playground": "Create",
     "playgroundLabel": "Creative Playground",
+    "visualDevelopment": "Characters",
+    "visualDevelopmentLabel": "Character Visual Development",
     "composite": "Remake",
     "compositeLabel": "AI Live-Action Remake",
     "skills": "Skills",
@@ -60,6 +62,11 @@
       "title": "Creative Playground",
       "description": "Experiment quickly with images, video, and references without setting up a full project.",
       "meta": "QUICK CREATE"
+    },
+    "visualDevelopment": {
+      "title": "Character Visual Development",
+      "description": "Build production-ready character canon from the World Bible, casting, and identity lock.",
+      "meta": "CASTING → CANON"
     }
   },
   "grid": {

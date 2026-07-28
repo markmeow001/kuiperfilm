@@ -88,6 +88,7 @@ export const TASK_TYPE = {
   // bespoke PlaygroundRun path. projectId is the synthetic 'playground'
   // sentinel (no FK on Task.projectId; already in billing VIRTUAL_PROJECT_IDS).
   PLAYGROUND_IMAGE: 'playground_image',
+  VISUAL_DEVELOPMENT_IMAGE: 'visual_development_image',
   PLAYGROUND_VIDEO: 'playground_video',
   PLAYGROUND_VIDEO_ANALYZE: 'playground_video_analyze',
   // Canvas 无限画布 script node — pasted/wired script → LLM → array of

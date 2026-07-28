@@ -241,6 +241,8 @@ const ROUTE_FILES = [
   'src/app/api/user/models/route.ts',
   'src/app/api/user/project-state/[projectId]/route.ts',
   'src/app/api/user/transactions/route.ts',
+  'src/app/api/visual-development/[projectId]/route.ts',
+  'src/app/api/visual-development/[projectId]/face-bible/route.ts',
   'src/app/api/workspaces/[workspaceId]/addable-users/route.ts',
   'src/app/api/workspaces/[workspaceId]/api-keys/[keyId]/route.ts',
   'src/app/api/workspaces/[workspaceId]/api-keys/[keyId]/usage/route.ts',

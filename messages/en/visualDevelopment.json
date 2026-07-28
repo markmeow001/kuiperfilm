@@ -1,0 +1,217 @@
+{
+  "header": {
+    "back": "Back to projects",
+    "eyebrow": "VISUAL DEVELOPMENT",
+    "system": "CHARACTER CANON SYSTEM",
+    "title": "Character Visual Development",
+    "project": "Bind project",
+    "noProject": "No project selected",
+    "preview": "CASTING BETA"
+  },
+  "rail": {
+    "title": "Development phases",
+    "groups": {
+      "foundation": "01 · WORLD FOUNDATION",
+      "identity": "02 · CHARACTER IDENTITY",
+      "design": "03 · DESIGN LANGUAGE",
+      "production": "04 · FILM PRODUCTION"
+    }
+  },
+  "workspace": {
+    "objective": "OBJECTIVE",
+    "deliverables": "DELIVERABLES",
+    "approvalGate": "APPROVAL GATE",
+    "previewNotice": "INTERFACE PREVIEW",
+    "casting": {
+      "batch": "CASTING BATCH",
+      "model": "MODEL",
+      "notConnected": "Not connected",
+      "count": "OUTPUT",
+      "ratio": "RATIO",
+      "generate": "Generate {count}",
+      "waiting": "AWAITING GENERATION",
+      "seedPending": "SEED —",
+      "seedUnsupported": "SEED UNSUPPORTED",
+      "seedApplied": "SEED BOUND",
+      "candidate": "Candidate",
+      "projectSetup": "WORLD BIBLE × CHARACTER DNA",
+      "worldPremise": "World / story premise",
+      "visualThesis": "Visual and emotional thesis",
+      "characterName": "Character name",
+      "characterCode": "Character code",
+      "characterRole": "Character role",
+      "coreTraits": "Core traits",
+      "apparentAge": "Apparent age (21+ required)",
+      "ethnicity": "Ethnicity and cultural background",
+      "faceStructure": "Facial structure and identifiers",
+      "emotionalRead": "First emotional read",
+      "lifeHistory": "Life history visible in the face",
+      "resolution": "Model default resolution",
+      "modelBinding": "IMAGE MODEL BINDING",
+      "generateHint": "Every candidate records the actual model, provider, prompt, dimensions, and seed support. A seed is not identity; the selected face becomes the Canon reference.",
+      "shortlist": "Shortlist",
+      "canonLock": "Lock",
+      "canonLocked": "Locked",
+      "generating": "Submitting…",
+      "generateFailed": "Unable to create the casting batch",
+      "actionFailed": "Unable to update the candidate"
+    },
+    "face": {
+      "canonSource": "IDENTITY REFERENCE · CANON",
+      "canonRequired": "Lock a Casting choice before starting Face Bible",
+      "identityRecord": "FACE LOCK RECORD",
+      "identityAnchors": "Identity anchors: face shape, eye spacing, nose, mouth, jaw, hairline and natural asymmetry",
+      "allowedVariation": "Allowed variation",
+      "forbiddenDrift": "Forbidden drift",
+      "modelBinding": "Reference-image model binding",
+      "referenceOnly": "The Canon image defines identity only",
+      "modelRequired": "Choose a reference-capable model",
+      "resolution": "Resolution",
+      "aspectRatio": "Aspect ratio",
+      "generate": "Generate 10 Face Bible assets",
+      "generating": "Submitting…",
+      "waiting": "AWAITING FACE LOCK",
+      "approve": "Approve",
+      "approved": "Approved",
+      "reject": "Reject",
+      "rejectionPrompt": "Describe the rejection, such as nose drift, age change, or a different identity.",
+      "lock": "Lock Face Bible",
+      "locked": "Face Bible locked",
+      "lockHint": "All ten assets must complete and pass individual review before a formal FACE ID can be created. Rejected assets require a new batch.",
+      "modelHint": "Only enabled models with declared reference-image support are listed. A seed is recorded but never treated as identity.",
+      "seedUnsupported": "SEED N/A",
+      "generateFailed": "Failed to create Face Bible batch",
+      "reviewFailed": "Face Bible review failed",
+      "lockFailed": "Face Bible is not ready to lock"
+    },
+    "board": {
+      "title": "Stage asset board",
+      "description": "Once upstream canon is approved, this board will load the relevant prompts, references, and review state.",
+      "addReference": "Add reference",
+      "emptySlot": "EMPTY SLOT"
+    }
+  },
+  "inspector": {
+    "title": "Development control",
+    "canon": "CANON CONTROL",
+    "promptStack": "PROMPT STACK",
+    "worldBible": "World Bible",
+    "characterDna": "Character DNA",
+    "stageTemplate": "Stage prompt template",
+    "modelAdapter": "Model adapter",
+    "empty": "Empty",
+    "loaded": "Loaded",
+    "notConnected": "Offline",
+    "seedRegistry": "SEED REGISTRY",
+    "lockPolicy": "Canon Lock",
+    "lockPolicyDescription": "Only assets approved in the current phase can become the single source of truth for the next phase.",
+    "recordNotice": "The connected version will record model version, seed, dimensions, prompt, and references."
+  },
+  "stages": {
+    "research": {
+      "title": "Reference Research",
+      "shortTitle": "Research",
+      "objective": "Build credible references for the character, period, materials, culture, and cinematic language before designing.",
+      "deliverables": ["Actor and facial reference board", "Costume and material research", "Film still and color references", "Cultural and symbol research"],
+      "gate": "References are traceable, coherent, and clearly support the character and world."
+    },
+    "world": {
+      "title": "World Bible",
+      "shortTitle": "World Bible",
+      "objective": "Define the color, material, architecture, faction, and technology rules shared by every character.",
+      "deliverables": ["World design formula", "Faction color system", "Material and aging rules", "Architecture, symbols, and exclusions"],
+      "gate": "The world rules can constrain downstream prompts and identify designs that do not belong in the film."
+    },
+    "casting": {
+      "title": "Casting",
+      "shortTitle": "Casting",
+      "objective": "Select the face that can carry the role without costume, accessories, abilities, or a dramatic setting.",
+      "deliverables": ["10 standardized casting portraits", "Seed and model record per candidate", "Three-person shortlist", "Final casting rationale"],
+      "gate": "One distinctive face remains stable across angles and can carry the character's emotional range."
+    },
+    "face": {
+      "title": "Face Bible and Identity Lock",
+      "shortTitle": "Face Bible",
+      "objective": "Turn the selected face into an identity standard that survives changes in angle, expression, and lens.",
+      "deliverables": ["Front and three-quarter views", "Full profile and back view", "Skin, eye, nose, lip, and ear detail", "Primary identity reference"],
+      "gate": "Every view reads as the same person without age, ethnicity, or facial proportion drift."
+    },
+    "hair": {
+      "title": "Hair Design",
+      "shortTitle": "Hair",
+      "objective": "Keep identity fixed while exploring hairstyles that support arc, class, and story state.",
+      "deliverables": ["Core hairstyle tests", "Formal variation", "Escape or battle-worn variation", "Hair structure and material board"],
+      "gate": "Core and story variants are clear without changing the locked facial identity."
+    },
+    "costume": {
+      "title": "Costume Design",
+      "shortTitle": "Costume",
+      "objective": "Create silhouette, function, and material history from the World Bible and character arc.",
+      "deliverables": ["Three costume directions", "Front and back construction", "Material and wear notes", "Final costume canon"],
+      "gate": "Silhouette, function, class, and material origin are explainable and obey world rules."
+    },
+    "accessory": {
+      "title": "Accessories and Signature Props",
+      "shortTitle": "Props",
+      "objective": "Build icons, accessories, weapons, and carry items that identify the character independently.",
+      "deliverables": ["Signature character icon", "Accessory and jewelry board", "Weapon or functional prop", "Scale and placement reference"],
+      "gate": "Every prop has a story or functional reason beyond decoration."
+    },
+    "silhouette": {
+      "title": "Silhouette Validation",
+      "shortTitle": "Silhouette",
+      "objective": "Test whether the character remains uniquely identifiable without face or material detail.",
+      "deliverables": ["Front black silhouette", "Profile and action silhouettes", "Cast lineup comparison", "Silhouette revision record"],
+      "gate": "Characters do not merge in a lineup and remain readable in wide shots and backlight."
+    },
+    "expression": {
+      "title": "Cinematic Expression",
+      "shortTitle": "Expression",
+      "objective": "Design playable emotions around story beats rather than generic happy, sad, angry, and afraid poses.",
+      "deliverables": ["Core expression set", "Restraint and vigilance", "Story-turn emotions", "Extreme-emotion identity test"],
+      "gate": "Emotion is credible while actor identity remains stable without beautification or facial drift."
+    },
+    "ability": {
+      "title": "Ability and VFX Language",
+      "shortTitle": "Ability",
+      "objective": "Break powers into filmable, generatable visual rules and progressive states.",
+      "deliverables": ["Ability activation", "Ability material and color", "Action or influence method", "Forbidden effects and failure state"],
+      "gate": "The ability fits character, world rules, and cinematography and can be divided into shots."
+    },
+    "hero": {
+      "title": "Hero Shot",
+      "shortTitle": "Hero Shot",
+      "objective": "Combine the locked face, hair, costume, props, and ability into a definitive cinematic image.",
+      "deliverables": ["White-background hero design", "In-world hero shot", "Vertical campaign composition", "Lighting and color test"],
+      "gate": "All locked assets are integrated correctly and the frame communicates role and tone."
+    },
+    "turnaround": {
+      "title": "Character Turnaround",
+      "shortTitle": "Turnaround",
+      "objective": "Create the shared character standard used by modeling, generation, and the production team.",
+      "deliverables": ["Front, side, and back", "Three-quarter view", "Material and color callouts", "Prop and scale reference"],
+      "gate": "The sheet has no view contradictions and is sufficient as the official downstream reference."
+    },
+    "evolution": {
+      "title": "Costume Evolution",
+      "shortTitle": "Evolution",
+      "objective": "Map costume, hair, injuries, and prop continuity across the story timeline.",
+      "deliverables": ["Introduction look", "Mid-story state", "Turn or betrayal variation", "Finale look"],
+      "gate": "Every change maps to a story event with explicit continuity rules between shots."
+    },
+    "integration": {
+      "title": "Scene Integration and Lighting",
+      "shortTitle": "Integration",
+      "objective": "Place the approved character in key scenes to test scale, color temperature, materials, and faction readability.",
+      "deliverables": ["Key scene composites", "Day, night, and color tests", "Ensemble and scale validation", "Reflections and contact shadows"],
+      "gate": "The character belongs in the scene and keeps stable materials, skin tone, and identity."
+    },
+    "video": {
+      "title": "Video Bible",
+      "shortTitle": "Video Bible",
+      "objective": "Define motion, performance, camera, and consistency references before entering video models.",
+      "deliverables": ["Walk, run, sit, and turn", "Dialogue and lip-sync reference", "Ability and combat motion", "Camera, model, and failure records"],
+      "gate": "Face, costume, body, performance, and physics remain coherent across continuous shots."
+    }
+  }
+}

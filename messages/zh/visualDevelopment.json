@@ -1,0 +1,217 @@
+{
+  "header": {
+    "back": "返回專案首頁",
+    "eyebrow": "VISUAL DEVELOPMENT",
+    "system": "CHARACTER CANON SYSTEM",
+    "title": "角色視覺開發",
+    "project": "綁定專案",
+    "noProject": "尚未選擇專案",
+    "preview": "CASTING BETA"
+  },
+  "rail": {
+    "title": "開發階段",
+    "groups": {
+      "foundation": "01 · 世界基礎",
+      "identity": "02 · 角色身分",
+      "design": "03 · 造型語言",
+      "production": "04 · 電影製作"
+    }
+  },
+  "workspace": {
+    "objective": "OBJECTIVE",
+    "deliverables": "DELIVERABLES",
+    "approvalGate": "APPROVAL GATE",
+    "previewNotice": "介面預覽",
+    "casting": {
+      "batch": "CASTING BATCH",
+      "model": "MODEL",
+      "notConnected": "尚未連接",
+      "count": "OUTPUT",
+      "ratio": "RATIO",
+      "generate": "生成 {count} 張",
+      "waiting": "AWAITING GENERATION",
+      "seedPending": "SEED —",
+      "seedUnsupported": "SEED 不支援",
+      "seedApplied": "SEED 已綁定",
+      "candidate": "候選",
+      "projectSetup": "WORLD BIBLE × CHARACTER DNA",
+      "worldPremise": "世界／故事核心",
+      "visualThesis": "視覺與情緒命題",
+      "characterName": "角色名稱",
+      "characterCode": "角色代碼",
+      "characterRole": "角色定位",
+      "coreTraits": "核心性格",
+      "apparentAge": "外觀年齡（須 21+）",
+      "ethnicity": "族裔與文化背景",
+      "faceStructure": "臉部骨相與辨識特徵",
+      "emotionalRead": "第一眼情緒",
+      "lifeHistory": "臉上可讀出的生命經歷",
+      "resolution": "模型預設尺寸",
+      "modelBinding": "生圖模型綁定",
+      "generateHint": "每一張候選圖會保存實際模型、Provider、Prompt、尺寸與 Seed 支援狀態；Seed 不是角色身分，選定後仍會以 Canon 參考圖鎖定演員臉。",
+      "shortlist": "短名單",
+      "canonLock": "定角",
+      "canonLocked": "已定角",
+      "generating": "送出中…",
+      "generateFailed": "Casting 批次建立失敗",
+      "actionFailed": "候選操作失敗"
+    },
+    "face": {
+      "canonSource": "IDENTITY REFERENCE · CANON",
+      "canonRequired": "請先在 Casting 階段完成定角",
+      "identityRecord": "FACE LOCK RECORD",
+      "identityAnchors": "身分錨點：臉型、眼距、鼻型、嘴型、下顎、髮際線與自然不對稱",
+      "allowedVariation": "允許變化",
+      "forbiddenDrift": "禁止漂移",
+      "modelBinding": "參考圖生圖模型綁定",
+      "referenceOnly": "Canon 圖僅負責角色身分",
+      "modelRequired": "選擇支援參考圖的模型",
+      "resolution": "尺寸",
+      "aspectRatio": "畫幅",
+      "generate": "生成 Face Bible 10 張",
+      "generating": "送出中…",
+      "waiting": "AWAITING FACE LOCK",
+      "approve": "通過",
+      "approved": "已通過",
+      "reject": "退回",
+      "rejectionPrompt": "請寫下退回原因，例如：鼻型漂移、年齡變化或不像同一人。",
+      "lock": "鎖定 Face Bible",
+      "locked": "Face Bible 已鎖定",
+      "lockHint": "十項資產都完成並逐張通過後，才能建立正式 FACE ID；任何退回項目都必須重新生成新批次。",
+      "modelHint": "系統只列出已啟用且明確支援參考圖的模型；Seed 只作生成紀錄，不視為身分鎖定。",
+      "seedUnsupported": "SEED N/A",
+      "generateFailed": "Face Bible 批次建立失敗",
+      "reviewFailed": "Face Bible 資產審核失敗",
+      "lockFailed": "Face Bible 尚未符合鎖定條件"
+    },
+    "board": {
+      "title": "階段資產工作板",
+      "description": "上游 Canon 確認後，這裡會載入對應的提示詞、參考素材與審核狀態。",
+      "addReference": "加入參考素材",
+      "emptySlot": "EMPTY SLOT"
+    }
+  },
+  "inspector": {
+    "title": "開發控制",
+    "canon": "CANON CONTROL",
+    "promptStack": "PROMPT STACK",
+    "worldBible": "世界觀 Bible",
+    "characterDna": "角色 DNA",
+    "stageTemplate": "階段 Prompt 模板",
+    "modelAdapter": "模型轉譯層",
+    "empty": "空白",
+    "loaded": "已載入",
+    "notConnected": "未連接",
+    "seedRegistry": "SEED REGISTRY",
+    "lockPolicy": "Canon Lock",
+    "lockPolicyDescription": "只有通過當前階段審核的資產，才能成為下一階段的唯一參考來源。",
+    "recordNotice": "正式串接後會同步記錄模型版本、Seed、尺寸、Prompt 與參考圖。"
+  },
+  "stages": {
+    "research": {
+      "title": "參考考據與視覺研究",
+      "shortTitle": "參考考據",
+      "objective": "建立角色、時代、材質、文化與電影語言的可信參考，先定義創作邊界。",
+      "deliverables": ["演員與臉型參考板", "服裝與材質研究", "電影劇照與色彩參考", "文化與符號考據"],
+      "gate": "參考來源可追溯、彼此不衝突，且能清楚支撐角色與世界觀。"
+    },
+    "world": {
+      "title": "世界觀 Bible",
+      "shortTitle": "世界 Bible",
+      "objective": "建立所有人物共同遵守的色彩、材質、建築、陣營與科技規則。",
+      "deliverables": ["世界核心公式", "陣營色彩系統", "材質與老化規則", "建築、符號與禁用項目"],
+      "gate": "世界規則足以約束後續 Prompt，並能辨識哪些設計不屬於本片。"
+    },
+    "casting": {
+      "title": "Casting 選角",
+      "shortTitle": "Casting",
+      "objective": "只選擇能承載角色的演員臉，不加入造型、飾品、能力或戲劇場景。",
+      "deliverables": ["10 張同規格候選人像", "每張候選 Seed 與模型紀錄", "3 位短名單候選", "最終演員選定理由"],
+      "gate": "選定一張具辨識度、跨角度穩定，且能承載角色情緒的演員臉。"
+    },
+    "face": {
+      "title": "Face Bible 與身分鎖定",
+      "shortTitle": "Face Bible",
+      "objective": "將選定的演員臉發展成可跨角度、表情與鏡頭保持一致的身分標準。",
+      "deliverables": ["正面與 3/4 視角", "完整側面與背面", "皮膚、眼鼻唇耳細節", "Identity Reference 主圖"],
+      "gate": "不同視角仍可被辨識為同一人，年齡、族裔與五官比例沒有漂移。"
+    },
+    "hair": {
+      "title": "髮型設計",
+      "shortTitle": "髮型",
+      "objective": "固定臉部身分，只探索能支撐角色弧線、階級與劇情狀態的髮型。",
+      "deliverables": ["基礎髮型測試", "正式場合版本", "逃亡或戰損版本", "髮型結構與材質板"],
+      "gate": "主髮型與劇情版本清楚，且不改變已鎖定的臉部身分。"
+    },
+    "costume": {
+      "title": "服裝設計",
+      "shortTitle": "服裝",
+      "objective": "以世界 Bible 和角色弧線為基礎，建立具有剪影、功能與材質故事的服裝。",
+      "deliverables": ["三套服裝方向", "正反面結構", "材質與磨損說明", "最終 Costume Canon"],
+      "gate": "輪廓、功能、階級與材質來源都能被解釋，並符合世界規則。"
+    },
+    "accessory": {
+      "title": "配件與標誌性道具",
+      "shortTitle": "配件道具",
+      "objective": "建立可獨立辨識角色的 Icon、配件、武器與日常攜帶物。",
+      "deliverables": ["角色標誌性 Icon", "配件與珠寶板", "武器或功能道具", "尺寸與佩戴位置"],
+      "gate": "每件配件都有劇情或功能理由，不只是裝飾。"
+    },
+    "silhouette": {
+      "title": "Silhouette 剪影驗證",
+      "shortTitle": "剪影",
+      "objective": "在沒有臉部與材質的條件下，驗證角色輪廓是否仍具唯一辨識度。",
+      "deliverables": ["正面全黑剪影", "側面與動態剪影", "角色群組對比", "輪廓修正記錄"],
+      "gate": "主角群同框時不會混淆，遠景與逆光畫面仍能辨識角色。"
+    },
+    "expression": {
+      "title": "電影情緒與表情",
+      "shortTitle": "表情",
+      "objective": "以劇情節點建立可演出的細微情緒，而不是通用的笑、怒、哀、樂。",
+      "deliverables": ["基礎表情組", "壓抑與警覺", "劇情轉折情緒", "極端情緒一致性測試"],
+      "gate": "情緒變化可信且仍保持同一演員身分，不出現美顏或臉型漂移。"
+    },
+    "ability": {
+      "title": "能力與視覺特效語言",
+      "shortTitle": "能力",
+      "objective": "把角色能力拆成可拍攝、可生成、可延續的視覺規則與階段。",
+      "deliverables": ["能力啟動狀態", "能力材質與色彩", "攻擊或作用方式", "禁用效果與失控狀態"],
+      "gate": "能力能與角色、世界規則和攝影語言一致，並可拆分為影片鏡頭。"
+    },
+    "hero": {
+      "title": "Hero Shot",
+      "shortTitle": "Hero Shot",
+      "objective": "整合已鎖定的臉、髮型、服裝、配件與能力，建立角色代表性電影畫面。",
+      "deliverables": ["白底角色主視覺", "世界場景 Hero Shot", "直式宣傳構圖", "燈光與色彩測試"],
+      "gate": "所有已鎖定資產正確整合，畫面能清楚傳達角色定位與電影調性。"
+    },
+    "turnaround": {
+      "title": "Turnaround 角色設定板",
+      "shortTitle": "Turnaround",
+      "objective": "整理可供建模、後續生成與製作團隊共同引用的角色標準設定。",
+      "deliverables": ["正面、側面、背面", "3/4 視角", "材質與配色標註", "配件與比例參考"],
+      "gate": "設定板無視角矛盾，足以作為所有下游資產的正式基準。"
+    },
+    "evolution": {
+      "title": "電影服裝演化",
+      "shortTitle": "造型演化",
+      "objective": "依照劇情時間線設計服裝、髮型、傷勢與道具的連續變化。",
+      "deliverables": ["初登場造型", "中段狀態", "轉折或背叛版本", "Finale 最終造型"],
+      "gate": "每次改變都對應劇情事件，且鏡頭之間具備明確連戲規則。"
+    },
+    "integration": {
+      "title": "場景整合與燈光測試",
+      "shortTitle": "場景整合",
+      "objective": "把已定稿角色放入主要場景，驗證比例、色溫、材質與陣營辨識。",
+      "deliverables": ["主要場景合成", "日夜與色溫測試", "群像與尺度驗證", "環境反光與接觸陰影"],
+      "gate": "角色不會像貼圖，並能在不同環境中維持材質、膚色與身分一致。"
+    },
+    "video": {
+      "title": "Video Bible",
+      "shortTitle": "Video Bible",
+      "objective": "建立角色進入影片模型前的動作、表演、鏡頭與一致性參考。",
+      "deliverables": ["走、跑、坐與轉身", "對話與口型參考", "能力與戰鬥動作", "鏡頭、模型與失敗案例紀錄"],
+      "gate": "角色能在連續鏡頭中維持臉、服裝、身形、表演與物理連貫性。"
+    }
+  }
+}

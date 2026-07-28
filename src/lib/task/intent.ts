@@ -67,6 +67,7 @@ const TASK_INTENT_BY_TYPE: Record<TaskType, TaskIntent> = {
   // a registration side-effect, not content generation.
   [TASK_TYPE.REGISTER_ARK_ASSET]: 'process',
   [TASK_TYPE.PLAYGROUND_IMAGE]: 'generate',
+  [TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE]: 'generate',
   [TASK_TYPE.PLAYGROUND_VIDEO]: 'generate',
   [TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE]: 'analyze',
   [TASK_TYPE.CANVAS_STORYBOARD]: 'build',

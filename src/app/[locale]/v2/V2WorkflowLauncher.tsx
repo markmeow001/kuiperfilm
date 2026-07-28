@@ -53,6 +53,14 @@ export function V2WorkflowLauncher({ locale }: V2WorkflowLauncherProps) {
       meta: t('playground.meta'),
       accentClass: 'bg-accent-500 text-white',
     },
+    {
+      href: `/${locale}/visual-development`,
+      icon: 'brain',
+      title: t('visualDevelopment.title'),
+      description: t('visualDevelopment.description'),
+      meta: t('visualDevelopment.meta'),
+      accentClass: 'bg-primary-500 text-black',
+    },
   ]
 
   return (
@@ -74,7 +82,7 @@ export function V2WorkflowLauncher({ locale }: V2WorkflowLauncherProps) {
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {items.map((item) => (
           <Link
             key={item.href}

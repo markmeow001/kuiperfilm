@@ -17,6 +17,7 @@
 import type { Job } from 'bullmq'
 import { generateImage } from '@/lib/generator-api'
 import type { TaskJobData } from '@/lib/task/types'
+import { TASK_TYPE } from '@/lib/task/types'
 import { uploadImageSourceToCos, waitExternalResult, toSignedUrlIfCos } from '../utils'
 import { logInfo as _ulogInfo, logError as _ulogError } from '@/lib/logging/core'
 
@@ -51,6 +52,10 @@ export async function handlePlaygroundImageTask(
   const referenceText = typeof payload.referenceText === 'string' ? payload.referenceText : ''
   const resolution = typeof payload.resolution === 'string' ? payload.resolution : null
   const aspectRatio = typeof payload.aspectRatio === 'string' ? payload.aspectRatio : null
+  const negativePrompt = typeof payload.negativePrompt === 'string' ? payload.negativePrompt : null
+  const seed = typeof payload.seed === 'number' && Number.isInteger(payload.seed)
+    ? payload.seed
+    : null
 
   const refImageKeys = parseStringArray(payload.referenceImages)
   const signedImageUrls = refImageKeys.map((k) => toSignedUrlIfCos(k, 7200) ?? k)
@@ -73,6 +78,8 @@ export async function handlePlaygroundImageTask(
     ...(maskImageUrl ? { maskImage: maskImageUrl } : {}),
     ...(aspectRatio ? { aspectRatio } : {}),
     ...(resolution ? { resolution } : {}),
+    ...(negativePrompt ? { negativePrompt } : {}),
+    ...(seed !== null ? { seed } : {}),
   })
 
   if (!result.success) {
@@ -102,7 +109,10 @@ export async function handlePlaygroundImageTask(
 
   // Download + persist to our COS/R2 so the client loads it from our own
   // (CSP-allowed) storage with a predictable lifetime.
-  const cosKey = await uploadImageSourceToCos(sourceUrl, `playground-runs/${taskId}`, taskId)
+  const storageFolder = job.data.type === TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE
+    ? 'visual-development'
+    : 'playground-runs'
+  const cosKey = await uploadImageSourceToCos(sourceUrl, `${storageFolder}/${taskId}`, taskId)
 
   _ulogInfo(`[playground-image] success taskId=${taskId} cosKey=${cosKey}`)
 

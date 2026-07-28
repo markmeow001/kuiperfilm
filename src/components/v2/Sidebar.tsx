@@ -13,7 +13,7 @@ interface SidebarProps {
 
 interface UtilityLink {
   href: string
-  icon: 'image' | 'sparklesAlt' | 'video'
+  icon: 'image' | 'sparklesAlt' | 'brain' | 'video'
   label: string
 }
 
@@ -26,6 +26,7 @@ export function Sidebar({ currentStep, onSelect, locale = 'zh' }: SidebarProps) 
   const utilityLinks: UtilityLink[] = [
     { href: `/${locale}/canvas`, icon: 'image', label: '無限畫布' },
     { href: `/${locale}/playground`, icon: 'sparklesAlt', label: 'Playground' },
+    { href: `/${locale}/visual-development`, icon: 'brain', label: '角色視覺開發' },
     { href: `/${locale}/live-composite`, icon: 'video', label: 'AI 實拍重製' },
   ]
 
