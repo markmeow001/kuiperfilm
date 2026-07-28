@@ -45,6 +45,14 @@
  * reference is present. (Previously refs were silently dropped because we
  * always used the t2i slug — that produced unrelated images for the
  * canvas "720 from an uploaded photo" flow.)
+ *
+ * 2026-07-27 — FLUX 系列 (Black Forest Labs, 7 logical models) 接入。
+ * Slug 全部经 schema CDN 验证（flat 命名 black-forest-labs-flux-*.json）：
+ *   - flux-2-pro / flux-2-flex / flux-2-dev: /text-to-image + /edit，
+ *     star-separated `size`，edit 吃 `images: string[]`（多图 OK）
+ *   - flux-kontext-pro / flux-kontext-max: t2i 有后缀；edit 是 BARE slug，
+ *     schema 只声明单张 `image: string`（>1 张显式拒绝）
+ *   - flux-1.1-pro / flux-1.1-pro-ultra: BARE slug，t2i only（无 edit 变体）
  */
 
 import { BaseImageGenerator, type ImageGenerateParams, type GenerateResult } from '../base'
@@ -82,6 +90,16 @@ const ATLASCLOUD_IMAGE_MODEL_MAP: Record<string, string> = {
   'z-image-turbo': 'z-image/turbo',
   'grok-imagine-image': 'xai/grok-imagine-image/text-to-image',
   'grok-imagine-image-quality': 'xai/grok-imagine-image-quality/text-to-image',
+  // 2026-07-27 — FLUX 系列 (Black Forest Labs)。Slug 逐一以 schema CDN 验证:
+  // flux-2 家族与 kontext t2i 走 /text-to-image 后缀；flux-1.1 两款是 BARE
+  // slug（无后缀、t2i only）。kontext 的 edit 变体也是 BARE slug（见 edit map）。
+  'flux-2-pro': 'black-forest-labs/flux-2-pro/text-to-image',
+  'flux-2-flex': 'black-forest-labs/flux-2-flex/text-to-image',
+  'flux-2-dev': 'black-forest-labs/flux-2-dev/text-to-image',
+  'flux-kontext-pro': 'black-forest-labs/flux-kontext-pro/text-to-image',
+  'flux-kontext-max': 'black-forest-labs/flux-kontext-max/text-to-image',
+  'flux-1.1-pro': 'black-forest-labs/flux-1.1-pro',
+  'flux-1.1-pro-ultra': 'black-forest-labs/flux-1.1-pro-ultra',
 }
 
 /** img2img (`/edit`) counterparts — used when referenceImages are present.
@@ -96,10 +114,17 @@ const ATLASCLOUD_IMAGE_EDIT_MODEL_MAP: Record<string, string> = {
   'nano-banana-2': 'google/nano-banana-2/edit',
   'grok-imagine-image': 'xai/grok-imagine-image/edit',
   'grok-imagine-image-quality': 'xai/grok-imagine-image-quality/edit',
+  'flux-2-pro': 'black-forest-labs/flux-2-pro/edit',
+  'flux-2-flex': 'black-forest-labs/flux-2-flex/edit',
+  'flux-2-dev': 'black-forest-labs/flux-2-dev/edit',
+  // Kontext 的 image-edit endpoint 就是 BARE slug（schema 声明单张
+  // `image: string`，不是数组）——doGenerate 里对 >1 张参考图显式拒绝。
+  'flux-kontext-pro': 'black-forest-labs/flux-kontext-pro',
+  'flux-kontext-max': 'black-forest-labs/flux-kontext-max',
 }
 
 /** Logical ids that have no img2img variant at AtlasCloud. */
-const ATLASCLOUD_NO_EDIT_MODELS = new Set(['z-image-turbo'])
+const ATLASCLOUD_NO_EDIT_MODELS = new Set(['z-image-turbo', 'flux-1.1-pro', 'flux-1.1-pro-ultra'])
 
 /** Logical ids whose `/edit` schema declares `mask_image`（局部重绘）。
  *  Schema ground truth: static.atlascloud.ai/model/schema/openai-gpt-image-1-edit.json
@@ -296,6 +321,64 @@ export function normaliseGrokResolution(input: string | undefined): string | und
   return undefined
 }
 
+function isFlux2Slug(slug: string): boolean {
+  return slug.startsWith('black-forest-labs/flux-2-')
+}
+
+function isFluxKontextSlug(slug: string): boolean {
+  return slug.startsWith('black-forest-labs/flux-kontext-')
+}
+
+function isFlux11Slug(slug: string): boolean {
+  return slug.startsWith('black-forest-labs/flux-1.1-pro')
+}
+
+/** Kontext t2i aspect_ratio enum（schema 声明 9 值；与 nano-banana 同集合）。
+ *  只有 /text-to-image 变体有此字段——BARE edit slug 没有，不要发。 */
+const FLUX_KONTEXT_RATIO_ENUM = new Set([
+  '21:9',
+  '16:9',
+  '4:3',
+  '3:2',
+  '1:1',
+  '2:3',
+  '3:4',
+  '9:16',
+  '9:21',
+])
+
+/** Exported for unit testing (pure). 2:1（720全景）映射到最宽的 21:9。 */
+export function normaliseFluxKontextRatio(input: string | undefined): string | undefined {
+  if (!input) return undefined
+  if (FLUX_KONTEXT_RATIO_ENUM.has(input)) return input
+  if (input === '2:1') return '21:9'
+  return undefined
+}
+
+/** flux-1.1-pro / -ultra aspect_ratio enum（schema 只声明 5 值）。 */
+const FLUX_11_RATIO_ENUM = new Set(['1:1', '16:9', '9:16', '4:3', '3:4'])
+
+/** Exported for unit testing (pure). 枚举外的宽/竖幅向内收敛到最近值；
+ *  未知比例 → undefined（省略字段，模型默认 1:1）。 */
+export function normaliseFlux11Ratio(input: string | undefined): string | undefined {
+  if (!input) return undefined
+  if (FLUX_11_RATIO_ENUM.has(input)) return input
+  switch (input) {
+    case '21:9':
+    case '2:1':
+      return '16:9'
+    case '9:21':
+    case '1:2':
+      return '9:16'
+    case '3:2':
+      return '4:3'
+    case '2:3':
+      return '3:4'
+    default:
+      return undefined
+  }
+}
+
 interface AtlasCloudImageSubmitResponse {
   code?: number
   message?: string
@@ -336,7 +419,14 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     // No-edit models: reject refs explicitly (不隐式回退) — the generic edit-map
     // fallback would silently reroute the request to another model's /edit.
     if (useEdit && modelId && ATLASCLOUD_NO_EDIT_MODELS.has(modelId)) {
-      throw new Error(`${modelId} 不支持参考图（无 img2img 变体）：请移除参考图，或改用 Nano Banana / GPT Image 2 / Grok Imagine`)
+      throw new Error(`${modelId} 不支持参考图（无 img2img 变体）：请移除参考图，或改用 Nano Banana / GPT Image 2 / Grok Imagine / FLUX.2`)
+    }
+    // Kontext edit schema 只声明单张 `image: string` —— 多张参考图若只送第
+    // 一张就是静默丢图。显式拒绝，让用户自己决定留哪张（或换 FLUX.2 系列）。
+    if (useEdit && modelId && (modelId === 'flux-kontext-pro' || modelId === 'flux-kontext-max')) {
+      if (validRefs.length > 1) {
+        throw new Error(`${modelId} 只接受 1 张参考图：请只保留 1 张，或改用支持多图的 FLUX.2 / Nano Banana`)
+      }
     }
     // 局部重绘: a mask on a model whose schema has no mask_image would be
     // SILENTLY DROPPED by the gateway — the whole image would regenerate and
@@ -374,6 +464,8 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     if (useEdit) {
       if (isGrokImagineSlug(atlasModel)) body.image_urls = validRefs
       else if (isGptImage1Slug(atlasModel)) body.image = validRefs
+      // Kontext: 单张 string（>1 已在上面显式拒绝）。
+      else if (isFluxKontextSlug(atlasModel)) body.image = validRefs[0]
       else body.images = validRefs
     }
     if (trimmedMask) {
@@ -424,6 +516,22 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       const grokRes = normaliseGrokResolution(resolution)
       if (grokRes) body.resolution = grokRes
       body.num_images = 1
+    } else if (isFlux2Slug(atlasModel)) {
+      // FLUX.2 家族 (pro/flex/dev): 星号分隔自由 size（与 Z-Image 同约定），
+      // t2i 与 /edit schema 都声明 size。output_format 只有 pro/flex 有、dev
+      // 没有——统一不发（默认 jpeg），避免 dev 撞 400。
+      body.size = aspectRatioToZImageSize(aspectRatio)
+    } else if (isFluxKontextSlug(atlasModel)) {
+      // Kontext: 只有 /text-to-image 变体声明 aspect_ratio；BARE edit slug
+      // 的 schema 没有该字段（输出跟随底图），over-send 有 400 风险。
+      if (!useEdit) {
+        const ratio = normaliseFluxKontextRatio(aspectRatio)
+        if (ratio) body.aspect_ratio = ratio
+      }
+    } else if (isFlux11Slug(atlasModel)) {
+      // flux-1.1-pro / -ultra: 5 值 aspect_ratio 枚举，t2i only。
+      const ratio = normaliseFlux11Ratio(aspectRatio)
+      if (ratio) body.aspect_ratio = ratio
     }
 
     if (useEdit) {

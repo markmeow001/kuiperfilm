@@ -1576,6 +1576,152 @@
     }
   },
   {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-2-pro",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "2:1",
+          "21:9"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-2-flex",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "2:1",
+          "21:9"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-2-dev",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "2:1",
+          "21:9"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-kontext-pro",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9",
+          "9:21"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-kontext-max",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9",
+          "9:21"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": true
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-1.1-pro",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
+    "modelType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-1.1-pro-ultra",
+    "capabilities": {
+      "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "16:9",
+          "9:16",
+          "4:3",
+          "3:4"
+        ],
+        "supportNegativePrompt": false,
+        "supportReferenceImage": false
+      }
+    }
+  },
+  {
     "modelType": "video",
     "provider": "atlascloud",
     "modelId": "seedance-v1.5-pro",

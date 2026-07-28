@@ -6268,6 +6268,69 @@
     }
   },
   {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-2-pro",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.06
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-2-flex",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.15
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-2-dev",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.03
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-kontext-pro",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.04
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-kontext-max",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.08
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-1.1-pro",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.04
+    }
+  },
+  {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "flux-1.1-pro-ultra",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.06
+    }
+  },
+  {
     "apiType": "video",
     "provider": "atlascloud",
     "modelId": "seedance-v1.5-pro",

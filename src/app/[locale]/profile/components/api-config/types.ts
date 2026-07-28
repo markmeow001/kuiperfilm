@@ -128,6 +128,14 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'z-image-turbo', name: 'Z-Image Turbo (AtlasCloud · 極速廉價，無圖生圖)', type: 'image', provider: 'atlascloud' },
     { modelId: 'grok-imagine-image', name: 'Grok Imagine (AtlasCloud · xAI 標準)', type: 'image', provider: 'atlascloud' },
     { modelId: 'grok-imagine-image-quality', name: 'Grok Imagine Quality (AtlasCloud · xAI 高質)', type: 'image', provider: 'atlascloud' },
+    // 2026-07-27 — FLUX 系列 (Black Forest Labs)。slug 映射见 generators/image/atlascloud.ts。
+    { modelId: 'flux-2-pro', name: 'FLUX.2 Pro (AtlasCloud · BFL 旗艦，多參考圖)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'flux-2-flex', name: 'FLUX.2 Flex (AtlasCloud · 文字排版強)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'flux-2-dev', name: 'FLUX.2 Dev (AtlasCloud · 經濟)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'flux-kontext-pro', name: 'FLUX Kontext Pro (AtlasCloud · 指令改圖，單參考圖)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'flux-kontext-max', name: 'FLUX Kontext Max (AtlasCloud · 指令改圖高質)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'flux-1.1-pro', name: 'FLUX 1.1 Pro (AtlasCloud · 經典文生圖，無參考圖)', type: 'image', provider: 'atlascloud' },
+    { modelId: 'flux-1.1-pro-ultra', name: 'FLUX 1.1 Pro Ultra (AtlasCloud · 4MP 高清，無參考圖)', type: 'image', provider: 'atlascloud' },
     // 视频模型
     { modelId: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance 1.0 Pro Fast', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-0-lite-i2v-250428', name: 'Seedance 1.0 Lite', type: 'video', provider: 'ark' },
