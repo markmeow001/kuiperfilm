@@ -6331,6 +6331,15 @@
     }
   },
   {
+    "apiType": "image",
+    "provider": "atlascloud",
+    "modelId": "seedream-v5.0-lite",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.032
+    }
+  },
+  {
     "apiType": "video",
     "provider": "atlascloud",
     "modelId": "seedance-v1.5-pro",

@@ -136,6 +136,8 @@ export const PRESET_MODELS: PresetModel[] = [
     { modelId: 'flux-kontext-max', name: 'FLUX Kontext Max (AtlasCloud · 指令改圖高質)', type: 'image', provider: 'atlascloud' },
     { modelId: 'flux-1.1-pro', name: 'FLUX 1.1 Pro (AtlasCloud · 經典文生圖，無參考圖)', type: 'image', provider: 'atlascloud' },
     { modelId: 'flux-1.1-pro-ultra', name: 'FLUX 1.1 Pro Ultra (AtlasCloud · 4MP 高清，無參考圖)', type: 'image', provider: 'atlascloud' },
+    // 2026-07-27 — Seedream 5.0 Lite（AtlasCloud 只上架 Lite 档；Pro 未上架）。
+    { modelId: 'seedream-v5.0-lite', name: 'Seedream 5.0 Lite (AtlasCloud · 字節 CoT 推理，多參考圖)', type: 'image', provider: 'atlascloud' },
     // 视频模型
     { modelId: 'doubao-seedance-1-0-pro-fast-251015', name: 'Seedance 1.0 Pro Fast', type: 'video', provider: 'ark' },
     { modelId: 'doubao-seedance-1-0-lite-i2v-250428', name: 'Seedance 1.0 Lite', type: 'video', provider: 'ark' },

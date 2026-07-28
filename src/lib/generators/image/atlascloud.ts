@@ -100,6 +100,10 @@ const ATLASCLOUD_IMAGE_MODEL_MAP: Record<string, string> = {
   'flux-kontext-max': 'black-forest-labs/flux-kontext-max/text-to-image',
   'flux-1.1-pro': 'black-forest-labs/flux-1.1-pro',
   'flux-1.1-pro-ultra': 'black-forest-labs/flux-1.1-pro-ultra',
+  // 2026-07-27 — Seedream 5.0 Lite (ByteDance)。t2i 是 BARE slug、edit 有
+  // 后缀；size 是 16 值固定枚举（星号分隔、分 2K/4K 两档），不是自由填值。
+  // AtlasCloud 只上架 Lite 档（5.0 Pro 未上架）。
+  'seedream-v5.0-lite': 'bytedance/seedream-v5.0-lite',
 }
 
 /** img2img (`/edit`) counterparts — used when referenceImages are present.
@@ -121,6 +125,8 @@ const ATLASCLOUD_IMAGE_EDIT_MODEL_MAP: Record<string, string> = {
   // `image: string`，不是数组）——doGenerate 里对 >1 张参考图显式拒绝。
   'flux-kontext-pro': 'black-forest-labs/flux-kontext-pro',
   'flux-kontext-max': 'black-forest-labs/flux-kontext-max',
+  // 多图 edit（官方最多 14 张），`images: string[]` 走默认分支。
+  'seedream-v5.0-lite': 'bytedance/seedream-v5.0-lite/edit',
 }
 
 /** Logical ids that have no img2img variant at AtlasCloud. */
@@ -379,6 +385,45 @@ export function normaliseFlux11Ratio(input: string | undefined): string | undefi
   }
 }
 
+function isSeedreamV5Slug(slug: string): boolean {
+  return slug.startsWith('bytedance/seedream-v5.0-lite')
+}
+
+/** Seedream 5.0 Lite `size` 固定枚举（t2i 与 /edit 同一张表）——发枚举外
+ *  的值会被 gateway 400，所以 aspectRatio+resolution 只能映射到最近档位。
+ *  2K 档 8 值 + 4K 档 8 值；2:1（720全景习惯值）收敛到最宽的 21:9 档。
+ *  Exported for unit testing (pure). */
+export function seedreamV5SizeFor(
+  aspectRatio: string | undefined,
+  resolution: string | undefined,
+): string {
+  const use4k = typeof resolution === 'string' && resolution.toLowerCase() === '4k'
+  const tier2k: Record<string, string> = {
+    '1:1': '2048*2048',
+    '4:3': '2304*1728',
+    '3:4': '1728*2304',
+    '16:9': '2848*1600',
+    '9:16': '1600*2848',
+    '3:2': '2496*1664',
+    '2:3': '1664*2496',
+    '21:9': '3136*1344',
+    '2:1': '3136*1344',
+  }
+  const tier4k: Record<string, string> = {
+    '1:1': '3072*3072',
+    '4:3': '3456*2592',
+    '3:4': '2592*3456',
+    '16:9': '4096*2304',
+    '9:16': '2304*4096',
+    '3:2': '3744*2496',
+    '2:3': '2496*3744',
+    '21:9': '4704*2016',
+    '2:1': '4704*2016',
+  }
+  const tier = use4k ? tier4k : tier2k
+  return tier[aspectRatio ?? '1:1'] ?? tier['1:1']
+}
+
 interface AtlasCloudImageSubmitResponse {
   code?: number
   message?: string
@@ -532,6 +577,9 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       // flux-1.1-pro / -ultra: 5 值 aspect_ratio 枚举，t2i only。
       const ratio = normaliseFlux11Ratio(aspectRatio)
       if (ratio) body.aspect_ratio = ratio
+    } else if (isSeedreamV5Slug(atlasModel)) {
+      // Seedream 5.0 Lite: 固定 size 枚举（2K/4K 两档）。
+      body.size = seedreamV5SizeFor(aspectRatio, resolution)
     }
 
     if (useEdit) {
