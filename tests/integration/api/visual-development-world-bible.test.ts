@@ -124,6 +124,47 @@ describe('visual development World Bible API', () => {
     expect(savedWorldBible.assets).toHaveLength(4)
   })
 
+  it('上一批世界觀資產仍在生成 -> 拒絕重複送出第二批付費任務', async () => {
+    const activeAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
+      code,
+      taskId: `active-${code}`,
+      prompt: code,
+      negativePrompt: '',
+      requestedSeed: null,
+      seedStatus: 'unsupported',
+      approved: false,
+      rejectionNote: null,
+    }))
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+      id: 'workspace-1',
+      projectId: 'project-1',
+      worldVersion: 1,
+      status: 'world_generating',
+      worldBible: { ...completeWorld, assets: activeAssets },
+    })
+    prismaMock.task.count.mockResolvedValue(2)
+
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.POST(generateRequest('atlascloud::flux-2-pro'), {
+      params: Promise.resolve({ projectId: 'project-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('WORLD_ASSET_GENERATION_ACTIVE')
+    expect(body.error.details.activeTaskCount).toBe(2)
+    expect(prismaMock.task.count).toHaveBeenCalledWith({
+      where: {
+        id: { in: activeAssets.map((asset) => asset.taskId) },
+        projectId: 'project-1',
+        userId: 'user-1',
+        status: { in: ['queued', 'processing'] },
+      },
+    })
+    expect(apiConfigMock.resolveModelSelection).not.toHaveBeenCalled()
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
   it('四張資產完成且全數通過 -> 建立可追溯 World Canon', async () => {
     const approvedAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
       code, taskId: `task-${code}`, prompt: code, negativePrompt: '', requestedSeed: null, seedStatus: 'unsupported', approved: true, rejectionNote: null,

@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/ui/icons'
 import type { FaceBibleWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
+import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 
 export interface FaceBibleTranslations {
   canonSource: string
@@ -89,8 +90,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
           <div className="mb-2 font-mono text-[9px] tracking-[0.18em] text-primary-400">{translations.canonSource}</div>
           <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-primary-500/30 bg-[#101013]">
             {controller.canonCandidate.resultUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={controller.canonCandidate.resultUrl} alt="Canon identity" className="h-full w-full object-cover" />
+              <VisualDevelopmentImage src={controller.canonCandidate.resultUrl} alt="Canon identity" />
             )}
             <span className="absolute right-2 top-2 rounded-md bg-primary-500 px-2 py-1 font-mono text-[8px] font-semibold text-black">CANON</span>
           </div>
@@ -148,8 +148,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
             <article key={candidate.id} className="bg-[#0b0b0d] p-2.5">
               <div className={`relative aspect-[3/4] overflow-hidden rounded-xl border bg-[#101013] ${candidate.shortlisted ? 'border-primary-500/60' : 'border-white/[0.07]'}`}>
                 {candidate.resultUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={candidate.resultUrl} alt={candidate.code} className="h-full w-full object-cover" />
+                  <VisualDevelopmentImage src={candidate.resultUrl} alt={candidate.code} />
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-tertiary">
                     <AppIcon name="user" className="h-5 w-5 opacity-55" />

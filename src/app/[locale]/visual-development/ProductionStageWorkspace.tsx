@@ -2,6 +2,7 @@ import { AppIcon } from '@/components/ui/icons'
 import type { ProductionFieldId } from '@/lib/visual-development/production-stages'
 import type { CastingCandidateView, ProductionStageWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
+import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 
 export interface ProductionStageTranslations {
   prerequisite: string
@@ -147,7 +148,7 @@ function ProductionCandidate({ candidate, mediaType, translations, onReview, onS
   return (
     <article className="min-w-0 bg-[#0c0c0f]">
       <div className="relative aspect-[3/4] overflow-hidden bg-[#111116]">
-        {candidate.resultUrl ? mediaType === 'video' ? <video src={candidate.resultUrl} controls playsInline className="h-full w-full object-cover" /> : <img src={candidate.resultUrl} alt={candidate.code} className="h-full w-full object-cover" /> : (
+        {candidate.resultUrl ? mediaType === 'video' ? <video src={candidate.resultUrl} controls playsInline className="h-full w-full object-cover" /> : <VisualDevelopmentImage src={candidate.resultUrl} alt={candidate.code} /> : (
           <div className="flex h-full flex-col items-center justify-center px-4 text-center"><AppIcon name={mediaType === 'video' ? 'video' : 'image'} className="h-5 w-5 text-text-tertiary" /><span className="mt-3 font-mono text-[8px] text-text-tertiary">{candidate.taskStatus === 'processing' ? `${candidate.progress}%` : translations.waiting}</span></div>
         )}
         {candidate.isCanon && <span className="absolute left-2 top-2 rounded bg-primary-500 px-1.5 py-1 font-mono text-[7px] text-black">{translations.primary}</span>}

@@ -41,6 +41,17 @@ describe('visual development world bible', () => {
     expect(prompt.prompt).toContain('Material & Aging Rules')
     expect(prompt.prompt).toContain(completeWorld.materialRules)
     expect(prompt.prompt).toContain('Reference images, when supplied, are evidence')
+    expect(prompt.prompt).toContain('photorealistic macro photography')
+    expect(prompt.prompt).toContain('live-action photorealism')
     expect(prompt.negativePrompt).toContain('movie poster')
+    expect(prompt.negativePrompt).toContain('digital painting')
+  })
+
+  it('世界核心公式 Prompt -> 要求單一真人電影畫面而不是手繪概念圖', () => {
+    const prompt = buildWorldBibleAssetPrompt(completeWorld, 'WORLD-FORMULA')
+
+    expect(prompt.prompt).toContain('one uninterrupted photorealistic live-action establishing frame')
+    expect(prompt.prompt).toContain('physical feature-film set or location')
+    expect(prompt.negativePrompt).toContain('concept art rendering')
   })
 })

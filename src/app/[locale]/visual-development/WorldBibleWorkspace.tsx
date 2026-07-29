@@ -2,6 +2,7 @@ import { AppIcon } from '@/components/ui/icons'
 import { WORLD_ASSET_DEFINITIONS } from '@/lib/visual-development/world-bible'
 import type { WorldBibleFormState, WorldBibleWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
+import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 
 export interface WorldBibleTranslations {
   foundation: string
@@ -69,6 +70,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
   const fieldsComplete = REQUIRED_FIELDS.every((field) => controller.form[field].trim().length > 0)
   const assetsComplete = controller.assets.length === WORLD_ASSET_DEFINITIONS.length
     && controller.assets.every((asset) => asset.taskStatus === 'completed' && asset.approved)
+  const generationActive = controller.assets.some((asset) => asset.taskStatus === 'queued' || asset.taskStatus === 'processing')
   const isLocked = controller.status === 'world_locked'
 
   return (
@@ -138,7 +140,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
             {controller.references.map((reference) => (
               <article key={reference.id} className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0d0d10]">
                 <div className="aspect-[4/3] bg-black/30">
-                  {reference.previewUrl && <img src={reference.previewUrl} alt={reference.name} className="h-full w-full object-cover" />}
+                  {reference.previewUrl && <VisualDevelopmentImage src={reference.previewUrl} alt={reference.name} />}
                 </div>
                 <div className="p-2">
                   <p className="truncate text-[9px] text-white">{reference.name}</p>
@@ -168,9 +170,9 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
               </select>
             </div>
           </div>
-          <button type="button" disabled={isLocked || !fieldsComplete || !controller.form.modelKey || controller.isGenerating} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={isLocked || !fieldsComplete || !controller.form.modelKey || controller.isGenerating || generationActive} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
-            {controller.isGenerating ? translations.generating : translations.generate}
+            {controller.isGenerating || generationActive ? translations.generating : translations.generate}
           </button>
         </div>
 
@@ -183,7 +185,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
               return (
                 <article key={definition.code} className={`overflow-hidden rounded-xl border bg-[#0d0d10] ${asset?.approved ? 'border-primary-500/35' : 'border-white/[0.08]'}`}>
                   <div className="relative aspect-video bg-black/25">
-                    {asset?.resultUrl ? <img src={asset.resultUrl} alt={definition.title} className="h-full w-full object-cover" /> : (
+                    {asset?.resultUrl ? <VisualDevelopmentImage src={asset.resultUrl} alt={definition.title} /> : (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-tertiary">
                         <AppIcon name="imageEdit" className="h-5 w-5 opacity-55" />
                         <span className="font-mono text-[8px] tracking-[0.13em]">{asset ? `${asset.taskStatus} ${asset.progress}%` : translations.waiting}</span>

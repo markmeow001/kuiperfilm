@@ -170,6 +170,23 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (!worldBibleRequiredFieldsComplete(document)) {
     throw new ApiError('INVALID_PARAMS', { code: 'WORLD_BIBLE_REQUIRED_FIELDS_INCOMPLETE' })
   }
+  const existingTaskIds = document.assets.map((asset) => asset.taskId)
+  if (existingTaskIds.length > 0) {
+    const activeTaskCount = await prisma.task.count({
+      where: {
+        id: { in: existingTaskIds },
+        projectId,
+        userId: access.userId,
+        status: { in: ['queued', 'processing'] },
+      },
+    })
+    if (activeTaskCount > 0) {
+      throw new ApiError('CONFLICT', {
+        code: 'WORLD_ASSET_GENERATION_ACTIVE',
+        activeTaskCount,
+      })
+    }
+  }
   const modelKey = requiredString(body.modelKey ?? document.modelKey, 'modelKey', 255)
   document.modelKey = modelKey
 

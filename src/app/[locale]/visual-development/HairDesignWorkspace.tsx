@@ -2,6 +2,7 @@ import { AppIcon } from '@/components/ui/icons'
 import type { ReactNode } from 'react'
 import type { CastingCandidateView, HairDesignWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
+import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 
 export interface HairDesignTranslations {
   prerequisite: string
@@ -197,7 +198,7 @@ export function HairDesignWorkspace({ controller, translations }: HairDesignWork
         {controller.selectedHairCandidate && (
           <div className="flex items-center gap-3 border-b border-white/[0.07] bg-primary-500/[0.035] px-4 py-3">
             <div className="h-12 w-10 overflow-hidden rounded-lg border border-primary-500/30 bg-[#101013]">
-              {controller.selectedHairCandidate.resultUrl && <img src={controller.selectedHairCandidate.resultUrl} alt="Selected hair" className="h-full w-full object-cover" />}
+              {controller.selectedHairCandidate.resultUrl && <VisualDevelopmentImage src={controller.selectedHairCandidate.resultUrl} alt="Selected hair" />}
             </div>
             <div>
               <div className="font-mono text-[8px] tracking-[0.16em] text-primary-400">REFERENCE IMAGE 2 · HAIR ONLY</div>
@@ -235,7 +236,7 @@ export function HairDesignWorkspace({ controller, translations }: HairDesignWork
 function ReferenceCard({ candidate, badge }: { candidate: CastingCandidateView; badge: string }) {
   return (
     <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-primary-500/30 bg-[#101013]">
-      {candidate.resultUrl && <img src={candidate.resultUrl} alt={badge} className="h-full w-full object-cover" />}
+      {candidate.resultUrl && <VisualDevelopmentImage src={candidate.resultUrl} alt={badge} />}
       <span className="absolute right-2 top-2 rounded-md bg-primary-500 px-2 py-1 font-mono text-[8px] font-semibold text-black">{badge}</span>
     </div>
   )
@@ -269,7 +270,7 @@ function CandidateCard({ candidate, waiting, seedUnsupported, children }: { cand
   return (
     <article className="bg-[#0b0b0d] p-2.5">
       <div className={`relative aspect-[3/4] overflow-hidden rounded-xl border bg-[#101013] ${candidate.isCanon || candidate.shortlisted ? 'border-primary-500/60' : 'border-white/[0.07]'}`}>
-        {candidate.resultUrl ? <img src={candidate.resultUrl} alt={candidate.code} className="h-full w-full object-cover" /> : (
+        {candidate.resultUrl ? <VisualDevelopmentImage src={candidate.resultUrl} alt={candidate.code} /> : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-tertiary">
             <AppIcon name="user" className="h-5 w-5 opacity-55" />
             <span className="font-mono text-[8px] tracking-[0.12em]">{candidate.taskStatus === 'pending' ? waiting : `${candidate.taskStatus} ${candidate.progress}%`}</span>

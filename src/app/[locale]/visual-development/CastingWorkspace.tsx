@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/ui/icons'
 import type { CastingWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
+import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 
 interface CastingTranslations {
   batch: string
@@ -148,8 +149,7 @@ export function CastingWorkspace({
             <article key={candidate.id} className="group bg-[#0b0b0d] p-2.5">
               <div className={`relative aspect-[4/5] overflow-hidden rounded-xl border bg-[#101013] ${candidate.isCanon ? 'border-primary-500/70' : 'border-white/[0.07]'}`}>
                 {candidate.resultUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={candidate.resultUrl} alt={`${translations.candidate} ${candidate.code}`} className="h-full w-full object-cover" />
+                  <VisualDevelopmentImage src={candidate.resultUrl} alt={`${translations.candidate} ${candidate.code}`} />
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-tertiary">
                     <AppIcon name="user" className="h-5 w-5 opacity-55" />

@@ -222,7 +222,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   }, [input, load, persistForm])
 
   const generate = useCallback(async () => {
-    if (!input.projectId || !form.modelKey) return
+    const hasActiveGeneration = assets.some((asset) => asset.taskStatus === 'queued' || asset.taskStatus === 'processing')
+    if (!input.projectId || !form.modelKey || hasActiveGeneration) return
     setIsGenerating(true)
     try {
       const response = await fetch(`/api/visual-development/${input.projectId}/world-bible`, {
@@ -240,7 +241,7 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
     } finally {
       setIsGenerating(false)
     }
-  }, [form, input, load])
+  }, [assets, form, input, load])
 
   const patch = useCallback(async (body: Record<string, unknown>, fallback: string) => {
     if (!input.projectId) return
