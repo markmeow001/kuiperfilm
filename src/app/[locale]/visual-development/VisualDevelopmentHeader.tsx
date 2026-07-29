@@ -63,7 +63,7 @@ export function VisualDevelopmentHeader(props: VisualDevelopmentHeaderProps) {
   }
 
   return (
-    <header className="relative z-30 border-b border-white/[0.07] bg-[#060607]/95 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-30 shrink-0 border-b border-white/[0.07] bg-[#060607]/95 px-4 backdrop-blur-xl sm:px-6">
       <div className="flex min-h-[72px] items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3 sm:gap-5">
           <Link href={`/${locale}/v2`} aria-label={labels.back} title={labels.back} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400">

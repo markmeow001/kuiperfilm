@@ -88,7 +88,7 @@ export function StageWorkspace({
   translations,
 }: StageWorkspaceProps) {
   return (
-    <main className="min-w-0 overflow-y-auto bg-canvas">
+    <main className="min-h-0 min-w-0 overflow-y-auto overscroll-y-contain bg-canvas [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mb-6 flex flex-col gap-5 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">

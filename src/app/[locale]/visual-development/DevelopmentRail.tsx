@@ -41,7 +41,7 @@ export function DevelopmentRail({
   title,
 }: DevelopmentRailProps) {
   return (
-    <aside className="border-b border-white/[0.07] bg-[#09090b] lg:min-h-0 lg:border-b-0 lg:border-r">
+    <aside className="border-b border-white/[0.07] bg-[#09090b] lg:min-h-0 lg:border-b-0 lg:border-r xl:h-full xl:overflow-hidden">
       <div className="hidden h-full min-h-0 flex-col lg:flex">
         <div className="border-b border-white/[0.07] px-5 py-5">
           <div className="font-mono text-[9px] tracking-[0.2em] text-text-tertiary">
@@ -50,7 +50,7 @@ export function DevelopmentRail({
           <h2 className="mt-1.5 font-serif-cn text-sm font-semibold text-white">{title}</h2>
         </div>
 
-        <nav aria-label={title} className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+        <nav aria-label={title} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4">
           {GROUP_ORDER.map((groupId) => {
             const groupStages = stages.filter((stage) => stage.group === groupId)
             return (

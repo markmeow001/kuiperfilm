@@ -116,6 +116,38 @@ describe('Kuiper visual system', () => {
     expect(finalDelivery).toContain('kuiper-primary-button')
   })
 
+  it('keeps visual development navigation fixed while the stage workspace scrolls', () => {
+    const shell = readFileSync(
+      'src/app/[locale]/visual-development/VisualDevelopmentClient.tsx',
+      'utf8',
+    )
+    const header = readFileSync(
+      'src/app/[locale]/visual-development/VisualDevelopmentHeader.tsx',
+      'utf8',
+    )
+    const rail = readFileSync(
+      'src/app/[locale]/visual-development/DevelopmentRail.tsx',
+      'utf8',
+    )
+    const stage = readFileSync(
+      'src/app/[locale]/visual-development/StageWorkspace.tsx',
+      'utf8',
+    )
+    const inspector = readFileSync(
+      'src/app/[locale]/visual-development/DevelopmentInspector.tsx',
+      'utf8',
+    )
+
+    expect(shell).toContain('xl:h-dvh xl:min-h-0')
+    expect(shell).toContain('xl:grid-rows-[minmax(0,1fr)]')
+    expect(shell).toContain('xl:overflow-hidden')
+    expect(header).toContain('sticky top-0')
+    expect(header).toContain('shrink-0')
+    expect(rail).toContain('xl:h-full xl:overflow-hidden')
+    expect(stage).toContain('min-h-0 min-w-0 overflow-y-auto overscroll-y-contain')
+    expect(inspector).toContain('xl:h-full xl:min-h-0 xl:overflow-y-auto')
+  })
+
   it('does not reintroduce legacy amber or stone utilities in redesigned production areas', () => {
     const redesignedFiles = [
       'src/app/[locale]/v2/workspace/[projectId]/subjects/V2SubjectsClient.tsx',

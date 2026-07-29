@@ -37,7 +37,7 @@ export function DevelopmentInspector({
   stage,
 }: DevelopmentInspectorProps) {
   return (
-    <aside className="border-t border-white/[0.07] bg-[#09090b] xl:min-h-0 xl:overflow-y-auto xl:border-l xl:border-t-0">
+    <aside className="border-t border-white/[0.07] bg-[#09090b] xl:h-full xl:min-h-0 xl:overflow-y-auto xl:overscroll-y-contain xl:border-l xl:border-t-0 xl:[scrollbar-gutter:stable]">
       <div className="border-b border-white/[0.07] px-5 py-5">
         <div className="font-mono text-[9px] tracking-[0.2em] text-text-tertiary">
           SYSTEM INSPECTOR

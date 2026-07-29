@@ -392,10 +392,10 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const activeStage = stages.find((stage) => stage.id === activeStageId) ?? stages[0]
 
   return (
-    <div className="kuiper-stage flex min-h-screen flex-col overflow-hidden text-text-primary">
+    <div className="kuiper-stage flex min-h-screen flex-col overflow-hidden text-text-primary xl:h-dvh xl:min-h-0">
       <VisualDevelopmentHeader locale={locale} projectId={projectId} projects={projects} characters={characters} characterCode={selectedCharacterCode} onProjectChange={changeProject} onCharacterChange={selectCharacter} onCreateProject={createProject} saveStatus={saveStatus} labels={{ back: t('header.back'), eyebrow: t('header.eyebrow'), system: t('header.system'), title: t('header.title'), project: t('header.project'), noProject: t('header.noProject'), character: t('header.character'), noCharacter: t('header.noCharacter'), preview: t('header.preview'), newProject: t('header.newProject'), projectName: t('header.projectName'), projectDescription: t('header.projectDescription'), create: t('header.create'), creating: t('header.creating'), cancel: t('header.cancel'), export: t('header.export'), exportCanon: t('header.exportCanon'), exportApproved: t('header.exportApproved'), exportFull: t('header.exportFull'), saving: t('header.saving'), saved: t('header.saved'), saveError: t('header.saveError') }} />
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)_304px]">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[248px_minmax(0,1fr)] xl:grid-rows-[minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)_304px] xl:overflow-hidden">
         <DevelopmentRail
           activeStageId={activeStageId}
           groups={{
