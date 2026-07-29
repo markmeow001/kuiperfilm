@@ -762,6 +762,15 @@ Header 点 project 从 `/workspace/[id]` redirect `/v2/workspace/[id]`。旧 `/w
 - 回归：`npm run test:regression` 全绿。
 
 ## 当前验证执行记录（持续追加）
+- ✅ 2026-07-29 Visual Development System：完成 Phase -2 劇本匯入、Phase 00 World Bible、Casting／Face Bible／Hair Design 與 Phase 4–13；使用者可建立新專案或綁定既有專案，所有階段直接讀取既有平台模型清單並沿用 Task／worker／計費主幹。
+- ✅ 劇本來源採專案內版本化保存（DOCX／TXT／Markdown／貼上文字，最多 50 版），分析任務只保存來源 key／雜湊／模型參數，不將完整劇本文字放入 Task payload；AI 分析可產出世界觀草稿、角色清單與場景清單，經人工勾選後才寫入專案。
+- ✅ 角色與世界觀草稿採 900ms autosave；角色切換會清空上一角色的非共用欄位，同時保留劇本匯入的結構化 metadata。API 對欄位數、單欄與總字數皆有顯式上限，World Canon／Face Canon 鎖定後維持既有 gate。
+- ✅ 單張產物可下載；專案可輸出 Canon／Approved／Full 三種 ZIP，內含來源劇本、World Bible、角色階段資產、Prompt／模型／seed／審核紀錄與 `09_QA/export_report.json`。多批次同階段使用 batch 目錄避免 ZIP 同名覆蓋；缺失素材會在 QA 報告中明列，不靜默跳過。
+- ✅ 本輪未新增或修改資料庫 schema；沿用 `VisualDevelopmentWorkspace.worldBible` 與角色／批次 JSON 資產，避免未授權 migration。
+- ✅ Code review 修正：角色切換殘留、結構化角色 metadata 被 autosave 丟失、草稿極端大小、ZIP 重名／scope metadata 過度輸出。定向測試 6 files／16 tests、TypeScript、ESLint（0 errors／6 既有 `<img>` warnings）、route／runtime guards、`git diff --check` 皆通過。
+- ✅ `npm run test:regression`：unit 2475、billing integration 22、API integration 408、chain integration 14，共 2919 tests 全數通過。
+- ✅ `npm run build`：Next.js production build 成功，`/[locale]/visual-development` 與 script-source／script-analysis／export API 均收錄。建置環境 Redis `127.0.0.1:16379` 未啟動而產生既有連線警告，但不影響產物；正式部署由 compose Redis 提供。
+- ⚠️ 未執行 AtlasCloud 付費生圖／劇本分析端到端；部署驗收只做登入閘門、頁面與 API 無扣費 smoke test。
 - ✅ `npx vitest run tests/unit/run-runtime/task-bridge.test.ts`
 - ✅ `npx vitest run tests/unit/run-runtime/task-bridge.test.ts tests/unit/helpers/run-stream-state-machine.test.ts`
 - ✅ `npx vitest run tests/unit/helpers/run-request-executor.run-events.test.ts tests/unit/run-runtime/task-bridge.test.ts tests/unit/helpers/run-stream-state-machine.test.ts`

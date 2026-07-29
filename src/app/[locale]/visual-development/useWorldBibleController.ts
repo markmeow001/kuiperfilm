@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
 import type { WorldAssetCode } from '@/lib/visual-development/world-bible'
 import type {
@@ -61,6 +61,10 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const hydratedProjectRef = useRef('')
+  const lastSavedSignatureRef = useRef('')
+  const onWorldChangedRef = useRef(input.onWorldChanged)
+  onWorldChangedRef.current = input.onWorldChanged
 
   const imageModels = useMemo(() => input.imageModels.filter((model) => {
     if (references.length === 0) return true
@@ -76,6 +80,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       setStatus('draft')
       setVersion(1)
       setCanonId(null)
+      hydratedProjectRef.current = ''
+      lastSavedSignatureRef.current = ''
       return
     }
     setIsLoading(true)
@@ -87,8 +93,7 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
         return
       }
       const world = payload.data?.worldBible
-      setForm((current) => ({
-        ...current,
+      const loadedForm: WorldBibleFormState = {
         projectPremise: world?.projectPremise ?? '',
         visualThesis: world?.visualThesis ?? '',
         eraAndGeography: world?.eraAndGeography ?? '',
@@ -99,21 +104,45 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
         architectureLanguage: world?.architectureLanguage ?? '',
         cameraFormat: world?.cameraFormat ?? '',
         forbiddenElements: world?.forbiddenElements ?? '',
-        modelKey: world?.modelKey ?? current.modelKey,
+        modelKey: world?.modelKey ?? '',
         resolution: world?.resolution ?? '',
         aspectRatio: world?.aspectRatio ?? '16:9',
-      }))
+      }
+      setForm(loadedForm)
       setReferences(world?.references ?? [])
       setAssets(world?.assets ?? [])
       setStatus(world?.status ?? 'draft')
       setVersion(world?.version ?? 1)
       setCanonId(world?.canonId ?? null)
+      hydratedProjectRef.current = input.projectId
+      lastSavedSignatureRef.current = JSON.stringify(loadedForm)
     } finally {
       setIsLoading(false)
     }
   }, [input.projectId])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    if (!input.projectId || hydratedProjectRef.current !== input.projectId || isLoading || status === 'world_locked') return
+    const signature = JSON.stringify(form)
+    if (signature === lastSavedSignatureRef.current) return
+    const timer = window.setTimeout(() => {
+      setIsSaving(true)
+      void fetch(`/api/visual-development/${input.projectId}/world-bible`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ worldBible: form }),
+      }).then((response) => {
+        if (!response.ok) throw new Error('World Bible autosave failed')
+        lastSavedSignatureRef.current = signature
+        onWorldChangedRef.current()
+      }).catch((error) => {
+        window.alert(error instanceof Error ? error.message : String(error))
+      }).finally(() => setIsSaving(false))
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [form, input.projectId, isLoading, status])
 
   useEffect(() => {
     const active = assets.some((asset) => asset.taskStatus === 'queued' || asset.taskStatus === 'processing')
@@ -134,6 +163,7 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       window.alert(errorMessage(payload, 'World Bible 儲存失敗'))
       return false
     }
+    lastSavedSignatureRef.current = JSON.stringify(form)
     return true
   }, [form, input.projectId])
 
@@ -254,5 +284,6 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       'World Bible 資產審核失敗',
     ),
     onLock: () => void patch({ action: 'canon-lock' }, 'World Bible 尚未符合鎖定條件'),
+    onReload: () => void load(),
   }
 }

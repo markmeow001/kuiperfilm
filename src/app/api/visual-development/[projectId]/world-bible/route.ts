@@ -60,11 +60,23 @@ function mergeEditableWorldBible(current: WorldBibleDocument, value: unknown): W
   const input = record(value)
   const next = { ...current }
   for (const field of EDITABLE_FIELDS) {
-    if (typeof input[field] === 'string') next[field] = input[field].trim()
+    if (typeof input[field] === 'string') {
+      if (input[field].length > 8_000) {
+        throw new ApiError('INVALID_PARAMS', { code: 'FIELD_TOO_LONG', field, details: { max: 8_000 } })
+      }
+      next[field] = input[field].trim()
+    }
   }
-  if (typeof input.modelKey === 'string') next.modelKey = input.modelKey.trim()
-  if (typeof input.resolution === 'string') next.resolution = input.resolution.trim()
+  if (typeof input.modelKey === 'string') {
+    if (input.modelKey.length > 255) throw new ApiError('INVALID_PARAMS', { code: 'FIELD_TOO_LONG', field: 'modelKey', details: { max: 255 } })
+    next.modelKey = input.modelKey.trim()
+  }
+  if (typeof input.resolution === 'string') {
+    if (input.resolution.length > 64) throw new ApiError('INVALID_PARAMS', { code: 'FIELD_TOO_LONG', field: 'resolution', details: { max: 64 } })
+    next.resolution = input.resolution.trim()
+  }
   if (typeof input.aspectRatio === 'string' && input.aspectRatio.trim()) {
+    if (input.aspectRatio.length > 32) throw new ApiError('INVALID_PARAMS', { code: 'FIELD_TOO_LONG', field: 'aspectRatio', details: { max: 32 } })
     next.aspectRatio = input.aspectRatio.trim()
   }
   return next

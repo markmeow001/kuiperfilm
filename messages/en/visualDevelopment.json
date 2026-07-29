@@ -6,7 +6,23 @@
     "title": "Character Visual Development",
     "project": "Bind project",
     "noProject": "No project selected",
-    "preview": "CASTING BETA"
+    "character": "Active character",
+    "noCharacter": "No character created",
+    "preview": "CASTING BETA",
+    "newProject": "New project",
+    "projectName": "Project name",
+    "projectDescription": "Project description (optional)",
+    "create": "Create and bind",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "createFailed": "Unable to create project",
+    "export": "Export package",
+    "exportCanon": "Download Canon package",
+    "exportApproved": "Download approved package",
+    "exportFull": "Download full project package",
+    "saving": "AUTOSAVING…",
+    "saved": "AUTOSAVED",
+    "saveError": "AUTOSAVE FAILED"
   },
   "rail": {
     "title": "Development phases",
@@ -22,6 +38,41 @@
     "deliverables": "DELIVERABLES",
     "approvalGate": "APPROVAL GATE",
     "previewNotice": "PRODUCTION SYSTEM",
+    "script": {
+      "source": "SCREENPLAY SOURCE",
+      "sourceDescription": "Upload or paste the full screenplay, then choose a text model. The system extracts world rules, characters, animals or creatures, and key locations into a reviewable draft.",
+      "title": "Screenplay title",
+      "titlePlaceholder": "e.g. Sequence Three Underground City V1",
+      "paste": "Screenplay text",
+      "pastePlaceholder": "Paste the screenplay here, or upload DOCX, TXT, or Markdown above…",
+      "upload": "Upload screenplay",
+      "uploading": "Reading…",
+      "supportedFiles": "DOCX / TXT / MD supported; 120,000 characters maximum",
+      "model": "Analysis model",
+      "modelPlaceholder": "Select an LLM",
+      "modelHint": "Models come from the platform's currently enabled text-model pool. The exact model and analysis time are recorded.",
+      "analyze": "Analyze screenplay",
+      "analyzing": "Analyzing world and characters…",
+      "review": "ANALYSIS REVIEW",
+      "reviewDescription": "Review the interpretation first. Only the world draft and characters you approve are written into the development pipeline.",
+      "synopsis": "Story synopsis",
+      "worldDraft": "World draft",
+      "characters": "Screenplay character roster",
+      "locations": "Key locations",
+      "selectAll": "Select all",
+      "clearAll": "Clear all",
+      "applyWorld": "Write draft into Phase 00 World Bible",
+      "applyWorldHint": "Only an unlocked World Bible can be filled. Locked Canon is never overwritten.",
+      "apply": "Approve and import",
+      "applying": "Importing…",
+      "noAnalysis": "Import a screenplay to see its world draft and complete character roster here.",
+      "draftNotice": "AI analysis creates a review draft and never locks Canon automatically",
+      "charactersSelected": "{selected} of {total} characters selected",
+      "evidence": "Evidence, inferences, and uncertainties",
+      "sourceVersions": "SCREENPLAY SOURCE VERSIONS"
+      ,"currentVersion": "CURRENT"
+      ,"downloadSource": "Download original screenplay"
+    },
     "world": {
       "foundation": "PROJECT / WORLD BIBLE",
       "foundationDescription": "Define how the world operates, how it is photographed, and what must never appear. Once locked, these rules govern every character and shot downstream.",
@@ -246,6 +297,13 @@
     "recordNotice": "The connected version will record model version, seed, dimensions, prompt, and references."
   },
   "stages": {
+    "script": {
+      "title": "Screenplay Import & Analysis",
+      "shortTitle": "Screenplay",
+      "objective": "Turn a full screenplay into a reviewable world draft, character roster, relationships, and key locations before visual development begins.",
+      "deliverables": ["Screenplay source and version record", "World Bible draft", "Complete human and non-human roster", "Key locations and confidence notes"],
+      "gate": "A human approves the world rules and characters to import; AI analysis cannot overwrite locked Canon."
+    },
     "research": {
       "title": "Reference Research",
       "shortTitle": "Research",

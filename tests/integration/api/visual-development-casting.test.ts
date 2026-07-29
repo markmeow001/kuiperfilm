@@ -3,8 +3,8 @@ import { buildMockRequest } from '../../helpers/request'
 import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../helpers/auth'
 
 const prismaMock = vi.hoisted(() => ({
-  visualDevelopmentWorkspace: { findUnique: vi.fn() },
-  visualDevelopmentCharacter: { upsert: vi.fn() },
+  visualDevelopmentWorkspace: { findUnique: vi.fn(), upsert: vi.fn() },
+  visualDevelopmentCharacter: { findUnique: vi.fn(), findFirst: vi.fn(), upsert: vi.fn(), update: vi.fn() },
   visualDevelopmentBatch: { create: vi.fn(), update: vi.fn() },
   visualDevelopmentCandidate: { update: vi.fn(), updateMany: vi.fn() },
 }))
@@ -22,6 +22,39 @@ describe('POST /api/visual-development/[projectId] Casting gate', () => {
     resetAuthMockState()
     installAuthMocks()
     mockAuthenticated('user-1')
+    prismaMock.visualDevelopmentWorkspace.upsert.mockResolvedValue({ id: 'workspace-1', projectId: 'project-1' })
+    prismaMock.visualDevelopmentCharacter.upsert.mockResolvedValue({ id: 'character-1', code: 'SINO' })
+  })
+
+  it('autosaves character drafts without replacing the World Bible', async () => {
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({ id: 'workspace-1', projectId: 'project-1', status: 'world_locked', worldBible: { projectPremise: 'Canon' } })
+    prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({ characterDna: { role: 'lead', aliases: ['Snow'] }, castingBrief: { apparentAge: '24' } })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PUT',
+      body: { characterCode: 'SINO', characterName: '絲諾', characterDna: { coreTraits: 'quietly resilient' }, castingBrief: { emotionalRead: 'restrained' } },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.visualDevelopmentWorkspace.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: {} }))
+    expect(prismaMock.visualDevelopmentCharacter.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      update: expect.objectContaining({ characterDna: { role: 'lead', aliases: ['Snow'], coreTraits: 'quietly resilient' } }),
+    }))
+  })
+
+  it('merges downstream stage drafts into the active character record', async () => {
+    prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({ id: 'character-1', code: 'SINO', characterDna: { role: 'lead', aliases: ['Snow'] } })
+    prismaMock.visualDevelopmentCharacter.update.mockResolvedValue({ id: 'character-1', code: 'SINO', updatedAt: new Date() })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PATCH',
+      body: { action: 'save-draft', characterCode: 'SINO', characterDnaPatch: { hairSilhouette: 'sharp owl-wing contour' } },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.visualDevelopmentCharacter.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: { characterDna: { role: 'lead', aliases: ['Snow'], hairSilhouette: 'sharp owl-wing contour' } },
+    }))
   })
 
   it('World Canon 尚未鎖定 -> 不得建立 Casting 或送出生圖任務', async () => {

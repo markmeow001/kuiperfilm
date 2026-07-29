@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { parseStoredScriptAnalysis, type ScriptAnalysisDocument } from './script-analysis'
 
 export const WORLD_ASSET_DEFINITIONS = [
   {
@@ -34,6 +35,20 @@ export interface WorldBibleReference {
   createdAt: string
 }
 
+export interface ScreenplaySourceVersion {
+  id: string
+  key: string
+  originalKey: string | null
+  name: string
+  sourceTitle: string
+  sourceFormat: 'pasted' | 'docx' | 'txt' | 'md'
+  mimeType: string
+  sha256: string
+  sizeBytes: number
+  textLength: number
+  createdAt: string
+}
+
 export interface WorldBibleAsset {
   code: WorldAssetCode
   taskId: string
@@ -57,12 +72,14 @@ export interface WorldBibleDocument {
   cameraFormat: string
   forbiddenElements: string
   references: WorldBibleReference[]
+  sources: ScreenplaySourceVersion[]
   assets: WorldBibleAsset[]
   modelKey: string
   resolution: string
   aspectRatio: string
   canonId: string | null
   lockedAt: string | null
+  scriptAnalysis: ScriptAnalysisDocument | null
 }
 
 export const EMPTY_WORLD_BIBLE: WorldBibleDocument = {
@@ -77,12 +94,14 @@ export const EMPTY_WORLD_BIBLE: WorldBibleDocument = {
   cameraFormat: '',
   forbiddenElements: '',
   references: [],
+  sources: [],
   assets: [],
   modelKey: '',
   resolution: '',
   aspectRatio: '16:9',
   canonId: null,
   lockedAt: null,
+  scriptAnalysis: null,
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -135,6 +154,31 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
       }]
     })
     : []
+  const sources = Array.isArray(source.sources)
+    ? source.sources.flatMap((item) => {
+      const entry = record(item)
+      const sourceFormat = entry.sourceFormat
+      if (
+        typeof entry.id !== 'string'
+        || typeof entry.key !== 'string'
+        || typeof entry.sha256 !== 'string'
+        || (sourceFormat !== 'pasted' && sourceFormat !== 'docx' && sourceFormat !== 'txt' && sourceFormat !== 'md')
+      ) return []
+      return [{
+        id: entry.id,
+        key: entry.key,
+        originalKey: typeof entry.originalKey === 'string' ? entry.originalKey : null,
+        name: typeof entry.name === 'string' ? entry.name : 'Screenplay',
+        sourceTitle: typeof entry.sourceTitle === 'string' ? entry.sourceTitle : 'Screenplay',
+        sourceFormat: sourceFormat as ScreenplaySourceVersion['sourceFormat'],
+        mimeType: typeof entry.mimeType === 'string' ? entry.mimeType : 'application/octet-stream',
+        sha256: entry.sha256,
+        sizeBytes: typeof entry.sizeBytes === 'number' ? entry.sizeBytes : 0,
+        textLength: typeof entry.textLength === 'number' ? entry.textLength : 0,
+        createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : '',
+      }]
+    })
+    : []
 
   return {
     projectPremise: text(source, 'projectPremise'),
@@ -148,12 +192,14 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
     cameraFormat: text(source, 'cameraFormat'),
     forbiddenElements: text(source, 'forbiddenElements'),
     references,
+    sources,
     assets,
     modelKey: text(source, 'modelKey'),
     resolution: text(source, 'resolution'),
     aspectRatio: text(source, 'aspectRatio') || '16:9',
     canonId: nullableText(source, 'canonId'),
     lockedAt: nullableText(source, 'lockedAt'),
+    scriptAnalysis: parseStoredScriptAnalysis(source.scriptAnalysis),
   }
 }
 

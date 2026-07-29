@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/ui/icons'
 import { WORLD_ASSET_DEFINITIONS } from '@/lib/visual-development/world-bible'
 import type { WorldBibleFormState, WorldBibleWorkspaceController } from './visual-development-types'
+import { visualDevelopmentDownloadHref } from './visual-development-download'
 
 export interface WorldBibleTranslations {
   foundation: string
@@ -208,6 +209,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
                       )}
                     </div>
                     {asset && <p className="mt-2 font-mono text-[8px] text-text-tertiary">{asset.seedStatus === 'applied' ? `SEED ${asset.requestedSeed}` : translations.seedUnsupported}</p>}
+                    {asset?.resultUrl && <a href={visualDevelopmentDownloadHref(asset.resultUrl, `world-${definition.code}`)} className="mt-2 inline-flex items-center gap-1.5 rounded bg-white/[0.05] px-2 py-1 text-[8px] text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" />DOWNLOAD</a>}
                     {asset?.errorMessage && <p className="mt-2 text-[9px] text-red-300">{asset.errorMessage}</p>}
                     {asset?.rejectionNote && !asset.approved && <p className="mt-2 text-[9px] text-amber-200/70">{asset.rejectionNote}</p>}
                   </div>

@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/ui/icons'
 import type { ReactNode } from 'react'
 import type { CastingCandidateView, HairDesignWorkspaceController } from './visual-development-types'
+import { visualDevelopmentDownloadHref } from './visual-development-download'
 
 export interface HairDesignTranslations {
   prerequisite: string
@@ -278,7 +279,10 @@ function CandidateCard({ candidate, waiting, seedUnsupported, children }: { cand
       </div>
       <div className="mt-2 flex min-h-6 items-center justify-between gap-2">
         <span className="truncate font-mono text-[7px] text-text-tertiary">{candidate.seedStatus === 'applied' ? `SEED ${candidate.requestedSeed}` : seedUnsupported}</span>
-        {children}
+        <div className="flex items-center gap-1">
+          {candidate.resultUrl && <a href={visualDevelopmentDownloadHref(candidate.resultUrl, `hair-${candidate.code}`)} aria-label={`Download ${candidate.code}`} className="rounded bg-white/[0.05] p-1 text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" /></a>}
+          {children}
+        </div>
       </div>
     </article>
   )

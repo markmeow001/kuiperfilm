@@ -199,6 +199,8 @@ const UPLOAD_MIME_TYPES: Record<string, string> = {
   '.wav': 'audio/wav',
   '.m4a': 'audio/mp4',
   '.json': 'application/json',
+  '.md': 'text/markdown; charset=utf-8',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.txt': 'text/plain; charset=utf-8',
   '.srt': 'text/plain; charset=utf-8',
   '.zip': 'application/zip',

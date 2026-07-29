@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
 import {
   canEnterProductionStage,
@@ -39,10 +39,10 @@ function initialForm(stageId: ProductionStageId, dna: Record<string, string>): P
   for (const field of stage.fields) record[field] = dna[`${stage.id}_${field}`] ?? ''
   return {
     stageRecord: record,
-    modelKey: '',
-    resolution: '',
-    aspectRatio: stage.mediaType === 'video' ? '16:9' : '3:4',
-    duration: 5,
+    modelKey: dna[`draft_${stage.id}_modelKey`] ?? '',
+    resolution: dna[`draft_${stage.id}_resolution`] ?? '',
+    aspectRatio: dna[`draft_${stage.id}_aspectRatio`] ?? (stage.mediaType === 'video' ? '16:9' : '3:4'),
+    duration: Number(dna[`draft_${stage.id}_duration`]) || 5,
   }
 }
 
@@ -61,12 +61,22 @@ export function useProductionStageController(input: UseProductionStageController
 } {
   const [forms, setForms] = useState<Partial<Record<ProductionStageId, ProductionStageFormState>>>({})
   const [isGenerating, setIsGenerating] = useState(false)
+  const lastSavedDraftsRef = useRef<Partial<Record<ProductionStageId, string>>>({})
+  const loadedIdentityRef = useRef('')
   const stage = useMemo(() => getProductionStage(input.activeStageId), [input.activeStageId])
   const batch = useMemo(
     () => input.batches.find((item) => item.stage === stage.dbStage) ?? null,
     [input.batches, stage.dbStage],
   )
   const form = forms[input.activeStageId] ?? initialForm(input.activeStageId, input.characterDna)
+
+  useEffect(() => {
+    const identityKey = `${input.projectId}:${input.characterCode}`
+    if (loadedIdentityRef.current === identityKey) return
+    loadedIdentityRef.current = identityKey
+    lastSavedDraftsRef.current = {}
+    setForms({ [input.activeStageId]: initialForm(input.activeStageId, input.characterDna) })
+  }, [input.activeStageId, input.characterCode, input.characterDna, input.projectId])
 
   useEffect(() => {
     setForms((current) => current[input.activeStageId]
@@ -92,6 +102,30 @@ export function useProductionStageController(input: UseProductionStageController
       }
     })
   }, [batch, input.activeStageId, input.characterDna, stage.fields])
+
+  useEffect(() => {
+    if (!input.projectId || !input.characterCode || input.isLoading) return
+    const signature = JSON.stringify(form)
+    if (lastSavedDraftsRef.current[input.activeStageId] === signature) return
+    const timer = window.setTimeout(() => {
+      const characterDnaPatch: Record<string, string> = {
+        [`draft_${stage.id}_modelKey`]: form.modelKey,
+        [`draft_${stage.id}_resolution`]: form.resolution,
+        [`draft_${stage.id}_aspectRatio`]: form.aspectRatio,
+        [`draft_${stage.id}_duration`]: String(form.duration),
+      }
+      for (const field of stage.fields) characterDnaPatch[`${stage.id}_${field}`] = form.stageRecord[field]
+      void fetch(`/api/visual-development/${input.projectId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'save-draft', characterCode: input.characterCode, characterDnaPatch }),
+      }).then((response) => {
+        if (!response.ok) throw new Error(`${stage.id} autosave failed`)
+        lastSavedDraftsRef.current[input.activeStageId] = signature
+      }).catch((error) => window.alert(error instanceof Error ? error.message : String(error)))
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [form, input.activeStageId, input.characterCode, input.isLoading, input.projectId, stage.fields, stage.id])
 
   const models = useMemo(() => stage.mediaType === 'video'
     ? input.videoModels.filter((model) => model.capabilities?.video?.supportReferenceImage === true)

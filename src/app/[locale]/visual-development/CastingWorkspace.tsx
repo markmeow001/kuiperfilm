@@ -1,5 +1,6 @@
 import { AppIcon } from '@/components/ui/icons'
 import type { CastingWorkspaceController } from './visual-development-types'
+import { visualDevelopmentDownloadHref } from './visual-development-download'
 
 interface CastingTranslations {
   batch: string
@@ -164,6 +165,7 @@ export function CastingWorkspace({
                 </span>
                 {candidate.resultUrl && (
                   <div className="flex gap-1">
+                    <a href={visualDevelopmentDownloadHref(candidate.resultUrl, `${controller.form.characterCode || 'character'}-casting-${candidate.code}`)} aria-label={`Download ${candidate.code}`} className="rounded bg-white/[0.05] p-1 text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" /></a>
                     <button type="button" onClick={() => controller.onCandidateAction(candidate.id, 'shortlist', !candidate.shortlisted)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-white/15 text-white' : 'bg-white/[0.05] text-text-tertiary'}`}>{translations.shortlist}</button>
                     <button type="button" disabled={candidate.isCanon} onClick={() => controller.onCandidateAction(candidate.id, 'canon-lock')} className="rounded bg-primary-500/[0.14] px-1.5 py-1 text-[8px] text-primary-400 disabled:opacity-50">{candidate.isCanon ? translations.canonLocked : translations.canonLock}</button>
                   </div>

@@ -6,7 +6,23 @@
     "title": "角色視覺開發",
     "project": "綁定專案",
     "noProject": "尚未選擇專案",
-    "preview": "CASTING BETA"
+    "character": "目前開發角色",
+    "noCharacter": "尚未建立角色",
+    "preview": "CASTING BETA",
+    "newProject": "建立專案",
+    "projectName": "專案名稱",
+    "projectDescription": "專案說明（選填）",
+    "create": "建立並綁定",
+    "creating": "建立中…",
+    "cancel": "取消",
+    "createFailed": "無法建立專案",
+    "export": "打包匯出",
+    "exportCanon": "下載 Canon 資產包",
+    "exportApproved": "下載已通過資產包",
+    "exportFull": "下載完整專案包",
+    "saving": "自動儲存中…",
+    "saved": "已自動儲存",
+    "saveError": "自動儲存失敗"
   },
   "rail": {
     "title": "開發階段",
@@ -22,6 +38,41 @@
     "deliverables": "DELIVERABLES",
     "approvalGate": "APPROVAL GATE",
     "previewNotice": "製作系統",
+    "script": {
+      "source": "SCREENPLAY SOURCE",
+      "sourceDescription": "上傳或貼上完整劇本，選擇文字分析模型。系統會抽取世界規則、角色、動物／異種與主要場景，先形成可審核草稿。",
+      "title": "劇本名稱",
+      "titlePlaceholder": "例如：序列三地下城 V1",
+      "paste": "劇本文字",
+      "pastePlaceholder": "在這裡貼上劇本，或從右上方上傳 DOCX、TXT、Markdown…",
+      "upload": "上傳劇本",
+      "uploading": "讀取中…",
+      "supportedFiles": "支援 DOCX / TXT / MD；單次最多 120,000 字元",
+      "model": "劇本分析模型",
+      "modelPlaceholder": "選擇 LLM 模型",
+      "modelHint": "模型來自平台目前已啟用的文字模型；每次分析都會保存實際模型與時間。",
+      "analyze": "分析劇本",
+      "analyzing": "正在分析世界與角色…",
+      "review": "ANALYSIS REVIEW",
+      "reviewDescription": "先檢查 AI 對劇本的理解。只有你勾選並確認的世界觀與角色，才會寫入正式開發流程。",
+      "synopsis": "故事摘要",
+      "worldDraft": "世界觀草稿",
+      "characters": "劇本角色清單",
+      "locations": "主要場景",
+      "selectAll": "全選角色",
+      "clearAll": "全部取消",
+      "applyWorld": "寫入 Phase 00 世界觀草稿",
+      "applyWorldHint": "只會填入尚未鎖定的 World Bible；不會覆蓋已鎖定 Canon。",
+      "apply": "確認並導入",
+      "applying": "導入中…",
+      "noAnalysis": "導入劇本後，世界觀草稿與所有角色會出現在這裡。",
+      "draftNotice": "AI 分析只建立待審草稿，不會自動鎖定 Canon",
+      "charactersSelected": "已選 {selected} / {total} 位角色",
+      "evidence": "證據、推論與不確定項目",
+      "sourceVersions": "劇本來源版本"
+      ,"currentVersion": "目前版本"
+      ,"downloadSource": "下載原始劇本"
+    },
     "world": {
       "foundation": "PROJECT / WORLD BIBLE",
       "foundationDescription": "先定義這個世界如何運作、如何被看見，以及哪些設計永遠不能出現。鎖定後會成為所有角色與鏡頭的上游規則。",
@@ -246,6 +297,13 @@
     "recordNotice": "正式串接後會同步記錄模型版本、Seed、尺寸、Prompt 與參考圖。"
   },
   "stages": {
+    "script": {
+      "title": "劇本導入與結構分析",
+      "shortTitle": "劇本導入",
+      "objective": "從完整劇本建立可審核的世界觀草稿、角色名冊、關係與主要場景，作為視覺開發的起點。",
+      "deliverables": ["劇本來源與版本紀錄", "世界觀 Bible 草稿", "完整角色與非人角色清單", "主要場景與分析信心註記"],
+      "gate": "人工確認要寫入的世界規則與角色；AI 分析不得直接覆蓋已鎖定 Canon。"
+    },
     "research": {
       "title": "參考考據與視覺研究",
       "shortTitle": "參考考據",

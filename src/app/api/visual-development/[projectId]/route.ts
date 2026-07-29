@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ApiError, apiHandler } from '@/lib/api-errors'
@@ -10,7 +11,7 @@ import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildCastingPrompt, type StringRecord } from '@/lib/visual-development/prompt'
 import { projectCandidateTask } from '@/lib/visual-development/records'
-import { parseWorldBible } from '@/lib/visual-development/world-bible'
+import { EMPTY_WORLD_BIBLE, parseWorldBible, toWorldBibleJson } from '@/lib/visual-development/world-bible'
 
 type RouteContext = { params: Promise<{ projectId: string }> }
 type JsonRecord = Record<string, unknown>
@@ -21,12 +22,32 @@ function toRecord(value: unknown): JsonRecord {
     : {}
 }
 
-function toStringRecord(value: unknown): StringRecord {
-  return Object.fromEntries(
-    Object.entries(toRecord(value))
-      .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-      .map(([key, text]) => [key, text.trim()]),
-  )
+function toStringRecord(value: unknown, field = 'record'): StringRecord {
+  const entries = Object.entries(toRecord(value))
+  if (entries.length > 100) {
+    throw new ApiError('INVALID_PARAMS', { code: 'RECORD_TOO_LARGE', field, details: { maxEntries: 100 } })
+  }
+  let totalLength = 0
+  const normalized: Array<[string, string]> = []
+  for (const [key, rawValue] of entries) {
+    if (typeof rawValue !== 'string') {
+      throw new ApiError('INVALID_PARAMS', { code: 'RECORD_VALUE_INVALID', field, details: { key } })
+    }
+    if (key.length > 120 || rawValue.length > 8_000) {
+      throw new ApiError('INVALID_PARAMS', { code: 'RECORD_FIELD_TOO_LONG', field, details: { key, max: 8_000 } })
+    }
+    const text = rawValue.trim()
+    totalLength += key.length + text.length
+    if (totalLength > 100_000) {
+      throw new ApiError('INVALID_PARAMS', { code: 'RECORD_TOO_LARGE', field, details: { maxChars: 100_000 } })
+    }
+    normalized.push([key, text])
+  }
+  return Object.fromEntries(normalized)
+}
+
+function toJsonObject(value: unknown): Prisma.InputJsonObject {
+  return toRecord(value) as Prisma.InputJsonObject
 }
 
 function requiredString(value: unknown, field: string, max = 4000): string {
@@ -133,21 +154,25 @@ export const PUT = apiHandler(async (request: NextRequest, context: RouteContext
   const access = await requireAccess(projectId, 'write')
   if (access instanceof Response) return access
   const body = toRecord(await request.json())
-  const worldBible = toStringRecord(body.worldBible)
-  const characterDna = toStringRecord(body.characterDna)
-  const castingBrief = toStringRecord(body.castingBrief)
+  const characterDna = toStringRecord(body.characterDna, 'characterDna')
+  const castingBrief = toStringRecord(body.castingBrief, 'castingBrief')
   const characterCode = normalizeCharacterCode(body.characterCode)
   const characterName = requiredString(body.characterName, 'characterName', 120)
 
   const workspace = await prisma.visualDevelopmentWorkspace.upsert({
     where: { projectId },
-    create: { projectId, worldBible },
-    update: { worldBible, worldVersion: { increment: 1 } },
+    create: { projectId, worldBible: toWorldBibleJson(EMPTY_WORLD_BIBLE), status: 'world_draft' },
+    update: {},
   })
+  const existingCharacter = await prisma.visualDevelopmentCharacter.findUnique({
+    where: { workspaceId_code: { workspaceId: workspace.id, code: characterCode } },
+  })
+  const mergedDna = { ...toJsonObject(existingCharacter?.characterDna), ...characterDna }
+  const mergedBrief = { ...toJsonObject(existingCharacter?.castingBrief), ...castingBrief }
   const character = await prisma.visualDevelopmentCharacter.upsert({
     where: { workspaceId_code: { workspaceId: workspace.id, code: characterCode } },
-    create: { workspaceId: workspace.id, code: characterCode, name: characterName, characterDna, castingBrief },
-    update: { name: characterName, characterDna, castingBrief },
+    create: { workspaceId: workspace.id, code: characterCode, name: characterName, characterDna: mergedDna, castingBrief: mergedBrief },
+    update: { name: characterName, characterDna: mergedDna, castingBrief: mergedBrief },
   })
   return NextResponse.json({ success: true, data: { workspace, character } })
 })
@@ -328,6 +353,21 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   const access = await requireAccess(projectId, 'write')
   if (access instanceof Response) return access
   const body = toRecord(await request.json())
+  if (body.action === 'save-draft') {
+    const characterCode = normalizeCharacterCode(body.characterCode)
+    const characterDnaPatch = toStringRecord(body.characterDnaPatch, 'characterDnaPatch')
+    const character = await prisma.visualDevelopmentCharacter.findFirst({
+      where: { code: characterCode, workspace: { projectId } },
+    })
+    if (!character) throw new ApiError('NOT_FOUND', { code: 'VISUAL_DEVELOPMENT_CHARACTER_NOT_FOUND' })
+    const nextDna = { ...toJsonObject(character.characterDna), ...characterDnaPatch }
+    const updated = await prisma.visualDevelopmentCharacter.update({
+      where: { id: character.id },
+      data: { characterDna: nextDna },
+      select: { id: true, code: true, updatedAt: true },
+    })
+    return NextResponse.json({ success: true, data: { character: updated } })
+  }
   const candidateId = requiredString(body.candidateId, 'candidateId', 191)
   const action = requiredString(body.action, 'action', 32)
   const candidate = await prisma.visualDevelopmentCandidate.findUnique({

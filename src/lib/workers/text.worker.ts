@@ -40,6 +40,7 @@ import { handleReferenceToCharacterTask } from './handlers/reference-to-characte
 import { handleShotAITask } from './handlers/shot-ai-tasks'
 import { handleCharacterProfileTask } from './handlers/character-profile'
 import { handleRegisterArkAssetTask } from './handlers/register-ark-asset'
+import { handleVisualDevelopmentScriptAnalysisTask } from './handlers/visual-development-script-analysis'
 import { defaultPanelGenerationMode } from '@/lib/novel-promotion/generation-mode'
 
 type AnyObj = Record<string, unknown>
@@ -689,6 +690,8 @@ async function processTextTask(job: Job<TaskJobData>) {
       return await handleCanvasTextTask(job)
     case TASK_TYPE.PLAYGROUND_VIDEO_ANALYZE:
       return await handlePlaygroundVideoAnalyzeTask(job)
+    case TASK_TYPE.VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS:
+      return await handleVisualDevelopmentScriptAnalysisTask(job)
     default:
       throw new Error(`Unsupported text task type: ${job.data.type}`)
   }

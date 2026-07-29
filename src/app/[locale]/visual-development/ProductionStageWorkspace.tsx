@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/ui/icons'
 import type { ProductionFieldId } from '@/lib/visual-development/production-stages'
 import type { CastingCandidateView, ProductionStageWorkspaceController } from './visual-development-types'
+import { visualDevelopmentDownloadHref } from './visual-development-download'
 
 export interface ProductionStageTranslations {
   prerequisite: string
@@ -155,6 +156,7 @@ function ProductionCandidate({ candidate, mediaType, translations, onReview, onS
         <div className="truncate font-mono text-[8px] tracking-[0.1em] text-white">{candidate.code}</div>
         <div className="font-mono text-[7px] text-text-tertiary">{candidate.requestedSeed ? `SEED ${candidate.requestedSeed}` : translations.seedUnsupported}</div>
         {candidate.resultUrl && <div className="flex flex-wrap gap-1">
+          <a href={visualDevelopmentDownloadHref(candidate.resultUrl, `${mediaType}-${candidate.code}`)} aria-label={`Download ${candidate.code}`} className="rounded bg-white/[0.05] p-1 text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" /></a>
           <button type="button" onClick={() => onReview(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
           <button type="button" onClick={() => { const note = window.prompt(translations.rejectionPrompt, candidate.rejectionNote ?? ''); if (note?.trim()) onReview(candidate.id, false, note.trim()) }} className="rounded bg-white/[0.05] px-1.5 py-1 text-[8px] text-text-tertiary">{translations.reject}</button>
           <button type="button" onClick={() => onSelectPrimary(candidate.id)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.isCanon ? 'bg-primary-500 text-black' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.isCanon ? translations.primary : translations.makePrimary}</button>

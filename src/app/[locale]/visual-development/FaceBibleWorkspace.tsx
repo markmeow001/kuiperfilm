@@ -1,5 +1,6 @@
 import { AppIcon } from '@/components/ui/icons'
 import type { FaceBibleWorkspaceController } from './visual-development-types'
+import { visualDevelopmentDownloadHref } from './visual-development-download'
 
 export interface FaceBibleTranslations {
   canonSource: string
@@ -164,6 +165,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
                 </span>
                 {candidate.resultUrl && (
                   <div className="flex gap-1">
+                    <a href={visualDevelopmentDownloadHref(candidate.resultUrl, `${controller.characterCode}-face-${candidate.code}`)} aria-label={`Download ${candidate.code}`} className="rounded bg-white/[0.05] p-1 text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" /></a>
                     <button type="button" onClick={() => controller.onReview(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
                     <button type="button" onClick={() => {
                       const note = window.prompt(translations.rejectionPrompt, candidate.rejectionNote ?? '')

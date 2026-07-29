@@ -5,7 +5,8 @@ import { FaceBibleWorkspace, type FaceBibleTranslations } from './FaceBibleWorks
 import { HairDesignWorkspace, type HairDesignTranslations } from './HairDesignWorkspace'
 import { WorldBibleWorkspace, type WorldBibleTranslations } from './WorldBibleWorkspace'
 import { ProductionStageWorkspace, type ProductionStageTranslations } from './ProductionStageWorkspace'
-import type { CastingWorkspaceController, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
+import { ScriptImportWorkspace, type ScriptImportTranslations } from './ScriptImportWorkspace'
+import type { CastingWorkspaceController, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, ScriptImportWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
 
 export interface CastingTranslations {
   batch: string
@@ -47,6 +48,7 @@ export interface StageWorkspaceTranslations {
   deliverables: string
   approvalGate: string
   previewNotice: string
+  script: ScriptImportTranslations
   world: WorldBibleTranslations
   casting: CastingTranslations
   face: FaceBibleTranslations
@@ -64,6 +66,7 @@ interface StageWorkspaceProps {
   candidateCount: 4 | 8 | 10
   onCandidateCountChange: (count: 4 | 8 | 10) => void
   stage: LocalizedDevelopmentStage
+  scriptImportController: ScriptImportWorkspaceController
   worldBibleController: WorldBibleWorkspaceController
   castingController: CastingWorkspaceController
   faceBibleController: FaceBibleWorkspaceController
@@ -76,6 +79,7 @@ export function StageWorkspace({
   candidateCount,
   onCandidateCountChange,
   stage,
+  scriptImportController,
   worldBibleController,
   castingController,
   faceBibleController,
@@ -106,7 +110,9 @@ export function StageWorkspace({
           <StageIcon stage={stage} />
         </div>
 
-        {stage.id === 'world' ? (
+        {stage.id === 'script' ? (
+          <ScriptImportWorkspace controller={scriptImportController} translations={translations.script} />
+        ) : stage.id === 'world' ? (
           <WorldBibleWorkspace controller={worldBibleController} translations={translations.world} />
         ) : stage.id === 'casting' ? (
           <CastingWorkspace
@@ -125,7 +131,7 @@ export function StageWorkspace({
           <GenericStageBoard stage={stage} translations={translations} />
         )}
 
-        {!['world', 'casting', 'face', 'hair', 'costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) && <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
+        {!['script', 'world', 'casting', 'face', 'hair', 'costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) && <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
           <div className="rounded-2xl border border-white/[0.07] bg-raised p-5">
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">
               {translations.deliverables}

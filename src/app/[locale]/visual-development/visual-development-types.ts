@@ -1,10 +1,57 @@
 import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
 import type { WorldAssetCode } from '@/lib/visual-development/world-bible'
+import type { ScriptAnalysisDocument, ScriptSourceFormat } from '@/lib/visual-development/script-analysis'
 import type { ProductionFieldId, ProductionStageDefinition, ProductionStageId } from '@/lib/visual-development/production-stages'
 
 export interface ProjectOption {
   id: string
   name: string
+}
+
+export interface CharacterOption {
+  code: string
+  name: string
+  status: string
+}
+
+export interface ScriptImportWorkspaceController {
+  sourceTitle: string
+  sourceFormat: ScriptSourceFormat
+  scriptText: string
+  modelKey: string
+  llmModels: UserModelOption[]
+  analysis: ScriptAnalysisDocument | null
+  sources: ScriptSourceVersionView[]
+  sourceVersionId: string | null
+  taskStatus: string | null
+  errorMessage: string | null
+  selectedCharacterCodes: string[]
+  applyWorldBible: boolean
+  isUploading: boolean
+  isAnalyzing: boolean
+  isApplying: boolean
+  onSourceTitleChange: (value: string) => void
+  onScriptTextChange: (value: string) => void
+  onModelChange: (value: string) => void
+  onFileSelected: (file: File) => void
+  onAnalyze: () => void
+  onToggleCharacter: (code: string) => void
+  onSelectAllCharacters: (selected: boolean) => void
+  onApplyWorldBibleChange: (selected: boolean) => void
+  onApply: () => void
+}
+
+export interface ScriptSourceVersionView {
+  id: string
+  name: string
+  sourceTitle: string
+  sourceFormat: ScriptSourceFormat
+  sha256: string
+  sizeBytes: number
+  textLength: number
+  createdAt: string
+  version: number
+  downloadUrl: string
 }
 
 export interface CastingCandidateView {
@@ -123,6 +170,7 @@ export interface WorldBibleWorkspaceController {
   onGenerate: () => void
   onReviewAsset: (code: WorldAssetCode, approved: boolean, rejectionNote?: string) => void
   onLock: () => void
+  onReload: () => void
 }
 
 export interface FaceBibleFormState {

@@ -47,18 +47,25 @@ export function useHairDesignController(input: UseHairDesignInput): {
   const [form, setForm] = useState<HairDesignFormState>(EMPTY_HAIR_FORM)
   const [isGenerating, setIsGenerating] = useState(false)
   const loadedProjectId = useRef('')
+  const lastSavedDraftRef = useRef('')
 
   useEffect(() => {
-    if (loadedProjectId.current !== input.projectId) {
-      loadedProjectId.current = input.projectId
-      setForm({
+    const identityKey = `${input.projectId}:${input.characterCode}`
+    if (loadedProjectId.current !== identityKey) {
+      loadedProjectId.current = identityKey
+      const nextForm = {
         ...EMPTY_HAIR_FORM,
         hairSilhouette: input.characterDna.hairSilhouette || EMPTY_HAIR_FORM.hairSilhouette,
         partingAndHairline: input.characterDna.partingAndHairline || EMPTY_HAIR_FORM.partingAndHairline,
         lengthAndTexture: input.characterDna.lengthAndTexture || EMPTY_HAIR_FORM.lengthAndTexture,
         storyRequirements: input.characterDna.storyRequirements || EMPTY_HAIR_FORM.storyRequirements,
         forbiddenDrift: input.characterDna.hairForbiddenDrift || EMPTY_HAIR_FORM.forbiddenDrift,
-      })
+        modelKey: input.characterDna.draft_hair_modelKey || '',
+        resolution: input.characterDna.draft_hair_resolution || '',
+        aspectRatio: input.characterDna.draft_hair_aspectRatio || '3:4',
+      }
+      setForm(nextForm)
+      lastSavedDraftRef.current = JSON.stringify(nextForm)
       return
     }
     setForm((current) => ({
@@ -71,12 +78,43 @@ export function useHairDesignController(input: UseHairDesignInput): {
     }))
   }, [
     input.characterDna.hairForbiddenDrift,
+    input.characterDna.draft_hair_aspectRatio,
+    input.characterDna.draft_hair_modelKey,
+    input.characterDna.draft_hair_resolution,
     input.characterDna.hairSilhouette,
     input.characterDna.lengthAndTexture,
     input.characterDna.partingAndHairline,
     input.characterDna.storyRequirements,
     input.projectId,
+    input.characterCode,
   ])
+
+  useEffect(() => {
+    if (!input.projectId || !input.characterCode || input.isLoading) return
+    const signature = JSON.stringify(form)
+    if (signature === lastSavedDraftRef.current) return
+    const timer = window.setTimeout(() => {
+      const characterDnaPatch = {
+        hairSilhouette: form.hairSilhouette,
+        partingAndHairline: form.partingAndHairline,
+        lengthAndTexture: form.lengthAndTexture,
+        storyRequirements: form.storyRequirements,
+        hairForbiddenDrift: form.forbiddenDrift,
+        draft_hair_modelKey: form.modelKey,
+        draft_hair_resolution: form.resolution,
+        draft_hair_aspectRatio: form.aspectRatio,
+      }
+      void fetch(`/api/visual-development/${input.projectId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'save-draft', characterCode: input.characterCode, characterDnaPatch }),
+      }).then((response) => {
+        if (!response.ok) throw new Error('Hair Design autosave failed')
+        lastSavedDraftRef.current = signature
+      }).catch((error) => window.alert(error instanceof Error ? error.message : String(error)))
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [form, input.characterCode, input.isLoading, input.projectId])
 
   const imageModels = useMemo(
     () => input.imageModels.filter((model) => (

@@ -1,6 +1,7 @@
 import type { AppIconName } from '@/components/ui/icons/registry'
 
 export type VisualDevelopmentStageId =
+  | 'script'
   | 'research'
   | 'world'
   | 'casting'
@@ -31,6 +32,7 @@ export interface VisualDevelopmentStageDefinition {
 }
 
 export const VISUAL_DEVELOPMENT_STAGES: readonly VisualDevelopmentStageDefinition[] = [
+  { id: 'script', code: '-2', group: 'foundation', icon: 'fileText' },
   { id: 'research', code: '-1', group: 'foundation', icon: 'search' },
   { id: 'world', code: '00', group: 'foundation', icon: 'globe' },
   { id: 'casting', code: '01', group: 'identity', icon: 'user' },
@@ -48,7 +50,7 @@ export const VISUAL_DEVELOPMENT_STAGES: readonly VisualDevelopmentStageDefinitio
   { id: 'video', code: '13', group: 'production', icon: 'video' },
 ] as const
 
-export const DEFAULT_VISUAL_DEVELOPMENT_STAGE: VisualDevelopmentStageId = 'casting'
+export const DEFAULT_VISUAL_DEVELOPMENT_STAGE: VisualDevelopmentStageId = 'script'
 
 export function getVisualDevelopmentStage(
   stageId: VisualDevelopmentStageId,

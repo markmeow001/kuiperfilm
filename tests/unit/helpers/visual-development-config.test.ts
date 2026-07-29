@@ -6,9 +6,10 @@ import {
 } from '@/app/[locale]/visual-development/visual-development-config'
 
 describe('visual development stage configuration', () => {
-  it('defines the complete Phase -1 through Phase 13 pipeline in order', () => {
-    expect(VISUAL_DEVELOPMENT_STAGES).toHaveLength(15)
+  it('defines the complete Phase -2 through Phase 13 pipeline in order', () => {
+    expect(VISUAL_DEVELOPMENT_STAGES).toHaveLength(16)
     expect(VISUAL_DEVELOPMENT_STAGES.map((stage) => stage.code)).toEqual([
+      '-2',
       '-1',
       '00',
       '01',
@@ -27,10 +28,10 @@ describe('visual development stage configuration', () => {
     ])
   })
 
-  it('uses unique ids and opens the UI prototype on casting', () => {
+  it('uses unique ids and opens the UI on screenplay import', () => {
     const ids = VISUAL_DEVELOPMENT_STAGES.map((stage) => stage.id)
     expect(new Set(ids).size).toBe(ids.length)
-    expect(DEFAULT_VISUAL_DEVELOPMENT_STAGE).toBe('casting')
-    expect(getVisualDevelopmentStage(DEFAULT_VISUAL_DEVELOPMENT_STAGE).code).toBe('01')
+    expect(DEFAULT_VISUAL_DEVELOPMENT_STAGE).toBe('script')
+    expect(getVisualDevelopmentStage(DEFAULT_VISUAL_DEVELOPMENT_STAGE).code).toBe('-2')
   })
 })

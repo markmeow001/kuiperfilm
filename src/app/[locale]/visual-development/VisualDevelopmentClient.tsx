@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { PRODUCTION_STAGE_IDS, type ProductionStageId } from '@/lib/visual-development/production-stages'
@@ -9,9 +9,12 @@ import { DevelopmentRail, type LocalizedDevelopmentStage } from './DevelopmentRa
 import { StageWorkspace } from './StageWorkspace'
 import { VisualDevelopmentHeader } from './VisualDevelopmentHeader'
 import { useHairDesignController } from './useHairDesignController'
+import { useScriptImportController } from './useScriptImportController'
 import { useProductionStageController } from './useProductionStageController'
 import { useWorldBibleController } from './useWorldBibleController'
 import { useStageWorkspaceTranslations } from './useStageWorkspaceTranslations'
+import { useVisualDevelopmentCharacterAutosave, useVisualDevelopmentProjectSelection } from './useVisualDevelopmentProjectState'
+import { EMPTY_CASTING_FORM, EMPTY_FACE_FORM, toStringArray, toStringRecord, type WorkspaceResponse } from './visual-development-client-state'
 import {
   DEFAULT_VISUAL_DEVELOPMENT_STAGE,
   VISUAL_DEVELOPMENT_STAGES,
@@ -20,63 +23,14 @@ import {
 import type {
   CastingBatchView,
   CastingCandidateView,
-  CastingFormState,
   CastingWorkspaceController,
   FaceBibleFormState,
   FaceBibleWorkspaceController,
-  ProjectOption,
+  CharacterOption,
 } from './visual-development-types'
 
 interface VisualDevelopmentClientProps {
   locale: string
-}
-
-function toStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-}
-
-const EMPTY_FORM: CastingFormState = {
-  worldBible: { projectPremise: '', visualThesis: '' },
-  characterDna: { role: '', coreTraits: '' },
-  castingBrief: {
-    apparentAge: '24–28',
-    ethnicity: '',
-    faceStructure: '',
-    emotionalRead: '',
-    lifeHistory: '',
-  },
-  characterCode: 'CHAR-01',
-  characterName: '',
-  modelKey: '',
-  resolution: '',
-}
-
-const EMPTY_FACE_FORM: FaceBibleFormState = {
-  identityAnchors: '',
-  allowedVariation: 'camera angle, gaze direction and the requested micro-expression only',
-  forbiddenDrift: 'apparent age, ancestry, face width, eye spacing, nose shape, lip volume, jawline, hairline and distinctive marks',
-  modelKey: '',
-  resolution: '',
-  aspectRatio: '3:4',
-}
-
-type WorkspaceResponse = {
-  data?: {
-    workspace?: {
-      status?: string
-      worldBible?: Record<string, string> | null
-      characters?: Array<{
-        code: string
-        name: string
-        status: string
-        characterDna?: Record<string, string> | null
-        castingBrief?: Record<string, string> | null
-        castingBatches?: CastingBatchView[]
-      }>
-    } | null
-  }
 }
 
 export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps) {
@@ -85,9 +39,11 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     DEFAULT_VISUAL_DEVELOPMENT_STAGE,
   )
   const [candidateCount, setCandidateCount] = useState<4 | 8 | 10>(10)
-  const [projects, setProjects] = useState<ProjectOption[]>([])
-  const [projectId, setProjectId] = useState('')
-  const [form, setForm] = useState<CastingFormState>(EMPTY_FORM)
+  const { projects, projectId, changeProject, createProject } = useVisualDevelopmentProjectSelection(t('header.createFailed'))
+  const [characters, setCharacters] = useState<CharacterOption[]>([])
+  const [selectedCharacterCode, setSelectedCharacterCode] = useState('')
+  const selectedCharacterCodeRef = useRef('')
+  const [form, setForm] = useState(EMPTY_CASTING_FORM)
   const [batch, setBatch] = useState<CastingBatchView | null>(null)
   const [faceBatch, setFaceBatch] = useState<CastingBatchView | null>(null)
   const [hairExplorationBatch, setHairExplorationBatch] = useState<CastingBatchView | null>(null)
@@ -102,17 +58,6 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const modelsQuery = useUserModels()
   const stageWorkspaceTranslations = useStageWorkspaceTranslations(candidateCount)
 
-  useEffect(() => {
-    void (async () => {
-      const response = await fetch('/api/projects?page=1&pageSize=100')
-      if (!response.ok) return
-      const data = await response.json() as { projects?: ProjectOption[] }
-      const nextProjects = Array.isArray(data.projects) ? data.projects : []
-      setProjects(nextProjects)
-      setProjectId((current) => current || nextProjects[0]?.id || '')
-    })()
-  }, [])
-
   const loadWorkspace = useCallback(async (selectedProjectId: string) => {
     if (!selectedProjectId) {
       setBatch(null)
@@ -120,6 +65,9 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       setHairExplorationBatch(null)
       setHairValidationBatch(null)
       setProductionBatches([])
+      setCharacters([])
+      setSelectedCharacterCode('')
+      selectedCharacterCodeRef.current = ''
       return
     }
     setIsLoadingWorkspace(true)
@@ -129,7 +77,12 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       const payload = await response.json() as WorkspaceResponse
       const workspace = payload.data?.workspace
       setWorldStatus(workspace?.status ?? 'draft')
-      const character = workspace?.characters?.[0]
+      const nextCharacters = workspace?.characters?.map(({ code, name, status }) => ({ code, name, status })) ?? []
+      setCharacters(nextCharacters)
+      const character = workspace?.characters?.find((item) => item.code === selectedCharacterCodeRef.current)
+        ?? workspace?.characters?.[0]
+      selectedCharacterCodeRef.current = character?.code ?? ''
+      setSelectedCharacterCode(character?.code ?? '')
       const batches = character?.castingBatches ?? []
       setBatch(batches.find((item) => item.stage === 'casting') ?? null)
       setFaceBatch(batches.find((item) => item.stage === 'face-lock') ?? null)
@@ -147,19 +100,21 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
         }))
       }
       if (workspace && character) {
+        const characterDna = toStringRecord(character.characterDna)
+        const castingBrief = toStringRecord(character.castingBrief)
         setCharacterStatus(character.status)
         setForm((current) => ({
           ...current,
-          characterDna: { ...current.characterDna, ...(character.characterDna ?? {}) },
-          castingBrief: { ...current.castingBrief, ...(character.castingBrief ?? {}) },
+          characterDna: { ...EMPTY_CASTING_FORM.characterDna, ...characterDna },
+          castingBrief: { ...EMPTY_CASTING_FORM.castingBrief, ...castingBrief },
           characterCode: character.code,
           characterName: character.name,
         }))
         setFaceForm((current) => ({
           ...current,
-          identityAnchors: character.characterDna?.identityAnchors ?? current.identityAnchors,
-          allowedVariation: character.characterDna?.allowedVariation ?? current.allowedVariation,
-          forbiddenDrift: character.characterDna?.forbiddenDrift ?? current.forbiddenDrift,
+          identityAnchors: characterDna.identityAnchors ?? EMPTY_FACE_FORM.identityAnchors,
+          allowedVariation: characterDna.allowedVariation ?? EMPTY_FACE_FORM.allowedVariation,
+          forbiddenDrift: characterDna.forbiddenDrift ?? EMPTY_FACE_FORM.forbiddenDrift,
         }))
       }
     } finally {
@@ -168,17 +123,28 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   }, [])
 
   useEffect(() => {
+    selectedCharacterCodeRef.current = ''
+    setSelectedCharacterCode('')
+    setCharacters([])
     setBatch(null)
     setFaceBatch(null)
     setHairExplorationBatch(null)
     setHairValidationBatch(null)
     setProductionBatches([])
-    setForm(EMPTY_FORM)
+    setForm(EMPTY_CASTING_FORM)
     setFaceForm(EMPTY_FACE_FORM)
     setCharacterStatus('draft')
     setWorldStatus('draft')
     void loadWorkspace(projectId)
   }, [projectId, loadWorkspace])
+
+  const saveStatus = useVisualDevelopmentCharacterAutosave({ projectId, form, faceForm, isLoading: isLoadingWorkspace })
+
+  const selectCharacter = useCallback((characterCode: string) => {
+    selectedCharacterCodeRef.current = characterCode
+    setSelectedCharacterCode(characterCode)
+    void loadWorkspace(projectId)
+  }, [loadWorkspace, projectId])
 
   useEffect(() => {
     const hasActiveTasks = [batch, faceBatch, hairExplorationBatch, hairValidationBatch, ...productionBatches].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
@@ -360,13 +326,23 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onGenerate: () => void generateFaceBible(),
     onReview: (candidateId, approved, rejectionNote) => void reviewFaceAsset(candidateId, approved, rejectionNote),
     onLock: () => void lockFaceBible(),
-  }), [canonCandidate, characterStatus, faceBatch, faceForm, generateFaceBible, isGeneratingFace, isLoadingWorkspace, lockFaceBible, modelsQuery.isLoading, referenceImageModels, reviewFaceAsset, updateFaceField])
+  }), [canonCandidate, characterStatus, faceBatch, faceForm, form.characterCode, generateFaceBible, isGeneratingFace, isLoadingWorkspace, lockFaceBible, modelsQuery.isLoading, referenceImageModels, reviewFaceAsset, updateFaceField])
 
   const worldBibleController = useWorldBibleController({
     projectId,
     locale,
     imageModels: modelsQuery.data?.image ?? [],
     onWorldChanged: () => void loadWorkspace(projectId),
+  })
+
+  const scriptImportController = useScriptImportController({
+    projectId,
+    locale,
+    llmModels: modelsQuery.data?.llm ?? [],
+    onApplied: async () => {
+      await Promise.all([loadWorkspace(projectId), worldBibleController.onReload()])
+      setActiveStageId('world')
+    },
   })
 
   const { controller: hairDesignController, activeBatch: activeHairBatch } = useHairDesignController({
@@ -417,7 +393,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
 
   return (
     <div className="kuiper-stage flex min-h-screen flex-col overflow-hidden text-text-primary">
-      <VisualDevelopmentHeader locale={locale} projectId={projectId} projects={projects} onProjectChange={setProjectId} labels={{ back: t('header.back'), eyebrow: t('header.eyebrow'), system: t('header.system'), title: t('header.title'), project: t('header.project'), noProject: t('header.noProject'), preview: t('header.preview') }} />
+      <VisualDevelopmentHeader locale={locale} projectId={projectId} projects={projects} characters={characters} characterCode={selectedCharacterCode} onProjectChange={changeProject} onCharacterChange={selectCharacter} onCreateProject={createProject} saveStatus={saveStatus} labels={{ back: t('header.back'), eyebrow: t('header.eyebrow'), system: t('header.system'), title: t('header.title'), project: t('header.project'), noProject: t('header.noProject'), character: t('header.character'), noCharacter: t('header.noCharacter'), preview: t('header.preview'), newProject: t('header.newProject'), projectName: t('header.projectName'), projectDescription: t('header.projectDescription'), create: t('header.create'), creating: t('header.creating'), cancel: t('header.cancel'), export: t('header.export'), exportCanon: t('header.exportCanon'), exportApproved: t('header.exportApproved'), exportFull: t('header.exportFull'), saving: t('header.saving'), saved: t('header.saved'), saveError: t('header.saveError') }} />
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)_304px]">
         <DevelopmentRail
@@ -435,6 +411,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
         />
 
         <StageWorkspace
+          scriptImportController={scriptImportController}
           worldBibleController={worldBibleController}
           castingController={castingController}
           faceBibleController={faceBibleController}
