@@ -32,6 +32,8 @@ interface CastingTranslations {
   canonLock: string
   canonLocked: string
   generating: string
+  worldRequired: string
+  worldLocked: string
 }
 
 interface CastingWorkspaceProps {
@@ -69,6 +71,10 @@ export function CastingWorkspace({
         <div className="mb-4 flex items-center gap-2 font-mono text-[9px] tracking-[0.18em] text-primary-400">
           <AppIcon name="brain" className="h-3.5 w-3.5" />
           {translations.projectSetup}
+        </div>
+        <div className={`mb-4 flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] ${controller.worldStatus === 'world_locked' ? 'border-primary-500/20 bg-primary-500/[0.06] text-primary-400' : 'border-amber-400/20 bg-amber-400/[0.05] text-amber-200/80'}`}>
+          <AppIcon name={controller.worldStatus === 'world_locked' ? 'badgeCheck' : 'lock'} className="h-3.5 w-3.5" />
+          {controller.worldStatus === 'world_locked' ? translations.worldLocked : translations.worldRequired}
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
           <Field label={translations.worldPremise} value={controller.form.worldBible.projectPremise} onChange={(value) => controller.onFieldChange('worldBible', 'projectPremise', value)} multiline />
@@ -129,7 +135,7 @@ export function CastingWorkspace({
                 {count}
               </button>
             ))}
-            <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
+            <button type="button" disabled={controller.worldStatus !== 'world_locked' || controller.isGenerating || controller.isLoading || !controller.form.modelKey} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
               <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
               {controller.isGenerating ? translations.generating : translations.generate}
             </button>
@@ -182,4 +188,3 @@ function Field({ label, value, onChange, multiline = false, placeholder }: { lab
     </label>
   )
 }
-

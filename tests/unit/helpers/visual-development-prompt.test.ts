@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCastingPrompt,
   buildFaceLockPrompt,
+  buildHairExplorationPrompt,
+  buildHairValidationPrompt,
   FACE_LOCK_VARIANTS,
+  HAIR_EXPLORATION_VARIANTS,
+  HAIR_VALIDATION_VARIANTS,
 } from '@/lib/visual-development/prompt'
 
 describe('visual development casting prompt', () => {
@@ -32,6 +36,38 @@ describe('visual development casting prompt', () => {
     expect(result.prompt).toContain('No costume design')
     expect(result.promptStack.phaseTemplate).toBe('CADS_CASTING_FACE_V1')
     expect(result.negativePrompt).toContain('recognizable actor')
+  })
+})
+
+describe('visual development Hair Design prompts', () => {
+  const hairRecord = {
+    characterCode: 'CHR-SNO',
+    hairSilhouette: 'readable around the face and compatible with a high collar',
+    partingAndHairline: 'preserve the natural hairline',
+    lengthAndTexture: 'believable weight and strand grouping',
+    storyRequirements: 'formal and escape states share the same core cut',
+    forbiddenDrift: 'face, age, ancestry, wardrobe and background',
+  }
+
+  it('defines ten unique exploration directions and changes hair only', () => {
+    expect(HAIR_EXPLORATION_VARIANTS).toHaveLength(10)
+    expect(new Set(HAIR_EXPLORATION_VARIANTS.map((item) => item.code)).size).toBe(10)
+    const result = buildHairExplorationPrompt({ ...hairRecord, variant: HAIR_EXPLORATION_VARIANTS[0] })
+    expect(result.prompt).toContain('Reference image 1 defines the exact identity')
+    expect(result.prompt).toContain('Change only hairstyle construction')
+    expect(result.prompt).toContain('compatible with costume collars')
+    expect(result.promptStack.phaseTemplate).toBe('CADS_HAIR_EXPLORATION_V1')
+  })
+
+  it('assigns identity and hair to separate references across eight validation assets', () => {
+    expect(HAIR_VALIDATION_VARIANTS).toHaveLength(8)
+    expect(new Set(HAIR_VALIDATION_VARIANTS.map((item) => item.code)).size).toBe(8)
+    const result = buildHairValidationPrompt({ ...hairRecord, variant: HAIR_VALIDATION_VARIANTS[2] })
+    expect(result.prompt).toContain('Reference image 1 is the exclusive identity authority')
+    expect(result.prompt).toContain('Reference image 2 is the exclusive hairstyle-construction authority')
+    expect(result.prompt).toContain('direct back view')
+    expect(result.promptStack.phaseTemplate).toBe('CADS_HAIR_VALIDATION_V1')
+    expect(result.promptStack.hairReference).toBe('REFERENCE_IMAGE_2_HAIR_ONLY')
   })
 })
 

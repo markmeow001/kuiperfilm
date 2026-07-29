@@ -1,4 +1,5 @@
 import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
+import type { WorldAssetCode } from '@/lib/visual-development/world-bible'
 
 export interface ProjectOption {
   id: string
@@ -22,6 +23,7 @@ export interface CastingCandidateView {
 export interface CastingBatchView {
   id: string
   stage: string
+  candidateCount: number
   modelKey: string
   provider: string
   modelId: string
@@ -30,6 +32,68 @@ export interface CastingBatchView {
   resolution: string | null
   status: string
   candidates: CastingCandidateView[]
+}
+
+export interface WorldBibleReferenceView {
+  id: string
+  key: string
+  name: string
+  category: string
+  note: string
+  createdAt: string
+  previewUrl?: string | null
+}
+
+export interface WorldBibleAssetView {
+  code: WorldAssetCode
+  taskId: string
+  prompt: string
+  negativePrompt: string
+  requestedSeed: number | null
+  seedStatus: string
+  approved: boolean
+  rejectionNote: string | null
+  taskStatus: string
+  progress: number
+  resultUrl: string | null
+  errorMessage: string | null
+}
+
+export interface WorldBibleFormState {
+  projectPremise: string
+  visualThesis: string
+  eraAndGeography: string
+  societyAndFactions: string
+  technologyRules: string
+  colorScript: string
+  materialRules: string
+  architectureLanguage: string
+  cameraFormat: string
+  forbiddenElements: string
+  modelKey: string
+  resolution: string
+  aspectRatio: string
+}
+
+export interface WorldBibleWorkspaceController {
+  form: WorldBibleFormState
+  references: WorldBibleReferenceView[]
+  assets: WorldBibleAssetView[]
+  status: string
+  version: number
+  canonId: string | null
+  imageModels: UserModelOption[]
+  isLoading: boolean
+  isSaving: boolean
+  isGenerating: boolean
+  isUploading: boolean
+  onFieldChange: (field: keyof WorldBibleFormState, value: string) => void
+  onSave: () => void
+  onUploadReferences: (files: FileList) => void
+  onRemoveReference: (referenceId: string) => void
+  onGenerate: () => void
+  onReviewAsset: (code: WorldAssetCode, approved: boolean, rejectionNote?: string) => void
+  onLock: () => void
 }
 
 export interface FaceBibleFormState {
@@ -56,6 +120,36 @@ export interface FaceBibleWorkspaceController {
   onLock: () => void
 }
 
+export interface HairDesignFormState {
+  hairSilhouette: string
+  partingAndHairline: string
+  lengthAndTexture: string
+  storyRequirements: string
+  forbiddenDrift: string
+  modelKey: string
+  resolution: string
+  aspectRatio: string
+}
+
+export interface HairDesignWorkspaceController {
+  explorationBatch: CastingBatchView | null
+  validationBatch: CastingBatchView | null
+  identityCandidate: CastingCandidateView | null
+  selectedHairCandidate: CastingCandidateView | null
+  characterCode: string
+  characterStatus: string
+  form: HairDesignFormState
+  imageModels: UserModelOption[]
+  isGenerating: boolean
+  isLoading: boolean
+  onFieldChange: (field: keyof HairDesignFormState, value: string) => void
+  onGenerateExploration: () => void
+  onSelectDirection: (candidateId: string) => void
+  onGenerateValidation: () => void
+  onReviewValidation: (candidateId: string, approved: boolean, rejectionNote?: string) => void
+  onLock: () => void
+}
+
 export interface CastingFormState {
   worldBible: Record<string, string>
   characterDna: Record<string, string>
@@ -69,6 +163,7 @@ export interface CastingFormState {
 export interface CastingWorkspaceController {
   batch: CastingBatchView | null
   form: CastingFormState
+  worldStatus: string
   imageModels: UserModelOption[]
   isGenerating: boolean
   isLoading: boolean

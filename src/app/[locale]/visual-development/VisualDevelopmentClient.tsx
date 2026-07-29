@@ -8,6 +8,9 @@ import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { DevelopmentInspector } from './DevelopmentInspector'
 import { DevelopmentRail, type LocalizedDevelopmentStage } from './DevelopmentRail'
 import { StageWorkspace } from './StageWorkspace'
+import { useHairDesignController } from './useHairDesignController'
+import { useWorldBibleController } from './useWorldBibleController'
+import { useStageWorkspaceTranslations } from './useStageWorkspaceTranslations'
 import {
   DEFAULT_VISUAL_DEVELOPMENT_STAGE,
   VISUAL_DEVELOPMENT_STAGES,
@@ -61,6 +64,7 @@ const EMPTY_FACE_FORM: FaceBibleFormState = {
 type WorkspaceResponse = {
   data?: {
     workspace?: {
+      status?: string
       worldBible?: Record<string, string> | null
       characters?: Array<{
         code: string
@@ -85,12 +89,16 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const [form, setForm] = useState<CastingFormState>(EMPTY_FORM)
   const [batch, setBatch] = useState<CastingBatchView | null>(null)
   const [faceBatch, setFaceBatch] = useState<CastingBatchView | null>(null)
+  const [hairExplorationBatch, setHairExplorationBatch] = useState<CastingBatchView | null>(null)
+  const [hairValidationBatch, setHairValidationBatch] = useState<CastingBatchView | null>(null)
   const [faceForm, setFaceForm] = useState<FaceBibleFormState>(EMPTY_FACE_FORM)
   const [characterStatus, setCharacterStatus] = useState('draft')
+  const [worldStatus, setWorldStatus] = useState('draft')
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isGeneratingFace, setIsGeneratingFace] = useState(false)
   const modelsQuery = useUserModels()
+  const stageWorkspaceTranslations = useStageWorkspaceTranslations(candidateCount)
 
   useEffect(() => {
     void (async () => {
@@ -107,6 +115,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     if (!selectedProjectId) {
       setBatch(null)
       setFaceBatch(null)
+      setHairExplorationBatch(null)
+      setHairValidationBatch(null)
       return
     }
     setIsLoadingWorkspace(true)
@@ -115,15 +125,27 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       if (!response.ok) return
       const payload = await response.json() as WorkspaceResponse
       const workspace = payload.data?.workspace
+      setWorldStatus(workspace?.status ?? 'draft')
       const character = workspace?.characters?.[0]
       const batches = character?.castingBatches ?? []
       setBatch(batches.find((item) => item.stage === 'casting') ?? null)
       setFaceBatch(batches.find((item) => item.stage === 'face-lock') ?? null)
+      setHairExplorationBatch(batches.find((item) => item.stage === 'hair-exploration') ?? null)
+      setHairValidationBatch(batches.find((item) => item.stage === 'hair-validation') ?? null)
+      if (workspace) {
+        setForm((current) => ({
+          ...current,
+          worldBible: {
+            ...current.worldBible,
+            projectPremise: workspace.worldBible?.projectPremise ?? '',
+            visualThesis: workspace.worldBible?.visualThesis ?? '',
+          },
+        }))
+      }
       if (workspace && character) {
         setCharacterStatus(character.status)
         setForm((current) => ({
           ...current,
-          worldBible: { ...current.worldBible, ...(workspace.worldBible ?? {}) },
           characterDna: { ...current.characterDna, ...(character.characterDna ?? {}) },
           castingBrief: { ...current.castingBrief, ...(character.castingBrief ?? {}) },
           characterCode: character.code,
@@ -144,19 +166,22 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   useEffect(() => {
     setBatch(null)
     setFaceBatch(null)
+    setHairExplorationBatch(null)
+    setHairValidationBatch(null)
     setForm(EMPTY_FORM)
     setFaceForm(EMPTY_FACE_FORM)
     setCharacterStatus('draft')
+    setWorldStatus('draft')
     void loadWorkspace(projectId)
   }, [projectId, loadWorkspace])
 
   useEffect(() => {
-    const hasActiveTasks = [batch, faceBatch].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
+    const hasActiveTasks = [batch, faceBatch, hairExplorationBatch, hairValidationBatch].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
       candidate.taskStatus === 'queued' || candidate.taskStatus === 'processing'))
     if (!projectId || !hasActiveTasks) return
     const timer = window.setInterval(() => void loadWorkspace(projectId), 3000)
     return () => window.clearInterval(timer)
-  }, [batch, faceBatch, projectId, loadWorkspace])
+  }, [batch, faceBatch, hairExplorationBatch, hairValidationBatch, projectId, loadWorkspace])
 
   const updateField = useCallback((
     group: 'worldBible' | 'characterDna' | 'castingBrief',
@@ -176,6 +201,10 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
 
   const generateCasting = useCallback(async () => {
     if (!projectId || !form.modelKey) return
+    if (worldStatus !== 'world_locked') {
+      window.alert(t('workspace.casting.worldRequired'))
+      return
+    }
     setIsGenerating(true)
     try {
       const response = await fetch(`/api/visual-development/${projectId}`, {
@@ -197,7 +226,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     } finally {
       setIsGenerating(false)
     }
-  }, [candidateCount, form, loadWorkspace, locale, projectId, t])
+  }, [candidateCount, form, loadWorkspace, locale, projectId, t, worldStatus])
 
   const handleCandidateAction = useCallback(async (
     candidateId: string,
@@ -298,6 +327,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const castingController = useMemo<CastingWorkspaceController>(() => ({
     batch,
     form,
+    worldStatus,
     imageModels: modelsQuery.data?.image ?? [],
     isGenerating,
     isLoading: isLoadingWorkspace || modelsQuery.isLoading,
@@ -305,7 +335,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onIdentityChange: updateIdentity,
     onGenerate: () => void generateCasting(),
     onCandidateAction: (candidateId, action, shortlisted) => void handleCandidateAction(candidateId, action, shortlisted),
-  }), [batch, form, generateCasting, handleCandidateAction, isGenerating, isLoadingWorkspace, modelsQuery.data?.image, modelsQuery.isLoading, updateField, updateIdentity])
+  }), [batch, form, generateCasting, handleCandidateAction, isGenerating, isLoadingWorkspace, modelsQuery.data?.image, modelsQuery.isLoading, updateField, updateIdentity, worldStatus])
 
   const canonCandidate = useMemo<CastingCandidateView | null>(
     () => batch?.candidates.find((candidate) => candidate.isCanon) ?? null,
@@ -326,6 +356,27 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onReview: (candidateId, approved, rejectionNote) => void reviewFaceAsset(candidateId, approved, rejectionNote),
     onLock: () => void lockFaceBible(),
   }), [canonCandidate, characterStatus, faceBatch, faceForm, generateFaceBible, isGeneratingFace, isLoadingWorkspace, lockFaceBible, modelsQuery.isLoading, referenceImageModels, reviewFaceAsset, updateFaceField])
+
+  const worldBibleController = useWorldBibleController({
+    projectId,
+    locale,
+    imageModels: modelsQuery.data?.image ?? [],
+    onWorldChanged: () => void loadWorkspace(projectId),
+  })
+
+  const { controller: hairDesignController, activeBatch: activeHairBatch } = useHairDesignController({
+    projectId,
+    locale,
+    characterCode: form.characterCode,
+    characterStatus,
+    characterDna: form.characterDna,
+    faceBatch,
+    explorationBatch: hairExplorationBatch,
+    validationBatch: hairValidationBatch,
+    imageModels: modelsQuery.data?.image ?? [],
+    isLoading: isLoadingWorkspace || modelsQuery.isLoading,
+    onRefresh: async () => loadWorkspace(projectId),
+  })
 
   const stages = useMemo<LocalizedDevelopmentStage[]>(
     () =>
@@ -400,88 +451,30 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
         />
 
         <StageWorkspace
+          worldBibleController={worldBibleController}
           castingController={castingController}
           faceBibleController={faceBibleController}
+          hairDesignController={hairDesignController}
           candidateCount={candidateCount}
           onCandidateCountChange={setCandidateCount}
           stage={activeStage}
-          translations={{
-            objective: t('workspace.objective'),
-            deliverables: t('workspace.deliverables'),
-            approvalGate: t('workspace.approvalGate'),
-            previewNotice: t('workspace.previewNotice'),
-            casting: {
-              batch: t('workspace.casting.batch'),
-              model: t('workspace.casting.model'),
-              notConnected: t('workspace.casting.notConnected'),
-              count: t('workspace.casting.count'),
-              ratio: t('workspace.casting.ratio'),
-              generate: t('workspace.casting.generate', { count: candidateCount }),
-              waiting: t('workspace.casting.waiting'),
-              seedPending: t('workspace.casting.seedPending'),
-              candidate: t('workspace.casting.candidate'),
-              seedUnsupported: t('workspace.casting.seedUnsupported'),
-              seedApplied: t('workspace.casting.seedApplied'),
-              projectSetup: t('workspace.casting.projectSetup'),
-              worldPremise: t('workspace.casting.worldPremise'),
-              visualThesis: t('workspace.casting.visualThesis'),
-              characterName: t('workspace.casting.characterName'),
-              characterCode: t('workspace.casting.characterCode'),
-              characterRole: t('workspace.casting.characterRole'),
-              coreTraits: t('workspace.casting.coreTraits'),
-              apparentAge: t('workspace.casting.apparentAge'),
-              ethnicity: t('workspace.casting.ethnicity'),
-              faceStructure: t('workspace.casting.faceStructure'),
-              emotionalRead: t('workspace.casting.emotionalRead'),
-              lifeHistory: t('workspace.casting.lifeHistory'),
-              resolution: t('workspace.casting.resolution'),
-              modelBinding: t('workspace.casting.modelBinding'),
-              generateHint: t('workspace.casting.generateHint'),
-              shortlist: t('workspace.casting.shortlist'),
-              canonLock: t('workspace.casting.canonLock'),
-              canonLocked: t('workspace.casting.canonLocked'),
-              generating: t('workspace.casting.generating'),
-            },
-            face: {
-              canonSource: t('workspace.face.canonSource'),
-              canonRequired: t('workspace.face.canonRequired'),
-              identityRecord: t('workspace.face.identityRecord'),
-              identityAnchors: t('workspace.face.identityAnchors'),
-              allowedVariation: t('workspace.face.allowedVariation'),
-              forbiddenDrift: t('workspace.face.forbiddenDrift'),
-              modelBinding: t('workspace.face.modelBinding'),
-              referenceOnly: t('workspace.face.referenceOnly'),
-              modelRequired: t('workspace.face.modelRequired'),
-              resolution: t('workspace.face.resolution'),
-              aspectRatio: t('workspace.face.aspectRatio'),
-              generate: t('workspace.face.generate'),
-              generating: t('workspace.face.generating'),
-              waiting: t('workspace.face.waiting'),
-              approve: t('workspace.face.approve'),
-              approved: t('workspace.face.approved'),
-              reject: t('workspace.face.reject'),
-              rejectionPrompt: t('workspace.face.rejectionPrompt'),
-              lock: t('workspace.face.lock'),
-              locked: t('workspace.face.locked'),
-              lockHint: t('workspace.face.lockHint'),
-              modelHint: t('workspace.face.modelHint'),
-              seedUnsupported: t('workspace.face.seedUnsupported'),
-            },
-            board: {
-              title: t('workspace.board.title'),
-              description: t('workspace.board.description'),
-              addReference: t('workspace.board.addReference'),
-              emptySlot: t('workspace.board.emptySlot'),
-            },
-          }}
+          translations={stageWorkspaceTranslations}
         />
 
         <DevelopmentInspector
-          batch={activeStageId === 'face' ? faceBatch : batch}
-          candidateCount={activeStageId === 'face' ? 10 : candidateCount}
-          worldReady={Boolean(form.worldBible.projectPremise && form.worldBible.visualThesis)}
+          batch={activeStageId === 'face' ? faceBatch : activeStageId === 'hair' ? activeHairBatch : batch}
+          candidateCount={activeStageId === 'face' ? 10 : activeStageId === 'hair' && activeHairBatch?.stage === 'hair-validation' ? 8 : activeStageId === 'hair' ? 10 : candidateCount}
+          worldReady={worldBibleController.status === 'world_locked'}
           characterReady={Boolean(form.characterName && form.characterDna.role && form.characterDna.coreTraits)}
-          modelLabel={modelsQuery.data?.image.find((model) => model.value === (activeStageId === 'face' ? faceForm.modelKey : form.modelKey))?.label ?? null}
+          modelLabel={modelsQuery.data?.image.find((model) => model.value === (
+            activeStageId === 'world'
+              ? worldBibleController.form.modelKey
+              : activeStageId === 'face'
+              ? faceForm.modelKey
+              : activeStageId === 'hair'
+                ? hairDesignController.form.modelKey
+                : form.modelKey
+          ))?.label ?? null}
           labels={{
             title: t('inspector.title'),
             canon: t('inspector.canon'),

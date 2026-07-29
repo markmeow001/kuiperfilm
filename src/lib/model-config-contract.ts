@@ -36,6 +36,8 @@ export interface ImageCapabilities {
   aspectRatioOptions?: string[]
   supportNegativePrompt?: boolean
   supportReferenceImage?: boolean
+  /** The model can consume two or more reference images in one request. */
+  supportMultiReferenceImage?: boolean
   /** The provider accepts an explicit deterministic/noise seed for image generation. */
   supportSeed?: boolean
   /** 局部重绘：接受遮罩图（透明区=重绘区）。目前仅 AtlasCloud gpt-image-1。 */
@@ -99,6 +101,7 @@ const IMAGE_ALLOWED_FIELDS = new Set<keyof ImageCapabilities>([
   'aspectRatioOptions',
   'supportNegativePrompt',
   'supportReferenceImage',
+  'supportMultiReferenceImage',
   'supportSeed',
   'supportMaskEdit',
   'fieldI18n',
@@ -328,6 +331,15 @@ function validateImageCapabilities(issues: CapabilityValidationIssue[], raw: unk
       code: 'CAPABILITY_FIELD_INVALID',
       field: 'capabilities.image.supportReferenceImage',
       message: 'supportReferenceImage must be boolean',
+    })
+  }
+
+
+  if (raw.supportMultiReferenceImage !== undefined && typeof raw.supportMultiReferenceImage !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.image.supportMultiReferenceImage',
+      message: 'supportMultiReferenceImage must be boolean',
     })
   }
 

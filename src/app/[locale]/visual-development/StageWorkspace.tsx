@@ -2,9 +2,11 @@ import { AppIcon } from '@/components/ui/icons'
 import type { LocalizedDevelopmentStage } from './DevelopmentRail'
 import { CastingWorkspace } from './CastingWorkspace'
 import { FaceBibleWorkspace, type FaceBibleTranslations } from './FaceBibleWorkspace'
-import type { CastingWorkspaceController, FaceBibleWorkspaceController } from './visual-development-types'
+import { HairDesignWorkspace, type HairDesignTranslations } from './HairDesignWorkspace'
+import { WorldBibleWorkspace, type WorldBibleTranslations } from './WorldBibleWorkspace'
+import type { CastingWorkspaceController, FaceBibleWorkspaceController, HairDesignWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
 
-interface CastingTranslations {
+export interface CastingTranslations {
   batch: string
   model: string
   notConnected: string
@@ -35,36 +37,46 @@ interface CastingTranslations {
   canonLock: string
   canonLocked: string
   generating: string
+  worldRequired: string
+  worldLocked: string
+}
+
+export interface StageWorkspaceTranslations {
+  objective: string
+  deliverables: string
+  approvalGate: string
+  previewNotice: string
+  world: WorldBibleTranslations
+  casting: CastingTranslations
+  face: FaceBibleTranslations
+  hair: HairDesignTranslations
+  board: {
+    title: string
+    description: string
+    addReference: string
+    emptySlot: string
+  }
 }
 
 interface StageWorkspaceProps {
   candidateCount: 4 | 8 | 10
   onCandidateCountChange: (count: 4 | 8 | 10) => void
   stage: LocalizedDevelopmentStage
+  worldBibleController: WorldBibleWorkspaceController
   castingController: CastingWorkspaceController
   faceBibleController: FaceBibleWorkspaceController
-  translations: {
-    objective: string
-    deliverables: string
-    approvalGate: string
-    previewNotice: string
-    casting: CastingTranslations
-    face: FaceBibleTranslations
-    board: {
-      title: string
-      description: string
-      addReference: string
-      emptySlot: string
-    }
-  }
+  hairDesignController: HairDesignWorkspaceController
+  translations: StageWorkspaceTranslations
 }
 
 export function StageWorkspace({
   candidateCount,
   onCandidateCountChange,
   stage,
+  worldBibleController,
   castingController,
   faceBibleController,
+  hairDesignController,
   translations,
 }: StageWorkspaceProps) {
   return (
@@ -90,7 +102,9 @@ export function StageWorkspace({
           <StageIcon stage={stage} />
         </div>
 
-        {stage.id === 'casting' ? (
+        {stage.id === 'world' ? (
+          <WorldBibleWorkspace controller={worldBibleController} translations={translations.world} />
+        ) : stage.id === 'casting' ? (
           <CastingWorkspace
             candidateCount={candidateCount}
             controller={castingController}
@@ -99,11 +113,13 @@ export function StageWorkspace({
           />
         ) : stage.id === 'face' ? (
           <FaceBibleWorkspace controller={faceBibleController} translations={translations.face} />
+        ) : stage.id === 'hair' ? (
+          <HairDesignWorkspace controller={hairDesignController} translations={translations.hair} />
         ) : (
           <GenericStageBoard stage={stage} translations={translations} />
         )}
 
-        <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
+        {!['world', 'casting', 'face', 'hair'].includes(stage.id) && <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
           <div className="rounded-2xl border border-white/[0.07] bg-raised p-5">
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">
               {translations.deliverables}
@@ -138,7 +154,7 @@ export function StageWorkspace({
               Canon Lock
             </button>
           </div>
-        </section>
+        </section>}
       </div>
     </main>
   )

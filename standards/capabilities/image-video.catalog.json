@@ -10,7 +10,8 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportMultiReferenceImage": true
       }
     }
   },
@@ -26,7 +27,8 @@
           "4K"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportMultiReferenceImage": true
       }
     }
   },
@@ -1479,6 +1481,7 @@
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
+        "supportMultiReferenceImage": true,
         "supportMaskEdit": true
       }
     }
@@ -1593,7 +1596,8 @@
           "21:9"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportMultiReferenceImage": true
       }
     }
   },
@@ -1615,7 +1619,8 @@
           "21:9"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportMultiReferenceImage": true
       }
     }
   },
@@ -1637,7 +1642,8 @@
           "21:9"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportMultiReferenceImage": true
       }
     }
   },
@@ -1725,7 +1731,8 @@
           "21:9"
         ],
         "supportNegativePrompt": false,
-        "supportReferenceImage": true
+        "supportReferenceImage": true,
+        "supportMultiReferenceImage": true
       }
     }
   },

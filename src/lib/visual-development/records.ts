@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client'
-import { toSignedUrlIfCos } from '@/lib/workers/utils'
+import { getSignedUrl } from '@/lib/cos'
 
 type TaskSnapshot = {
   id: string
@@ -28,7 +28,7 @@ export function projectCandidateTask(candidate: {
   return {
     taskStatus: task?.status ?? candidate.status,
     progress: task?.progress ?? 0,
-    resultUrl: resultKey ? toSignedUrlIfCos(resultKey, 3600) : null,
+    resultUrl: resultKey ? getSignedUrl(resultKey, 3600) : null,
     errorCode: task?.errorCode ?? null,
     errorMessage: task?.errorMessage ?? null,
   }

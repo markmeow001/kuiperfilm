@@ -10,6 +10,7 @@ import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildCastingPrompt, type StringRecord } from '@/lib/visual-development/prompt'
 import { projectCandidateTask } from '@/lib/visual-development/records'
+import { parseWorldBible } from '@/lib/visual-development/world-bible'
 
 type RouteContext = { params: Promise<{ projectId: string }> }
 type JsonRecord = Record<string, unknown>
@@ -78,7 +79,7 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
         include: {
           castingBatches: {
             orderBy: { createdAt: 'desc' },
-            take: 6,
+            take: 12,
             include: { candidates: { orderBy: { code: 'asc' } } },
           },
         },
@@ -157,7 +158,23 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (access instanceof Response) return access
   const body = toRecord(await request.json())
   const locale = resolveRequiredTaskLocale(request, body)
-  const worldBible = toStringRecord(body.worldBible)
+  const lockedWorkspace = await prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } })
+  if (!lockedWorkspace || lockedWorkspace.status !== 'world_locked') {
+    throw new ApiError('CONFLICT', { code: 'WORLD_CANON_REQUIRED' })
+  }
+  const worldDocument = parseWorldBible(lockedWorkspace.worldBible)
+  const worldBible: StringRecord = {
+    projectPremise: worldDocument.projectPremise,
+    visualThesis: worldDocument.visualThesis,
+    eraAndGeography: worldDocument.eraAndGeography,
+    societyAndFactions: worldDocument.societyAndFactions,
+    technologyRules: worldDocument.technologyRules,
+    colorScript: worldDocument.colorScript,
+    materialRules: worldDocument.materialRules,
+    architectureLanguage: worldDocument.architectureLanguage,
+    cameraFormat: worldDocument.cameraFormat,
+    forbiddenElements: worldDocument.forbiddenElements,
+  }
   const characterDna = toStringRecord(body.characterDna)
   const castingBrief = toStringRecord(body.castingBrief)
   const characterCode = normalizeCharacterCode(body.characterCode)
@@ -198,14 +215,9 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     throw new ApiError('INVALID_PARAMS', { code: 'RESOLUTION_UNSUPPORTED', field: 'resolution' })
   }
 
-  const workspace = await prisma.visualDevelopmentWorkspace.upsert({
-    where: { projectId },
-    create: { projectId, worldBible },
-    update: { worldBible, worldVersion: { increment: 1 } },
-  })
   const character = await prisma.visualDevelopmentCharacter.upsert({
-    where: { workspaceId_code: { workspaceId: workspace.id, code: characterCode } },
-    create: { workspaceId: workspace.id, code: characterCode, name: characterName, characterDna, castingBrief },
+    where: { workspaceId_code: { workspaceId: lockedWorkspace.id, code: characterCode } },
+    create: { workspaceId: lockedWorkspace.id, code: characterCode, name: characterName, characterDna, castingBrief },
     update: { name: characterName, characterDna, castingBrief },
   })
   const basePrompt = buildCastingPrompt({
@@ -359,4 +371,3 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   ])
   return NextResponse.json({ success: true, data: { candidateId: candidate.id } })
 })
-

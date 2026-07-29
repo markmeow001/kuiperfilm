@@ -47,6 +47,72 @@ export interface FaceLockPromptInput {
   variant: FaceLockVariant
 }
 
+export type HairExplorationVariantCode =
+  | 'HAIR-LONG-CENTER'
+  | 'HAIR-LONG-SIDE'
+  | 'HAIR-SHOULDER'
+  | 'HAIR-BOB'
+  | 'HAIR-CROPPED'
+  | 'HAIR-SLICKED'
+  | 'HAIR-LOW-TIED'
+  | 'HAIR-HALF-TIED'
+  | 'HAIR-BRAIDED'
+  | 'HAIR-ASYMMETRIC'
+
+export interface HairExplorationVariant {
+  code: HairExplorationVariantCode
+  instruction: string
+}
+
+export const HAIR_EXPLORATION_VARIANTS: readonly HairExplorationVariant[] = [
+  { code: 'HAIR-LONG-CENTER', instruction: 'a long, center-parted silhouette with controlled face-framing lengths' },
+  { code: 'HAIR-LONG-SIDE', instruction: 'a long, soft side-parted silhouette with one side kept clear of the face' },
+  { code: 'HAIR-SHOULDER', instruction: 'a shoulder-length silhouette with practical movement and a readable neckline' },
+  { code: 'HAIR-BOB', instruction: 'a structured bob silhouette with a distinct nape and clean profile' },
+  { code: 'HAIR-CROPPED', instruction: 'a cropped silhouette with a believable natural hairline and exposed ears' },
+  { code: 'HAIR-SLICKED', instruction: 'a controlled swept-back silhouette that exposes the full face and hairline' },
+  { code: 'HAIR-LOW-TIED', instruction: 'a low-tied silhouette with a practical nape construction and restrained flyaways' },
+  { code: 'HAIR-HALF-TIED', instruction: 'a half-tied silhouette balancing an open face with loose back length' },
+  { code: 'HAIR-BRAIDED', instruction: 'a restrained braided construction with a readable crown, nape and side profile' },
+  { code: 'HAIR-ASYMMETRIC', instruction: 'an asymmetric silhouette with one open side and one weighted side, still physically plausible' },
+] as const
+
+export type HairValidationVariantCode =
+  | 'HAIR-VIEW-FRONT'
+  | 'HAIR-VIEW-PROFILE'
+  | 'HAIR-VIEW-BACK'
+  | 'HAIR-SIL-BACKLIGHT'
+  | 'HAIR-MOVE-WALK'
+  | 'HAIR-MOVE-WIND'
+  | 'HAIR-STATE-FORMAL'
+  | 'HAIR-STATE-DISTRESSED'
+
+export interface HairValidationVariant {
+  code: HairValidationVariantCode
+  instruction: string
+  changeOnly: string
+}
+
+export const HAIR_VALIDATION_VARIANTS: readonly HairValidationVariant[] = [
+  { code: 'HAIR-VIEW-FRONT', instruction: 'a front-facing head-and-shoulders hair construction reference', changeOnly: 'camera view' },
+  { code: 'HAIR-VIEW-PROFILE', instruction: 'a complete left-profile hair construction reference', changeOnly: 'camera view' },
+  { code: 'HAIR-VIEW-BACK', instruction: 'a direct back view clearly showing crown, lengths, tie points and nape construction', changeOnly: 'camera view' },
+  { code: 'HAIR-SIL-BACKLIGHT', instruction: 'a backlit three-quarter silhouette test with the hair contour fully readable', changeOnly: 'lighting direction' },
+  { code: 'HAIR-MOVE-WALK', instruction: 'a restrained walking-motion test showing believable secondary hair movement', changeOnly: 'subtle body movement' },
+  { code: 'HAIR-MOVE-WIND', instruction: 'a controlled wind-response test showing strand grouping, weight and recovery', changeOnly: 'air movement' },
+  { code: 'HAIR-STATE-FORMAL', instruction: 'the same hairstyle in its carefully maintained formal story state', changeOnly: 'grooming state' },
+  { code: 'HAIR-STATE-DISTRESSED', instruction: 'the same hairstyle after prolonged escape or conflict, with physically plausible loosened strands', changeOnly: 'story wear state' },
+] as const
+
+export interface HairPromptInput {
+  characterCode: string
+  hairSilhouette: string
+  partingAndHairline: string
+  lengthAndTexture: string
+  storyRequirements: string
+  forbiddenDrift: string
+}
+
 function clean(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -160,6 +226,78 @@ export function buildFaceLockPrompt(input: FaceLockPromptInput): {
       identityAnchors: identityAnchors || 'Use all observable identity anchors from Canon reference',
       phaseTemplate: 'CADS_FACE_LOCK_V1',
       modelAdapter: 'IDENTITY_REFERENCE_EDIT_V1',
+      changeOnly: input.variant.changeOnly,
+    },
+  }
+}
+
+/** CADS Phase 3 exploration. Reference image 1 remains the sole identity authority. */
+export function buildHairExplorationPrompt(
+  input: HairPromptInput & { variant: HairExplorationVariant },
+): { prompt: string; negativePrompt: string; promptStack: StringRecord } {
+  const prompt = [
+    `HAIR EXPLORATION ${input.characterCode}-${input.variant.code}.`,
+    'Reference image 1 defines the exact identity of this fictional adult performer. Preserve the face, age, ancestry, skin, body, expression, plain wardrobe, white background, camera perspective and neutral studio light.',
+    `Explore only the hair as ${input.variant.instruction}.`,
+    clean(input.hairSilhouette) ? `Required silhouette logic: ${clean(input.hairSilhouette)}.` : '',
+    clean(input.partingAndHairline) ? `Parting and hairline rules: ${clean(input.partingAndHairline)}.` : '',
+    clean(input.lengthAndTexture) ? `Length and texture rules: ${clean(input.lengthAndTexture)}.` : '',
+    clean(input.storyRequirements) ? `Character and story requirements: ${clean(input.storyRequirements)}.` : '',
+    clean(input.forbiddenDrift) ? `Forbidden drift: ${clean(input.forbiddenDrift)}.` : '',
+    'Keep the design filmable, physically plausible, readable in front, profile and back silhouette, compatible with costume collars, and clear of the eyes and mouth for performance.',
+    'Change only hairstyle construction. Do not redesign or beautify the face and do not add costume, jewelry, headwear, props, scenery or visual effects.',
+  ].filter(Boolean).join('\n\n')
+
+  const negativePrompt = [
+    'different person, identity drift, face redesign, age change, ancestry change',
+    'changed facial proportions, changed hairline anatomy, beauty retouching, plastic skin',
+    'wig-like hair, impossible strand structure, floating hair, blocked eyes, blocked mouth',
+    'costume, jewelry, headwear, props, scenery, fantasy effects, text, watermark',
+  ].join(', ')
+
+  return {
+    prompt,
+    negativePrompt,
+    promptStack: {
+      identityReference: 'REFERENCE_IMAGE_1_IDENTITY_ONLY',
+      phaseTemplate: 'CADS_HAIR_EXPLORATION_V1',
+      modelAdapter: 'IDENTITY_REFERENCE_HAIR_EDIT_V1',
+      changeOnly: 'hairstyle construction',
+    },
+  }
+}
+
+/** CADS Phase 3 validation. Reference 1 owns identity; reference 2 owns hair. */
+export function buildHairValidationPrompt(
+  input: HairPromptInput & { variant: HairValidationVariant },
+): { prompt: string; negativePrompt: string; promptStack: StringRecord } {
+  const prompt = [
+    `HAIR VALIDATION ${input.characterCode}-${input.variant.code}.`,
+    'Reference image 1 is the exclusive identity authority. Preserve its exact face, apparent age, ancestry, facial proportions, skin tone, natural asymmetry and distinctive marks.',
+    'Reference image 2 is the exclusive hairstyle-construction authority. Preserve its silhouette, parting, hairline treatment, length, texture, volume, tie points and strand grouping.',
+    `Create ${input.variant.instruction} of the same performer wearing the same selected hairstyle.`,
+    `Change only ${input.variant.changeOnly}.`,
+    clean(input.storyRequirements) ? `Story continuity requirement: ${clean(input.storyRequirements)}.` : '',
+    clean(input.forbiddenDrift) ? `Forbidden drift: ${clean(input.forbiddenDrift)}.` : '',
+    'Keep the same plain neutral wardrobe and clean studio environment unless the requested validation changes lighting. Hair must remain filmable, physically plausible, performance-safe and compatible with a costume collar.',
+    'Do not merge identities, copy facial features from reference image 2, invent a new haircut, add costume, jewelry, headwear, props, scenery or fantasy effects.',
+  ].filter(Boolean).join('\n\n')
+
+  const negativePrompt = [
+    'different person, merged identity, identity drift, face from reference image 2',
+    'different hairstyle, changed silhouette, changed parting, changed length, changed texture',
+    'beauty retouching, plastic skin, wig-like hair, impossible movement, blocked performance',
+    'costume, jewelry, headwear, props, scenery, fantasy effects, text, watermark',
+  ].join(', ')
+
+  return {
+    prompt,
+    negativePrompt,
+    promptStack: {
+      identityReference: 'REFERENCE_IMAGE_1_IDENTITY_ONLY',
+      hairReference: 'REFERENCE_IMAGE_2_HAIR_ONLY',
+      phaseTemplate: 'CADS_HAIR_VALIDATION_V1',
+      modelAdapter: 'DUAL_REFERENCE_IDENTITY_HAIR_EDIT_V1',
       changeOnly: input.variant.changeOnly,
     },
   }
