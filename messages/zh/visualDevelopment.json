@@ -38,6 +38,11 @@
     "deliverables": "DELIVERABLES",
     "approvalGate": "APPROVAL GATE",
     "previewNotice": "製作系統",
+    "characterRoster": {
+      "title": "劇本角色名冊",
+      "loaded": "已載入 {count} 位角色，點選即可切換各自的開發資產",
+      "current": "目前角色"
+    },
     "script": {
       "source": "SCREENPLAY SOURCE",
       "sourceDescription": "上傳或貼上完整劇本，選擇文字分析模型。系統會抽取世界規則、角色、動物／異種與主要場景，先形成可審核草稿。",

@@ -6,7 +6,8 @@ import { HairDesignWorkspace, type HairDesignTranslations } from './HairDesignWo
 import { WorldBibleWorkspace, type WorldBibleTranslations } from './WorldBibleWorkspace'
 import { ProductionStageWorkspace, type ProductionStageTranslations } from './ProductionStageWorkspace'
 import { ScriptImportWorkspace, type ScriptImportTranslations } from './ScriptImportWorkspace'
-import type { CastingWorkspaceController, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, ScriptImportWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
+import { CharacterRoster } from './CharacterRoster'
+import type { CastingWorkspaceController, CharacterOption, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, ScriptImportWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
 
 export interface CastingTranslations {
   batch: string
@@ -50,6 +51,11 @@ export interface StageWorkspaceTranslations {
   deliverables: string
   approvalGate: string
   previewNotice: string
+  characterRoster: {
+    title: string
+    loaded: string
+    current: string
+  }
   script: ScriptImportTranslations
   world: WorldBibleTranslations
   casting: CastingTranslations
@@ -68,6 +74,10 @@ interface StageWorkspaceProps {
   candidateCount: 4 | 8 | 10
   onCandidateCountChange: (count: 4 | 8 | 10) => void
   stage: LocalizedDevelopmentStage
+  characters: CharacterOption[]
+  characterCode: string
+  isLoadingCharacter: boolean
+  onCharacterChange: (characterCode: string) => void
   scriptImportController: ScriptImportWorkspaceController
   worldBibleController: WorldBibleWorkspaceController
   castingController: CastingWorkspaceController
@@ -81,6 +91,10 @@ export function StageWorkspace({
   candidateCount,
   onCandidateCountChange,
   stage,
+  characters,
+  characterCode,
+  isLoadingCharacter,
+  onCharacterChange,
   scriptImportController,
   worldBibleController,
   castingController,
@@ -89,6 +103,8 @@ export function StageWorkspace({
   productionStageController,
   translations,
 }: StageWorkspaceProps) {
+  const isCharacterStage = !['script', 'research', 'world'].includes(stage.id)
+
   return (
     <main className="min-h-0 min-w-0 overflow-y-auto overscroll-y-contain bg-canvas [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
@@ -111,6 +127,16 @@ export function StageWorkspace({
           </div>
           <StageIcon stage={stage} />
         </div>
+
+        {isCharacterStage && (
+          <CharacterRoster
+            characters={characters}
+            characterCode={characterCode}
+            isLoading={isLoadingCharacter}
+            onCharacterChange={onCharacterChange}
+            labels={translations.characterRoster}
+          />
+        )}
 
         {stage.id === 'script' ? (
           <ScriptImportWorkspace controller={scriptImportController} translations={translations.script} />

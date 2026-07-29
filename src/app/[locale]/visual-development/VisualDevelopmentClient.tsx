@@ -441,6 +441,10 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
           hairDesignController={hairDesignController}
           productionStageController={productionStageController}
           candidateCount={candidateCount}
+          characters={characters}
+          characterCode={selectedCharacterCode}
+          isLoadingCharacter={isLoadingWorkspace}
+          onCharacterChange={selectCharacter}
           onCandidateCountChange={setCandidateCount}
           stage={activeStage}
           translations={stageWorkspaceTranslations}

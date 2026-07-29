@@ -11,6 +11,11 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
     deliverables: t('workspace.deliverables'),
     approvalGate: t('workspace.approvalGate'),
     previewNotice: t('workspace.previewNotice'),
+    characterRoster: {
+      title: t('workspace.characterRoster.title'),
+      loaded: t('workspace.characterRoster.loaded'),
+      current: t('workspace.characterRoster.current'),
+    },
     script: {
       source: t('workspace.script.source'),
       sourceDescription: t('workspace.script.sourceDescription'),

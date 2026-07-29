@@ -38,6 +38,11 @@
     "deliverables": "DELIVERABLES",
     "approvalGate": "APPROVAL GATE",
     "previewNotice": "PRODUCTION SYSTEM",
+    "characterRoster": {
+      "title": "SCREENPLAY CHARACTER ROSTER",
+      "loaded": "{count} characters loaded. Select one to open that character's development assets.",
+      "current": "CURRENT"
+    },
     "script": {
       "source": "SCREENPLAY SOURCE",
       "sourceDescription": "Upload or paste the full screenplay, then choose a text model. The system extracts world rules, characters, animals or creatures, and key locations into a reviewable draft.",
