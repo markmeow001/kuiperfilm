@@ -1,5 +1,6 @@
 import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
 import type { WorldAssetCode } from '@/lib/visual-development/world-bible'
+import type { ProductionFieldId, ProductionStageDefinition, ProductionStageId } from '@/lib/visual-development/production-stages'
 
 export interface ProjectOption {
   id: string
@@ -32,7 +33,35 @@ export interface CastingBatchView {
   resolution: string | null
   status: string
   candidates: CastingCandidateView[]
+  promptStack?: Record<string, unknown> | null
 }
+
+export interface ProductionStageFormState {
+  stageRecord: Record<ProductionFieldId, string>
+  modelKey: string
+  resolution: string
+  aspectRatio: string
+  duration: number
+}
+
+export interface ProductionStageWorkspaceController {
+  stage: ProductionStageDefinition
+  batch: CastingBatchView | null
+  characterStatus: string
+  prerequisiteReady: boolean
+  form: ProductionStageFormState
+  models: UserModelOption[]
+  isGenerating: boolean
+  isLoading: boolean
+  onRecordChange: (field: ProductionFieldId, value: string) => void
+  onSettingChange: (field: 'modelKey' | 'resolution' | 'aspectRatio' | 'duration', value: string | number) => void
+  onGenerate: () => void
+  onReview: (candidateId: string, approved: boolean, rejectionNote?: string) => void
+  onSelectPrimary: (candidateId: string) => void
+  onLock: () => void
+}
+
+export type ProductionStageBatchMap = Partial<Record<ProductionStageId, CastingBatchView>>
 
 export interface WorldBibleReferenceView {
   id: string

@@ -1,0 +1,396 @@
+import { randomInt } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { ApiError, apiHandler } from '@/lib/api-errors'
+import { isErrorResponse, requireProjectAccess, requireUserAuth } from '@/lib/api-auth'
+import { resolveModelSelection } from '@/lib/api-config'
+import { findBuiltinCapabilities } from '@/lib/model-capabilities/catalog'
+import { submitTask } from '@/lib/task/submitter'
+import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
+import { TASK_TYPE } from '@/lib/task/types'
+import { buildProductionStagePrompt } from '@/lib/visual-development/production-prompt'
+import {
+  canEnterProductionStage,
+  getProductionStage,
+  PRODUCTION_STAGE_DEFINITIONS,
+  type ProductionStageDefinition,
+} from '@/lib/visual-development/production-stages'
+import { readResultKey } from '@/lib/visual-development/records'
+
+type RouteContext = { params: Promise<{ projectId: string; stageId: string }> }
+type JsonRecord = Record<string, unknown>
+type StringRecord = Record<string, string>
+
+function toRecord(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {}
+}
+
+function toStringRecord(value: unknown): StringRecord {
+  return Object.fromEntries(Object.entries(toRecord(value))
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+    .map(([key, text]) => [key, text.trim()]))
+}
+
+function requiredString(value: unknown, field: string, max = 4000): string {
+  const normalized = typeof value === 'string' ? value.trim() : ''
+  if (!normalized) throw new ApiError('INVALID_PARAMS', { code: 'FIELD_REQUIRED', field })
+  if (normalized.length > max) throw new ApiError('INVALID_PARAMS', { code: 'FIELD_TOO_LONG', field, details: { max } })
+  return normalized
+}
+
+function normalizeCharacterCode(value: unknown): string {
+  const code = requiredString(value, 'characterCode', 64).toUpperCase().replace(/[^A-Z0-9_-]/g, '-')
+  if (!code) throw new ApiError('INVALID_PARAMS', { code: 'CHARACTER_CODE_INVALID' })
+  return code
+}
+
+function resolveStage(stageId: string): ProductionStageDefinition {
+  try {
+    return getProductionStage(stageId)
+  } catch {
+    throw new ApiError('INVALID_PARAMS', { code: 'PRODUCTION_STAGE_INVALID', field: 'stageId' })
+  }
+}
+
+async function requireAccess(projectId: string) {
+  const auth = await requireUserAuth()
+  if (isErrorResponse(auth)) return auth
+  const access = await requireProjectAccess(projectId, auth.session.user.id, 'write')
+  if (!access.allowed) {
+    if (access.reason === 'NOT_FOUND') throw new ApiError('NOT_FOUND')
+    throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
+  }
+  return { userId: auth.session.user.id }
+}
+
+async function resolveCompletedCandidate(input: {
+  candidateId?: string
+  characterId: string
+  stage: string
+  userId: string
+  projectId: string
+  code?: string
+}) {
+  const candidate = await prisma.visualDevelopmentCandidate.findFirst({
+    where: {
+      ...(input.candidateId ? { id: input.candidateId } : {}),
+      ...(input.code ? { code: input.code } : { isCanon: true }),
+      batch: {
+        characterId: input.characterId,
+        stage: input.stage,
+        ...(input.stage === 'face-lock' || input.stage.startsWith('phase-') ? { status: 'canon_locked' } : {}),
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!candidate?.taskId) throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_ASSET_MISSING' })
+  const task = await prisma.task.findFirst({
+    where: { id: candidate.taskId, userId: input.userId, projectId: input.projectId, status: 'completed' },
+    select: { result: true },
+  })
+  const resultKey = task ? readResultKey(task.result) : null
+  if (!resultKey) throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_ASSET_INCOMPLETE' })
+  return { candidate, resultKey }
+}
+
+async function resolveReferenceImages(input: {
+  stage: ProductionStageDefinition
+  characterId: string
+  userId: string
+  projectId: string
+}) {
+  if (input.stage.id === 'costume') {
+    const face = await resolveCompletedCandidate({
+      characterId: input.characterId,
+      stage: 'face-lock',
+      code: 'EXPR-RESTRAINED',
+      userId: input.userId,
+      projectId: input.projectId,
+    })
+    const hair = await resolveCompletedCandidate({
+      characterId: input.characterId,
+      stage: 'hair-exploration',
+      userId: input.userId,
+      projectId: input.projectId,
+    })
+    return [face.resultKey, hair.resultKey]
+  }
+  const index = PRODUCTION_STAGE_DEFINITIONS.findIndex((stage) => stage.id === input.stage.id)
+  const previous = PRODUCTION_STAGE_DEFINITIONS[index - 1]
+  if (!previous) throw new ApiError('CONFLICT', { code: 'UPSTREAM_STAGE_MISSING' })
+  const upstream = await resolveCompletedCandidate({
+    characterId: input.characterId,
+    stage: previous.dbStage,
+    userId: input.userId,
+    projectId: input.projectId,
+  })
+  if (input.stage.mediaType === 'video') return [upstream.resultKey]
+  const face = await resolveCompletedCandidate({
+    characterId: input.characterId,
+    stage: 'face-lock',
+    code: 'EXPR-RESTRAINED',
+    userId: input.userId,
+    projectId: input.projectId,
+  })
+  return [face.resultKey, upstream.resultKey]
+}
+
+async function resolveBoundModel(userId: string, modelKey: string, stage: ProductionStageDefinition) {
+  let selection
+  try {
+    selection = await resolveModelSelection(userId, modelKey, stage.mediaType)
+  } catch (error) {
+    throw new ApiError('FORBIDDEN', {
+      code: 'MODEL_NOT_ENABLED',
+      details: { message: error instanceof Error ? error.message : String(error) },
+    })
+  }
+  const capabilities = findBuiltinCapabilities(stage.mediaType, selection.provider, selection.modelId)
+  if (stage.mediaType === 'image') {
+    if (capabilities?.image?.supportReferenceImage !== true || capabilities.image.supportMultiReferenceImage !== true) {
+      throw new ApiError('INVALID_PARAMS', { code: 'STAGE_MULTI_REFERENCE_MODEL_REQUIRED', field: 'modelKey' })
+    }
+  } else if (capabilities?.video?.supportReferenceImage !== true) {
+    throw new ApiError('INVALID_PARAMS', { code: 'STAGE_IMAGE_TO_VIDEO_MODEL_REQUIRED', field: 'modelKey' })
+  }
+  return { selection, capabilities }
+}
+
+export const POST = apiHandler(async (request: NextRequest, context: RouteContext) => {
+  const { projectId, stageId } = await context.params
+  const stage = resolveStage(stageId)
+  const access = await requireAccess(projectId)
+  if (access instanceof Response) return access
+  const body = toRecord(await request.json())
+  const locale = resolveRequiredTaskLocale(request, body)
+  const characterCode = normalizeCharacterCode(body.characterCode)
+  const modelKey = requiredString(body.modelKey, 'modelKey', 255)
+  const stageRecord = toStringRecord(body.stageRecord)
+  for (const field of stage.fields) requiredString(stageRecord[field], `stageRecord.${field}`)
+
+  const character = await prisma.visualDevelopmentCharacter.findFirst({
+    where: { code: characterCode, workspace: { projectId } },
+    include: { workspace: true },
+  })
+  if (!character) throw new ApiError('NOT_FOUND', { code: 'VISUAL_CHARACTER_NOT_FOUND' })
+  if (!canEnterProductionStage(character.status, stage.id)) {
+    throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LOCK_REQUIRED', details: { required: stage.prerequisiteStatus } })
+  }
+
+  const referenceImages = await resolveReferenceImages({ stage, characterId: character.id, userId: access.userId, projectId })
+  const { selection, capabilities } = await resolveBoundModel(access.userId, modelKey, stage)
+  const imageCaps = capabilities?.image
+  const videoCaps = capabilities?.video
+  const aspectRatio = typeof body.aspectRatio === 'string' && body.aspectRatio.trim()
+    ? body.aspectRatio.trim()
+    : stage.mediaType === 'video' ? '16:9' : '3:4'
+  const ratioOptions = stage.mediaType === 'image' ? imageCaps?.aspectRatioOptions : ['16:9', '9:16', '1:1']
+  if (ratioOptions && !ratioOptions.includes(aspectRatio)) {
+    throw new ApiError('INVALID_PARAMS', { code: 'ASPECT_RATIO_UNSUPPORTED', field: 'aspectRatio' })
+  }
+  const resolution = typeof body.resolution === 'string' && body.resolution.trim() ? body.resolution.trim() : null
+  const resolutionOptions = stage.mediaType === 'image' ? imageCaps?.resolutionOptions : videoCaps?.resolutionOptions
+  if (resolution && resolutionOptions && !resolutionOptions.includes(resolution)) {
+    throw new ApiError('INVALID_PARAMS', { code: 'RESOLUTION_UNSUPPORTED', field: 'resolution' })
+  }
+  const requestedDuration = Number(body.duration)
+  const durationOptions = videoCaps?.durationOptions ?? []
+  const duration = stage.mediaType === 'video'
+    ? (Number.isFinite(requestedDuration) && requestedDuration > 0 ? requestedDuration : durationOptions[0] ?? 5)
+    : null
+  if (duration !== null && durationOptions.length > 0 && !durationOptions.includes(duration)) {
+    throw new ApiError('INVALID_PARAMS', { code: 'DURATION_UNSUPPORTED', field: 'duration' })
+  }
+
+  const worldBible = toStringRecord(character.workspace.worldBible)
+  const characterDna = toStringRecord(character.characterDna)
+  const promptResults = stage.variants.map((variant) => ({
+    code: variant.code,
+    ...buildProductionStagePrompt({ stage, variant, characterCode, worldBible, characterDna, stageRecord }),
+  }))
+  const seedSupported = stage.mediaType === 'image' && imageCaps?.supportSeed === true
+  const firstPrompt = promptResults[0]
+  if (!firstPrompt) throw new ApiError('INTERNAL_ERROR', { code: 'STAGE_VARIANTS_EMPTY' })
+
+  const batch = await prisma.visualDevelopmentBatch.create({
+    data: {
+      characterId: character.id,
+      stage: stage.dbStage,
+      candidateCount: promptResults.length,
+      provider: selection.provider,
+      modelKey: selection.modelKey,
+      modelId: selection.modelId,
+      seedSupported,
+      prompt: firstPrompt.prompt,
+      negativePrompt: firstPrompt.negativePrompt,
+      promptStack: {
+        ...firstPrompt.promptStack,
+        stageId: stage.id,
+        stageRecord,
+        referenceImages,
+        referenceResponsibilities: stage.mediaType === 'video'
+          ? ['scene-integrated visual authority']
+          : ['identity authority', 'upstream design authority'],
+      },
+      worldBibleSnapshot: character.workspace.worldBible ?? undefined,
+      characterDnaSnapshot: character.characterDna ?? undefined,
+      castingBriefSnapshot: character.castingBrief ?? undefined,
+      aspectRatio,
+      resolution,
+      candidates: {
+        create: promptResults.map((result) => {
+          const requestedSeed = seedSupported ? randomInt(1, 2_147_483_647) : null
+          return {
+            code: result.code,
+            requestedSeed,
+            effectiveSeed: requestedSeed,
+            seedStatus: seedSupported ? 'applied' : 'unsupported',
+            prompt: result.prompt,
+            negativePrompt: result.negativePrompt,
+            modelKey: selection.modelKey,
+            provider: selection.provider,
+            modelId: selection.modelId,
+            aspectRatio,
+            resolution,
+          }
+        }),
+      },
+    },
+    include: { candidates: { orderBy: { code: 'asc' } } },
+  })
+
+  const submissions = await Promise.allSettled(batch.candidates.map(async (candidate) => {
+    const type = stage.mediaType === 'video' ? TASK_TYPE.PLAYGROUND_VIDEO : TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE
+    const payload: Record<string, unknown> = {
+      prompt: candidate.prompt,
+      modelKey: selection.modelKey,
+      modelId: selection.modelId,
+      outputType: stage.mediaType,
+      referenceImages,
+      aspectRatio,
+      ...(resolution ? { resolution } : {}),
+      ...(duration !== null ? { duration } : {}),
+      ...(stage.mediaType === 'video' && videoCaps?.supportGenerateAudio === true ? { generateAudio: false } : {}),
+      ...(stage.mediaType === 'image' && imageCaps?.supportNegativePrompt === true ? { negativePrompt: candidate.negativePrompt } : {}),
+      ...(seedSupported && candidate.requestedSeed !== null ? { seed: candidate.requestedSeed } : {}),
+      generationCount: 1,
+      meta: {
+        originPrompt: candidate.prompt,
+        originModelKey: selection.modelKey,
+        visualDevelopmentBatchId: batch.id,
+        visualDevelopmentCandidateId: candidate.id,
+        productionStageId: stage.id,
+        referenceImages,
+      },
+    }
+    const submitted = await submitTask({
+      userId: access.userId,
+      locale,
+      projectId,
+      type,
+      targetType: `visual-development-${stage.id}`,
+      targetId: candidate.id,
+      dedupeKey: `visual-development-${stage.id}:${candidate.id}`,
+      dedupeMode: 'idempotent',
+      skipRateLimit: true,
+      payload,
+    })
+    await prisma.visualDevelopmentCandidate.update({
+      where: { id: candidate.id },
+      data: { taskId: submitted.taskId, status: submitted.status },
+    })
+  }))
+  const failedIds = batch.candidates
+    .filter((_, index) => submissions[index]?.status === 'rejected')
+    .map((candidate) => candidate.id)
+  if (failedIds.length > 0) {
+    await prisma.visualDevelopmentCandidate.updateMany({ where: { id: { in: failedIds } }, data: { status: 'submission_failed' } })
+  }
+  await prisma.visualDevelopmentBatch.update({
+    where: { id: batch.id },
+    data: { status: failedIds.length === 0 ? 'queued' : failedIds.length === batch.candidateCount ? 'failed' : 'partial_failed' },
+  })
+  return NextResponse.json({
+    success: failedIds.length === 0,
+    data: { batchId: batch.id, stage: stage.id, submitted: batch.candidateCount - failedIds.length, failed: failedIds.length },
+  }, { status: failedIds.length === 0 ? 202 : 207 })
+})
+
+export const PATCH = apiHandler(async (request: NextRequest, context: RouteContext) => {
+  const { projectId, stageId } = await context.params
+  const stage = resolveStage(stageId)
+  const access = await requireAccess(projectId)
+  if (access instanceof Response) return access
+  const body = toRecord(await request.json())
+  const action = requiredString(body.action, 'action', 40)
+
+  if (action === 'asset-review' || action === 'select-primary') {
+    const candidateId = requiredString(body.candidateId, 'candidateId', 191)
+    const candidate = await prisma.visualDevelopmentCandidate.findUnique({
+      where: { id: candidateId },
+      include: { batch: { include: { character: { include: { workspace: true } } } } },
+    })
+    if (!candidate || candidate.batch.stage !== stage.dbStage || candidate.batch.character.workspace.projectId !== projectId) {
+      throw new ApiError('NOT_FOUND')
+    }
+    if (!candidate.taskId) throw new ApiError('CONFLICT', { code: 'STAGE_ASSET_INCOMPLETE' })
+    const task = await prisma.task.findFirst({
+      where: { id: candidate.taskId, userId: access.userId, projectId, status: 'completed' },
+      select: { result: true },
+    })
+    if (!task || !readResultKey(task.result)) throw new ApiError('CONFLICT', { code: 'STAGE_ASSET_INCOMPLETE' })
+    if (action === 'select-primary') {
+      await prisma.$transaction([
+        prisma.visualDevelopmentCandidate.updateMany({ where: { batchId: candidate.batchId }, data: { isCanon: false } }),
+        prisma.visualDevelopmentCandidate.update({ where: { id: candidate.id }, data: { isCanon: true, shortlisted: true } }),
+      ])
+    } else {
+      const approved = body.approved === true
+      const rejectionNote = approved ? null : requiredString(body.rejectionNote, 'rejectionNote', 1000)
+      await prisma.visualDevelopmentCandidate.update({
+        where: { id: candidate.id },
+        data: { shortlisted: approved, rejectionNote, ...(approved ? {} : { isCanon: false }) },
+      })
+    }
+    return NextResponse.json({ success: true, data: { candidateId } })
+  }
+
+  if (action !== 'canon-lock') throw new ApiError('INVALID_PARAMS', { code: 'STAGE_ACTION_INVALID' })
+  const batchId = requiredString(body.batchId, 'batchId', 191)
+  const batch = await prisma.visualDevelopmentBatch.findUnique({
+    where: { id: batchId },
+    include: { character: { include: { workspace: true } }, candidates: true },
+  })
+  if (!batch || batch.stage !== stage.dbStage || batch.character.workspace.projectId !== projectId) throw new ApiError('NOT_FOUND')
+  if (batch.candidates.length !== stage.variants.length || batch.candidates.some((candidate) => !candidate.shortlisted)) {
+    throw new ApiError('CONFLICT', { code: 'STAGE_ALL_ASSETS_MUST_BE_APPROVED' })
+  }
+  const primary = batch.candidates.find((candidate) => candidate.isCanon)
+  if (!primary) throw new ApiError('CONFLICT', { code: 'STAGE_PRIMARY_ASSET_REQUIRED' })
+  const taskIds = batch.candidates.flatMap((candidate) => candidate.taskId ? [candidate.taskId] : [])
+  const completed = await prisma.task.count({ where: { id: { in: taskIds }, userId: access.userId, projectId, status: 'completed' } })
+  if (completed !== stage.variants.length) throw new ApiError('CONFLICT', { code: 'STAGE_ASSETS_INCOMPLETE' })
+
+  const dna = toStringRecord(batch.character.characterDna)
+  const versionKey = `${stage.id}CanonVersion`
+  const currentVersion = Number.parseInt(dna[versionKey] || '0', 10)
+  const version = Number.isFinite(currentVersion) ? currentVersion + 1 : 1
+  const promptStack = toRecord(batch.promptStack)
+  const stageRecord = toStringRecord(promptStack.stageRecord)
+  const prefixedRecord = Object.fromEntries(Object.entries(stageRecord).map(([key, value]) => [`${stage.id}_${key}`, value]))
+  const nextDna: Prisma.InputJsonObject = {
+    ...dna,
+    ...prefixedRecord,
+    [`${stage.id}CanonId`]: `${stage.id.toUpperCase()}-${batch.character.code}-v${String(version).padStart(3, '0')}`,
+    [`${stage.id}CanonVersion`]: String(version),
+    [`${stage.id}BatchId`]: batch.id,
+    [`${stage.id}PrimaryCandidateId`]: primary.id,
+    [`${stage.id}LockedAt`]: new Date().toISOString(),
+  }
+  await prisma.$transaction([
+    prisma.visualDevelopmentCharacter.update({ where: { id: batch.characterId }, data: { status: stage.lockedStatus, characterDna: nextDna } }),
+    prisma.visualDevelopmentBatch.update({ where: { id: batch.id }, data: { status: 'canon_locked' } }),
+  ])
+  return NextResponse.json({ success: true, data: { batchId: batch.id, stage: stage.id, version } })
+})

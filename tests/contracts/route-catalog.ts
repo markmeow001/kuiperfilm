@@ -244,6 +244,7 @@ const ROUTE_FILES = [
   'src/app/api/visual-development/[projectId]/route.ts',
   'src/app/api/visual-development/[projectId]/face-bible/route.ts',
   'src/app/api/visual-development/[projectId]/hair-design/route.ts',
+  'src/app/api/visual-development/[projectId]/stages/[stageId]/route.ts',
   'src/app/api/visual-development/[projectId]/world-bible/route.ts',
   'src/app/api/visual-development/[projectId]/world-bible/reference/route.ts',
   'src/app/api/workspaces/[workspaceId]/addable-users/route.ts',

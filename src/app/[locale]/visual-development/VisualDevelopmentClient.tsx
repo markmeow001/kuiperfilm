@@ -1,14 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import { AppIcon } from '@/components/ui/icons'
 import { useUserModels } from '@/lib/query/hooks/useUserModels'
+import { PRODUCTION_STAGE_IDS, type ProductionStageId } from '@/lib/visual-development/production-stages'
 import { DevelopmentInspector } from './DevelopmentInspector'
 import { DevelopmentRail, type LocalizedDevelopmentStage } from './DevelopmentRail'
 import { StageWorkspace } from './StageWorkspace'
+import { VisualDevelopmentHeader } from './VisualDevelopmentHeader'
 import { useHairDesignController } from './useHairDesignController'
+import { useProductionStageController } from './useProductionStageController'
 import { useWorldBibleController } from './useWorldBibleController'
 import { useStageWorkspaceTranslations } from './useStageWorkspaceTranslations'
 import {
@@ -91,6 +92,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const [faceBatch, setFaceBatch] = useState<CastingBatchView | null>(null)
   const [hairExplorationBatch, setHairExplorationBatch] = useState<CastingBatchView | null>(null)
   const [hairValidationBatch, setHairValidationBatch] = useState<CastingBatchView | null>(null)
+  const [productionBatches, setProductionBatches] = useState<CastingBatchView[]>([])
   const [faceForm, setFaceForm] = useState<FaceBibleFormState>(EMPTY_FACE_FORM)
   const [characterStatus, setCharacterStatus] = useState('draft')
   const [worldStatus, setWorldStatus] = useState('draft')
@@ -117,6 +119,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       setFaceBatch(null)
       setHairExplorationBatch(null)
       setHairValidationBatch(null)
+      setProductionBatches([])
       return
     }
     setIsLoadingWorkspace(true)
@@ -132,6 +135,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       setFaceBatch(batches.find((item) => item.stage === 'face-lock') ?? null)
       setHairExplorationBatch(batches.find((item) => item.stage === 'hair-exploration') ?? null)
       setHairValidationBatch(batches.find((item) => item.stage === 'hair-validation') ?? null)
+      setProductionBatches(batches.filter((item) => item.stage.startsWith('phase-')))
       if (workspace) {
         setForm((current) => ({
           ...current,
@@ -168,6 +172,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     setFaceBatch(null)
     setHairExplorationBatch(null)
     setHairValidationBatch(null)
+    setProductionBatches([])
     setForm(EMPTY_FORM)
     setFaceForm(EMPTY_FACE_FORM)
     setCharacterStatus('draft')
@@ -176,12 +181,12 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   }, [projectId, loadWorkspace])
 
   useEffect(() => {
-    const hasActiveTasks = [batch, faceBatch, hairExplorationBatch, hairValidationBatch].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
+    const hasActiveTasks = [batch, faceBatch, hairExplorationBatch, hairValidationBatch, ...productionBatches].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
       candidate.taskStatus === 'queued' || candidate.taskStatus === 'processing'))
     if (!projectId || !hasActiveTasks) return
     const timer = window.setInterval(() => void loadWorkspace(projectId), 3000)
     return () => window.clearInterval(timer)
-  }, [batch, faceBatch, hairExplorationBatch, hairValidationBatch, projectId, loadWorkspace])
+  }, [batch, faceBatch, hairExplorationBatch, hairValidationBatch, productionBatches, projectId, loadWorkspace])
 
   const updateField = useCallback((
     group: 'worldBible' | 'characterDna' | 'castingBrief',
@@ -378,6 +383,23 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onRefresh: async () => loadWorkspace(projectId),
   })
 
+  const activeProductionStageId = (PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId)
+    ? activeStageId
+    : 'costume') as ProductionStageId
+  const { controller: productionStageController, activeBatch: activeProductionBatch } = useProductionStageController({
+    activeStageId: activeProductionStageId,
+    projectId,
+    locale,
+    characterCode: form.characterCode,
+    characterStatus,
+    characterDna: form.characterDna,
+    batches: productionBatches,
+    imageModels: modelsQuery.data?.image ?? [],
+    videoModels: modelsQuery.data?.video ?? [],
+    isLoading: isLoadingWorkspace || modelsQuery.isLoading,
+    onRefresh: async () => loadWorkspace(projectId),
+  })
+
   const stages = useMemo<LocalizedDevelopmentStage[]>(
     () =>
       VISUAL_DEVELOPMENT_STAGES.map((stage) => ({
@@ -395,45 +417,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
 
   return (
     <div className="kuiper-stage flex min-h-screen flex-col overflow-hidden text-text-primary">
-      <header className="relative z-30 border-b border-white/[0.07] bg-[#060607]/95 px-4 backdrop-blur-xl sm:px-6">
-        <div className="flex min-h-[72px] items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-5">
-            <Link
-              href={`/${locale}/v2`}
-              aria-label={t('header.back')}
-              title={t('header.back')}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-text-secondary transition-colors hover:border-primary-500/40 hover:text-primary-400"
-            >
-              <AppIcon name="chevronLeft" className="h-4 w-4" />
-            </Link>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 font-mono text-[9px] tracking-[0.22em] text-primary-400">
-                <span>{t('header.eyebrow')}</span>
-                <span className="hidden h-px w-6 bg-primary-500/40 sm:block" />
-                <span className="hidden text-text-tertiary sm:inline">{t('header.system')}</span>
-              </div>
-              <h1 className="mt-1 truncate font-serif-cn text-lg font-semibold text-white">
-                {t('header.title')}
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <select
-              value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
-              aria-label={t('header.project')}
-              className="hidden h-9 max-w-56 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-[11px] text-text-secondary outline-none focus:border-primary-500/50 md:block"
-            >
-              <option value="">{t('header.noProject')}</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-            </select>
-            <span className="rounded-lg border border-primary-500/25 bg-primary-500/[0.08] px-2.5 py-1.5 font-mono text-[9px] tracking-[0.16em] text-primary-400">
-              {t('header.preview')}
-            </span>
-          </div>
-        </div>
-      </header>
+      <VisualDevelopmentHeader locale={locale} projectId={projectId} projects={projects} onProjectChange={setProjectId} labels={{ back: t('header.back'), eyebrow: t('header.eyebrow'), system: t('header.system'), title: t('header.title'), project: t('header.project'), noProject: t('header.noProject'), preview: t('header.preview') }} />
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[248px_minmax(0,1fr)] xl:grid-cols-[248px_minmax(0,1fr)_304px]">
         <DevelopmentRail
@@ -455,6 +439,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
           castingController={castingController}
           faceBibleController={faceBibleController}
           hairDesignController={hairDesignController}
+          productionStageController={productionStageController}
           candidateCount={candidateCount}
           onCandidateCountChange={setCandidateCount}
           stage={activeStage}
@@ -462,8 +447,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
         />
 
         <DevelopmentInspector
-          batch={activeStageId === 'face' ? faceBatch : activeStageId === 'hair' ? activeHairBatch : batch}
-          candidateCount={activeStageId === 'face' ? 10 : activeStageId === 'hair' && activeHairBatch?.stage === 'hair-validation' ? 8 : activeStageId === 'hair' ? 10 : candidateCount}
+          batch={activeStageId === 'face' ? faceBatch : activeStageId === 'hair' ? activeHairBatch : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId) ? activeProductionBatch : batch}
+          candidateCount={activeStageId === 'face' ? 10 : activeStageId === 'hair' && activeHairBatch?.stage === 'hair-validation' ? 8 : activeStageId === 'hair' ? 10 : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId) ? (productionStageController.stage.variants.length === 8 ? 8 : 4) : candidateCount}
           worldReady={worldBibleController.status === 'world_locked'}
           characterReady={Boolean(form.characterName && form.characterDna.role && form.characterDna.coreTraits)}
           modelLabel={modelsQuery.data?.image.find((model) => model.value === (
@@ -473,6 +458,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
               ? faceForm.modelKey
               : activeStageId === 'hair'
                 ? hairDesignController.form.modelKey
+                : PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId)
+                  ? productionStageController.form.modelKey
                 : form.modelKey
           ))?.label ?? null}
           labels={{

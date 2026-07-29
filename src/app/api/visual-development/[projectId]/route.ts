@@ -79,7 +79,7 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
         include: {
           castingBatches: {
             orderBy: { createdAt: 'desc' },
-            take: 12,
+            take: 30,
             include: { candidates: { orderBy: { code: 'asc' } } },
           },
         },

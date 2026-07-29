@@ -4,7 +4,8 @@ import { CastingWorkspace } from './CastingWorkspace'
 import { FaceBibleWorkspace, type FaceBibleTranslations } from './FaceBibleWorkspace'
 import { HairDesignWorkspace, type HairDesignTranslations } from './HairDesignWorkspace'
 import { WorldBibleWorkspace, type WorldBibleTranslations } from './WorldBibleWorkspace'
-import type { CastingWorkspaceController, FaceBibleWorkspaceController, HairDesignWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
+import { ProductionStageWorkspace, type ProductionStageTranslations } from './ProductionStageWorkspace'
+import type { CastingWorkspaceController, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
 
 export interface CastingTranslations {
   batch: string
@@ -50,6 +51,7 @@ export interface StageWorkspaceTranslations {
   casting: CastingTranslations
   face: FaceBibleTranslations
   hair: HairDesignTranslations
+  production: ProductionStageTranslations
   board: {
     title: string
     description: string
@@ -66,6 +68,7 @@ interface StageWorkspaceProps {
   castingController: CastingWorkspaceController
   faceBibleController: FaceBibleWorkspaceController
   hairDesignController: HairDesignWorkspaceController
+  productionStageController: ProductionStageWorkspaceController
   translations: StageWorkspaceTranslations
 }
 
@@ -77,6 +80,7 @@ export function StageWorkspace({
   castingController,
   faceBibleController,
   hairDesignController,
+  productionStageController,
   translations,
 }: StageWorkspaceProps) {
   return (
@@ -115,11 +119,13 @@ export function StageWorkspace({
           <FaceBibleWorkspace controller={faceBibleController} translations={translations.face} />
         ) : stage.id === 'hair' ? (
           <HairDesignWorkspace controller={hairDesignController} translations={translations.hair} />
+        ) : ['costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) ? (
+          <ProductionStageWorkspace controller={productionStageController} translations={translations.production} />
         ) : (
           <GenericStageBoard stage={stage} translations={translations} />
         )}
 
-        {!['world', 'casting', 'face', 'hair'].includes(stage.id) && <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
+        {!['world', 'casting', 'face', 'hair', 'costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) && <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
           <div className="rounded-2xl border border-white/[0.07] bg-raised p-5">
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">
               {translations.deliverables}
