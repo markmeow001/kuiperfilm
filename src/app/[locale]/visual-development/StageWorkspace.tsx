@@ -34,6 +34,10 @@ export interface CastingTranslations {
   faceStructure: string
   emotionalRead: string
   lifeHistory: string
+  directorPrompt: string
+  directorPromptDescription: string
+  directorPromptPlaceholder: string
+  framingStandard: string
   resolution: string
   modelBinding: string
   historyTitle: string

@@ -29,6 +29,7 @@ describe('visual development casting prompt', () => {
         faceStructure: 'long face with broad cheekbones',
         emotionalRead: 'restrained fear with determination',
         lifeHistory: 'sheltered upbringing followed by recent trauma',
+        directorPrompt: 'an unconventional independent-film face with smaller eyes',
       },
     })
 
@@ -39,10 +40,15 @@ describe('visual development casting prompt', () => {
     expect(result.prompt).toContain('evenly lit pure white (#FFFFFF)')
     expect(result.prompt).toContain('may influence only the performer\'s subtle facial performance')
     expect(result.prompt).toContain('No costume design')
-    expect(result.promptStack.phaseTemplate).toBe('CADS_CASTING_FACE_V1')
+    expect(result.prompt).toContain('entire head, complete crown, full hair silhouette')
+    expect(result.prompt).toContain('both shoulders and upper chest')
+    expect(result.prompt).toContain('an unconventional independent-film face with smaller eyes')
+    expect(result.promptStack.castingDirection).toContain('unconventional independent-film face')
+    expect(result.promptStack.phaseTemplate).toBe('CADS_CASTING_FACE_V2')
     expect(result.negativePrompt).toContain('recognizable actor')
     expect(result.negativePrompt).toContain('gray background')
     expect(result.negativePrompt).toContain('blood')
+    expect(result.negativePrompt).toContain('cropped head')
   })
 })
 

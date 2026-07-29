@@ -155,6 +155,7 @@ export function buildCastingPrompt(input: CastingPromptInput): {
     line('Life history visible in the face', input.castingBrief.lifeHistory),
   ].filter((value): value is string => Boolean(value)).join(' ')
 
+  const directorDirection = clean(input.castingBrief.directorPrompt)
   const exclusions = clean(input.castingBrief.exclusions)
 
   const phaseTemplate = [
@@ -163,7 +164,9 @@ export function buildCastingPrompt(input: CastingPromptInput): {
     identity,
     performance,
     storyContext,
-    'Front-facing head-and-shoulders casting photograph, direct eye contact, neutral restrained expression, plain clean neutral crew-neck top.',
+    'MANDATORY FRAMING: a front-facing medium close-up casting photograph framed from the upper chest to above the head. Show the performer\'s entire head, complete crown, full hair silhouette, both ears when not covered by hair, neck, both shoulders and upper chest. Leave clean white breathing room above the highest hair and visible margins beside both shoulders. The subject must occupy only about 65–72% of the image height. Never crop the crown, hair, chin, neck or shoulders. This is not an extreme close-up.',
+    'Direct eye contact, neutral restrained expression, plain clean neutral crew-neck top.',
+    directorDirection ? `Casting director direction for this candidate batch: ${directorDirection}. Apply this only to casting identity, facial structure, presence and subtle performance; it cannot override the mandatory framing, adult-performer, pure-white-background, clean-wardrobe or no-prop rules.` : '',
     'Story, trauma and world context may influence only the performer\'s subtle facial performance. Never visualize them as blood, wounds, dirt, costume, props, symbols, scenery or special effects.',
     'Pure white seamless studio background, evenly lit edge to edge. No costume design, no props, no jewelry, no hair ornaments, no fantasy effects, no world scenery.',
     'Natural facial asymmetry, visible skin pores, peach fuzz, subtle under-eye texture, tiny believable blemishes, realistic eyelashes and individual hair strands.',
@@ -178,6 +181,7 @@ export function buildCastingPrompt(input: CastingPromptInput): {
     'gothic costume, fantasy costume, jewelry, feathers, symbols, props, scenery',
     'blood, wounds, bruises, dirt, damaged clothing, distressed wardrobe',
     'gray background, dark background, colored background, gradient background, room, location, environmental backdrop',
+    'extreme close-up, face-only crop, cropped head, cut-off crown, cut-off hair, hair touching frame edge, cropped chin, missing neck, cropped shoulders, missing upper chest',
     'smiling, seductive expression, perfect facial symmetry, text, watermark',
   ].join(', ')
 
@@ -187,8 +191,9 @@ export function buildCastingPrompt(input: CastingPromptInput): {
     promptStack: {
       worldBible: storyContext || 'No story context supplied',
       characterDna: `${identity} ${performance}`.trim(),
-      phaseTemplate: 'CADS_CASTING_FACE_V1',
-      modelAdapter: 'PHOTOREAL_CASTING_NEUTRAL_V1',
+      castingDirection: directorDirection || 'No additional casting direction supplied',
+      phaseTemplate: 'CADS_CASTING_FACE_V2',
+      modelAdapter: 'PHOTOREAL_CASTING_NEUTRAL_V2',
     },
   }
 }

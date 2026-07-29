@@ -28,6 +28,10 @@ const translations = {
   faceStructure: '臉部骨相',
   emotionalRead: '第一眼情緒',
   lifeHistory: '生命經歷',
+  directorPrompt: '選角導演提示詞',
+  directorPromptDescription: '只調整這一批候選的選角方向',
+  directorPromptPlaceholder: '例如：非典型的獨立電影面孔',
+  framingStandard: '完整頭部＋雙肩上胸',
   resolution: '模型預設尺寸',
   modelBinding: '生圖模型綁定',
   historyTitle: '此角色的選角歷史',
@@ -101,6 +105,51 @@ describe('CastingWorkspace World Canon gate', () => {
     expect(screen.getByRole('option', { name: '3:4' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '生成 8 張' }))
     expect(value.onGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('可編輯本批選角方向，並固定顯示完整頭部與上胸構圖標準', () => {
+    const value = controller({ worldStatus: 'world_locked' })
+    render(<CastingWorkspace candidateCount={8} controller={value} onCandidateCountChange={vi.fn()} translations={translations} />)
+
+    const prompt = screen.getByLabelText('選角導演提示詞')
+    fireEvent.change(prompt, { target: { value: '眼睛較小、骨相更明確' } })
+
+    expect(value.onFieldChange).toHaveBeenCalledWith('castingBrief', 'directorPrompt', '眼睛較小、骨相更明確')
+    expect(screen.getByText('完整頭部＋雙肩上胸')).toBeInTheDocument()
+  })
+
+  it('候選圖片依生成比例完整顯示，不再用 cover 裁掉頭頂', () => {
+    const batch = {
+      id: 'batch-framing',
+      stage: 'casting',
+      createdAt: '2026-07-29T22:00:00.000Z',
+      candidateCount: 4,
+      modelKey: 'atlascloud::flux-2-pro',
+      provider: 'atlascloud',
+      modelId: 'flux-2-pro',
+      seedSupported: true,
+      aspectRatio: '4:3',
+      resolution: null,
+      status: 'completed',
+      candidates: [{
+        id: 'candidate-1',
+        code: 'C-01',
+        taskStatus: 'completed',
+        progress: 100,
+        resultUrl: '/casting-candidate.jpg',
+        requestedSeed: 1234,
+        seedStatus: 'applied',
+        shortlisted: false,
+        isCanon: false,
+        errorMessage: null,
+      }],
+    }
+    const value = controller({ worldStatus: 'world_locked', batch, batches: [batch], activeBatchId: batch.id })
+    render(<CastingWorkspace candidateCount={4} controller={value} onCandidateCountChange={vi.fn()} translations={translations} />)
+
+    const image = screen.getByAltText('候選人 C-01')
+    expect(image).toHaveClass('object-contain')
+    expect(image.parentElement?.parentElement).toHaveStyle({ aspectRatio: '4 / 3' })
   })
 
   it('同一角色有多次選角生成 -> 顯示完整批次歷史並可切回舊結果', () => {

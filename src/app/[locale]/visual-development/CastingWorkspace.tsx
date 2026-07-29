@@ -29,6 +29,10 @@ interface CastingTranslations {
   faceStructure: string
   emotionalRead: string
   lifeHistory: string
+  directorPrompt: string
+  directorPromptDescription: string
+  directorPromptPlaceholder: string
+  framingStandard: string
   resolution: string
   modelBinding: string
   historyTitle: string
@@ -75,6 +79,7 @@ export function CastingWorkspace({
       isCanon: false,
       errorMessage: null,
     }))
+  const candidateAspectRatio = toCssAspectRatio(controller.batch?.aspectRatio ?? controller.form.aspectRatio)
 
   return (
     <div className="space-y-4">
@@ -101,6 +106,28 @@ export function CastingWorkspace({
           <Field label={translations.emotionalRead} value={controller.form.castingBrief.emotionalRead} onChange={(value) => controller.onFieldChange('castingBrief', 'emotionalRead', value)} />
           <div className="lg:col-span-2">
             <Field label={translations.lifeHistory} value={controller.form.castingBrief.lifeHistory} onChange={(value) => controller.onFieldChange('castingBrief', 'lifeHistory', value)} multiline />
+          </div>
+          <div className="lg:col-span-2 rounded-xl border border-primary-500/20 bg-primary-500/[0.045] p-3">
+            <span className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="casting-director-prompt" className="flex items-center gap-2 font-mono text-[9px] tracking-[0.13em] text-primary-300">
+                <AppIcon name="brain" className="h-3.5 w-3.5" />
+                {translations.directorPrompt}
+              </label>
+              <span className="rounded-md border border-white/[0.08] bg-black/20 px-2 py-1 font-mono text-[7px] tracking-[0.08em] text-text-tertiary">
+                {translations.framingStandard}
+              </span>
+            </span>
+            <span className="mt-2 block font-serif-cn text-[10px] leading-5 text-text-tertiary">
+              {translations.directorPromptDescription}
+            </span>
+            <textarea
+              id="casting-director-prompt"
+              rows={4}
+              value={controller.form.castingBrief.directorPrompt ?? ''}
+              onChange={(event) => controller.onFieldChange('castingBrief', 'directorPrompt', event.target.value)}
+              placeholder={translations.directorPromptPlaceholder}
+              className="mt-3 w-full resize-y rounded-xl border border-white/[0.09] bg-[#0a0a0d] px-3 py-3 text-xs leading-5 text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50"
+            />
           </div>
         </div>
       </section>
@@ -225,9 +252,14 @@ export function CastingWorkspace({
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] sm:grid-cols-4 2xl:grid-cols-5">
           {displayedCandidates.map((candidate) => (
             <article key={candidate.id} className="group bg-[#0b0b0d] p-2.5">
-              <div className={`relative aspect-[4/5] overflow-hidden rounded-xl border bg-[#101013] ${candidate.isCanon ? 'border-primary-500/70' : 'border-white/[0.07]'}`}>
+              <div style={{ aspectRatio: candidateAspectRatio }} className={`relative overflow-hidden rounded-xl border bg-white ${candidate.isCanon ? 'border-primary-500/70' : 'border-white/[0.07]'}`}>
                 {candidate.resultUrl ? (
-                  <VisualDevelopmentImage src={candidate.resultUrl} alt={`${translations.candidate} ${candidate.code}`} />
+                  <VisualDevelopmentImage
+                    src={candidate.resultUrl}
+                    alt={`${translations.candidate} ${candidate.code}`}
+                    className="h-full w-full object-contain"
+                    buttonClassName="bg-white"
+                  />
                 ) : (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-text-tertiary">
                     <AppIcon name="user" className="h-5 w-5 opacity-55" />
@@ -264,6 +296,13 @@ function formatBatchTimestamp(value?: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`
+}
+
+function toCssAspectRatio(value?: string): string {
+  const [width, height] = (value ?? '').split(':').map(Number)
+  return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
+    ? `${width} / ${height}`
+    : '4 / 5'
 }
 
 function Field({ label, value, onChange, multiline = false, placeholder }: { label: string; value?: string; onChange: (value: string) => void; multiline?: boolean; placeholder?: string }) {

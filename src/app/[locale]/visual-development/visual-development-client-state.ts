@@ -25,6 +25,7 @@ export const EMPTY_CASTING_FORM: CastingFormState = {
     faceStructure: '',
     emotionalRead: '',
     lifeHistory: '',
+    directorPrompt: '',
   },
   characterCode: 'CHAR-01',
   characterName: '',
