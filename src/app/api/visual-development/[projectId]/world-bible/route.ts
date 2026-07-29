@@ -206,7 +206,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (document.references.length > 1 && capabilities?.supportMultiReferenceImage !== true) {
     throw new ApiError('INVALID_PARAMS', { code: 'MULTI_REFERENCE_IMAGE_UNSUPPORTED' })
   }
-  if (capabilities?.aspectRatioOptions && !capabilities.aspectRatioOptions.includes(document.aspectRatio)) {
+  if (!capabilities?.aspectRatioOptions?.includes(document.aspectRatio)) {
     throw new ApiError('INVALID_PARAMS', { code: 'ASPECT_RATIO_UNSUPPORTED', field: 'aspectRatio' })
   }
   if (document.resolution && capabilities?.resolutionOptions && !capabilities.resolutionOptions.includes(document.resolution)) {

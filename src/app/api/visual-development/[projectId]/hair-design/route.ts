@@ -158,7 +158,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const faceAuthority = await resolveFaceAuthority(character.id, access.userId, projectId)
   const { selection, capabilities } = await resolveBoundModel(access.userId, modelKey)
   const aspectRatio = requiredString(body.aspectRatio, 'aspectRatio', 16)
-  if (capabilities.aspectRatioOptions && !capabilities.aspectRatioOptions.includes(aspectRatio)) {
+  if (!capabilities.aspectRatioOptions?.includes(aspectRatio)) {
     throw new ApiError('INVALID_PARAMS', { code: 'ASPECT_RATIO_UNSUPPORTED', field: 'aspectRatio' })
   }
   const resolution = typeof body.resolution === 'string' && body.resolution.trim()

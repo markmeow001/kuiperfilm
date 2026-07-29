@@ -14,13 +14,27 @@ const CAPABILITY_NAMESPACES = new Set(['llm', 'image', 'video', 'audio', 'lipsyn
 const MODEL_TYPES = new Set(['llm', 'image', 'video', 'audio', 'lipsync'])
 const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
   llm: new Set(['reasoningEffortOptions', 'fieldI18n']),
-  image: new Set(['resolutionOptions', 'fieldI18n']),
+  image: new Set([
+    'resolutionOptions',
+    'aspectRatioOptions',
+    'supportNegativePrompt',
+    'supportReferenceImage',
+    'supportMultiReferenceImage',
+    'supportMaskEdit',
+    'supportSeed',
+    'fieldI18n',
+  ]),
   video: new Set([
+    'generationModeOptions',
+    'generateAudioOptions',
     'durationOptions',
     'fpsOptions',
     'resolutionOptions',
+    'aspectRatioOptions',
     'firstlastframe',
     'supportGenerateAudio',
+    'supportNegativePrompt',
+    'supportReferenceImage',
     'fieldI18n',
   ]),
   audio: new Set(['voiceOptions', 'rateOptions', 'fieldI18n']),
@@ -33,11 +47,15 @@ const CAPABILITY_NAMESPACE_I18N_FIELDS = {
   },
   image: {
     resolution: 'resolutionOptions',
+    aspectRatio: 'aspectRatioOptions',
   },
   video: {
+    generationMode: 'generationModeOptions',
+    generateAudio: 'generateAudioOptions',
     duration: 'durationOptions',
     fps: 'fpsOptions',
     resolution: 'resolutionOptions',
+    aspectRatio: 'aspectRatioOptions',
   },
   audio: {
     voice: 'voiceOptions',
@@ -62,6 +80,10 @@ function isStringArray(value) {
 
 function isNumberArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))
+}
+
+function isBooleanArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === 'boolean')
 }
 
 function parseModelKeyStrict(value) {
@@ -226,6 +248,9 @@ function validateCapabilities(modelType, capabilities) {
       if (image.resolutionOptions !== undefined && !isStringArray(image.resolutionOptions)) {
         pushIssue(issues, 'capabilities.image.resolutionOptions', 'must be string array')
       }
+      if (image.aspectRatioOptions !== undefined && !isStringArray(image.aspectRatioOptions)) {
+        pushIssue(issues, 'capabilities.image.aspectRatioOptions', 'must be string array')
+      }
       validateFieldI18nMap(issues, 'image', image)
     }
   }
@@ -236,6 +261,12 @@ function validateCapabilities(modelType, capabilities) {
       pushIssue(issues, 'capabilities.video', 'video capabilities must be an object')
     } else {
       validateAllowedFields(issues, 'video', video)
+      if (video.generationModeOptions !== undefined && !isStringArray(video.generationModeOptions)) {
+        pushIssue(issues, 'capabilities.video.generationModeOptions', 'must be string array')
+      }
+      if (video.generateAudioOptions !== undefined && !isBooleanArray(video.generateAudioOptions)) {
+        pushIssue(issues, 'capabilities.video.generateAudioOptions', 'must be boolean array')
+      }
       if (video.durationOptions !== undefined && !isNumberArray(video.durationOptions)) {
         pushIssue(issues, 'capabilities.video.durationOptions', 'must be number array')
       }
@@ -244,6 +275,9 @@ function validateCapabilities(modelType, capabilities) {
       }
       if (video.resolutionOptions !== undefined && !isStringArray(video.resolutionOptions)) {
         pushIssue(issues, 'capabilities.video.resolutionOptions', 'must be string array')
+      }
+      if (video.aspectRatioOptions !== undefined && !isStringArray(video.aspectRatioOptions)) {
+        pushIssue(issues, 'capabilities.video.aspectRatioOptions', 'must be string array')
       }
       if (video.supportGenerateAudio !== undefined && typeof video.supportGenerateAudio !== 'boolean') {
         pushIssue(issues, 'capabilities.video.supportGenerateAudio', 'must be boolean')

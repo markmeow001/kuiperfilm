@@ -302,7 +302,9 @@ export class TencentVODVideoGenerator extends BaseVideoGenerator {
         }
         if (opts.duration) outputConfig.Duration = opts.duration
         if (opts.resolution) outputConfig.Resolution = opts.resolution
-        if (opts.aspectRatio) outputConfig.AspectRatio = opts.aspectRatio
+        if (opts.aspectRatio && opts.aspectRatio !== 'auto' && opts.aspectRatio !== 'adaptive') {
+            outputConfig.AspectRatio = opts.aspectRatio
+        }
         // AudioGeneration: prefer explicit ToggleFlag, fall back to the boolean
         // alias coming from video.worker (Kling 3.0 / Omni "音畫同出").
         if (opts.audioGeneration) {

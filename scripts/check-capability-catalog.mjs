@@ -25,6 +25,7 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
     'durationOptions',
     'fpsOptions',
     'resolutionOptions',
+    'aspectRatioOptions',
     'firstlastframe',
     'supportGenerateAudio',
     'supportNegativePrompt',
@@ -43,6 +44,7 @@ const CAPABILITY_NAMESPACE_I18N_FIELDS = {
     duration: 'durationOptions',
     fps: 'fpsOptions',
     resolution: 'resolutionOptions',
+    aspectRatio: 'aspectRatioOptions',
   },
   audio: { voice: 'voiceOptions', rate: 'rateOptions' },
   lipsync: { mode: 'modeOptions' },
@@ -210,6 +212,9 @@ function validateCapabilitiesForModelType(issues, file, index, modelType, capabi
       if (image.resolutionOptions !== undefined && !isStringArray(image.resolutionOptions)) {
         pushIssue(issues, file, index, 'capabilities.image.resolutionOptions', 'must be string array')
       }
+      if (image.aspectRatioOptions !== undefined && !isStringArray(image.aspectRatioOptions)) {
+        pushIssue(issues, file, index, 'capabilities.image.aspectRatioOptions', 'must be string array')
+      }
       validateFieldI18nMap(issues, file, index, 'image', image)
     }
   }
@@ -234,6 +239,9 @@ function validateCapabilitiesForModelType(issues, file, index, modelType, capabi
       }
       if (video.resolutionOptions !== undefined && !isStringArray(video.resolutionOptions)) {
         pushIssue(issues, file, index, 'capabilities.video.resolutionOptions', 'must be string array')
+      }
+      if (video.aspectRatioOptions !== undefined && !isStringArray(video.aspectRatioOptions)) {
+        pushIssue(issues, file, index, 'capabilities.video.aspectRatioOptions', 'must be string array')
       }
       if (video.supportGenerateAudio !== undefined && typeof video.supportGenerateAudio !== 'boolean') {
         pushIssue(issues, file, index, 'capabilities.video.supportGenerateAudio', 'must be boolean')
@@ -325,6 +333,32 @@ async function main() {
       }
 
       validateCapabilitiesForModelType(issues, filePath, index, item.modelType, item.capabilities)
+      if (path.basename(filePath) === 'image-video.catalog.json') {
+        const image = item.capabilities?.image
+        const video = item.capabilities?.video
+        if (item.modelType === 'image' && !isStringArray(image?.aspectRatioOptions)) {
+          pushIssue(
+            issues,
+            filePath,
+            index,
+            'capabilities.image.aspectRatioOptions',
+            'production image models must declare their exact aspect-ratio choices',
+          )
+        }
+        if (
+          item.modelType === 'video'
+          && video?.supportReferenceImage === true
+          && !isStringArray(video.aspectRatioOptions)
+        ) {
+          pushIssue(
+            issues,
+            filePath,
+            index,
+            'capabilities.video.aspectRatioOptions',
+            'reference-video models used by visual development must declare their exact aspect-ratio choices',
+          )
+        }
+      }
     }
   }
 

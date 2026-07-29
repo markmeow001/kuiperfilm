@@ -4,6 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useUserModels } from '@/lib/query/hooks/useUserModels'
 import { PRODUCTION_STAGE_IDS, type ProductionStageId } from '@/lib/visual-development/production-stages'
+import {
+  getVisualDevelopmentAspectRatios,
+  pickVisualDevelopmentAspectRatio,
+  reconcileVisualDevelopmentAspectRatio,
+} from '@/lib/visual-development/model-options'
 import { DevelopmentInspector } from './DevelopmentInspector'
 import { DevelopmentRail, type LocalizedDevelopmentStage } from './DevelopmentRail'
 import { StageWorkspace } from './StageWorkspace'
@@ -162,11 +167,11 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     setForm((current) => ({ ...current, [group]: { ...current[group], [field]: value } }))
   }, [])
 
-  const updateIdentity = useCallback((field: 'characterCode' | 'characterName' | 'modelKey' | 'resolution', value: string) => {
+  const updateIdentity = useCallback((field: 'characterCode' | 'characterName' | 'modelKey' | 'resolution' | 'aspectRatio', value: string) => {
     setForm((current) => ({
       ...current,
       [field]: value,
-      ...(field === 'modelKey' ? { resolution: '' } : {}),
+      ...(field === 'modelKey' ? { resolution: '', aspectRatio: '' } : {}),
     }))
   }, [])
 
@@ -184,7 +189,6 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
         body: JSON.stringify({
           ...form,
           candidateCount,
-          aspectRatio: '4:5',
           meta: { locale },
         }),
       })
@@ -223,11 +227,29 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     [modelsQuery.data?.image],
   )
 
+  useEffect(() => {
+    if (!form.modelKey) return
+    const selected = modelsQuery.data?.image?.find((model) => model.value === form.modelKey)
+    if (!selected) return
+    const aspectRatio = reconcileVisualDevelopmentAspectRatio(form.aspectRatio, selected.capabilities, 'image')
+    if (aspectRatio !== form.aspectRatio) {
+      setForm((current) => ({ ...current, aspectRatio }))
+    }
+  }, [form.aspectRatio, form.modelKey, modelsQuery.data?.image])
+
+  useEffect(() => {
+    if (!faceForm.modelKey) return
+    const selected = referenceImageModels.find((model) => model.value === faceForm.modelKey)
+    if (!selected) return
+    const aspectRatio = reconcileVisualDevelopmentAspectRatio(faceForm.aspectRatio, selected.capabilities, 'image')
+    if (aspectRatio !== faceForm.aspectRatio) setFaceForm((current) => ({ ...current, aspectRatio }))
+  }, [faceForm.aspectRatio, faceForm.modelKey, referenceImageModels])
+
   const updateFaceField = useCallback((field: keyof FaceBibleFormState, value: string) => {
     if (field === 'modelKey') {
       const selected = referenceImageModels.find((model) => model.value === value)
-      const ratios = selected?.capabilities?.image?.aspectRatioOptions ?? ['3:4']
-      const preferredRatio = ['3:4', '4:5', '9:16', '1:1'].find((ratio) => ratios.includes(ratio)) ?? ratios[0] ?? ''
+      const ratios = selected ? getVisualDevelopmentAspectRatios(selected.capabilities, 'image') : []
+      const preferredRatio = pickVisualDevelopmentAspectRatio(ratios, 'image')
       setFaceForm((current) => ({ ...current, modelKey: value, resolution: '', aspectRatio: preferredRatio }))
       return
     }

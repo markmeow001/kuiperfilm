@@ -236,7 +236,7 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
             firstAppearance: character.firstAppearance,
             aliases: character.aliases,
           },
-          castingBrief: { apparentAge: character.apparentAge, ...character.castingBrief },
+          castingBrief: { apparentAge: character.apparentAge, ...character.castingBrief, performerAge: '21+' },
         },
         update: {
           name: character.name,
@@ -255,7 +255,14 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
             firstAppearance: character.firstAppearance,
             aliases: character.aliases,
           },
-          castingBrief: { ...existingBrief, apparentAge: character.apparentAge, ...character.castingBrief },
+          castingBrief: {
+            ...existingBrief,
+            apparentAge: character.apparentAge,
+            ...character.castingBrief,
+            performerAge: typeof existingBrief.performerAge === 'string' && existingBrief.performerAge.trim()
+              ? existingBrief.performerAge
+              : '21+',
+          },
         },
       })
     }

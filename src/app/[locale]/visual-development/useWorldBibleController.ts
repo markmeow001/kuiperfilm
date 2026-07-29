@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
 import type { WorldAssetCode } from '@/lib/visual-development/world-bible'
+import {
+  getVisualDevelopmentAspectRatios,
+  pickVisualDevelopmentAspectRatio,
+  reconcileVisualDevelopmentAspectRatio,
+} from '@/lib/visual-development/model-options'
 import type {
   WorldBibleAssetView,
   WorldBibleFormState,
@@ -122,6 +127,14 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   }, [input.projectId])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    if (!form.modelKey || status === 'world_locked') return
+    const selected = imageModels.find((model) => model.value === form.modelKey)
+    if (!selected) return
+    const aspectRatio = reconcileVisualDevelopmentAspectRatio(form.aspectRatio, selected.capabilities, 'image')
+    if (aspectRatio !== form.aspectRatio) setForm((current) => ({ ...current, aspectRatio }))
+  }, [form.aspectRatio, form.modelKey, imageModels, status])
 
   useEffect(() => {
     if (!input.projectId || hydratedProjectRef.current !== input.projectId || isLoading || status === 'world_locked') return
@@ -271,11 +284,17 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
     isSaving,
     isGenerating,
     isUploading,
-    onFieldChange: (field, value) => setForm((current) => ({
-      ...current,
-      [field]: value,
-      ...(field === 'modelKey' ? { resolution: '' } : {}),
-    })),
+    onFieldChange: (field, value) => setForm((current) => {
+      if (field !== 'modelKey') return { ...current, [field]: value }
+      const selected = imageModels.find((model) => model.value === value)
+      const ratios = selected ? getVisualDevelopmentAspectRatios(selected.capabilities, 'image') : []
+      return {
+        ...current,
+        modelKey: value,
+        resolution: '',
+        aspectRatio: pickVisualDevelopmentAspectRatio(ratios, 'image'),
+      }
+    }),
     onSave: () => void save(),
     onUploadReferences: (files) => void uploadReferences(files),
     onRemoveReference: (referenceId) => void removeReference(referenceId),

@@ -9,6 +9,11 @@ import {
   type ProductionFieldId,
   type ProductionStageId,
 } from '@/lib/visual-development/production-stages'
+import {
+  getVisualDevelopmentAspectRatios,
+  pickVisualDevelopmentAspectRatio,
+  reconcileVisualDevelopmentAspectRatio,
+} from '@/lib/visual-development/model-options'
 import type {
   CastingBatchView,
   ProductionStageFormState,
@@ -134,6 +139,22 @@ export function useProductionStageController(input: UseProductionStageController
       && model.capabilities.image.supportMultiReferenceImage === true),
   [input.imageModels, input.videoModels, stage.mediaType])
 
+  useEffect(() => {
+    if (!form.modelKey) return
+    const selected = models.find((model) => model.value === form.modelKey)
+    if (!selected) return
+    const aspectRatio = reconcileVisualDevelopmentAspectRatio(form.aspectRatio, selected.capabilities, stage.mediaType)
+    if (aspectRatio !== form.aspectRatio) {
+      setForms((current) => ({
+        ...current,
+        [input.activeStageId]: {
+          ...(current[input.activeStageId] ?? initialForm(input.activeStageId, input.characterDna)),
+          aspectRatio,
+        },
+      }))
+    }
+  }, [form.aspectRatio, form.modelKey, input.activeStageId, input.characterDna, models, stage.mediaType])
+
   const updateForm = useCallback((change: (current: ProductionStageFormState) => ProductionStageFormState) => {
     setForms((current) => {
       const active = current[input.activeStageId] ?? initialForm(input.activeStageId, input.characterDna)
@@ -149,12 +170,8 @@ export function useProductionStageController(input: UseProductionStageController
     updateForm((current) => {
       if (field !== 'modelKey') return { ...current, [field]: value }
       const selected = models.find((model) => model.value === value)
-      const ratios = stage.mediaType === 'video'
-        ? ['16:9', '9:16', '1:1']
-        : selected?.capabilities?.image?.aspectRatioOptions ?? ['3:4']
-      const preferred = stage.mediaType === 'video'
-        ? '16:9'
-        : ['3:4', '4:5', '9:16', '1:1'].find((ratio) => ratios.includes(ratio)) ?? ratios[0] ?? '3:4'
+      const ratios = selected ? getVisualDevelopmentAspectRatios(selected.capabilities, stage.mediaType) : []
+      const preferred = pickVisualDevelopmentAspectRatio(ratios, stage.mediaType)
       const durations = selected?.capabilities?.video?.durationOptions ?? []
       return { ...current, modelKey: String(value), resolution: '', aspectRatio: preferred, duration: durations[0] ?? current.duration }
     })

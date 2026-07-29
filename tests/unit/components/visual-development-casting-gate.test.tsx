@@ -22,7 +22,8 @@ const translations = {
   characterCode: '角色代碼',
   characterRole: '角色定位',
   coreTraits: '核心性格',
-  apparentAge: '外觀年齡',
+  apparentAge: '角色銀幕年齡',
+  performerAge: '成年演員年齡',
   ethnicity: '族裔',
   faceStructure: '臉部骨相',
   emotionalRead: '第一眼情緒',
@@ -45,11 +46,12 @@ function controller(overrides: Partial<CastingWorkspaceController> = {}): Castin
     form: {
       worldBible: { projectPremise: '世界', visualThesis: '命題' },
       characterDna: { role: '主角', coreTraits: '堅定' },
-      castingBrief: { apparentAge: '24', emotionalRead: '警覺' },
+      castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: '警覺' },
       characterCode: 'CHAR-001',
       characterName: '絲諾',
       modelKey: 'atlascloud::flux-2-pro',
       resolution: '',
+      aspectRatio: '3:4',
     },
     worldStatus: 'world_draft',
     imageModels: [{
@@ -57,7 +59,7 @@ function controller(overrides: Partial<CastingWorkspaceController> = {}): Castin
       label: 'FLUX.2 Pro',
       provider: 'atlascloud',
       providerName: 'AtlasCloud',
-      capabilities: { image: { supportSeed: false, resolutionOptions: [] } },
+      capabilities: { image: { supportSeed: false, resolutionOptions: [], aspectRatioOptions: ['3:4', '2:3'] } },
     }],
     isGenerating: false,
     isLoading: false,
@@ -86,6 +88,9 @@ describe('CastingWorkspace World Canon gate', () => {
     const value = controller({ worldStatus: 'world_locked' })
     render(<CastingWorkspace candidateCount={8} controller={value} onCandidateCountChange={vi.fn()} translations={translations} />)
 
+    expect(screen.getByLabelText('角色銀幕年齡')).toHaveValue('18')
+    expect(screen.getByLabelText('成年演員年齡')).toHaveValue('21+')
+    expect(screen.getByRole('option', { name: '3:4' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '生成 8 張' }))
     expect(value.onGenerate).toHaveBeenCalledTimes(1)
   })

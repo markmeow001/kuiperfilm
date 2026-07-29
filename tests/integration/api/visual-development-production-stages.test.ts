@@ -32,7 +32,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/api-config', () => apiConfigMock)
 vi.mock('@/lib/task/submitter', () => submitterMock)
 
-function request(stageId: 'costume' | 'video', modelKey: string) {
+function request(stageId: 'costume' | 'video', modelKey: string, aspectRatio = stageId === 'video' ? '16:9' : '3:4') {
   const records = stageId === 'costume'
     ? { silhouetteSystem: 'tower-like layered silhouette', materialConstruction: 'worn wool, leather and aged silver', storyWear: 'motivated repairs and soot at contact zones' }
     : { performanceActions: 'walk, listen, speak and controlled action', motionRules: 'natural weight, restrained face and stable cloth', continuityChecks: 'identity, costume, props, scene and light remain stable' }
@@ -42,7 +42,7 @@ function request(stageId: 'costume' | 'video', modelKey: string) {
     body: {
       characterCode: 'CHR-SNO',
       modelKey,
-      aspectRatio: stageId === 'video' ? '16:9' : '3:4',
+      aspectRatio,
       duration: 5,
       stageRecord: records,
       meta: { locale: 'zh' },
@@ -132,6 +132,29 @@ describe('production stage API', () => {
     expect(first.payload.referenceImages).toEqual(['images/visual-development/integration-task-1.png'])
     expect(first.payload.duration).toBe(5)
     expect(first.payload.prompt).toContain('same performer')
+  })
+
+  it('accepts a portrait ratio registered by the selected Seedance R2V model', async () => {
+    installFixtures('integration_locked')
+    apiConfigMock.resolveModelSelection.mockResolvedValue({ provider: 'atlascloud', modelId: 'seedance-2.0-r2v', modelKey: 'atlascloud::seedance-2.0-r2v' })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.POST(request('video', 'atlascloud::seedance-2.0-r2v', '3:4'), { params: Promise.resolve({ projectId: 'project-1', stageId: 'video' }) })
+
+    expect(response.status).toBe(202)
+    const first = submitterMock.submitTask.mock.calls[0]?.[0] as { payload: Record<string, unknown> }
+    expect(first.payload.aspectRatio).toBe('3:4')
+  })
+
+  it('rejects a ratio not registered by the selected Kling O3 model before submission', async () => {
+    installFixtures('integration_locked')
+    apiConfigMock.resolveModelSelection.mockResolvedValue({ provider: 'atlascloud', modelId: 'kling-o3-pro-r2v', modelKey: 'atlascloud::kling-o3-pro-r2v' })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.POST(request('video', 'atlascloud::kling-o3-pro-r2v', '3:4'), { params: Promise.resolve({ projectId: 'project-1', stageId: 'video' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.details.code).toBe('ASPECT_RATIO_UNSUPPORTED')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
   })
 
   it('requires all approved assets and a primary before locking the next Canon status', async () => {

@@ -235,6 +235,7 @@ export interface CastingFormState {
   characterName: string
   modelKey: string
   resolution: string
+  aspectRatio: string
 }
 
 export interface CastingWorkspaceController {
@@ -245,7 +246,7 @@ export interface CastingWorkspaceController {
   isGenerating: boolean
   isLoading: boolean
   onFieldChange: (group: 'worldBible' | 'characterDna' | 'castingBrief', field: string, value: string) => void
-  onIdentityChange: (field: 'characterCode' | 'characterName' | 'modelKey' | 'resolution', value: string) => void
+  onIdentityChange: (field: 'characterCode' | 'characterName' | 'modelKey' | 'resolution' | 'aspectRatio', value: string) => void
   onOpenWorldBible: () => void
   onGenerate: () => void
   onCandidateAction: (candidateId: string, action: 'shortlist' | 'canon-lock', shortlisted?: boolean) => void

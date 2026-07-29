@@ -293,6 +293,38 @@ describe('TencentVODVideoGenerator', () => {
     expect(out).not.toHaveProperty('OutputComplianceCheck')
   })
 
+  it('omits adaptive ratio instead of sending an invalid Tencent enum', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'adaptive reference video',
+      options: {
+        modelId: 'Seedance-1.5-pro',
+        aspectRatio: 'adaptive',
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req.OutputConfig).not.toHaveProperty('AspectRatio')
+  })
+
+  it('forwards an exact supported ratio for Kling video', async () => {
+    const generator = new TencentVODVideoGenerator()
+    await generator.generate({
+      userId: 'user-1',
+      imageUrl: 'https://example.com/start.png',
+      prompt: 'vertical character test',
+      options: {
+        modelId: 'Kling-3.0',
+        aspectRatio: '9:16',
+      },
+    })
+
+    const req = createAigcVideoTaskMock.mock.calls.at(0)?.[0] as Record<string, unknown>
+    expect(req.OutputConfig).toEqual(expect.objectContaining({ AspectRatio: '9:16' }))
+  })
+
   it('forwards only the explicitly-set advanced flags', async () => {
     const generator = new TencentVODVideoGenerator()
     await generator.generate({

@@ -113,7 +113,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     throw new ApiError('INVALID_PARAMS', { code: 'FACE_LOCK_REFERENCE_MODEL_REQUIRED', field: 'modelKey' })
   }
   const aspectRatio = requiredString(body.aspectRatio, 'aspectRatio', 16)
-  if (capabilities.aspectRatioOptions && !capabilities.aspectRatioOptions.includes(aspectRatio)) {
+  if (!capabilities.aspectRatioOptions?.includes(aspectRatio)) {
     throw new ApiError('INVALID_PARAMS', { code: 'ASPECT_RATIO_UNSUPPORTED', field: 'aspectRatio' })
   }
   const resolution = typeof body.resolution === 'string' && body.resolution.trim()

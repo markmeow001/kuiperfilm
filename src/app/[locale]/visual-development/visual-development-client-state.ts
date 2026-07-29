@@ -20,6 +20,7 @@ export const EMPTY_CASTING_FORM: CastingFormState = {
   characterDna: { role: '', coreTraits: '' },
   castingBrief: {
     apparentAge: '24–28',
+    performerAge: '21+',
     ethnicity: '',
     faceStructure: '',
     emotionalRead: '',
@@ -29,6 +30,7 @@ export const EMPTY_CASTING_FORM: CastingFormState = {
   characterName: '',
   modelKey: '',
   resolution: '',
+  aspectRatio: '',
 }
 
 export const EMPTY_FACE_FORM: FaceBibleFormState = {

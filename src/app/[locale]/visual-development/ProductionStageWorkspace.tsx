@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/ui/icons'
+import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model-options'
 import type { ProductionFieldId } from '@/lib/visual-development/production-stages'
 import type { CastingCandidateView, ProductionStageWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
@@ -43,13 +44,16 @@ export function ProductionStageWorkspace({ controller, translations }: Productio
   const resolutions = controller.stage.mediaType === 'video'
     ? selectedModel?.capabilities?.video?.resolutionOptions ?? []
     : selectedModel?.capabilities?.image?.resolutionOptions ?? []
-  const ratios = controller.stage.mediaType === 'video'
-    ? ['16:9', '9:16', '1:1']
-    : selectedModel?.capabilities?.image?.aspectRatioOptions ?? ['3:4']
+  const ratios = selectedModel
+    ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, controller.stage.mediaType)
+    : []
   const durations = selectedModel?.capabilities?.video?.durationOptions ?? []
   const candidates = controller.batch?.candidates ?? placeholders(controller)
   const fieldsReady = controller.stage.fields.every((field) => controller.form.stageRecord[field]?.trim())
-  const canGenerate = controller.prerequisiteReady && Boolean(controller.form.modelKey) && fieldsReady
+  const canGenerate = controller.prerequisiteReady
+    && Boolean(controller.form.modelKey)
+    && Boolean(controller.form.aspectRatio)
+    && fieldsReady
   const canLock = Boolean(
     controller.batch
     && controller.batch.status !== 'canon_locked'
@@ -100,6 +104,7 @@ export function ProductionStageWorkspace({ controller, translations }: Productio
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
               <select value={controller.form.aspectRatio} onChange={(event) => controller.onSettingChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+                <option value="">{translations.aspectRatio}</option>
                 {ratios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
               </select>
               {controller.stage.mediaType === 'video' ? (

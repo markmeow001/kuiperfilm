@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/ui/icons'
+import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model-options'
 import type { ReactNode } from 'react'
 import type { CastingCandidateView, HairDesignWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
@@ -18,6 +19,7 @@ export interface HairDesignTranslations {
   modelRequired: string
   modelHint: string
   resolution: string
+  aspectRatio: string
   exploreTitle: string
   exploreDescription: string
   generateExploration: string
@@ -86,11 +88,12 @@ function placeholders(codes: readonly string[], prefix: string): CastingCandidat
 export function HairDesignWorkspace({ controller, translations }: HairDesignWorkspaceProps) {
   const selectedModel = controller.imageModels.find((model) => model.value === controller.form.modelKey)
   const resolutions = selectedModel?.capabilities?.image?.resolutionOptions ?? []
-  const ratios = selectedModel?.capabilities?.image?.aspectRatioOptions ?? ['3:4']
+  const ratios = selectedModel ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, 'image') : []
   const exploration = controller.explorationBatch?.candidates ?? placeholders(EXPLORATION_CODES, 'hair-explore')
   const validation = controller.validationBatch?.candidates ?? placeholders(VALIDATION_CODES, 'hair-validate')
   const canGenerate = Boolean(
     controller.form.modelKey
+    && controller.form.aspectRatio
     && controller.form.hairSilhouette
     && controller.form.partingAndHairline
     && controller.form.lengthAndTexture
@@ -162,6 +165,7 @@ export function HairDesignWorkspace({ controller, translations }: HairDesignWork
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
               <select value={controller.form.aspectRatio} onChange={(event) => controller.onFieldChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+                <option value="">{translations.aspectRatio}</option>
                 {ratios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
               </select>
             </div>

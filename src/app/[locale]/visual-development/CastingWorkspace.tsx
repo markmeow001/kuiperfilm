@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/ui/icons'
+import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model-options'
 import type { CastingWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
@@ -23,6 +24,7 @@ interface CastingTranslations {
   characterRole: string
   coreTraits: string
   apparentAge: string
+  performerAge: string
   ethnicity: string
   faceStructure: string
   emotionalRead: string
@@ -54,6 +56,7 @@ export function CastingWorkspace({
 }: CastingWorkspaceProps) {
   const selectedModel = controller.imageModels.find((model) => model.value === controller.form.modelKey)
   const resolutions = selectedModel?.capabilities?.image?.resolutionOptions ?? []
+  const aspectRatios = selectedModel ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, 'image') : []
   const displayedCandidates = controller.batch?.candidates
     ?? Array.from({ length: candidateCount }, (_, index) => ({
       id: `pending-${index}`,
@@ -86,7 +89,8 @@ export function CastingWorkspace({
           <Field label={translations.characterCode} value={controller.form.characterCode} onChange={(value) => controller.onIdentityChange('characterCode', value)} />
           <Field label={translations.characterRole} value={controller.form.characterDna.role} onChange={(value) => controller.onFieldChange('characterDna', 'role', value)} />
           <Field label={translations.coreTraits} value={controller.form.characterDna.coreTraits} onChange={(value) => controller.onFieldChange('characterDna', 'coreTraits', value)} />
-          <Field label={translations.apparentAge} value={controller.form.castingBrief.apparentAge} onChange={(value) => controller.onFieldChange('castingBrief', 'apparentAge', value)} placeholder="24–28" />
+          <Field label={translations.apparentAge} value={controller.form.castingBrief.apparentAge} onChange={(value) => controller.onFieldChange('castingBrief', 'apparentAge', value)} placeholder="18" />
+          <Field label={translations.performerAge} value={controller.form.castingBrief.performerAge} onChange={(value) => controller.onFieldChange('castingBrief', 'performerAge', value)} placeholder="21+" />
           <Field label={translations.ethnicity} value={controller.form.castingBrief.ethnicity} onChange={(value) => controller.onFieldChange('castingBrief', 'ethnicity', value)} />
           <Field label={translations.faceStructure} value={controller.form.castingBrief.faceStructure} onChange={(value) => controller.onFieldChange('castingBrief', 'faceStructure', value)} />
           <Field label={translations.emotionalRead} value={controller.form.castingBrief.emotionalRead} onChange={(value) => controller.onFieldChange('castingBrief', 'emotionalRead', value)} />
@@ -102,7 +106,7 @@ export function CastingWorkspace({
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">
               {translations.modelBinding}
             </div>
-            <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(220px,1fr)_140px]">
+            <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(220px,1fr)_140px_120px]">
               <select
                 value={controller.form.modelKey}
                 onChange={(event) => controller.onIdentityChange('modelKey', event.target.value)}
@@ -123,6 +127,14 @@ export function CastingWorkspace({
                 <option value="">{translations.resolution}</option>
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
+              <select
+                value={controller.form.aspectRatio}
+                onChange={(event) => controller.onIdentityChange('aspectRatio', event.target.value)}
+                className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50"
+              >
+                <option value="">{translations.ratio}</option>
+                {aspectRatios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
+              </select>
             </div>
             {selectedModel && (
               <p className="mt-2 truncate font-mono text-[8px] text-text-tertiary">
@@ -139,7 +151,7 @@ export function CastingWorkspace({
               </button>
             ))}
             {controller.worldStatus === 'world_locked' ? (
-              <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
+              <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
                 <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
                 {controller.isGenerating ? translations.generating : translations.generate}
               </button>

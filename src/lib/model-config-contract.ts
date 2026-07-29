@@ -31,8 +31,7 @@ export interface LLMCapabilities {
 
 export interface ImageCapabilities {
   resolutionOptions?: string[]
-  /** Per-model aspect-ratio enum (e.g. Grok's 1:1…21:9); pickers fall back to
-   *  the global default list when absent. */
+  /** Exact per-model aspect-ratio enum. Generation UIs should fail closed when absent. */
   aspectRatioOptions?: string[]
   supportNegativePrompt?: boolean
   supportReferenceImage?: boolean
@@ -51,6 +50,7 @@ export interface VideoCapabilities {
   durationOptions?: number[]
   fpsOptions?: number[]
   resolutionOptions?: string[]
+  aspectRatioOptions?: string[]
   firstlastframe?: boolean
   supportGenerateAudio?: boolean
   supportNegativePrompt?: boolean
@@ -113,6 +113,7 @@ const VIDEO_ALLOWED_FIELDS = new Set<keyof VideoCapabilities>([
   'durationOptions',
   'fpsOptions',
   'resolutionOptions',
+  'aspectRatioOptions',
   'firstlastframe',
   'supportGenerateAudio',
   'supportNegativePrompt',
@@ -405,6 +406,15 @@ function validateVideoCapabilities(issues: CapabilityValidationIssue[], raw: unk
     })
   }
 
+  const aspectRatioOptions = raw.aspectRatioOptions
+  if (aspectRatioOptions !== undefined && !isStringArray(aspectRatioOptions)) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.video.aspectRatioOptions',
+      message: 'aspectRatioOptions must be a non-empty string array',
+    })
+  }
+
   if (raw.supportGenerateAudio !== undefined && typeof raw.supportGenerateAudio !== 'boolean') {
     issues.push({
       code: 'CAPABILITY_FIELD_INVALID',
@@ -443,6 +453,7 @@ function validateVideoCapabilities(issues: CapabilityValidationIssue[], raw: unk
     duration: isNumberArray(durationOptions) ? durationOptions : undefined,
     fps: isNumberArray(fpsOptions) ? fpsOptions : undefined,
     resolution: isStringArray(resolutionOptions) ? resolutionOptions : undefined,
+    aspectRatio: isStringArray(aspectRatioOptions) ? aspectRatioOptions : undefined,
   })
 }
 

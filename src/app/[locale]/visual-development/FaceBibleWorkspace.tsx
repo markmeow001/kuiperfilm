@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/ui/icons'
+import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model-options'
 import type { FaceBibleWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
@@ -50,7 +51,7 @@ const PLACEHOLDER_CODES = [
 export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorkspaceProps) {
   const selectedModel = controller.imageModels.find((model) => model.value === controller.form.modelKey)
   const resolutions = selectedModel?.capabilities?.image?.resolutionOptions ?? []
-  const ratios = selectedModel?.capabilities?.image?.aspectRatioOptions ?? ['3:4']
+  const ratios = selectedModel ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, 'image') : []
   const candidates = controller.batch?.candidates ?? PLACEHOLDER_CODES.map((code, index) => ({
     id: `face-pending-${index}`,
     code,
@@ -130,6 +131,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
               <select value={controller.form.aspectRatio} onChange={(event) => controller.onFieldChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+                <option value="">{translations.aspectRatio}</option>
                 {ratios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
               </select>
             </div>
@@ -137,7 +139,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
               {translations.referenceOnly} · {translations.modelHint}
             </p>
           </div>
-          <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.identityAnchors || !controller.form.forbiddenDrift} onClick={controller.onGenerate} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio || !controller.form.identityAnchors || !controller.form.forbiddenDrift} onClick={controller.onGenerate} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating ? translations.generating : translations.generate}
           </button>

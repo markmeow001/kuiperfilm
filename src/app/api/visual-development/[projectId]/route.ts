@@ -66,14 +66,36 @@ function normalizeCharacterCode(value: unknown): string {
 }
 
 function assertAdultCastingBrief(castingBrief: StringRecord) {
-  const ages = (castingBrief.apparentAge || '').match(/\d+/g)?.map(Number) ?? []
+  const ages = (castingBrief.performerAge || '').match(/\d+/g)?.map(Number) ?? []
   if (ages.length === 0 || Math.min(...ages) < 21) {
     throw new ApiError('INVALID_PARAMS', {
-      code: 'CASTING_ADULT_AGE_REQUIRED',
-      field: 'castingBrief.apparentAge',
-      details: { message: 'Casting 候選必須明確設定為 21 歲以上的虛構成年人。' },
+      code: 'CASTING_ADULT_PERFORMER_AGE_REQUIRED',
+      field: 'castingBrief.performerAge',
+      message: '成年演員年齡必須明確設定為 21 歲以上；角色銀幕年齡可依劇本保留。',
     })
   }
+}
+
+function resolveCastingAspectRatio(requested: unknown, options: string[] | undefined): string {
+  const normalized = typeof requested === 'string' ? requested.trim() : ''
+  if (!options?.length) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'ASPECT_RATIO_CAPABILITY_MISSING',
+      field: 'aspectRatio',
+      message: '目前模型尚未登記可用畫面比例，請改選其他模型。',
+    })
+  }
+  if (normalized) {
+    if (!options.includes(normalized)) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'ASPECT_RATIO_UNSUPPORTED',
+        field: 'aspectRatio',
+        message: `目前模型不支援 ${normalized}，請選擇模型提供的畫面比例。`,
+      })
+    }
+    return normalized
+  }
+  return ['4:5', '3:4', '2:3', '9:16', '1:1'].find((ratio) => options.includes(ratio)) ?? options[0]
 }
 
 async function requireAccess(projectId: string, action: 'read' | 'write') {
@@ -227,17 +249,16 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   }
   const capabilities = findBuiltinCapabilities('image', selection.provider, selection.modelId)?.image
   const seedSupported = capabilities?.supportSeed === true
-  const aspectRatio = typeof body.aspectRatio === 'string' && body.aspectRatio.trim()
-    ? body.aspectRatio.trim()
-    : '4:5'
-  if (capabilities?.aspectRatioOptions && !capabilities.aspectRatioOptions.includes(aspectRatio)) {
-    throw new ApiError('INVALID_PARAMS', { code: 'ASPECT_RATIO_UNSUPPORTED', field: 'aspectRatio' })
-  }
+  const aspectRatio = resolveCastingAspectRatio(body.aspectRatio, capabilities?.aspectRatioOptions)
   const resolution = typeof body.resolution === 'string' && body.resolution.trim()
     ? body.resolution.trim()
     : null
   if (resolution && capabilities?.resolutionOptions && !capabilities.resolutionOptions.includes(resolution)) {
-    throw new ApiError('INVALID_PARAMS', { code: 'RESOLUTION_UNSUPPORTED', field: 'resolution' })
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'RESOLUTION_UNSUPPORTED',
+      field: 'resolution',
+      message: `目前模型不支援 ${resolution}，請選擇模型提供的尺寸。`,
+    })
   }
 
   const character = await prisma.visualDevelopmentCharacter.upsert({

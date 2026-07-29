@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
+import {
+  getVisualDevelopmentAspectRatios,
+  pickVisualDevelopmentAspectRatio,
+  reconcileVisualDevelopmentAspectRatio,
+} from '@/lib/visual-development/model-options'
 import type {
   CastingBatchView,
   CastingCandidateView,
@@ -124,11 +129,19 @@ export function useHairDesignController(input: UseHairDesignInput): {
     [input.imageModels],
   )
 
+  useEffect(() => {
+    if (!form.modelKey) return
+    const selected = imageModels.find((model) => model.value === form.modelKey)
+    if (!selected) return
+    const aspectRatio = reconcileVisualDevelopmentAspectRatio(form.aspectRatio, selected.capabilities, 'image')
+    if (aspectRatio !== form.aspectRatio) setForm((current) => ({ ...current, aspectRatio }))
+  }, [form.aspectRatio, form.modelKey, imageModels])
+
   const updateField = useCallback((field: keyof HairDesignFormState, value: string) => {
     if (field === 'modelKey') {
       const selected = imageModels.find((model) => model.value === value)
-      const ratios = selected?.capabilities?.image?.aspectRatioOptions ?? ['3:4']
-      const preferredRatio = ['3:4', '4:5', '9:16', '1:1'].find((ratio) => ratios.includes(ratio)) ?? ratios[0] ?? ''
+      const ratios = selected ? getVisualDevelopmentAspectRatios(selected.capabilities, 'image') : []
+      const preferredRatio = pickVisualDevelopmentAspectRatio(ratios, 'image')
       setForm((current) => ({ ...current, modelKey: value, resolution: '', aspectRatio: preferredRatio }))
       return
     }

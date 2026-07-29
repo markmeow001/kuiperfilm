@@ -23,7 +23,8 @@ describe('visual development casting prompt', () => {
         coreTraits: 'gentle, vigilant, quietly defiant',
       },
       castingBrief: {
-        apparentAge: '24–28',
+        apparentAge: '18',
+        performerAge: '21+',
         ethnicity: 'Caucasian',
         faceStructure: 'long face with broad cheekbones',
         emotionalRead: 'restrained fear with determination',
@@ -32,6 +33,8 @@ describe('visual development casting prompt', () => {
     })
 
     expect(result.prompt).toContain('fictional unknown adult performer')
+    expect(result.prompt).toContain('Screen role age: 18')
+    expect(result.prompt).toContain('Adult performer age: 21+')
     expect(result.prompt).toContain('Pure white seamless studio background')
     expect(result.prompt).toContain('No costume design')
     expect(result.promptStack.phaseTemplate).toBe('CADS_CASTING_FACE_V1')

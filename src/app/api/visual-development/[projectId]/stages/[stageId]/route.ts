@@ -10,6 +10,7 @@ import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildProductionStagePrompt } from '@/lib/visual-development/production-prompt'
+import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model-options'
 import {
   canEnterProductionStage,
   getProductionStage,
@@ -185,9 +186,13 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const aspectRatio = typeof body.aspectRatio === 'string' && body.aspectRatio.trim()
     ? body.aspectRatio.trim()
     : stage.mediaType === 'video' ? '16:9' : '3:4'
-  const ratioOptions = stage.mediaType === 'image' ? imageCaps?.aspectRatioOptions : ['16:9', '9:16', '1:1']
-  if (ratioOptions && !ratioOptions.includes(aspectRatio)) {
-    throw new ApiError('INVALID_PARAMS', { code: 'ASPECT_RATIO_UNSUPPORTED', field: 'aspectRatio' })
+  const ratioOptions = getVisualDevelopmentAspectRatios(capabilities, stage.mediaType)
+  if (!ratioOptions.includes(aspectRatio)) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'ASPECT_RATIO_UNSUPPORTED',
+      field: 'aspectRatio',
+      message: `目前模型不支援 ${aspectRatio}，請從模型比例選單重新選擇。`,
+    })
   }
   const resolution = typeof body.resolution === 'string' && body.resolution.trim() ? body.resolution.trim() : null
   const resolutionOptions = stage.mediaType === 'image' ? imageCaps?.resolutionOptions : videoCaps?.resolutionOptions

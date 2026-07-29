@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/ui/icons'
+import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model-options'
 import { WORLD_ASSET_DEFINITIONS } from '@/lib/visual-development/world-bible'
 import type { WorldBibleFormState, WorldBibleWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
@@ -66,7 +67,7 @@ const REQUIRED_FIELDS: Array<keyof WorldBibleFormState> = [
 export function WorldBibleWorkspace({ controller, translations }: WorldBibleWorkspaceProps) {
   const selectedModel = controller.imageModels.find((model) => model.value === controller.form.modelKey)
   const resolutions = selectedModel?.capabilities?.image?.resolutionOptions ?? []
-  const aspectRatios = selectedModel?.capabilities?.image?.aspectRatioOptions ?? ['16:9']
+  const aspectRatios = selectedModel ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, 'image') : []
   const fieldsComplete = REQUIRED_FIELDS.every((field) => controller.form[field].trim().length > 0)
   const assetsComplete = controller.assets.length === WORLD_ASSET_DEFINITIONS.length
     && controller.assets.every((asset) => asset.taskStatus === 'completed' && asset.approved)
@@ -166,11 +167,12 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
               <select value={controller.form.aspectRatio} disabled={isLocked} onChange={(event) => controller.onFieldChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
+                <option value="">{translations.aspectRatio}</option>
                 {aspectRatios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
               </select>
             </div>
           </div>
-          <button type="button" disabled={isLocked || !fieldsComplete || !controller.form.modelKey || controller.isGenerating || generationActive} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={isLocked || !fieldsComplete || !controller.form.modelKey || !controller.form.aspectRatio || controller.isGenerating || generationActive} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating || generationActive ? translations.generating : translations.generate}
           </button>

@@ -9,6 +9,19 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "auto",
+          "21:9",
+          "16:9",
+          "3:2",
+          "4:3",
+          "5:4",
+          "1:1",
+          "4:5",
+          "3:4",
+          "2:3",
+          "9:16"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
         "supportMultiReferenceImage": true
@@ -25,6 +38,23 @@
           "1K",
           "2K",
           "4K"
+        ],
+        "aspectRatioOptions": [
+          "auto",
+          "21:9",
+          "16:9",
+          "3:2",
+          "4:3",
+          "5:4",
+          "1:1",
+          "4:5",
+          "3:4",
+          "2:3",
+          "9:16",
+          "4:1",
+          "1:4",
+          "8:1",
+          "1:8"
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
@@ -283,6 +313,15 @@
     "modelId": "doubao-seedance-2-0-260128",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16",
+          "21:9",
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal",
           "firstlastframe"
@@ -323,6 +362,15 @@
     "modelId": "doubao-seedance-2-0-fast-260128",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16",
+          "21:9",
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal",
           "firstlastframe"
@@ -505,6 +553,18 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
       }
@@ -519,6 +579,18 @@
         "resolutionOptions": [
           "2K",
           "4K"
+        ],
+        "aspectRatioOptions": [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
@@ -537,6 +609,22 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "1:1",
+          "1:4",
+          "1:8",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:1",
+          "4:3",
+          "4:5",
+          "5:4",
+          "8:1",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
       }
@@ -551,6 +639,18 @@
         "resolutionOptions": [
           "1K"
         ],
+        "aspectRatioOptions": [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
       }
@@ -562,6 +662,13 @@
     "modelId": "imagen-4.0-generate-001",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "3:4",
+          "4:3",
+          "9:16",
+          "16:9"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
       }
@@ -573,6 +680,13 @@
     "modelId": "imagen-4.0-fast-generate-001",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "3:4",
+          "4:3",
+          "9:16",
+          "16:9"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
       }
@@ -584,6 +698,13 @@
     "modelId": "imagen-4.0-ultra-generate-001",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "1:1",
+          "3:4",
+          "4:3",
+          "9:16",
+          "16:9"
+        ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
       }
@@ -830,6 +951,15 @@
     "modelId": "bytedance/seedance-2.0/reference-to-video",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "auto",
+          "21:9",
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -906,6 +1036,15 @@
     "modelId": "bytedance/seedance-2.0/fast/reference-to-video",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "auto",
+          "21:9",
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -1295,6 +1434,23 @@
           "1K",
           "2K",
           "4K"
+        ],
+        "aspectRatioOptions": [
+          "auto",
+          "21:9",
+          "16:9",
+          "3:2",
+          "4:3",
+          "5:4",
+          "1:1",
+          "4:5",
+          "3:4",
+          "2:3",
+          "9:16",
+          "4:1",
+          "1:4",
+          "8:1",
+          "1:8"
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": false
@@ -1970,6 +2126,15 @@
     "modelId": "seedance-2.0-r2v",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16",
+          "21:9",
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2008,6 +2173,15 @@
     "modelId": "seedance-2.0-fast-r2v",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "4:3",
+          "1:1",
+          "3:4",
+          "9:16",
+          "21:9",
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2045,6 +2219,11 @@
     "modelId": "kling-o3-std-r2v",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2079,6 +2258,11 @@
     "modelId": "kling-o3-pro-r2v",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2275,6 +2459,11 @@
     "modelId": "Kling-3.0",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2303,6 +2492,11 @@
     "modelId": "Kling-3.0-Omni",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2814,6 +3008,10 @@
     "modelId": "OS-2.0",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2841,6 +3039,9 @@
     "modelId": "Seedance-1.0-pro",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2863,6 +3064,9 @@
     "modelId": "Seedance-1.0-lite-i2v",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2884,6 +3088,9 @@
     "modelId": "Seedance-1.0-pro-fast",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2905,6 +3112,9 @@
     "modelId": "Seedance-1.5-pro",
     "capabilities": {
       "video": {
+        "aspectRatioOptions": [
+          "adaptive"
+        ],
         "generationModeOptions": [
           "normal"
         ],
@@ -2970,6 +3180,18 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -2986,6 +3208,18 @@
           "1K",
           "2K",
           "4K"
+        ],
+        "aspectRatioOptions": [
+          "1:1",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:3",
+          "4:5",
+          "5:4",
+          "9:16",
+          "16:9",
+          "21:9"
         ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
@@ -3005,6 +3239,22 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "1:1",
+          "1:4",
+          "1:8",
+          "2:3",
+          "3:2",
+          "3:4",
+          "4:1",
+          "4:3",
+          "4:5",
+          "5:4",
+          "8:1",
+          "9:16",
+          "16:9",
+          "21:9"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3021,6 +3271,17 @@
           "1080P",
           "2K",
           "4K"
+        ],
+        "aspectRatioOptions": [
+          "1:1",
+          "3:2",
+          "2:3",
+          "3:4",
+          "4:3",
+          "16:9",
+          "9:16",
+          "21:9",
+          "9:21"
         ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
@@ -3039,6 +3300,17 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "1:1",
+          "3:2",
+          "2:3",
+          "3:4",
+          "4:3",
+          "16:9",
+          "9:16",
+          "21:9",
+          "9:21"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3056,6 +3328,17 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "1:1",
+          "3:2",
+          "2:3",
+          "3:4",
+          "4:3",
+          "16:9",
+          "9:16",
+          "21:9",
+          "9:21"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3068,6 +3351,9 @@
     "modelId": "Qwen-0925",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "auto"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3083,6 +3369,16 @@
         "resolutionOptions": [
           "2K",
           "4K"
+        ],
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9"
         ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
@@ -3100,6 +3396,16 @@
           "2K",
           "3K"
         ],
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3115,6 +3421,16 @@
         "resolutionOptions": [
           "1k",
           "2k"
+        ],
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9"
         ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
@@ -3132,6 +3448,16 @@
           "1k",
           "2k"
         ],
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3148,6 +3474,17 @@
           "1k",
           "2k"
         ],
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9",
+          "auto"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3163,6 +3500,17 @@
         "resolutionOptions": [
           "1k",
           "2k"
+        ],
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "4:3",
+          "3:4",
+          "3:2",
+          "2:3",
+          "21:9",
+          "auto"
         ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
@@ -3181,6 +3529,16 @@
           "2K",
           "4K"
         ],
+        "aspectRatioOptions": [
+          "16:9",
+          "9:16",
+          "1:1",
+          "3:4",
+          "4:3",
+          "21:9",
+          "2:3",
+          "3:2"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3193,6 +3551,9 @@
     "modelId": "Jimeng-4.0",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "auto"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true
@@ -3205,6 +3566,9 @@
     "modelId": "Hunyuan-3.0",
     "capabilities": {
       "image": {
+        "aspectRatioOptions": [
+          "auto"
+        ],
         "supportNegativePrompt": true,
         "supportReferenceImage": true,
         "supportSeed": true

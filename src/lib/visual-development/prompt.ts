@@ -139,7 +139,8 @@ export function buildCastingPrompt(input: CastingPromptInput): {
   ].filter((value): value is string => Boolean(value)).join(' ')
 
   const identity = [
-    line('Apparent age', input.castingBrief.apparentAge || input.characterDna.age),
+    line('Screen role age', input.castingBrief.apparentAge || input.characterDna.age),
+    line('Adult performer age', input.castingBrief.performerAge),
     line('Ethnicity', input.castingBrief.ethnicity || input.characterDna.ethnicity),
     line('Gender presentation', input.characterDna.genderPresentation),
     line('Face structure', input.castingBrief.faceStructure),
@@ -157,7 +158,7 @@ export function buildCastingPrompt(input: CastingPromptInput): {
   const exclusions = clean(input.castingBrief.exclusions)
 
   const phaseTemplate = [
-    `Feature-film casting portrait, candidate ${input.candidateCode}, of a fictional unknown adult performer, clearly 21 years old or older.`,
+    `Feature-film casting portrait, candidate ${input.candidateCode}, of a fictional unknown adult performer, clearly 21 years old or older, cast to portray the specified screen role age. The generated performer must remain unmistakably adult; express the role age through performance context only.`,
     identity,
     performance,
     storyContext,

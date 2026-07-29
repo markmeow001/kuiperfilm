@@ -82,6 +82,29 @@ function splitModel(model: string): { name: string; version: string } {
     return { name, version: model.slice(idx + 1) }
 }
 
+const TENCENT_VOD_IMAGE_RATIO_IN_PROMPT = new Set(['SI'])
+const TENCENT_VOD_IMAGE_RATIO_UNSUPPORTED = new Set(['SI', 'Qwen', 'Hunyuan', 'Jimeng'])
+
+function resolveTencentImageRatio(input: {
+    modelName: string
+    aspectRatio?: string
+    prompt: string
+}): { outputAspectRatio?: string; prompt: string } {
+    const aspectRatio = input.aspectRatio?.trim()
+    if (!aspectRatio || aspectRatio === 'auto' || aspectRatio === 'adaptive') {
+        return { prompt: input.prompt }
+    }
+    if (TENCENT_VOD_IMAGE_RATIO_IN_PROMPT.has(input.modelName)) {
+        return {
+            prompt: `${input.prompt}\n\nOUTPUT FORMAT: Compose the generated image in a strict ${aspectRatio} aspect ratio.`,
+        }
+    }
+    if (TENCENT_VOD_IMAGE_RATIO_UNSUPPORTED.has(input.modelName)) {
+        return { prompt: input.prompt }
+    }
+    return { outputAspectRatio: aspectRatio, prompt: input.prompt }
+}
+
 /**
  * Per-model reference image cap, sourced from Tencent VOD docs (last
  * verified 2026-05-13 against https://cloud.tencent.com/document/product/266/126240).
@@ -156,6 +179,7 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
         if (!modelName) {
             throw new Error('TENCENT_VOD_MODEL_REQUIRED: provide options.modelId like "GEM-3.1"')
         }
+        const ratio = resolveTencentImageRatio({ modelName, aspectRatio: opts.aspectRatio, prompt })
 
         const logger = createScopedLogger({
             module: 'worker.tencent-vod-image',
@@ -209,14 +233,14 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
         const outputConfig: Record<string, unknown> = {
             StorageMode: opts.storageMode ?? 'Temporary',
         }
-        if (opts.aspectRatio) outputConfig.AspectRatio = opts.aspectRatio
+        if (ratio.outputAspectRatio) outputConfig.AspectRatio = ratio.outputAspectRatio
         if (opts.resolution) outputConfig.Resolution = opts.resolution
 
         const req: Record<string, unknown> = {
             SubAppId: creds.subAppId,
             ModelName: modelName,
             ModelVersion: modelVersion || undefined,
-            Prompt: prompt,
+            Prompt: ratio.prompt,
             OutputConfig: outputConfig,
         }
         if (fileInfos.length) req.FileInfos = fileInfos
@@ -240,9 +264,9 @@ export class TencentVODImageGenerator extends BaseImageGenerator {
                 modelName,
                 modelVersion,
                 refCount: fileInfos.length,
-                aspectRatio: opts.aspectRatio,
+                aspectRatio: ratio.outputAspectRatio ?? opts.aspectRatio,
                 resolution: opts.resolution,
-                promptLength: prompt.length,
+                promptLength: ratio.prompt.length,
             },
         })
 

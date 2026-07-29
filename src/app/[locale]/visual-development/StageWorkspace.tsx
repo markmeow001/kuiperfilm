@@ -28,6 +28,7 @@ export interface CastingTranslations {
   characterRole: string
   coreTraits: string
   apparentAge: string
+  performerAge: string
   ethnicity: string
   faceStructure: string
   emotionalRead: string
