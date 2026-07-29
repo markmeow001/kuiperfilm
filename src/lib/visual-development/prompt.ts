@@ -158,12 +158,14 @@ export function buildCastingPrompt(input: CastingPromptInput): {
   const exclusions = clean(input.castingBrief.exclusions)
 
   const phaseTemplate = [
+    'NON-NEGOTIABLE CASTING FORMAT: a single photorealistic human portrait on an evenly lit pure white (#FFFFFF) seamless studio background. The background must contain no gray gradient, room, scenery, texture, graphic layout or environmental detail.',
     `Feature-film casting portrait, candidate ${input.candidateCode}, of a fictional unknown adult performer, clearly 21 years old or older, cast to portray the specified screen role age. The generated performer must remain unmistakably adult; express the role age through performance context only.`,
     identity,
     performance,
     storyContext,
-    'Front-facing head-and-shoulders casting photograph, direct eye contact, neutral restrained expression, plain neutral crew-neck top.',
-    'Pure white seamless studio background. No costume design, no props, no jewelry, no hair ornaments, no fantasy effects, no world scenery.',
+    'Front-facing head-and-shoulders casting photograph, direct eye contact, neutral restrained expression, plain clean neutral crew-neck top.',
+    'Story, trauma and world context may influence only the performer\'s subtle facial performance. Never visualize them as blood, wounds, dirt, costume, props, symbols, scenery or special effects.',
+    'Pure white seamless studio background, evenly lit edge to edge. No costume design, no props, no jewelry, no hair ornaments, no fantasy effects, no world scenery.',
     'Natural facial asymmetry, visible skin pores, peach fuzz, subtle under-eye texture, tiny believable blemishes, realistic eyelashes and individual hair strands.',
     'Large softbox slightly above camera, soft fill, subtle rim light, neutral exposure, high-end feature-film casting photography, documentary authenticity, unretouched real human skin.',
     exclusions ? `Casting exclusions: ${exclusions}.` : '',
@@ -174,6 +176,8 @@ export function buildCastingPrompt(input: CastingPromptInput): {
     'anime, illustration, digital painting, CGI, 3D render, doll face, plastic skin',
     'beauty filter, glamour retouching, fashion pose, heavy makeup, false eyelashes',
     'gothic costume, fantasy costume, jewelry, feathers, symbols, props, scenery',
+    'blood, wounds, bruises, dirt, damaged clothing, distressed wardrobe',
+    'gray background, dark background, colored background, gradient background, room, location, environmental backdrop',
     'smiling, seductive expression, perfect facial symmetry, text, watermark',
   ].join(', ')
 

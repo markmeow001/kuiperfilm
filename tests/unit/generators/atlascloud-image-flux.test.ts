@@ -117,12 +117,13 @@ describe('AtlasCloud FLUX request bodies', () => {
       userId: 'u1',
       prompt: '雨夜霓虹街道',
       referenceImages: [],
-      options: { modelId: 'flux-2-pro', aspectRatio: '16:9' },
+      options: { modelId: 'flux-2-pro', aspectRatio: '16:9', seed: 71342 },
     })
     expect(result.success).toBe(true)
     expect(result.externalId).toBe('ATLASCLOUD:IMAGE:pred_flux_1')
     expect(bodies[0].model).toBe('black-forest-labs/flux-2-pro/text-to-image')
     expect(bodies[0].size).toBe('2048*1152')
+    expect(bodies[0].seed).toBe(71342)
     expect(bodies[0].images).toBeUndefined()
   })
 
@@ -133,10 +134,11 @@ describe('AtlasCloud FLUX request bodies', () => {
       userId: 'u1',
       prompt: 'x',
       referenceImages: [REF_A, REF_B],
-      options: { modelId: 'flux-2-flex', aspectRatio: '1:1' },
+      options: { modelId: 'flux-2-flex', aspectRatio: '1:1', seed: 24680 },
     })
     expect(bodies[0].model).toBe('black-forest-labs/flux-2-flex/edit')
     expect(bodies[0].images).toEqual([REF_A, REF_B])
+    expect(bodies[0].seed).toBe(24680)
     expect(bodies[0].image).toBeUndefined()
   })
 

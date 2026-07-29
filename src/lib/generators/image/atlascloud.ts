@@ -72,6 +72,7 @@ interface AtlasCloudImageOptions {
   outputFormat?: string     // 'jpeg' | 'png'
   enableWebSearch?: boolean // Nano Banana Pro: grounding with web search
   maskImage?: string        // 局部重绘遮罩 URL（透明区=重绘区；仅 gpt-image-1/edit）
+  seed?: number             // 支援模型的可重現隨機種子
 }
 
 /** Logical id (the one stored in PRESET_MODELS / projectData.imageModel)
@@ -451,6 +452,7 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       outputFormat,
       enableWebSearch,
       maskImage,
+      seed,
     } = options as AtlasCloudImageOptions
 
     // Reference images present → use the img2img `/edit` slug so AtlasCloud
@@ -566,6 +568,9 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
       // t2i 与 /edit schema 都声明 size。output_format 只有 pro/flex 有、dev
       // 没有——统一不发（默认 jpeg），避免 dev 撞 400。
       body.size = aspectRatioToZImageSize(aspectRatio)
+      // AtlasCloud 的 FLUX.2 t2i / edit schemas 都公開 seed；只傳有效整數，
+      // 讓 Casting 記錄的 requestedSeed 與真正送到供應商的值一致。
+      if (typeof seed === 'number' && Number.isInteger(seed)) body.seed = seed
     } else if (isFluxKontextSlug(atlasModel)) {
       // Kontext: 只有 /text-to-image 变体声明 aspect_ratio；BARE edit slug
       // 的 schema 没有该字段（输出跟随底图），over-send 有 400 风险。

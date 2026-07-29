@@ -10,7 +10,7 @@ import {
 } from '@/lib/visual-development/prompt'
 
 describe('visual development casting prompt', () => {
-  it('keeps World Bible context while excluding costume and scenery from Casting', () => {
+  it('Casting 含創傷故事背景 -> 只影響表演並強制純白背景與乾淨便服', () => {
     const result = buildCastingPrompt({
       candidateCode: 'C-01',
       worldBible: {
@@ -36,9 +36,13 @@ describe('visual development casting prompt', () => {
     expect(result.prompt).toContain('Screen role age: 18')
     expect(result.prompt).toContain('Adult performer age: 21+')
     expect(result.prompt).toContain('Pure white seamless studio background')
+    expect(result.prompt).toContain('evenly lit pure white (#FFFFFF)')
+    expect(result.prompt).toContain('may influence only the performer\'s subtle facial performance')
     expect(result.prompt).toContain('No costume design')
     expect(result.promptStack.phaseTemplate).toBe('CADS_CASTING_FACE_V1')
     expect(result.negativePrompt).toContain('recognizable actor')
+    expect(result.negativePrompt).toContain('gray background')
+    expect(result.negativePrompt).toContain('blood')
   })
 })
 

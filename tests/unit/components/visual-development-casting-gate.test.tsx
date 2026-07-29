@@ -30,6 +30,11 @@ const translations = {
   lifeHistory: '生命經歷',
   resolution: '模型預設尺寸',
   modelBinding: '生圖模型綁定',
+  historyTitle: '此角色的選角歷史',
+  historyDescription: '切換批次只會查看舊結果',
+  historyNewest: '最新',
+  historyBatch: '批次 {number}',
+  historyImages: '{count} 張',
   generateHint: '生成說明',
   shortlist: '短名單',
   canonLock: '定角',
@@ -43,6 +48,8 @@ const translations = {
 function controller(overrides: Partial<CastingWorkspaceController> = {}): CastingWorkspaceController {
   return {
     batch: null,
+    batches: [],
+    activeBatchId: '',
     form: {
       worldBible: { projectPremise: '世界', visualThesis: '命題' },
       characterDna: { role: '主角', coreTraits: '堅定' },
@@ -67,6 +74,7 @@ function controller(overrides: Partial<CastingWorkspaceController> = {}): Castin
     onIdentityChange: vi.fn(),
     onOpenWorldBible: vi.fn(),
     onGenerate: vi.fn(),
+    onSelectBatch: vi.fn(),
     onCandidateAction: vi.fn(),
     ...overrides,
   }
@@ -93,5 +101,44 @@ describe('CastingWorkspace World Canon gate', () => {
     expect(screen.getByRole('option', { name: '3:4' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '生成 8 張' }))
     expect(value.onGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('同一角色有多次選角生成 -> 顯示完整批次歷史並可切回舊結果', () => {
+    const oldBatch = {
+      id: 'batch-old',
+      stage: 'casting',
+      createdAt: '2026-07-29T20:00:00.000Z',
+      candidateCount: 4,
+      modelKey: 'atlascloud::flux-2-pro',
+      provider: 'atlascloud',
+      modelId: 'flux-2-pro',
+      seedSupported: true,
+      aspectRatio: '3:4',
+      resolution: null,
+      status: 'completed',
+      candidates: [],
+    }
+    const newestBatch = {
+      ...oldBatch,
+      id: 'batch-new',
+      createdAt: '2026-07-29T21:00:00.000Z',
+      candidateCount: 8,
+      aspectRatio: '4:3',
+    }
+    const onSelectBatch = vi.fn()
+    const value = controller({
+      worldStatus: 'world_locked',
+      batch: newestBatch,
+      batches: [newestBatch, oldBatch],
+      activeBatchId: newestBatch.id,
+      onSelectBatch,
+    })
+
+    render(<CastingWorkspace candidateCount={8} controller={value} onCandidateCountChange={vi.fn()} translations={translations} />)
+
+    expect(screen.getByText('此角色的選角歷史')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /批次 02[\s\S]*8 張[\s\S]*4:3/ })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: /批次 01[\s\S]*4 張[\s\S]*3:4/ }))
+    expect(onSelectBatch).toHaveBeenCalledWith('batch-old')
   })
 })

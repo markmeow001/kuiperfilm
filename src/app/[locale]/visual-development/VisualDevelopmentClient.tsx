@@ -48,8 +48,10 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const [characters, setCharacters] = useState<CharacterOption[]>([])
   const [selectedCharacterCode, setSelectedCharacterCode] = useState('')
   const selectedCharacterCodeRef = useRef('')
+  const selectedCastingBatchIdRef = useRef('')
   const [form, setForm] = useState(EMPTY_CASTING_FORM)
   const [batch, setBatch] = useState<CastingBatchView | null>(null)
+  const [castingBatches, setCastingBatches] = useState<CastingBatchView[]>([])
   const [faceBatch, setFaceBatch] = useState<CastingBatchView | null>(null)
   const [hairExplorationBatch, setHairExplorationBatch] = useState<CastingBatchView | null>(null)
   const [hairValidationBatch, setHairValidationBatch] = useState<CastingBatchView | null>(null)
@@ -66,6 +68,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const loadWorkspace = useCallback(async (selectedProjectId: string) => {
     if (!selectedProjectId) {
       setBatch(null)
+      setCastingBatches([])
       setFaceBatch(null)
       setHairExplorationBatch(null)
       setHairValidationBatch(null)
@@ -73,6 +76,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       setCharacters([])
       setSelectedCharacterCode('')
       selectedCharacterCodeRef.current = ''
+      selectedCastingBatchIdRef.current = ''
       return
     }
     setIsLoadingWorkspace(true)
@@ -89,7 +93,13 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       selectedCharacterCodeRef.current = character?.code ?? ''
       setSelectedCharacterCode(character?.code ?? '')
       const batches = character?.castingBatches ?? []
-      setBatch(batches.find((item) => item.stage === 'casting') ?? null)
+      const nextCastingBatches = batches.filter((item) => item.stage === 'casting')
+      setCastingBatches(nextCastingBatches)
+      const nextCastingBatch = nextCastingBatches.find((item) => item.id === selectedCastingBatchIdRef.current)
+        ?? nextCastingBatches[0]
+        ?? null
+      selectedCastingBatchIdRef.current = nextCastingBatch?.id ?? ''
+      setBatch(nextCastingBatch)
       setFaceBatch(batches.find((item) => item.stage === 'face-lock') ?? null)
       setHairExplorationBatch(batches.find((item) => item.stage === 'hair-exploration') ?? null)
       setHairValidationBatch(batches.find((item) => item.stage === 'hair-validation') ?? null)
@@ -132,6 +142,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     setSelectedCharacterCode('')
     setCharacters([])
     setBatch(null)
+    setCastingBatches([])
     setFaceBatch(null)
     setHairExplorationBatch(null)
     setHairValidationBatch(null)
@@ -140,6 +151,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     setFaceForm(EMPTY_FACE_FORM)
     setCharacterStatus('draft')
     setWorldStatus('draft')
+    selectedCastingBatchIdRef.current = ''
     void loadWorkspace(projectId)
   }, [projectId, loadWorkspace])
 
@@ -147,17 +159,20 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
 
   const selectCharacter = useCallback((characterCode: string) => {
     selectedCharacterCodeRef.current = characterCode
+    selectedCastingBatchIdRef.current = ''
     setSelectedCharacterCode(characterCode)
+    setCastingBatches([])
+    setBatch(null)
     void loadWorkspace(projectId)
   }, [loadWorkspace, projectId])
 
   useEffect(() => {
-    const hasActiveTasks = [batch, faceBatch, hairExplorationBatch, hairValidationBatch, ...productionBatches].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
+    const hasActiveTasks = [...castingBatches, faceBatch, hairExplorationBatch, hairValidationBatch, ...productionBatches].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
       candidate.taskStatus === 'queued' || candidate.taskStatus === 'processing'))
     if (!projectId || !hasActiveTasks) return
     const timer = window.setInterval(() => void loadWorkspace(projectId), 3000)
     return () => window.clearInterval(timer)
-  }, [batch, faceBatch, hairExplorationBatch, hairValidationBatch, productionBatches, projectId, loadWorkspace])
+  }, [castingBatches, faceBatch, hairExplorationBatch, hairValidationBatch, productionBatches, projectId, loadWorkspace])
 
   const updateField = useCallback((
     group: 'worldBible' | 'characterDna' | 'castingBrief',
@@ -192,16 +207,27 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
           meta: { locale },
         }),
       })
-      const payload = await response.json() as { error?: { message?: string; details?: { message?: string } } }
+      const payload = await response.json() as {
+        data?: { batchId?: string }
+        error?: { message?: string; details?: { message?: string } }
+      }
       if (!response.ok && response.status !== 207) {
         window.alert(payload.error?.details?.message ?? payload.error?.message ?? t('workspace.casting.generateFailed'))
         return
       }
+      selectedCastingBatchIdRef.current = payload.data?.batchId ?? ''
       await loadWorkspace(projectId)
     } finally {
       setIsGenerating(false)
     }
   }, [candidateCount, form, loadWorkspace, locale, projectId, t, worldStatus])
+
+  const selectCastingBatch = useCallback((batchId: string) => {
+    const selectedBatch = castingBatches.find((item) => item.id === batchId)
+    if (!selectedBatch) return
+    selectedCastingBatchIdRef.current = selectedBatch.id
+    setBatch(selectedBatch)
+  }, [castingBatches])
 
   const handleCandidateAction = useCallback(async (
     candidateId: string,
@@ -319,6 +345,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
 
   const castingController = useMemo<CastingWorkspaceController>(() => ({
     batch,
+    batches: castingBatches,
+    activeBatchId: batch?.id ?? '',
     form,
     worldStatus,
     imageModels: modelsQuery.data?.image ?? [],
@@ -328,12 +356,14 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onIdentityChange: updateIdentity,
     onOpenWorldBible: () => setActiveStageId('world'),
     onGenerate: () => void generateCasting(),
+    onSelectBatch: selectCastingBatch,
     onCandidateAction: (candidateId, action, shortlisted) => void handleCandidateAction(candidateId, action, shortlisted),
-  }), [batch, form, generateCasting, handleCandidateAction, isGenerating, isLoadingWorkspace, modelsQuery.data?.image, modelsQuery.isLoading, updateField, updateIdentity, worldStatus])
+  }), [batch, castingBatches, form, generateCasting, handleCandidateAction, isGenerating, isLoadingWorkspace, modelsQuery.data?.image, modelsQuery.isLoading, selectCastingBatch, updateField, updateIdentity, worldStatus])
 
   const canonCandidate = useMemo<CastingCandidateView | null>(
-    () => batch?.candidates.find((candidate) => candidate.isCanon) ?? null,
-    [batch],
+    () => castingBatches.flatMap((castingBatch) => castingBatch.candidates)
+      .find((candidate) => candidate.isCanon) ?? null,
+    [castingBatches],
   )
 
   const faceBibleController = useMemo<FaceBibleWorkspaceController>(() => ({

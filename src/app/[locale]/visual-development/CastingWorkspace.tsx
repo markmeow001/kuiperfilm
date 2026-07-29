@@ -31,6 +31,11 @@ interface CastingTranslations {
   lifeHistory: string
   resolution: string
   modelBinding: string
+  historyTitle: string
+  historyDescription: string
+  historyNewest: string
+  historyBatch: string
+  historyImages: string
   generateHint: string
   shortlist: string
   canonLock: string
@@ -164,6 +169,59 @@ export function CastingWorkspace({
           </div>
         </div>
 
+        {controller.batches.length > 0 && (
+          <div className="border-b border-white/[0.07] bg-black/[0.16] px-4 py-3">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2 font-mono text-[9px] tracking-[0.16em] text-primary-400">
+                  <AppIcon name="clock" className="h-3.5 w-3.5" />
+                  {translations.historyTitle}
+                </div>
+                <p className="mt-1 font-serif-cn text-[10px] text-text-tertiary">{translations.historyDescription}</p>
+              </div>
+              <span className="font-mono text-[8px] tracking-[0.12em] text-text-tertiary">
+                {controller.form.characterCode} · {controller.batches.length}
+              </span>
+            </div>
+
+            <div className="mt-3 flex snap-x gap-2 overflow-x-auto pb-1">
+              {controller.batches.map((historyBatch, index) => {
+                const selected = historyBatch.id === controller.activeBatchId
+                const batchNumber = controller.batches.length - index
+                const timestamp = formatBatchTimestamp(historyBatch.createdAt)
+                return (
+                  <button
+                    key={historyBatch.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => controller.onSelectBatch(historyBatch.id)}
+                    className={`min-w-[190px] snap-start rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/70 ${selected ? 'border-primary-500/55 bg-primary-500/[0.12]' : 'border-white/[0.08] bg-[#0c0c0f] hover:border-primary-500/25 hover:bg-white/[0.04]'}`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className={`font-mono text-[9px] tracking-[0.12em] ${selected ? 'text-primary-300' : 'text-text-secondary'}`}>
+                        {translations.historyBatch.replace('{number}', String(batchNumber).padStart(2, '0'))}
+                      </span>
+                      {index === 0 && (
+                        <span className="rounded bg-primary-500 px-1.5 py-0.5 font-mono text-[7px] font-semibold tracking-[0.08em] text-black">
+                          {translations.historyNewest}
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-1.5 block truncate text-[10px] text-white">{historyBatch.modelId}</span>
+                    <span className="mt-1 flex items-center gap-1.5 font-mono text-[8px] text-text-tertiary">
+                      {translations.historyImages.replace('{count}', String(historyBatch.candidateCount))}
+                      <span aria-hidden="true">·</span>
+                      {historyBatch.aspectRatio}
+                      {historyBatch.resolution && <><span aria-hidden="true">·</span>{historyBatch.resolution}</>}
+                    </span>
+                    {timestamp && <span className="mt-1 block font-mono text-[7px] text-text-tertiary/70">{timestamp}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] sm:grid-cols-4 2xl:grid-cols-5">
           {displayedCandidates.map((candidate) => (
             <article key={candidate.id} className="group bg-[#0b0b0d] p-2.5">
@@ -199,6 +257,13 @@ export function CastingWorkspace({
       <p className="px-1 font-serif-cn text-[11px] leading-5 text-text-tertiary">{translations.generateHint}</p>
     </div>
   )
+}
+
+function formatBatchTimestamp(value?: string): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`
 }
 
 function Field({ label, value, onChange, multiline = false, placeholder }: { label: string; value?: string; onChange: (value: string) => void; multiline?: boolean; placeholder?: string }) {

@@ -71,6 +71,7 @@ export interface CastingCandidateView {
 export interface CastingBatchView {
   id: string
   stage: string
+  createdAt?: string
   candidateCount: number
   modelKey: string
   provider: string
@@ -240,6 +241,8 @@ export interface CastingFormState {
 
 export interface CastingWorkspaceController {
   batch: CastingBatchView | null
+  batches: CastingBatchView[]
+  activeBatchId: string
   form: CastingFormState
   worldStatus: string
   imageModels: UserModelOption[]
@@ -249,5 +252,6 @@ export interface CastingWorkspaceController {
   onIdentityChange: (field: 'characterCode' | 'characterName' | 'modelKey' | 'resolution' | 'aspectRatio', value: string) => void
   onOpenWorldBible: () => void
   onGenerate: () => void
+  onSelectBatch: (batchId: string) => void
   onCandidateAction: (candidateId: string, action: 'shortlist' | 'canon-lock', shortlisted?: boolean) => void
 }

@@ -36,6 +36,11 @@ export interface CastingTranslations {
   lifeHistory: string
   resolution: string
   modelBinding: string
+  historyTitle: string
+  historyDescription: string
+  historyNewest: string
+  historyBatch: string
+  historyImages: string
   generateHint: string
   shortlist: string
   canonLock: string

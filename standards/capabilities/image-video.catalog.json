@@ -1753,7 +1753,8 @@
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
-        "supportMultiReferenceImage": true
+        "supportMultiReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -1776,7 +1777,8 @@
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
-        "supportMultiReferenceImage": true
+        "supportMultiReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
@@ -1799,7 +1801,8 @@
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
-        "supportMultiReferenceImage": true
+        "supportMultiReferenceImage": true,
+        "supportSeed": true
       }
     }
   },
