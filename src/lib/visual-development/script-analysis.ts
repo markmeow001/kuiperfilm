@@ -109,14 +109,27 @@ function textArray(value: unknown, field: string, maxItems = 50): string[] {
   })
 }
 
-function parseEntityType(value: unknown): ScriptAnalysisCharacter['entityType'] {
+function parseEntityType(value: unknown, missingFields: string[], field: string): ScriptAnalysisCharacter['entityType'] {
   if (value === 'human' || value === 'animal' || value === 'creature' || value === 'synthetic' || value === 'unknown') {
     return value
   }
-  throw new Error('SCRIPT_ANALYSIS_INVALID: character.entityType is invalid')
+  missingFields.push(field)
+  return 'unknown'
 }
 
-function parseCharacter(value: unknown, index: number): ScriptAnalysisCharacter {
+function reviewText(
+  source: Record<string, unknown>,
+  key: string,
+  max: number,
+  missingFields: string[],
+  field: string,
+): string {
+  const value = optionalText(source, key, max)
+  if (!value) missingFields.push(field)
+  return value
+}
+
+function parseCharacter(value: unknown, index: number, missingFields: string[]): ScriptAnalysisCharacter {
   const source = record(value)
   const code = requiredText(source, 'code', 64).toUpperCase()
   if (!/^[A-Z0-9][A-Z0-9_-]*$/.test(code)) {
@@ -127,23 +140,23 @@ function parseCharacter(value: unknown, index: number): ScriptAnalysisCharacter 
     code,
     name: requiredText(source, 'name', 120),
     aliases: textArray(source.aliases ?? [], `characters[${index}].aliases`, 20),
-    entityType: parseEntityType(source.entityType),
-    role: requiredText(source, 'role', 1_000),
-    narrativeFunction: requiredText(source, 'narrativeFunction', 2_000),
-    apparentAge: requiredText(source, 'apparentAge', 120),
-    coreTraits: requiredText(source, 'coreTraits', 2_000),
-    goal: requiredText(source, 'goal', 2_000),
-    fear: requiredText(source, 'fear', 2_000),
+    entityType: parseEntityType(source.entityType, missingFields, `characters[${index}].entityType`),
+    role: reviewText(source, 'role', 1_000, missingFields, `characters[${index}].role`),
+    narrativeFunction: reviewText(source, 'narrativeFunction', 2_000, missingFields, `characters[${index}].narrativeFunction`),
+    apparentAge: reviewText(source, 'apparentAge', 120, missingFields, `characters[${index}].apparentAge`),
+    coreTraits: reviewText(source, 'coreTraits', 2_000, missingFields, `characters[${index}].coreTraits`),
+    goal: reviewText(source, 'goal', 2_000, missingFields, `characters[${index}].goal`),
+    fear: reviewText(source, 'fear', 2_000, missingFields, `characters[${index}].fear`),
     secret: optionalText(source, 'secret', 2_000),
-    arc: requiredText(source, 'arc', 3_000),
-    relationships: requiredText(source, 'relationships', 3_000),
+    arc: reviewText(source, 'arc', 3_000, missingFields, `characters[${index}].arc`),
+    relationships: reviewText(source, 'relationships', 3_000, missingFields, `characters[${index}].relationships`),
     physicalNotes: optionalText(source, 'physicalNotes', 2_000),
-    firstAppearance: requiredText(source, 'firstAppearance', 500),
+    firstAppearance: reviewText(source, 'firstAppearance', 500, missingFields, `characters[${index}].firstAppearance`),
     castingBrief: {
       ethnicity: optionalText(casting, 'ethnicity', 500),
       faceStructure: optionalText(casting, 'faceStructure', 1_000),
-      emotionalRead: requiredText(casting, 'emotionalRead', 1_000),
-      lifeHistory: requiredText(casting, 'lifeHistory', 2_000),
+      emotionalRead: reviewText(casting, 'emotionalRead', 1_000, missingFields, `characters[${index}].castingBrief.emotionalRead`),
+      lifeHistory: reviewText(casting, 'lifeHistory', 2_000, missingFields, `characters[${index}].castingBrief.lifeHistory`),
     },
   }
 }
@@ -183,9 +196,12 @@ export function parseScriptAnalysisModelOutput(input: {
   sourceId?: string | null
 }): ScriptAnalysisDocument {
   const source = extractJsonObject(input.text)
+  const missingFields: string[] = []
   const worldSource = record(source.worldBible)
   const worldBible = {} as ScriptAnalysisWorldDraft
-  for (const key of WORLD_KEYS) worldBible[key] = requiredText(worldSource, key)
+  for (const key of WORLD_KEYS) {
+    worldBible[key] = reviewText(worldSource, key, 8_000, missingFields, `worldBible.${key}`)
+  }
 
   if (!Array.isArray(source.characters) || source.characters.length === 0) {
     throw new Error('SCRIPT_ANALYSIS_INVALID: characters must contain at least one entry')
@@ -193,7 +209,7 @@ export function parseScriptAnalysisModelOutput(input: {
   if (source.characters.length > SCRIPT_ANALYSIS_MAX_CHARACTERS) {
     throw new Error(`SCRIPT_ANALYSIS_INVALID: characters exceed ${SCRIPT_ANALYSIS_MAX_CHARACTERS}`)
   }
-  const characters = source.characters.map(parseCharacter)
+  const characters = source.characters.map((character, index) => parseCharacter(character, index, missingFields))
   const codes = new Set(characters.map((character) => character.code))
   if (codes.size !== characters.length) throw new Error('SCRIPT_ANALYSIS_INVALID: character codes must be unique')
 
@@ -211,11 +227,14 @@ export function parseScriptAnalysisModelOutput(input: {
     modelKey: input.modelKey,
     analyzedAt: input.analyzedAt,
     synopsis: requiredText(source, 'synopsis', 10_000),
-    themes: textArray(source.themes, 'themes', 20),
+    themes: textArray(source.themes ?? [], 'themes', 20),
     worldBible,
     characters,
     locations,
-    confidenceNotes: textArray(source.confidenceNotes ?? [], 'confidenceNotes', 30),
+    confidenceNotes: Array.from(new Set([
+      ...textArray(source.confidenceNotes ?? [], 'confidenceNotes', 30),
+      ...missingFields.map((field) => `Model omitted ${field}; left blank for human review.`),
+    ])).slice(0, 60),
     importedAt: null,
     importedCharacterCodes: [],
   }

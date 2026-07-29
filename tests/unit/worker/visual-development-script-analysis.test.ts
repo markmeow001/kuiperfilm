@@ -20,6 +20,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: { visualDevelopmentWorkspace: {
 } } }))
 
 import { handleVisualDevelopmentScriptAnalysisTask } from '@/lib/workers/handlers/visual-development-script-analysis'
+import { parseStoredScriptAnalysis } from '@/lib/visual-development/script-analysis'
 
 const modelResult = {
   synopsis: '地下城逃亡者揭開制度真相。', themes: ['自由與控制'],
@@ -68,6 +69,30 @@ describe('visual development screenplay analysis task', () => {
     mocks.executeAiTextStep.mockResolvedValue({ text: 'not json', reasoning: '' })
     await expect(handleVisualDevelopmentScriptAnalysisTask(job())).rejects.toThrow(/did not return JSON/)
     expect(mocks.upsert).not.toHaveBeenCalled()
+  })
+
+  it('keeps an analyzable draft when the model omits reviewable character fields', async () => {
+    const incompleteResult = structuredClone(modelResult)
+    const incompleteCharacter = incompleteResult.characters[0] as Record<string, unknown>
+    delete incompleteCharacter.fear
+    delete incompleteCharacter.relationships
+    incompleteCharacter.entityType = 'unsupported-value'
+    mocks.executeAiTextStep.mockResolvedValue({ text: JSON.stringify(incompleteResult), reasoning: '' })
+
+    await expect(handleVisualDevelopmentScriptAnalysisTask(job())).resolves.toMatchObject({
+      success: true,
+      characterCount: 1,
+    })
+
+    const analysis = mocks.upsert.mock.calls[0]?.[0].create.worldBible.scriptAnalysis
+    expect(analysis.characters[0]).toMatchObject({ fear: '', relationships: '', entityType: 'unknown' })
+    expect(analysis.confidenceNotes).toEqual(expect.arrayContaining([
+      expect.stringContaining('characters[0].fear'),
+      expect.stringContaining('characters[0].relationships'),
+      expect.stringContaining('characters[0].entityType'),
+    ]))
+    const restored = parseStoredScriptAnalysis(analysis)
+    expect(restored?.confidenceNotes.filter((note) => note.includes('characters[0].fear'))).toHaveLength(1)
   })
 
   it('rejects a short screenplay before calling the model', async () => {
