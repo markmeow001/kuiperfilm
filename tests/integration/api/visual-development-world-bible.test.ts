@@ -113,12 +113,18 @@ describe('visual development World Bible API', () => {
     expect(submitterMock.submitTask).toHaveBeenCalledTimes(4)
     const submissions = submitterMock.submitTask.mock.calls.map((call) => call[0] as { payload: Record<string, unknown> })
     expect(submissions[0]?.payload.referenceImages).toEqual(['images/ref-1.png', 'images/ref-2.png'])
-    expect(submissions.map((submission) => String(submission.payload.prompt))).toEqual(expect.arrayContaining([
-      expect.stringContaining('World Core Formula'),
-      expect.stringContaining('Faction Color System'),
-      expect.stringContaining('Material & Aging Rules'),
-      expect.stringContaining('Architecture, Symbols & Exclusions'),
+    const prompts = submissions.map((submission) => String(submission.payload.prompt))
+    expect(prompts).toEqual(expect.arrayContaining([
+      expect.stringContaining('live-action establishing shot that expresses the governing contradiction'),
+      expect.stringContaining('live-action scene that expresses faction hierarchy'),
+      expect.stringContaining('photorealistic set-detail or still-life photograph'),
+      expect.stringContaining('photorealistic live-action architecture shot'),
     ]))
+    expect(prompts.every((prompt) => prompt.includes('must contain zero written characters'))).toBe(true)
+    expect(prompts.every((prompt) => !prompt.includes('World Core Formula'))).toBe(true)
+    expect(prompts.every((prompt) => !prompt.includes('Faction Color System'))).toBe(true)
+    expect(prompts.every((prompt) => !prompt.includes('Material & Aging Rules'))).toBe(true)
+    expect(prompts.every((prompt) => !prompt.includes('Architecture, Symbols & Exclusions'))).toBe(true)
     const update = prismaMock.visualDevelopmentWorkspace.upsert.mock.calls.at(-1)?.[0]
     const savedWorldBible = update?.update.worldBible as { assets: unknown[] }
     expect(savedWorldBible.assets).toHaveLength(4)

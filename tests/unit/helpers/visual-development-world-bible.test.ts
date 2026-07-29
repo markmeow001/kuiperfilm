@@ -35,23 +35,40 @@ describe('visual development world bible', () => {
     expect(worldBibleRequiredFieldsComplete({ ...completeWorld, architectureLanguage: '' })).toBe(false)
   })
 
-  it('材質資產 Prompt -> 同時包含世界規則、資產責任與參考圖邊界', () => {
+  it('材質資產 Prompt -> 生成單張無字實拍畫面並保留世界規則與參考圖邊界', () => {
     const prompt = buildWorldBibleAssetPrompt(completeWorld, 'MATERIAL-AGING')
 
-    expect(prompt.prompt).toContain('Material & Aging Rules')
     expect(prompt.prompt).toContain(completeWorld.materialRules)
     expect(prompt.prompt).toContain('Reference images, when supplied, are evidence')
-    expect(prompt.prompt).toContain('photorealistic macro photography')
+    expect(prompt.prompt).toContain('one uninterrupted, edge-to-edge photorealistic set-detail or still-life photograph')
     expect(prompt.prompt).toContain('live-action photorealism')
+    expect(prompt.prompt).toContain('single full-bleed photograph')
+    expect(prompt.prompt).toContain('must contain zero written characters')
     expect(prompt.negativePrompt).toContain('movie poster')
     expect(prompt.negativePrompt).toContain('digital painting')
+    expect(prompt.negativePrompt).toContain('gibberish text')
+    expect(prompt.negativePrompt).toContain('multi-panel layout')
   })
 
   it('世界核心公式 Prompt -> 要求單一真人電影畫面而不是手繪概念圖', () => {
     const prompt = buildWorldBibleAssetPrompt(completeWorld, 'WORLD-FORMULA')
 
-    expect(prompt.prompt).toContain('one uninterrupted photorealistic live-action establishing frame')
+    expect(prompt.prompt).toContain('one uninterrupted, edge-to-edge photorealistic live-action establishing shot')
     expect(prompt.prompt).toContain('physical feature-film set or location')
     expect(prompt.negativePrompt).toContain('concept art rendering')
   })
+
+  it.each(['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'] as const)(
+    '%s Prompt -> 禁止模型自行排版、拼貼與產生文字',
+    (code) => {
+      const prompt = buildWorldBibleAssetPrompt(completeWorld, code)
+
+      expect(prompt.prompt).toContain('one continuous image from one camera viewpoint')
+      expect(prompt.prompt).toContain('no white margin, border, grid, split screen, inset image, collage or multi-panel layout')
+      expect(prompt.prompt).toContain('no title, heading, caption, label, annotation, callout, legend, letter, number, logo, watermark, readable signage or invented writing')
+      expect(prompt.prompt).toContain('Do not reserve or design any area for text')
+      expect(prompt.negativePrompt).toContain('mood board')
+      expect(prompt.negativePrompt).toContain('typography')
+    },
+  )
 })
