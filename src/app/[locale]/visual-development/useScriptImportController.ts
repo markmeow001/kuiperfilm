@@ -14,6 +14,11 @@ type AnalysisResponse = {
   error?: { message?: string; details?: { message?: string } }
 }
 
+type SourceResponse = {
+  data?: { source?: ScriptSourceVersionView; scriptText?: string }
+  error?: { message?: string; details?: { message?: string } }
+}
+
 function responseError(payload: AnalysisResponse, fallback: string) {
   return payload.error?.details?.message ?? payload.error?.message ?? fallback
 }
@@ -39,10 +44,25 @@ export function useScriptImportController(input: {
   const [isApplying, setIsApplying] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const analysisIdRef = useRef<string | null>(null)
+  const sourceVersionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!modelKey && input.llmModels[0]) setModelKey(input.llmModels[0].value)
   }, [input.llmModels, modelKey])
+
+  const loadSource = useCallback(async (sourceId: string) => {
+    if (!input.projectId || !sourceId) return
+    const response = await fetch(`/api/visual-development/${input.projectId}/script-source?sourceId=${encodeURIComponent(sourceId)}`)
+    const payload = await response.json() as SourceResponse
+    if (!response.ok || !payload.data?.source || typeof payload.data.scriptText !== 'string') {
+      throw new Error(payload.error?.details?.message ?? payload.error?.message ?? 'Unable to load screenplay source')
+    }
+    sourceVersionIdRef.current = payload.data.source.id
+    setSourceVersionId(payload.data.source.id)
+    setSourceTitle(payload.data.source.sourceTitle)
+    setSourceFormat(payload.data.source.sourceFormat)
+    setScriptText(payload.data.scriptText)
+  }, [input.projectId])
 
   const refresh = useCallback(async () => {
     if (!input.projectId) return
@@ -55,8 +75,9 @@ export function useScriptImportController(input: {
       }
       const nextAnalysis = payload.data?.analysis ?? null
       const nextTask = payload.data?.task ?? null
+      const nextSources = payload.data?.sources ?? []
       setAnalysis(nextAnalysis)
-      setSources(payload.data?.sources ?? [])
+      setSources(nextSources)
       setTaskStatus(nextTask?.status ?? null)
       setIsAnalyzing(nextTask?.status === 'queued' || nextTask?.status === 'processing')
       if (nextTask?.status === 'failed') setErrorMessage(nextTask.errorMessage ?? 'Screenplay analysis failed')
@@ -65,15 +86,18 @@ export function useScriptImportController(input: {
         setSelectedCharacterCodes(nextAnalysis.characters.map((character) => character.code))
         setApplyWorldBible(true)
       }
+      const latestSource = nextSources[nextSources.length - 1]
+      if (!sourceVersionIdRef.current && latestSource) await loadSource(latestSource.id)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error))
       setIsAnalyzing(false)
     }
-  }, [input.projectId])
+  }, [input.projectId, loadSource])
 
   useEffect(() => {
     setAnalysis(null)
     setSources([])
+    sourceVersionIdRef.current = null
     setSourceVersionId(null)
     setTaskStatus(null)
     setSelectedCharacterCodes([])
@@ -126,6 +150,7 @@ export function useScriptImportController(input: {
         return
       }
       setSourceVersionId(sourcePayload.data.source.id)
+      sourceVersionIdRef.current = sourcePayload.data.source.id
       await refresh()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : String(error))
@@ -154,6 +179,7 @@ export function useScriptImportController(input: {
         }
         activeSourceId = sourcePayload.data.source.id
         setSourceVersionId(activeSourceId)
+        sourceVersionIdRef.current = activeSourceId
       }
       const response = await fetch(`/api/visual-development/${input.projectId}/script-analysis`, {
         method: 'POST',
@@ -219,8 +245,8 @@ export function useScriptImportController(input: {
     isUploading,
     isAnalyzing,
     isApplying,
-    onSourceTitleChange: (value: string) => { setSourceTitle(value); setSourceFormat('pasted'); setSourceVersionId(null) },
-    onScriptTextChange: (value: string) => { setScriptText(value); setSourceFormat('pasted'); setSourceVersionId(null) },
+    onSourceTitleChange: (value: string) => { setSourceTitle(value); setSourceFormat('pasted'); sourceVersionIdRef.current = null; setSourceVersionId(null) },
+    onScriptTextChange: (value: string) => { setScriptText(value); setSourceFormat('pasted'); sourceVersionIdRef.current = null; setSourceVersionId(null) },
     onModelChange: setModelKey,
     onFileSelected: (file: File) => void onFileSelected(file),
     onAnalyze: () => void onAnalyze(),

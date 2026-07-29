@@ -9,6 +9,7 @@ import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import {
   SCRIPT_ANALYSIS_MIN_CHARS,
+  SCRIPT_ANALYSIS_PIPELINE_VERSION,
   type ScriptSourceFormat,
 } from '@/lib/visual-development/script-analysis'
 import { parseWorldBible, toWorldBibleJson } from '@/lib/visual-development/world-bible'
@@ -53,21 +54,37 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
   const { projectId } = await context.params
   const access = await requireAccess(projectId, 'read')
   if (access instanceof Response) return access
-  const [workspace, task] = await Promise.all([
-    prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } }),
-    prisma.task.findFirst({
+  const workspace = await prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } })
+  const document = workspace ? parseWorldBible(workspace.worldBible) : null
+  const activeSource = document?.sources[document.sources.length - 1] ?? null
+  const recentTasks = activeSource
+    ? await prisma.task.findMany({
       where: { projectId, userId: access.userId, type: TASK_TYPE.VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, status: true, progress: true, errorCode: true, errorMessage: true, createdAt: true },
-    }),
-  ])
-  const document = workspace ? parseWorldBible(workspace.worldBible) : null
+      take: 20,
+      select: { id: true, status: true, progress: true, errorCode: true, errorMessage: true, createdAt: true, payload: true },
+    })
+    : []
+  const activeTask = recentTasks.find((candidate) => record(candidate.payload).sourceId === activeSource?.id) ?? null
+  const task = activeTask
+    ? {
+      id: activeTask.id,
+      status: activeTask.status,
+      progress: activeTask.progress,
+      errorCode: activeTask.errorCode,
+      errorMessage: activeTask.errorMessage,
+      createdAt: activeTask.createdAt,
+    }
+    : null
+  const analysis = document && document.scriptAnalysis?.sourceId === activeSource?.id
+    ? document.scriptAnalysis
+    : null
   const sources = document?.sources.map((source, index) => ({
     ...source,
     version: index + 1,
     downloadUrl: getSignedUrl(source.originalKey ?? source.key, 3600),
   })) ?? []
-  return NextResponse.json({ success: true, data: { analysis: document?.scriptAnalysis ?? null, sources, task } })
+  return NextResponse.json({ success: true, data: { analysis, sources, task } })
 })
 
 export const POST = apiHandler(async (request: NextRequest, context: RouteContext) => {
@@ -105,7 +122,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   }
 
   const fingerprint = createHash('sha256')
-    .update(`${selection.modelKey}\u0000${source.sha256}`)
+    .update(`${SCRIPT_ANALYSIS_PIPELINE_VERSION}\u0000${selection.modelKey}\u0000${source.sha256}`)
     .digest('hex')
     .slice(0, 24)
   const submitted = await submitTask({
@@ -115,8 +132,8 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     type: TASK_TYPE.VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS,
     targetType: 'VisualDevelopmentWorkspace',
     targetId: projectId,
-    dedupeKey: `visual-development-script:${projectId}:${fingerprint}`,
-    dedupeMode: 'idempotent',
+    dedupeKey: `visual-development-script:v${SCRIPT_ANALYSIS_PIPELINE_VERSION}:${projectId}:${fingerprint}`,
+    dedupeMode: 'active',
     payload: {
       sourceId,
       sourceKey: source.key,

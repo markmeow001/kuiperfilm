@@ -6,7 +6,7 @@ import { TASK_TYPE } from '@/lib/task/types'
 const prismaMock = vi.hoisted(() => ({
   visualDevelopmentWorkspace: { findUnique: vi.fn(), update: vi.fn() },
   visualDevelopmentCharacter: { upsert: vi.fn() },
-  task: { findFirst: vi.fn() },
+  task: { findMany: vi.fn() },
   $transaction: vi.fn(),
 }))
 const apiConfigMock = vi.hoisted(() => ({ resolveModelSelection: vi.fn() }))
@@ -49,6 +49,7 @@ describe('visual development screenplay analysis API', () => {
     mockAuthenticated('user-1')
     apiConfigMock.resolveModelSelection.mockResolvedValue({ provider: 'atlascloud', modelId: 'gpt-5', modelKey: 'atlascloud::gpt-5' })
     submitterMock.submitTask.mockResolvedValue({ taskId: 'task-1', status: 'queued', deduped: false })
+    prismaMock.task.findMany.mockResolvedValue([])
     prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue(workspace())
     prismaMock.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
       visualDevelopmentWorkspace: prismaMock.visualDevelopmentWorkspace,
@@ -67,8 +68,33 @@ describe('visual development screenplay analysis API', () => {
     expect(submitterMock.submitTask).toHaveBeenCalledWith(expect.objectContaining({
       type: TASK_TYPE.VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS,
       projectId: 'project-1',
+      dedupeKey: expect.stringContaining('visual-development-script:v2:'),
       payload: expect.objectContaining({ sourceId: 'source-1', sourceKey: 'documents/source.txt', analysisModel: 'atlascloud::gpt-5', model: 'atlascloud::gpt-5' }),
     }))
+  })
+
+  it('does not surface an older failed task or analysis after a new source is uploaded', async () => {
+    const nextWorkspace = workspace()
+    nextWorkspace.worldBible.sources.push({
+      id: 'source-2', key: 'documents/source-2.txt', originalKey: null, name: '序列三 V2.txt', sourceTitle: '序列三 V2',
+      sourceFormat: 'pasted', mimeType: 'text/plain', sha256: 'def', sizeBytes: 1500, textLength: 1200, createdAt: '2026-07-29T01:00:00.000Z',
+    })
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue(nextWorkspace)
+    prismaMock.task.findMany.mockResolvedValue([{
+      id: 'task-old', status: 'failed', progress: 70, errorCode: 'INTERNAL_ERROR',
+      errorMessage: 'SCRIPT_ANALYSIS_INVALID: missing fear', createdAt: new Date('2026-07-29T00:30:00.000Z'),
+      payload: { sourceId: 'source-1' },
+    }])
+    const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
+    const response = await mod.GET(buildMockRequest({
+      path: '/api/visual-development/project-1/script-analysis', method: 'GET',
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.analysis).toBeNull()
+    expect(body.data.task).toBeNull()
+    expect(body.data.sources).toHaveLength(2)
   })
 
   it('refuses to overwrite a locked World Canon', async () => {

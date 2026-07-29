@@ -3,6 +3,7 @@ import type { Locale } from '@/i18n/routing'
 export const SCRIPT_ANALYSIS_MIN_CHARS = 500
 export const SCRIPT_ANALYSIS_MAX_CHARS = 120_000
 export const SCRIPT_ANALYSIS_MAX_CHARACTERS = 120
+export const SCRIPT_ANALYSIS_PIPELINE_VERSION = 2
 
 export type ScriptSourceFormat = 'pasted' | 'docx' | 'txt' | 'md'
 

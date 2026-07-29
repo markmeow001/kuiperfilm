@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ApiError, apiHandler } from '@/lib/api-errors'
 import { isErrorResponse, requireProjectAccess, requireUserAuth } from '@/lib/api-auth'
-import { generateUniqueKey, getSignedUrl, uploadToCOS } from '@/lib/cos'
+import { generateUniqueKey, getSignedUrl, toFetchableUrl, uploadToCOS } from '@/lib/cos'
 import {
   EMPTY_WORLD_BIBLE,
   parseWorldBible,
@@ -16,11 +16,12 @@ type RouteContext = { params: Promise<{ projectId: string }> }
 
 const MAX_SOURCE_BYTES = 10 * 1024 * 1024
 const MAX_SOURCE_VERSIONS = 50
+const MAX_NORMALIZED_SOURCE_BYTES = SCRIPT_ANALYSIS_MAX_CHARS * 4
 
-async function requireAccess(projectId: string) {
+async function requireAccess(projectId: string, action: 'read' | 'write' = 'write') {
   const auth = await requireUserAuth()
   if (isErrorResponse(auth)) return auth
-  const access = await requireProjectAccess(projectId, auth.session.user.id, 'write')
+  const access = await requireProjectAccess(projectId, auth.session.user.id, action)
   if (!access.allowed) {
     if (access.reason === 'NOT_FOUND') throw new ApiError('NOT_FOUND')
     throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
@@ -50,6 +51,59 @@ function title(value: unknown, fallback: string): string {
   const result = typeof value === 'string' ? value.trim() : ''
   return (result || fallback).slice(0, 240)
 }
+
+export const GET = apiHandler(async (request: NextRequest, context: RouteContext) => {
+  const { projectId } = await context.params
+  const access = await requireAccess(projectId, 'read')
+  if (access instanceof Response) return access
+  const workspace = await prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } })
+  if (!workspace) throw new ApiError('NOT_FOUND')
+  const document = parseWorldBible(workspace.worldBible)
+  const requestedSourceId = new URL(request.url).searchParams.get('sourceId')?.trim() ?? ''
+  const source = requestedSourceId
+    ? document.sources.find((candidate) => candidate.id === requestedSourceId)
+    : document.sources[document.sources.length - 1]
+  if (!source) throw new ApiError('NOT_FOUND', { code: 'SCRIPT_SOURCE_NOT_FOUND' })
+
+  const signedUrl = getSignedUrl(source.key, 600)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15_000)
+  let upstream: Response
+  try {
+    upstream = await fetch(toFetchableUrl(signedUrl), {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: signedUrl.startsWith('/')
+        ? { cookie: request.headers.get('cookie') ?? '' }
+        : undefined,
+    })
+  } catch {
+    throw new ApiError('INTERNAL_ERROR', { code: 'SCRIPT_SOURCE_FETCH_FAILED' })
+  } finally {
+    clearTimeout(timer)
+  }
+  if (!upstream.ok) throw new ApiError('NOT_FOUND', { code: 'SCRIPT_SOURCE_CONTENT_NOT_FOUND' })
+  const declaredLength = Number(upstream.headers.get('content-length') ?? 0)
+  if (declaredLength > MAX_NORMALIZED_SOURCE_BYTES) {
+    throw new ApiError('INVALID_PARAMS', { code: 'SCRIPT_SOURCE_CONTENT_TOO_LARGE' })
+  }
+  const scriptText = (await upstream.text()).trim()
+  if (!scriptText || Buffer.byteLength(scriptText, 'utf8') > MAX_NORMALIZED_SOURCE_BYTES) {
+    throw new ApiError('INVALID_PARAMS', { code: 'SCRIPT_SOURCE_CONTENT_INVALID' })
+  }
+  const versionIndex = document.sources.findIndex((candidate) => candidate.id === source.id)
+  return NextResponse.json({
+    success: true,
+    data: {
+      source: {
+        ...source,
+        version: versionIndex + 1,
+        downloadUrl: getSignedUrl(source.originalKey ?? source.key, 3600),
+      },
+      scriptText,
+    },
+  })
+})
 
 export const POST = apiHandler(async (request: NextRequest, context: RouteContext) => {
   const { projectId } = await context.params

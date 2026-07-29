@@ -348,7 +348,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const { controller: hairDesignController, activeBatch: activeHairBatch } = useHairDesignController({
     projectId,
     locale,
-    characterCode: form.characterCode,
+    characterCode: selectedCharacterCode,
     characterStatus,
     characterDna: form.characterDna,
     faceBatch,
@@ -366,7 +366,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     activeStageId: activeProductionStageId,
     projectId,
     locale,
-    characterCode: form.characterCode,
+    characterCode: selectedCharacterCode,
     characterStatus,
     characterDna: form.characterDna,
     batches: productionBatches,
