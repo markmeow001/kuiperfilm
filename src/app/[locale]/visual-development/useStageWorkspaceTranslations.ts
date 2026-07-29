@@ -119,6 +119,7 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       generating: t('workspace.casting.generating'),
       worldRequired: t('workspace.casting.worldRequired'),
       worldLocked: t('workspace.casting.worldLocked'),
+      completeWorld: t('workspace.casting.completeWorld'),
     },
     face: {
       canonSource: t('workspace.face.canonSource'),

@@ -304,6 +304,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     isLoading: isLoadingWorkspace || modelsQuery.isLoading,
     onFieldChange: updateField,
     onIdentityChange: updateIdentity,
+    onOpenWorldBible: () => setActiveStageId('world'),
     onGenerate: () => void generateCasting(),
     onCandidateAction: (candidateId, action, shortlisted) => void handleCandidateAction(candidateId, action, shortlisted),
   }), [batch, form, generateCasting, handleCandidateAction, isGenerating, isLoadingWorkspace, modelsQuery.data?.image, modelsQuery.isLoading, updateField, updateIdentity, worldStatus])

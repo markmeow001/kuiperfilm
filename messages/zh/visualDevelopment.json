@@ -146,6 +146,7 @@
       "generating": "送出中…",
       "worldRequired": "請先到 Phase 00 完成並鎖定 World Canon",
       "worldLocked": "World Canon 已載入，Casting Prompt 將繼承故事與情緒規則",
+      "completeWorld": "完成 Phase 00",
       "generateFailed": "Casting 批次建立失敗",
       "actionFailed": "候選操作失敗"
     },

@@ -41,6 +41,7 @@ export interface CastingTranslations {
   generating: string
   worldRequired: string
   worldLocked: string
+  completeWorld: string
 }
 
 export interface StageWorkspaceTranslations {

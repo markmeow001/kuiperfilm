@@ -146,6 +146,7 @@
       "generating": "Submitting…",
       "worldRequired": "Complete and lock World Canon in Phase 00 first",
       "worldLocked": "World Canon loaded. Casting prompts inherit its story and emotional rules.",
+      "completeWorld": "Complete Phase 00",
       "generateFailed": "Unable to create the casting batch",
       "actionFailed": "Unable to update the candidate"
     },

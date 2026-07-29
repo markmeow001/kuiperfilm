@@ -36,6 +36,7 @@ interface CastingTranslations {
   generating: string
   worldRequired: string
   worldLocked: string
+  completeWorld: string
 }
 
 interface CastingWorkspaceProps {
@@ -137,10 +138,17 @@ export function CastingWorkspace({
                 {count}
               </button>
             ))}
-            <button type="button" disabled={controller.worldStatus !== 'world_locked' || controller.isGenerating || controller.isLoading || !controller.form.modelKey} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
-              <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
-              {controller.isGenerating ? translations.generating : translations.generate}
-            </button>
+            {controller.worldStatus === 'world_locked' ? (
+              <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
+                <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
+                {controller.isGenerating ? translations.generating : translations.generate}
+              </button>
+            ) : (
+              <button type="button" onClick={controller.onOpenWorldBible} className="ml-1 flex h-9 items-center gap-2 rounded-lg border border-amber-300/30 bg-amber-300/[0.08] px-3 text-[10px] font-semibold text-amber-100 transition-colors hover:bg-amber-300/[0.14]" title={translations.worldRequired}>
+                <AppIcon name="lock" className="h-3.5 w-3.5" />
+                {translations.completeWorld}
+              </button>
+            )}
           </div>
         </div>
 
