@@ -70,6 +70,12 @@ export interface CastingCandidateView {
   prompt?: string
   originPrompt?: string
   negativePrompt?: string | null
+  modelKey?: string
+  provider?: string
+  modelId?: string
+  modelVersion?: string | null
+  aspectRatio?: string
+  resolution?: string | null
   history?: CandidateGenerationHistoryView[]
 }
 

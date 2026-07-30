@@ -23,6 +23,13 @@ const candidate: CastingCandidateView = {
   errorMessage: null,
   prompt: 'current prompt',
   originPrompt: 'original immutable prompt',
+  negativePrompt: null,
+  modelKey: 'atlascloud::flux-2-pro',
+  provider: 'atlascloud',
+  modelId: 'flux-2-pro',
+  modelVersion: null,
+  aspectRatio: '3:4',
+  resolution: null,
   history: [{
     taskId: 'task-original',
     prompt: 'original immutable prompt',
@@ -49,7 +56,28 @@ const candidate: CastingCandidateView = {
 }
 
 describe('CandidatePromptEditor', () => {
-  it('shows the immutable original prompt and regenerates only the selected candidate with an editable prompt', () => {
+  it('預設收起 Prompt -> 點擊按鈕後才開啟完整操控面板', () => {
+    render(
+      <CandidatePromptEditor
+        candidate={{ ...candidate, negativePrompt: 'blood, dirt, wounds' }}
+        isRegenerating={false}
+        onRegenerate={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByText('original immutable prompt')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /panelButton/ }))
+
+    expect(screen.getByRole('dialog', { name: 'panelTitle' })).toBeInTheDocument()
+    expect(screen.getAllByText('original immutable prompt')).toHaveLength(2)
+    expect(screen.getByText('blood, dirt, wounds')).toBeInTheDocument()
+    expect(screen.getByText('atlascloud::flux-2-pro')).toBeInTheDocument()
+  })
+
+  it('修改 Prompt -> 只以指定 Seed 策略重生目前這張資產', () => {
     const onRegenerate = vi.fn()
     render(
       <CandidatePromptEditor
@@ -59,12 +87,12 @@ describe('CandidatePromptEditor', () => {
       />,
     )
 
-    expect(screen.getAllByText('original immutable prompt').length).toBeGreaterThan(0)
-    const editor = screen.getByRole('textbox')
+    fireEvent.click(screen.getByRole('button', { name: /panelButton/ }))
+    const editor = screen.getByRole('textbox', { name: /regenerateTitle/ })
     expect(editor).toHaveValue('current prompt')
     fireEvent.change(editor, { target: { value: 'edited prompt for this slot only' } })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'reuse' } })
-    fireEvent.click(screen.getByRole('button', { name: 'regenerateOne' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'seedMode' }), { target: { value: 'reuse' } })
+    fireEvent.click(screen.getByRole('button', { name: 'saveAndRegenerate' }))
 
     expect(onRegenerate).toHaveBeenCalledWith(
       'candidate-1',
@@ -83,7 +111,8 @@ describe('CandidatePromptEditor', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'regenerateOne' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /panelButton/ }))
+    expect(screen.getByRole('button', { name: 'saveAndRegenerate' })).toBeDisabled()
     expect(screen.getByText('canonLockedHint')).toBeInTheDocument()
   })
 
@@ -98,7 +127,8 @@ describe('CandidatePromptEditor', () => {
     )
 
     expect(screen.getByText('versions 2')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'regenerateOne' }))
+    fireEvent.click(screen.getByRole('button', { name: /panelButton/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'saveAndRegenerate' }))
     expect(onRegenerate).toHaveBeenCalledWith('candidate-1', 'current prompt', 'new')
   })
 
@@ -111,7 +141,8 @@ describe('CandidatePromptEditor', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'regenerateOne' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /panelButton/ }))
+    expect(screen.getByRole('button', { name: 'saveAndRegenerate' })).toBeDisabled()
     expect(screen.queryByText('canonLockedHint')).not.toBeInTheDocument()
   })
 })
