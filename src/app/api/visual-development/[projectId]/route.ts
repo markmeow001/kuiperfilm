@@ -377,6 +377,14 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (body.action === 'save-draft') {
     const characterCode = normalizeCharacterCode(body.characterCode)
     const characterDnaPatch = toStringRecord(body.characterDnaPatch, 'characterDnaPatch')
+    const immutableBriefKey = Object.keys(characterDnaPatch)
+      .find((key) => key.startsWith('stageBrief_'))
+    if (immutableBriefKey) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'IMMUTABLE_STAGE_BRIEF',
+        field: `characterDnaPatch.${immutableBriefKey}`,
+      })
+    }
     const character = await prisma.visualDevelopmentCharacter.findFirst({
       where: { code: characterCode, workspace: { projectId } },
     })

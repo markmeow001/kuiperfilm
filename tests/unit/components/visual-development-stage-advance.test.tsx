@@ -117,6 +117,19 @@ const productionTranslations: ProductionStageTranslations = {
   prerequisite: '上一階段未鎖定',
   prerequisiteHint: '請先完成上一階段',
   designRecord: '設計紀錄',
+  briefTitle: '劇本設計基準',
+  briefDescription: '由劇本與 Canon 自動建立',
+  briefModel: '分析模型',
+  briefCreate: '建立基準',
+  briefCreating: '建立中',
+  briefRequired: '請先建立基準',
+  briefImmutable: '唯讀',
+  briefEvidence: '劇本依據',
+  briefConstraints: '不可違反',
+  creativePromptTitle: '導演調整提示詞',
+  creativePromptDescription: '只調整本輪方向',
+  creativePromptPlaceholder: '輸入調整',
+  resetPrompt: '清空調整',
   modelBinding: '模型',
   imageModelRequired: '選擇生圖模型',
   videoModelRequired: '選擇影片模型',
@@ -148,11 +161,27 @@ function productionController(stageId: 'costume' | 'video'): ProductionStageWork
   const stage = getProductionStage(stageId)
   return {
     stage,
+    stageBrief: {
+      version: 1,
+      stageId,
+      characterCode: 'CHR-001',
+      modelKey: 'openrouter::gemini',
+      createdAt: '2026-07-30T00:00:00.000Z',
+      sourceAnalysisId: 'analysis-1',
+      summary: '從劇本建立的階段基準',
+      fields: Object.fromEntries(stage.fields.map((field) => [field, productionFields[field]])),
+      evidence: ['劇本證據'],
+      constraints: ['不可改變角色身分'],
+    },
+    stageBriefTaskStatus: 'completed',
+    stageBriefError: null,
+    analysisModel: 'Gemini',
     batch: lockedBatch(stage.dbStage),
     characterStatus: stage.lockedStatus,
     prerequisiteReady: true,
     form: {
       stageRecord: productionFields,
+      creativePrompt: '',
       modelKey: '',
       resolution: '',
       aspectRatio: '',
@@ -160,8 +189,11 @@ function productionController(stageId: 'costume' | 'video'): ProductionStageWork
     },
     models: [],
     isGenerating: false,
+    isGeneratingBrief: false,
     isLoading: false,
-    onRecordChange: vi.fn(),
+    onCreateStageBrief: vi.fn(),
+    onCreativePromptChange: vi.fn(),
+    onResetCreativePrompt: vi.fn(),
     onSettingChange: vi.fn(),
     onGenerate: vi.fn(),
     onReview: vi.fn(),
@@ -171,6 +203,53 @@ function productionController(stageId: 'costume' | 'video'): ProductionStageWork
 }
 
 describe('visual development locked-stage navigation', () => {
+  it('requires a screenplay-derived baseline before enabling the editable director prompt', () => {
+    const controller = productionController('costume')
+    controller.stageBrief = null
+    controller.stageBriefTaskStatus = null
+    controller.batch = null
+    controller.characterStatus = 'hair_locked'
+    controller.form.creativePrompt = ''
+
+    render(
+      <ProductionStageWorkspace
+        controller={controller}
+        nextStage={{ code: '05', shortTitle: '配件道具' }}
+        onAdvance={vi.fn()}
+        translations={productionTranslations}
+      />,
+    )
+
+    const create = screen.getByRole('button', { name: '建立基準' })
+    expect(create).toBeEnabled()
+    fireEvent.click(create)
+    expect(controller.onCreateStageBrief).toHaveBeenCalledTimes(1)
+    expect(screen.getByPlaceholderText('請先建立基準')).toBeDisabled()
+  })
+
+  it('shows the immutable baseline separately from the editable director adjustment', () => {
+    const controller = productionController('costume')
+    controller.form.creativePrompt = '減少裝飾'
+
+    render(
+      <ProductionStageWorkspace
+        controller={controller}
+        nextStage={{ code: '05', shortTitle: '配件道具' }}
+        onAdvance={vi.fn()}
+        translations={productionTranslations}
+      />,
+    )
+
+    expect(screen.getByText('從劇本建立的階段基準')).toBeInTheDocument()
+    expect(screen.getByText('劇本證據')).toBeInTheDocument()
+    const prompt = screen.getByPlaceholderText('輸入調整')
+    expect(prompt).toHaveValue('減少裝飾')
+    fireEvent.change(prompt, { target: { value: '保留磨損、縮短外套' } })
+    expect(controller.onCreativePromptChange).toHaveBeenCalledWith('保留磨損、縮短外套')
+    fireEvent.click(screen.getByRole('button', { name: '清空調整' }))
+    expect(controller.onResetCreativePrompt).toHaveBeenCalledTimes(1)
+  })
+
   it('replaces the locked Hair Canon button with an enabled Phase 4 action', () => {
     const onAdvance = vi.fn()
     render(

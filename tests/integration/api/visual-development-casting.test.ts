@@ -78,6 +78,23 @@ describe('POST /api/visual-development/[projectId] Casting gate', () => {
     }))
   })
 
+  it('rejects attempts to overwrite an immutable screenplay stage brief through draft autosave', async () => {
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PATCH',
+      body: {
+        action: 'save-draft',
+        characterCode: 'SINO',
+        characterDnaPatch: { stageBrief_costume: '{"summary":"client override"}' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.details.code).toBe('IMMUTABLE_STAGE_BRIEF')
+    expect(prismaMock.visualDevelopmentCharacter.update).not.toHaveBeenCalled()
+  })
+
   it('World Canon 尚未鎖定 -> 不得建立 Casting 或送出生圖任務', async () => {
     prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
       id: 'workspace-1', projectId: 'project-1', status: 'world_draft', worldBible: {},

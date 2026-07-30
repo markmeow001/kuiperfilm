@@ -90,6 +90,7 @@ export const TASK_TYPE = {
   PLAYGROUND_IMAGE: 'playground_image',
   VISUAL_DEVELOPMENT_IMAGE: 'visual_development_image',
   VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS: 'visual_development_script_analysis',
+  VISUAL_DEVELOPMENT_STAGE_BRIEF: 'visual_development_stage_brief',
   PLAYGROUND_VIDEO: 'playground_video',
   PLAYGROUND_VIDEO_ANALYZE: 'playground_video_analyze',
   // Canvas 无限画布 script node — pasted/wired script → LLM → array of

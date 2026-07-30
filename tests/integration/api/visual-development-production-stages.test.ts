@@ -5,6 +5,7 @@ import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../h
 const prismaMock = vi.hoisted(() => ({
   visualDevelopmentCharacter: {
     findFirst: vi.fn(),
+    findUnique: vi.fn(),
     update: vi.fn(async () => ({})),
   },
   visualDevelopmentCandidate: {
@@ -33,9 +34,6 @@ vi.mock('@/lib/api-config', () => apiConfigMock)
 vi.mock('@/lib/task/submitter', () => submitterMock)
 
 function request(stageId: 'costume' | 'video', modelKey: string, aspectRatio = stageId === 'video' ? '16:9' : '3:4') {
-  const records = stageId === 'costume'
-    ? { silhouetteSystem: 'tower-like layered silhouette', materialConstruction: 'worn wool, leather and aged silver', storyWear: 'motivated repairs and soot at contact zones' }
-    : { performanceActions: 'walk, listen, speak and controlled action', motionRules: 'natural weight, restrained face and stable cloth', continuityChecks: 'identity, costume, props, scene and light remain stable' }
   return buildMockRequest({
     path: `/api/visual-development/project-1/stages/${stageId}`,
     method: 'POST',
@@ -44,21 +42,54 @@ function request(stageId: 'costume' | 'video', modelKey: string, aspectRatio = s
       modelKey,
       aspectRatio,
       duration: 5,
-      stageRecord: records,
+      creativePrompt: 'Reduce decorative clutter while preserving the screenplay baseline.',
       meta: { locale: 'zh' },
     },
   })
 }
 
+function storedBrief(stageId: 'costume' | 'video') {
+  const fields = stageId === 'costume'
+    ? {
+        silhouetteSystem: 'tower-like layered silhouette',
+        materialConstruction: 'worn wool, leather and aged silver',
+        storyWear: 'motivated repairs and soot at contact zones',
+      }
+    : {
+        performanceActions: 'walk, listen, speak and controlled action',
+        motionRules: 'natural weight, restrained face and stable cloth',
+        continuityChecks: 'identity, costume, props, scene and light remain stable',
+      }
+  return JSON.stringify({
+    version: 1,
+    stageId,
+    characterCode: 'CHR-SNO',
+    modelKey: 'openrouter::gemini-3.1-pro',
+    createdAt: '2026-07-30T00:00:00.000Z',
+    sourceAnalysisId: 'SCRIPT-analysis-1',
+    summary: `Immutable ${stageId} direction derived from the screenplay.`,
+    fields,
+    evidence: ['The screenplay establishes the character as a guarded underground fugitive.'],
+    constraints: ['Preserve locked identity, hair, class, and story state.'],
+  })
+}
+
 function installFixtures(status = 'hair_locked') {
+  const characterDna = {
+    role: 'protagonist',
+    coreTraits: 'guarded and determined',
+    stageBrief_costume: storedBrief('costume'),
+    stageBrief_video: storedBrief('video'),
+  }
   prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({
     id: 'character-1',
     code: 'CHR-SNO',
     status,
-    characterDna: { role: 'protagonist', coreTraits: 'guarded and determined' },
+    characterDna,
     castingBrief: { apparentAge: '24–28' },
     workspace: { id: 'workspace-1', projectId: 'project-1', worldBible: { projectPremise: 'underground city', visualThesis: 'sacred order hides predation' } },
   })
+  prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({ characterDna })
   prismaMock.visualDevelopmentCandidate.findFirst.mockImplementation(async (args: { where: { batch: { stage: string } } }) => {
     const stage = args.where.batch.stage
     if (stage === 'face-lock') return { id: 'face-1', taskId: 'face-task-1', code: 'EXPR-RESTRAINED' }
@@ -115,6 +146,126 @@ describe('production stage API', () => {
     ])
     expect(first.payload.prompt).toContain('Reference image 1 is the locked Face ID')
     expect(first.payload.prompt).toContain('Reference image 2 is the approved upstream design asset')
+    expect(first.payload.prompt).toContain('Immutable screenplay-derived stage baseline')
+    expect(first.payload.prompt).toContain('Reduce decorative clutter')
+    expect(prismaMock.visualDevelopmentBatch.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        promptStack: expect.objectContaining({
+          stageBrief: expect.objectContaining({
+            stageId: 'costume',
+            sourceAnalysisId: 'SCRIPT-analysis-1',
+          }),
+          creativePrompt: 'Reduce decorative clutter while preserving the screenplay baseline.',
+        }),
+      }),
+    }))
+    expect(prismaMock.visualDevelopmentCharacter.update).toHaveBeenCalledWith(expect.objectContaining({
+      data: {
+        characterDna: expect.objectContaining({
+          draft_costume_creativePrompt: 'Reduce decorative clutter while preserving the screenplay baseline.',
+        }),
+      },
+    }))
+  })
+
+  it('rejects generation when the immutable screenplay baseline has not been created', async () => {
+    prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({
+      id: 'character-1',
+      code: 'CHR-SNO',
+      status: 'hair_locked',
+      characterDna: { role: 'protagonist' },
+      castingBrief: {},
+      workspace: { id: 'workspace-1', projectId: 'project-1', worldBible: {} },
+    })
+    apiConfigMock.resolveModelSelection.mockResolvedValue({ provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro' })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.POST(request('costume', 'atlascloud::flux-2-pro'), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('STAGE_BRIEF_REQUIRED')
+    expect(prismaMock.visualDevelopmentBatch.create).not.toHaveBeenCalled()
+  })
+
+  it('queues a stage-specific screenplay baseline with the original analysis model', async () => {
+    prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({
+      id: 'character-1',
+      code: 'CHR-SNO',
+      status: 'hair_locked',
+      characterDna: { role: 'protagonist' },
+      workspace: {
+        id: 'workspace-1',
+        projectId: 'project-1',
+        worldBible: {
+          scriptAnalysis: {
+            id: 'SCRIPT-analysis-1',
+            sourceId: 'source-1',
+            status: 'applied',
+            sourceTitle: '序列三',
+            sourceFormat: 'pasted',
+            sourceLength: 1200,
+            modelKey: 'openrouter::gemini-3.1-pro',
+            analyzedAt: '2026-07-29T00:00:00.000Z',
+            synopsis: '地下城逃亡者揭開制度真相。',
+            themes: [],
+            worldBible: {},
+            characters: [{
+              code: 'CHR-SNO',
+              name: '絲諾',
+              aliases: [],
+              entityType: 'human',
+              role: '主角',
+              narrativeFunction: '揭示制度真相',
+              apparentAge: '19',
+              coreTraits: '溫柔且堅韌',
+              goal: '逃離地下城',
+              fear: '失去同伴',
+              secret: '',
+              arc: '成為反抗核心',
+              relationships: '與休互信',
+              physicalNotes: '黑長髮',
+              firstAppearance: '平民區',
+              castingBrief: { ethnicity: '', faceStructure: '', emotionalRead: '克制', lifeHistory: '很早被迫長大' },
+            }],
+            locations: [],
+            confidenceNotes: [],
+            importedAt: '2026-07-29T01:00:00.000Z',
+            importedCharacterCodes: ['CHR-SNO'],
+          },
+        },
+      },
+    })
+    apiConfigMock.resolveModelSelection.mockResolvedValue({
+      provider: 'openrouter',
+      modelId: 'google/gemini-3.1-pro',
+      modelKey: 'openrouter::gemini-3.1-pro',
+    })
+    submitterMock.submitTask.mockResolvedValue({ taskId: 'brief-task-1', status: 'queued' })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.POST(buildMockRequest({
+      path: '/api/visual-development/project-1/stages/costume',
+      method: 'POST',
+      body: {
+        action: 'create-stage-brief',
+        characterCode: 'CHR-SNO',
+        meta: { locale: 'zh' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
+
+    expect(response.status).toBe(202)
+    expect(apiConfigMock.resolveModelSelection).toHaveBeenCalledWith(
+      'user-1',
+      'openrouter::gemini-3.1-pro',
+      'llm',
+    )
+    expect(submitterMock.submitTask).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'visual_development_stage_brief',
+      targetId: 'character-1:costume',
+      payload: expect.objectContaining({
+        stageId: 'costume',
+        analysisModel: 'openrouter::gemini-3.1-pro',
+      }),
+    }))
   })
 
   it('creates four Phase 13 motion tests with a selectable video model and one scene reference', async () => {

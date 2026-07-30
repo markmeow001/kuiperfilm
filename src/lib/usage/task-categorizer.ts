@@ -86,6 +86,7 @@ const ANALYZE_TYPES = new Set<string>([
   'canvas_text',
   'playground_video_analyze',
   'visual_development_script_analysis',
+  'visual_development_stage_brief',
   // Provider-side asset ingestion/validation. It creates no image or video;
   // count it with analysis/preparation work instead of leaving usage drift.
   'register_ark_asset',

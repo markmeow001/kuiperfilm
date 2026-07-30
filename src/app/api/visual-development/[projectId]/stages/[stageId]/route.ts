@@ -18,6 +18,15 @@ import {
   type ProductionStageDefinition,
 } from '@/lib/visual-development/production-stages'
 import { readResultKey } from '@/lib/visual-development/records'
+import {
+  readProductionStageBriefState,
+  submitProductionStageBrief,
+} from '@/lib/visual-development/stage-brief-service'
+import {
+  parseStoredProductionStageBrief,
+  productionStageBriefDnaKey,
+  productionStageCreativePromptDnaKey,
+} from '@/lib/visual-development/stage-brief'
 
 type RouteContext = { params: Promise<{ projectId: string; stageId: string }> }
 type JsonRecord = Record<string, unknown>
@@ -40,6 +49,12 @@ function requiredString(value: unknown, field: string, max = 4000): string {
   return normalized
 }
 
+function optionalString(value: unknown, field: string, max = 4000): string {
+  const normalized = typeof value === 'string' ? value.trim() : ''
+  if (normalized.length > max) throw new ApiError('INVALID_PARAMS', { code: 'FIELD_TOO_LONG', field, details: { max } })
+  return normalized
+}
+
 function normalizeCharacterCode(value: unknown): string {
   const code = requiredString(value, 'characterCode', 64).toUpperCase().replace(/[^A-Z0-9_-]/g, '-')
   if (!code) throw new ApiError('INVALID_PARAMS', { code: 'CHARACTER_CODE_INVALID' })
@@ -54,10 +69,10 @@ function resolveStage(stageId: string): ProductionStageDefinition {
   }
 }
 
-async function requireAccess(projectId: string) {
+async function requireAccess(projectId: string, action: 'read' | 'write') {
   const auth = await requireUserAuth()
   if (isErrorResponse(auth)) return auth
-  const access = await requireProjectAccess(projectId, auth.session.user.id, 'write')
+  const access = await requireProjectAccess(projectId, auth.session.user.id, action)
   if (!access.allowed) {
     if (access.reason === 'NOT_FOUND') throw new ApiError('NOT_FOUND')
     throw new ApiError('FORBIDDEN', { code: 'INSUFFICIENT_ACCESS' })
@@ -158,17 +173,41 @@ async function resolveBoundModel(userId: string, modelKey: string, stage: Produc
   return { selection, capabilities }
 }
 
+export const GET = apiHandler(async (request: NextRequest, context: RouteContext) => {
+  const { projectId, stageId } = await context.params
+  const stage = resolveStage(stageId)
+  const access = await requireAccess(projectId, 'read')
+  if (access instanceof Response) return access
+  const characterCode = normalizeCharacterCode(request.nextUrl.searchParams.get('characterCode'))
+  const state = await readProductionStageBriefState({
+    projectId,
+    userId: access.userId,
+    characterCode,
+    stage,
+  })
+  return NextResponse.json({ success: true, data: state })
+})
+
 export const POST = apiHandler(async (request: NextRequest, context: RouteContext) => {
   const { projectId, stageId } = await context.params
   const stage = resolveStage(stageId)
-  const access = await requireAccess(projectId)
+  const access = await requireAccess(projectId, 'write')
   if (access instanceof Response) return access
   const body = toRecord(await request.json())
   const locale = resolveRequiredTaskLocale(request, body)
   const characterCode = normalizeCharacterCode(body.characterCode)
+  if (body.action === 'create-stage-brief') {
+    const submitted = await submitProductionStageBrief({
+      projectId,
+      userId: access.userId,
+      locale,
+      characterCode,
+      stage,
+    })
+    return NextResponse.json({ success: true, data: submitted }, { status: 202 })
+  }
   const modelKey = requiredString(body.modelKey, 'modelKey', 255)
-  const stageRecord = toStringRecord(body.stageRecord)
-  for (const field of stage.fields) requiredString(stageRecord[field], `stageRecord.${field}`)
+  const creativePrompt = optionalString(body.creativePrompt, 'creativePrompt')
 
   const character = await prisma.visualDevelopmentCharacter.findFirst({
     where: { code: characterCode, workspace: { projectId } },
@@ -178,6 +217,14 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (!canEnterProductionStage(character.status, stage.id)) {
     throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LOCK_REQUIRED', details: { required: stage.prerequisiteStatus } })
   }
+  const characterDna = toStringRecord(character.characterDna)
+  const stageBrief = parseStoredProductionStageBrief(
+    characterDna[productionStageBriefDnaKey(stage.id)],
+    stage,
+  )
+  if (!stageBrief) throw new ApiError('CONFLICT', { code: 'STAGE_BRIEF_REQUIRED' })
+  const stageRecord = Object.fromEntries(stage.fields.map((field) => [field, stageBrief.fields[field] ?? '']))
+  for (const field of stage.fields) requiredString(stageRecord[field], `stageBrief.fields.${field}`)
 
   const referenceImages = await resolveReferenceImages({ stage, characterId: character.id, userId: access.userId, projectId })
   const { selection, capabilities } = await resolveBoundModel(access.userId, modelKey, stage)
@@ -209,10 +256,18 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   }
 
   const worldBible = toStringRecord(character.workspace.worldBible)
-  const characterDna = toStringRecord(character.characterDna)
   const promptResults = stage.variants.map((variant) => ({
     code: variant.code,
-    ...buildProductionStagePrompt({ stage, variant, characterCode, worldBible, characterDna, stageRecord }),
+    ...buildProductionStagePrompt({
+      stage,
+      variant,
+      characterCode,
+      worldBible,
+      characterDna,
+      stageRecord,
+      stageBrief,
+      creativePrompt,
+    }),
   }))
   const seedSupported = stage.mediaType === 'image' && imageCaps?.supportSeed === true
   const firstPrompt = promptResults[0]
@@ -233,6 +288,19 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
         ...firstPrompt.promptStack,
         stageId: stage.id,
         stageRecord,
+        stageBrief: {
+          version: stageBrief.version,
+          stageId: stageBrief.stageId,
+          characterCode: stageBrief.characterCode,
+          sourceAnalysisId: stageBrief.sourceAnalysisId,
+          modelKey: stageBrief.modelKey,
+          summary: stageBrief.summary,
+          fields: { ...stageBrief.fields },
+          evidence: [...stageBrief.evidence],
+          constraints: [...stageBrief.constraints],
+          createdAt: stageBrief.createdAt,
+        },
+        creativePrompt,
         referenceImages,
         referenceResponsibilities: stage.mediaType === 'video'
           ? ['scene-integrated visual authority']
@@ -306,6 +374,20 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
       data: { taskId: submitted.taskId, status: submitted.status },
     })
   }))
+  const latestCharacter = await prisma.visualDevelopmentCharacter.findUnique({
+    where: { id: character.id },
+    select: { characterDna: true },
+  })
+  const latestCharacterDna = toStringRecord(latestCharacter?.characterDna)
+  await prisma.visualDevelopmentCharacter.update({
+    where: { id: character.id },
+    data: {
+      characterDna: {
+        ...latestCharacterDna,
+        [productionStageCreativePromptDnaKey(stage.id)]: creativePrompt,
+      } satisfies Prisma.InputJsonObject,
+    },
+  })
   const failedIds = batch.candidates
     .filter((_, index) => submissions[index]?.status === 'rejected')
     .map((candidate) => candidate.id)
@@ -325,7 +407,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
 export const PATCH = apiHandler(async (request: NextRequest, context: RouteContext) => {
   const { projectId, stageId } = await context.params
   const stage = resolveStage(stageId)
-  const access = await requireAccess(projectId)
+  const access = await requireAccess(projectId, 'write')
   if (access instanceof Response) return access
   const body = toRecord(await request.json())
   const action = requiredString(body.action, 'action', 40)

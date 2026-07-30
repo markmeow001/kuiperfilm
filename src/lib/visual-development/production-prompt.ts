@@ -1,4 +1,5 @@
 import type { ProductionStageDefinition, ProductionStageVariant } from './production-stages'
+import type { ProductionStageBrief } from './stage-brief'
 
 type StringRecord = Record<string, string>
 
@@ -9,6 +10,8 @@ export interface ProductionPromptInput {
   worldBible: StringRecord
   characterDna: StringRecord
   stageRecord: StringRecord
+  stageBrief: ProductionStageBrief
+  creativePrompt: string
 }
 
 function summarize(record: StringRecord, keys: readonly string[]): string {
@@ -28,6 +31,9 @@ export function buildProductionStagePrompt(input: ProductionPromptInput) {
     .map((field) => input.stageRecord[field]?.trim())
     .filter(Boolean)
     .join(' | ')
+  const evidence = input.stageBrief.evidence.join(' | ')
+  const constraints = input.stageBrief.constraints.join(' | ')
+  const creativeAdjustment = input.creativePrompt.trim()
   const referenceRule = input.stage.mediaType === 'video'
     ? 'Reference image 1 is the approved scene-integrated character plate and is the sole visual authority for identity, costume, hair, props, environment and lighting.'
     : 'Reference image 1 is the locked Face ID and controls identity only. Reference image 2 is the approved upstream design asset and controls hair, costume, props, silhouette and story state. Resolve conflicts by preserving identity from image 1 and design from image 2.'
@@ -41,7 +47,13 @@ export function buildProductionStagePrompt(input: ProductionPromptInput) {
     `Create ${input.variant.instruction}.`,
     world ? `Locked World Canon: ${world}.` : '',
     identity ? `Locked Character Canon: ${identity}.` : '',
-    design ? `Approved stage design record: ${design}.` : '',
+    `Immutable screenplay-derived stage baseline (v${input.stageBrief.version}, ${input.stageBrief.sourceAnalysisId}): ${input.stageBrief.summary}.`,
+    design ? `Locked stage design fields: ${design}.` : '',
+    evidence ? `Screenplay and Canon evidence: ${evidence}.` : '',
+    constraints ? `Stage constraints: ${constraints}.` : '',
+    creativeAdjustment
+      ? `User creative adjustment: ${creativeAdjustment}. Apply it only where it does not contradict the immutable screenplay baseline, locked World Canon, Character Canon or upstream visual Canon.`
+      : 'No user creative adjustment. Follow the immutable screenplay-derived baseline exactly.',
     formatRule,
     'Preserve all upstream Canon decisions. Change only what this output instruction explicitly requires. No redesign, no identity drift, no unexplained material, prop, costume, hair, scale or story-state changes.',
   ].filter(Boolean).join('\n\n')
@@ -64,6 +76,9 @@ export function buildProductionStagePrompt(input: ProductionPromptInput) {
       modelAdapter: input.stage.mediaType === 'video' ? 'CANON_IMAGE_TO_VIDEO_V1' : 'DUAL_REFERENCE_CHARACTER_V1',
       referencePolicy: referenceRule,
       stageRecord: design,
+      stageBriefVersion: input.stageBrief.version,
+      stageBriefSourceAnalysisId: input.stageBrief.sourceAnalysisId,
+      creativePrompt: creativeAdjustment,
     },
   }
 }

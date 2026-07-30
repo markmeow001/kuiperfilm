@@ -2,6 +2,7 @@ import type { UserModelOption } from '@/lib/query/hooks/useUserModels'
 import type { WorldAssetCode } from '@/lib/visual-development/world-bible'
 import type { ScriptAnalysisDocument, ScriptSourceFormat } from '@/lib/visual-development/script-analysis'
 import type { ProductionFieldId, ProductionStageDefinition, ProductionStageId } from '@/lib/visual-development/production-stages'
+import type { ProductionStageBrief } from '@/lib/visual-development/stage-brief'
 
 export interface ProjectOption {
   id: string
@@ -86,6 +87,7 @@ export interface CastingBatchView {
 
 export interface ProductionStageFormState {
   stageRecord: Record<ProductionFieldId, string>
+  creativePrompt: string
   modelKey: string
   resolution: string
   aspectRatio: string
@@ -94,14 +96,21 @@ export interface ProductionStageFormState {
 
 export interface ProductionStageWorkspaceController {
   stage: ProductionStageDefinition
+  stageBrief: ProductionStageBrief | null
+  stageBriefTaskStatus: string | null
+  stageBriefError: string | null
+  analysisModel: string | null
   batch: CastingBatchView | null
   characterStatus: string
   prerequisiteReady: boolean
   form: ProductionStageFormState
   models: UserModelOption[]
   isGenerating: boolean
+  isGeneratingBrief: boolean
   isLoading: boolean
-  onRecordChange: (field: ProductionFieldId, value: string) => void
+  onCreateStageBrief: () => void
+  onCreativePromptChange: (value: string) => void
+  onResetCreativePrompt: () => void
   onSettingChange: (field: 'modelKey' | 'resolution' | 'aspectRatio' | 'duration', value: string | number) => void
   onGenerate: () => void
   onReview: (candidateId: string, approved: boolean, rejectionNote?: string) => void

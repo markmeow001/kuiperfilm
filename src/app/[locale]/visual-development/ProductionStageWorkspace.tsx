@@ -9,6 +9,19 @@ export interface ProductionStageTranslations {
   prerequisite: string
   prerequisiteHint: string
   designRecord: string
+  briefTitle: string
+  briefDescription: string
+  briefModel: string
+  briefCreate: string
+  briefCreating: string
+  briefRequired: string
+  briefImmutable: string
+  briefEvidence: string
+  briefConstraints: string
+  creativePromptTitle: string
+  creativePromptDescription: string
+  creativePromptPlaceholder: string
+  resetPrompt: string
   modelBinding: string
   imageModelRequired: string
   videoModelRequired: string
@@ -53,11 +66,10 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
     : []
   const durations = selectedModel?.capabilities?.video?.durationOptions ?? []
   const candidates = controller.batch?.candidates ?? placeholders(controller)
-  const fieldsReady = controller.stage.fields.every((field) => controller.form.stageRecord[field]?.trim())
   const canGenerate = controller.prerequisiteReady
+    && Boolean(controller.stageBrief)
     && Boolean(controller.form.modelKey)
     && Boolean(controller.form.aspectRatio)
-    && fieldsReady
   const canLock = Boolean(
     controller.batch
     && controller.batch.status !== 'canon_locked'
@@ -85,13 +97,91 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
           <AppIcon name="imageEdit" className="h-3.5 w-3.5" />
           {translations.designRecord}
         </div>
-        <div className="grid gap-3 lg:grid-cols-3">
-          {controller.stage.fields.map((field) => (
-            <label key={field} className="block">
-              <span className="mb-1.5 block text-[10px] text-text-secondary">{translations.fields[field]}</span>
-              <textarea value={controller.form.stageRecord[field]} onChange={(event) => controller.onRecordChange(field, event.target.value)} rows={4} className="w-full resize-none rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 py-2.5 font-serif-cn text-xs leading-5 text-white outline-none focus:border-primary-500/50" />
-            </label>
-          ))}
+        {!controller.stageBrief ? (
+          <div className="rounded-xl border border-primary-500/20 bg-primary-500/[0.04] p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <AppIcon name="brain" className="h-4 w-4 text-primary-400" />
+                  <h3 className="font-serif-cn text-sm font-semibold text-white">{translations.briefTitle}</h3>
+                  <span className="rounded-full border border-primary-500/20 px-2 py-0.5 font-mono text-[8px] text-primary-300">{translations.briefImmutable}</span>
+                </div>
+                <p className="mt-2 max-w-3xl font-serif-cn text-[11px] leading-5 text-text-secondary">{translations.briefDescription}</p>
+                <p className="mt-2 font-mono text-[8px] tracking-[0.12em] text-text-tertiary">
+                  {translations.briefModel} · {controller.analysisModel ?? '—'}
+                </p>
+                {controller.stageBriefError ? (
+                  <p className="mt-2 text-[10px] text-red-300">{controller.stageBriefError}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                disabled={controller.isGeneratingBrief || controller.isLoading}
+                onClick={controller.onCreateStageBrief}
+                className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
+                {controller.isGeneratingBrief ? translations.briefCreating : translations.briefCreate}
+              </button>
+            </div>
+            {controller.stageBriefTaskStatus === 'queued' || controller.stageBriefTaskStatus === 'processing' ? (
+              <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                <div className="h-full w-2/3 animate-pulse rounded-full bg-primary-500" />
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-primary-500/20 bg-primary-500/[0.04] p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <AppIcon name="lock" className="h-3.5 w-3.5 text-primary-400" />
+                <h3 className="font-serif-cn text-sm font-semibold text-white">{translations.briefTitle}</h3>
+                <span className="rounded-full border border-primary-500/20 px-2 py-0.5 font-mono text-[8px] text-primary-300">{translations.briefImmutable}</span>
+              </div>
+              <p className="mt-2 font-serif-cn text-[11px] leading-5 text-text-secondary">{controller.stageBrief.summary}</p>
+              <p className="mt-2 font-mono text-[8px] tracking-[0.1em] text-text-tertiary">
+                v{controller.stageBrief.version} · {controller.stageBrief.modelKey} · {controller.stageBrief.sourceAnalysisId}
+              </p>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-3">
+              {controller.stage.fields.map((field) => (
+                <div key={field} className="rounded-xl border border-white/[0.08] bg-[#0d0d10] p-3">
+                  <div className="text-[10px] text-text-secondary">{translations.fields[field]}</div>
+                  <p className="mt-2 whitespace-pre-wrap font-serif-cn text-xs leading-5 text-white">
+                    {controller.stageBrief?.fields[field]}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <BriefList title={translations.briefEvidence} items={controller.stageBrief.evidence} />
+              <BriefList title={translations.briefConstraints} items={controller.stageBrief.constraints} />
+            </div>
+          </div>
+        )}
+        <div className="mt-4 rounded-xl border border-white/[0.08] bg-[#0d0d10] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] text-text-secondary">{translations.creativePromptTitle}</div>
+              <p className="mt-1 font-serif-cn text-[9px] leading-4 text-text-tertiary">{translations.creativePromptDescription}</p>
+            </div>
+            <button
+              type="button"
+              disabled={!controller.form.creativePrompt}
+              onClick={controller.onResetCreativePrompt}
+              className="shrink-0 rounded-lg border border-white/[0.08] px-2.5 py-1.5 text-[9px] text-text-secondary disabled:opacity-30"
+            >
+              {translations.resetPrompt}
+            </button>
+          </div>
+          <textarea
+            value={controller.form.creativePrompt}
+            onChange={(event) => controller.onCreativePromptChange(event.target.value)}
+            disabled={!controller.stageBrief}
+            placeholder={controller.stageBrief ? translations.creativePromptPlaceholder : translations.briefRequired}
+            rows={5}
+            className="mt-3 w-full resize-y rounded-xl border border-white/[0.09] bg-black/20 px-3 py-2.5 font-serif-cn text-xs leading-5 text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50 disabled:cursor-not-allowed disabled:opacity-40"
+          />
         </div>
       </section>
 
@@ -154,6 +244,22 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
           )}
         </div>
       </section>
+    </div>
+  )
+}
+
+function BriefList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-[#0d0d10] p-3">
+      <div className="text-[10px] text-text-secondary">{title}</div>
+      <ul className="mt-2 space-y-1.5">
+        {items.map((item, index) => (
+          <li key={`${index}-${item}`} className="flex gap-2 font-serif-cn text-[10px] leading-4 text-text-secondary">
+            <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary-400" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

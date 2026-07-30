@@ -10,6 +10,10 @@ import {
   type ProductionStageId,
 } from '@/lib/visual-development/production-stages'
 import {
+  productionStageCreativePromptDnaKey,
+  type ProductionStageBrief,
+} from '@/lib/visual-development/stage-brief'
+import {
   getVisualDevelopmentAspectRatios,
   pickVisualDevelopmentAspectRatio,
   reconcileVisualDevelopmentAspectRatio,
@@ -34,16 +38,31 @@ interface UseProductionStageControllerInput {
   onRefresh: () => Promise<void>
 }
 
+interface StageBriefTaskView {
+  id: string
+  status: string
+  progress: number
+  errorCode: string | null
+  errorMessage: string | null
+  createdAt: string
+}
+
+interface StageBriefState {
+  brief: ProductionStageBrief | null
+  creativePrompt: string
+  analysisModel: string | null
+  task: StageBriefTaskView | null
+}
+
 function emptyRecord(): Record<ProductionFieldId, string> {
   return Object.fromEntries(PRODUCTION_FIELD_IDS.map((field) => [field, ''])) as Record<ProductionFieldId, string>
 }
 
 function initialForm(stageId: ProductionStageId, dna: Record<string, string>): ProductionStageFormState {
   const stage = getProductionStage(stageId)
-  const record = emptyRecord()
-  for (const field of stage.fields) record[field] = dna[`${stage.id}_${field}`] ?? ''
   return {
-    stageRecord: record,
+    stageRecord: emptyRecord(),
+    creativePrompt: dna[productionStageCreativePromptDnaKey(stage.id)] ?? '',
     modelKey: dna[`draft_${stage.id}_modelKey`] ?? '',
     resolution: dna[`draft_${stage.id}_resolution`] ?? '',
     aspectRatio: dna[`draft_${stage.id}_aspectRatio`] ?? (stage.mediaType === 'video' ? '16:9' : '3:4'),
@@ -51,35 +70,33 @@ function initialForm(stageId: ProductionStageId, dna: Record<string, string>): P
   }
 }
 
-function readStageRecord(batch: CastingBatchView | null, fields: readonly ProductionFieldId[]) {
-  const raw = batch?.promptStack?.stageRecord
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const source = raw as Record<string, unknown>
-  const record = emptyRecord()
-  for (const field of fields) record[field] = typeof source[field] === 'string' ? source[field].trim() : ''
-  return fields.every((field) => record[field]) ? record : null
-}
-
 export function useProductionStageController(input: UseProductionStageControllerInput): {
   controller: ProductionStageWorkspaceController
   activeBatch: CastingBatchView | null
 } {
   const [forms, setForms] = useState<Partial<Record<ProductionStageId, ProductionStageFormState>>>({})
+  const [briefStates, setBriefStates] = useState<Partial<Record<ProductionStageId, StageBriefState>>>({})
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isSubmittingBrief, setIsSubmittingBrief] = useState(false)
   const lastSavedDraftsRef = useRef<Partial<Record<ProductionStageId, string>>>({})
   const loadedIdentityRef = useRef('')
+  const initializedBriefFormsRef = useRef(new Set<string>())
   const stage = useMemo(() => getProductionStage(input.activeStageId), [input.activeStageId])
   const batch = useMemo(
     () => input.batches.find((item) => item.stage === stage.dbStage) ?? null,
     [input.batches, stage.dbStage],
   )
   const form = forms[input.activeStageId] ?? initialForm(input.activeStageId, input.characterDna)
+  const briefState = briefStates[input.activeStageId] ?? null
+  const stageBrief = briefState?.brief ?? null
 
   useEffect(() => {
     const identityKey = `${input.projectId}:${input.characterCode}`
     if (loadedIdentityRef.current === identityKey) return
     loadedIdentityRef.current = identityKey
     lastSavedDraftsRef.current = {}
+    initializedBriefFormsRef.current.clear()
+    setBriefStates({})
     setForms({ [input.activeStageId]: initialForm(input.activeStageId, input.characterDna) })
   }, [input.activeStageId, input.characterCode, input.characterDna, input.projectId])
 
@@ -89,24 +106,72 @@ export function useProductionStageController(input: UseProductionStageController
       : { ...current, [input.activeStageId]: initialForm(input.activeStageId, input.characterDna) })
   }, [input.activeStageId, input.characterDna])
 
-  useEffect(() => {
-    const restoredRecord = readStageRecord(batch, stage.fields)
-    if (!restoredRecord || !batch) return
-    setForms((current) => {
-      const active = current[input.activeStageId] ?? initialForm(input.activeStageId, input.characterDna)
-      if (stage.fields.some((field) => active.stageRecord[field]?.trim())) return current
-      return {
+  const loadStageBrief = useCallback(async (stageId: ProductionStageId) => {
+    if (!input.projectId || !input.characterCode) return
+    const response = await fetch(
+      `/api/visual-development/${input.projectId}/stages/${stageId}?characterCode=${encodeURIComponent(input.characterCode)}`,
+    )
+    const payload = await response.json() as {
+      data?: StageBriefState
+      error?: { message?: string; details?: { message?: string } }
+    }
+    if (!response.ok || !payload.data) {
+      const message = payload.error?.details?.message ?? payload.error?.message ?? 'Stage brief load failed'
+      setBriefStates((current) => ({
         ...current,
-        [input.activeStageId]: {
-          ...active,
-          stageRecord: restoredRecord,
-          modelKey: batch.modelKey,
-          resolution: batch.resolution ?? '',
-          aspectRatio: batch.aspectRatio,
+        [stageId]: {
+          brief: null,
+          creativePrompt: '',
+          analysisModel: null,
+          task: {
+            id: '',
+            status: 'failed',
+            progress: 0,
+            errorCode: 'STAGE_BRIEF_LOAD_FAILED',
+            errorMessage: message,
+            createdAt: '',
+          },
         },
-      }
-    })
-  }, [batch, input.activeStageId, input.characterDna, stage.fields])
+      }))
+      return
+    }
+    setBriefStates((current) => ({ ...current, [stageId]: payload.data }))
+    if (payload.data.brief) {
+      const targetStage = getProductionStage(stageId)
+      const formKey = `${input.projectId}:${input.characterCode}:${stageId}`
+      const initializeCreativePrompt = !initializedBriefFormsRef.current.has(formKey)
+      initializedBriefFormsRef.current.add(formKey)
+      setForms((current) => {
+        const active = current[stageId] ?? initialForm(stageId, input.characterDna)
+        const stageRecord = emptyRecord()
+        for (const field of targetStage.fields) stageRecord[field] = payload.data?.brief?.fields[field] ?? ''
+        return {
+          ...current,
+          [stageId]: {
+            ...active,
+            stageRecord,
+            creativePrompt: initializeCreativePrompt ? payload.data?.creativePrompt ?? '' : active.creativePrompt,
+            ...(batch && stageId === input.activeStageId ? {
+              modelKey: active.modelKey || batch.modelKey,
+              resolution: active.resolution || batch.resolution || '',
+              aspectRatio: active.aspectRatio || batch.aspectRatio,
+            } : {}),
+          },
+        }
+      })
+    }
+  }, [batch, input.activeStageId, input.characterCode, input.characterDna, input.projectId])
+
+  useEffect(() => {
+    void loadStageBrief(input.activeStageId)
+  }, [input.activeStageId, input.characterCode, input.projectId, loadStageBrief])
+
+  useEffect(() => {
+    const status = briefState?.task?.status
+    if (status !== 'queued' && status !== 'processing') return
+    const timer = window.setInterval(() => void loadStageBrief(input.activeStageId), 2500)
+    return () => window.clearInterval(timer)
+  }, [briefState?.task?.status, input.activeStageId, loadStageBrief])
 
   useEffect(() => {
     if (!input.projectId || !input.characterCode || input.isLoading) return
@@ -118,8 +183,8 @@ export function useProductionStageController(input: UseProductionStageController
         [`draft_${stage.id}_resolution`]: form.resolution,
         [`draft_${stage.id}_aspectRatio`]: form.aspectRatio,
         [`draft_${stage.id}_duration`]: String(form.duration),
+        [productionStageCreativePromptDnaKey(stage.id)]: form.creativePrompt,
       }
-      for (const field of stage.fields) characterDnaPatch[`${stage.id}_${field}`] = form.stageRecord[field]
       void fetch(`/api/visual-development/${input.projectId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -130,7 +195,7 @@ export function useProductionStageController(input: UseProductionStageController
       }).catch((error) => window.alert(error instanceof Error ? error.message : String(error)))
     }, 900)
     return () => window.clearTimeout(timer)
-  }, [form, input.activeStageId, input.characterCode, input.isLoading, input.projectId, stage.fields, stage.id])
+  }, [form, input.activeStageId, input.characterCode, input.isLoading, input.projectId, stage.id])
 
   const models = useMemo(() => stage.mediaType === 'video'
     ? input.videoModels.filter((model) => model.capabilities?.video?.supportReferenceImage === true)
@@ -162,9 +227,40 @@ export function useProductionStageController(input: UseProductionStageController
     })
   }, [input.activeStageId, input.characterDna])
 
-  const onRecordChange = useCallback((field: ProductionFieldId, value: string) => {
-    updateForm((current) => ({ ...current, stageRecord: { ...current.stageRecord, [field]: value } }))
+  const onCreativePromptChange = useCallback((value: string) => {
+    updateForm((current) => ({ ...current, creativePrompt: value }))
   }, [updateForm])
+
+  const onResetCreativePrompt = useCallback(() => {
+    updateForm((current) => ({ ...current, creativePrompt: '' }))
+  }, [updateForm])
+
+  const onCreateStageBrief = useCallback(async () => {
+    if (!input.projectId || !input.characterCode || stageBrief) return
+    setIsSubmittingBrief(true)
+    try {
+      const response = await fetch(`/api/visual-development/${input.projectId}/stages/${stage.id}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create-stage-brief',
+          characterCode: input.characterCode,
+          meta: { locale: input.locale },
+        }),
+      })
+      const payload = await response.json() as {
+        data?: { taskId?: string; status?: string }
+        error?: { message?: string; details?: { message?: string } }
+      }
+      if (!response.ok) {
+        window.alert(payload.error?.details?.message ?? payload.error?.message ?? 'Stage brief generation failed')
+        return
+      }
+      await loadStageBrief(stage.id)
+    } finally {
+      setIsSubmittingBrief(false)
+    }
+  }, [input.characterCode, input.locale, input.projectId, loadStageBrief, stage.id, stageBrief])
 
   const onSettingChange = useCallback((field: 'modelKey' | 'resolution' | 'aspectRatio' | 'duration', value: string | number) => {
     updateForm((current) => {
@@ -190,7 +286,7 @@ export function useProductionStageController(input: UseProductionStageController
           resolution: form.resolution,
           aspectRatio: form.aspectRatio,
           duration: form.duration,
-          stageRecord: Object.fromEntries(stage.fields.map((field) => [field, form.stageRecord[field]])),
+          creativePrompt: form.creativePrompt,
           meta: { locale: input.locale },
         }),
       })
@@ -203,7 +299,7 @@ export function useProductionStageController(input: UseProductionStageController
     } finally {
       setIsGenerating(false)
     }
-  }, [form, input, stage.fields, stage.id])
+  }, [form, input, stage.id])
 
   const patch = useCallback(async (body: Record<string, unknown>) => {
     if (!input.projectId) return
@@ -222,20 +318,46 @@ export function useProductionStageController(input: UseProductionStageController
 
   const controller = useMemo<ProductionStageWorkspaceController>(() => ({
     stage,
+    stageBrief,
+    stageBriefTaskStatus: briefState?.task?.status ?? null,
+    stageBriefError: briefState?.task?.errorMessage ?? null,
+    analysisModel: briefState?.analysisModel ?? null,
     batch,
     characterStatus: input.characterStatus,
     prerequisiteReady: canEnterProductionStage(input.characterStatus, stage.id),
     form,
     models,
     isGenerating,
+    isGeneratingBrief: isSubmittingBrief
+      || briefState?.task?.status === 'queued'
+      || briefState?.task?.status === 'processing',
     isLoading: input.isLoading,
-    onRecordChange,
+    onCreateStageBrief: () => void onCreateStageBrief(),
+    onCreativePromptChange,
+    onResetCreativePrompt,
     onSettingChange,
     onGenerate: () => void onGenerate(),
     onReview: (candidateId, approved, rejectionNote) => void patch({ action: 'asset-review', candidateId, approved, rejectionNote }),
     onSelectPrimary: (candidateId) => void patch({ action: 'select-primary', candidateId }),
     onLock: () => batch && void patch({ action: 'canon-lock', batchId: batch.id }),
-  }), [batch, form, input.characterStatus, input.isLoading, isGenerating, models, onGenerate, onRecordChange, onSettingChange, patch, stage])
+  }), [
+    batch,
+    briefState,
+    form,
+    input.characterStatus,
+    input.isLoading,
+    isGenerating,
+    isSubmittingBrief,
+    models,
+    onCreateStageBrief,
+    onCreativePromptChange,
+    onGenerate,
+    onResetCreativePrompt,
+    onSettingChange,
+    patch,
+    stage,
+    stageBrief,
+  ])
 
   return { controller, activeBatch: batch }
 }
