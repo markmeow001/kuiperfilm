@@ -111,4 +111,17 @@ describe('visual development Face Lock prompt', () => {
     expect(FACE_LOCK_VARIANTS).toHaveLength(10)
     expect(new Set(FACE_LOCK_VARIANTS.map((item) => item.code)).size).toBe(10)
   })
+
+  it('uses all observable Canon features when optional text anchors are blank', () => {
+    const result = buildFaceLockPrompt({
+      characterCode: 'CHR-SNO',
+      identityAnchors: '',
+      allowedVariation: '',
+      forbiddenDrift: '',
+      variant: FACE_LOCK_VARIANTS[0],
+    })
+
+    expect(result.prompt).toContain('reference image 1 exclusively as the identity source')
+    expect(result.promptStack.identityAnchors).toBe('Use all observable identity anchors from Canon reference')
+  })
 })

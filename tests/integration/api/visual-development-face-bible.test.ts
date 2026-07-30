@@ -40,7 +40,14 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/api-config', () => apiConfigMock)
 vi.mock('@/lib/task/submitter', () => submitterMock)
 
-function postRequest(modelKey = 'atlascloud::flux-kontext-pro') {
+function postRequest(
+  modelKey = 'atlascloud::flux-kontext-pro',
+  faceLockRecord: Record<string, string> = {
+    identityAnchors: 'long face, wide-set eyes, subtly crooked nose',
+    allowedVariation: 'camera angle and requested micro-expression only',
+    forbiddenDrift: 'age, ancestry, eye spacing, nose, lips, jaw and hairline',
+  },
+) {
   return buildMockRequest({
     path: '/api/visual-development/project-1/face-bible',
     method: 'POST',
@@ -48,11 +55,7 @@ function postRequest(modelKey = 'atlascloud::flux-kontext-pro') {
       characterCode: 'CHR-SNO',
       modelKey,
       aspectRatio: '3:4',
-      faceLockRecord: {
-        identityAnchors: 'long face, wide-set eyes, subtly crooked nose',
-        allowedVariation: 'camera angle and requested micro-expression only',
-        forbiddenDrift: 'age, ancestry, eye spacing, nose, lips, jaw and hairline',
-      },
+      faceLockRecord,
       meta: { locale: 'zh' },
     },
   })
@@ -149,6 +152,51 @@ describe('POST /api/visual-development/[projectId]/face-bible', () => {
           stage: 'face-lock',
           candidateCount: 10,
           modelKey: 'atlascloud::flux-kontext-pro',
+        }),
+      }),
+    )
+  })
+
+  it('uses the Canon image when optional text identity notes are blank', async () => {
+    apiConfigMock.resolveModelSelection.mockResolvedValue({
+      provider: 'atlascloud',
+      modelId: 'flux-2-pro',
+      modelKey: 'atlascloud::flux-2-pro',
+    })
+    prismaMock.visualDevelopmentBatch.create.mockImplementation(async (args: {
+      data: {
+        candidates: { create: Array<Record<string, unknown>> }
+      }
+    }) => ({
+      id: 'face-batch-canon-only',
+      candidateCount: args.data.candidates.create.length,
+      candidates: args.data.candidates.create.map((candidate, index) => ({
+        ...candidate,
+        id: `face-canon-only-${index + 1}`,
+      })),
+    }))
+    submitterMock.submitTask.mockImplementation(async (input: { targetId: string }) => ({
+      taskId: `task-${input.targetId}`,
+      status: 'queued',
+    }))
+
+    const mod = await import('@/app/api/visual-development/[projectId]/face-bible/route')
+    const response = await mod.POST(postRequest('atlascloud::flux-2-pro', {
+      identityAnchors: '',
+      allowedVariation: '',
+      forbiddenDrift: '',
+    }), {
+      params: Promise.resolve({ projectId: 'project-1' }),
+    })
+
+    expect(response.status).toBe(202)
+    expect(submitterMock.submitTask).toHaveBeenCalledTimes(10)
+    expect(prismaMock.visualDevelopmentBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          promptStack: expect.objectContaining({
+            identityAnchors: 'Use all observable identity anchors from Canon reference',
+          }),
         }),
       }),
     )

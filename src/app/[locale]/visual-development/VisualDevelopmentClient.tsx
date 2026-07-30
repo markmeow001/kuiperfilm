@@ -308,6 +308,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
         return
       }
       await loadWorkspace(projectId)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : t('workspace.face.generateFailed'))
     } finally {
       setIsGeneratingFace(false)
     }

@@ -9,6 +9,7 @@ export interface FaceBibleTranslations {
   canonRequired: string
   identityRecord: string
   identityAnchors: string
+  identityAnchorsHint: string
   allowedVariation: string
   forbiddenDrift: string
   modelBinding: string
@@ -106,7 +107,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
             {translations.identityRecord}
           </div>
           <div className="grid gap-3">
-            <FaceField label={translations.identityAnchors} value={controller.form.identityAnchors} onChange={(value) => controller.onFieldChange('identityAnchors', value)} rows={3} />
+            <FaceField label={translations.identityAnchors} hint={translations.identityAnchorsHint} value={controller.form.identityAnchors} onChange={(value) => controller.onFieldChange('identityAnchors', value)} rows={3} />
             <div className="grid gap-3 md:grid-cols-2">
               <FaceField label={translations.allowedVariation} value={controller.form.allowedVariation} onChange={(value) => controller.onFieldChange('allowedVariation', value)} rows={2} />
               <FaceField label={translations.forbiddenDrift} value={controller.form.forbiddenDrift} onChange={(value) => controller.onFieldChange('forbiddenDrift', value)} rows={2} />
@@ -139,7 +140,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
               {translations.referenceOnly} · {translations.modelHint}
             </p>
           </div>
-          <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio || !controller.form.identityAnchors || !controller.form.forbiddenDrift} onClick={controller.onGenerate} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio} onClick={controller.onGenerate} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating ? translations.generating : translations.generate}
           </button>
@@ -192,11 +193,12 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
   )
 }
 
-function FaceField({ label, value, onChange, rows }: { label: string; value: string; onChange: (value: string) => void; rows: number }) {
+function FaceField({ label, hint, value, onChange, rows }: { label: string; hint?: string; value: string; onChange: (value: string) => void; rows: number }) {
   return (
     <label className="block">
       <span className="mb-1.5 block font-mono text-[8px] tracking-[0.13em] text-text-tertiary">{label}</span>
       <textarea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} className="w-full resize-y rounded-xl border border-white/[0.08] bg-[#0d0d10] px-3 py-2.5 text-xs text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50" />
+      {hint && <span className="mt-1.5 block font-serif-cn text-[9px] leading-4 text-text-tertiary">{hint}</span>}
     </label>
   )
 }

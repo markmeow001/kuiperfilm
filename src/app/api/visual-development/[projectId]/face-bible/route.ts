@@ -72,8 +72,8 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const characterCode = normalizeCharacterCode(body.characterCode)
   const modelKey = requiredString(body.modelKey, 'modelKey', 255)
   const faceLockRecord = toStringRecord(body.faceLockRecord)
-  requiredString(faceLockRecord.identityAnchors, 'faceLockRecord.identityAnchors')
-  requiredString(faceLockRecord.forbiddenDrift, 'faceLockRecord.forbiddenDrift')
+  // The locked Canon image is the authoritative identity source. Text notes are
+  // optional refinements; leaving them blank must not prevent Face Bible work.
 
   const character = await prisma.visualDevelopmentCharacter.findFirst({
     where: { code: characterCode, workspace: { projectId } },

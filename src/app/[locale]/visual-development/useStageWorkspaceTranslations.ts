@@ -141,6 +141,7 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       canonRequired: t('workspace.face.canonRequired'),
       identityRecord: t('workspace.face.identityRecord'),
       identityAnchors: t('workspace.face.identityAnchors'),
+      identityAnchorsHint: t('workspace.face.identityAnchorsHint'),
       allowedVariation: t('workspace.face.allowedVariation'),
       forbiddenDrift: t('workspace.face.forbiddenDrift'),
       modelBinding: t('workspace.face.modelBinding'),
