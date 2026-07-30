@@ -57,15 +57,36 @@ describe('depth rebuild workflow', () => {
     expect(depthRebuildAspectRatio(2520, 1080)).toBe('21:9')
   })
 
-  it('角色缺少原片人物綁定 -> 明確阻擋付費生成', () => {
+  it('多角色時缺少原片人物綁定 -> 明確阻擋付費生成', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      characters: [
+        validationCharacter(1),
+        {
+          ...validationCharacter(2),
+          label: '女記者',
+          sourceBinding: '   ',
+        },
+      ],
+    })).toBe('請描述「女記者」要替換原片中的哪一位人物')
+  })
+
+  it('單一角色留空綁定 -> 自動綁定唯一表演者、通過驗證', () => {
     expect(getDepthRebuildValidationError({
       ...baseValidation,
       characters: [{
         ...validationCharacter(1),
-        label: '女記者',
         sourceBinding: '   ',
       }],
-    })).toBe('請描述「女記者」要替換原片中的哪一位人物')
+    })).toBeNull()
+  })
+
+  it('零角色自由重繪模式 -> 保留原表演者、通過驗證', () => {
+    expect(getDepthRebuildValidationError({
+      ...baseValidation,
+      characters: [],
+    })).toBeNull()
+    expect(promptValidation({ characters: [] })).toBeNull()
   })
 
   it('免費 Prompt 驗證 -> 不依賴深度影片、模型、估價或既有 Prompt', () => {
@@ -104,9 +125,13 @@ describe('depth rebuild workflow', () => {
       expected: '請填寫角色 1 的名稱',
     },
     {
-      label: '角色缺人物對應',
+      // 單一角色留空綁定會自動綁定唯一表演者；多角色才要求逐一指定。
+      label: '多角色缺人物對應',
       overrides: {
-        characters: [{ ...validationCharacter(1), label: '女記者', sourceBinding: ' ' }],
+        characters: [
+          validationCharacter(1),
+          { ...validationCharacter(2), label: '女記者', sourceBinding: ' ' },
+        ],
       },
       expected: '請描述「女記者」要替換原片中的哪一位人物',
     },

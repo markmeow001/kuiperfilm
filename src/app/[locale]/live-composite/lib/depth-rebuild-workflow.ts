@@ -170,7 +170,8 @@ function getReferenceSetupValidationError(
     'characters' | 'sceneReferenceCount' | 'sceneDescription' | 'reservedReferenceImageCount'
   >,
 ): string | null {
-  if (input.characters.length === 0) return '請至少新增一位新角色'
+  // 零角色 = 自由重繪模式：保留原片表演者，只依主題／場景重繪。
+  // 用來排除身份替換變數、單獨驗證深度引導遵循度。
   const reservedReferenceImageCount = input.reservedReferenceImageCount ?? 0
   const userReferenceImageLimit = MAX_REFERENCE_IMAGES - reservedReferenceImageCount
   if (input.characters.length + input.sceneReferenceCount > userReferenceImageLimit) {
@@ -193,7 +194,10 @@ function getReferenceSetupValidationError(
     const normalizedLabel = label.toLocaleLowerCase()
     if (normalizedLabels.has(normalizedLabel)) return `角色名稱「${label}」重複，請使用不同名稱`
     normalizedLabels.add(normalizedLabel)
-    if (!binding) return `請描述「${label}」要替換原片中的哪一位人物`
+    // 單一角色時允許留空綁定：prompt 端自動綁定「原片唯一表演者」。
+    if (!binding && input.characters.length > 1) {
+      return `請描述「${label}」要替換原片中的哪一位人物`
+    }
     if (binding.length > DEPTH_CHARACTER_BINDING_MAX_CHARS) {
       return `「${label}」的人物對應不可超過 ${DEPTH_CHARACTER_BINDING_MAX_CHARS} 字`
     }

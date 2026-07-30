@@ -396,8 +396,10 @@ export function useDepthRebuildGeneration({
     activeDepthGuide: LocalDepthGuide | null,
   ): Promise<PendingDepthRebuildUploads> {
     if (pending.uploads) return pending.uploads
+    // 零參考圖是合法的（自由重繪模式：不換角色、無場景圖）；只有深度
+    // 影片缺失才算素材不完整。
     const referenceMap = buildDepthRebuildReferenceMap(characters, sceneReferences)
-    if (!activeDepthGuide || referenceMap.ordered.length === 0) {
+    if (!activeDepthGuide) {
       throw new Error('本機素材尚未完整上傳；請清除舊任務並重新建立')
     }
     if (!sourceVideoStorageKey && !sourceVideoFile) {

@@ -142,12 +142,18 @@ export function buildDepthRebuildPrompt(input: DepthRebuildPromptInput): string 
   return prompt
 }
 
+/** 單一角色留空綁定時的自動對應：原片唯一表演者。 */
+export const DEPTH_REBUILD_SOLE_PERFORMER_BINDING = 'the only performer in the source video'
+
 /**
  * 單筆自適應 Depth 重建 Prompt。
  *
  * 新契約刻意把完整 Depth 放在 video 1，讓全片只有一條不被切斷的運鏡、
  * 構圖與身體軌跡；video 2（若存在）只補原片 RGB 的表情／視線細節，
  * 不得反過來改寫完整 Depth 的鏡頭幾何。
+ *
+ * 零角色 = 自由重繪模式：不做身份替換，保留原片表演者的數量、走位與
+ * 互動時序，只依場景／主題重繪畫面——用來單獨測試深度引導遵循度。
  */
 export function buildAdaptiveDepthRebuildPrompt(
   input: AdaptiveDepthRebuildPromptInput,
@@ -163,11 +169,15 @@ export function buildAdaptiveDepthRebuildPrompt(
   ) {
     throw new Error('深度重建只支援 4–15 秒影片，且模型輸出秒數必須是整數')
   }
-  if (input.characters.length === 0) throw new Error('至少需要一位新角色')
 
   const characters = input.characters.map((character, index) => ({
     label: required(character.label, `角色 ${index + 1} 名稱`),
-    sourceBinding: required(character.sourceBinding, `角色 ${index + 1} 人物對應`),
+    // 單一角色留空綁定 → 自動綁定唯一表演者；多角色必須逐一指定，
+    // 否則交疊時的替換指令是含糊的。
+    sourceBinding: character.sourceBinding.trim()
+      || (input.characters.length === 1
+        ? DEPTH_REBUILD_SOLE_PERFORMER_BINDING
+        : required(character.sourceBinding, `角色 ${index + 1} 人物對應`)),
     description: required(character.description, `角色 ${index + 1} 描述`),
     token: `image ${index + 1}`,
   }))
@@ -237,21 +247,31 @@ export function buildAdaptiveDepthRebuildPrompt(
     'Never add an establishing shot, push in before pulling back, reverse direction, zoom out, widen the frame, reveal feet or a full body when the source does not.',
     '',
     '[IDENTITY AND ENVIRONMENT CONTRACT]',
-    ...characters.map((character) => (
-      `Replace only the performer identified as "${character.sourceBinding}" with "${character.label}" from ${character.token}. ` +
-      'Keep that performer\'s screen side, body motion, head timing, interaction timing and source-relative speed; never apply the identity to another performer.'
-    )),
-    'Keep every specified identity separate and stable. Never swap, merge, duplicate or reassign identities when performers overlap, cross, turn or leave the frame.',
+    ...(characters.length === 0
+      ? [
+          'No performer replacement is requested. Re-create each performer to fit the new scene direction while keeping their count, screen positions, body motion, entrances and interaction timing from the guides.',
+        ]
+      : [
+          ...characters.map((character) => (
+            `Replace only the performer identified as "${character.sourceBinding}" with "${character.label}" from ${character.token}. ` +
+            'Keep that performer\'s screen side, body motion, head timing, interaction timing and source-relative speed; never apply the identity to another performer.'
+          )),
+          'Keep every specified identity separate and stable. Never swap, merge, duplicate or reassign identities when performers overlap, cross, turn or leave the frame.',
+        ]),
     'Preserve performer count, entrance order and interaction topology from video 1.',
     sceneBinding,
     audioBinding,
-    '',
-    '[NEW CHARACTERS]',
-    ...characters.flatMap((character, index) => [
-      `${index + 1}. ${character.label}`,
-      `Source performer: ${character.sourceBinding}`,
-      `Appearance direction: ${character.description}`,
-    ]),
+    ...(characters.length === 0
+      ? []
+      : [
+          '',
+          '[NEW CHARACTERS]',
+          ...characters.flatMap((character, index) => [
+            `${index + 1}. ${character.label}`,
+            `Source performer: ${character.sourceBinding}`,
+            `Appearance direction: ${character.description}`,
+          ]),
+        ]),
     '',
     '[NEW ENVIRONMENT]',
     scene,

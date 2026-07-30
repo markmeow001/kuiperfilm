@@ -80,6 +80,17 @@ describe('深度重建動作契約', () => {
     })
   })
 
+  it('零角色自由重繪 -> 契約通過驗證，Prompt 只輸出運鏡與構圖規則', () => {
+    const contract = createDepthRebuildMotionContract({
+      durationSeconds: 6,
+      characters: [],
+      settings: DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS,
+    })
+    expect(validateMotionContract(contract)).toEqual({ valid: true, issues: [] })
+    const prompt = buildMotionContractPromptSection(contract)
+    expect(prompt).toContain('SHOT CONTINUITY')
+  })
+
   it('預設婚禮片 -> 英文 Prompt 強制全程後退、人物前進且不得反向', () => {
     const prompt = buildMotionContractPromptSection(DEFAULT_WEDDING_MOTION_CONTRACT)
 

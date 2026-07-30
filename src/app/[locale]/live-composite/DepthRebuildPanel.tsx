@@ -223,6 +223,9 @@ export function DepthRebuildPanel({
         <p className="mt-2 text-xs leading-5 text-amber-200/80">
           可依原片人物逐一指定新角色，人物與場景合計最多 9 張參考圖；深度影片另計、不占這 9 張。多人對應仍屬文字約束，交疊時無法保證百分之百不換人。
         </p>
+        <p className="mt-2 text-xs leading-5 text-stone-400">
+          不新增角色也能生成：保留原片表演者的數量與走位，只依場景描述重繪畫面（適合先測試深度引導效果）。只有一位角色時，人物對應可留空、自動綁定原片唯一表演者。
+        </p>
       </div>
       {errorMessage ? (
         <div

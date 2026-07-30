@@ -189,6 +189,73 @@ describe('深度引導 Seedance prompt', () => {
     )
   })
 
+  it('零角色自由重繪 -> 保留原表演者、無 NEW CHARACTERS 區段、場景圖從 image 1 起算', () => {
+    const guidePlan = buildDepthRebuildGuidePlan(6)
+    const prompt = buildAdaptiveDepthRebuildPrompt({
+      guidePlan,
+      characters: [],
+      sceneReferences: [{ note: '霓虹雨夜街道' }],
+      sceneDescription: '賽博龐克雨夜城市，霓虹反射在濕滑路面',
+      sourceAudioMode: 'generate',
+      motionContract: createDepthRebuildMotionContract({
+        durationSeconds: 6,
+        characters: [],
+        settings: { ...DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS },
+      }),
+    })
+
+    expect(prompt).toContain('No performer replacement is requested')
+    expect(prompt).toContain('keeping their count, screen positions, body motion, entrances and interaction timing')
+    expect(prompt).not.toContain('[NEW CHARACTERS]')
+    expect(prompt).not.toContain('Replace only the performer')
+    expect(prompt).toContain('image 1 = new environment reference (霓虹雨夜街道)')
+    expect(prompt).toContain('[NEW ENVIRONMENT]')
+  })
+
+  it('單一角色留空人物綁定 -> 自動綁定唯一表演者', () => {
+    const guidePlan = buildDepthRebuildGuidePlan(6)
+    const prompt = buildAdaptiveDepthRebuildPrompt({
+      guidePlan,
+      characters: [{
+        label: '女主角',
+        sourceBinding: '   ',
+        description: '電影寫實的短髮女性',
+      }],
+      sceneReferences: [],
+      sceneDescription: '有持續環境動態的電影寫實場景',
+      sourceAudioMode: 'generate',
+      motionContract: createDepthRebuildMotionContract({
+        durationSeconds: 6,
+        characters: [{ id: 'character-1', label: '女主角', sourceBinding: '' }],
+        settings: { ...DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS },
+      }),
+    })
+
+    expect(prompt).toContain('Replace only the performer identified as "the only performer in the source video" with "女主角"')
+  })
+
+  it('多角色仍要求逐一填寫人物綁定 -> 留空顯式失敗', () => {
+    const guidePlan = buildDepthRebuildGuidePlan(6)
+    expect(() => buildAdaptiveDepthRebuildPrompt({
+      guidePlan,
+      characters: [
+        { label: 'A', sourceBinding: '原片左側', description: '角色 A' },
+        { label: 'B', sourceBinding: '  ', description: '角色 B' },
+      ],
+      sceneReferences: [],
+      sceneDescription: '場景',
+      sourceAudioMode: 'generate',
+      motionContract: createDepthRebuildMotionContract({
+        durationSeconds: 6,
+        characters: [
+          { id: 'character-1', label: 'A', sourceBinding: '原片左側' },
+          { id: 'character-2', label: 'B', sourceBinding: '' },
+        ],
+        settings: { ...DEFAULT_DEPTH_REBUILD_MOTION_SETTINGS },
+      }),
+    })).toThrow('人物對應')
+  })
+
   it('沒有場景圖 -> 只建立角色 image 1，不引用不存在的 image 2', () => {
     const prompt = buildDepthRebuildPrompt(buildPromptInput({
       durationSeconds: 5,

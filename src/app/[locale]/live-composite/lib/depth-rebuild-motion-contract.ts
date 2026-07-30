@@ -329,9 +329,8 @@ export function validateMotionContract(
   if (!Number.isFinite(contract.durationSeconds) || contract.durationSeconds <= 0) {
     issues.push('durationSeconds 必須是大於 0 的有限秒數')
   }
-  if (contract.characters.length === 0) {
-    issues.push('至少需要一位角色')
-  }
+  // 零角色 = 自由重繪模式（保留原表演者，不做身份替換）——運鏡與構圖
+  // 規則仍然成立，角色相關區段自然為空。
 
   const ids = contract.characters.map((character) => character.id.trim())
   const knownIds = new Set(ids.filter(hasText))
