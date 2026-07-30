@@ -11,6 +11,7 @@ import {
 import type {
   CastingBatchView,
   CastingCandidateView,
+  CandidateRegenerationControls,
   HairDesignFormState,
   HairDesignWorkspaceController,
 } from './visual-development-types'
@@ -38,6 +39,7 @@ interface UseHairDesignInput {
   imageModels: UserModelOption[]
   isLoading: boolean
   onRefresh: () => Promise<void>
+  candidateRegeneration: CandidateRegenerationControls
 }
 
 interface ApiErrorPayload {
@@ -211,6 +213,7 @@ export function useHairDesignController(input: UseHairDesignInput): {
   )
 
   const controller = useMemo<HairDesignWorkspaceController>(() => ({
+    ...input.candidateRegeneration,
     explorationBatch: input.explorationBatch,
     validationBatch: input.validationBatch,
     identityCandidate,
@@ -245,6 +248,7 @@ export function useHairDesignController(input: UseHairDesignInput): {
     imageModels,
     input.characterCode,
     input.characterStatus,
+    input.candidateRegeneration,
     input.explorationBatch,
     input.isLoading,
     input.validationBatch,

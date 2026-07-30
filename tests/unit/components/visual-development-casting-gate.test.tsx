@@ -51,6 +51,8 @@ const translations = {
 
 function controller(overrides: Partial<CastingWorkspaceController> = {}): CastingWorkspaceController {
   return {
+    regeneratingCandidateIds: [],
+    onRegenerateCandidate: vi.fn(),
     batch: null,
     batches: [],
     activeBatchId: '',

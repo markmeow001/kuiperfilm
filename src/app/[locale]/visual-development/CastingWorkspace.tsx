@@ -3,6 +3,7 @@ import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model
 import type { CastingWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
+import { CandidatePromptEditor } from './CandidatePromptEditor'
 
 interface CastingTranslations {
   batch: string
@@ -282,6 +283,16 @@ export function CastingWorkspace({
                 )}
               </div>
               {candidate.errorMessage && <p className="mt-1 line-clamp-2 text-[8px] text-red-300">{candidate.errorMessage}</p>}
+              {'prompt' in candidate && candidate.prompt && (
+                <div className="-mx-2.5 -mb-2.5 mt-2">
+                  <CandidatePromptEditor
+                    candidate={candidate}
+                    disabled={controller.batch?.status === 'canon_locked' || candidate.isCanon}
+                    isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
+                    onRegenerate={controller.onRegenerateCandidate}
+                  />
+                </div>
+              )}
             </article>
           ))}
         </div>

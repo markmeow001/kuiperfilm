@@ -4,6 +4,7 @@ import type { ProductionFieldId } from '@/lib/visual-development/production-stag
 import type { CastingCandidateView, ProductionStageWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
+import { CandidatePromptEditor } from './CandidatePromptEditor'
 
 export interface ProductionStageTranslations {
   prerequisite: string
@@ -221,7 +222,17 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
         </div>
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] xl:grid-cols-4">
           {orderedCandidates(controller, candidates).map((candidate) => (
-            <ProductionCandidate key={candidate.id} candidate={candidate} mediaType={controller.stage.mediaType} translations={translations} onReview={controller.onReview} onSelectPrimary={controller.onSelectPrimary} />
+            <ProductionCandidate
+              key={candidate.id}
+              candidate={candidate}
+              mediaType={controller.stage.mediaType}
+              translations={translations}
+              onReview={controller.onReview}
+              onSelectPrimary={controller.onSelectPrimary}
+              onRegenerate={controller.onRegenerateCandidate}
+              isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
+              regenerationDisabled={isLocked}
+            />
           ))}
         </div>
         <div className="flex flex-col gap-3 border-t border-white/[0.07] p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -272,7 +283,25 @@ function orderedCandidates(controller: ProductionStageWorkspaceController, candi
   return controller.stage.variants.map((variant) => candidates.find((candidate) => candidate.code === variant.code)).filter((candidate): candidate is CastingCandidateView => Boolean(candidate))
 }
 
-function ProductionCandidate({ candidate, mediaType, translations, onReview, onSelectPrimary }: { candidate: CastingCandidateView; mediaType: 'image' | 'video'; translations: ProductionStageTranslations; onReview: (id: string, approved: boolean, note?: string) => void; onSelectPrimary: (id: string) => void }) {
+function ProductionCandidate({
+  candidate,
+  mediaType,
+  translations,
+  onReview,
+  onSelectPrimary,
+  onRegenerate,
+  isRegenerating,
+  regenerationDisabled,
+}: {
+  candidate: CastingCandidateView
+  mediaType: 'image' | 'video'
+  translations: ProductionStageTranslations
+  onReview: (id: string, approved: boolean, note?: string) => void
+  onSelectPrimary: (id: string) => void
+  onRegenerate: ProductionStageWorkspaceController['onRegenerateCandidate']
+  isRegenerating: boolean
+  regenerationDisabled: boolean
+}) {
   return (
     <article className="min-w-0 bg-[#0c0c0f]">
       <div className="relative aspect-[3/4] overflow-hidden bg-[#111116]">
@@ -291,6 +320,15 @@ function ProductionCandidate({ candidate, mediaType, translations, onReview, onS
           <button type="button" onClick={() => onSelectPrimary(candidate.id)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.isCanon ? 'bg-primary-500 text-black' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.isCanon ? translations.primary : translations.makePrimary}</button>
         </div>}
       </div>
+      {candidate.prompt && (
+        <CandidatePromptEditor
+          candidate={candidate}
+          mediaType={mediaType}
+          disabled={regenerationDisabled}
+          isRegenerating={isRegenerating}
+          onRegenerate={onRegenerate}
+        />
+      )}
     </article>
   )
 }

@@ -233,6 +233,25 @@
       "reviewFailed": "Hair validation review failed",
       "lockFailed": "Hair assets are not ready to lock"
     },
+    "candidatePrompt": {
+      "originalTitle": "ORIGINAL PROMPT",
+      "readOnly": "READ-ONLY TRACE",
+      "regenerateTitle": "REGENERATION PROMPT",
+      "expand": "View / edit",
+      "versions": "{count} versions",
+      "seedMode": "Seed strategy",
+      "newSeed": "New Seed — create a new variation",
+      "reuseSeed": "Reuse Seed — compare prompt changes only",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Could not copy the prompt. Select the text manually.",
+      "reset": "Reset current prompt",
+      "regenerateOne": "Regenerate this only",
+      "regenerating": "Regenerating…",
+      "regenerateFailed": "Single-asset regeneration failed",
+      "canonLockedHint": "This batch is Canon locked. Create a new batch before editing so downstream assets are not overwritten.",
+      "historyTitle": "SLOT VERSION HISTORY"
+    },
     "production": {
       "prerequisite": "The upstream Canon is not locked",
       "prerequisiteHint": "This stage only consumes reviewed and locked upstream assets. Complete the previous stage in the left rail, then return here.",

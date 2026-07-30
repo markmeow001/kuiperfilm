@@ -10,6 +10,10 @@ import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildCastingPrompt, type StringRecord } from '@/lib/visual-development/prompt'
+import {
+  collectCandidateHistoryTaskIds,
+  readCandidateGenerationHistory,
+} from '@/lib/visual-development/candidate-history'
 import { projectCandidateTask } from '@/lib/visual-development/records'
 import { EMPTY_WORLD_BIBLE, parseWorldBible, toWorldBibleJson } from '@/lib/visual-development/world-bible'
 
@@ -131,11 +135,17 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
   })
   if (!workspace) return NextResponse.json({ success: true, data: { workspace: null } })
 
-  const taskIds = workspace.characters.flatMap((character) =>
+  const currentTaskIds = workspace.characters.flatMap((character) =>
     character.castingBatches.flatMap((batch) =>
       batch.candidates.flatMap((candidate) => candidate.taskId ? [candidate.taskId] : []),
     ),
   )
+  const historyTaskIds = collectCandidateHistoryTaskIds(
+    workspace.characters.flatMap((character) =>
+      character.castingBatches.map((batch) => batch.promptStack),
+    ),
+  )
+  const taskIds = [...new Set([...currentTaskIds, ...historyTaskIds])]
   const tasks = taskIds.length > 0
     ? await prisma.task.findMany({
       where: { id: { in: taskIds }, userId: access.userId, projectId },
@@ -160,10 +170,19 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
           ...character,
           castingBatches: character.castingBatches.map((batch) => ({
             ...batch,
-            candidates: batch.candidates.map((candidate) => ({
-              ...candidate,
-              ...projectCandidateTask(candidate, tasksById),
-            })),
+            candidates: batch.candidates.map((candidate) => {
+              const history = readCandidateGenerationHistory(batch.promptStack, candidate.id)
+              const originPrompt = history[0]?.prompt ?? candidate.prompt
+              return {
+                ...candidate,
+                ...projectCandidateTask(candidate, tasksById),
+                originPrompt,
+                history: [...history].reverse().map((snapshot) => ({
+                  ...snapshot,
+                  ...projectCandidateTask({ taskId: snapshot.taskId, status: 'completed' }, tasksById),
+                })),
+              }
+            }),
           })),
         })),
       },

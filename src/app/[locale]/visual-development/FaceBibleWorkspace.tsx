@@ -3,6 +3,7 @@ import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model
 import type { FaceBibleWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
+import { CandidatePromptEditor } from './CandidatePromptEditor'
 
 export interface FaceBibleTranslations {
   canonSource: string
@@ -178,6 +179,16 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
               </div>
               {candidate.errorMessage && <p className="mt-1 line-clamp-2 text-[8px] text-red-300">{candidate.errorMessage}</p>}
               {candidate.rejectionNote && !candidate.shortlisted && <p className="mt-1 line-clamp-2 text-[8px] text-amber-200/70">{candidate.rejectionNote}</p>}
+              {'prompt' in candidate && candidate.prompt && (
+                <div className="-mx-2.5 -mb-2.5 mt-2">
+                  <CandidatePromptEditor
+                    candidate={candidate}
+                    disabled={controller.batch?.status === 'canon_locked'}
+                    isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
+                    onRegenerate={controller.onRegenerateCandidate}
+                  />
+                </div>
+              )}
             </article>
           ))}
         </div>

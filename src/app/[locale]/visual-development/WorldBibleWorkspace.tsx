@@ -1,9 +1,10 @@
 import { AppIcon } from '@/components/ui/icons'
 import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model-options'
 import { WORLD_ASSET_DEFINITIONS } from '@/lib/visual-development/world-bible'
-import type { WorldBibleFormState, WorldBibleWorkspaceController } from './visual-development-types'
+import type { CastingCandidateView, WorldBibleFormState, WorldBibleWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
+import { CandidatePromptEditor } from './CandidatePromptEditor'
 
 export interface WorldBibleTranslations {
   foundation: string
@@ -184,6 +185,23 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {WORLD_ASSET_DEFINITIONS.map((definition) => {
               const asset = controller.assets.find((item) => item.code === definition.code)
+              const promptCandidate: CastingCandidateView | null = asset ? {
+                id: asset.code,
+                code: asset.code,
+                taskStatus: asset.taskStatus,
+                progress: asset.progress,
+                resultUrl: asset.resultUrl,
+                requestedSeed: asset.requestedSeed,
+                seedStatus: asset.seedStatus,
+                shortlisted: asset.approved,
+                isCanon: false,
+                errorMessage: asset.errorMessage,
+                rejectionNote: asset.rejectionNote,
+                prompt: asset.prompt,
+                originPrompt: asset.originPrompt,
+                negativePrompt: asset.negativePrompt,
+                history: asset.history,
+              } : null
               return (
                 <article key={definition.code} className={`overflow-hidden rounded-xl border bg-[#0d0d10] ${asset?.approved ? 'border-primary-500/35' : 'border-white/[0.08]'}`}>
                   <div className="relative aspect-video bg-black/25">
@@ -217,6 +235,14 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
                     {asset?.errorMessage && <p className="mt-2 text-[9px] text-red-300">{asset.errorMessage}</p>}
                     {asset?.rejectionNote && !asset.approved && <p className="mt-2 text-[9px] text-amber-200/70">{asset.rejectionNote}</p>}
                   </div>
+                  {asset && promptCandidate && (
+                    <CandidatePromptEditor
+                      candidate={promptCandidate}
+                      disabled={isLocked}
+                      isRegenerating={controller.regeneratingAssetCodes.includes(asset.code)}
+                      onRegenerate={(_candidateId, prompt, seedMode) => controller.onRegenerateAsset(asset.code, prompt, seedMode)}
+                    />
+                  )}
                 </article>
               )
             })}

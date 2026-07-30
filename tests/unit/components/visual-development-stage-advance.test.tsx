@@ -81,6 +81,8 @@ const hairTranslations: HairDesignTranslations = {
 
 function hairController(): HairDesignWorkspaceController {
   return {
+    regeneratingCandidateIds: [],
+    onRegenerateCandidate: vi.fn(),
     explorationBatch: lockedBatch('hair-exploration'),
     validationBatch: lockedBatch('hair-validation'),
     identityCandidate: candidate,
@@ -160,6 +162,8 @@ const productionTranslations: ProductionStageTranslations = {
 function productionController(stageId: 'costume' | 'video'): ProductionStageWorkspaceController {
   const stage = getProductionStage(stageId)
   return {
+    regeneratingCandidateIds: [],
+    onRegenerateCandidate: vi.fn(),
     stage,
     stageBrief: {
       version: 1,

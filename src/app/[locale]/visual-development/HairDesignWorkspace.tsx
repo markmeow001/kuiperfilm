@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import type { CastingCandidateView, HairDesignWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
+import { CandidatePromptEditor } from './CandidatePromptEditor'
 
 export interface HairDesignTranslations {
   prerequisite: string
@@ -185,7 +186,15 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
         </StageHeader>
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] sm:grid-cols-3 2xl:grid-cols-5">
           {exploration.map((candidate) => (
-            <CandidateCard key={candidate.id} candidate={candidate} waiting={translations.waiting} seedUnsupported={translations.seedUnsupported}>
+            <CandidateCard
+              key={candidate.id}
+              candidate={candidate}
+              waiting={translations.waiting}
+              seedUnsupported={translations.seedUnsupported}
+              regenerationDisabled={controller.explorationBatch?.status === 'canon_locked' || candidate.isCanon}
+              isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
+              onRegenerate={controller.onRegenerateCandidate}
+            >
               {candidate.resultUrl && (
                 <button type="button" onClick={() => controller.onSelectDirection(candidate.id)} className={`rounded px-2 py-1 text-[8px] ${candidate.isCanon ? 'bg-primary-500 text-black' : 'bg-white/[0.06] text-text-secondary'}`}>
                   {candidate.isCanon ? translations.selected : translations.select}
@@ -216,7 +225,15 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
         )}
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] sm:grid-cols-3 xl:grid-cols-4">
           {validation.map((candidate) => (
-            <CandidateCard key={candidate.id} candidate={candidate} waiting={translations.waiting} seedUnsupported={translations.seedUnsupported}>
+            <CandidateCard
+              key={candidate.id}
+              candidate={candidate}
+              waiting={translations.waiting}
+              seedUnsupported={translations.seedUnsupported}
+              regenerationDisabled={isLocked}
+              isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
+              onRegenerate={controller.onRegenerateCandidate}
+            >
               {candidate.resultUrl && (
                 <div className="flex gap-1">
                   <button type="button" onClick={() => controller.onReviewValidation(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
@@ -281,7 +298,23 @@ function StageHeader({ index, title, description, children }: { index: string; t
   )
 }
 
-function CandidateCard({ candidate, waiting, seedUnsupported, children }: { candidate: CastingCandidateView; waiting: string; seedUnsupported: string; children: ReactNode }) {
+function CandidateCard({
+  candidate,
+  waiting,
+  seedUnsupported,
+  regenerationDisabled,
+  isRegenerating,
+  onRegenerate,
+  children,
+}: {
+  candidate: CastingCandidateView
+  waiting: string
+  seedUnsupported: string
+  regenerationDisabled: boolean
+  isRegenerating: boolean
+  onRegenerate: HairDesignWorkspaceController['onRegenerateCandidate']
+  children: ReactNode
+}) {
   return (
     <article className="bg-[#0b0b0d] p-2.5">
       <div className={`relative aspect-[3/4] overflow-hidden rounded-xl border bg-[#101013] ${candidate.isCanon || candidate.shortlisted ? 'border-primary-500/60' : 'border-white/[0.07]'}`}>
@@ -300,6 +333,16 @@ function CandidateCard({ candidate, waiting, seedUnsupported, children }: { cand
           {children}
         </div>
       </div>
+      {candidate.prompt && (
+        <div className="-mx-2.5 -mb-2.5 mt-2">
+          <CandidatePromptEditor
+            candidate={candidate}
+            disabled={regenerationDisabled}
+            isRegenerating={isRegenerating}
+            onRegenerate={onRegenerate}
+          />
+        </div>
+      )}
     </article>
   )
 }

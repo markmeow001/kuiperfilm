@@ -243,6 +243,7 @@ const ROUTE_FILES = [
   'src/app/api/user/project-state/[projectId]/route.ts',
   'src/app/api/user/transactions/route.ts',
   'src/app/api/visual-development/[projectId]/route.ts',
+  'src/app/api/visual-development/[projectId]/candidates/[candidateId]/regenerate/route.ts',
   'src/app/api/visual-development/[projectId]/script-analysis/route.ts',
   'src/app/api/visual-development/[projectId]/script-source/route.ts',
   'src/app/api/visual-development/[projectId]/export/route.ts',

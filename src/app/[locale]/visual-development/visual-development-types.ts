@@ -67,6 +67,45 @@ export interface CastingCandidateView {
   isCanon: boolean
   errorMessage: string | null
   rejectionNote?: string | null
+  prompt?: string
+  originPrompt?: string
+  negativePrompt?: string | null
+  history?: CandidateGenerationHistoryView[]
+}
+
+export interface CandidateGenerationHistoryView {
+  taskId: string
+  prompt: string
+  negativePrompt: string | null
+  requestedSeed: number | null
+  effectiveSeed: number | null
+  seedStatus: string
+  modelKey: string
+  provider: string
+  modelId: string
+  modelVersion: string | null
+  aspectRatio: string
+  resolution: string | null
+  shortlisted: boolean
+  isCanon: boolean
+  rejectionNote: string | null
+  createdAt: string
+  taskStatus: string
+  progress: number
+  resultUrl: string | null
+  errorCode: string | null
+  errorMessage: string | null
+}
+
+export type CandidateRegenerationSeedMode = 'new' | 'reuse'
+
+export interface CandidateRegenerationControls {
+  regeneratingCandidateIds: readonly string[]
+  onRegenerateCandidate: (
+    candidateId: string,
+    prompt: string,
+    seedMode: CandidateRegenerationSeedMode,
+  ) => void
 }
 
 export interface CastingBatchView {
@@ -94,7 +133,7 @@ export interface ProductionStageFormState {
   duration: number
 }
 
-export interface ProductionStageWorkspaceController {
+export interface ProductionStageWorkspaceController extends CandidateRegenerationControls {
   stage: ProductionStageDefinition
   stageBrief: ProductionStageBrief | null
   stageBriefTaskStatus: string | null
@@ -143,6 +182,8 @@ export interface WorldBibleAssetView {
   progress: number
   resultUrl: string | null
   errorMessage: string | null
+  originPrompt: string
+  history: CandidateGenerationHistoryView[]
 }
 
 export interface WorldBibleFormState {
@@ -173,12 +214,18 @@ export interface WorldBibleWorkspaceController {
   isSaving: boolean
   isGenerating: boolean
   isUploading: boolean
+  regeneratingAssetCodes: readonly WorldAssetCode[]
   onFieldChange: (field: keyof WorldBibleFormState, value: string) => void
   onSave: () => void
   onUploadReferences: (files: FileList) => void
   onRemoveReference: (referenceId: string) => void
   onGenerate: () => void
   onReviewAsset: (code: WorldAssetCode, approved: boolean, rejectionNote?: string) => void
+  onRegenerateAsset: (
+    code: WorldAssetCode,
+    prompt: string,
+    seedMode: CandidateRegenerationSeedMode,
+  ) => void
   onLock: () => void
   onReload: () => void
 }
@@ -192,7 +239,7 @@ export interface FaceBibleFormState {
   aspectRatio: string
 }
 
-export interface FaceBibleWorkspaceController {
+export interface FaceBibleWorkspaceController extends CandidateRegenerationControls {
   batch: CastingBatchView | null
   canonCandidate: CastingCandidateView | null
   characterCode: string
@@ -218,7 +265,7 @@ export interface HairDesignFormState {
   aspectRatio: string
 }
 
-export interface HairDesignWorkspaceController {
+export interface HairDesignWorkspaceController extends CandidateRegenerationControls {
   explorationBatch: CastingBatchView | null
   validationBatch: CastingBatchView | null
   identityCandidate: CastingCandidateView | null
@@ -248,7 +295,7 @@ export interface CastingFormState {
   aspectRatio: string
 }
 
-export interface CastingWorkspaceController {
+export interface CastingWorkspaceController extends CandidateRegenerationControls {
   batch: CastingBatchView | null
   batches: CastingBatchView[]
   activeBatchId: string

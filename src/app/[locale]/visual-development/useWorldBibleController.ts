@@ -9,6 +9,7 @@ import {
   reconcileVisualDevelopmentAspectRatio,
 } from '@/lib/visual-development/model-options'
 import type {
+  CandidateRegenerationSeedMode,
   WorldBibleAssetView,
   WorldBibleFormState,
   WorldBibleReferenceView,
@@ -66,6 +67,7 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [regeneratingAssetCodes, setRegeneratingAssetCodes] = useState<WorldAssetCode[]>([])
   const hydratedProjectRef = useRef('')
   const lastSavedSignatureRef = useRef('')
   const onWorldChangedRef = useRef(input.onWorldChanged)
@@ -272,6 +274,37 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
     input.onWorldChanged()
   }, [input, load])
 
+  const regenerateAsset = useCallback(async (
+    code: WorldAssetCode,
+    prompt: string,
+    seedMode: CandidateRegenerationSeedMode,
+  ) => {
+    if (!input.projectId || regeneratingAssetCodes.includes(code)) return
+    setRegeneratingAssetCodes((current) => [...current, code])
+    try {
+      const response = await fetch(`/api/visual-development/${input.projectId}/world-bible`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'regenerate-asset',
+          code,
+          prompt,
+          seedMode,
+          meta: { locale: input.locale },
+        }),
+      })
+      const payload = await response.json() as WorldBibleResponse
+      if (!response.ok) {
+        window.alert(errorMessage(payload, 'World Bible 單張資產重生失敗'))
+        return
+      }
+      await load()
+      input.onWorldChanged()
+    } finally {
+      setRegeneratingAssetCodes((current) => current.filter((value) => value !== code))
+    }
+  }, [input, load, regeneratingAssetCodes])
+
   return {
     form,
     references,
@@ -284,6 +317,7 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
     isSaving,
     isGenerating,
     isUploading,
+    regeneratingAssetCodes,
     onFieldChange: (field, value) => setForm((current) => {
       if (field !== 'modelKey') return { ...current, [field]: value }
       const selected = imageModels.find((model) => model.value === value)
@@ -303,6 +337,7 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       { action: 'asset-review', code, approved, rejectionNote },
       'World Bible 資產審核失敗',
     ),
+    onRegenerateAsset: (code, prompt, seedMode) => void regenerateAsset(code, prompt, seedMode),
     onLock: () => void patch({ action: 'canon-lock' }, 'World Bible 尚未符合鎖定條件'),
     onReload: () => void load(),
   }

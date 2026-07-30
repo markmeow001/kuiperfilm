@@ -32,6 +32,8 @@ const translations = {
 
 function controller(): FaceBibleWorkspaceController {
   return {
+    regeneratingCandidateIds: [],
+    onRegenerateCandidate: vi.fn(),
     batch: null,
     canonCandidate: {
       id: 'canon-1',

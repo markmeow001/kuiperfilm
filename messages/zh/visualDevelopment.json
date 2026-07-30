@@ -233,6 +233,25 @@
       "reviewFailed": "髮型驗證審核失敗",
       "lockFailed": "髮型資產尚未符合鎖定條件"
     },
+    "candidatePrompt": {
+      "originalTitle": "原始 Prompt",
+      "readOnly": "唯讀追溯",
+      "regenerateTitle": "本次重生 Prompt",
+      "expand": "查看／修改",
+      "versions": "共 {count} 版",
+      "seedMode": "Seed 策略",
+      "newSeed": "新 Seed｜同 Prompt 產生新變體",
+      "reuseSeed": "沿用 Seed｜只比較 Prompt 修改",
+      "copy": "複製",
+      "copied": "已複製",
+      "copyFailed": "無法複製 Prompt，請手動選取文字。",
+      "reset": "還原目前 Prompt",
+      "regenerateOne": "只重生這張",
+      "regenerating": "重生中…",
+      "regenerateFailed": "單張資產重生失敗",
+      "canonLockedHint": "這一批已鎖定為 Canon。為了不破壞下游資產，請建立新一輪批次後再調整。",
+      "historyTitle": "此格版本歷史"
+    },
     "production": {
       "prerequisite": "上一階段 Canon 尚未鎖定",
       "prerequisiteHint": "本階段只會讀取已通過審核並鎖定的上游資產。請先完成左側流程中的上一階段，再回到這裡繼續。",

@@ -20,6 +20,7 @@ import {
 } from '@/lib/visual-development/model-options'
 import type {
   CastingBatchView,
+  CandidateRegenerationControls,
   ProductionStageFormState,
   ProductionStageWorkspaceController,
 } from './visual-development-types'
@@ -36,6 +37,7 @@ interface UseProductionStageControllerInput {
   videoModels: UserModelOption[]
   isLoading: boolean
   onRefresh: () => Promise<void>
+  candidateRegeneration: CandidateRegenerationControls
 }
 
 interface StageBriefTaskView {
@@ -317,6 +319,7 @@ export function useProductionStageController(input: UseProductionStageController
   }, [input, stage.id])
 
   const controller = useMemo<ProductionStageWorkspaceController>(() => ({
+    ...input.candidateRegeneration,
     stage,
     stageBrief,
     stageBriefTaskStatus: briefState?.task?.status ?? null,
@@ -345,6 +348,7 @@ export function useProductionStageController(input: UseProductionStageController
     briefState,
     form,
     input.characterStatus,
+    input.candidateRegeneration,
     input.isLoading,
     isGenerating,
     isSubmittingBrief,

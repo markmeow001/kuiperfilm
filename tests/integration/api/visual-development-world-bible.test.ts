@@ -171,6 +171,76 @@ describe('visual development World Bible API', () => {
     expect(submitterMock.submitTask).not.toHaveBeenCalled()
   })
 
+  it('只重生指定世界觀資產並保留上一版 Prompt 與任務', async () => {
+    const assets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
+      code,
+      taskId: `task-${code}`,
+      prompt: `${code} original prompt`,
+      negativePrompt: 'text, watermark',
+      requestedSeed: 456,
+      seedStatus: 'applied',
+      approved: code !== 'WORLD-FORMULA',
+      rejectionNote: null,
+      originPrompt: `${code} original prompt`,
+      history: [],
+    }))
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+      id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_review', worldBible: { ...completeWorld, assets },
+    })
+    prismaMock.task.findFirst.mockResolvedValue({
+      id: 'task-WORLD-FORMULA',
+      type: 'visual_development_image',
+      targetType: 'visual-development-world-asset',
+      status: 'completed',
+      result: { resultUrls: ['images/world-formula.png'] },
+      payload: {
+        prompt: 'WORLD-FORMULA original prompt',
+        modelKey: 'atlascloud::flux-2-pro',
+        modelId: 'flux-2-pro',
+        aspectRatio: '16:9',
+        referenceImages: ['images/ref-1.png', 'images/ref-2.png'],
+        seed: 456,
+        meta: { visualDevelopmentWorldAssetCode: 'WORLD-FORMULA' },
+      },
+    })
+    submitterMock.submitTask.mockResolvedValueOnce({ taskId: 'task-world-regenerated', status: 'queued' })
+
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/world-bible',
+      method: 'PATCH',
+      body: {
+        action: 'regenerate-asset',
+        code: 'WORLD-FORMULA',
+        prompt: 'WORLD-FORMULA edited prompt',
+        seedMode: 'reuse',
+        meta: { locale: 'zh' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(202)
+    expect(submitterMock.submitTask).toHaveBeenCalledTimes(1)
+    expect(submitterMock.submitTask).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        prompt: 'WORLD-FORMULA edited prompt',
+        modelKey: 'atlascloud::flux-2-pro',
+        referenceImages: ['images/ref-1.png', 'images/ref-2.png'],
+        seed: 456,
+      }),
+    }))
+    const update = prismaMock.visualDevelopmentWorkspace.update.mock.calls.at(-1)?.[0]
+    const saved = update?.data.worldBible as { assets: Array<{ code: string; taskId: string; prompt: string; approved: boolean; history: Array<{ taskId: string; prompt: string }> }> }
+    const regenerated = saved.assets.find((asset) => asset.code === 'WORLD-FORMULA')
+    expect(regenerated).toMatchObject({
+      taskId: 'task-world-regenerated',
+      prompt: 'WORLD-FORMULA edited prompt',
+      approved: false,
+    })
+    expect(regenerated?.history).toEqual(expect.arrayContaining([
+      expect.objectContaining({ taskId: 'task-WORLD-FORMULA', prompt: 'WORLD-FORMULA original prompt' }),
+    ]))
+  })
+
   it('四張資產完成且全數通過 -> 建立可追溯 World Canon', async () => {
     const approvedAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
       code, taskId: `task-${code}`, prompt: code, negativePrompt: '', requestedSeed: null, seedStatus: 'unsupported', approved: true, rejectionNote: null,

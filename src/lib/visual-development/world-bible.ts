@@ -1,5 +1,9 @@
 import type { Prisma } from '@prisma/client'
 import { parseStoredScriptAnalysis, type ScriptAnalysisDocument } from './script-analysis'
+import {
+  parseCandidateGenerationSnapshot,
+  type CandidateGenerationSnapshot,
+} from './candidate-history'
 
 export const WORLD_ASSET_DEFINITIONS = [
   {
@@ -58,6 +62,8 @@ export interface WorldBibleAsset {
   seedStatus: 'applied' | 'unsupported'
   approved: boolean
   rejectionNote: string | null
+  originPrompt: string
+  history: CandidateGenerationSnapshot[]
 }
 
 export interface WorldBibleDocument {
@@ -142,15 +148,24 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
     ? source.assets.flatMap((item) => {
       const entry = record(item)
       if (!isWorldAssetCode(entry.code) || typeof entry.taskId !== 'string') return []
+      const history = Array.isArray(entry.history)
+        ? entry.history.flatMap((value) => {
+          const snapshot = parseCandidateGenerationSnapshot(value)
+          return snapshot ? [snapshot] : []
+        })
+        : []
+      const prompt = typeof entry.prompt === 'string' ? entry.prompt : ''
       return [{
         code: entry.code,
         taskId: entry.taskId,
-        prompt: typeof entry.prompt === 'string' ? entry.prompt : '',
+        prompt,
         negativePrompt: typeof entry.negativePrompt === 'string' ? entry.negativePrompt : '',
         requestedSeed: typeof entry.requestedSeed === 'number' ? entry.requestedSeed : null,
         seedStatus: entry.seedStatus === 'applied' ? 'applied' as const : 'unsupported' as const,
         approved: entry.approved === true,
         rejectionNote: typeof entry.rejectionNote === 'string' ? entry.rejectionNote : null,
+        originPrompt: typeof entry.originPrompt === 'string' ? entry.originPrompt : history[0]?.prompt ?? prompt,
+        history,
       }]
     })
     : []

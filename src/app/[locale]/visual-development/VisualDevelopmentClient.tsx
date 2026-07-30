@@ -14,6 +14,7 @@ import { DevelopmentRail, type LocalizedDevelopmentStage } from './DevelopmentRa
 import { StageWorkspace } from './StageWorkspace'
 import { VisualDevelopmentHeader } from './VisualDevelopmentHeader'
 import { useHairDesignController } from './useHairDesignController'
+import { useCandidateRegeneration } from './useCandidateRegeneration'
 import { useScriptImportController } from './useScriptImportController'
 import { useProductionStageController } from './useProductionStageController'
 import { useWorldBibleController } from './useWorldBibleController'
@@ -136,6 +137,12 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       setIsLoadingWorkspace(false)
     }
   }, [])
+
+  const candidateRegeneration = useCandidateRegeneration({
+    projectId,
+    locale,
+    onRefresh: async () => loadWorkspace(projectId),
+  })
 
   useEffect(() => {
     selectedCharacterCodeRef.current = ''
@@ -346,6 +353,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   }, [faceBatch, loadWorkspace, projectId, t])
 
   const castingController = useMemo<CastingWorkspaceController>(() => ({
+    ...candidateRegeneration,
     batch,
     batches: castingBatches,
     activeBatchId: batch?.id ?? '',
@@ -360,7 +368,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onGenerate: () => void generateCasting(),
     onSelectBatch: selectCastingBatch,
     onCandidateAction: (candidateId, action, shortlisted) => void handleCandidateAction(candidateId, action, shortlisted),
-  }), [batch, castingBatches, form, generateCasting, handleCandidateAction, isGenerating, isLoadingWorkspace, modelsQuery.data?.image, modelsQuery.isLoading, selectCastingBatch, updateField, updateIdentity, worldStatus])
+  }), [batch, candidateRegeneration, castingBatches, form, generateCasting, handleCandidateAction, isGenerating, isLoadingWorkspace, modelsQuery.data?.image, modelsQuery.isLoading, selectCastingBatch, updateField, updateIdentity, worldStatus])
 
   const canonCandidate = useMemo<CastingCandidateView | null>(
     () => castingBatches.flatMap((castingBatch) => castingBatch.candidates)
@@ -369,6 +377,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   )
 
   const faceBibleController = useMemo<FaceBibleWorkspaceController>(() => ({
+    ...candidateRegeneration,
     batch: faceBatch,
     canonCandidate,
     characterCode: form.characterCode,
@@ -381,7 +390,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onGenerate: () => void generateFaceBible(),
     onReview: (candidateId, approved, rejectionNote) => void reviewFaceAsset(candidateId, approved, rejectionNote),
     onLock: () => void lockFaceBible(),
-  }), [canonCandidate, characterStatus, faceBatch, faceForm, form.characterCode, generateFaceBible, isGeneratingFace, isLoadingWorkspace, lockFaceBible, modelsQuery.isLoading, referenceImageModels, reviewFaceAsset, updateFaceField])
+  }), [candidateRegeneration, canonCandidate, characterStatus, faceBatch, faceForm, form.characterCode, generateFaceBible, isGeneratingFace, isLoadingWorkspace, lockFaceBible, modelsQuery.isLoading, referenceImageModels, reviewFaceAsset, updateFaceField])
 
   const worldBibleController = useWorldBibleController({
     projectId,
@@ -412,6 +421,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     imageModels: modelsQuery.data?.image ?? [],
     isLoading: isLoadingWorkspace || modelsQuery.isLoading,
     onRefresh: async () => loadWorkspace(projectId),
+    candidateRegeneration,
   })
 
   const activeProductionStageId = (PRODUCTION_STAGE_IDS.includes(activeStageId as ProductionStageId)
@@ -429,6 +439,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     videoModels: modelsQuery.data?.video ?? [],
     isLoading: isLoadingWorkspace || modelsQuery.isLoading,
     onRefresh: async () => loadWorkspace(projectId),
+    candidateRegeneration,
   })
 
   const stages = useMemo<LocalizedDevelopmentStage[]>(

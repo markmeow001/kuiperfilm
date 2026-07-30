@@ -8,7 +8,8 @@ import { findBuiltinCapabilities } from '@/lib/model-capabilities/catalog'
 import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
-import { projectCandidateTask } from '@/lib/visual-development/records'
+import { projectCandidateTask, readResultKey } from '@/lib/visual-development/records'
+import type { CandidateGenerationSnapshot } from '@/lib/visual-development/candidate-history'
 import { getSignedUrl } from '@/lib/cos'
 import { buildWorldBibleAssetPrompt } from '@/lib/visual-development/world-bible-prompt'
 import {
@@ -103,7 +104,10 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
   if (access instanceof Response) return access
   const workspace = await loadWorkspace(projectId)
   const document = workspace ? parseWorldBible(workspace.worldBible) : EMPTY_WORLD_BIBLE
-  const taskIds = document.assets.map((asset) => asset.taskId)
+  const taskIds = [...new Set(document.assets.flatMap((asset) => [
+    asset.taskId,
+    ...asset.history.map((revision) => revision.taskId),
+  ]))]
   const tasks = taskIds.length > 0
     ? await prisma.task.findMany({
       where: { id: { in: taskIds }, projectId, userId: access.userId },
@@ -126,6 +130,10 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
         assets: document.assets.map((asset) => ({
           ...asset,
           ...projectCandidateTask({ taskId: asset.taskId, status: 'pending' }, tasksById),
+          history: [...asset.history].reverse().map((revision) => ({
+            ...revision,
+            ...projectCandidateTask({ taskId: revision.taskId, status: 'completed' }, tasksById),
+          })),
         })),
       },
     },
@@ -255,6 +263,8 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
       seedStatus: requestedSeed === null ? 'unsupported' as const : 'applied' as const,
       approved: false,
       rejectionNote: null,
+      originPrompt: prompt.prompt,
+      history: [],
     }
   }))
   const assets = submissions.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
@@ -289,6 +299,99 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   const workspace = await loadWorkspace(projectId)
   if (!workspace) throw new ApiError('NOT_FOUND')
   const document = parseWorldBible(workspace.worldBible)
+
+  if (action === 'regenerate-asset') {
+    if (workspace.status === 'world_locked') throw new ApiError('CONFLICT', { code: 'WORLD_BIBLE_LOCKED' })
+    if (!isWorldAssetCode(body.code)) throw new ApiError('INVALID_PARAMS', { code: 'WORLD_ASSET_CODE_INVALID' })
+    const asset = document.assets.find((item) => item.code === body.code)
+    if (!asset) throw new ApiError('NOT_FOUND', { code: 'WORLD_ASSET_NOT_FOUND' })
+    const prompt = requiredString(body.prompt, 'prompt', 30_000)
+    const seedMode = body.seedMode === 'reuse' ? 'reuse' : 'new'
+    const previousTask = await prisma.task.findFirst({
+      where: { id: asset.taskId, projectId, userId: access.userId },
+      select: { id: true, type: true, targetType: true, payload: true, result: true, status: true },
+    })
+    const previousCompleted = previousTask?.status === 'completed' && Boolean(readResultKey(previousTask.result))
+    const previousFailed = previousTask?.status === 'failed' || previousTask?.status === 'dismissed'
+    if (!previousTask || (!previousCompleted && !previousFailed)) {
+      throw new ApiError('CONFLICT', { code: 'WORLD_ASSET_NOT_COMPLETED' })
+    }
+    if (previousTask.type !== TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE) {
+      throw new ApiError('CONFLICT', { code: 'WORLD_ASSET_TASK_TYPE_UNSUPPORTED' })
+    }
+    const previousPayload = record(previousTask.payload)
+    const previousMeta = record(previousPayload.meta)
+    const seedSupported = asset.seedStatus === 'applied'
+    const requestedSeed = seedSupported
+      ? seedMode === 'reuse' && asset.requestedSeed !== null
+        ? asset.requestedSeed
+        : randomInt(1, 2_147_483_647)
+      : null
+    const payload: Record<string, unknown> = {
+      ...previousPayload,
+      prompt,
+      ...(seedSupported && requestedSeed !== null ? { seed: requestedSeed } : {}),
+      meta: {
+        ...previousMeta,
+        originPrompt: prompt,
+        previousVisualDevelopmentTaskId: previousTask.id,
+        visualDevelopmentWorldAssetCode: asset.code,
+        regenerationSeedMode: seedMode,
+      },
+    }
+    if (!seedSupported) delete payload.seed
+    const snapshot: CandidateGenerationSnapshot = {
+      taskId: previousTask.id,
+      prompt: asset.prompt,
+      negativePrompt: asset.negativePrompt,
+      requestedSeed: asset.requestedSeed,
+      effectiveSeed: asset.requestedSeed,
+      seedStatus: asset.seedStatus,
+      modelKey: typeof previousPayload.modelKey === 'string' ? previousPayload.modelKey : document.modelKey,
+      provider: '',
+      modelId: typeof previousPayload.modelId === 'string' ? previousPayload.modelId : '',
+      modelVersion: null,
+      aspectRatio: document.aspectRatio,
+      resolution: document.resolution || null,
+      shortlisted: asset.approved,
+      isCanon: false,
+      rejectionNote: asset.rejectionNote,
+      createdAt: new Date().toISOString(),
+    }
+    const submitted = await submitTask({
+      userId: access.userId,
+      locale: resolveRequiredTaskLocale(request, body),
+      projectId,
+      type: TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE,
+      targetType: previousTask.targetType,
+      targetId: `${projectId}:${asset.code}:${randomUUID()}`,
+      dedupeKey: `visual-development-world-regenerate:${projectId}:${asset.code}:${randomUUID()}`,
+      dedupeMode: 'idempotent',
+      skipRateLimit: true,
+      payload,
+    })
+    const appended = [...asset.history, snapshot]
+    asset.history = appended.length <= 30 || !appended[0]
+      ? appended
+      : [appended[0], ...appended.slice(-29)]
+    asset.originPrompt = asset.originPrompt || snapshot.prompt
+    asset.taskId = submitted.taskId
+    asset.prompt = prompt
+    asset.requestedSeed = requestedSeed
+    asset.seedStatus = seedSupported ? 'applied' : 'unsupported'
+    asset.approved = false
+    asset.rejectionNote = null
+    document.canonId = null
+    document.lockedAt = null
+    await prisma.visualDevelopmentWorkspace.update({
+      where: { id: workspace.id },
+      data: { worldBible: toWorldBibleJson(document), status: 'world_generating' },
+    })
+    return NextResponse.json({
+      success: true,
+      data: { code: asset.code, taskId: submitted.taskId, requestedSeed, seedMode },
+    }, { status: 202 })
+  }
 
   if (action === 'asset-review') {
     if (workspace.status === 'world_locked') throw new ApiError('CONFLICT', { code: 'WORLD_BIBLE_LOCKED' })
