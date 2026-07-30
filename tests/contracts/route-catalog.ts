@@ -93,6 +93,7 @@ const ROUTE_FILES = [
   'src/app/api/files/[...path]/route.ts',
   'src/app/api/files/extract-episodes/route.ts',
   // Live Composite Studio server workflows and owner-only project CRUD.
+  'src/app/api/live-composite/depth-guide/mp4/route.ts',
   'src/app/api/live-composite/depth-rebuild/finalize/route.ts',
   'src/app/api/live-composite/projects/[id]/route.ts',
   'src/app/api/live-composite/projects/route.ts',

@@ -1102,6 +1102,7 @@ export function LiveCompositeClient({ locale, userId }: LiveCompositeClientProps
               depthUrl={depthRebuild.depthGuide?.previewUrl ?? null}
               resultUrl={depthRebuild.result?.url ?? null}
               depthDownloadName={depthRebuild.depthGuide?.file.name}
+              depthFile={depthRebuild.depthGuide?.file ?? null}
             />
           ) : metadata && maskReady ? (
             <MaskKeyframeRail duration={metadata.duration} currentTime={currentTime} keyframes={activeTimeline.keyframes} activeKeyframeId={activeTimeline.activeKeyframe?.id ?? null} hasExactKeyframe={Boolean(activeTimeline.exactKeyframe)} disabled={isVideoExporting || occlusionBusy} onAdd={activeTimeline.addKeyframe} onDelete={activeTimeline.deleteKeyframe} onApplyToStart={activeTimeline.applyToStart} onApplyToEnd={activeTimeline.applyToEnd} onSeek={(time) => stageRef.current?.seekTo(time)} />

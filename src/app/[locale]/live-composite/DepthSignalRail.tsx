@@ -1,6 +1,63 @@
 'use client'
 
+import { useState } from 'react'
 import { AppIcon } from '@/components/ui/icons'
+
+/** 深度影片是 MediaRecorder WebM；此鈕走伺服器 ffmpeg 轉檔給本機播放器。 */
+function DepthMp4DownloadButton({ file }: { file: File }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function downloadMp4(): Promise<void> {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/live-composite/depth-guide/mp4', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'video/webm' },
+        body: file,
+      })
+      if (!response.ok) {
+        let message = `轉檔失敗（HTTP ${response.status}）`
+        try {
+          const parsed = await response.json() as { error?: { message?: string } }
+          if (parsed?.error?.message) message = parsed.error.message
+        } catch { /* 回應不是 JSON 時沿用預設訊息 */ }
+        throw new Error(message)
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      try {
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = 'depth-guide.mp4'
+        anchor.click()
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '轉檔失敗，請稍後重試')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => { void downloadMp4() }}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 text-xs text-stone-400 underline decoration-stone-700 underline-offset-4 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <AppIcon name="download" className="h-3.5 w-3.5" />
+        {busy ? '轉檔中…' : '下載 MP4'}
+      </button>
+      {error ? <span role="alert" className="text-xs text-rose-300">{error}</span> : null}
+    </span>
+  )
+}
 
 export interface DepthSignalRailProps {
   sourceUrl: string | null
@@ -8,6 +65,8 @@ export interface DepthSignalRailProps {
   resultUrl: string | null
   depthDownloadName?: string
   resultDownloadName?: string
+  /** 本機深度影片檔（WebM）；提供時顯示「下載 MP4」伺服器轉檔按鈕。 */
+  depthFile?: File | null
 }
 
 interface SignalStageProps {
@@ -18,9 +77,10 @@ interface SignalStageProps {
   url: string | null
   tone: 'source' | 'depth' | 'result'
   downloadName?: string
+  extraAction?: React.ReactNode
 }
 
-function SignalStage({ number, eyebrow, title, description, url, tone, downloadName }: SignalStageProps) {
+function SignalStage({ number, eyebrow, title, description, url, tone, downloadName, extraAction }: SignalStageProps) {
   const toneClass = tone === 'depth'
     ? 'border-cyan-300/30 text-cyan-200'
     : tone === 'result'
@@ -51,10 +111,13 @@ function SignalStage({ number, eyebrow, title, description, url, tone, downloadN
         )}
       </div>
       {url && downloadName ? (
-        <a href={url} download={downloadName} className="mt-2 inline-flex items-center gap-1.5 text-xs text-stone-400 underline decoration-stone-700 underline-offset-4 hover:text-white">
-          <AppIcon name="download" className="h-3.5 w-3.5" />
-          下載{title}
-        </a>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <a href={url} download={downloadName} className="inline-flex items-center gap-1.5 text-xs text-stone-400 underline decoration-stone-700 underline-offset-4 hover:text-white">
+            <AppIcon name="download" className="h-3.5 w-3.5" />
+            下載{title}
+          </a>
+          {extraAction}
+        </div>
       ) : url ? (
         <p className="mt-2 text-xs leading-5 text-stone-600">{description}</p>
       ) : null}
@@ -68,6 +131,7 @@ export function DepthSignalRail({
   resultUrl,
   depthDownloadName = 'depth-guide.webm',
   resultDownloadName = 'ai-rebuild.mp4',
+  depthFile = null,
 }: DepthSignalRailProps) {
   return (
     <section className="border-t border-white/10 bg-[#080b0f] px-4 py-4" aria-labelledby="depth-signal-heading">
@@ -82,7 +146,16 @@ export function DepthSignalRail({
       <div className="flex items-start gap-3 overflow-x-auto pb-1">
         <SignalStage number="01" eyebrow="Motion" title="原始表演" description="上傳原片後顯示。" url={sourceUrl} tone="source" />
         <AppIcon name="arrowRight" className="mt-[4.75rem] h-4 w-4 shrink-0 text-stone-700" aria-hidden="true" />
-        <SignalStage number="02" eyebrow="Geometry" title="深度影片" description="本機產生後顯示黑白空間引導。" url={depthUrl} tone="depth" downloadName={depthUrl ? depthDownloadName : undefined} />
+        <SignalStage
+          number="02"
+          eyebrow="Geometry"
+          title="深度影片"
+          description="本機產生後顯示黑白空間引導。"
+          url={depthUrl}
+          tone="depth"
+          downloadName={depthUrl ? depthDownloadName : undefined}
+          extraAction={depthUrl && depthFile ? <DepthMp4DownloadButton file={depthFile} /> : null}
+        />
         <AppIcon name="arrowRight" className="mt-[4.75rem] h-4 w-4 shrink-0 text-stone-700" aria-hidden="true" />
         <SignalStage number="03" eyebrow="Synthesis" title="AI 重建" description="確認費用並完成生成後顯示。" url={resultUrl} tone="result" downloadName={resultUrl ? resultDownloadName : undefined} />
       </div>
