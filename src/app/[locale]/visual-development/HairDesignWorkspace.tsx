@@ -36,12 +36,15 @@ export interface HairDesignTranslations {
   lock: string
   locked: string
   lockHint: string
+  nextPhase: string
   generating: string
   seedUnsupported: string
 }
 
 interface HairDesignWorkspaceProps {
   controller: HairDesignWorkspaceController
+  nextStage: { code: string; shortTitle: string } | null
+  onAdvance: () => void
   translations: HairDesignTranslations
 }
 
@@ -85,7 +88,7 @@ function placeholders(codes: readonly string[], prefix: string): CastingCandidat
   }))
 }
 
-export function HairDesignWorkspace({ controller, translations }: HairDesignWorkspaceProps) {
+export function HairDesignWorkspace({ controller, nextStage, onAdvance, translations }: HairDesignWorkspaceProps) {
   const selectedModel = controller.imageModels.find((model) => model.value === controller.form.modelKey)
   const resolutions = selectedModel?.capabilities?.image?.resolutionOptions ?? []
   const ratios = selectedModel ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, 'image') : []
@@ -106,6 +109,7 @@ export function HairDesignWorkspace({ controller, translations }: HairDesignWork
     && validation.length === VALIDATION_CODES.length
     && validation.every((candidate) => candidate.resultUrl && candidate.shortlisted),
   )
+  const isLocked = controller.validationBatch?.status === 'canon_locked'
   const faceReady = [
     'face_locked',
     'hair_exploration_in_progress',
@@ -227,10 +231,17 @@ export function HairDesignWorkspace({ controller, translations }: HairDesignWork
         </div>
         <div className="flex flex-col gap-3 border-t border-white/[0.07] p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-2xl font-serif-cn text-[10px] leading-4 text-text-tertiary">{translations.lockHint}</p>
-          <button type="button" disabled={!canLock} onClick={controller.onLock} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
-            <AppIcon name="lock" className="h-3.5 w-3.5" />
-            {controller.validationBatch?.status === 'canon_locked' ? translations.locked : translations.lock}
-          </button>
+          {isLocked && nextStage ? (
+            <button type="button" onClick={onAdvance} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-colors hover:bg-primary-400">
+              <AppIcon name="arrowRight" className="h-3.5 w-3.5" />
+              {translations.nextPhase} · {nextStage.code} {nextStage.shortTitle}
+            </button>
+          ) : (
+            <button type="button" disabled={!canLock} onClick={controller.onLock} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
+              <AppIcon name="lock" className="h-3.5 w-3.5" />
+              {isLocked ? translations.locked : translations.lock}
+            </button>
+          )}
         </div>
       </section>
     </div>

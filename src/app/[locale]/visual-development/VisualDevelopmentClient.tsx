@@ -445,6 +445,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   )
 
   const activeStage = stages.find((stage) => stage.id === activeStageId) ?? stages[0]
+  const activeStageIndex = stages.findIndex((stage) => stage.id === activeStage.id)
+  const nextStage = activeStageIndex >= 0 ? stages[activeStageIndex + 1] ?? null : null
 
   return (
     <div className="kuiper-stage flex min-h-screen flex-col overflow-hidden text-text-primary xl:h-dvh xl:min-h-0">
@@ -479,6 +481,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
           onCharacterChange={selectCharacter}
           onCandidateCountChange={setCandidateCount}
           stage={activeStage}
+          nextStage={nextStage}
+          onStageSelect={setActiveStageId}
           translations={stageWorkspaceTranslations}
         />
 

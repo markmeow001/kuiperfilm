@@ -225,6 +225,7 @@
       "lock": "Lock Hair Canon",
       "locked": "Hair Canon locked",
       "lockHint": "All eight validation assets must complete and pass review before a formal HAIR ID is created for costume, props, and downstream shots.",
+      "nextPhase": "Continue to next phase",
       "generating": "Submitting…",
       "seedUnsupported": "SEED N/A",
       "generateFailed": "Failed to create hair batch",
@@ -258,6 +259,8 @@
       "lock": "Lock stage Canon",
       "locked": "Stage Canon locked",
       "lockHint": "Every output must be complete and approved, with one primary asset selected, before this stage can be locked and the next stage opens.",
+      "nextPhase": "Continue to next phase",
+      "complete": "Character development workflow complete",
       "fields": {
         "silhouetteSystem": "Costume silhouette, proportion and hierarchy",
         "materialConstruction": "Fabric, leather, metal and construction logic",

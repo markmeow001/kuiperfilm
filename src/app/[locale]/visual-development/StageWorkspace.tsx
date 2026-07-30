@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useRef } from 'react'
 import { AppIcon } from '@/components/ui/icons'
 import type { LocalizedDevelopmentStage } from './DevelopmentRail'
 import { CastingWorkspace } from './CastingWorkspace'
@@ -83,6 +86,8 @@ interface StageWorkspaceProps {
   candidateCount: 4 | 8 | 10
   onCandidateCountChange: (count: 4 | 8 | 10) => void
   stage: LocalizedDevelopmentStage
+  nextStage: LocalizedDevelopmentStage | null
+  onStageSelect: (stageId: LocalizedDevelopmentStage['id']) => void
   characters: CharacterOption[]
   characterCode: string
   isLoadingCharacter: boolean
@@ -100,6 +105,8 @@ export function StageWorkspace({
   candidateCount,
   onCandidateCountChange,
   stage,
+  nextStage,
+  onStageSelect,
   characters,
   characterCode,
   isLoadingCharacter,
@@ -113,9 +120,18 @@ export function StageWorkspace({
   translations,
 }: StageWorkspaceProps) {
   const isCharacterStage = !['script', 'research', 'world'].includes(stage.id)
+  const mainRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 })
+  }, [stage.id])
+
+  const advance = () => {
+    if (nextStage) onStageSelect(nextStage.id)
+  }
 
   return (
-    <main className="min-h-0 min-w-0 overflow-y-auto overscroll-y-contain bg-canvas [scrollbar-gutter:stable]">
+    <main ref={mainRef} className="min-h-0 min-w-0 overflow-y-auto overscroll-y-contain bg-canvas [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-[1180px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mb-6 flex flex-col gap-5 border-b border-white/[0.07] pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
@@ -161,9 +177,9 @@ export function StageWorkspace({
         ) : stage.id === 'face' ? (
           <FaceBibleWorkspace controller={faceBibleController} translations={translations.face} />
         ) : stage.id === 'hair' ? (
-          <HairDesignWorkspace controller={hairDesignController} translations={translations.hair} />
+          <HairDesignWorkspace controller={hairDesignController} nextStage={nextStage} onAdvance={advance} translations={translations.hair} />
         ) : ['costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) ? (
-          <ProductionStageWorkspace controller={productionStageController} translations={translations.production} />
+          <ProductionStageWorkspace controller={productionStageController} nextStage={nextStage} onAdvance={advance} translations={translations.production} />
         ) : (
           <GenericStageBoard stage={stage} translations={translations} />
         )}

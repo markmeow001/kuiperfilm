@@ -225,6 +225,7 @@
       "lock": "鎖定 Hair Canon",
       "locked": "Hair Canon 已鎖定",
       "lockHint": "八項驗證資產都完成並逐張通過後，才能建立正式 HAIR ID，供服裝、配件與後續鏡頭引用。",
+      "nextPhase": "進入下一階段",
       "generating": "送出中…",
       "seedUnsupported": "SEED N/A",
       "generateFailed": "髮型批次建立失敗",
@@ -258,6 +259,8 @@
       "lock": "鎖定本階段 Canon",
       "locked": "本階段 Canon 已鎖定",
       "lockHint": "所有輸出必須生成完成並逐張通過，且至少指定一張主資產，才能鎖定並開放下一階段。",
+      "nextPhase": "進入下一階段",
+      "complete": "角色開發流程已完成",
       "fields": {
         "silhouetteSystem": "服裝剪影、比例與層級",
         "materialConstruction": "布料、皮革、金屬與製作結構",

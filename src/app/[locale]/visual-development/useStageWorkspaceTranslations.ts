@@ -193,6 +193,7 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       lock: t('workspace.hair.lock'),
       locked: t('workspace.hair.locked'),
       lockHint: t('workspace.hair.lockHint'),
+      nextPhase: t('workspace.hair.nextPhase'),
       generating: t('workspace.hair.generating'),
       seedUnsupported: t('workspace.hair.seedUnsupported'),
     },
@@ -222,6 +223,8 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       lock: t('workspace.production.lock'),
       locked: t('workspace.production.locked'),
       lockHint: t('workspace.production.lockHint'),
+      nextPhase: t('workspace.production.nextPhase'),
+      complete: t('workspace.production.complete'),
       fields: {
         silhouetteSystem: t('workspace.production.fields.silhouetteSystem'),
         materialConstruction: t('workspace.production.fields.materialConstruction'),

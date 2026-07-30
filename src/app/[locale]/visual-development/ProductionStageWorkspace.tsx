@@ -31,15 +31,19 @@ export interface ProductionStageTranslations {
   lock: string
   locked: string
   lockHint: string
+  nextPhase: string
+  complete: string
   fields: Record<ProductionFieldId, string>
 }
 
 interface ProductionStageWorkspaceProps {
   controller: ProductionStageWorkspaceController
+  nextStage: { code: string; shortTitle: string } | null
+  onAdvance: () => void
   translations: ProductionStageTranslations
 }
 
-export function ProductionStageWorkspace({ controller, translations }: ProductionStageWorkspaceProps) {
+export function ProductionStageWorkspace({ controller, nextStage, onAdvance, translations }: ProductionStageWorkspaceProps) {
   const selectedModel = controller.models.find((model) => model.value === controller.form.modelKey)
   const resolutions = controller.stage.mediaType === 'video'
     ? selectedModel?.capabilities?.video?.resolutionOptions ?? []
@@ -61,6 +65,7 @@ export function ProductionStageWorkspace({ controller, translations }: Productio
     && candidates.every((candidate) => candidate.resultUrl && candidate.shortlisted)
     && candidates.some((candidate) => candidate.isCanon),
   )
+  const isLocked = controller.batch?.status === 'canon_locked'
 
   if (!controller.prerequisiteReady) {
     return (
@@ -131,10 +136,22 @@ export function ProductionStageWorkspace({ controller, translations }: Productio
         </div>
         <div className="flex flex-col gap-3 border-t border-white/[0.07] p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-2xl font-serif-cn text-[10px] leading-4 text-text-tertiary">{translations.lockHint}</p>
-          <button type="button" disabled={!canLock} onClick={controller.onLock} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-primary-500/35 bg-primary-500/[0.1] px-3 text-[10px] font-semibold text-primary-300 disabled:cursor-not-allowed disabled:opacity-35">
-            <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
-            {controller.batch?.status === 'canon_locked' ? translations.locked : translations.lock}
-          </button>
+          {isLocked && nextStage ? (
+            <button type="button" onClick={onAdvance} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-colors hover:bg-primary-400">
+              <AppIcon name="arrowRight" className="h-3.5 w-3.5" />
+              {translations.nextPhase} · {nextStage.code} {nextStage.shortTitle}
+            </button>
+          ) : isLocked ? (
+            <div role="status" className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-primary-500/35 bg-primary-500/[0.1] px-3 text-[10px] font-semibold text-primary-300">
+              <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
+              {translations.complete}
+            </div>
+          ) : (
+            <button type="button" disabled={!canLock} onClick={controller.onLock} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-primary-500/35 bg-primary-500/[0.1] px-3 text-[10px] font-semibold text-primary-300 disabled:cursor-not-allowed disabled:opacity-35">
+              <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
+              {translations.lock}
+            </button>
+          )}
         </div>
       </section>
     </div>
