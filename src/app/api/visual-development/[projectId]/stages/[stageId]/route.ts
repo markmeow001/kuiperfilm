@@ -14,7 +14,7 @@ import { getVisualDevelopmentAspectRatios } from '@/lib/visual-development/model
 import {
   canEnterProductionStage,
   getProductionStage,
-  PRODUCTION_STAGE_DEFINITIONS,
+  type ProductionReferenceSource,
   type ProductionStageDefinition,
 } from '@/lib/visual-development/production-stages'
 import { readResultKey } from '@/lib/visual-development/records'
@@ -116,40 +116,23 @@ async function resolveReferenceImages(input: {
   userId: string
   projectId: string
 }) {
-  if (input.stage.id === 'costume') {
-    const face = await resolveCompletedCandidate({
+  return await Promise.all(input.stage.referenceSources.map(async (reference) => {
+    const location = resolveReferenceLocation(reference)
+    const resolved = await resolveCompletedCandidate({
       characterId: input.characterId,
-      stage: 'face-lock',
-      code: 'EXPR-RESTRAINED',
+      stage: location.stage,
+      code: reference.candidateCode,
       userId: input.userId,
       projectId: input.projectId,
     })
-    const hair = await resolveCompletedCandidate({
-      characterId: input.characterId,
-      stage: 'hair-exploration',
-      userId: input.userId,
-      projectId: input.projectId,
-    })
-    return [face.resultKey, hair.resultKey]
-  }
-  const index = PRODUCTION_STAGE_DEFINITIONS.findIndex((stage) => stage.id === input.stage.id)
-  const previous = PRODUCTION_STAGE_DEFINITIONS[index - 1]
-  if (!previous) throw new ApiError('CONFLICT', { code: 'UPSTREAM_STAGE_MISSING' })
-  const upstream = await resolveCompletedCandidate({
-    characterId: input.characterId,
-    stage: previous.dbStage,
-    userId: input.userId,
-    projectId: input.projectId,
-  })
-  if (input.stage.mediaType === 'video') return [upstream.resultKey]
-  const face = await resolveCompletedCandidate({
-    characterId: input.characterId,
-    stage: 'face-lock',
-    code: 'EXPR-RESTRAINED',
-    userId: input.userId,
-    projectId: input.projectId,
-  })
-  return [face.resultKey, upstream.resultKey]
+    return resolved.resultKey
+  }))
+}
+
+function resolveReferenceLocation(reference: ProductionReferenceSource): { stage: string } {
+  if (reference.source === 'face') return { stage: 'face-lock' }
+  if (reference.source === 'hair') return { stage: 'hair-exploration' }
+  return { stage: getProductionStage(reference.source).dbStage }
 }
 
 async function resolveBoundModel(userId: string, modelKey: string, stage: ProductionStageDefinition) {
@@ -302,9 +285,12 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
         },
         creativePrompt,
         referenceImages,
-        referenceResponsibilities: stage.mediaType === 'video'
-          ? ['scene-integrated visual authority']
-          : ['identity authority', 'upstream design authority'],
+        referenceResponsibilities: stage.referenceSources.map((reference, index) => ({
+          image: index + 1,
+          source: reference.source,
+          candidateCode: reference.candidateCode ?? null,
+          authority: reference.authority,
+        })),
       },
       worldBibleSnapshot: character.workspace.worldBible ?? undefined,
       characterDnaSnapshot: character.characterDna ?? undefined,

@@ -58,7 +58,7 @@ describe('visual development world bible', () => {
     expect(prompt.negativePrompt).toContain('concept art rendering')
   })
 
-  it('Research Canon 的排除證據 -> 只編入文字限制與 Negative Prompt', () => {
+  it('未授權外部處理的 Research Canon 筆記 -> 不送進外部模型 Prompt', () => {
     const avoidConstraint = 'Avoid glossy untouched brass and pristine ceremonial textiles.'
     const prompt = buildWorldBibleAssetPrompt({
       ...completeWorld,
@@ -85,9 +85,41 @@ describe('visual development world bible', () => {
       },
     }, 'MATERIAL-AGING')
 
+    expect(prompt.prompt).not.toContain(avoidConstraint)
+    expect(prompt.negativePrompt).not.toContain(avoidConstraint)
+    expect(prompt.prompt).not.toContain('images/internal-avoid.png')
+  })
+
+  it('已授權且權利合格的排除證據 -> 編入文字限制與 Negative Prompt', () => {
+    const avoidConstraint = 'Avoid glossy untouched brass and pristine ceremonial textiles.'
+    const prompt = buildWorldBibleAssetPrompt({
+      ...completeWorld,
+      research: {
+        ...completeWorld.research,
+        status: 'locked',
+        references: [{
+          id: 'avoid-licensed',
+          key: 'images/licensed-avoid.png',
+          name: 'Licensed exclusion',
+          category: 'costume-material',
+          usage: 'avoid',
+          note: avoidConstraint,
+          sourceUrl: 'https://example.com/licensed',
+          creator: 'Archive',
+          license: 'Production reference license',
+          rightsStatus: 'licensed',
+          externalProcessingAllowed: true,
+          downstreamEnabled: false,
+          reviewStatus: 'approved',
+          rejectionNote: null,
+          createdAt: '2026-07-31T00:00:00.000Z',
+        }],
+      },
+    }, 'MATERIAL-AGING')
+
     expect(prompt.prompt).toContain(avoidConstraint)
     expect(prompt.negativePrompt).toContain(avoidConstraint)
-    expect(prompt.prompt).not.toContain('images/internal-avoid.png')
+    expect(prompt.prompt).not.toContain('images/licensed-avoid.png')
   })
 
   it.each(['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'] as const)(

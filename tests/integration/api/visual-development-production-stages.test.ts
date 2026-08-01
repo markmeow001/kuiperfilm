@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildMockRequest } from '../../helpers/request'
 import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../helpers/auth'
+import { getProductionStage, type ProductionStageId } from '@/lib/visual-development/production-stages'
 
 const prismaMock = vi.hoisted(() => ({
   visualDevelopmentCharacter: {
@@ -33,7 +34,7 @@ vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/api-config', () => apiConfigMock)
 vi.mock('@/lib/task/submitter', () => submitterMock)
 
-function request(stageId: 'costume' | 'video', modelKey: string, aspectRatio = stageId === 'video' ? '16:9' : '3:4') {
+function request(stageId: ProductionStageId, modelKey: string, aspectRatio = stageId === 'video' ? '16:9' : '3:4') {
   return buildMockRequest({
     path: `/api/visual-development/project-1/stages/${stageId}`,
     method: 'POST',
@@ -48,18 +49,10 @@ function request(stageId: 'costume' | 'video', modelKey: string, aspectRatio = s
   })
 }
 
-function storedBrief(stageId: 'costume' | 'video') {
-  const fields = stageId === 'costume'
-    ? {
-        silhouetteSystem: 'tower-like layered silhouette',
-        materialConstruction: 'worn wool, leather and aged silver',
-        storyWear: 'motivated repairs and soot at contact zones',
-      }
-    : {
-        performanceActions: 'walk, listen, speak and controlled action',
-        motionRules: 'natural weight, restrained face and stable cloth',
-        continuityChecks: 'identity, costume, props, scene and light remain stable',
-      }
+function storedBrief(stageId: ProductionStageId) {
+  const fields = Object.fromEntries(
+    getProductionStage(stageId).fields.map((field) => [field, `${stageId} screenplay direction for ${field}`]),
+  )
   return JSON.stringify({
     version: 1,
     stageId,
@@ -79,6 +72,8 @@ function installFixtures(status = 'hair_locked') {
     role: 'protagonist',
     coreTraits: 'guarded and determined',
     stageBrief_costume: storedBrief('costume'),
+    stageBrief_expression: storedBrief('expression'),
+    stageBrief_turnaround: storedBrief('turnaround'),
     stageBrief_video: storedBrief('video'),
   }
   prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({
@@ -94,6 +89,7 @@ function installFixtures(status = 'hair_locked') {
     const stage = args.where.batch.stage
     if (stage === 'face-lock') return { id: 'face-1', taskId: 'face-task-1', code: 'EXPR-RESTRAINED' }
     if (stage === 'hair-exploration') return { id: 'hair-1', taskId: 'hair-task-1', code: 'HAIR-LONG-CENTER', isCanon: true }
+    if (stage === 'phase-05-accessory') return { id: 'accessory-1', taskId: 'accessory-task-1', code: 'PROP-WORN' }
     if (stage === 'phase-12-integration') return { id: 'integration-1', taskId: 'integration-task-1', code: 'INT-WIDE', isCanon: true }
     return null
   })
@@ -144,8 +140,8 @@ describe('production stage API', () => {
       'images/visual-development/face-task-1.png',
       'images/visual-development/hair-task-1.png',
     ])
-    expect(first.payload.prompt).toContain('Reference image 1 is the locked Face ID')
-    expect(first.payload.prompt).toContain('Reference image 2 is the approved upstream design asset')
+    expect(first.payload.prompt).toContain('Reference image 1 is the locked Face ID and identity only')
+    expect(first.payload.prompt).toContain('Reference image 2 is the locked Hair ID')
     expect(first.payload.prompt).toContain('Immutable screenplay-derived stage baseline')
     expect(first.payload.prompt).toContain('Reduce decorative clutter')
     expect(prismaMock.visualDevelopmentBatch.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -165,6 +161,24 @@ describe('production stage API', () => {
           draft_costume_creativePrompt: 'Reduce decorative clutter while preserving the screenplay baseline.',
         }),
       },
+    }))
+  })
+
+  it('uses the approved worn-design authority for Phase 7 instead of feeding the silhouette image into expressions', async () => {
+    installFixtures('silhouette_locked')
+    apiConfigMock.resolveModelSelection.mockResolvedValue({ provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro' })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.POST(request('expression', 'atlascloud::flux-2-pro'), { params: Promise.resolve({ projectId: 'project-1', stageId: 'expression' }) })
+
+    expect(response.status).toBe(202)
+    const first = submitterMock.submitTask.mock.calls[0]?.[0] as { payload: Record<string, unknown> }
+    expect(first.payload.referenceImages).toEqual([
+      'images/visual-development/face-task-1.png',
+      'images/visual-development/accessory-task-1.png',
+    ])
+    expect(first.payload.prompt).toContain('Change only the requested screenplay-driven micro-expression')
+    expect(prismaMock.visualDevelopmentBatch.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ negativePrompt: expect.stringContaining('generic sad stare') }),
     }))
   })
 
@@ -282,7 +296,7 @@ describe('production stage API', () => {
     expect(first.projectId).toBe('project-1')
     expect(first.payload.referenceImages).toEqual(['images/visual-development/integration-task-1.png'])
     expect(first.payload.duration).toBe(5)
-    expect(first.payload.prompt).toContain('same performer')
+    expect(first.payload.prompt).toContain('approved first-frame identity')
   })
 
   it('accepts a portrait ratio registered by the selected Seedance R2V model', async () => {

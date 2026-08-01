@@ -9,6 +9,16 @@ describe('visual development production stages', () => {
     expect(getProductionStage('costume').prerequisiteStatus).toBe('hair_locked')
     expect(getProductionStage('video').prerequisiteStatus).toBe('integration_locked')
     expect(getProductionStage('video').mediaType).toBe('video')
+    expect(getProductionStage('expression').referenceSources).toEqual([
+      expect.objectContaining({ source: 'face', candidateCode: 'EXPR-RESTRAINED' }),
+      expect.objectContaining({ source: 'accessory', candidateCode: 'PROP-WORN' }),
+    ])
+    expect(getProductionStage('turnaround').referenceSources[1]).toEqual(
+      expect.objectContaining({ source: 'accessory', candidateCode: 'PROP-WORN' }),
+    )
+    expect(getProductionStage('video').referenceSources).toEqual([
+      expect.objectContaining({ source: 'integration' }),
+    ])
   })
 
   it('does not open a stage before its upstream Canon, but permits controlled regeneration later', () => {
@@ -45,12 +55,37 @@ describe('visual development production stages', () => {
       },
       creativePrompt: 'Reduce decorative trim and emphasize repaired seams.',
     })
-    expect(result.prompt).toContain('Reference image 1 is the locked Face ID')
-    expect(result.prompt).toContain('Reference image 2 is the approved upstream design asset')
+    expect(result.prompt).toContain('Reference image 1 is the locked Face ID and identity only')
+    expect(result.prompt).toContain('Reference image 2 is the locked Hair ID')
+    expect(result.prompt).toContain('one uninterrupted photorealistic live-action costume reference')
     expect(result.prompt).toContain('Preserve all upstream Canon decisions')
     expect(result.prompt).toContain('Immutable screenplay-derived stage baseline')
     expect(result.prompt).toContain('Reduce decorative trim')
     expect(result.promptStack.stageTemplate).toBe('CADS_PHASE_04_COSTUME_V1')
+    expect(result.negativePrompt).toContain('costume concept sketch')
+    expect(result.negativePrompt).not.toContain('changed locked costume')
+  })
+
+  it('assigns a phase-specific physical output contract to every production stage', () => {
+    for (const stage of PRODUCTION_STAGE_DEFINITIONS) {
+      expect(stage.referenceSources.length).toBeGreaterThan(0)
+      expect(stage.outputRule).toMatch(/one /i)
+      expect(stage.negativeTerms.length).toBeGreaterThan(0)
+    }
+    expect(getProductionStage('expression').outputRule).toContain('entire head')
+    expect(getProductionStage('turnaround').outputRule).toContain('crown to soles')
+    expect(getProductionStage('evolution').negativeTerms).toContain('unmotivated dirt')
+  })
+
+  it('references only real candidate codes from completed upstream production stages', () => {
+    for (const stage of PRODUCTION_STAGE_DEFINITIONS) {
+      for (const reference of stage.referenceSources) {
+        if (reference.source === 'face' || reference.source === 'hair' || !reference.candidateCode) continue
+        const upstream = getProductionStage(reference.source)
+        expect(upstream.phase).toBeLessThan(stage.phase)
+        expect(upstream.variants.map((variant) => variant.code)).toContain(reference.candidateCode)
+      }
+    }
   })
 
   it('validates a screenplay baseline against the distinct fields of every Phase 4–13 stage', () => {

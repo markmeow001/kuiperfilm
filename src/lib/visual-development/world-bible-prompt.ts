@@ -1,5 +1,5 @@
 import { WORLD_ASSET_DEFINITIONS, type WorldAssetCode, type WorldBibleDocument } from './world-bible'
-import { researchPromptConstraints } from './research'
+import { externallyAuthorizedResearchPromptConstraints } from './research'
 
 function line(label: string, value: string): string {
   return `${label}: ${value.trim()}`
@@ -19,7 +19,7 @@ const LIVE_ACTION_DELIVERABLE: Record<WorldAssetCode, string> = {
 export function buildWorldBibleAssetPrompt(document: WorldBibleDocument, code: WorldAssetCode) {
   const definition = WORLD_ASSET_DEFINITIONS.find((item) => item.code === code)
   if (!definition) throw new Error(`WORLD_ASSET_CODE_UNKNOWN: ${code}`)
-  const constraints = researchPromptConstraints(document.research)
+  const constraints = externallyAuthorizedResearchPromptConstraints(document.research)
 
   const prompt = [
     'Create exactly one production-design reference photograph for a professional live-action feature film.',

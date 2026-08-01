@@ -265,6 +265,32 @@ export function researchPromptConstraints(document: ResearchDocument): {
   }
 }
 
+/**
+ * Returns only research notes that the project has explicitly cleared for an
+ * external model. Internal/editorial references can still guide the human
+ * review process, but their notes must not silently leave KuiperFilm.
+ */
+export function externallyAuthorizedResearchPromptConstraints(document: ResearchDocument): {
+  use: string[]
+  avoid: string[]
+} {
+  if (document.status !== 'locked') return { use: [], avoid: [] }
+  const approved = document.references.filter((reference) => (
+    reference.reviewStatus === 'approved'
+    && reference.externalProcessingAllowed
+    && EXTERNAL_PROCESSING_RIGHTS.has(reference.rightsStatus)
+    && reference.note.trim()
+  ))
+  return {
+    use: approved
+      .filter((reference) => reference.usage === 'use')
+      .map((reference) => reference.note.trim().slice(0, 600)),
+    avoid: approved
+      .filter((reference) => reference.usage === 'avoid')
+      .map((reference) => reference.note.trim().slice(0, 600)),
+  }
+}
+
 export function canSendResearchReferenceExternally(reference: ResearchReference): boolean {
   return reference.externalProcessingAllowed
     && reference.downstreamEnabled
