@@ -70,6 +70,15 @@ export interface WorldBibleAsset {
   history: CandidateGenerationSnapshot[]
 }
 
+export type PendingWorldBibleAsset = Omit<WorldBibleAsset, 'taskId'>
+
+export interface WorldGenerationReservation {
+  id: string
+  kind: 'initial' | 'regenerate'
+  startedAt: string
+  pendingAssets: PendingWorldBibleAsset[]
+}
+
 export interface WorldBibleDocument {
   projectPremise: string
   visualThesis: string
@@ -91,6 +100,7 @@ export interface WorldBibleDocument {
   lockedAt: string | null
   scriptAnalysis: ScriptAnalysisDocument | null
   research: ResearchDocument
+  generationReservation: WorldGenerationReservation | null
 }
 
 export const EMPTY_WORLD_BIBLE: WorldBibleDocument = {
@@ -114,6 +124,7 @@ export const EMPTY_WORLD_BIBLE: WorldBibleDocument = {
   lockedAt: null,
   scriptAnalysis: null,
   research: EMPTY_RESEARCH,
+  generationReservation: null,
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -202,6 +213,43 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
       }]
     })
     : []
+  const reservationSource = record(source.generationReservation)
+  const pendingAssets = Array.isArray(reservationSource.pendingAssets)
+    ? reservationSource.pendingAssets.flatMap((item) => {
+      const entry = record(item)
+      if (!isWorldAssetCode(entry.code)) return []
+      const history = Array.isArray(entry.history)
+        ? entry.history.flatMap((value) => {
+          const snapshot = parseCandidateGenerationSnapshot(value)
+          return snapshot ? [snapshot] : []
+        })
+        : []
+      const prompt = typeof entry.prompt === 'string' ? entry.prompt : ''
+      return [{
+        code: entry.code,
+        prompt,
+        negativePrompt: typeof entry.negativePrompt === 'string' ? entry.negativePrompt : '',
+        requestedSeed: typeof entry.requestedSeed === 'number' ? entry.requestedSeed : null,
+        seedStatus: entry.seedStatus === 'applied' ? 'applied' as const : 'unsupported' as const,
+        approved: false,
+        rejectionNote: null,
+        originPrompt: typeof entry.originPrompt === 'string' ? entry.originPrompt : prompt,
+        history,
+      }]
+    })
+    : []
+  const generationReservation = (
+    typeof reservationSource.id === 'string'
+    && (reservationSource.kind === 'initial' || reservationSource.kind === 'regenerate')
+    && typeof reservationSource.startedAt === 'string'
+    && pendingAssets.length > 0
+  ) ? {
+      id: reservationSource.id,
+      kind: reservationSource.kind,
+      startedAt: reservationSource.startedAt,
+      pendingAssets,
+    } satisfies WorldGenerationReservation
+    : null
 
   return {
     projectPremise: text(source, 'projectPremise'),
@@ -224,6 +272,7 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
     lockedAt: nullableText(source, 'lockedAt'),
     scriptAnalysis: parseStoredScriptAnalysis(source.scriptAnalysis),
     research: parseResearch(source.research),
+    generationReservation,
   }
 }
 

@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildMockRequest } from '../../helpers/request'
 import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../helpers/auth'
 
+const workspaceState = vi.hoisted(() => ({ value: null as Record<string, unknown> | null }))
 const prismaMock = vi.hoisted(() => ({
   visualDevelopmentWorkspace: {
-    findUnique: vi.fn(),
-    updateMany: vi.fn(async (_args: { where: Record<string, unknown>; data: Record<string, unknown> }) => ({ count: 1 })),
+    findUnique: vi.fn(async () => workspaceState.value),
+    updateMany: vi.fn(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      if (workspaceState.value) workspaceState.value = { ...workspaceState.value, ...args.data, updatedAt: new Date() }
+      return { count: 1 }
+    }),
     upsert: vi.fn(async (args: { create: Record<string, unknown>; update: Record<string, unknown> }) => ({
       id: 'workspace-1',
       worldVersion: 1,
@@ -15,7 +19,7 @@ const prismaMock = vi.hoisted(() => ({
     update: vi.fn(async (_args: { data: Record<string, unknown> }) => ({})),
   },
   task: {
-    findMany: vi.fn(async () => []),
+    findMany: vi.fn(async (): Promise<Array<{ id: string; payload: unknown }>> => []),
     findFirst: vi.fn(),
     count: vi.fn(),
   },
@@ -95,8 +99,14 @@ describe('visual development World Bible API', () => {
     resetAuthMockState()
     installAuthMocks()
     mockAuthenticated('user-1')
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_draft', worldBible: completeWorld,
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+    }
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockImplementation(async () => workspaceState.value)
+    prismaMock.visualDevelopmentWorkspace.updateMany.mockImplementation(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      if (workspaceState.value) workspaceState.value = { ...workspaceState.value, ...args.data, updatedAt: new Date() }
+      return { count: 1 }
     })
     submitterMock.submitTask.mockImplementation(async (input: { targetId: string }) => ({
       taskId: `task-${input.targetId.split(':')[1]}`,
@@ -120,13 +130,13 @@ describe('visual development World Bible API', () => {
   })
 
   it('Research Canon 尚未鎖定 -> Phase 00 不得送出生圖任務', async () => {
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1',
       projectId: 'project-1',
       worldVersion: 1,
       status: 'world_draft',
       worldBible: { ...completeWorld, research: { ...completeWorld.research, status: 'draft', canonId: null, lockedAt: null } },
-    })
+    }
     const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
     const response = await mod.POST(generateRequest('atlascloud::flux-2-pro'), {
       params: Promise.resolve({ projectId: 'project-1' }),
@@ -154,7 +164,7 @@ describe('visual development World Bible API', () => {
   })
 
   it('Research Canon references exceed the selected model hard limit -> rejects before paid submission', async () => {
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_draft',
       worldBible: {
         ...completeWorld,
@@ -167,7 +177,7 @@ describe('visual development World Bible API', () => {
           })),
         },
       },
-    })
+    }
     apiConfigMock.resolveModelSelection.mockResolvedValue({
       provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro',
     })
@@ -222,6 +232,172 @@ describe('visual development World Bible API', () => {
     expect(savedWorldBible.assets).toHaveLength(4)
   })
 
+  it('生成批次 reservation 寫入衝突 -> 不會先送出任何付費任務', async () => {
+    apiConfigMock.resolveModelSelection.mockResolvedValue({
+      provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro',
+    })
+    prismaMock.visualDevelopmentWorkspace.updateMany.mockResolvedValueOnce({ count: 0 })
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.POST(generateRequest('atlascloud::flux-2-pro'), {
+      params: Promise.resolve({ projectId: 'project-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('VISUAL_DEVELOPMENT_WRITE_CONFLICT')
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
+  it('任務送出後遇到協作 autosave -> 重新合併最新文件並保留全部 task IDs', async () => {
+    apiConfigMock.resolveModelSelection.mockResolvedValue({
+      provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro',
+    })
+    let writes = 0
+    prismaMock.visualDevelopmentWorkspace.updateMany.mockImplementation(async (args: { data: Record<string, unknown> }) => {
+      writes += 1
+      if (writes === 2 && workspaceState.value) {
+        const latestWorldBible = workspaceState.value.worldBible as Record<string, unknown>
+        workspaceState.value = {
+          ...workspaceState.value,
+          worldBible: { ...latestWorldBible, projectPremise: 'A collaborator refined the premise during submission.' },
+          updatedAt: new Date(),
+        }
+        return { count: 0 }
+      }
+      if (workspaceState.value) workspaceState.value = { ...workspaceState.value, ...args.data, updatedAt: new Date() }
+      return { count: 1 }
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.POST(generateRequest('atlascloud::flux-2-pro'), {
+      params: Promise.resolve({ projectId: 'project-1' }),
+    })
+
+    expect(response.status).toBe(202)
+    expect(writes).toBe(3)
+    const savedWorldBible = workspaceState.value?.worldBible as { projectPremise: string; assets: Array<{ taskId: string }>; generationReservation: unknown }
+    expect(savedWorldBible.projectPremise).toBe('A collaborator refined the premise during submission.')
+    expect(savedWorldBible.assets.map((asset) => asset.taskId)).toHaveLength(4)
+    expect(savedWorldBible.generationReservation).toBeNull()
+  })
+
+  it('伺服器於送出後中斷 -> 從既有任務完整復原 reservation 並避免重複扣款', async () => {
+    const runId = 'recover-complete-run'
+    const pendingAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
+      code,
+      prompt: `${code} prompt`,
+      negativePrompt: 'text, watermark',
+      requestedSeed: null,
+      seedStatus: 'unsupported',
+      approved: false,
+      rejectionNote: null,
+      originPrompt: `${code} prompt`,
+      history: [],
+    }))
+    workspaceState.value = {
+      id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_submitting',
+      worldBible: {
+        ...completeWorld,
+        generationReservation: {
+          id: runId,
+          kind: 'initial',
+          startedAt: '2026-07-30T00:00:00.000Z',
+          pendingAssets,
+        },
+      },
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+    }
+    prismaMock.task.findMany.mockResolvedValue(pendingAssets.map((asset) => ({
+      id: `recovered-${asset.code}`,
+      payload: { meta: { visualDevelopmentWorldAssetCode: asset.code } },
+    })))
+
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.POST(generateRequest('atlascloud::flux-2-pro'), {
+      params: Promise.resolve({ projectId: 'project-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data).toMatchObject({ reconciled: true, resolved: true, recovered: 4, expected: 4 })
+    expect(apiConfigMock.resolveModelSelection).not.toHaveBeenCalled()
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+    const saved = workspaceState.value?.worldBible as {
+      generationReservation: unknown
+      assets: Array<{ code: string; taskId: string }>
+    }
+    expect(saved.generationReservation).toBeNull()
+    expect(saved.assets).toEqual(expect.arrayContaining(pendingAssets.map((asset) => expect.objectContaining({
+      code: asset.code,
+      taskId: `recovered-${asset.code}`,
+    }))))
+    expect(workspaceState.value?.status).toBe('world_generating')
+  })
+
+  it('逾時 reservation 僅找到部分任務 -> 保留已扣款資產並解除永久阻塞', async () => {
+    const runId = 'recover-partial-run'
+    const pendingAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
+      code,
+      prompt: `${code} prompt`,
+      negativePrompt: 'text, watermark',
+      requestedSeed: null,
+      seedStatus: 'unsupported',
+      approved: false,
+      rejectionNote: null,
+      originPrompt: `${code} prompt`,
+      history: [],
+    }))
+    workspaceState.value = {
+      id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_submitting',
+      worldBible: {
+        ...completeWorld,
+        generationReservation: {
+          id: runId,
+          kind: 'initial',
+          startedAt: '2026-07-30T00:00:00.000Z',
+          pendingAssets,
+        },
+      },
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+    }
+    prismaMock.task.findMany.mockResolvedValue([{
+      id: 'recovered-WORLD-FORMULA',
+      payload: { meta: { visualDevelopmentWorldAssetCode: 'WORLD-FORMULA' } },
+    }])
+
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/world-bible',
+      method: 'PATCH',
+      body: {
+        action: 'regenerate-asset',
+        code: 'WORLD-FORMULA',
+        prompt: 'This retry must recover instead of creating another paid task.',
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: {
+        action: 'recover-generation',
+        requestedAction: 'regenerate-asset',
+        reconciled: true,
+        resolved: true,
+      },
+    })
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+    const saved = workspaceState.value?.worldBible as {
+      generationReservation: unknown
+      assets: Array<{ code: string; taskId: string }>
+    }
+    expect(saved.generationReservation).toBeNull()
+    expect(saved.assets).toEqual([expect.objectContaining({
+      code: 'WORLD-FORMULA',
+      taskId: 'recovered-WORLD-FORMULA',
+    })])
+    expect(workspaceState.value?.status).toBe('world_partial_failed')
+  })
+
   it('上一批世界觀資產仍在生成 -> 拒絕重複送出第二批付費任務', async () => {
     const activeAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
       code,
@@ -233,13 +409,13 @@ describe('visual development World Bible API', () => {
       approved: false,
       rejectionNote: null,
     }))
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1',
       projectId: 'project-1',
       worldVersion: 1,
       status: 'world_generating',
       worldBible: { ...completeWorld, assets: activeAssets },
-    })
+    }
     prismaMock.task.count.mockResolvedValue(2)
 
     const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
@@ -276,9 +452,9 @@ describe('visual development World Bible API', () => {
       originPrompt: `${code} original prompt`,
       history: [],
     }))
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_review', worldBible: { ...completeWorld, assets },
-    })
+    }
     prismaMock.task.findFirst.mockResolvedValue({
       id: 'task-WORLD-FORMULA',
       type: 'visual_development_image',
@@ -347,9 +523,9 @@ describe('visual development World Bible API', () => {
     const approvedAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
       code, taskId: `task-${code}`, prompt: code, negativePrompt: '', requestedSeed: null, seedStatus: 'unsupported', approved: true, rejectionNote: null,
     }))
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1', projectId: 'project-1', worldVersion: 3, status: 'world_review', worldBible: { ...completeWorld, assets: approvedAssets },
-    })
+    }
     prismaMock.task.count.mockResolvedValue(4)
     const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
     const response = await mod.PATCH(buildMockRequest({
@@ -368,7 +544,7 @@ describe('visual development World Bible API', () => {
     const approvedAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
       code, taskId: `task-${code}`, prompt: code, negativePrompt: '', requestedSeed: null, seedStatus: 'unsupported', approved: true, rejectionNote: null,
     }))
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1',
       projectId: 'project-1',
       worldVersion: 3,
@@ -378,7 +554,7 @@ describe('visual development World Bible API', () => {
         assets: approvedAssets,
         research: { ...completeWorld.research, status: 'draft', canonId: null, lockedAt: null },
       },
-    })
+    }
     const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
     const response = await mod.PATCH(buildMockRequest({
       path: '/api/visual-development/project-1/world-bible', method: 'PATCH', body: { action: 'canon-lock' },
@@ -391,9 +567,9 @@ describe('visual development World Bible API', () => {
   })
 
   it('有效 PNG 參考圖 -> 上傳並寫入專案 World Bible', async () => {
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_draft', worldBible: { ...completeWorld, references: [] },
-    })
+    }
     const form = new FormData()
     form.append('file', new File([new Uint8Array([137, 80, 78, 71])], 'reference.png', { type: 'image/png' }))
     form.append('category', 'architecture')
@@ -411,7 +587,7 @@ describe('visual development World Bible API', () => {
   })
 
   it('Research Canon 已繼承十二張參考圖 -> 仍可加入不會送往外部的 Phase 00 站內參考圖', async () => {
-    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+    workspaceState.value = {
       id: 'workspace-1',
       projectId: 'project-1',
       worldVersion: 1,
@@ -428,7 +604,7 @@ describe('visual development World Bible API', () => {
           })),
         },
       },
-    })
+    }
     const form = new FormData()
     form.append('file', new File([new Uint8Array([137, 80, 78, 71])], 'reference.png', { type: 'image/png' }))
     const request = new NextRequest('http://localhost/api/visual-development/project-1/world-bible/reference', { method: 'POST', body: form })

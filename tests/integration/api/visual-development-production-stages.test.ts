@@ -8,6 +8,7 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
     findUnique: vi.fn(),
     update: vi.fn(async () => ({})),
+    updateMany: vi.fn(async () => ({ count: 1 })),
   },
   visualDevelopmentCandidate: {
     findFirst: vi.fn(),
@@ -18,6 +19,7 @@ const prismaMock = vi.hoisted(() => ({
   visualDevelopmentBatch: {
     create: vi.fn(),
     update: vi.fn(async () => ({})),
+    updateMany: vi.fn(async () => ({ count: 1 })),
     findUnique: vi.fn(),
     findFirst: vi.fn(),
   },
@@ -25,7 +27,10 @@ const prismaMock = vi.hoisted(() => ({
     findFirst: vi.fn(),
     count: vi.fn(),
   },
-  $transaction: vi.fn(async (operations: unknown[]) => operations),
+  $transaction: vi.fn(async (input: unknown) => {
+    if (typeof input === 'function') return await (input as (tx: typeof prismaMock) => Promise<unknown>)(prismaMock)
+    return input
+  }),
 }))
 
 const apiConfigMock = vi.hoisted(() => ({ resolveModelSelection: vi.fn() }))
@@ -72,8 +77,13 @@ function installFixtures(status = 'hair_locked') {
   const characterDna = {
     role: 'protagonist',
     coreTraits: 'guarded and determined',
+    faceBibleBatchId: 'face-lock-batch-1',
     hairBibleBatchId: 'hair-validation-batch-1',
     hairDirectionCandidateId: 'hair-1',
+    accessoryBatchId: 'accessory-batch-1',
+    accessoryPrimaryCandidateId: 'accessory-1',
+    integrationBatchId: 'integration-batch-1',
+    integrationPrimaryCandidateId: 'integration-1',
     stageBrief_costume: storedBrief('costume'),
     stageBrief_expression: storedBrief('expression'),
     stageBrief_turnaround: storedBrief('turnaround'),
@@ -87,7 +97,7 @@ function installFixtures(status = 'hair_locked') {
     castingBrief: { apparentAge: '24–28' },
     workspace: { id: 'workspace-1', projectId: 'project-1', worldBible: { projectPremise: 'underground city', visualThesis: 'sacred order hides predation' } },
   })
-  prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({ characterDna })
+  prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({ status, characterDna })
   prismaMock.visualDevelopmentBatch.findFirst.mockResolvedValue({
     id: 'hair-validation-batch-1',
     promptStack: { sourceHairCandidateId: 'hair-1' },
@@ -187,6 +197,12 @@ describe('production stage API', () => {
     expect(first.payload.prompt).toContain('Change only the requested screenplay-driven micro-expression')
     expect(prismaMock.visualDevelopmentBatch.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ negativePrompt: expect.stringContaining('generic sad stare') }),
+    }))
+    expect(prismaMock.visualDevelopmentCandidate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        code: 'PROP-WORN',
+        batch: expect.objectContaining({ id: 'accessory-batch-1', stage: 'phase-05-accessory' }),
+      }),
     }))
   })
 
@@ -344,7 +360,7 @@ describe('production stage API', () => {
         id: 'character-1',
         code: 'CHR-SNO',
         status: 'hair_locked',
-        characterDna: { hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
+        characterDna: { faceBibleBatchId: 'face-lock-batch-1', hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
         workspace: { projectId: 'project-1' },
       },
       candidates: Array.from({ length: 4 }, (_, index) => ({ id: `candidate-${index}`, taskId: `task-${index}`, shortlisted: true, isCanon: index === 0 })),
@@ -354,8 +370,45 @@ describe('production stage API', () => {
     const response = await mod.PATCH(buildMockRequest({ path: '/api/visual-development/project-1/stages/costume', method: 'PATCH', body: { action: 'canon-lock', batchId: 'costume-batch-1' } }), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
 
     expect(response.status).toBe(200)
-    expect(prismaMock.visualDevelopmentCharacter.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'costume_locked' }) }))
-    expect(prismaMock.visualDevelopmentBatch.update).toHaveBeenCalledWith({ where: { id: 'costume-batch-1' }, data: { status: 'canon_locked' } })
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'costume_locked' }) }))
+    expect(prismaMock.visualDevelopmentBatch.updateMany).toHaveBeenCalledWith({
+      where: { id: 'costume-batch-1', status: 'queued' },
+      data: { status: 'canon_locked' },
+    })
+  })
+
+  it('two concurrent Canon locks -> only the batch that atomically claims its prior status may advance', async () => {
+    prismaMock.visualDevelopmentBatch.findUnique.mockResolvedValue({
+      id: 'costume-batch-race',
+      stage: 'phase-04-costume',
+      status: 'queued',
+      characterId: 'character-1',
+      promptStack: {
+        stageRecord: { silhouetteSystem: 'tower', materialConstruction: 'wool', storyWear: 'soot' },
+        referenceCandidateIds: ['face-1', 'hair-1'],
+      },
+      character: {
+        id: 'character-1', code: 'CHR-SNO', status: 'hair_locked',
+        characterDna: { faceBibleBatchId: 'face-lock-batch-1', hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
+        workspace: { projectId: 'project-1' },
+      },
+      candidates: Array.from({ length: 4 }, (_, index) => ({
+        id: `race-candidate-${index}`, taskId: `race-task-${index}`, shortlisted: true, isCanon: index === 0,
+      })),
+    })
+    prismaMock.task.count.mockResolvedValue(4)
+    prismaMock.visualDevelopmentBatch.updateMany.mockResolvedValueOnce({ count: 0 })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/stages/costume',
+      method: 'PATCH',
+      body: { action: 'canon-lock', batchId: 'costume-batch-race' },
+    }), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('STAGE_BATCH_IMMUTABLE')
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).not.toHaveBeenCalled()
   })
 
   it('does not allow asset review to mutate a Canon-locked production batch', async () => {
@@ -379,6 +432,71 @@ describe('production stage API', () => {
     expect(prismaMock.visualDevelopmentCandidate.update).not.toHaveBeenCalled()
   })
 
+  it('asset review loses the batch claim race -> does not mutate a candidate after Canon lock starts', async () => {
+    prismaMock.visualDevelopmentCandidate.findUnique.mockResolvedValue({
+      id: 'candidate-race', taskId: 'task-race', batchId: 'costume-batch-race',
+      batch: {
+        id: 'costume-batch-race', stage: 'phase-04-costume', status: 'queued',
+        character: { workspace: { projectId: 'project-1' } },
+      },
+    })
+    prismaMock.visualDevelopmentBatch.updateMany.mockResolvedValueOnce({ count: 0 })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/stages/costume',
+      method: 'PATCH',
+      body: { action: 'asset-review', candidateId: 'candidate-race', approved: true },
+    }), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('STAGE_BATCH_IMMUTABLE')
+    expect(prismaMock.task.findFirst).not.toHaveBeenCalled()
+    expect(prismaMock.visualDevelopmentCandidate.update).not.toHaveBeenCalled()
+  })
+
+  it('Canon lock re-reads the claimed batch -> rejects a review change that happened before the claim', async () => {
+    const initialBatch = {
+      id: 'costume-batch-recheck', stage: 'phase-04-costume', status: 'queued', characterId: 'character-1',
+      character: { workspace: { projectId: 'project-1' } },
+    }
+    const claimedBatch = {
+      ...initialBatch,
+      status: 'canon_locked',
+      promptStack: {
+        stageRecord: { silhouetteSystem: 'tower', materialConstruction: 'wool', storyWear: 'soot' },
+        referenceCandidateIds: ['face-1', 'hair-1'],
+      },
+      character: {
+        id: 'character-1', code: 'CHR-SNO', status: 'hair_locked',
+        characterDna: { faceBibleBatchId: 'face-lock-batch-1', hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
+        workspace: { projectId: 'project-1' },
+      },
+      candidates: Array.from({ length: 4 }, (_, index) => ({
+        id: `recheck-candidate-${index}`,
+        taskId: `recheck-task-${index}`,
+        shortlisted: index !== 3,
+        isCanon: index === 0,
+      })),
+    }
+    prismaMock.visualDevelopmentBatch.findUnique
+      .mockResolvedValueOnce(initialBatch)
+      .mockResolvedValueOnce(claimedBatch)
+
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/stages/costume',
+      method: 'PATCH',
+      body: { action: 'canon-lock', batchId: 'costume-batch-recheck' },
+    }), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('STAGE_ALL_ASSETS_MUST_BE_APPROVED')
+    expect(prismaMock.task.count).not.toHaveBeenCalled()
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).not.toHaveBeenCalled()
+  })
+
   it('rejects an old production batch after its upstream Canon lineage changes', async () => {
     prismaMock.visualDevelopmentBatch.findUnique.mockResolvedValue({
       id: 'costume-batch-old', stage: 'phase-04-costume', status: 'queued', characterId: 'character-1',
@@ -388,7 +506,7 @@ describe('production stage API', () => {
       },
       character: {
         id: 'character-1', code: 'CHR-SNO', status: 'hair_locked',
-        characterDna: { hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
+        characterDna: { faceBibleBatchId: 'face-lock-batch-1', hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
         workspace: { projectId: 'project-1' },
       },
       candidates: Array.from({ length: 4 }, (_, index) => ({

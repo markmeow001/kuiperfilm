@@ -82,6 +82,7 @@ async function requireAccess(projectId: string, action: 'read' | 'write') {
 
 async function resolveCompletedCandidate(input: {
   candidateId?: string
+  batchId?: string
   characterId: string
   stage: string
   userId: string
@@ -93,6 +94,7 @@ async function resolveCompletedCandidate(input: {
       ...(input.candidateId ? { id: input.candidateId } : {}),
       ...(input.code ? { code: input.code } : { isCanon: true }),
       batch: {
+        ...(input.batchId ? { id: input.batchId } : {}),
         characterId: input.characterId,
         stage: input.stage,
         ...(input.stage === 'face-lock' || input.stage.startsWith('phase-') ? { status: 'canon_locked' } : {}),
@@ -138,7 +140,26 @@ async function resolveReferenceImages(input: {
       })
       return { candidateId: resolved.candidate.id, resultKey: resolved.resultKey }
     }
+    if (reference.source === 'face') {
+      const faceBibleBatchId = requiredString(input.characterDna.faceBibleBatchId, 'characterDna.faceBibleBatchId', 191)
+      const resolved = await resolveCompletedCandidate({
+        batchId: faceBibleBatchId,
+        characterId: input.characterId,
+        stage: location.stage,
+        code: reference.candidateCode,
+        userId: input.userId,
+        projectId: input.projectId,
+      })
+      return { candidateId: resolved.candidate.id, resultKey: resolved.resultKey }
+    }
+    const sourceStage = getProductionStage(reference.source)
+    const batchId = requiredString(input.characterDna[`${sourceStage.id}BatchId`], `characterDna.${sourceStage.id}BatchId`, 191)
+    const candidateId = reference.candidateCode
+      ? undefined
+      : requiredString(input.characterDna[`${sourceStage.id}PrimaryCandidateId`], `characterDna.${sourceStage.id}PrimaryCandidateId`, 191)
     const resolved = await resolveCompletedCandidate({
+      batchId,
+      candidateId,
       characterId: input.characterId,
       stage: location.stage,
       code: reference.candidateCode,
@@ -438,96 +459,127 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
 
   if (action === 'asset-review' || action === 'select-primary') {
     const candidateId = requiredString(body.candidateId, 'candidateId', 191)
-    const candidate = await prisma.visualDevelopmentCandidate.findUnique({
-      where: { id: candidateId },
-      include: { batch: { include: { character: { include: { workspace: true } } } } },
-    })
-    if (!candidate || candidate.batch.stage !== stage.dbStage || candidate.batch.character.workspace.projectId !== projectId) {
-      throw new ApiError('NOT_FOUND')
-    }
-    if (candidate.batch.status === 'canon_locked' || candidate.batch.status === 'superseded') {
-      throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
-    }
-    if (!candidate.taskId) throw new ApiError('CONFLICT', { code: 'STAGE_ASSET_INCOMPLETE' })
-    const task = await prisma.task.findFirst({
-      where: { id: candidate.taskId, userId: access.userId, projectId, status: 'completed' },
-      select: { result: true },
-    })
-    if (!task || !readResultKey(task.result)) throw new ApiError('CONFLICT', { code: 'STAGE_ASSET_INCOMPLETE' })
-    if (action === 'select-primary') {
-      await prisma.$transaction([
-        prisma.visualDevelopmentCandidate.updateMany({ where: { batchId: candidate.batchId }, data: { isCanon: false } }),
-        prisma.visualDevelopmentCandidate.update({ where: { id: candidate.id }, data: { isCanon: true, shortlisted: true } }),
-      ])
-    } else {
-      const approved = body.approved === true
-      const rejectionNote = approved ? null : requiredString(body.rejectionNote, 'rejectionNote', 1000)
-      await prisma.visualDevelopmentCandidate.update({
-        where: { id: candidate.id },
-        data: { shortlisted: approved, rejectionNote, ...(approved ? {} : { isCanon: false }) },
+    const approved = body.approved === true
+    const rejectionNote = action === 'asset-review' && !approved
+      ? requiredString(body.rejectionNote, 'rejectionNote', 1000)
+      : null
+    await prisma.$transaction(async (transaction) => {
+      const candidate = await transaction.visualDevelopmentCandidate.findUnique({
+        where: { id: candidateId },
+        include: { batch: { include: { character: { include: { workspace: true } } } } },
       })
-    }
+      if (!candidate || candidate.batch.stage !== stage.dbStage || candidate.batch.character.workspace.projectId !== projectId) {
+        throw new ApiError('NOT_FOUND')
+      }
+      if (candidate.batch.status === 'canon_locked' || candidate.batch.status === 'superseded') {
+        throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
+      }
+      const touched = await transaction.visualDevelopmentBatch.updateMany({
+        where: { id: candidate.batchId, status: candidate.batch.status },
+        data: { updatedAt: new Date() },
+      })
+      if (touched.count !== 1) throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
+      if (!candidate.taskId) throw new ApiError('CONFLICT', { code: 'STAGE_ASSET_INCOMPLETE' })
+      const task = await transaction.task.findFirst({
+        where: { id: candidate.taskId, userId: access.userId, projectId, status: 'completed' },
+        select: { result: true },
+      })
+      if (!task || !readResultKey(task.result)) throw new ApiError('CONFLICT', { code: 'STAGE_ASSET_INCOMPLETE' })
+      if (action === 'select-primary') {
+        await transaction.visualDevelopmentCandidate.updateMany({ where: { batchId: candidate.batchId }, data: { isCanon: false } })
+        await transaction.visualDevelopmentCandidate.update({ where: { id: candidate.id }, data: { isCanon: true, shortlisted: true } })
+      } else {
+        await transaction.visualDevelopmentCandidate.update({
+          where: { id: candidate.id },
+          data: { shortlisted: approved, rejectionNote, ...(approved ? {} : { isCanon: false }) },
+        })
+      }
+    })
     return NextResponse.json({ success: true, data: { candidateId } })
   }
 
   if (action !== 'canon-lock') throw new ApiError('INVALID_PARAMS', { code: 'STAGE_ACTION_INVALID' })
   const batchId = requiredString(body.batchId, 'batchId', 191)
-  const batch = await prisma.visualDevelopmentBatch.findUnique({
-    where: { id: batchId },
-    include: { character: { include: { workspace: true } }, candidates: true },
-  })
-  if (!batch || batch.stage !== stage.dbStage || batch.character.workspace.projectId !== projectId) throw new ApiError('NOT_FOUND')
-  if (batch.status === 'canon_locked' || batch.status === 'superseded') {
-    throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
-  }
-  if (!canEnterProductionStage(batch.character.status, stage.id)) {
-    throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LOCK_REQUIRED', details: { required: stage.prerequisiteStatus } })
-  }
-  if (batch.candidates.length !== stage.variants.length || batch.candidates.some((candidate) => !candidate.shortlisted)) {
-    throw new ApiError('CONFLICT', { code: 'STAGE_ALL_ASSETS_MUST_BE_APPROVED' })
-  }
-  const primary = batch.candidates.find((candidate) => candidate.isCanon)
-  if (!primary) throw new ApiError('CONFLICT', { code: 'STAGE_PRIMARY_ASSET_REQUIRED' })
-  const taskIds = batch.candidates.flatMap((candidate) => candidate.taskId ? [candidate.taskId] : [])
-  const completed = await prisma.task.count({ where: { id: { in: taskIds }, userId: access.userId, projectId, status: 'completed' } })
-  if (completed !== stage.variants.length) throw new ApiError('CONFLICT', { code: 'STAGE_ASSETS_INCOMPLETE' })
+  const version = await prisma.$transaction(async (transaction) => {
+    const initialBatch = await transaction.visualDevelopmentBatch.findUnique({
+      where: { id: batchId },
+      include: { character: { include: { workspace: true } } },
+    })
+    if (!initialBatch || initialBatch.stage !== stage.dbStage || initialBatch.character.workspace.projectId !== projectId) {
+      throw new ApiError('NOT_FOUND')
+    }
+    if (initialBatch.status === 'canon_locked' || initialBatch.status === 'superseded') {
+      throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
+    }
+    const claimed = await transaction.visualDevelopmentBatch.updateMany({
+      where: { id: initialBatch.id, status: initialBatch.status },
+      data: { status: 'canon_locked' },
+    })
+    if (claimed.count !== 1) throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
+    const batch = await transaction.visualDevelopmentBatch.findUnique({
+      where: { id: batchId },
+      include: { character: { include: { workspace: true } }, candidates: true },
+    })
+    if (!batch) throw new ApiError('NOT_FOUND')
+    if (batch.candidates.length !== stage.variants.length || batch.candidates.some((candidate) => !candidate.shortlisted)) {
+      throw new ApiError('CONFLICT', { code: 'STAGE_ALL_ASSETS_MUST_BE_APPROVED' })
+    }
+    const primary = batch.candidates.find((candidate) => candidate.isCanon)
+    if (!primary) throw new ApiError('CONFLICT', { code: 'STAGE_PRIMARY_ASSET_REQUIRED' })
+    const taskIds = batch.candidates.flatMap((candidate) => candidate.taskId ? [candidate.taskId] : [])
+    const completed = await transaction.task.count({
+      where: { id: { in: taskIds }, userId: access.userId, projectId, status: 'completed' },
+    })
+    if (completed !== stage.variants.length) throw new ApiError('CONFLICT', { code: 'STAGE_ASSETS_INCOMPLETE' })
 
-  const dna = toStringRecord(batch.character.characterDna)
-  const versionKey = `${stage.id}CanonVersion`
-  const currentVersion = Number.parseInt(dna[versionKey] || '0', 10)
-  const version = Number.isFinite(currentVersion) ? currentVersion + 1 : 1
-  const promptStack = toRecord(batch.promptStack)
-  const storedReferenceCandidateIds = Array.isArray(promptStack.referenceCandidateIds)
-    ? promptStack.referenceCandidateIds.filter((value): value is string => typeof value === 'string')
-    : []
-  const currentReferenceAssets = await resolveReferenceImages({
-    stage,
-    characterId: batch.characterId,
-    characterDna: dna,
-    userId: access.userId,
-    projectId,
+    const promptStack = toRecord(batch.promptStack)
+    const storedReferenceCandidateIds = Array.isArray(promptStack.referenceCandidateIds)
+      ? promptStack.referenceCandidateIds.filter((value): value is string => typeof value === 'string')
+      : []
+    const currentCharacter = await transaction.visualDevelopmentCharacter.findUnique({
+      where: { id: batch.characterId },
+      select: { status: true, characterDna: true, updatedAt: true },
+    })
+    if (!currentCharacter || !canEnterProductionStage(currentCharacter.status, stage.id)) {
+      throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LOCK_REQUIRED', details: { required: stage.prerequisiteStatus } })
+    }
+    const currentDna = toStringRecord(currentCharacter.characterDna)
+    const currentReferenceAssets = await resolveReferenceImages({
+      stage,
+      characterId: batch.characterId,
+      characterDna: currentDna,
+      userId: access.userId,
+      projectId,
+    })
+    const currentReferenceCandidateIds = currentReferenceAssets.map((reference) => reference.candidateId)
+    if (
+      storedReferenceCandidateIds.length !== currentReferenceCandidateIds.length
+      || storedReferenceCandidateIds.some((candidateId, index) => candidateId !== currentReferenceCandidateIds[index])
+    ) {
+      throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LINEAGE_CHANGED' })
+    }
+    const versionKey = `${stage.id}CanonVersion`
+    const currentVersion = Number.parseInt(currentDna[versionKey] || '0', 10)
+    const nextVersion = Number.isFinite(currentVersion) ? currentVersion + 1 : 1
+    const stageRecord = toStringRecord(promptStack.stageRecord)
+    const prefixedRecord = Object.fromEntries(Object.entries(stageRecord).map(([key, value]) => [`${stage.id}_${key}`, value]))
+    const nextDna: Prisma.InputJsonObject = {
+      ...currentDna,
+      ...prefixedRecord,
+      [`${stage.id}CanonId`]: `${stage.id.toUpperCase()}-${batch.character.code}-v${String(nextVersion).padStart(3, '0')}`,
+      [`${stage.id}CanonVersion`]: String(nextVersion),
+      [`${stage.id}BatchId`]: batch.id,
+      [`${stage.id}PrimaryCandidateId`]: primary.id,
+      [`${stage.id}LockedAt`]: new Date().toISOString(),
+    }
+    const advanced = await transaction.visualDevelopmentCharacter.updateMany({
+      where: { id: batch.characterId, updatedAt: currentCharacter.updatedAt },
+      data: { status: stage.lockedStatus, characterDna: nextDna },
+    })
+    if (advanced.count !== 1) {
+      throw new ApiError('CONFLICT', { code: 'VISUAL_DEVELOPMENT_WRITE_CONFLICT' })
+    }
+    return nextVersion
   })
-  const currentReferenceCandidateIds = currentReferenceAssets.map((reference) => reference.candidateId)
-  if (
-    storedReferenceCandidateIds.length !== currentReferenceCandidateIds.length
-    || storedReferenceCandidateIds.some((candidateId, index) => candidateId !== currentReferenceCandidateIds[index])
-  ) {
-    throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LINEAGE_CHANGED' })
-  }
-  const stageRecord = toStringRecord(promptStack.stageRecord)
-  const prefixedRecord = Object.fromEntries(Object.entries(stageRecord).map(([key, value]) => [`${stage.id}_${key}`, value]))
-  const nextDna: Prisma.InputJsonObject = {
-    ...dna,
-    ...prefixedRecord,
-    [`${stage.id}CanonId`]: `${stage.id.toUpperCase()}-${batch.character.code}-v${String(version).padStart(3, '0')}`,
-    [`${stage.id}CanonVersion`]: String(version),
-    [`${stage.id}BatchId`]: batch.id,
-    [`${stage.id}PrimaryCandidateId`]: primary.id,
-    [`${stage.id}LockedAt`]: new Date().toISOString(),
-  }
-  await prisma.$transaction([
-    prisma.visualDevelopmentCharacter.update({ where: { id: batch.characterId }, data: { status: stage.lockedStatus, characterDna: nextDna } }),
-    prisma.visualDevelopmentBatch.update({ where: { id: batch.id }, data: { status: 'canon_locked' } }),
-  ])
-  return NextResponse.json({ success: true, data: { batchId: batch.id, stage: stage.id, version } })
+  return NextResponse.json({ success: true, data: { batchId, stage: stage.id, version } })
 })

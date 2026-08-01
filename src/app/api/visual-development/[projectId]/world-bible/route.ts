@@ -1,7 +1,7 @@
 import { randomInt, randomUUID } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ApiError, apiHandler } from '@/lib/api-errors'
+import { ApiError, apiHandler, isApiError } from '@/lib/api-errors'
 import { isErrorResponse, requireProjectAccess, requireUserAuth } from '@/lib/api-auth'
 import { resolveModelSelection } from '@/lib/api-config'
 import { findBuiltinCapabilities } from '@/lib/model-capabilities/catalog'
@@ -25,7 +25,10 @@ import {
   toWorldBibleJson,
   worldBibleRequiredFieldsComplete,
   type WorldAssetCode,
+  type WorldBibleAsset,
   type WorldBibleDocument,
+  type PendingWorldBibleAsset,
+  type WorldGenerationReservation,
 } from '@/lib/visual-development/world-bible'
 
 type RouteContext = { params: Promise<{ projectId: string }> }
@@ -102,6 +105,88 @@ async function requireAccess(projectId: string, action: 'read' | 'write') {
 
 async function loadWorkspace(projectId: string) {
   return await prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } })
+}
+
+function isWorkspaceWriteConflict(error: unknown): boolean {
+  if (!isApiError(error)) return false
+  return record(error.details).code === 'VISUAL_DEVELOPMENT_WRITE_CONFLICT'
+}
+
+async function finalizeReservedWorldGeneration(input: {
+  projectId: string
+  runId: string
+  taskIdsByCode: Map<WorldAssetCode, string>
+  status: string
+}): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const workspace = await loadWorkspace(input.projectId)
+    if (!workspace) throw new ApiError('NOT_FOUND')
+    const document = parseWorldBible(workspace.worldBible)
+    const reservation = document.generationReservation
+    if (reservation?.id !== input.runId) {
+      const alreadyPersisted = [...input.taskIdsByCode.values()].every((taskId) =>
+        document.assets.some((asset) => asset.taskId === taskId),
+      )
+      if (alreadyPersisted) return
+      throw new ApiError('CONFLICT', { code: 'WORLD_GENERATION_RESERVATION_LOST' })
+    }
+    const resolvedAssets: WorldBibleAsset[] = reservation.pendingAssets.flatMap((pending) => {
+      const taskId = input.taskIdsByCode.get(pending.code)
+      return taskId ? [{ ...pending, taskId }] : []
+    })
+    document.assets = reservation.kind === 'initial'
+      ? resolvedAssets
+      : document.assets.map((asset) => resolvedAssets.find((candidate) => candidate.code === asset.code) ?? asset)
+    document.generationReservation = null
+    document.canonId = null
+    document.lockedAt = null
+    try {
+      await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
+        worldBible: toWorldBibleJson(document),
+        status: input.status,
+      })
+      return
+    } catch (error) {
+      if (!isWorkspaceWriteConflict(error) || attempt === 4) throw error
+    }
+  }
+}
+
+const WORLD_RESERVATION_STALE_MS = 5 * 60 * 1000
+
+async function reconcileReservedWorldGeneration(input: {
+  projectId: string
+  reservation: WorldGenerationReservation
+}): Promise<{ resolved: boolean; recovered: number; expected: number; stale: boolean }> {
+  const tasks = await prisma.task.findMany({
+    where: {
+      projectId: input.projectId,
+      targetType: 'visual-development-world-asset',
+      targetId: { endsWith: `:${input.reservation.id}` },
+    },
+    select: { id: true, payload: true },
+  })
+  const expectedCodes = new Set(input.reservation.pendingAssets.map((asset) => asset.code))
+  const taskIdsByCode = new Map<WorldAssetCode, string>()
+  for (const task of tasks) {
+    const payload = record(task.payload)
+    const meta = record(payload.meta)
+    const code = meta.visualDevelopmentWorldAssetCode
+    if (isWorldAssetCode(code) && expectedCodes.has(code)) taskIdsByCode.set(code, task.id)
+  }
+  const startedAt = Date.parse(input.reservation.startedAt)
+  const stale = !Number.isFinite(startedAt) || Date.now() - startedAt >= WORLD_RESERVATION_STALE_MS
+  const complete = taskIdsByCode.size === expectedCodes.size
+  if (!complete && !stale) {
+    return { resolved: false, recovered: taskIdsByCode.size, expected: expectedCodes.size, stale: false }
+  }
+  await finalizeReservedWorldGeneration({
+    projectId: input.projectId,
+    runId: input.reservation.id,
+    taskIdsByCode,
+    status: complete ? 'world_generating' : taskIdsByCode.size > 0 ? 'world_partial_failed' : 'world_failed',
+  })
+  return { resolved: true, recovered: taskIdsByCode.size, expected: expectedCodes.size, stale }
 }
 
 export const GET = apiHandler(async (_request: NextRequest, context: RouteContext) => {
@@ -194,6 +279,27 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (document.research.status !== 'locked' || !evaluateResearchGate(document.research).ready) {
     throw new ApiError('CONFLICT', { code: 'RESEARCH_CANON_REQUIRED' })
   }
+  if (document.generationReservation) {
+    const reconciliation = await reconcileReservedWorldGeneration({
+      projectId,
+      reservation: document.generationReservation,
+    })
+    if (reconciliation.resolved) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          action: 'recover-generation',
+          runId: document.generationReservation.id,
+          reconciled: true,
+          ...reconciliation,
+        },
+      })
+    }
+    throw new ApiError('CONFLICT', {
+      code: 'WORLD_ASSET_GENERATION_RESERVED',
+      details: { runId: document.generationReservation.id, ...reconciliation },
+    })
+  }
   const existingTaskIds = document.assets.map((asset) => asset.taskId)
   if (existingTaskIds.length > 0) {
     const activeTaskCount = await prisma.task.count({
@@ -258,43 +364,14 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
 
   const seedSupported = capabilities?.supportSeed === true
   const runId = randomUUID()
-  const submissions = await Promise.allSettled(WORLD_ASSET_DEFINITIONS.map(async (definition) => {
+  const pendingAssets: PendingWorldBibleAsset[] = WORLD_ASSET_DEFINITIONS.map((definition) => {
     const prompt = buildWorldBibleAssetPrompt(document, definition.code)
     const effectivePrompt = capabilities?.supportNegativePrompt === true
       ? prompt.prompt
       : `${prompt.prompt}\n\nThe selected model has no separate negative-prompt channel. Explicit exclusions: ${prompt.negativePrompt}. Do not render any excluded item.`
     const requestedSeed = seedSupported ? randomInt(1, 2_147_483_647) : null
-    const submitted = await submitTask({
-      userId: access.userId,
-      locale,
-      projectId,
-      type: TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE,
-      targetType: 'visual-development-world-asset',
-      targetId: `${projectId}:${definition.code}:${runId}`,
-      dedupeKey: `visual-development-world:${projectId}:${runId}:${definition.code}`,
-      dedupeMode: 'idempotent',
-      skipRateLimit: true,
-      payload: {
-        prompt: effectivePrompt,
-        modelKey: selection.modelKey,
-        modelId: selection.modelId,
-        aspectRatio: document.aspectRatio,
-        ...(document.resolution ? { resolution: document.resolution } : {}),
-        ...(referenceKeys.length > 0 ? { referenceImages: referenceKeys } : {}),
-        ...(capabilities?.supportNegativePrompt === true ? { negativePrompt: prompt.negativePrompt } : {}),
-        ...(requestedSeed !== null ? { seed: requestedSeed } : {}),
-        generationCount: 1,
-        meta: {
-          originPrompt: effectivePrompt,
-          originModelKey: selection.modelKey,
-          visualDevelopmentWorldRunId: runId,
-          visualDevelopmentWorldAssetCode: definition.code,
-        },
-      },
-    })
     return {
       code: definition.code,
-      taskId: submitted.taskId,
       prompt: effectivePrompt,
       negativePrompt: prompt.negativePrompt,
       requestedSeed,
@@ -304,20 +381,61 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
       originPrompt: effectivePrompt,
       history: [],
     }
-  }))
-  const assets = submissions.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
-  document.assets = assets
-  document.canonId = null
-  document.lockedAt = null
-  const failed = submissions.length - assets.length
+  })
   if (!workspace) throw new ApiError('CONFLICT', { code: 'RESEARCH_CANON_REQUIRED' })
+  document.generationReservation = {
+    id: runId,
+    kind: 'initial',
+    startedAt: new Date().toISOString(),
+    pendingAssets,
+  }
   await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
     worldBible: toWorldBibleJson(document),
+    status: 'world_submitting',
+  })
+
+  const submissions = await Promise.allSettled(pendingAssets.map(async (pending) => {
+    const submitted = await submitTask({
+      userId: access.userId,
+      locale,
+      projectId,
+      type: TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE,
+      targetType: 'visual-development-world-asset',
+      targetId: `${projectId}:${pending.code}:${runId}`,
+      dedupeKey: `visual-development-world:${projectId}:${runId}:${pending.code}`,
+      dedupeMode: 'idempotent',
+      skipRateLimit: true,
+      payload: {
+        prompt: pending.prompt,
+        modelKey: selection.modelKey,
+        modelId: selection.modelId,
+        aspectRatio: document.aspectRatio,
+        ...(document.resolution ? { resolution: document.resolution } : {}),
+        ...(referenceKeys.length > 0 ? { referenceImages: referenceKeys } : {}),
+        ...(capabilities?.supportNegativePrompt === true ? { negativePrompt: pending.negativePrompt } : {}),
+        ...(pending.requestedSeed !== null ? { seed: pending.requestedSeed } : {}),
+        generationCount: 1,
+        meta: {
+          originPrompt: pending.prompt,
+          originModelKey: selection.modelKey,
+          visualDevelopmentWorldRunId: runId,
+          visualDevelopmentWorldAssetCode: pending.code,
+        },
+      },
+    })
+    return { code: pending.code, taskId: submitted.taskId }
+  }))
+  const submittedAssets = submissions.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+  const failed = submissions.length - submittedAssets.length
+  await finalizeReservedWorldGeneration({
+    projectId,
+    runId,
+    taskIdsByCode: new Map(submittedAssets.map((asset) => [asset.code, asset.taskId])),
     status: failed === 0 ? 'world_generating' : failed === submissions.length ? 'world_failed' : 'world_partial_failed',
   })
   return NextResponse.json({
     success: failed === 0,
-    data: { runId, submitted: assets.length, failed, seedSupported },
+    data: { runId, submitted: submittedAssets.length, failed, seedSupported },
   }, { status: failed === 0 ? 202 : 207 })
 })
 
@@ -330,6 +448,31 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   const workspace = await loadWorkspace(projectId)
   if (!workspace) throw new ApiError('NOT_FOUND')
   const document = parseWorldBible(workspace.worldBible)
+  if (document.generationReservation) {
+    const reconciliation = await reconcileReservedWorldGeneration({
+      projectId,
+      reservation: document.generationReservation,
+    })
+    if (reconciliation.resolved) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          action: 'recover-generation',
+          requestedAction: action,
+          runId: document.generationReservation.id,
+          reconciled: true,
+          ...reconciliation,
+        },
+      })
+    }
+    throw new ApiError('CONFLICT', {
+      code: 'WORLD_ASSET_GENERATION_RESERVED',
+      details: { runId: document.generationReservation.id, ...reconciliation },
+    })
+  }
+  if (action === 'recover-generation') {
+    return NextResponse.json({ success: true, data: { action, resolved: false, recovered: 0, expected: 0 } })
+  }
 
   if (action === 'regenerate-asset') {
     if (workspace.status === 'world_locked') throw new ApiError('CONFLICT', { code: 'WORLD_BIBLE_LOCKED' })
@@ -370,6 +513,7 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
         ? asset.requestedSeed
         : randomInt(1, 2_147_483_647)
       : null
+    const runId = randomUUID()
     const payload: Record<string, unknown> = {
       ...previousPayload,
       prompt,
@@ -379,6 +523,7 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
         ...previousMeta,
         originPrompt: prompt,
         previousVisualDevelopmentTaskId: previousTask.id,
+        visualDevelopmentWorldRunId: runId,
         visualDevelopmentWorldAssetCode: asset.code,
         regenerationSeedMode: seedMode,
       },
@@ -403,33 +548,58 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
       rejectionNote: asset.rejectionNote,
       createdAt: new Date().toISOString(),
     }
-    const submitted = await submitTask({
-      userId: access.userId,
-      locale: resolveRequiredTaskLocale(request, body),
-      projectId,
-      type: TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE,
-      targetType: previousTask.targetType,
-      targetId: `${projectId}:${asset.code}:${randomUUID()}`,
-      dedupeKey: `visual-development-world-regenerate:${projectId}:${asset.code}:${randomUUID()}`,
-      dedupeMode: 'idempotent',
-      skipRateLimit: true,
-      payload,
-    })
     const appended = [...asset.history, snapshot]
-    asset.history = appended.length <= 30 || !appended[0]
+    const history = appended.length <= 30 || !appended[0]
       ? appended
       : [appended[0], ...appended.slice(-29)]
-    asset.originPrompt = asset.originPrompt || snapshot.prompt
-    asset.taskId = submitted.taskId
-    asset.prompt = prompt
-    asset.requestedSeed = requestedSeed
-    asset.seedStatus = seedSupported ? 'applied' : 'unsupported'
-    asset.approved = false
-    asset.rejectionNote = null
-    document.canonId = null
-    document.lockedAt = null
+    const pendingAsset: PendingWorldBibleAsset = {
+      code: asset.code,
+      prompt,
+      negativePrompt: asset.negativePrompt,
+      requestedSeed,
+      seedStatus: seedSupported ? 'applied' : 'unsupported',
+      approved: false,
+      rejectionNote: null,
+      originPrompt: asset.originPrompt || snapshot.prompt,
+      history,
+    }
+    document.generationReservation = {
+      id: runId,
+      kind: 'regenerate',
+      startedAt: new Date().toISOString(),
+      pendingAssets: [pendingAsset],
+    }
     await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
       worldBible: toWorldBibleJson(document),
+      status: 'world_submitting',
+    })
+    let submitted
+    try {
+      submitted = await submitTask({
+        userId: access.userId,
+        locale: resolveRequiredTaskLocale(request, body),
+        projectId,
+        type: TASK_TYPE.VISUAL_DEVELOPMENT_IMAGE,
+        targetType: previousTask.targetType,
+        targetId: `${projectId}:${asset.code}:${runId}`,
+        dedupeKey: `visual-development-world-regenerate:${projectId}:${runId}:${asset.code}`,
+        dedupeMode: 'idempotent',
+        skipRateLimit: true,
+        payload,
+      })
+    } catch (error) {
+      await finalizeReservedWorldGeneration({
+        projectId,
+        runId,
+        taskIdsByCode: new Map(),
+        status: 'world_failed',
+      })
+      throw error
+    }
+    await finalizeReservedWorldGeneration({
+      projectId,
+      runId,
+      taskIdsByCode: new Map([[asset.code, submitted.taskId]]),
       status: 'world_generating',
     })
     return NextResponse.json({
