@@ -58,6 +58,38 @@ describe('visual development world bible', () => {
     expect(prompt.negativePrompt).toContain('concept art rendering')
   })
 
+  it('Research Canon 的排除證據 -> 只編入文字限制與 Negative Prompt', () => {
+    const avoidConstraint = 'Avoid glossy untouched brass and pristine ceremonial textiles.'
+    const prompt = buildWorldBibleAssetPrompt({
+      ...completeWorld,
+      research: {
+        ...completeWorld.research,
+        status: 'locked',
+        references: [{
+          id: 'avoid-1',
+          key: 'images/internal-avoid.png',
+          name: 'Internal exclusion',
+          category: 'costume-material',
+          usage: 'avoid',
+          note: avoidConstraint,
+          sourceUrl: 'https://example.com/internal',
+          creator: 'Archive',
+          license: 'Internal research',
+          rightsStatus: 'editorial-reference',
+          externalProcessingAllowed: false,
+          downstreamEnabled: false,
+          reviewStatus: 'approved',
+          rejectionNote: null,
+          createdAt: '2026-07-31T00:00:00.000Z',
+        }],
+      },
+    }, 'MATERIAL-AGING')
+
+    expect(prompt.prompt).toContain(avoidConstraint)
+    expect(prompt.negativePrompt).toContain(avoidConstraint)
+    expect(prompt.prompt).not.toContain('images/internal-avoid.png')
+  })
+
   it.each(['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'] as const)(
     '%s Prompt -> 禁止模型自行排版、拼貼與產生文字',
     (code) => {

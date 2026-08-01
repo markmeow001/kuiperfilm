@@ -45,6 +45,9 @@ export interface WorldBibleTranslations {
   lock: string
   locked: string
   version: string
+  researchRequired: string
+  researchLoaded: string
+  referenceLimit: string
 }
 
 interface WorldBibleWorkspaceProps {
@@ -74,6 +77,10 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
     && controller.assets.every((asset) => asset.taskStatus === 'completed' && asset.approved)
   const generationActive = controller.assets.some((asset) => asset.taskStatus === 'queued' || asset.taskStatus === 'processing')
   const isLocked = controller.status === 'world_locked'
+  const researchReady = controller.researchStatus === 'locked'
+  const totalReferenceCount = controller.inheritedReferenceCount + controller.references.length
+  const referenceLimitExceeded = totalReferenceCount > 12
+  const referenceLimitReached = totalReferenceCount >= 12
 
   return (
     <div className="space-y-4">
@@ -112,6 +119,16 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
           <WorldField label={translations.cameraFormat} field="cameraFormat" controller={controller} multiline />
           <WorldField label={translations.forbiddenElements} field="forbiddenElements" controller={controller} multiline />
         </div>
+        <div className={`mx-5 mb-5 flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] ${researchReady ? 'border-primary-500/20 bg-primary-500/[0.05] text-primary-300' : 'border-amber-300/20 bg-amber-300/[0.05] text-amber-100/70'}`}>
+          <AppIcon name={researchReady ? 'circleCheck' : 'alert'} className="h-3.5 w-3.5 shrink-0" />
+          {researchReady ? `${translations.researchLoaded} (${controller.inheritedReferenceCount})` : translations.researchRequired}
+        </div>
+        {referenceLimitReached && (
+          <div className={`mx-5 mb-5 flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] ${referenceLimitExceeded ? 'border-red-400/20 bg-red-400/[0.05] text-red-200' : 'border-amber-300/20 bg-amber-300/[0.05] text-amber-100/70'}`}>
+            <AppIcon name="alert" className="h-3.5 w-3.5 shrink-0" />
+            {translations.referenceLimit} ({totalReferenceCount}/12)
+          </div>
+        )}
         <div className="flex justify-end border-t border-white/[0.07] px-5 py-3">
           <button type="button" disabled={isLocked || controller.isSaving || controller.isLoading} onClick={controller.onSave} className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.04] px-4 text-[10px] text-white transition-colors hover:border-white/[0.18] disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="bookmark" className="h-3.5 w-3.5 text-primary-400" />
@@ -126,10 +143,10 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
             <div className="font-mono text-[9px] tracking-[0.18em] text-primary-400">{translations.references}</div>
             <p className="mt-1 font-serif-cn text-xs leading-5 text-text-secondary">{translations.referencesDescription}</p>
           </div>
-          <label className={`flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-primary-500/30 bg-primary-500/[0.08] px-3 text-[10px] text-primary-400 ${isLocked || controller.isUploading ? 'pointer-events-none opacity-35' : ''}`}>
+          <label className={`flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-primary-500/30 bg-primary-500/[0.08] px-3 text-[10px] text-primary-400 ${isLocked || controller.isUploading || referenceLimitReached ? 'pointer-events-none opacity-35' : ''}`}>
             <AppIcon name="plus" className="h-3.5 w-3.5" />
             {controller.isUploading ? translations.uploading : translations.addReferences}
-            <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" disabled={isLocked || controller.isUploading} onChange={(event) => {
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple className="sr-only" disabled={isLocked || controller.isUploading || referenceLimitReached} onChange={(event) => {
               if (event.target.files) controller.onUploadReferences(event.target.files)
               event.currentTarget.value = ''
             }} />
@@ -173,7 +190,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
               </select>
             </div>
           </div>
-          <button type="button" disabled={isLocked || !fieldsComplete || !controller.form.modelKey || !controller.form.aspectRatio || controller.isGenerating || generationActive} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={isLocked || !researchReady || referenceLimitExceeded || !fieldsComplete || !controller.form.modelKey || !controller.form.aspectRatio || controller.isGenerating || generationActive} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating || generationActive ? translations.generating : translations.generate}
           </button>
@@ -253,7 +270,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
       <section className="rounded-2xl border border-primary-500/20 bg-primary-500/[0.045] p-5">
         <div className="flex items-center gap-2 font-mono text-[9px] tracking-[0.18em] text-primary-400"><AppIcon name="lock" className="h-3.5 w-3.5" />{translations.canonGate}</div>
         <p className="mt-3 font-serif-cn text-xs leading-5 text-text-secondary">{translations.canonGateDescription}</p>
-        <button type="button" disabled={isLocked || !fieldsComplete || !assetsComplete} onClick={controller.onLock} className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-primary-500/25 bg-primary-500/[0.08] text-[10px] text-primary-400 disabled:cursor-not-allowed disabled:border-white/[0.08] disabled:bg-white/[0.03] disabled:text-text-tertiary disabled:opacity-45">
+        <button type="button" disabled={isLocked || !researchReady || !fieldsComplete || !assetsComplete} onClick={controller.onLock} className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-primary-500/25 bg-primary-500/[0.08] text-[10px] text-primary-400 disabled:cursor-not-allowed disabled:border-white/[0.08] disabled:bg-white/[0.03] disabled:text-text-tertiary disabled:opacity-45">
           <AppIcon name="badgeCheck" className="h-4 w-4" />
           {isLocked ? translations.locked : translations.lock}
         </button>

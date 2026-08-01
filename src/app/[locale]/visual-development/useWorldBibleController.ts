@@ -15,6 +15,7 @@ import type {
   WorldBibleReferenceView,
   WorldBibleWorkspaceController,
 } from './visual-development-types'
+import type { ResearchStatus } from '@/lib/visual-development/research'
 
 const EMPTY_FORM: WorldBibleFormState = {
   projectPremise: '',
@@ -40,6 +41,8 @@ type WorldBibleResponse = {
       status?: string
       version?: number
       canonId?: string | null
+      researchStatus?: ResearchStatus
+      inheritedReferenceCount?: number
     }
   }
   error?: { message?: string; details?: { message?: string } }
@@ -63,6 +66,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   const [status, setStatus] = useState('draft')
   const [version, setVersion] = useState(1)
   const [canonId, setCanonId] = useState<string | null>(null)
+  const [researchStatus, setResearchStatus] = useState<ResearchStatus>('draft')
+  const [inheritedReferenceCount, setInheritedReferenceCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -74,10 +79,11 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   onWorldChangedRef.current = input.onWorldChanged
 
   const imageModels = useMemo(() => input.imageModels.filter((model) => {
-    if (references.length === 0) return true
-    if (references.length === 1) return model.capabilities?.image?.supportReferenceImage === true
+    const referenceCount = references.length + inheritedReferenceCount
+    if (referenceCount === 0) return true
+    if (referenceCount === 1) return model.capabilities?.image?.supportReferenceImage === true
     return model.capabilities?.image?.supportMultiReferenceImage === true
-  }), [input.imageModels, references.length])
+  }), [inheritedReferenceCount, input.imageModels, references.length])
 
   const load = useCallback(async () => {
     if (!input.projectId) {
@@ -87,6 +93,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       setStatus('draft')
       setVersion(1)
       setCanonId(null)
+      setResearchStatus('draft')
+      setInheritedReferenceCount(0)
       hydratedProjectRef.current = ''
       lastSavedSignatureRef.current = ''
       return
@@ -121,6 +129,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       setStatus(world?.status ?? 'draft')
       setVersion(world?.version ?? 1)
       setCanonId(world?.canonId ?? null)
+      setResearchStatus(world?.researchStatus ?? 'draft')
+      setInheritedReferenceCount(world?.inheritedReferenceCount ?? 0)
       hydratedProjectRef.current = input.projectId
       lastSavedSignatureRef.current = JSON.stringify(loadedForm)
     } finally {
@@ -312,6 +322,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
     status,
     version,
     canonId,
+    researchStatus,
+    inheritedReferenceCount,
     imageModels,
     isLoading,
     isSaving,

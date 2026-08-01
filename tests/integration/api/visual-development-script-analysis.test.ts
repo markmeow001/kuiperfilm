@@ -111,6 +111,28 @@ describe('visual development screenplay analysis API', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
+  it('new screenplay targets World Bible after Research Canon is locked -> requires a new project version', async () => {
+    const baseWorkspace = workspace()
+    const lockedResearchWorkspace = {
+      ...baseWorkspace,
+      worldBible: {
+        ...baseWorkspace.worldBible,
+        research: { status: 'locked', version: 1, canonId: 'RESEARCH-1', lockedAt: '2026-07-31T00:00:00.000Z' },
+      },
+    }
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue(lockedResearchWorkspace)
+    const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/script-analysis', method: 'PATCH',
+      body: { action: 'apply-analysis', applyWorldBible: true, characterCodes: ['SINO'] },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('RESEARCH_CANON_ALREADY_LOCKED')
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it('imports only approved characters and preserves the AI result as an applied audit record', async () => {
     const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
     const response = await mod.PATCH(buildMockRequest({

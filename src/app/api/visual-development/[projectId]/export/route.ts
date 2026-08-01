@@ -43,6 +43,16 @@ function includeCandidate(scope: ExportScope, input: { shortlisted: boolean; isC
   return input.isCanon || (batchStatus === 'canon_locked' && input.shortlisted)
 }
 
+function includeResearchReference(
+  scope: ExportScope,
+  input: { reviewStatus: string },
+  researchStatus: string,
+): boolean {
+  if (scope === 'full') return true
+  if (scope === 'approved') return input.reviewStatus === 'approved'
+  return researchStatus === 'locked' && input.reviewStatus === 'approved'
+}
+
 export const GET = apiHandler(async (request: NextRequest, context: RouteContext) => {
   const { projectId } = await context.params
   const scope = parseScope(new URL(request.url).searchParams.get('scope'))
@@ -93,6 +103,13 @@ export const GET = apiHandler(async (request: NextRequest, context: RouteContext
     for (const reference of document.references) {
       assets.push({ key: reference.key, archivePath: `02_WORLD_BIBLE/references/${safeSegment(reference.name, reference.id)}${assetExtension(reference.key)}` })
     }
+  }
+  for (const reference of document.research.references) {
+    if (!includeResearchReference(scope, reference, document.research.status)) continue
+    assets.push({
+      key: reference.key,
+      archivePath: `02_WORLD_BIBLE/research/references/${safeSegment(reference.category, 'general')}/${safeSegment(reference.name, reference.id)}${assetExtension(reference.key)}`,
+    })
   }
 
   for (const worldAsset of document.assets) {
@@ -177,6 +194,7 @@ export const GET = apiHandler(async (request: NextRequest, context: RouteContext
       void (async () => {
         archive.append(json(manifest), { name: '00_ADMIN/project_manifest.json' })
         archive.append(json(document), { name: '02_WORLD_BIBLE/world_bible.json' })
+        archive.append(json(document.research), { name: '02_WORLD_BIBLE/research/research_canon.json' })
         for (const character of manifest.characters) {
           archive.append(json(character), { name: `03_CHARACTERS/${safeSegment(`${character.code}_${character.name}`, character.code)}/character_record.json` })
         }

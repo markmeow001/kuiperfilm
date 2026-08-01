@@ -1,7 +1,12 @@
 import { WORLD_ASSET_DEFINITIONS, type WorldAssetCode, type WorldBibleDocument } from './world-bible'
+import { researchPromptConstraints } from './research'
 
 function line(label: string, value: string): string {
   return `${label}: ${value.trim()}`
+}
+
+function researchLine(label: string, value: string): string {
+  return `${label}: ${value.trim().slice(0, 1_600)}`
 }
 
 const LIVE_ACTION_DELIVERABLE: Record<WorldAssetCode, string> = {
@@ -14,6 +19,7 @@ const LIVE_ACTION_DELIVERABLE: Record<WorldAssetCode, string> = {
 export function buildWorldBibleAssetPrompt(document: WorldBibleDocument, code: WorldAssetCode) {
   const definition = WORLD_ASSET_DEFINITIONS.find((item) => item.code === code)
   if (!definition) throw new Error(`WORLD_ASSET_CODE_UNKNOWN: ${code}`)
+  const constraints = researchPromptConstraints(document.research)
 
   const prompt = [
     'Create exactly one production-design reference photograph for a professional live-action feature film.',
@@ -23,6 +29,24 @@ export function buildWorldBibleAssetPrompt(document: WorldBibleDocument, code: W
     'The image itself must contain zero written characters: no title, heading, caption, label, annotation, callout, legend, letter, number, logo, watermark, readable signage or invented writing. Do not reserve or design any area for text.',
     'The target production is live-action photorealism. Every depicted space, object and material must obey real optics, gravity, construction, weathering and motivated practical light.',
     'Use natural photographic micro-contrast, physically credible surface response and restrained feature-film color. Preserve small imperfections; avoid beautified, illustrative or game-rendered surfaces.',
+    '',
+    'LOCKED RESEARCH CANON — use these statements as evidence and constraints, not as visible text:',
+    researchLine('Research question', document.research.designQuestion),
+    researchLine('Research visual hypothesis', document.research.visualHypothesis),
+    researchLine('Period and culture evidence', document.research.eraAndCulture),
+    researchLine('Material reality evidence', document.research.materialReality),
+    researchLine('Cinematic language evidence', document.research.cinematicLanguage),
+    researchLine('Cultural boundaries', document.research.culturalBoundaries),
+    researchLine('Assumptions and unknowns', document.research.assumptionsAndUnknowns),
+    researchLine('Source policy', document.research.sourcePolicy),
+    ...(constraints.use.length > 0 ? [
+      'Approved research principles to adopt:',
+      ...constraints.use.map((constraint) => `- ${constraint}`),
+    ] : []),
+    ...(constraints.avoid.length > 0 ? [
+      'Approved research exclusions — do not reproduce these traits:',
+      ...constraints.avoid.map((constraint) => `- ${constraint}`),
+    ] : []),
     '',
     line('Project premise', document.projectPremise),
     line('Visual thesis', document.visualThesis),
@@ -86,6 +110,7 @@ export function buildWorldBibleAssetPrompt(document: WorldBibleDocument, code: W
       'random ornament',
       'inconsistent architecture',
       'plastic materials',
+      ...constraints.avoid,
     ].join(', '),
   }
 }

@@ -11,6 +11,18 @@ export type RequirementCoverageEntry = {
 
 export const REQUIREMENTS_MATRIX: ReadonlyArray<RequirementCoverageEntry> = [
   {
+    id: 'REQ-VISDEV-RESEARCH-CANON',
+    feature: 'Visual development research evidence and Canon gate',
+    userValue: '參考考據可追溯、可審核，通過素材會成為 World Bible 的上游依據',
+    risk: '未授權或未審素材被靜默帶入後續生成，或 Phase 順序被繞過',
+    priority: 'P0',
+    tests: [
+      'tests/unit/helpers/visual-development-research.test.ts',
+      'tests/integration/api/visual-development-research.test.ts',
+      'tests/integration/api/visual-development-world-bible.test.ts',
+    ],
+  },
+  {
     id: 'REQ-ASSETHUB-CHARACTER-EDIT',
     feature: 'Asset Hub character edit',
     userValue: '角色信息编辑后立即可见并正确保存',

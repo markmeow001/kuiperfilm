@@ -9,8 +9,9 @@ import { HairDesignWorkspace, type HairDesignTranslations } from './HairDesignWo
 import { WorldBibleWorkspace, type WorldBibleTranslations } from './WorldBibleWorkspace'
 import { ProductionStageWorkspace, type ProductionStageTranslations } from './ProductionStageWorkspace'
 import { ScriptImportWorkspace, type ScriptImportTranslations } from './ScriptImportWorkspace'
+import { ResearchWorkspace, type ResearchTranslations } from './ResearchWorkspace'
 import { CharacterRoster } from './CharacterRoster'
-import type { CastingWorkspaceController, CharacterOption, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, ScriptImportWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
+import type { CastingWorkspaceController, CharacterOption, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, ResearchWorkspaceController, ScriptImportWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
 
 export interface CastingTranslations {
   batch: string
@@ -69,6 +70,7 @@ export interface StageWorkspaceTranslations {
     current: string
   }
   script: ScriptImportTranslations
+  research: ResearchTranslations
   world: WorldBibleTranslations
   casting: CastingTranslations
   face: FaceBibleTranslations
@@ -93,6 +95,7 @@ interface StageWorkspaceProps {
   isLoadingCharacter: boolean
   onCharacterChange: (characterCode: string) => void
   scriptImportController: ScriptImportWorkspaceController
+  researchController: ResearchWorkspaceController
   worldBibleController: WorldBibleWorkspaceController
   castingController: CastingWorkspaceController
   faceBibleController: FaceBibleWorkspaceController
@@ -112,6 +115,7 @@ export function StageWorkspace({
   isLoadingCharacter,
   onCharacterChange,
   scriptImportController,
+  researchController,
   worldBibleController,
   castingController,
   faceBibleController,
@@ -165,6 +169,8 @@ export function StageWorkspace({
 
         {stage.id === 'script' ? (
           <ScriptImportWorkspace controller={scriptImportController} translations={translations.script} />
+        ) : stage.id === 'research' ? (
+          <ResearchWorkspace controller={researchController} translations={translations.research} />
         ) : stage.id === 'world' ? (
           <WorldBibleWorkspace controller={worldBibleController} translations={translations.world} />
         ) : stage.id === 'casting' ? (
@@ -184,7 +190,7 @@ export function StageWorkspace({
           <GenericStageBoard stage={stage} translations={translations} />
         )}
 
-        {!['script', 'world', 'casting', 'face', 'hair', 'costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) && <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
+        {!['script', 'research', 'world', 'casting', 'face', 'hair', 'costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) && <section className="mt-6 grid gap-3 md:grid-cols-[1fr_0.8fr]">
           <div className="rounded-2xl border border-white/[0.07] bg-raised p-5">
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">
               {translations.deliverables}

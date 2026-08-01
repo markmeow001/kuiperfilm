@@ -57,6 +57,26 @@ const completeWorld = {
   aspectRatio: '16:9',
   canonId: null,
   lockedAt: null,
+  research: {
+    designQuestion: 'How does ritual conceal extraction?',
+    visualHypothesis: 'Warm sacred surfaces hide cold biological infrastructure.',
+    eraAndCulture: 'Post-collapse subterranean civic religion.',
+    materialReality: 'Aged brass, yellowed lace, oxidized steel, damp membranes.',
+    cinematicLanguage: 'Restrained lenses, practical light, deep blacks.',
+    culturalBoundaries: 'No direct living religious symbols.',
+    assumptionsAndUnknowns: 'The origin of surviving craft remains uncertain.',
+    sourcePolicy: 'Trace every adopted source for internal research only.',
+    references: [
+      { id: 'research-face', key: 'images/research-face.png', name: 'face', category: 'casting-face', usage: 'use', note: 'Use grounded facial proportions.', sourceUrl: 'https://example.com/face', creator: 'Archive', license: '', rightsStatus: 'owned', externalProcessingAllowed: true, downstreamEnabled: true, reviewStatus: 'approved', rejectionNote: null, createdAt: '2026-07-31' },
+      { id: 'research-costume', key: 'images/research-costume.png', name: 'costume', category: 'costume-material', usage: 'use', note: 'Use layered practical construction.', sourceUrl: 'https://example.com/costume', creator: 'Archive', license: '', rightsStatus: 'owned', externalProcessingAllowed: true, downstreamEnabled: true, reviewStatus: 'approved', rejectionNote: null, createdAt: '2026-07-31' },
+      { id: 'research-film', key: 'images/research-film.png', name: 'film', category: 'film-color', usage: 'use', note: 'Use motivated practical light.', sourceUrl: 'https://example.com/film', creator: 'Archive', license: '', rightsStatus: 'owned', externalProcessingAllowed: true, downstreamEnabled: true, reviewStatus: 'approved', rejectionNote: null, createdAt: '2026-07-31' },
+      { id: 'research-culture', key: 'images/research-culture.png', name: 'culture', category: 'culture-symbol', usage: 'use', note: 'Use non-linguistic circular motifs.', sourceUrl: 'https://example.com/culture', creator: 'Archive', license: '', rightsStatus: 'owned', externalProcessingAllowed: true, downstreamEnabled: true, reviewStatus: 'approved', rejectionNote: null, createdAt: '2026-07-31' },
+    ],
+    status: 'locked',
+    version: 1,
+    canonId: 'RESEARCH-PROJECT--v001',
+    lockedAt: '2026-07-31T00:00:00.000Z',
+  },
 }
 
 function generateRequest(modelKey: string) {
@@ -98,6 +118,26 @@ describe('visual development World Bible API', () => {
     expect(submitterMock.submitTask).not.toHaveBeenCalled()
   })
 
+  it('Research Canon 尚未鎖定 -> Phase 00 不得送出生圖任務', async () => {
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+      id: 'workspace-1',
+      projectId: 'project-1',
+      worldVersion: 1,
+      status: 'world_draft',
+      worldBible: { ...completeWorld, research: { ...completeWorld.research, status: 'draft', canonId: null, lockedAt: null } },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.POST(generateRequest('atlascloud::flux-2-pro'), {
+      params: Promise.resolve({ projectId: 'project-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('RESEARCH_CANON_REQUIRED')
+    expect(apiConfigMock.resolveModelSelection).not.toHaveBeenCalled()
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
   it('完整規則與多參考模型 -> 送出四張不同責任的世界觀資產', async () => {
     apiConfigMock.resolveModelSelection.mockResolvedValue({
       provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro',
@@ -112,7 +152,14 @@ describe('visual development World Bible API', () => {
     expect(body.data.submitted).toBe(4)
     expect(submitterMock.submitTask).toHaveBeenCalledTimes(4)
     const submissions = submitterMock.submitTask.mock.calls.map((call) => call[0] as { payload: Record<string, unknown> })
-    expect(submissions[0]?.payload.referenceImages).toEqual(['images/ref-1.png', 'images/ref-2.png'])
+    expect(submissions[0]?.payload.referenceImages).toEqual([
+      'images/research-face.png',
+      'images/research-costume.png',
+      'images/research-film.png',
+      'images/research-culture.png',
+      'images/ref-1.png',
+      'images/ref-2.png',
+    ])
     const prompts = submissions.map((submission) => String(submission.payload.prompt))
     expect(prompts).toEqual(expect.arrayContaining([
       expect.stringContaining('live-action establishing shot that expresses the governing contradiction'),
@@ -121,6 +168,8 @@ describe('visual development World Bible API', () => {
       expect.stringContaining('photorealistic live-action architecture shot'),
     ]))
     expect(prompts.every((prompt) => prompt.includes('must contain zero written characters'))).toBe(true)
+    expect(prompts.every((prompt) => prompt.includes('LOCKED RESEARCH CANON'))).toBe(true)
+    expect(prompts.every((prompt) => prompt.includes('Warm sacred surfaces hide cold biological infrastructure.'))).toBe(true)
     expect(prompts.every((prompt) => !prompt.includes('World Core Formula'))).toBe(true)
     expect(prompts.every((prompt) => !prompt.includes('Faction Color System'))).toBe(true)
     expect(prompts.every((prompt) => !prompt.includes('Material & Aging Rules'))).toBe(true)
@@ -262,6 +311,32 @@ describe('visual development World Bible API', () => {
     expect((update?.data.worldBible as { canonId: string }).canonId).toBe('WORLD-PROJECT--v003')
   })
 
+  it('舊資產已全數通過但缺少 Research Canon -> 後端仍拒絕鎖定 World Canon', async () => {
+    const approvedAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
+      code, taskId: `task-${code}`, prompt: code, negativePrompt: '', requestedSeed: null, seedStatus: 'unsupported', approved: true, rejectionNote: null,
+    }))
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+      id: 'workspace-1',
+      projectId: 'project-1',
+      worldVersion: 3,
+      status: 'world_review',
+      worldBible: {
+        ...completeWorld,
+        assets: approvedAssets,
+        research: { ...completeWorld.research, status: 'draft', canonId: null, lockedAt: null },
+      },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/world-bible', method: 'PATCH', body: { action: 'canon-lock' },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('RESEARCH_CANON_REQUIRED')
+    expect(prismaMock.visualDevelopmentWorkspace.update).not.toHaveBeenCalled()
+  })
+
   it('有效 PNG 參考圖 -> 上傳並寫入專案 World Bible', async () => {
     prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
       id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_draft', worldBible: { ...completeWorld, references: [] },
@@ -280,5 +355,37 @@ describe('visual development World Bible API', () => {
     const update = prismaMock.visualDevelopmentWorkspace.upsert.mock.calls.at(-1)?.[0]
     const savedWorldBible = update?.update.worldBible as { references: unknown[] }
     expect(savedWorldBible.references).toHaveLength(1)
+  })
+
+  it('Research Canon 已繼承十二張參考圖 -> 拒絕再加入 World Bible 參考圖', async () => {
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+      id: 'workspace-1',
+      projectId: 'project-1',
+      worldVersion: 1,
+      status: 'world_draft',
+      worldBible: {
+        ...completeWorld,
+        references: [],
+        research: {
+          ...completeWorld.research,
+          references: Array.from({ length: 12 }, (_, index) => ({
+            ...completeWorld.research.references[index % completeWorld.research.references.length],
+            id: `research-${index + 1}`,
+            key: `images/research-${index + 1}.png`,
+          })),
+        },
+      },
+    })
+    const form = new FormData()
+    form.append('file', new File([new Uint8Array([137, 80, 78, 71])], 'reference.png', { type: 'image/png' }))
+    const request = new NextRequest('http://localhost/api/visual-development/project-1/world-bible/reference', { method: 'POST', body: form })
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/reference/route')
+    const response = await mod.POST(request, { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('WORLD_REFERENCE_LIMIT_REACHED')
+    expect(body.error.details.details).toEqual({ max: 12, inherited: 12 })
+    expect(cosMock.uploadToCOS).not.toHaveBeenCalled()
   })
 })

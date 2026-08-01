@@ -6,11 +6,11 @@ import { isErrorResponse, requireProjectAccess, requireUserAuth } from '@/lib/ap
 import { detectSupportedImageType } from '@/lib/playground/image-file-type'
 import { generateUniqueKey, getSignedUrl, uploadToCOS } from '@/lib/cos'
 import { EMPTY_WORLD_BIBLE, parseWorldBible, toWorldBibleJson } from '@/lib/visual-development/world-bible'
+import { MAX_WORLD_GENERATION_REFERENCES, approvedResearchReferenceKeys } from '@/lib/visual-development/research'
 
 type RouteContext = { params: Promise<{ projectId: string }> }
 
 const MAX_REFERENCE_BYTES = 10 * 1024 * 1024
-const MAX_REFERENCES = 12
 
 async function requireAccess(projectId: string) {
   const auth = await requireUserAuth()
@@ -30,8 +30,12 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const workspace = await prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } })
   if (workspace?.status === 'world_locked') throw new ApiError('CONFLICT', { code: 'WORLD_BIBLE_LOCKED' })
   const document = workspace ? parseWorldBible(workspace.worldBible) : EMPTY_WORLD_BIBLE
-  if (document.references.length >= MAX_REFERENCES) {
-    throw new ApiError('CONFLICT', { code: 'WORLD_REFERENCE_LIMIT_REACHED', details: { max: MAX_REFERENCES } })
+  const inheritedReferenceCount = approvedResearchReferenceKeys(document.research).length
+  if (document.references.length + inheritedReferenceCount >= MAX_WORLD_GENERATION_REFERENCES) {
+    throw new ApiError('CONFLICT', {
+      code: 'WORLD_REFERENCE_LIMIT_REACHED',
+      details: { max: MAX_WORLD_GENERATION_REFERENCES, inherited: inheritedReferenceCount },
+    })
   }
 
   let formData: FormData

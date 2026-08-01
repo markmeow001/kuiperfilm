@@ -16,6 +16,7 @@ import { VisualDevelopmentHeader } from './VisualDevelopmentHeader'
 import { useHairDesignController } from './useHairDesignController'
 import { useCandidateRegeneration } from './useCandidateRegeneration'
 import { useScriptImportController } from './useScriptImportController'
+import { useResearchController } from './useResearchController'
 import { useProductionStageController } from './useProductionStageController'
 import { useWorldBibleController } from './useWorldBibleController'
 import { useStageWorkspaceTranslations } from './useStageWorkspaceTranslations'
@@ -399,13 +400,18 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     onWorldChanged: () => void loadWorkspace(projectId),
   })
 
+  const researchController = useResearchController({
+    projectId,
+    onResearchChanged: () => void worldBibleController.onReload(),
+  })
+
   const scriptImportController = useScriptImportController({
     projectId,
     locale,
     llmModels: modelsQuery.data?.llm ?? [],
     onApplied: async () => {
       await Promise.all([loadWorkspace(projectId), worldBibleController.onReload()])
-      setActiveStageId('world')
+      setActiveStageId('research')
     },
   })
 
@@ -480,6 +486,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
 
         <StageWorkspace
           scriptImportController={scriptImportController}
+          researchController={researchController}
           worldBibleController={worldBibleController}
           castingController={castingController}
           faceBibleController={faceBibleController}

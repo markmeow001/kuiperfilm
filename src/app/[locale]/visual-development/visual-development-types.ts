@@ -3,6 +3,13 @@ import type { WorldAssetCode } from '@/lib/visual-development/world-bible'
 import type { ScriptAnalysisDocument, ScriptSourceFormat } from '@/lib/visual-development/script-analysis'
 import type { ProductionFieldId, ProductionStageDefinition, ProductionStageId } from '@/lib/visual-development/production-stages'
 import type { ProductionStageBrief } from '@/lib/visual-development/stage-brief'
+import type {
+  ResearchGateResult,
+  ResearchReferenceCategory,
+  ResearchReferenceUsage,
+  ResearchRightsStatus,
+  ResearchStatus,
+} from '@/lib/visual-development/research'
 
 export interface ProjectOption {
   id: string
@@ -215,6 +222,8 @@ export interface WorldBibleWorkspaceController {
   status: string
   version: number
   canonId: string | null
+  researchStatus: ResearchStatus
+  inheritedReferenceCount: number
   imageModels: UserModelOption[]
   isLoading: boolean
   isSaving: boolean
@@ -231,6 +240,64 @@ export interface WorldBibleWorkspaceController {
     code: WorldAssetCode,
     prompt: string,
     seedMode: CandidateRegenerationSeedMode,
+  ) => void
+  onLock: () => void
+  onReload: () => void
+}
+
+export interface ResearchFormState {
+  designQuestion: string
+  visualHypothesis: string
+  eraAndCulture: string
+  materialReality: string
+  cinematicLanguage: string
+  culturalBoundaries: string
+  assumptionsAndUnknowns: string
+  sourcePolicy: string
+}
+
+export interface ResearchReferenceMetadata {
+  category: ResearchReferenceCategory
+  usage: ResearchReferenceUsage
+  note: string
+  sourceUrl: string
+  creator: string
+  license: string
+  rightsStatus: ResearchRightsStatus
+  externalProcessingAllowed: boolean
+  downstreamEnabled: boolean
+}
+
+export interface ResearchReferenceView extends ResearchReferenceMetadata {
+  id: string
+  key: string
+  name: string
+  reviewStatus: 'pending' | 'approved' | 'rejected'
+  rejectionNote: string | null
+  createdAt: string
+  previewUrl?: string | null
+}
+
+export interface ResearchWorkspaceController {
+  form: ResearchFormState
+  references: ResearchReferenceView[]
+  gate: ResearchGateResult
+  status: ResearchStatus
+  version: number
+  canonId: string | null
+  worldStatus: string
+  isLoading: boolean
+  isSaving: boolean
+  isUploading: boolean
+  onFieldChange: (field: keyof ResearchFormState, value: string) => void
+  onSave: () => void
+  onUploadReference: (file: File, metadata: ResearchReferenceMetadata) => void
+  onRemoveReference: (referenceId: string) => void
+  onReviewReference: (referenceId: string, approved: boolean, rejectionNote?: string) => void
+  onSetReferenceProcessing: (
+    referenceId: string,
+    externalProcessingAllowed: boolean,
+    downstreamEnabled: boolean,
   ) => void
   onLock: () => void
   onReload: () => void

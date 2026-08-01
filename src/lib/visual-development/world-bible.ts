@@ -4,6 +4,7 @@ import {
   parseCandidateGenerationSnapshot,
   type CandidateGenerationSnapshot,
 } from './candidate-history'
+import { EMPTY_RESEARCH, parseResearch, type ResearchDocument } from './research'
 
 export const WORLD_ASSET_DEFINITIONS = [
   {
@@ -86,6 +87,7 @@ export interface WorldBibleDocument {
   canonId: string | null
   lockedAt: string | null
   scriptAnalysis: ScriptAnalysisDocument | null
+  research: ResearchDocument
 }
 
 export const EMPTY_WORLD_BIBLE: WorldBibleDocument = {
@@ -108,6 +110,7 @@ export const EMPTY_WORLD_BIBLE: WorldBibleDocument = {
   canonId: null,
   lockedAt: null,
   scriptAnalysis: null,
+  research: EMPTY_RESEARCH,
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -215,6 +218,7 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
     canonId: nullableText(source, 'canonId'),
     lockedAt: nullableText(source, 'lockedAt'),
     scriptAnalysis: parseStoredScriptAnalysis(source.scriptAnalysis),
+    research: parseResearch(source.research),
   }
 }
 

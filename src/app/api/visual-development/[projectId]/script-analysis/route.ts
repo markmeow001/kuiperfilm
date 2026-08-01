@@ -173,6 +173,12 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (applyWorldBible && workspace.status === 'world_locked') {
     throw new ApiError('CONFLICT', { code: 'WORLD_CANON_ALREADY_LOCKED' })
   }
+  if (applyWorldBible && worldBible.research.status === 'locked') {
+    throw new ApiError('CONFLICT', {
+      code: 'RESEARCH_CANON_ALREADY_LOCKED',
+      details: { message: 'Create a new project version before applying a different screenplay to World Bible.' },
+    })
+  }
   const byCode = new Map(analysis.characters.map((character) => [character.code, character]))
   const selected = characterCodes.map((code) => {
     const character = byCode.get(code)

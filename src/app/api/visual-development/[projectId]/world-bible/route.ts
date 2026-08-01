@@ -13,6 +13,11 @@ import type { CandidateGenerationSnapshot } from '@/lib/visual-development/candi
 import { getSignedUrl } from '@/lib/cos'
 import { buildWorldBibleAssetPrompt } from '@/lib/visual-development/world-bible-prompt'
 import {
+  MAX_WORLD_GENERATION_REFERENCES,
+  approvedResearchReferenceKeys,
+  evaluateResearchGate,
+} from '@/lib/visual-development/research'
+import {
   EMPTY_WORLD_BIBLE,
   WORLD_ASSET_DEFINITIONS,
   parseWorldBible,
@@ -127,6 +132,8 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
         })),
         status: workspace?.status ?? 'draft',
         version: workspace?.worldVersion ?? 1,
+        researchStatus: document.research.status,
+        inheritedReferenceCount: approvedResearchReferenceKeys(document.research).length,
         assets: document.assets.map((asset) => ({
           ...asset,
           ...projectCandidateTask({ taskId: asset.taskId, status: 'pending' }, tasksById),
@@ -178,6 +185,9 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (!worldBibleRequiredFieldsComplete(document)) {
     throw new ApiError('INVALID_PARAMS', { code: 'WORLD_BIBLE_REQUIRED_FIELDS_INCOMPLETE' })
   }
+  if (document.research.status !== 'locked' || !evaluateResearchGate(document.research).ready) {
+    throw new ApiError('CONFLICT', { code: 'RESEARCH_CANON_REQUIRED' })
+  }
   const existingTaskIds = document.assets.map((asset) => asset.taskId)
   if (existingTaskIds.length > 0) {
     const activeTaskCount = await prisma.task.count({
@@ -208,10 +218,20 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     })
   }
   const capabilities = findBuiltinCapabilities('image', selection.provider, selection.modelId)?.image
-  if (document.references.length === 1 && capabilities?.supportReferenceImage !== true) {
+  const referenceKeys = [...new Set([
+    ...approvedResearchReferenceKeys(document.research),
+    ...document.references.map((reference) => reference.key),
+  ])]
+  if (referenceKeys.length > MAX_WORLD_GENERATION_REFERENCES) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'REFERENCE_IMAGE_LIMIT_EXCEEDED',
+      details: { got: referenceKeys.length, max: MAX_WORLD_GENERATION_REFERENCES },
+    })
+  }
+  if (referenceKeys.length === 1 && capabilities?.supportReferenceImage !== true) {
     throw new ApiError('INVALID_PARAMS', { code: 'REFERENCE_IMAGE_UNSUPPORTED' })
   }
-  if (document.references.length > 1 && capabilities?.supportMultiReferenceImage !== true) {
+  if (referenceKeys.length > 1 && capabilities?.supportMultiReferenceImage !== true) {
     throw new ApiError('INVALID_PARAMS', { code: 'MULTI_REFERENCE_IMAGE_UNSUPPORTED' })
   }
   if (!capabilities?.aspectRatioOptions?.includes(document.aspectRatio)) {
@@ -242,7 +262,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
         modelId: selection.modelId,
         aspectRatio: document.aspectRatio,
         ...(document.resolution ? { resolution: document.resolution } : {}),
-        ...(document.references.length > 0 ? { referenceImages: document.references.map((reference) => reference.key) } : {}),
+        ...(referenceKeys.length > 0 ? { referenceImages: referenceKeys } : {}),
         ...(capabilities?.supportNegativePrompt === true ? { negativePrompt: prompt.negativePrompt } : {}),
         ...(requestedSeed !== null ? { seed: requestedSeed } : {}),
         generationCount: 1,
@@ -414,6 +434,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
 
   if (action !== 'canon-lock') {
     throw new ApiError('INVALID_PARAMS', { code: 'WORLD_BIBLE_ACTION_INVALID' })
+  }
+  if (document.research.status !== 'locked' || !evaluateResearchGate(document.research).ready) {
+    throw new ApiError('CONFLICT', { code: 'RESEARCH_CANON_REQUIRED' })
   }
   if (!worldBibleRequiredFieldsComplete(document)) {
     throw new ApiError('CONFLICT', { code: 'WORLD_BIBLE_REQUIRED_FIELDS_INCOMPLETE' })
