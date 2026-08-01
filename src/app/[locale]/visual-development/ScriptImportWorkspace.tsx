@@ -40,6 +40,7 @@ export interface ScriptImportTranslations {
   evidence: string
   sourceVersions: string
   currentVersion: string
+  loadSource: string
   downloadSource: string
 }
 
@@ -124,19 +125,34 @@ export function ScriptImportWorkspace({
                 <p className="mt-3 text-[10px] leading-5 text-text-tertiary">—</p>
               ) : (
                 <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
-                  {[...controller.sources].reverse().map((source) => (
-                    <a
-                      key={source.id}
-                      href={`/api/playground/download?url=${encodeURIComponent(source.downloadUrl)}&filename=${encodeURIComponent(source.name)}`}
-                      className={`block rounded-lg border px-3 py-2 transition-colors hover:border-primary-500/30 ${controller.sourceVersionId === source.id ? 'border-primary-500/30 bg-primary-500/[0.06]' : 'border-white/[0.06] bg-white/[0.02]'}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-[10px] text-white">V{source.version} · {source.sourceTitle}</span>
-                        <AppIcon name="download" className="h-3 w-3 shrink-0 text-primary-400" />
+                  {[...controller.sources].reverse().map((source) => {
+                    const selected = controller.sourceVersionId === source.id
+                    return (
+                      <div key={source.id} className={`rounded-lg border px-3 py-2 transition-colors ${selected ? 'border-primary-500/30 bg-primary-500/[0.06]' : 'border-white/[0.06] bg-white/[0.02]'}`}>
+                        <button
+                          type="button"
+                          onClick={() => controller.onSelectSource(source.id)}
+                          aria-pressed={selected}
+                          className="block w-full text-left"
+                          title={t.loadSource}
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-[10px] text-white">V{source.version} · {source.sourceTitle}</span>
+                            {selected && <span className="rounded bg-primary-500/[0.12] px-1.5 py-0.5 font-mono text-[7px] text-primary-300">{t.currentVersion}</span>}
+                          </span>
+                          <span className="mt-1 block font-mono text-[8px] text-text-tertiary">{source.sourceFormat.toUpperCase()} · {new Date(source.createdAt).toLocaleString()}</span>
+                        </button>
+                        <a
+                          href={`/api/playground/download?url=${encodeURIComponent(source.downloadUrl)}&filename=${encodeURIComponent(source.name)}`}
+                          aria-label={`${t.downloadSource}: ${source.sourceTitle}`}
+                          className="mt-2 inline-flex items-center gap-1.5 rounded border border-white/[0.07] px-2 py-1 font-mono text-[7px] text-text-tertiary hover:border-primary-500/25 hover:text-white"
+                        >
+                          <AppIcon name="download" className="h-3 w-3 shrink-0 text-primary-400" />
+                          {t.downloadSource}
+                        </a>
                       </div>
-                      <span className="mt-1 block font-mono text-[8px] text-text-tertiary">{source.sourceFormat.toUpperCase()} · {new Date(source.createdAt).toLocaleString()}</span>
-                    </a>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>

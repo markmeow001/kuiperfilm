@@ -5,6 +5,7 @@ import type { CastingCandidateView, ProductionStageWorkspaceController } from '.
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 import { CandidatePromptEditor } from './CandidatePromptEditor'
+import { GenerationBatchHistory } from './GenerationBatchHistory'
 
 export interface ProductionStageTranslations {
   prerequisite: string
@@ -47,6 +48,9 @@ export interface ProductionStageTranslations {
   lockHint: string
   nextPhase: string
   complete: string
+  historyTitle: string
+  historyDescription: string
+  historyNewest: string
   fields: Record<ProductionFieldId, string>
 }
 
@@ -67,18 +71,19 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
     : []
   const durations = selectedModel?.capabilities?.video?.durationOptions ?? []
   const candidates = controller.batch?.candidates ?? placeholders(controller)
-  const canGenerate = controller.prerequisiteReady
+  const isLocked = controller.batches.some((batch) => batch.status === 'canon_locked')
+  const canGenerate = !isLocked
+    && controller.prerequisiteReady
     && Boolean(controller.stageBrief)
     && Boolean(controller.form.modelKey)
     && Boolean(controller.form.aspectRatio)
   const canLock = Boolean(
     controller.batch
-    && controller.batch.status !== 'canon_locked'
+    && !isLocked
     && candidates.length === controller.stage.variants.length
     && candidates.every((candidate) => candidate.resultUrl && candidate.shortlisted)
     && candidates.some((candidate) => candidate.isCanon),
   )
-  const isLocked = controller.batch?.status === 'canon_locked'
 
   if (!controller.prerequisiteReady) {
     return (
@@ -216,6 +221,14 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
             {controller.isGenerating ? translations.generating : translations.generate}
           </button>
         </div>
+        <GenerationBatchHistory
+          batches={controller.batches}
+          activeBatchId={controller.activeBatchId}
+          onSelect={controller.onSelectBatch}
+          title={translations.historyTitle}
+          description={translations.historyDescription}
+          newest={translations.historyNewest}
+        />
         <div className="border-b border-white/[0.07] px-4 py-3">
           <div className="font-mono text-[9px] tracking-[0.18em] text-primary-400">{translations.outputs}</div>
           <p className="mt-1 font-serif-cn text-[10px] leading-4 text-text-tertiary">{translations.outputsDescription}</p>
@@ -232,6 +245,7 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
               onRegenerate={controller.onRegenerateCandidate}
               isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
               regenerationDisabled={isLocked}
+              actionsDisabled={isLocked}
             />
           ))}
         </div>
@@ -292,6 +306,7 @@ function ProductionCandidate({
   onRegenerate,
   isRegenerating,
   regenerationDisabled,
+  actionsDisabled,
 }: {
   candidate: CastingCandidateView
   mediaType: 'image' | 'video'
@@ -301,6 +316,7 @@ function ProductionCandidate({
   onRegenerate: ProductionStageWorkspaceController['onRegenerateCandidate']
   isRegenerating: boolean
   regenerationDisabled: boolean
+  actionsDisabled: boolean
 }) {
   return (
     <article className="min-w-0 bg-[#0c0c0f]">
@@ -315,9 +331,9 @@ function ProductionCandidate({
         <div className="font-mono text-[7px] text-text-tertiary">{candidate.requestedSeed ? `SEED ${candidate.requestedSeed}` : translations.seedUnsupported}</div>
         {candidate.resultUrl && <div className="flex flex-wrap gap-1">
           <a href={visualDevelopmentDownloadHref(candidate.resultUrl, `${mediaType}-${candidate.code}`)} aria-label={`Download ${candidate.code}`} className="rounded bg-white/[0.05] p-1 text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" /></a>
-          <button type="button" onClick={() => onReview(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
-          <button type="button" onClick={() => { const note = window.prompt(translations.rejectionPrompt, candidate.rejectionNote ?? ''); if (note?.trim()) onReview(candidate.id, false, note.trim()) }} className="rounded bg-white/[0.05] px-1.5 py-1 text-[8px] text-text-tertiary">{translations.reject}</button>
-          <button type="button" onClick={() => onSelectPrimary(candidate.id)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.isCanon ? 'bg-primary-500 text-black' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.isCanon ? translations.primary : translations.makePrimary}</button>
+          <button type="button" disabled={actionsDisabled} onClick={() => onReview(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] disabled:opacity-35 ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
+          <button type="button" disabled={actionsDisabled} onClick={() => { const note = window.prompt(translations.rejectionPrompt, candidate.rejectionNote ?? ''); if (note?.trim()) onReview(candidate.id, false, note.trim()) }} className="rounded bg-white/[0.05] px-1.5 py-1 text-[8px] text-text-tertiary disabled:opacity-35">{translations.reject}</button>
+          <button type="button" disabled={actionsDisabled} onClick={() => onSelectPrimary(candidate.id)} className={`rounded px-1.5 py-1 text-[8px] disabled:opacity-35 ${candidate.isCanon ? 'bg-primary-500 text-black' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.isCanon ? translations.primary : translations.makePrimary}</button>
         </div>}
       </div>
       {candidate.prompt && (

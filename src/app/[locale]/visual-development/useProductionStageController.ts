@@ -78,16 +78,22 @@ export function useProductionStageController(input: UseProductionStageController
 } {
   const [forms, setForms] = useState<Partial<Record<ProductionStageId, ProductionStageFormState>>>({})
   const [briefStates, setBriefStates] = useState<Partial<Record<ProductionStageId, StageBriefState>>>({})
+  const [selectedBatchIds, setSelectedBatchIds] = useState<Partial<Record<ProductionStageId, string>>>({})
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSubmittingBrief, setIsSubmittingBrief] = useState(false)
   const lastSavedDraftsRef = useRef<Partial<Record<ProductionStageId, string>>>({})
   const loadedIdentityRef = useRef('')
   const initializedBriefFormsRef = useRef(new Set<string>())
   const stage = useMemo(() => getProductionStage(input.activeStageId), [input.activeStageId])
-  const batch = useMemo(
-    () => input.batches.find((item) => item.stage === stage.dbStage) ?? null,
+  const stageBatches = useMemo(
+    () => input.batches.filter((item) => item.stage === stage.dbStage),
     [input.batches, stage.dbStage],
   )
+  const batch = useMemo(() => (
+    stageBatches.find((item) => item.id === selectedBatchIds[input.activeStageId])
+      ?? stageBatches[0]
+      ?? null
+  ), [input.activeStageId, selectedBatchIds, stageBatches])
   const form = forms[input.activeStageId] ?? initialForm(input.activeStageId, input.characterDna)
   const briefState = briefStates[input.activeStageId] ?? null
   const stageBrief = briefState?.brief ?? null
@@ -99,6 +105,7 @@ export function useProductionStageController(input: UseProductionStageController
     lastSavedDraftsRef.current = {}
     initializedBriefFormsRef.current.clear()
     setBriefStates({})
+    setSelectedBatchIds({})
     setForms({ [input.activeStageId]: initialForm(input.activeStageId, input.characterDna) })
   }, [input.activeStageId, input.characterCode, input.characterDna, input.projectId])
 
@@ -292,10 +299,13 @@ export function useProductionStageController(input: UseProductionStageController
           meta: { locale: input.locale },
         }),
       })
-      const payload = await response.json() as { error?: { message?: string; details?: { message?: string } } }
+      const payload = await response.json() as { data?: { batchId?: string }; error?: { message?: string; details?: { message?: string } } }
       if (!response.ok && response.status !== 207) {
         window.alert(payload.error?.details?.message ?? payload.error?.message ?? 'Stage generation failed')
         return
+      }
+      if (payload.data?.batchId) {
+        setSelectedBatchIds((current) => ({ ...current, [stage.id]: payload.data?.batchId }))
       }
       await input.onRefresh()
     } finally {
@@ -326,6 +336,8 @@ export function useProductionStageController(input: UseProductionStageController
     stageBriefError: briefState?.task?.errorMessage ?? null,
     analysisModel: briefState?.analysisModel ?? null,
     batch,
+    batches: stageBatches,
+    activeBatchId: batch?.id ?? '',
     characterStatus: input.characterStatus,
     prerequisiteReady: canEnterProductionStage(input.characterStatus, stage.id),
     form,
@@ -340,6 +352,7 @@ export function useProductionStageController(input: UseProductionStageController
     onResetCreativePrompt,
     onSettingChange,
     onGenerate: () => void onGenerate(),
+    onSelectBatch: (batchId) => setSelectedBatchIds((current) => ({ ...current, [stage.id]: batchId })),
     onReview: (candidateId, approved, rejectionNote) => void patch({ action: 'asset-review', candidateId, approved, rejectionNote }),
     onSelectPrimary: (candidateId) => void patch({ action: 'select-primary', candidateId }),
     onLock: () => batch && void patch({ action: 'canon-lock', batchId: batch.id }),
@@ -360,6 +373,7 @@ export function useProductionStageController(input: UseProductionStageController
     onSettingChange,
     patch,
     stage,
+    stageBatches,
     stageBrief,
   ])
 

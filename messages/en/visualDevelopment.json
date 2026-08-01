@@ -76,6 +76,7 @@
       "evidence": "Evidence, inferences, and uncertainties",
       "sourceVersions": "SCREENPLAY SOURCE VERSIONS"
       ,"currentVersion": "CURRENT"
+      ,"loadSource": "Switch to this screenplay version"
       ,"downloadSource": "Download original screenplay"
     },
     "research": {

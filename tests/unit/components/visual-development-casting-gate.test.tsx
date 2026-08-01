@@ -47,6 +47,7 @@ const translations = {
   worldRequired: '請先到 Phase 00 完成並鎖定 World Canon',
   worldLocked: 'World Canon 已載入',
   completeWorld: '完成 Phase 00',
+  nextPhase: '進入下一階段',
 }
 
 function controller(overrides: Partial<CastingWorkspaceController> = {}): CastingWorkspaceController {
@@ -191,5 +192,43 @@ describe('CastingWorkspace World Canon gate', () => {
     expect(screen.getByRole('button', { name: /批次 02[\s\S]*8 張[\s\S]*4:3/ })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: /批次 01[\s\S]*4 張[\s\S]*3:4/ }))
     expect(onSelectBatch).toHaveBeenCalledWith('batch-old')
+  })
+
+  it('定角後保留歷史查看並顯示 Face Bible 導引', () => {
+    const lockedBatch = {
+      id: 'casting-locked',
+      stage: 'casting',
+      candidateCount: 4,
+      modelKey: 'atlascloud::flux-2-pro',
+      provider: 'atlascloud',
+      modelId: 'flux-2-pro',
+      seedSupported: true,
+      aspectRatio: '3:4',
+      resolution: null,
+      status: 'canon_locked',
+      candidates: [],
+    }
+    const value = controller({
+      worldStatus: 'world_locked',
+      batch: lockedBatch,
+      batches: [lockedBatch],
+      activeBatchId: lockedBatch.id,
+    })
+    const onAdvance = vi.fn()
+
+    render(
+      <CastingWorkspace
+        candidateCount={4}
+        controller={value}
+        onCandidateCountChange={vi.fn()}
+        translations={translations}
+        nextStage={{ code: '02', shortTitle: 'Face Bible' }}
+        onAdvance={onAdvance}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: '生成 8 張' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: '進入下一階段 · 02 Face Bible' }))
+    expect(onAdvance).toHaveBeenCalledTimes(1)
   })
 })

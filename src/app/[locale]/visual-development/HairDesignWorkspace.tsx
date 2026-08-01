@@ -5,6 +5,7 @@ import type { CastingCandidateView, HairDesignWorkspaceController } from './visu
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 import { CandidatePromptEditor } from './CandidatePromptEditor'
+import { GenerationBatchHistory } from './GenerationBatchHistory'
 
 export interface HairDesignTranslations {
   prerequisite: string
@@ -40,6 +41,9 @@ export interface HairDesignTranslations {
   nextPhase: string
   generating: string
   seedUnsupported: string
+  historyTitle: string
+  historyDescription: string
+  historyNewest: string
 }
 
 interface HairDesignWorkspaceProps {
@@ -110,7 +114,7 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
     && validation.length === VALIDATION_CODES.length
     && validation.every((candidate) => candidate.resultUrl && candidate.shortlisted),
   )
-  const isLocked = controller.validationBatch?.status === 'canon_locked'
+  const isLocked = controller.validationBatches.some((batch) => batch.status === 'canon_locked')
   const faceReady = [
     'face_locked',
     'hair_exploration_in_progress',
@@ -179,11 +183,19 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
         </div>
 
         <StageHeader index="01" title={translations.exploreTitle} description={translations.exploreDescription}>
-          <button type="button" disabled={controller.isGenerating || controller.isLoading || !canGenerate} onClick={controller.onGenerateExploration} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={isLocked || controller.isGenerating || controller.isLoading || !canGenerate} onClick={controller.onGenerateExploration} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating ? translations.generating : translations.generateExploration}
           </button>
         </StageHeader>
+        <GenerationBatchHistory
+          batches={controller.explorationBatches}
+          activeBatchId={controller.activeExplorationBatchId}
+          onSelect={controller.onSelectExplorationBatch}
+          title={translations.historyTitle}
+          description={translations.historyDescription}
+          newest={translations.historyNewest}
+        />
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] sm:grid-cols-3 2xl:grid-cols-5">
           {exploration.map((candidate) => (
             <CandidateCard
@@ -191,12 +203,12 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
               candidate={candidate}
               waiting={translations.waiting}
               seedUnsupported={translations.seedUnsupported}
-              regenerationDisabled={controller.explorationBatch?.status === 'canon_locked' || candidate.isCanon}
+              regenerationDisabled={isLocked || controller.explorationBatch?.status === 'canon_locked' || candidate.isCanon}
               isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
               onRegenerate={controller.onRegenerateCandidate}
             >
               {candidate.resultUrl && (
-                <button type="button" onClick={() => controller.onSelectDirection(candidate.id)} className={`rounded px-2 py-1 text-[8px] ${candidate.isCanon ? 'bg-primary-500 text-black' : 'bg-white/[0.06] text-text-secondary'}`}>
+                <button type="button" disabled={isLocked} onClick={() => controller.onSelectDirection(candidate.id)} className={`rounded px-2 py-1 text-[8px] disabled:opacity-35 ${candidate.isCanon ? 'bg-primary-500 text-black' : 'bg-white/[0.06] text-text-secondary'}`}>
                   {candidate.isCanon ? translations.selected : translations.select}
                 </button>
               )}
@@ -207,11 +219,19 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-raised">
         <StageHeader index="02" title={translations.validationTitle} description={translations.validationDescription}>
-          <button type="button" disabled={controller.isGenerating || controller.isLoading || !canGenerate || !controller.selectedHairCandidate} onClick={controller.onGenerateValidation} className="flex h-9 shrink-0 items-center gap-2 rounded-lg border border-primary-500/35 bg-primary-500/[0.1] px-3 text-[10px] font-semibold text-primary-300 disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={isLocked || controller.isGenerating || controller.isLoading || !canGenerate || !controller.selectedHairCandidate} onClick={controller.onGenerateValidation} className="flex h-9 shrink-0 items-center gap-2 rounded-lg border border-primary-500/35 bg-primary-500/[0.1] px-3 text-[10px] font-semibold text-primary-300 disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating ? translations.generating : translations.generateValidation}
           </button>
         </StageHeader>
+        <GenerationBatchHistory
+          batches={controller.validationBatches}
+          activeBatchId={controller.activeValidationBatchId}
+          onSelect={controller.onSelectValidationBatch}
+          title={translations.historyTitle}
+          description={translations.historyDescription}
+          newest={translations.historyNewest}
+        />
         {controller.selectedHairCandidate && (
           <div className="flex items-center gap-3 border-b border-white/[0.07] bg-primary-500/[0.035] px-4 py-3">
             <div className="h-12 w-10 overflow-hidden rounded-lg border border-primary-500/30 bg-[#101013]">
@@ -236,11 +256,11 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
             >
               {candidate.resultUrl && (
                 <div className="flex gap-1">
-                  <button type="button" onClick={() => controller.onReviewValidation(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
-                  <button type="button" onClick={() => {
+                  <button type="button" disabled={isLocked} onClick={() => controller.onReviewValidation(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] disabled:opacity-35 ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
+                  <button type="button" disabled={isLocked} onClick={() => {
                     const note = window.prompt(translations.rejectionPrompt, candidate.rejectionNote ?? '')
                     if (note?.trim()) controller.onReviewValidation(candidate.id, false, note.trim())
-                  }} className="rounded bg-white/[0.05] px-1.5 py-1 text-[8px] text-text-tertiary">{translations.reject}</button>
+                  }} className="rounded bg-white/[0.05] px-1.5 py-1 text-[8px] text-text-tertiary disabled:opacity-35">{translations.reject}</button>
                 </div>
               )}
             </CandidateCard>

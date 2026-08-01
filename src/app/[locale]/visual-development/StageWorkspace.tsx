@@ -57,6 +57,7 @@ export interface CastingTranslations {
   worldRequired: string
   worldLocked: string
   completeWorld: string
+  nextPhase: string
 }
 
 export interface StageWorkspaceTranslations {
@@ -179,9 +180,11 @@ export function StageWorkspace({
             controller={castingController}
             onCandidateCountChange={onCandidateCountChange}
             translations={translations.casting}
+            nextStage={nextStage}
+            onAdvance={advance}
           />
         ) : stage.id === 'face' ? (
-          <FaceBibleWorkspace controller={faceBibleController} translations={translations.face} />
+          <FaceBibleWorkspace controller={faceBibleController} translations={translations.face} nextStage={nextStage} onAdvance={advance} />
         ) : stage.id === 'hair' ? (
           <HairDesignWorkspace controller={hairDesignController} nextStage={nextStage} onAdvance={advance} translations={translations.hair} />
         ) : ['costume', 'accessory', 'silhouette', 'expression', 'ability', 'hero', 'turnaround', 'evolution', 'integration', 'video'].includes(stage.id) ? (

@@ -45,18 +45,20 @@ export function useScriptImportController(input: {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const analysisIdRef = useRef<string | null>(null)
   const sourceVersionIdRef = useRef<string | null>(null)
+  const requestEpochRef = useRef(0)
 
   useEffect(() => {
     if (!modelKey && input.llmModels[0]) setModelKey(input.llmModels[0].value)
   }, [input.llmModels, modelKey])
 
-  const loadSource = useCallback(async (sourceId: string) => {
+  const loadSource = useCallback(async (sourceId: string, requestEpoch: number) => {
     if (!input.projectId || !sourceId) return
     const response = await fetch(`/api/visual-development/${input.projectId}/script-source?sourceId=${encodeURIComponent(sourceId)}`)
     const payload = await response.json() as SourceResponse
     if (!response.ok || !payload.data?.source || typeof payload.data.scriptText !== 'string') {
       throw new Error(payload.error?.details?.message ?? payload.error?.message ?? 'Unable to load screenplay source')
     }
+    if (requestEpoch !== requestEpochRef.current) return
     sourceVersionIdRef.current = payload.data.source.id
     setSourceVersionId(payload.data.source.id)
     setSourceTitle(payload.data.source.sourceTitle)
@@ -66,9 +68,15 @@ export function useScriptImportController(input: {
 
   const refresh = useCallback(async () => {
     if (!input.projectId) return
+    const requestEpoch = ++requestEpochRef.current
+    const requestedSourceId = sourceVersionIdRef.current
     try {
-      const response = await fetch(`/api/visual-development/${input.projectId}/script-analysis`)
+      const sourceQuery = requestedSourceId
+        ? `?sourceId=${encodeURIComponent(requestedSourceId)}`
+        : ''
+      const response = await fetch(`/api/visual-development/${input.projectId}/script-analysis${sourceQuery}`)
       const payload = await response.json() as AnalysisResponse
+      if (requestEpoch !== requestEpochRef.current) return
       if (!response.ok) {
         setErrorMessage(responseError(payload, 'Unable to load screenplay analysis'))
         return
@@ -87,14 +95,16 @@ export function useScriptImportController(input: {
         setApplyWorldBible(true)
       }
       const latestSource = nextSources[nextSources.length - 1]
-      if (!sourceVersionIdRef.current && latestSource) await loadSource(latestSource.id)
+      if (!requestedSourceId && latestSource) await loadSource(latestSource.id, requestEpoch)
     } catch (error) {
+      if (requestEpoch !== requestEpochRef.current) return
       setErrorMessage(error instanceof Error ? error.message : String(error))
       setIsAnalyzing(false)
     }
   }, [input.projectId, loadSource])
 
   useEffect(() => {
+    requestEpochRef.current += 1
     setAnalysis(null)
     setSources([])
     sourceVersionIdRef.current = null
@@ -112,6 +122,18 @@ export function useScriptImportController(input: {
     return () => window.clearInterval(timer)
   }, [input.projectId, isAnalyzing, refresh])
 
+  const detachFromSavedSource = useCallback(() => {
+    requestEpochRef.current += 1
+    sourceVersionIdRef.current = null
+    analysisIdRef.current = null
+    setSourceVersionId(null)
+    setAnalysis(null)
+    setTaskStatus(null)
+    setIsAnalyzing(false)
+    setSelectedCharacterCodes([])
+    setErrorMessage(null)
+  }, [])
+
   const onFileSelected = useCallback(async (file: File) => {
     setIsUploading(true)
     setErrorMessage(null)
@@ -128,6 +150,7 @@ export function useScriptImportController(input: {
         setErrorMessage(payload.error?.details?.message ?? payload.error?.message ?? 'Unable to read screenplay file')
         return
       }
+      detachFromSavedSource()
       setScriptText(payload.rawText)
       setSourceFormat(payload.meta?.sourceFormat ?? 'txt')
       const nextTitle = file.name.replace(/\.(docx|txt|md|markdown)$/i, '')
@@ -157,10 +180,11 @@ export function useScriptImportController(input: {
     } finally {
       setIsUploading(false)
     }
-  }, [input.projectId, refresh])
+  }, [detachFromSavedSource, input.projectId, refresh])
 
   const onAnalyze = useCallback(async () => {
     if (!input.projectId || !modelKey || !sourceTitle.trim() || !scriptText.trim()) return
+    const requestEpoch = ++requestEpochRef.current
     setIsAnalyzing(true)
     setErrorMessage(null)
     try {
@@ -172,9 +196,9 @@ export function useScriptImportController(input: {
           body: JSON.stringify({ sourceTitle, scriptText }),
         })
         const sourcePayload = await sourceResponse.json() as { data?: { source?: ScriptSourceVersionView }; error?: { message?: string; details?: { message?: string } } }
+        if (requestEpoch !== requestEpochRef.current) return
         if (!sourceResponse.ok || !sourcePayload.data?.source) {
           setErrorMessage(sourcePayload.error?.details?.message ?? sourcePayload.error?.message ?? 'Unable to save screenplay source')
-          setIsAnalyzing(false)
           return
         }
         activeSourceId = sourcePayload.data.source.id
@@ -187,16 +211,18 @@ export function useScriptImportController(input: {
         body: JSON.stringify({ sourceId: activeSourceId, sourceTitle, sourceFormat, modelKey, meta: { locale: input.locale } }),
       })
       const payload = await response.json() as AnalysisResponse
+      if (requestEpoch !== requestEpochRef.current) return
       if (!response.ok) {
         setErrorMessage(responseError(payload, 'Unable to start screenplay analysis'))
-        setIsAnalyzing(false)
         return
       }
       setTaskStatus('queued')
       await refresh()
     } catch (error) {
+      if (requestEpoch !== requestEpochRef.current) return
       setErrorMessage(error instanceof Error ? error.message : String(error))
-      setIsAnalyzing(false)
+    } finally {
+      if (requestEpoch === requestEpochRef.current) setIsAnalyzing(false)
     }
   }, [input.locale, input.projectId, modelKey, refresh, scriptText, sourceFormat, sourceTitle, sourceVersionId])
 
@@ -206,6 +232,27 @@ export function useScriptImportController(input: {
       : [...current, code])
   }, [])
 
+  const onSelectSource = useCallback(async (sourceId: string) => {
+    if (!sourceId || sourceId === sourceVersionIdRef.current) return
+    const previousSourceId = sourceVersionIdRef.current
+    const requestEpoch = ++requestEpochRef.current
+    sourceVersionIdRef.current = sourceId
+    setErrorMessage(null)
+    try {
+      await loadSource(sourceId, requestEpoch)
+      if (requestEpoch !== requestEpochRef.current) return
+      setAnalysis(null)
+      setTaskStatus(null)
+      setSelectedCharacterCodes([])
+      analysisIdRef.current = null
+      await refresh()
+    } catch (error) {
+      if (requestEpoch !== requestEpochRef.current) return
+      sourceVersionIdRef.current = previousSourceId
+      setErrorMessage(error instanceof Error ? error.message : String(error))
+    }
+  }, [loadSource, refresh])
+
   const onApply = useCallback(async () => {
     if (!input.projectId || !analysis || (!applyWorldBible && selectedCharacterCodes.length === 0)) return
     setIsApplying(true)
@@ -214,7 +261,13 @@ export function useScriptImportController(input: {
       const response = await fetch(`/api/visual-development/${input.projectId}/script-analysis`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'apply-analysis', applyWorldBible, characterCodes: selectedCharacterCodes }),
+        body: JSON.stringify({
+          action: 'apply-analysis',
+          analysisId: analysis.id,
+          sourceId: analysis.sourceId,
+          applyWorldBible,
+          characterCodes: selectedCharacterCodes,
+        }),
       })
       const payload = await response.json() as AnalysisResponse
       if (!response.ok) {
@@ -245,14 +298,15 @@ export function useScriptImportController(input: {
     isUploading,
     isAnalyzing,
     isApplying,
-    onSourceTitleChange: (value: string) => { setSourceTitle(value); setSourceFormat('pasted'); sourceVersionIdRef.current = null; setSourceVersionId(null) },
-    onScriptTextChange: (value: string) => { setScriptText(value); setSourceFormat('pasted'); sourceVersionIdRef.current = null; setSourceVersionId(null) },
+    onSourceTitleChange: (value: string) => { setSourceTitle(value); setSourceFormat('pasted'); detachFromSavedSource() },
+    onScriptTextChange: (value: string) => { setScriptText(value); setSourceFormat('pasted'); detachFromSavedSource() },
     onModelChange: setModelKey,
     onFileSelected: (file: File) => void onFileSelected(file),
+    onSelectSource: (sourceId: string) => void onSelectSource(sourceId),
     onAnalyze: () => void onAnalyze(),
     onToggleCharacter,
     onSelectAllCharacters: (selected: boolean) => setSelectedCharacterCodes(selected && analysis ? analysis.characters.map((character) => character.code) : []),
     onApplyWorldBibleChange: setApplyWorldBible,
     onApply: () => void onApply(),
-  }), [analysis, applyWorldBible, errorMessage, input.llmModels, isAnalyzing, isApplying, isUploading, modelKey, onAnalyze, onApply, onFileSelected, onToggleCharacter, scriptText, selectedCharacterCodes, sourceFormat, sourceTitle, sourceVersionId, sources, taskStatus])
+  }), [analysis, applyWorldBible, detachFromSavedSource, errorMessage, input.llmModels, isAnalyzing, isApplying, isUploading, modelKey, onAnalyze, onApply, onFileSelected, onSelectSource, onToggleCharacter, scriptText, selectedCharacterCodes, sourceFormat, sourceTitle, sourceVersionId, sources, taskStatus])
 }

@@ -76,6 +76,7 @@
       "evidence": "證據、推論與不確定項目",
       "sourceVersions": "劇本來源版本"
       ,"currentVersion": "目前版本"
+      ,"loadSource": "切換到這個劇本版本"
       ,"downloadSource": "下載原始劇本"
     },
     "research": {

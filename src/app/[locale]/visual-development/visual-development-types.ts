@@ -42,6 +42,7 @@ export interface ScriptImportWorkspaceController {
   onScriptTextChange: (value: string) => void
   onModelChange: (value: string) => void
   onFileSelected: (file: File) => void
+  onSelectSource: (sourceId: string) => void
   onAnalyze: () => void
   onToggleCharacter: (code: string) => void
   onSelectAllCharacters: (selected: boolean) => void
@@ -153,6 +154,8 @@ export interface ProductionStageWorkspaceController extends CandidateRegeneratio
   stageBriefError: string | null
   analysisModel: string | null
   batch: CastingBatchView | null
+  batches: CastingBatchView[]
+  activeBatchId: string
   characterStatus: string
   prerequisiteReady: boolean
   form: ProductionStageFormState
@@ -165,6 +168,7 @@ export interface ProductionStageWorkspaceController extends CandidateRegeneratio
   onResetCreativePrompt: () => void
   onSettingChange: (field: 'modelKey' | 'resolution' | 'aspectRatio' | 'duration', value: string | number) => void
   onGenerate: () => void
+  onSelectBatch: (batchId: string) => void
   onReview: (candidateId: string, approved: boolean, rejectionNote?: string) => void
   onSelectPrimary: (candidateId: string) => void
   onLock: () => void
@@ -224,6 +228,8 @@ export interface WorldBibleWorkspaceController {
   canonId: string | null
   researchStatus: ResearchStatus
   inheritedReferenceCount: number
+  generationReservationId: string | null
+  generationReservationActive: boolean
   imageModels: UserModelOption[]
   isLoading: boolean
   isSaving: boolean
@@ -314,6 +320,8 @@ export interface FaceBibleFormState {
 
 export interface FaceBibleWorkspaceController extends CandidateRegenerationControls {
   batch: CastingBatchView | null
+  batches: CastingBatchView[]
+  activeBatchId: string
   canonCandidate: CastingCandidateView | null
   characterCode: string
   characterStatus: string
@@ -323,6 +331,7 @@ export interface FaceBibleWorkspaceController extends CandidateRegenerationContr
   isLoading: boolean
   onFieldChange: (field: keyof FaceBibleFormState, value: string) => void
   onGenerate: () => void
+  onSelectBatch: (batchId: string) => void
   onReview: (candidateId: string, approved: boolean, rejectionNote?: string) => void
   onLock: () => void
 }
@@ -341,6 +350,10 @@ export interface HairDesignFormState {
 export interface HairDesignWorkspaceController extends CandidateRegenerationControls {
   explorationBatch: CastingBatchView | null
   validationBatch: CastingBatchView | null
+  explorationBatches: CastingBatchView[]
+  validationBatches: CastingBatchView[]
+  activeExplorationBatchId: string
+  activeValidationBatchId: string
   identityCandidate: CastingCandidateView | null
   selectedHairCandidate: CastingCandidateView | null
   characterCode: string
@@ -351,8 +364,10 @@ export interface HairDesignWorkspaceController extends CandidateRegenerationCont
   isLoading: boolean
   onFieldChange: (field: keyof HairDesignFormState, value: string) => void
   onGenerateExploration: () => void
+  onSelectExplorationBatch: (batchId: string) => void
   onSelectDirection: (candidateId: string) => void
   onGenerateValidation: () => void
+  onSelectValidationBatch: (batchId: string) => void
   onReviewValidation: (candidateId: string, approved: boolean, rejectionNote?: string) => void
   onLock: () => void
 }

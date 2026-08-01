@@ -51,13 +51,19 @@ async function requireAccess(projectId: string, action: 'read' | 'write') {
   return { userId: auth.session.user.id }
 }
 
-export const GET = apiHandler(async (_request: NextRequest, context: RouteContext) => {
+export const GET = apiHandler(async (request: NextRequest, context: RouteContext) => {
   const { projectId } = await context.params
   const access = await requireAccess(projectId, 'read')
   if (access instanceof Response) return access
   const workspace = await prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } })
   const document = workspace ? parseWorldBible(workspace.worldBible) : null
-  const activeSource = document?.sources[document.sources.length - 1] ?? null
+  const requestedSourceId = new URL(request.url).searchParams.get('sourceId')?.trim() ?? ''
+  const activeSource = requestedSourceId
+    ? document?.sources.find((source) => source.id === requestedSourceId) ?? null
+    : document?.sources[document.sources.length - 1] ?? null
+  if (requestedSourceId && !activeSource) {
+    throw new ApiError('NOT_FOUND', { code: 'SCRIPT_SOURCE_NOT_FOUND' })
+  }
   const recentTasks = activeSource
     ? await prisma.task.findMany({
       where: { projectId, userId: access.userId, type: TASK_TYPE.VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS },
@@ -171,6 +177,19 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   const worldBible = parseWorldBible(workspace.worldBible)
   const analysis = worldBible.scriptAnalysis
   if (!analysis) throw new ApiError('NOT_FOUND', { code: 'SCRIPT_ANALYSIS_NOT_FOUND' })
+  const expectedAnalysisId = requiredString(body.analysisId, 'analysisId', 120)
+  const expectedSourceId = requiredString(body.sourceId, 'sourceId', 120)
+  if (analysis.id !== expectedAnalysisId || analysis.sourceId !== expectedSourceId) {
+    throw new ApiError('CONFLICT', {
+      code: 'SCRIPT_ANALYSIS_CHANGED',
+      details: {
+        expectedAnalysisId,
+        currentAnalysisId: analysis.id,
+        expectedSourceId,
+        currentSourceId: analysis.sourceId,
+      },
+    })
+  }
   if (applyWorldBible && workspace.status === 'world_locked') {
     throw new ApiError('CONFLICT', { code: 'WORLD_CANON_ALREADY_LOCKED' })
   }

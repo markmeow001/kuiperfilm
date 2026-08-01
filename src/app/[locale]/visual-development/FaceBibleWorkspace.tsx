@@ -4,6 +4,7 @@ import type { FaceBibleWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 import { CandidatePromptEditor } from './CandidatePromptEditor'
+import { GenerationBatchHistory } from './GenerationBatchHistory'
 
 export interface FaceBibleTranslations {
   canonSource: string
@@ -30,11 +31,17 @@ export interface FaceBibleTranslations {
   lockHint: string
   modelHint: string
   seedUnsupported: string
+  historyTitle: string
+  historyDescription: string
+  historyNewest: string
+  nextPhase: string
 }
 
 interface FaceBibleWorkspaceProps {
   controller: FaceBibleWorkspaceController
   translations: FaceBibleTranslations
+  nextStage?: { code: string; shortTitle: string } | null
+  onAdvance?: () => void
 }
 
 const PLACEHOLDER_CODES = [
@@ -50,7 +57,7 @@ const PLACEHOLDER_CODES = [
   'DETAIL-SKIN',
 ] as const
 
-export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorkspaceProps) {
+export function FaceBibleWorkspace({ controller, translations, nextStage, onAdvance }: FaceBibleWorkspaceProps) {
   const selectedModel = controller.imageModels.find((model) => model.value === controller.form.modelKey)
   const resolutions = selectedModel?.capabilities?.image?.resolutionOptions ?? []
   const ratios = selectedModel ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, 'image') : []
@@ -67,9 +74,10 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
     errorMessage: null,
     rejectionNote: null,
   }))
+  const faceCanonLocked = controller.batches.some((batch) => batch.status === 'canon_locked')
   const canLock = Boolean(
     controller.batch
-    && controller.batch.status !== 'canon_locked'
+    && !faceCanonLocked
     && candidates.length === PLACEHOLDER_CODES.length
     && candidates.every((candidate) => candidate.resultUrl && candidate.shortlisted),
   )
@@ -141,11 +149,20 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
               {translations.referenceOnly} · {translations.modelHint}
             </p>
           </div>
-          <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio} onClick={controller.onGenerate} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={faceCanonLocked || controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio} onClick={controller.onGenerate} className="flex h-9 shrink-0 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating ? translations.generating : translations.generate}
           </button>
         </div>
+
+        <GenerationBatchHistory
+          batches={controller.batches}
+          activeBatchId={controller.activeBatchId}
+          onSelect={controller.onSelectBatch}
+          title={translations.historyTitle}
+          description={translations.historyDescription}
+          newest={translations.historyNewest}
+        />
 
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] sm:grid-cols-3 2xl:grid-cols-5">
           {candidates.map((candidate) => (
@@ -169,11 +186,11 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
                 {candidate.resultUrl && (
                   <div className="flex gap-1">
                     <a href={visualDevelopmentDownloadHref(candidate.resultUrl, `${controller.characterCode}-face-${candidate.code}`)} aria-label={`Download ${candidate.code}`} className="rounded bg-white/[0.05] p-1 text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" /></a>
-                    <button type="button" onClick={() => controller.onReview(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
-                    <button type="button" onClick={() => {
+                    <button type="button" disabled={faceCanonLocked} onClick={() => controller.onReview(candidate.id, true)} className={`rounded px-1.5 py-1 text-[8px] disabled:opacity-35 ${candidate.shortlisted ? 'bg-primary-500/[0.16] text-primary-400' : 'bg-white/[0.05] text-text-tertiary'}`}>{candidate.shortlisted ? translations.approved : translations.approve}</button>
+                    <button type="button" disabled={faceCanonLocked} onClick={() => {
                       const note = window.prompt(translations.rejectionPrompt, candidate.rejectionNote ?? '')
                       if (note?.trim()) controller.onReview(candidate.id, false, note.trim())
-                    }} className="rounded bg-white/[0.05] px-1.5 py-1 text-[8px] text-text-tertiary">{translations.reject}</button>
+                    }} className="rounded bg-white/[0.05] px-1.5 py-1 text-[8px] text-text-tertiary disabled:opacity-35">{translations.reject}</button>
                   </div>
                 )}
               </div>
@@ -183,7 +200,7 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
                 <div className="-mx-2.5 -mb-2.5 mt-2">
                   <CandidatePromptEditor
                     candidate={candidate}
-                    disabled={controller.batch?.status === 'canon_locked'}
+                    disabled={faceCanonLocked}
                     isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
                     onRegenerate={controller.onRegenerateCandidate}
                   />
@@ -194,12 +211,18 @@ export function FaceBibleWorkspace({ controller, translations }: FaceBibleWorksp
         </div>
         <div className="flex flex-col gap-3 border-t border-white/[0.07] p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-serif-cn text-[10px] leading-4 text-text-tertiary">{translations.lockHint}</p>
-          <button type="button" disabled={!canLock || controller.characterStatus === 'face_locked'} onClick={controller.onLock} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-primary-500/30 bg-primary-500/[0.1] px-4 text-[10px] font-medium text-primary-400 disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={!canLock} onClick={controller.onLock} className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-primary-500/30 bg-primary-500/[0.1] px-4 text-[10px] font-medium text-primary-400 disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="badgeCheck" className="h-3.5 w-3.5" />
-            {controller.characterStatus === 'face_locked' || controller.batch?.status === 'canon_locked' ? translations.locked : translations.lock}
+            {faceCanonLocked ? translations.locked : translations.lock}
           </button>
         </div>
       </section>
+      {faceCanonLocked && nextStage && onAdvance && (
+        <button type="button" onClick={onAdvance} className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary-500/35 bg-primary-500/[0.12] px-4 py-3 text-xs font-semibold text-primary-300 transition-colors hover:bg-primary-500/[0.18]">
+          {translations.nextPhase} · {nextStage.code} {nextStage.shortTitle}
+          <AppIcon name="arrowRight" className="h-4 w-4" />
+        </button>
+      )}
     </div>
   )
 }

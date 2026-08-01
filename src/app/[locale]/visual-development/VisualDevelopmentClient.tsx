@@ -51,12 +51,18 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const [selectedCharacterCode, setSelectedCharacterCode] = useState('')
   const selectedCharacterCodeRef = useRef('')
   const selectedCastingBatchIdRef = useRef('')
+  const selectedFaceBatchIdRef = useRef('')
+  const selectedHairExplorationBatchIdRef = useRef('')
+  const selectedHairValidationBatchIdRef = useRef('')
   const [form, setForm] = useState(EMPTY_CASTING_FORM)
   const [batch, setBatch] = useState<CastingBatchView | null>(null)
   const [castingBatches, setCastingBatches] = useState<CastingBatchView[]>([])
   const [faceBatch, setFaceBatch] = useState<CastingBatchView | null>(null)
+  const [faceBatches, setFaceBatches] = useState<CastingBatchView[]>([])
   const [hairExplorationBatch, setHairExplorationBatch] = useState<CastingBatchView | null>(null)
+  const [hairExplorationBatches, setHairExplorationBatches] = useState<CastingBatchView[]>([])
   const [hairValidationBatch, setHairValidationBatch] = useState<CastingBatchView | null>(null)
+  const [hairValidationBatches, setHairValidationBatches] = useState<CastingBatchView[]>([])
   const [productionBatches, setProductionBatches] = useState<CastingBatchView[]>([])
   const [faceForm, setFaceForm] = useState<FaceBibleFormState>(EMPTY_FACE_FORM)
   const [characterStatus, setCharacterStatus] = useState('draft')
@@ -72,13 +78,19 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       setBatch(null)
       setCastingBatches([])
       setFaceBatch(null)
+      setFaceBatches([])
       setHairExplorationBatch(null)
+      setHairExplorationBatches([])
       setHairValidationBatch(null)
+      setHairValidationBatches([])
       setProductionBatches([])
       setCharacters([])
       setSelectedCharacterCode('')
       selectedCharacterCodeRef.current = ''
       selectedCastingBatchIdRef.current = ''
+      selectedFaceBatchIdRef.current = ''
+      selectedHairExplorationBatchIdRef.current = ''
+      selectedHairValidationBatchIdRef.current = ''
       return
     }
     setIsLoadingWorkspace(true)
@@ -102,9 +114,21 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
         ?? null
       selectedCastingBatchIdRef.current = nextCastingBatch?.id ?? ''
       setBatch(nextCastingBatch)
-      setFaceBatch(batches.find((item) => item.stage === 'face-lock') ?? null)
-      setHairExplorationBatch(batches.find((item) => item.stage === 'hair-exploration') ?? null)
-      setHairValidationBatch(batches.find((item) => item.stage === 'hair-validation') ?? null)
+      const nextFaceBatches = batches.filter((item) => item.stage === 'face-lock')
+      const nextFaceBatch = nextFaceBatches.find((item) => item.id === selectedFaceBatchIdRef.current) ?? nextFaceBatches[0] ?? null
+      selectedFaceBatchIdRef.current = nextFaceBatch?.id ?? ''
+      setFaceBatches(nextFaceBatches)
+      setFaceBatch(nextFaceBatch)
+      const nextHairExplorationBatches = batches.filter((item) => item.stage === 'hair-exploration')
+      const nextHairExplorationBatch = nextHairExplorationBatches.find((item) => item.id === selectedHairExplorationBatchIdRef.current) ?? nextHairExplorationBatches[0] ?? null
+      selectedHairExplorationBatchIdRef.current = nextHairExplorationBatch?.id ?? ''
+      setHairExplorationBatches(nextHairExplorationBatches)
+      setHairExplorationBatch(nextHairExplorationBatch)
+      const nextHairValidationBatches = batches.filter((item) => item.stage === 'hair-validation')
+      const nextHairValidationBatch = nextHairValidationBatches.find((item) => item.id === selectedHairValidationBatchIdRef.current) ?? nextHairValidationBatches[0] ?? null
+      selectedHairValidationBatchIdRef.current = nextHairValidationBatch?.id ?? ''
+      setHairValidationBatches(nextHairValidationBatches)
+      setHairValidationBatch(nextHairValidationBatch)
       setProductionBatches(batches.filter((item) => item.stage.startsWith('phase-')))
       if (workspace) {
         setForm((current) => ({
@@ -152,14 +176,20 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     setBatch(null)
     setCastingBatches([])
     setFaceBatch(null)
+    setFaceBatches([])
     setHairExplorationBatch(null)
+    setHairExplorationBatches([])
     setHairValidationBatch(null)
+    setHairValidationBatches([])
     setProductionBatches([])
     setForm(EMPTY_CASTING_FORM)
     setFaceForm(EMPTY_FACE_FORM)
     setCharacterStatus('draft')
     setWorldStatus('draft')
     selectedCastingBatchIdRef.current = ''
+    selectedFaceBatchIdRef.current = ''
+    selectedHairExplorationBatchIdRef.current = ''
+    selectedHairValidationBatchIdRef.current = ''
     void loadWorkspace(projectId)
   }, [projectId, loadWorkspace])
 
@@ -168,6 +198,9 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const selectCharacter = useCallback((characterCode: string) => {
     selectedCharacterCodeRef.current = characterCode
     selectedCastingBatchIdRef.current = ''
+    selectedFaceBatchIdRef.current = ''
+    selectedHairExplorationBatchIdRef.current = ''
+    selectedHairValidationBatchIdRef.current = ''
     setSelectedCharacterCode(characterCode)
     setCastingBatches([])
     setBatch(null)
@@ -175,12 +208,12 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   }, [loadWorkspace, projectId])
 
   useEffect(() => {
-    const hasActiveTasks = [...castingBatches, faceBatch, hairExplorationBatch, hairValidationBatch, ...productionBatches].some((activeBatch) => activeBatch?.candidates.some((candidate) =>
+    const hasActiveTasks = [...castingBatches, ...faceBatches, ...hairExplorationBatches, ...hairValidationBatches, ...productionBatches].some((activeBatch) => activeBatch.candidates.some((candidate) =>
       candidate.taskStatus === 'queued' || candidate.taskStatus === 'processing'))
     if (!projectId || !hasActiveTasks) return
     const timer = window.setInterval(() => void loadWorkspace(projectId), 3000)
     return () => window.clearInterval(timer)
-  }, [castingBatches, faceBatch, hairExplorationBatch, hairValidationBatch, productionBatches, projectId, loadWorkspace])
+  }, [castingBatches, faceBatches, hairExplorationBatches, hairValidationBatches, productionBatches, projectId, loadWorkspace])
 
   const updateField = useCallback((
     group: 'worldBible' | 'characterDna' | 'castingBrief',
@@ -310,11 +343,12 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
           meta: { locale },
         }),
       })
-      const payload = await response.json() as { error?: { message?: string; details?: { message?: string } } }
+      const payload = await response.json() as { data?: { batchId?: string }; error?: { message?: string; details?: { message?: string } } }
       if (!response.ok && response.status !== 207) {
         window.alert(payload.error?.details?.message ?? payload.error?.message ?? t('workspace.face.generateFailed'))
         return
       }
+      selectedFaceBatchIdRef.current = payload.data?.batchId ?? ''
       await loadWorkspace(projectId)
     } catch (error) {
       window.alert(error instanceof Error ? error.message : t('workspace.face.generateFailed'))
@@ -353,6 +387,27 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     await loadWorkspace(projectId)
   }, [faceBatch, loadWorkspace, projectId, t])
 
+  const selectFaceBatch = useCallback((batchId: string) => {
+    const selected = faceBatches.find((item) => item.id === batchId)
+    if (!selected) return
+    selectedFaceBatchIdRef.current = selected.id
+    setFaceBatch(selected)
+  }, [faceBatches])
+
+  const selectHairExplorationBatch = useCallback((batchId: string) => {
+    selectedHairExplorationBatchIdRef.current = batchId
+    const selected = hairExplorationBatches.find((item) => item.id === batchId)
+    if (!selected) return
+    setHairExplorationBatch(selected)
+  }, [hairExplorationBatches])
+
+  const selectHairValidationBatch = useCallback((batchId: string) => {
+    selectedHairValidationBatchIdRef.current = batchId
+    const selected = hairValidationBatches.find((item) => item.id === batchId)
+    if (!selected) return
+    setHairValidationBatch(selected)
+  }, [hairValidationBatches])
+
   const castingController = useMemo<CastingWorkspaceController>(() => ({
     ...candidateRegeneration,
     batch,
@@ -380,6 +435,8 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const faceBibleController = useMemo<FaceBibleWorkspaceController>(() => ({
     ...candidateRegeneration,
     batch: faceBatch,
+    batches: faceBatches,
+    activeBatchId: faceBatch?.id ?? '',
     canonCandidate,
     characterCode: form.characterCode,
     characterStatus,
@@ -389,9 +446,10 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     isLoading: isLoadingWorkspace || modelsQuery.isLoading,
     onFieldChange: updateFaceField,
     onGenerate: () => void generateFaceBible(),
+    onSelectBatch: selectFaceBatch,
     onReview: (candidateId, approved, rejectionNote) => void reviewFaceAsset(candidateId, approved, rejectionNote),
     onLock: () => void lockFaceBible(),
-  }), [candidateRegeneration, canonCandidate, characterStatus, faceBatch, faceForm, form.characterCode, generateFaceBible, isGeneratingFace, isLoadingWorkspace, lockFaceBible, modelsQuery.isLoading, referenceImageModels, reviewFaceAsset, updateFaceField])
+  }), [candidateRegeneration, canonCandidate, characterStatus, faceBatch, faceBatches, faceForm, form.characterCode, generateFaceBible, isGeneratingFace, isLoadingWorkspace, lockFaceBible, modelsQuery.isLoading, referenceImageModels, reviewFaceAsset, selectFaceBatch, updateFaceField])
 
   const worldBibleController = useWorldBibleController({
     projectId,
@@ -415,15 +473,23 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     },
   })
 
+  const canonicalFaceBatch = faceBatches.find((candidateBatch) => (
+    candidateBatch.id === form.characterDna.faceBibleBatchId
+  )) ?? null
+
   const { controller: hairDesignController, activeBatch: activeHairBatch } = useHairDesignController({
     projectId,
     locale,
     characterCode: selectedCharacterCode,
     characterStatus,
     characterDna: form.characterDna,
-    faceBatch,
+    faceBatch: canonicalFaceBatch,
     explorationBatch: hairExplorationBatch,
     validationBatch: hairValidationBatch,
+    explorationBatches: hairExplorationBatches,
+    validationBatches: hairValidationBatches,
+    onSelectExplorationBatch: selectHairExplorationBatch,
+    onSelectValidationBatch: selectHairValidationBatch,
     imageModels: modelsQuery.data?.image ?? [],
     isLoading: isLoadingWorkspace || modelsQuery.isLoading,
     onRefresh: async () => loadWorkspace(projectId),

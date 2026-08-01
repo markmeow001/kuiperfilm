@@ -77,6 +77,9 @@ const hairTranslations: HairDesignTranslations = {
   nextPhase: '進入下一階段',
   generating: '生成中',
   seedUnsupported: 'SEED N/A',
+  historyTitle: '生成歷史',
+  historyDescription: '切換過去批次',
+  historyNewest: '最新',
 }
 
 function hairController(): HairDesignWorkspaceController {
@@ -85,6 +88,12 @@ function hairController(): HairDesignWorkspaceController {
     onRegenerateCandidate: vi.fn(),
     explorationBatch: lockedBatch('hair-exploration'),
     validationBatch: lockedBatch('hair-validation'),
+    explorationBatches: [lockedBatch('hair-exploration')],
+    validationBatches: [lockedBatch('hair-validation')],
+    activeExplorationBatchId: 'hair-exploration-batch',
+    activeValidationBatchId: 'hair-validation-batch',
+    onSelectExplorationBatch: vi.fn(),
+    onSelectValidationBatch: vi.fn(),
     identityCandidate: candidate,
     selectedHairCandidate: candidate,
     characterCode: 'CHR-001',
@@ -156,6 +165,9 @@ const productionTranslations: ProductionStageTranslations = {
   lockHint: '完成後鎖定',
   nextPhase: '進入下一階段',
   complete: '角色開發流程已完成',
+  historyTitle: '生成歷史',
+  historyDescription: '切換過去批次',
+  historyNewest: '最新',
   fields: productionFields,
 }
 
@@ -181,6 +193,9 @@ function productionController(stageId: 'costume' | 'video'): ProductionStageWork
     stageBriefError: null,
     analysisModel: 'Gemini',
     batch: lockedBatch(stage.dbStage),
+    batches: [lockedBatch(stage.dbStage)],
+    activeBatchId: `${stage.dbStage}-batch`,
+    onSelectBatch: vi.fn(),
     characterStatus: stage.lockedStatus,
     prerequisiteReady: true,
     form: {

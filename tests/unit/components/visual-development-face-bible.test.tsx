@@ -28,6 +28,10 @@ const translations = {
   lockHint: '完成後鎖定',
   modelHint: '僅顯示支援參考圖的模型',
   seedUnsupported: 'SEED N/A',
+  historyTitle: '生成歷史',
+  historyDescription: '切換過去批次',
+  historyNewest: '最新',
+  nextPhase: '進入下一階段',
 }
 
 function controller(): FaceBibleWorkspaceController {
@@ -35,6 +39,9 @@ function controller(): FaceBibleWorkspaceController {
     regeneratingCandidateIds: [],
     onRegenerateCandidate: vi.fn(),
     batch: null,
+    batches: [],
+    activeBatchId: '',
+    onSelectBatch: vi.fn(),
     canonCandidate: {
       id: 'canon-1',
       code: 'C-01',
@@ -83,5 +90,40 @@ describe('FaceBibleWorkspace generation readiness', () => {
     expect(generate).toBeEnabled()
     fireEvent.click(generate)
     expect(value.onGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers Phase 03 navigation when any Face Bible batch is Canon locked', () => {
+    const value = controller()
+    const lockedBatch = {
+      id: 'face-locked',
+      stage: 'face-lock',
+      candidateCount: 1,
+      modelKey: 'atlascloud::flux-2-pro',
+      provider: 'atlascloud',
+      modelId: 'flux-2-pro',
+      seedSupported: true,
+      aspectRatio: '9:16',
+      resolution: null,
+      status: 'canon_locked',
+      candidates: [],
+    }
+    value.batch = lockedBatch
+    value.batches = [lockedBatch]
+    value.activeBatchId = lockedBatch.id
+    const onAdvance = vi.fn()
+
+    render(
+      <FaceBibleWorkspace
+        controller={value}
+        translations={translations}
+        nextStage={{ code: '03', shortTitle: '髮型' }}
+        onAdvance={onAdvance}
+      />,
+    )
+
+    const next = screen.getByRole('button', { name: '進入下一階段 · 03 髮型' })
+    fireEvent.click(next)
+    expect(onAdvance).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: '生成 Face Bible 10 張' })).toBeDisabled()
   })
 })

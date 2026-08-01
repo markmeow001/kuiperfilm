@@ -49,6 +49,7 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       evidence: t('workspace.script.evidence'),
       sourceVersions: t('workspace.script.sourceVersions'),
       currentVersion: t('workspace.script.currentVersion'),
+      loadSource: t('workspace.script.loadSource'),
       downloadSource: t('workspace.script.downloadSource'),
     },
     research: {
@@ -207,6 +208,7 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       worldRequired: t('workspace.casting.worldRequired'),
       worldLocked: t('workspace.casting.worldLocked'),
       completeWorld: t('workspace.casting.completeWorld'),
+      nextPhase: t('workspace.hair.nextPhase'),
     },
     face: {
       canonSource: t('workspace.face.canonSource'),
@@ -233,6 +235,10 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       lockHint: t('workspace.face.lockHint'),
       modelHint: t('workspace.face.modelHint'),
       seedUnsupported: t('workspace.face.seedUnsupported'),
+      historyTitle: t('workspace.casting.historyTitle'),
+      historyDescription: t('workspace.casting.historyDescription'),
+      historyNewest: t('workspace.casting.historyNewest'),
+      nextPhase: t('workspace.hair.nextPhase'),
     },
     hair: {
       prerequisite: t('workspace.hair.prerequisite'),
@@ -268,6 +274,9 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       nextPhase: t('workspace.hair.nextPhase'),
       generating: t('workspace.hair.generating'),
       seedUnsupported: t('workspace.hair.seedUnsupported'),
+      historyTitle: t('workspace.casting.historyTitle'),
+      historyDescription: t('workspace.casting.historyDescription'),
+      historyNewest: t('workspace.casting.historyNewest'),
     },
     production: {
       prerequisite: t('workspace.production.prerequisite'),
@@ -310,6 +319,9 @@ export function useStageWorkspaceTranslations(candidateCount: 4 | 8 | 10): Stage
       lockHint: t('workspace.production.lockHint'),
       nextPhase: t('workspace.production.nextPhase'),
       complete: t('workspace.production.complete'),
+      historyTitle: t('workspace.casting.historyTitle'),
+      historyDescription: t('workspace.casting.historyDescription'),
+      historyNewest: t('workspace.casting.historyNewest'),
       fields: {
         silhouetteSystem: t('workspace.production.fields.silhouetteSystem'),
         materialConstruction: t('workspace.production.fields.materialConstruction'),

@@ -75,7 +75,8 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
   const fieldsComplete = REQUIRED_FIELDS.every((field) => controller.form[field].trim().length > 0)
   const assetsComplete = controller.assets.length === WORLD_ASSET_DEFINITIONS.length
     && controller.assets.every((asset) => asset.taskStatus === 'completed' && asset.approved)
-  const generationActive = controller.assets.some((asset) => asset.taskStatus === 'queued' || asset.taskStatus === 'processing')
+  const generationActive = controller.generationReservationActive
+    || controller.assets.some((asset) => asset.taskStatus === 'queued' || asset.taskStatus === 'processing')
   const isLocked = controller.status === 'world_locked'
   const researchReady = controller.researchStatus === 'locked'
   const internalReferenceCount = controller.references.length

@@ -74,6 +74,7 @@ export type PendingWorldBibleAsset = Omit<WorldBibleAsset, 'taskId'>
 
 export interface WorldGenerationReservation {
   id: string
+  ownerUserId: string
   kind: 'initial' | 'regenerate'
   startedAt: string
   pendingAssets: PendingWorldBibleAsset[]
@@ -245,6 +246,7 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
     && pendingAssets.length > 0
   ) ? {
       id: reservationSource.id,
+      ownerUserId: typeof reservationSource.ownerUserId === 'string' ? reservationSource.ownerUserId : '',
       kind: reservationSource.kind,
       startedAt: reservationSource.startedAt,
       pendingAssets,

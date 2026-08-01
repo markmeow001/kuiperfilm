@@ -5,6 +5,7 @@ import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../h
 
 const workspaceState = vi.hoisted(() => ({ value: null as Record<string, unknown> | null }))
 const prismaMock = vi.hoisted(() => ({
+  project: { findUnique: vi.fn() },
   visualDevelopmentWorkspace: {
     findUnique: vi.fn(async () => workspaceState.value),
     updateMany: vi.fn(async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
@@ -99,6 +100,7 @@ describe('visual development World Bible API', () => {
     resetAuthMockState()
     installAuthMocks()
     mockAuthenticated('user-1')
+    prismaMock.project.findUnique.mockResolvedValue({ userId: 'user-1' })
     workspaceState.value = {
       id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_draft', worldBible: completeWorld,
       updatedAt: new Date('2026-07-31T00:00:00.000Z'),
@@ -227,6 +229,8 @@ describe('visual development World Bible API', () => {
     expect(prompts.every((prompt) => !prompt.includes('Faction Color System'))).toBe(true)
     expect(prompts.every((prompt) => !prompt.includes('Material & Aging Rules'))).toBe(true)
     expect(prompts.every((prompt) => !prompt.includes('Architecture, Symbols & Exclusions'))).toBe(true)
+    const reservationWrite = prismaMock.visualDevelopmentWorkspace.updateMany.mock.calls[0]?.[0]
+    expect((reservationWrite?.data.worldBible as { generationReservation: { ownerUserId: string } }).generationReservation.ownerUserId).toBe('user-1')
     const update = prismaMock.visualDevelopmentWorkspace.updateMany.mock.calls.at(-1)?.[0]
     const savedWorldBible = update?.data.worldBible as { assets: unknown[] }
     expect(savedWorldBible.assets).toHaveLength(4)
@@ -299,6 +303,7 @@ describe('visual development World Bible API', () => {
         ...completeWorld,
         generationReservation: {
           id: runId,
+          ownerUserId: 'user-1',
           kind: 'initial',
           startedAt: '2026-07-30T00:00:00.000Z',
           pendingAssets,
@@ -333,6 +338,44 @@ describe('visual development World Bible API', () => {
     expect(workspaceState.value?.status).toBe('world_generating')
   })
 
+  it('舊版 ownerless reservation 僅允許專案擁有者復原', async () => {
+    const runId = 'legacy-ownerless-run'
+    const pendingAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
+      code, prompt: `${code} prompt`, negativePrompt: '', requestedSeed: null,
+      seedStatus: 'unsupported', approved: false, rejectionNote: null, originPrompt: `${code} prompt`, history: [],
+    }))
+    workspaceState.value = {
+      id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_submitting',
+      worldBible: {
+        ...completeWorld,
+        generationReservation: {
+          id: runId, kind: 'initial', startedAt: '2026-07-30T00:00:00.000Z', pendingAssets,
+        },
+      },
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+    }
+    prismaMock.task.findMany.mockResolvedValue(pendingAssets.map((asset) => ({
+      id: `legacy-${asset.code}`,
+      payload: { meta: { visualDevelopmentWorldAssetCode: asset.code } },
+    })))
+
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/world-bible', method: 'PATCH',
+      body: { action: 'recover-generation' },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      success: true,
+      data: { reconciled: true, resolved: true, recovered: 4 },
+    })
+    expect(prismaMock.task.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: 'user-1' }),
+    }))
+    expect((workspaceState.value?.worldBible as { generationReservation: unknown }).generationReservation).toBeNull()
+  })
+
   it('逾時 reservation 僅找到部分任務 -> 保留已扣款資產並解除永久阻塞', async () => {
     const runId = 'recover-partial-run'
     const pendingAssets = ['WORLD-FORMULA', 'FACTION-COLOR', 'MATERIAL-AGING', 'ARCH-SYMBOL'].map((code) => ({
@@ -352,6 +395,7 @@ describe('visual development World Bible API', () => {
         ...completeWorld,
         generationReservation: {
           id: runId,
+          ownerUserId: 'user-1',
           kind: 'initial',
           startedAt: '2026-07-30T00:00:00.000Z',
           pendingAssets,
@@ -396,6 +440,40 @@ describe('visual development World Bible API', () => {
       taskId: 'recovered-WORLD-FORMULA',
     })])
     expect(workspaceState.value?.status).toBe('world_partial_failed')
+  })
+
+  it('協作者不得復原或清除另一位使用者的付費生成 reservation', async () => {
+    const runId = 'owner-isolated-run'
+    workspaceState.value = {
+      id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_submitting',
+      worldBible: {
+        ...completeWorld,
+        generationReservation: {
+          id: runId,
+          ownerUserId: 'user-1',
+          kind: 'initial',
+          startedAt: new Date().toISOString(),
+          pendingAssets: [{
+            code: 'WORLD-FORMULA', prompt: 'prompt', negativePrompt: '', requestedSeed: null,
+            seedStatus: 'unsupported', approved: false, rejectionNote: null, originPrompt: 'prompt', history: [],
+          }],
+        },
+      },
+      updatedAt: new Date(),
+    }
+    mockAuthenticated('user-2')
+
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/world-bible', method: 'PATCH',
+      body: { action: 'recover-generation' },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(403)
+    expect(body.error.details.code).toBe('WORLD_GENERATION_RESERVATION_OWNER_REQUIRED')
+    expect(prismaMock.task.findMany).not.toHaveBeenCalled()
+    expect((workspaceState.value?.worldBible as { generationReservation: { id: string } }).generationReservation.id).toBe(runId)
   })
 
   it('上一批世界觀資產仍在生成 -> 拒絕重複送出第二批付費任務', async () => {

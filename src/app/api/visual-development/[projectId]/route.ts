@@ -19,6 +19,7 @@ import { EMPTY_WORLD_BIBLE, parseWorldBible, toWorldBibleJson } from '@/lib/visu
 
 type RouteContext = { params: Promise<{ projectId: string }> }
 type JsonRecord = Record<string, unknown>
+const CASTING_SUBMISSION_STALE_MS = 5 * 60 * 1000
 
 function toRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -126,7 +127,10 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
         include: {
           castingBatches: {
             orderBy: { createdAt: 'desc' },
-            take: 30,
+            // Keep enough per-character history for every visual-development phase.
+            // A single character can legitimately have several iterations across
+            // Casting, Face, Hair and Phases 04–13.
+            take: 100,
             include: { candidates: { orderBy: { code: 'asc' } } },
           },
         },
@@ -135,14 +139,53 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
   })
   if (!workspace) return NextResponse.json({ success: true, data: { workspace: null } })
 
+  // Recent history is capped for response size, but every exact Canon pointer
+  // must remain loadable even after hundreds of iterations.
+  const canonicalBatchIds = [...new Set(workspace.characters.flatMap((character) =>
+    Object.entries(toStringRecord(character.characterDna))
+      .filter(([key, value]) => key.endsWith('BatchId') && value)
+      .map(([, value]) => value),
+  ))]
+  const canonCandidateIds = workspace.characters.flatMap((character) =>
+    character.canonCandidateId ? [character.canonCandidateId] : [],
+  )
+  const [pointerBatches, canonCandidates] = await Promise.all([
+    canonicalBatchIds.length > 0
+      ? prisma.visualDevelopmentBatch.findMany({
+        where: { id: { in: canonicalBatchIds } },
+        include: { candidates: { orderBy: { code: 'asc' } } },
+      })
+      : [],
+    canonCandidateIds.length > 0
+      ? prisma.visualDevelopmentCandidate.findMany({
+        where: { id: { in: canonCandidateIds } },
+        include: { batch: { include: { candidates: { orderBy: { code: 'asc' } } } } },
+      })
+      : [],
+  ])
+  const exactCanonBatches = [
+    ...pointerBatches,
+    ...canonCandidates.map((candidate) => candidate.batch),
+  ]
+  const batchesByCharacter = new Map(workspace.characters.map((character) => {
+    const batches = [...character.castingBatches]
+    for (const batch of exactCanonBatches) {
+      if (batch.characterId === character.id && !batches.some((candidate) => candidate.id === batch.id)) {
+        batches.push(batch)
+      }
+    }
+    batches.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    return [character.id, batches] as const
+  }))
+
   const currentTaskIds = workspace.characters.flatMap((character) =>
-    character.castingBatches.flatMap((batch) =>
+    (batchesByCharacter.get(character.id) ?? []).flatMap((batch) =>
       batch.candidates.flatMap((candidate) => candidate.taskId ? [candidate.taskId] : []),
     ),
   )
   const historyTaskIds = collectCandidateHistoryTaskIds(
     workspace.characters.flatMap((character) =>
-      character.castingBatches.map((batch) => batch.promptStack),
+      (batchesByCharacter.get(character.id) ?? []).map((batch) => batch.promptStack),
     ),
   )
   const taskIds = [...new Set([...currentTaskIds, ...historyTaskIds])]
@@ -168,7 +211,7 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
         ...workspace,
         characters: workspace.characters.map((character) => ({
           ...character,
-          castingBatches: character.castingBatches.map((batch) => ({
+          castingBatches: (batchesByCharacter.get(character.id) ?? []).map((batch) => ({
             ...batch,
             candidates: batch.candidates.map((candidate) => {
               const history = readCandidateGenerationHistory(batch.promptStack, candidate.id)
@@ -257,6 +300,14 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   requiredString(characterDna.coreTraits, 'characterDna.coreTraits')
   requiredString(castingBrief.emotionalRead, 'castingBrief.emotionalRead')
 
+  const existingCharacter = await prisma.visualDevelopmentCharacter.findUnique({
+    where: { workspaceId_code: { workspaceId: lockedWorkspace.id, code: characterCode } },
+    select: { id: true, canonCandidateId: true },
+  })
+  if (existingCharacter?.canonCandidateId) {
+    throw new ApiError('CONFLICT', { code: 'CASTING_CANON_ALREADY_LOCKED' })
+  }
+
   let selection
   try {
     selection = await resolveModelSelection(access.userId, modelKey, 'image')
@@ -283,7 +334,9 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const character = await prisma.visualDevelopmentCharacter.upsert({
     where: { workspaceId_code: { workspaceId: lockedWorkspace.id, code: characterCode } },
     create: { workspaceId: lockedWorkspace.id, code: characterCode, name: characterName, characterDna, castingBrief },
-    update: { name: characterName, characterDna, castingBrief },
+    // The conditional write below owns all mutable updates. Keeping this
+    // branch empty prevents a concurrent Canon lock from being overwritten.
+    update: {},
   })
   const basePrompt = buildCastingPrompt({
     worldBible,
@@ -291,44 +344,64 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     castingBrief,
     candidateCode: `${characterCode}-CANDIDATE`,
   })
-  const batch = await prisma.visualDevelopmentBatch.create({
-    data: {
-      characterId: character.id,
-      candidateCount,
-      provider: selection.provider,
-      modelKey: selection.modelKey,
-      modelId: selection.modelId,
-      seedSupported,
-      prompt: basePrompt.prompt,
-      negativePrompt: basePrompt.negativePrompt,
-      promptStack: basePrompt.promptStack,
-      worldBibleSnapshot: worldBible,
-      characterDnaSnapshot: characterDna,
-      castingBriefSnapshot: castingBrief,
-      aspectRatio,
-      resolution,
-      candidates: {
-        create: Array.from({ length: candidateCount }, (_, index) => {
-          const code = `C-${String(index + 1).padStart(2, '0')}`
-          const requestedSeed = seedSupported ? randomInt(1, 2_147_483_647) : null
-          const prompt = buildCastingPrompt({ worldBible, characterDna, castingBrief, candidateCode: code })
-          return {
-            code,
-            requestedSeed,
-            effectiveSeed: requestedSeed,
-            seedStatus: seedSupported ? 'applied' : 'unsupported',
-            prompt: prompt.prompt,
-            negativePrompt: prompt.negativePrompt,
-            modelKey: selection.modelKey,
-            provider: selection.provider,
-            modelId: selection.modelId,
-            aspectRatio,
-            resolution,
-          }
-        }),
+  const activeSubmissionCutoff = new Date(Date.now() - CASTING_SUBMISSION_STALE_MS)
+  const batch = await prisma.$transaction(async (tx) => {
+    // The active submitting batch is a short-lived database reservation.
+    // Canon lock uses the same predicate, so either generation or lock wins;
+    // paid tasks can never be submitted after Canon was claimed.
+    const claimed = await tx.visualDevelopmentCharacter.updateMany({
+      where: {
+        id: character.id,
+        canonCandidateId: null,
+        castingBatches: {
+          none: { stage: 'casting', status: 'submitting', updatedAt: { gte: activeSubmissionCutoff } },
+        },
       },
-    },
-    include: { candidates: { orderBy: { code: 'asc' } } },
+      data: { name: characterName, characterDna, castingBrief },
+    })
+    if (claimed.count !== 1) {
+      throw new ApiError('CONFLICT', { code: 'CASTING_CANON_OR_GENERATION_CONFLICT' })
+    }
+    return tx.visualDevelopmentBatch.create({
+      data: {
+        characterId: character.id,
+        status: 'submitting',
+        candidateCount,
+        provider: selection.provider,
+        modelKey: selection.modelKey,
+        modelId: selection.modelId,
+        seedSupported,
+        prompt: basePrompt.prompt,
+        negativePrompt: basePrompt.negativePrompt,
+        promptStack: basePrompt.promptStack,
+        worldBibleSnapshot: worldBible,
+        characterDnaSnapshot: characterDna,
+        castingBriefSnapshot: castingBrief,
+        aspectRatio,
+        resolution,
+        candidates: {
+          create: Array.from({ length: candidateCount }, (_, index) => {
+            const code = `C-${String(index + 1).padStart(2, '0')}`
+            const requestedSeed = seedSupported ? randomInt(1, 2_147_483_647) : null
+            const prompt = buildCastingPrompt({ worldBible, characterDna, castingBrief, candidateCode: code })
+            return {
+              code,
+              requestedSeed,
+              effectiveSeed: requestedSeed,
+              seedStatus: seedSupported ? 'applied' : 'unsupported',
+              prompt: prompt.prompt,
+              negativePrompt: prompt.negativePrompt,
+              modelKey: selection.modelKey,
+              provider: selection.provider,
+              modelId: selection.modelId,
+              aspectRatio,
+              resolution,
+            }
+          }),
+        },
+      },
+      include: { candidates: { orderBy: { code: 'asc' } } },
+    })
   })
 
   const submissions = await Promise.allSettled(batch.candidates.map(async (candidate) => {
@@ -425,6 +498,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (!candidate || candidate.batch.character.workspace.projectId !== projectId) {
     throw new ApiError('NOT_FOUND')
   }
+  if (candidate.batch.status === 'canon_locked' || candidate.batch.character.canonCandidateId) {
+    throw new ApiError('CONFLICT', { code: 'CASTING_CANON_ALREADY_LOCKED' })
+  }
 
   if (action === 'shortlist') {
     const updated = await prisma.visualDevelopmentCandidate.update({
@@ -443,19 +519,33 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   })
   if (!task) throw new ApiError('CONFLICT', { code: 'CANDIDATE_NOT_COMPLETED' })
 
-  await prisma.$transaction([
-    prisma.visualDevelopmentCandidate.updateMany({
+  await prisma.$transaction(async (tx) => {
+    const activeSubmissionCutoff = new Date(Date.now() - CASTING_SUBMISSION_STALE_MS)
+    const claimed = await tx.visualDevelopmentCharacter.updateMany({
+      where: {
+        id: candidate.batch.characterId,
+        canonCandidateId: null,
+        castingBatches: {
+          none: { stage: 'casting', status: 'submitting', updatedAt: { gte: activeSubmissionCutoff } },
+        },
+      },
+      data: { canonCandidateId: candidate.id, canonLockedAt: new Date(), status: 'identity_locked' },
+    })
+    if (claimed.count !== 1) {
+      throw new ApiError('CONFLICT', { code: 'CASTING_CANON_OR_GENERATION_CONFLICT' })
+    }
+    await tx.visualDevelopmentCandidate.updateMany({
       where: { batch: { characterId: candidate.batch.characterId } },
       data: { isCanon: false },
-    }),
-    prisma.visualDevelopmentCandidate.update({
+    })
+    await tx.visualDevelopmentCandidate.update({
       where: { id: candidate.id },
       data: { isCanon: true, shortlisted: true },
-    }),
-    prisma.visualDevelopmentCharacter.update({
-      where: { id: candidate.batch.characterId },
-      data: { canonCandidateId: candidate.id, canonLockedAt: new Date(), status: 'identity_locked' },
-    }),
-  ])
+    })
+    await tx.visualDevelopmentBatch.update({
+      where: { id: candidate.batchId },
+      data: { status: 'canon_locked' },
+    })
+  })
   return NextResponse.json({ success: true, data: { candidateId: candidate.id } })
 })

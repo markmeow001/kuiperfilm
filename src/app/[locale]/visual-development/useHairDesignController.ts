@@ -36,6 +36,10 @@ interface UseHairDesignInput {
   faceBatch: CastingBatchView | null
   explorationBatch: CastingBatchView | null
   validationBatch: CastingBatchView | null
+  explorationBatches: CastingBatchView[]
+  validationBatches: CastingBatchView[]
+  onSelectExplorationBatch: (batchId: string) => void
+  onSelectValidationBatch: (batchId: string) => void
   imageModels: UserModelOption[]
   isLoading: boolean
   onRefresh: () => Promise<void>
@@ -176,10 +180,15 @@ export function useHairDesignController(input: UseHairDesignInput): {
           meta: { locale: input.locale },
         }),
       })
-      const payload = await response.json() as ApiErrorPayload
+      const payload = await response.json() as ApiErrorPayload & { data?: { batchId?: string } }
       if (!response.ok && response.status !== 207) {
         window.alert(payload.error?.details?.message ?? payload.error?.message ?? t('workspace.hair.generateFailed'))
         return
+      }
+      const nextBatchId = payload.data?.batchId
+      if (nextBatchId) {
+        if (action === 'explore') input.onSelectExplorationBatch(nextBatchId)
+        else input.onSelectValidationBatch(nextBatchId)
       }
       await input.onRefresh()
     } finally {
@@ -216,6 +225,10 @@ export function useHairDesignController(input: UseHairDesignInput): {
     ...input.candidateRegeneration,
     explorationBatch: input.explorationBatch,
     validationBatch: input.validationBatch,
+    explorationBatches: input.explorationBatches,
+    validationBatches: input.validationBatches,
+    activeExplorationBatchId: input.explorationBatch?.id ?? '',
+    activeValidationBatchId: input.validationBatch?.id ?? '',
     identityCandidate,
     selectedHairCandidate,
     characterCode: input.characterCode,
@@ -226,11 +239,13 @@ export function useHairDesignController(input: UseHairDesignInput): {
     isLoading: input.isLoading,
     onFieldChange: updateField,
     onGenerateExploration: () => void runGeneration('explore'),
+    onSelectExplorationBatch: input.onSelectExplorationBatch,
     onSelectDirection: (candidateId) => void patch(
       { action: 'exploration-select', candidateId },
       t('workspace.hair.selectFailed'),
     ),
     onGenerateValidation: () => void runGeneration('validate'),
+    onSelectValidationBatch: input.onSelectValidationBatch,
     onReviewValidation: (candidateId, approved, rejectionNote) => void patch(
       { action: 'asset-review', candidateId, approved, rejectionNote },
       t('workspace.hair.reviewFailed'),
@@ -250,8 +265,12 @@ export function useHairDesignController(input: UseHairDesignInput): {
     input.characterStatus,
     input.candidateRegeneration,
     input.explorationBatch,
+    input.explorationBatches,
     input.isLoading,
     input.validationBatch,
+    input.validationBatches,
+    input.onSelectExplorationBatch,
+    input.onSelectValidationBatch,
     isGenerating,
     patch,
     runGeneration,

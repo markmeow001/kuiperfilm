@@ -156,11 +156,26 @@ const WORLD_RESERVATION_STALE_MS = 5 * 60 * 1000
 
 async function reconcileReservedWorldGeneration(input: {
   projectId: string
+  userId: string
   reservation: WorldGenerationReservation
 }): Promise<{ resolved: boolean; recovered: number; expected: number; stale: boolean }> {
+  if (!input.reservation.ownerUserId) {
+    // Ownerless reservations only exist in legacy rows. Recovery is restricted
+    // to the project owner; collaborators never gain cross-user task access.
+    const project = await prisma.project.findUnique({
+      where: { id: input.projectId },
+      select: { userId: true },
+    })
+    if (!project || project.userId !== input.userId) {
+      throw new ApiError('FORBIDDEN', { code: 'WORLD_GENERATION_RESERVATION_OWNER_REQUIRED' })
+    }
+  } else if (input.reservation.ownerUserId !== input.userId) {
+    throw new ApiError('FORBIDDEN', { code: 'WORLD_GENERATION_RESERVATION_OWNER_REQUIRED' })
+  }
   const tasks = await prisma.task.findMany({
     where: {
       projectId: input.projectId,
+      userId: input.userId,
       targetType: 'visual-development-world-asset',
       targetId: { endsWith: `:${input.reservation.id}` },
     },
@@ -195,6 +210,9 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
   if (access instanceof Response) return access
   const workspace = await loadWorkspace(projectId)
   const document = workspace ? parseWorldBible(workspace.worldBible) : EMPTY_WORLD_BIBLE
+  const legacyReservationOwner = document.generationReservation && !document.generationReservation.ownerUserId
+    ? await prisma.project.findUnique({ where: { id: projectId }, select: { userId: true } })
+    : null
   const taskIds = [...new Set(document.assets.flatMap((asset) => [
     asset.taskId,
     ...asset.history.map((revision) => revision.taskId),
@@ -212,6 +230,12 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
     data: {
       worldBible: {
         ...document,
+        generationReservation: document.generationReservation
+          && (document.generationReservation.ownerUserId === access.userId
+            || (!document.generationReservation.ownerUserId && legacyReservationOwner?.userId === access.userId))
+          ? { id: document.generationReservation.id }
+          : null,
+        generationReservationActive: Boolean(document.generationReservation),
         references: document.references.map((reference) => ({
           ...reference,
           previewUrl: getSignedUrl(reference.key, 3600),
@@ -282,6 +306,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (document.generationReservation) {
     const reconciliation = await reconcileReservedWorldGeneration({
       projectId,
+      userId: access.userId,
       reservation: document.generationReservation,
     })
     if (reconciliation.resolved) {
@@ -385,6 +410,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (!workspace) throw new ApiError('CONFLICT', { code: 'RESEARCH_CANON_REQUIRED' })
   document.generationReservation = {
     id: runId,
+    ownerUserId: access.userId,
     kind: 'initial',
     startedAt: new Date().toISOString(),
     pendingAssets,
@@ -451,6 +477,7 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (document.generationReservation) {
     const reconciliation = await reconcileReservedWorldGeneration({
       projectId,
+      userId: access.userId,
       reservation: document.generationReservation,
     })
     if (reconciliation.resolved) {
@@ -565,6 +592,7 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     }
     document.generationReservation = {
       id: runId,
+      ownerUserId: access.userId,
       kind: 'regenerate',
       startedAt: new Date().toISOString(),
       pendingAssets: [pendingAsset],

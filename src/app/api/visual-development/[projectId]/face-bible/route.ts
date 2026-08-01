@@ -83,6 +83,10 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (!character.canonCandidateId) {
     throw new ApiError('CONFLICT', { code: 'CASTING_CANON_REQUIRED' })
   }
+  const existingCharacterDna = toStringRecord(character.characterDna)
+  if (existingCharacterDna.faceBibleBatchId || !['identity_locked', 'face_lock_in_progress'].includes(character.status)) {
+    throw new ApiError('CONFLICT', { code: 'FACE_CANON_ALREADY_LOCKED' })
+  }
 
   const canonCandidate = await prisma.visualDevelopmentCandidate.findUnique({
     where: { id: character.canonCandidateId },
@@ -124,10 +128,13 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   }
   const seedSupported = capabilities.supportSeed === true
   const mergedCharacterDna = mergeStringJson(character.characterDna, faceLockRecord)
-  await prisma.visualDevelopmentCharacter.update({
-    where: { id: character.id },
+  const claimed = await prisma.visualDevelopmentCharacter.updateMany({
+    where: { id: character.id, status: { in: ['identity_locked', 'face_lock_in_progress'] } },
     data: { characterDna: mergedCharacterDna, status: 'face_lock_in_progress' },
   })
+  if (claimed.count !== 1) {
+    throw new ApiError('CONFLICT', { code: 'FACE_CANON_ALREADY_LOCKED' })
+  }
 
   const promptResults = FACE_LOCK_VARIANTS.map((variant) => ({
     variant,
@@ -275,6 +282,11 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     if (!candidate || candidate.batch.stage !== 'face-lock' || candidate.batch.character.workspace.projectId !== projectId) {
       throw new ApiError('NOT_FOUND')
     }
+    if (candidate.batch.status === 'canon_locked'
+      || toStringRecord(candidate.batch.character.characterDna).faceBibleBatchId
+      || candidate.batch.character.status !== 'face_lock_in_progress') {
+      throw new ApiError('CONFLICT', { code: 'FACE_CANON_ALREADY_LOCKED' })
+    }
     if (!candidate.taskId) throw new ApiError('CONFLICT', { code: 'FACE_ASSET_NOT_GENERATED' })
     const task = await prisma.task.findFirst({
       where: { id: candidate.taskId, userId: access.userId, projectId, status: 'completed' },
@@ -285,9 +297,26 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     const rejectionNote = approved
       ? null
       : requiredString(body.rejectionNote, 'rejectionNote', 1000)
-    const updated = await prisma.visualDevelopmentCandidate.update({
-      where: { id: candidate.id },
-      data: { shortlisted: approved, rejectionNote },
+    const updated = await prisma.$transaction(async (tx) => {
+      // Temporarily claim the character row inside this transaction. A Canon
+      // lock racing this review must either wait for the reviewed value or win
+      // first and make this review fail; stale reviews can never land later.
+      const claimed = await tx.visualDevelopmentCharacter.updateMany({
+        where: { id: candidate.batch.character.id, status: 'face_lock_in_progress' },
+        data: { status: 'face_lock_reviewing' },
+      })
+      if (claimed.count !== 1) {
+        throw new ApiError('CONFLICT', { code: 'FACE_CANON_ALREADY_LOCKED' })
+      }
+      const reviewed = await tx.visualDevelopmentCandidate.update({
+        where: { id: candidate.id },
+        data: { shortlisted: approved, rejectionNote },
+      })
+      await tx.visualDevelopmentCharacter.update({
+        where: { id: candidate.batch.character.id },
+        data: { status: 'face_lock_in_progress' },
+      })
+      return reviewed
     })
     return NextResponse.json({ success: true, data: { candidate: { ...updated, approved } } })
   }
@@ -303,6 +332,11 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (!batch || batch.stage !== 'face-lock' || batch.character.workspace.projectId !== projectId) {
     throw new ApiError('NOT_FOUND')
   }
+  if (batch.status === 'canon_locked'
+    || toStringRecord(batch.character.characterDna).faceBibleBatchId
+    || batch.character.status !== 'face_lock_in_progress') {
+    throw new ApiError('CONFLICT', { code: 'FACE_CANON_ALREADY_LOCKED' })
+  }
   if (batch.candidates.length !== FACE_LOCK_VARIANTS.length || batch.candidates.some((candidate) => !candidate.shortlisted)) {
     throw new ApiError('CONFLICT', { code: 'FACE_BIBLE_ALL_ASSETS_MUST_BE_APPROVED' })
   }
@@ -313,25 +347,55 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (completedTaskCount !== FACE_LOCK_VARIANTS.length) {
     throw new ApiError('CONFLICT', { code: 'FACE_BIBLE_ASSETS_INCOMPLETE' })
   }
-  const currentDna = toStringRecord(batch.character.characterDna)
-  const currentVersion = Number.parseInt(currentDna.faceCanonVersion || '0', 10)
-  const faceCanonVersion = Number.isFinite(currentVersion) ? currentVersion + 1 : 1
-  await prisma.$transaction([
-    prisma.visualDevelopmentCharacter.update({
+  const faceCanonVersion = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.visualDevelopmentCharacter.updateMany({
+      where: { id: batch.characterId, status: 'face_lock_in_progress' },
+      data: { status: 'face_locking' },
+    })
+    if (claimed.count !== 1) {
+      throw new ApiError('CONFLICT', { code: 'FACE_CANON_ALREADY_LOCKED' })
+    }
+
+    // Re-read every approval and task inside the same transaction that owns
+    // the character row. The outer checks are only a fast preflight.
+    const lockedBatch = await tx.visualDevelopmentBatch.findUnique({
+      where: { id: batch.id },
+      include: { character: { include: { workspace: true } }, candidates: true },
+    })
+    if (!lockedBatch || lockedBatch.stage !== 'face-lock'
+      || lockedBatch.character.workspace.projectId !== projectId
+      || lockedBatch.status === 'canon_locked'
+      || toStringRecord(lockedBatch.character.characterDna).faceBibleBatchId
+      || lockedBatch.candidates.length !== FACE_LOCK_VARIANTS.length
+      || lockedBatch.candidates.some((candidate) => !candidate.shortlisted)) {
+      throw new ApiError('CONFLICT', { code: 'FACE_BIBLE_ALL_ASSETS_MUST_BE_APPROVED' })
+    }
+    const lockedTaskIds = lockedBatch.candidates.flatMap((candidate) => candidate.taskId ? [candidate.taskId] : [])
+    const lockedCompletedTaskCount = await tx.task.count({
+      where: { id: { in: lockedTaskIds }, userId: access.userId, projectId, status: 'completed' },
+    })
+    if (lockedCompletedTaskCount !== FACE_LOCK_VARIANTS.length) {
+      throw new ApiError('CONFLICT', { code: 'FACE_BIBLE_ASSETS_INCOMPLETE' })
+    }
+    const currentDna = toStringRecord(lockedBatch.character.characterDna)
+    const currentVersion = Number.parseInt(currentDna.faceCanonVersion || '0', 10)
+    const nextFaceCanonVersion = Number.isFinite(currentVersion) ? currentVersion + 1 : 1
+    await tx.visualDevelopmentCharacter.update({
       where: { id: batch.characterId },
       data: {
         status: 'face_locked',
         characterDna: {
           ...currentDna,
           faceBibleBatchId: batch.id,
-          faceCanonId: `FACE-${batch.character.code}-v${String(faceCanonVersion).padStart(3, '0')}`,
-          faceCanonVersion: String(faceCanonVersion),
+          faceCanonId: `FACE-${lockedBatch.character.code}-v${String(nextFaceCanonVersion).padStart(3, '0')}`,
+          faceCanonVersion: String(nextFaceCanonVersion),
           faceLockedAt: new Date().toISOString(),
         },
       },
-    }),
-    prisma.visualDevelopmentBatch.update({ where: { id: batch.id }, data: { status: 'canon_locked' } }),
-  ])
+    })
+    await tx.visualDevelopmentBatch.update({ where: { id: batch.id }, data: { status: 'canon_locked' } })
+    return nextFaceCanonVersion
+  })
   return NextResponse.json({
     success: true,
     data: { batchId: batch.id, faceCanonVersion },

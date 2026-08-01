@@ -43,6 +43,8 @@ type WorldBibleResponse = {
       canonId?: string | null
       researchStatus?: ResearchStatus
       inheritedReferenceCount?: number
+      generationReservation?: { id: string } | null
+      generationReservationActive?: boolean
     }
   }
   error?: { message?: string; details?: { message?: string } }
@@ -68,6 +70,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   const [canonId, setCanonId] = useState<string | null>(null)
   const [researchStatus, setResearchStatus] = useState<ResearchStatus>('draft')
   const [inheritedReferenceCount, setInheritedReferenceCount] = useState(0)
+  const [generationReservationId, setGenerationReservationId] = useState<string | null>(null)
+  const [generationReservationActive, setGenerationReservationActive] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -76,6 +80,7 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   const hydratedProjectRef = useRef('')
   const lastSavedSignatureRef = useRef('')
   const onWorldChangedRef = useRef(input.onWorldChanged)
+  const recoveryInFlightRef = useRef(false)
   onWorldChangedRef.current = input.onWorldChanged
 
   const imageModels = useMemo(() => input.imageModels.filter((model) => {
@@ -99,6 +104,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       setCanonId(null)
       setResearchStatus('draft')
       setInheritedReferenceCount(0)
+      setGenerationReservationId(null)
+      setGenerationReservationActive(false)
       hydratedProjectRef.current = ''
       lastSavedSignatureRef.current = ''
       return
@@ -135,6 +142,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
       setCanonId(world?.canonId ?? null)
       setResearchStatus(world?.researchStatus ?? 'draft')
       setInheritedReferenceCount(world?.inheritedReferenceCount ?? 0)
+      setGenerationReservationId(world?.generationReservation?.id ?? null)
+      setGenerationReservationActive(world?.generationReservationActive === true)
       hydratedProjectRef.current = input.projectId
       lastSavedSignatureRef.current = JSON.stringify(loadedForm)
     } finally {
@@ -143,6 +152,31 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   }, [input.projectId])
 
   useEffect(() => { void load() }, [load])
+
+  const recoverReservedGeneration = useCallback(async () => {
+    if (!input.projectId || !generationReservationId || recoveryInFlightRef.current) return
+    recoveryInFlightRef.current = true
+    try {
+      const response = await fetch(`/api/visual-development/${input.projectId}/world-bible`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'recover-generation' }),
+      })
+      if (response.ok) {
+        await load()
+        onWorldChangedRef.current()
+      }
+    } finally {
+      recoveryInFlightRef.current = false
+    }
+  }, [generationReservationId, input.projectId, load])
+
+  useEffect(() => {
+    if (!generationReservationId) return
+    void recoverReservedGeneration()
+    const timer = window.setInterval(() => void recoverReservedGeneration(), 5000)
+    return () => window.clearInterval(timer)
+  }, [generationReservationId, recoverReservedGeneration])
 
   useEffect(() => {
     if (!form.modelKey || status === 'world_locked') return
@@ -328,6 +362,8 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
     canonId,
     researchStatus,
     inheritedReferenceCount,
+    generationReservationId,
+    generationReservationActive,
     imageModels,
     isLoading,
     isSaving,

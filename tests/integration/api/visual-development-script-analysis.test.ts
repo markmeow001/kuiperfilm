@@ -101,12 +101,45 @@ describe('visual development screenplay analysis API', () => {
     expect(body.data.sources).toHaveLength(2)
   })
 
+  it('loads the analysis and task for an explicitly selected screenplay version', async () => {
+    const nextWorkspace = workspace()
+    nextWorkspace.worldBible.sources.push({
+      id: 'source-2', key: 'documents/source-2.txt', originalKey: null, name: '序列三 V2.txt', sourceTitle: '序列三 V2',
+      sourceFormat: 'pasted', mimeType: 'text/plain', sha256: 'def', sizeBytes: 1500, textLength: 1200, createdAt: '2026-07-29T01:00:00.000Z',
+    })
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue(nextWorkspace)
+    prismaMock.task.findMany.mockResolvedValue([{
+      id: 'task-source-1', status: 'completed', progress: 100, errorCode: null,
+      errorMessage: null, createdAt: new Date('2026-07-29T00:30:00.000Z'), payload: { sourceId: 'source-1' },
+    }])
+    const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
+    const response = await mod.GET(buildMockRequest({
+      path: '/api/visual-development/project-1/script-analysis?sourceId=source-1', method: 'GET',
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.analysis).toMatchObject({ id: analysis.id, sourceId: 'source-1' })
+    expect(body.data.task).toMatchObject({ id: 'task-source-1', status: 'completed' })
+  })
+
+  it('rejects an unknown explicitly selected screenplay version', async () => {
+    const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
+    const response = await mod.GET(buildMockRequest({
+      path: '/api/visual-development/project-1/script-analysis?sourceId=missing', method: 'GET',
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body.error.details.code).toBe('SCRIPT_SOURCE_NOT_FOUND')
+  })
+
   it('refuses to overwrite a locked World Canon', async () => {
     prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue(workspace('world_locked'))
     const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
     const response = await mod.PATCH(buildMockRequest({
       path: '/api/visual-development/project-1/script-analysis', method: 'PATCH',
-      body: { action: 'apply-analysis', applyWorldBible: true, characterCodes: ['SINO'] },
+      body: { action: 'apply-analysis', analysisId: analysis.id, sourceId: analysis.sourceId, applyWorldBible: true, characterCodes: ['SINO'] },
     }), { params: Promise.resolve({ projectId: 'project-1' }) })
     const body = await response.json()
 
@@ -128,7 +161,7 @@ describe('visual development screenplay analysis API', () => {
     const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
     const response = await mod.PATCH(buildMockRequest({
       path: '/api/visual-development/project-1/script-analysis', method: 'PATCH',
-      body: { action: 'apply-analysis', applyWorldBible: true, characterCodes: ['SINO'] },
+      body: { action: 'apply-analysis', analysisId: analysis.id, sourceId: analysis.sourceId, applyWorldBible: true, characterCodes: ['SINO'] },
     }), { params: Promise.resolve({ projectId: 'project-1' }) })
     const body = await response.json()
 
@@ -137,11 +170,24 @@ describe('visual development screenplay analysis API', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
+  it('refuses to apply a screenplay analysis that changed after it was reviewed', async () => {
+    const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/script-analysis', method: 'PATCH',
+      body: { action: 'apply-analysis', analysisId: 'SCRIPT-stale', sourceId: analysis.sourceId, applyWorldBible: true, characterCodes: ['SINO'] },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('SCRIPT_ANALYSIS_CHANGED')
+    expect(prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
   it('imports only approved characters and preserves the AI result as an applied audit record', async () => {
     const mod = await import('@/app/api/visual-development/[projectId]/script-analysis/route')
     const response = await mod.PATCH(buildMockRequest({
       path: '/api/visual-development/project-1/script-analysis', method: 'PATCH',
-      body: { action: 'apply-analysis', applyWorldBible: true, characterCodes: ['SINO'] },
+      body: { action: 'apply-analysis', analysisId: analysis.id, sourceId: analysis.sourceId, applyWorldBible: true, characterCodes: ['SINO'] },
     }), { params: Promise.resolve({ projectId: 'project-1' }) })
 
     expect(response.status).toBe(200)

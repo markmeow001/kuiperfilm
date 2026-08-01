@@ -49,6 +49,7 @@ interface CastingTranslations {
   worldRequired: string
   worldLocked: string
   completeWorld: string
+  nextPhase: string
 }
 
 interface CastingWorkspaceProps {
@@ -56,6 +57,8 @@ interface CastingWorkspaceProps {
   controller: CastingWorkspaceController
   onCandidateCountChange: (count: 4 | 8 | 10) => void
   translations: CastingTranslations
+  nextStage?: { code: string; shortTitle: string } | null
+  onAdvance?: () => void
 }
 
 export function CastingWorkspace({
@@ -63,7 +66,10 @@ export function CastingWorkspace({
   controller,
   onCandidateCountChange,
   translations,
+  nextStage,
+  onAdvance,
 }: CastingWorkspaceProps) {
+  const castingCanonLocked = controller.batches.some((historyBatch) => historyBatch.status === 'canon_locked')
   const selectedModel = controller.imageModels.find((model) => model.value === controller.form.modelKey)
   const resolutions = selectedModel?.capabilities?.image?.resolutionOptions ?? []
   const aspectRatios = selectedModel ? getVisualDevelopmentAspectRatios(selectedModel.capabilities, 'image') : []
@@ -184,7 +190,7 @@ export function CastingWorkspace({
               </button>
             ))}
             {controller.worldStatus === 'world_locked' ? (
-              <button type="button" disabled={controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
+              <button type="button" disabled={castingCanonLocked || controller.isGenerating || controller.isLoading || !controller.form.modelKey || !controller.form.aspectRatio} onClick={controller.onGenerate} className="ml-1 flex h-9 items-center gap-2 rounded-lg bg-primary-500 px-3 text-[10px] font-semibold text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-35">
                 <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
                 {controller.isGenerating ? translations.generating : translations.generate}
               </button>
@@ -277,8 +283,8 @@ export function CastingWorkspace({
                 {candidate.resultUrl && (
                   <div className="flex gap-1">
                     <a href={visualDevelopmentDownloadHref(candidate.resultUrl, `${controller.form.characterCode || 'character'}-casting-${candidate.code}`)} aria-label={`Download ${candidate.code}`} className="rounded bg-white/[0.05] p-1 text-text-tertiary hover:text-white"><AppIcon name="download" className="h-3 w-3" /></a>
-                    <button type="button" onClick={() => controller.onCandidateAction(candidate.id, 'shortlist', !candidate.shortlisted)} className={`rounded px-1.5 py-1 text-[8px] ${candidate.shortlisted ? 'bg-white/15 text-white' : 'bg-white/[0.05] text-text-tertiary'}`}>{translations.shortlist}</button>
-                    <button type="button" disabled={candidate.isCanon} onClick={() => controller.onCandidateAction(candidate.id, 'canon-lock')} className="rounded bg-primary-500/[0.14] px-1.5 py-1 text-[8px] text-primary-400 disabled:opacity-50">{candidate.isCanon ? translations.canonLocked : translations.canonLock}</button>
+                    <button type="button" disabled={castingCanonLocked} onClick={() => controller.onCandidateAction(candidate.id, 'shortlist', !candidate.shortlisted)} className={`rounded px-1.5 py-1 text-[8px] disabled:opacity-35 ${candidate.shortlisted ? 'bg-white/15 text-white' : 'bg-white/[0.05] text-text-tertiary'}`}>{translations.shortlist}</button>
+                    <button type="button" disabled={castingCanonLocked || candidate.isCanon} onClick={() => controller.onCandidateAction(candidate.id, 'canon-lock')} className="rounded bg-primary-500/[0.14] px-1.5 py-1 text-[8px] text-primary-400 disabled:opacity-50">{candidate.isCanon ? translations.canonLocked : translations.canonLock}</button>
                   </div>
                 )}
               </div>
@@ -287,7 +293,7 @@ export function CastingWorkspace({
                 <div className="-mx-2.5 -mb-2.5 mt-2">
                   <CandidatePromptEditor
                     candidate={candidate}
-                    disabled={controller.batch?.status === 'canon_locked' || candidate.isCanon}
+                    disabled={castingCanonLocked || candidate.isCanon}
                     isRegenerating={controller.regeneratingCandidateIds.includes(candidate.id)}
                     onRegenerate={controller.onRegenerateCandidate}
                   />
@@ -297,6 +303,12 @@ export function CastingWorkspace({
           ))}
         </div>
       </section>
+      {castingCanonLocked && nextStage && onAdvance && (
+        <button type="button" onClick={onAdvance} className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary-500/35 bg-primary-500/[0.12] px-4 py-3 text-xs font-semibold text-primary-300 transition-colors hover:bg-primary-500/[0.18]">
+          {translations.nextPhase} · {nextStage.code} {nextStage.shortTitle}
+          <AppIcon name="arrowRight" className="h-4 w-4" />
+        </button>
+      )}
       <p className="px-1 font-serif-cn text-[11px] leading-5 text-text-tertiary">{translations.generateHint}</p>
     </div>
   )
