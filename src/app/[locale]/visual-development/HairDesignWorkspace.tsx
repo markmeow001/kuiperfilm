@@ -149,12 +149,12 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
             {translations.designRecord}
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <HairField label={translations.hairSilhouette} value={controller.form.hairSilhouette} onChange={(value) => controller.onFieldChange('hairSilhouette', value)} />
-            <HairField label={translations.partingAndHairline} value={controller.form.partingAndHairline} onChange={(value) => controller.onFieldChange('partingAndHairline', value)} />
-            <HairField label={translations.lengthAndTexture} value={controller.form.lengthAndTexture} onChange={(value) => controller.onFieldChange('lengthAndTexture', value)} />
-            <HairField label={translations.storyRequirements} value={controller.form.storyRequirements} onChange={(value) => controller.onFieldChange('storyRequirements', value)} />
+            <HairField label={translations.hairSilhouette} value={controller.form.hairSilhouette} onChange={(value) => controller.onFieldChange('hairSilhouette', value)} disabled={isLocked} />
+            <HairField label={translations.partingAndHairline} value={controller.form.partingAndHairline} onChange={(value) => controller.onFieldChange('partingAndHairline', value)} disabled={isLocked} />
+            <HairField label={translations.lengthAndTexture} value={controller.form.lengthAndTexture} onChange={(value) => controller.onFieldChange('lengthAndTexture', value)} disabled={isLocked} />
+            <HairField label={translations.storyRequirements} value={controller.form.storyRequirements} onChange={(value) => controller.onFieldChange('storyRequirements', value)} disabled={isLocked} />
             <div className="md:col-span-2">
-              <HairField label={translations.forbiddenDrift} value={controller.form.forbiddenDrift} onChange={(value) => controller.onFieldChange('forbiddenDrift', value)} rows={2} />
+              <HairField label={translations.forbiddenDrift} value={controller.form.forbiddenDrift} onChange={(value) => controller.onFieldChange('forbiddenDrift', value)} rows={2} disabled={isLocked} />
             </div>
           </div>
         </div>
@@ -165,15 +165,15 @@ export function HairDesignWorkspace({ controller, nextStage, onAdvance, translat
           <div className="min-w-0 flex-1">
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">{translations.modelBinding}</div>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(220px,1fr)_110px_110px]">
-              <select value={controller.form.modelKey} onChange={(event) => controller.onFieldChange('modelKey', event.target.value)} className="h-10 min-w-0 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.modelKey} disabled={isLocked} onChange={(event) => controller.onFieldChange('modelKey', event.target.value)} className="h-10 min-w-0 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.modelRequired}</option>
                 {controller.imageModels.map((model) => <option key={model.value} value={model.value}>{model.label} · {model.providerName ?? model.provider}</option>)}
               </select>
-              <select value={controller.form.resolution} onChange={(event) => controller.onFieldChange('resolution', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.resolution} disabled={isLocked} onChange={(event) => controller.onFieldChange('resolution', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.resolution}</option>
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
-              <select value={controller.form.aspectRatio} onChange={(event) => controller.onFieldChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.aspectRatio} disabled={isLocked} onChange={(event) => controller.onFieldChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.aspectRatio}</option>
                 {ratios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
               </select>
@@ -294,11 +294,11 @@ function ReferenceCard({ candidate, badge }: { candidate: CastingCandidateView; 
   )
 }
 
-function HairField({ label, value, onChange, rows = 3 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) {
+function HairField({ label, value, onChange, rows = 3, disabled = false }: { label: string; value: string; onChange: (value: string) => void; rows?: number; disabled?: boolean }) {
   return (
     <label className="block">
       <span className="mb-1.5 block font-serif-cn text-[10px] leading-4 text-text-secondary">{label}</span>
-      <textarea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} className="w-full resize-none rounded-xl border border-white/[0.08] bg-[#0d0d10] px-3 py-2.5 text-xs leading-5 text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/45" />
+      <textarea rows={rows} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="w-full resize-none rounded-xl border border-white/[0.08] bg-[#0d0d10] px-3 py-2.5 text-xs leading-5 text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/45 disabled:cursor-not-allowed disabled:opacity-45" />
     </label>
   )
 }

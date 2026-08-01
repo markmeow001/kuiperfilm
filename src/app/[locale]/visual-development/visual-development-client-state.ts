@@ -26,6 +26,8 @@ export const EMPTY_CASTING_FORM: CastingFormState = {
     emotionalRead: '',
     lifeHistory: '',
     directorPrompt: '',
+    scorecard: '',
+    canonRationale: '',
   },
   characterCode: 'CHAR-01',
   characterName: '',
@@ -52,6 +54,7 @@ export type WorkspaceResponse = {
         code: string
         name: string
         status: string
+        updatedAt?: string
         characterDna?: Record<string, unknown> | null
         castingBrief?: Record<string, unknown> | null
         castingBatches?: CastingBatchView[]

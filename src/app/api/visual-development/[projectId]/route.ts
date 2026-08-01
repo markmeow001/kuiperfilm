@@ -10,6 +10,7 @@ import { submitTask } from '@/lib/task/submitter'
 import { resolveRequiredTaskLocale } from '@/lib/task/resolve-locale'
 import { TASK_TYPE } from '@/lib/task/types'
 import { buildCastingPrompt, type StringRecord } from '@/lib/visual-development/prompt'
+import { PRODUCTION_STAGE_IDS } from '@/lib/visual-development/production-stages'
 import {
   collectCandidateHistoryTaskIds,
   readCandidateGenerationHistory,
@@ -20,6 +21,18 @@ import { EMPTY_WORLD_BIBLE, parseWorldBible, toWorldBibleJson } from '@/lib/visu
 type RouteContext = { params: Promise<{ projectId: string }> }
 type JsonRecord = Record<string, unknown>
 const CASTING_SUBMISSION_STALE_MS = 5 * 60 * 1000
+const FACE_DRAFT_FIELDS = new Set(['identityAnchors', 'allowedVariation', 'forbiddenDrift'])
+const HAIR_DRAFT_FIELDS = new Set([
+  'hairSilhouette',
+  'partingAndHairline',
+  'lengthAndTexture',
+  'storyRequirements',
+  'hairForbiddenDrift',
+  'draft_hair_modelKey',
+  'draft_hair_resolution',
+  'draft_hair_aspectRatio',
+])
+const PRODUCTION_DRAFT_SUFFIXES = new Set(['modelKey', 'resolution', 'aspectRatio', 'duration', 'creativePrompt'])
 
 function toRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -51,6 +64,12 @@ function toStringRecord(value: unknown, field = 'record'): StringRecord {
   return Object.fromEntries(normalized)
 }
 
+function readStringRecord(value: unknown): StringRecord {
+  return Object.fromEntries(
+    Object.entries(toRecord(value)).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
+}
+
 function toJsonObject(value: unknown): Prisma.InputJsonObject {
   return toRecord(value) as Prisma.InputJsonObject
 }
@@ -62,6 +81,18 @@ function requiredString(value: unknown, field: string, max = 4000): string {
     throw new ApiError('INVALID_PARAMS', { code: 'FIELD_TOO_LONG', field, details: { max } })
   }
   return normalized
+}
+
+function optionalRevision(value: unknown): Date | null {
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value !== 'string') {
+    throw new ApiError('INVALID_PARAMS', { code: 'REVISION_INVALID', field: 'expectedUpdatedAt' })
+  }
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ApiError('INVALID_PARAMS', { code: 'REVISION_INVALID', field: 'expectedUpdatedAt' })
+  }
+  return parsed
 }
 
 function normalizeCharacterCode(value: unknown): string {
@@ -78,6 +109,80 @@ function assertAdultCastingBrief(castingBrief: StringRecord) {
       field: 'castingBrief.performerAge',
       message: '成年演員年齡必須明確設定為 21 歲以上；角色銀幕年齡可依劇本保留。',
     })
+  }
+}
+
+function assertCanonDraftMutationAllowed(input: {
+  existingCharacter: {
+    name?: string
+    characterDna?: unknown
+    castingBrief?: unknown
+    canonCandidateId?: string | null
+  } | null
+  characterName: string
+  characterDna: StringRecord
+  castingBrief: StringRecord
+}) {
+  const existing = input.existingCharacter
+  if (!existing?.canonCandidateId) return
+
+  const currentDna = readStringRecord(existing.characterDna)
+  const currentBrief = readStringRecord(existing.castingBrief)
+  const faceCanonLocked = Boolean(currentDna.faceBibleBatchId)
+  const changedDnaFields = Object.entries(input.characterDna)
+    .filter(([field, value]) => (currentDna[field] ?? '') !== value)
+    .map(([field]) => field)
+  const changedBriefFields = Object.entries(input.castingBrief)
+    .filter(([field, value]) => (currentBrief[field] ?? '') !== value)
+    .map(([field]) => field)
+  const forbiddenDnaFields = changedDnaFields.filter((field) => faceCanonLocked || !FACE_DRAFT_FIELDS.has(field))
+  const nameChanged = typeof existing.name === 'string' && existing.name !== input.characterName
+
+  if (nameChanged || forbiddenDnaFields.length > 0 || changedBriefFields.length > 0) {
+    throw new ApiError('CONFLICT', {
+      code: 'CANON_FIELDS_IMMUTABLE',
+      details: {
+        nameChanged,
+        characterDna: forbiddenDnaFields,
+        castingBrief: changedBriefFields,
+      },
+    })
+  }
+}
+
+function assertStageDraftPatchAllowed(characterDna: StringRecord, patch: StringRecord) {
+  for (const field of Object.keys(patch)) {
+    if (field.startsWith('stageBrief_')) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'IMMUTABLE_STAGE_BRIEF',
+        field: `characterDnaPatch.${field}`,
+      })
+    }
+    if (HAIR_DRAFT_FIELDS.has(field)) {
+      if (characterDna.hairBibleBatchId) {
+        throw new ApiError('CONFLICT', {
+          code: 'CANON_FIELDS_IMMUTABLE',
+          field: `characterDnaPatch.${field}`,
+        })
+      }
+      continue
+    }
+    const productionStage = PRODUCTION_STAGE_IDS.find((stageId) => {
+      const prefix = `draft_${stageId}_`
+      return field.startsWith(prefix) && PRODUCTION_DRAFT_SUFFIXES.has(field.slice(prefix.length))
+    })
+    if (!productionStage) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'STAGE_DRAFT_FIELD_INVALID',
+        field: `characterDnaPatch.${field}`,
+      })
+    }
+    if (characterDna[`${productionStage}BatchId`]) {
+      throw new ApiError('CONFLICT', {
+        code: 'CANON_FIELDS_IMMUTABLE',
+        field: `characterDnaPatch.${field}`,
+      })
+    }
   }
 }
 
@@ -142,7 +247,7 @@ export const GET = apiHandler(async (_request: NextRequest, context: RouteContex
   // Recent history is capped for response size, but every exact Canon pointer
   // must remain loadable even after hundreds of iterations.
   const canonicalBatchIds = [...new Set(workspace.characters.flatMap((character) =>
-    Object.entries(toStringRecord(character.characterDna))
+    Object.entries(readStringRecord(character.characterDna))
       .filter(([key, value]) => key.endsWith('BatchId') && value)
       .map(([, value]) => value),
   ))]
@@ -242,21 +347,46 @@ export const PUT = apiHandler(async (request: NextRequest, context: RouteContext
   const castingBrief = toStringRecord(body.castingBrief, 'castingBrief')
   const characterCode = normalizeCharacterCode(body.characterCode)
   const characterName = requiredString(body.characterName, 'characterName', 120)
+  const expectedUpdatedAt = optionalRevision(body.expectedUpdatedAt)
 
   const workspace = await prisma.visualDevelopmentWorkspace.upsert({
     where: { projectId },
     create: { projectId, worldBible: toWorldBibleJson(EMPTY_WORLD_BIBLE), status: 'world_draft' },
     update: {},
   })
-  const existingCharacter = await prisma.visualDevelopmentCharacter.findUnique({
-    where: { workspaceId_code: { workspaceId: workspace.id, code: characterCode } },
-  })
-  const mergedDna = { ...toJsonObject(existingCharacter?.characterDna), ...characterDna }
-  const mergedBrief = { ...toJsonObject(existingCharacter?.castingBrief), ...castingBrief }
-  const character = await prisma.visualDevelopmentCharacter.upsert({
-    where: { workspaceId_code: { workspaceId: workspace.id, code: characterCode } },
-    create: { workspaceId: workspace.id, code: characterCode, name: characterName, characterDna: mergedDna, castingBrief: mergedBrief },
-    update: { name: characterName, characterDna: mergedDna, castingBrief: mergedBrief },
+  const character = await prisma.$transaction(async (tx) => {
+    const existingCharacter = await tx.visualDevelopmentCharacter.findUnique({
+      where: { workspaceId_code: { workspaceId: workspace.id, code: characterCode } },
+    })
+    if (!existingCharacter) {
+      return tx.visualDevelopmentCharacter.create({
+        data: { workspaceId: workspace.id, code: characterCode, name: characterName, characterDna, castingBrief },
+      })
+    }
+    if (expectedUpdatedAt && existingCharacter.updatedAt.getTime() !== expectedUpdatedAt.getTime()) {
+      throw new ApiError('CONFLICT', { code: 'CHARACTER_DRAFT_STALE' })
+    }
+
+    assertCanonDraftMutationAllowed({
+      existingCharacter,
+      characterName,
+      characterDna,
+      castingBrief,
+    })
+    const mergedDna = { ...toJsonObject(existingCharacter.characterDna), ...characterDna }
+    const mergedBrief = { ...toJsonObject(existingCharacter.castingBrief), ...castingBrief }
+    const updated = await tx.visualDevelopmentCharacter.updateMany({
+      where: {
+        id: existingCharacter.id,
+        updatedAt: expectedUpdatedAt ?? existingCharacter.updatedAt,
+        canonCandidateId: existingCharacter.canonCandidateId,
+      },
+      data: { name: characterName, characterDna: mergedDna, castingBrief: mergedBrief },
+    })
+    if (updated.count !== 1) {
+      throw new ApiError('CONFLICT', { code: 'CHARACTER_DRAFT_STALE' })
+    }
+    return tx.visualDevelopmentCharacter.findUnique({ where: { id: existingCharacter.id } })
   })
   return NextResponse.json({ success: true, data: { workspace, character } })
 })
@@ -469,25 +599,21 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (body.action === 'save-draft') {
     const characterCode = normalizeCharacterCode(body.characterCode)
     const characterDnaPatch = toStringRecord(body.characterDnaPatch, 'characterDnaPatch')
-    const immutableBriefKey = Object.keys(characterDnaPatch)
-      .find((key) => key.startsWith('stageBrief_'))
-    if (immutableBriefKey) {
-      throw new ApiError('INVALID_PARAMS', {
-        code: 'IMMUTABLE_STAGE_BRIEF',
-        field: `characterDnaPatch.${immutableBriefKey}`,
-      })
-    }
     const character = await prisma.visualDevelopmentCharacter.findFirst({
       where: { code: characterCode, workspace: { projectId } },
     })
     if (!character) throw new ApiError('NOT_FOUND', { code: 'VISUAL_DEVELOPMENT_CHARACTER_NOT_FOUND' })
+    const currentDna = readStringRecord(character.characterDna)
+    assertStageDraftPatchAllowed(currentDna, characterDnaPatch)
     const nextDna = { ...toJsonObject(character.characterDna), ...characterDnaPatch }
-    const updated = await prisma.visualDevelopmentCharacter.update({
-      where: { id: character.id },
+    const updated = await prisma.visualDevelopmentCharacter.updateMany({
+      where: { id: character.id, updatedAt: character.updatedAt },
       data: { characterDna: nextDna },
-      select: { id: true, code: true, updatedAt: true },
     })
-    return NextResponse.json({ success: true, data: { character: updated } })
+    if (updated.count !== 1) {
+      throw new ApiError('CONFLICT', { code: 'CHARACTER_DRAFT_STALE' })
+    }
+    return NextResponse.json({ success: true, data: { character: { id: character.id, code: character.code } } })
   }
   const candidateId = requiredString(body.candidateId, 'candidateId', 191)
   const action = requiredString(body.action, 'action', 32)
@@ -502,16 +628,40 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     throw new ApiError('CONFLICT', { code: 'CASTING_CANON_ALREADY_LOCKED' })
   }
 
+  if (action !== 'shortlist' && action !== 'canon-lock') {
+    throw new ApiError('INVALID_PARAMS', { code: 'CANDIDATE_ACTION_INVALID' })
+  }
+  const characterDraft = toRecord(body.characterDraft)
+  const hasCharacterDraft = Object.keys(characterDraft).length > 0
+  const draftName = hasCharacterDraft
+    ? requiredString(characterDraft.characterName, 'characterDraft.characterName', 120)
+    : candidate.batch.character.name
+  const draftDna = hasCharacterDraft
+    ? toStringRecord(characterDraft.characterDna, 'characterDraft.characterDna')
+    : {}
+  const draftBrief = hasCharacterDraft
+    ? toStringRecord(characterDraft.castingBrief, 'characterDraft.castingBrief')
+    : {}
+  const lockedDna = { ...toJsonObject(candidate.batch.character.characterDna), ...draftDna }
+  const lockedBrief = { ...toJsonObject(candidate.batch.character.castingBrief), ...draftBrief }
+
   if (action === 'shortlist') {
-    const updated = await prisma.visualDevelopmentCandidate.update({
-      where: { id: candidateId },
-      data: { shortlisted: body.shortlisted !== false },
+    const updated = await prisma.$transaction(async (tx) => {
+      const saved = await tx.visualDevelopmentCharacter.updateMany({
+        where: { id: candidate.batch.characterId, canonCandidateId: null },
+        data: { name: draftName, characterDna: lockedDna, castingBrief: lockedBrief },
+      })
+      if (saved.count !== 1) {
+        throw new ApiError('CONFLICT', { code: 'CASTING_CANON_OR_GENERATION_CONFLICT' })
+      }
+      return tx.visualDevelopmentCandidate.update({
+        where: { id: candidateId },
+        data: { shortlisted: body.shortlisted !== false },
+      })
     })
     return NextResponse.json({ success: true, data: { candidate: updated } })
   }
-  if (action !== 'canon-lock') {
-    throw new ApiError('INVALID_PARAMS', { code: 'CANDIDATE_ACTION_INVALID' })
-  }
+
   if (!candidate.taskId) throw new ApiError('CONFLICT', { code: 'CANDIDATE_NOT_GENERATED' })
   const task = await prisma.task.findFirst({
     where: { id: candidate.taskId, userId: access.userId, projectId, status: 'completed' },
@@ -529,7 +679,14 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
           none: { stage: 'casting', status: 'submitting', updatedAt: { gte: activeSubmissionCutoff } },
         },
       },
-      data: { canonCandidateId: candidate.id, canonLockedAt: new Date(), status: 'identity_locked' },
+      data: {
+        name: draftName,
+        characterDna: lockedDna,
+        castingBrief: lockedBrief,
+        canonCandidateId: candidate.id,
+        canonLockedAt: new Date(),
+        status: 'identity_locked',
+      },
     })
     if (claimed.count !== 1) {
       throw new ApiError('CONFLICT', { code: 'CASTING_CANON_OR_GENERATION_CONFLICT' })

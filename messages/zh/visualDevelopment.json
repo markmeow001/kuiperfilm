@@ -236,7 +236,26 @@
       "worldLocked": "World Canon 已載入，Casting Prompt 將繼承故事與情緒規則",
       "completeWorld": "完成 Phase 00",
       "generateFailed": "Casting 批次建立失敗",
-      "actionFailed": "候選操作失敗"
+      "actionFailed": "候選操作失敗",
+      "scorecard": {
+        "title": "選角評分表",
+        "description": "以 1–5 分比較候選，記錄 Top 3 的晉級／淘汰理由與最後定角依據；內容會隨角色自動保存。",
+        "candidate": "候選",
+        "average": "平均",
+        "rationale": "晉級／淘汰理由",
+        "rationalePlaceholder": "例如：近景有記憶點，但側面年齡漂移",
+        "canonRationale": "最終定角理由",
+        "canonRationalePlaceholder": "說明為何這位演員能承載角色矛盾、表演範圍與長篇一致性。",
+        "metrics": {
+          "memorability": "記憶點",
+          "storyPresence": "故事感",
+          "roleFit": "角色適配",
+          "performanceRange": "表演潛力",
+          "angleStability": "多角度",
+          "ageCredibility": "年齡可信",
+          "photorealism": "真人感"
+        }
+      }
     },
     "face": {
       "canonSource": "IDENTITY REFERENCE · CANON",

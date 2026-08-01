@@ -125,5 +125,8 @@ describe('FaceBibleWorkspace generation readiness', () => {
     fireEvent.click(next)
     expect(onAdvance).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: '生成 Face Bible 10 張' })).toBeDisabled()
+    const identityField = screen.getByText('身分錨點（選填）').closest('label')?.querySelector('textarea')
+    expect(identityField).toBeDisabled()
+    expect(screen.getAllByRole('combobox')[0]).toBeDisabled()
   })
 })

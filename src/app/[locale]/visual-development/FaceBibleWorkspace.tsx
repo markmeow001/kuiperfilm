@@ -116,10 +116,10 @@ export function FaceBibleWorkspace({ controller, translations, nextStage, onAdva
             {translations.identityRecord}
           </div>
           <div className="grid gap-3">
-            <FaceField label={translations.identityAnchors} hint={translations.identityAnchorsHint} value={controller.form.identityAnchors} onChange={(value) => controller.onFieldChange('identityAnchors', value)} rows={3} />
+            <FaceField label={translations.identityAnchors} hint={translations.identityAnchorsHint} value={controller.form.identityAnchors} onChange={(value) => controller.onFieldChange('identityAnchors', value)} rows={3} disabled={faceCanonLocked} />
             <div className="grid gap-3 md:grid-cols-2">
-              <FaceField label={translations.allowedVariation} value={controller.form.allowedVariation} onChange={(value) => controller.onFieldChange('allowedVariation', value)} rows={2} />
-              <FaceField label={translations.forbiddenDrift} value={controller.form.forbiddenDrift} onChange={(value) => controller.onFieldChange('forbiddenDrift', value)} rows={2} />
+              <FaceField label={translations.allowedVariation} value={controller.form.allowedVariation} onChange={(value) => controller.onFieldChange('allowedVariation', value)} rows={2} disabled={faceCanonLocked} />
+              <FaceField label={translations.forbiddenDrift} value={controller.form.forbiddenDrift} onChange={(value) => controller.onFieldChange('forbiddenDrift', value)} rows={2} disabled={faceCanonLocked} />
             </div>
           </div>
         </div>
@@ -130,17 +130,17 @@ export function FaceBibleWorkspace({ controller, translations, nextStage, onAdva
           <div className="min-w-0 flex-1">
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">{translations.modelBinding}</div>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(220px,1fr)_110px_110px]">
-              <select value={controller.form.modelKey} onChange={(event) => controller.onFieldChange('modelKey', event.target.value)} className="h-10 min-w-0 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.modelKey} disabled={faceCanonLocked} onChange={(event) => controller.onFieldChange('modelKey', event.target.value)} className="h-10 min-w-0 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.modelRequired}</option>
                 {controller.imageModels.map((model) => (
                   <option key={model.value} value={model.value}>{model.label} · {model.providerName ?? model.provider}</option>
                 ))}
               </select>
-              <select value={controller.form.resolution} onChange={(event) => controller.onFieldChange('resolution', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.resolution} disabled={faceCanonLocked} onChange={(event) => controller.onFieldChange('resolution', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.resolution}</option>
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
-              <select value={controller.form.aspectRatio} onChange={(event) => controller.onFieldChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.aspectRatio} disabled={faceCanonLocked} onChange={(event) => controller.onFieldChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.aspectRatio}</option>
                 {ratios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
               </select>
@@ -227,11 +227,11 @@ export function FaceBibleWorkspace({ controller, translations, nextStage, onAdva
   )
 }
 
-function FaceField({ label, hint, value, onChange, rows }: { label: string; hint?: string; value: string; onChange: (value: string) => void; rows: number }) {
+function FaceField({ label, hint, value, onChange, rows, disabled = false }: { label: string; hint?: string; value: string; onChange: (value: string) => void; rows: number; disabled?: boolean }) {
   return (
     <label className="block">
       <span className="mb-1.5 block font-mono text-[8px] tracking-[0.13em] text-text-tertiary">{label}</span>
-      <textarea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} className="w-full resize-y rounded-xl border border-white/[0.08] bg-[#0d0d10] px-3 py-2.5 text-xs text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50" />
+      <textarea rows={rows} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="w-full resize-y rounded-xl border border-white/[0.08] bg-[#0d0d10] px-3 py-2.5 text-xs text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50 disabled:cursor-not-allowed disabled:opacity-45" />
       {hint && <span className="mt-1.5 block font-serif-cn text-[9px] leading-4 text-text-tertiary">{hint}</span>}
     </label>
   )

@@ -48,6 +48,25 @@ const translations = {
   worldLocked: 'World Canon 已載入',
   completeWorld: '完成 Phase 00',
   nextPhase: '進入下一階段',
+  scorecard: {
+    title: '選角評分表',
+    description: '比較候選並保存理由',
+    candidate: '候選',
+    average: '平均',
+    rationale: '理由',
+    rationalePlaceholder: '寫下理由',
+    canonRationale: '最終定角理由',
+    canonRationalePlaceholder: '寫下定角理由',
+    metrics: {
+      memorability: '記憶點',
+      storyPresence: '故事感',
+      roleFit: '角色適配',
+      performanceRange: '表演潛力',
+      angleStability: '多角度',
+      ageCredibility: '年齡可信',
+      photorealism: '真人感',
+    },
+  },
 }
 
 function controller(overrides: Partial<CastingWorkspaceController> = {}): CastingWorkspaceController {
@@ -228,6 +247,7 @@ describe('CastingWorkspace World Canon gate', () => {
     )
 
     expect(screen.getByRole('button', { name: '生成 8 張' })).toBeDisabled()
+    expect(screen.getByLabelText('角色名稱')).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: '進入下一階段 · 02 Face Bible' }))
     expect(onAdvance).toHaveBeenCalledTimes(1)
   })

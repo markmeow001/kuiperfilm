@@ -54,6 +54,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
   const selectedFaceBatchIdRef = useRef('')
   const selectedHairExplorationBatchIdRef = useRef('')
   const selectedHairValidationBatchIdRef = useRef('')
+  const characterRevisionRef = useRef('')
   const [form, setForm] = useState(EMPTY_CASTING_FORM)
   const [batch, setBatch] = useState<CastingBatchView | null>(null)
   const [castingBatches, setCastingBatches] = useState<CastingBatchView[]>([])
@@ -91,6 +92,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       selectedFaceBatchIdRef.current = ''
       selectedHairExplorationBatchIdRef.current = ''
       selectedHairValidationBatchIdRef.current = ''
+      characterRevisionRef.current = ''
       return
     }
     setIsLoadingWorkspace(true)
@@ -105,6 +107,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       const character = workspace?.characters?.find((item) => item.code === selectedCharacterCodeRef.current)
         ?? workspace?.characters?.[0]
       selectedCharacterCodeRef.current = character?.code ?? ''
+      characterRevisionRef.current = character?.updatedAt ?? ''
       setSelectedCharacterCode(character?.code ?? '')
       const batches = character?.castingBatches ?? []
       const nextCastingBatches = batches.filter((item) => item.stage === 'casting')
@@ -190,10 +193,18 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     selectedFaceBatchIdRef.current = ''
     selectedHairExplorationBatchIdRef.current = ''
     selectedHairValidationBatchIdRef.current = ''
+    characterRevisionRef.current = ''
     void loadWorkspace(projectId)
   }, [projectId, loadWorkspace])
 
-  const saveStatus = useVisualDevelopmentCharacterAutosave({ projectId, form, faceForm, isLoading: isLoadingWorkspace })
+  const saveStatus = useVisualDevelopmentCharacterAutosave({
+    projectId,
+    characterCode: selectedCharacterCode || form.characterCode,
+    form,
+    faceForm,
+    isLoading: isLoadingWorkspace,
+    revisionRef: characterRevisionRef,
+  })
 
   const selectCharacter = useCallback((characterCode: string) => {
     selectedCharacterCodeRef.current = characterCode
@@ -201,6 +212,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     selectedFaceBatchIdRef.current = ''
     selectedHairExplorationBatchIdRef.current = ''
     selectedHairValidationBatchIdRef.current = ''
+    characterRevisionRef.current = ''
     setSelectedCharacterCode(characterCode)
     setCastingBatches([])
     setBatch(null)
@@ -279,7 +291,21 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
     const response = await fetch(`/api/visual-development/${projectId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ candidateId, action, shortlisted }),
+      body: JSON.stringify({
+        candidateId,
+        action,
+        shortlisted,
+        characterDraft: {
+            characterName: form.characterName,
+            characterDna: {
+              ...form.characterDna,
+              identityAnchors: faceForm.identityAnchors,
+              allowedVariation: faceForm.allowedVariation,
+              forbiddenDrift: faceForm.forbiddenDrift,
+            },
+            castingBrief: form.castingBrief,
+        },
+      }),
     })
     if (!response.ok) {
       const payload = await response.json() as { error?: { message?: string } }
@@ -287,7 +313,7 @@ export function VisualDevelopmentClient({ locale }: VisualDevelopmentClientProps
       return
     }
     await loadWorkspace(projectId)
-  }, [loadWorkspace, projectId, t])
+  }, [faceForm, form, loadWorkspace, projectId, t])
 
   const referenceImageModels = useMemo(
     () => (modelsQuery.data?.image ?? []).filter((model) => model.capabilities?.image?.supportReferenceImage === true),

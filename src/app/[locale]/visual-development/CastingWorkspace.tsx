@@ -4,6 +4,7 @@ import type { CastingWorkspaceController } from './visual-development-types'
 import { visualDevelopmentDownloadHref } from './visual-development-download'
 import { VisualDevelopmentImage } from './VisualDevelopmentImage'
 import { CandidatePromptEditor } from './CandidatePromptEditor'
+import { CastingScorecard, type CastingScorecardTranslations } from './CastingScorecard'
 
 interface CastingTranslations {
   batch: string
@@ -50,6 +51,7 @@ interface CastingTranslations {
   worldLocked: string
   completeWorld: string
   nextPhase: string
+  scorecard: CastingScorecardTranslations
 }
 
 interface CastingWorkspaceProps {
@@ -100,19 +102,19 @@ export function CastingWorkspace({
           {controller.worldStatus === 'world_locked' ? translations.worldLocked : translations.worldRequired}
         </div>
         <div className="grid gap-3 lg:grid-cols-2">
-          <Field label={translations.worldPremise} value={controller.form.worldBible.projectPremise} onChange={(value) => controller.onFieldChange('worldBible', 'projectPremise', value)} multiline />
-          <Field label={translations.visualThesis} value={controller.form.worldBible.visualThesis} onChange={(value) => controller.onFieldChange('worldBible', 'visualThesis', value)} multiline />
-          <Field label={translations.characterName} value={controller.form.characterName} onChange={(value) => controller.onIdentityChange('characterName', value)} />
-          <Field label={translations.characterCode} value={controller.form.characterCode} onChange={(value) => controller.onIdentityChange('characterCode', value)} />
-          <Field label={translations.characterRole} value={controller.form.characterDna.role} onChange={(value) => controller.onFieldChange('characterDna', 'role', value)} />
-          <Field label={translations.coreTraits} value={controller.form.characterDna.coreTraits} onChange={(value) => controller.onFieldChange('characterDna', 'coreTraits', value)} />
-          <Field label={translations.apparentAge} value={controller.form.castingBrief.apparentAge} onChange={(value) => controller.onFieldChange('castingBrief', 'apparentAge', value)} placeholder="18" />
-          <Field label={translations.performerAge} value={controller.form.castingBrief.performerAge} onChange={(value) => controller.onFieldChange('castingBrief', 'performerAge', value)} placeholder="21+" />
-          <Field label={translations.ethnicity} value={controller.form.castingBrief.ethnicity} onChange={(value) => controller.onFieldChange('castingBrief', 'ethnicity', value)} />
-          <Field label={translations.faceStructure} value={controller.form.castingBrief.faceStructure} onChange={(value) => controller.onFieldChange('castingBrief', 'faceStructure', value)} />
-          <Field label={translations.emotionalRead} value={controller.form.castingBrief.emotionalRead} onChange={(value) => controller.onFieldChange('castingBrief', 'emotionalRead', value)} />
+          <Field label={translations.worldPremise} value={controller.form.worldBible.projectPremise} onChange={(value) => controller.onFieldChange('worldBible', 'projectPremise', value)} multiline disabled />
+          <Field label={translations.visualThesis} value={controller.form.worldBible.visualThesis} onChange={(value) => controller.onFieldChange('worldBible', 'visualThesis', value)} multiline disabled />
+          <Field label={translations.characterName} value={controller.form.characterName} onChange={(value) => controller.onIdentityChange('characterName', value)} disabled={castingCanonLocked} />
+          <Field label={translations.characterCode} value={controller.form.characterCode} onChange={(value) => controller.onIdentityChange('characterCode', value)} disabled={castingCanonLocked} />
+          <Field label={translations.characterRole} value={controller.form.characterDna.role} onChange={(value) => controller.onFieldChange('characterDna', 'role', value)} disabled={castingCanonLocked} />
+          <Field label={translations.coreTraits} value={controller.form.characterDna.coreTraits} onChange={(value) => controller.onFieldChange('characterDna', 'coreTraits', value)} disabled={castingCanonLocked} />
+          <Field label={translations.apparentAge} value={controller.form.castingBrief.apparentAge} onChange={(value) => controller.onFieldChange('castingBrief', 'apparentAge', value)} placeholder="18" disabled={castingCanonLocked} />
+          <Field label={translations.performerAge} value={controller.form.castingBrief.performerAge} onChange={(value) => controller.onFieldChange('castingBrief', 'performerAge', value)} placeholder="21+" disabled={castingCanonLocked} />
+          <Field label={translations.ethnicity} value={controller.form.castingBrief.ethnicity} onChange={(value) => controller.onFieldChange('castingBrief', 'ethnicity', value)} disabled={castingCanonLocked} />
+          <Field label={translations.faceStructure} value={controller.form.castingBrief.faceStructure} onChange={(value) => controller.onFieldChange('castingBrief', 'faceStructure', value)} disabled={castingCanonLocked} />
+          <Field label={translations.emotionalRead} value={controller.form.castingBrief.emotionalRead} onChange={(value) => controller.onFieldChange('castingBrief', 'emotionalRead', value)} disabled={castingCanonLocked} />
           <div className="lg:col-span-2">
-            <Field label={translations.lifeHistory} value={controller.form.castingBrief.lifeHistory} onChange={(value) => controller.onFieldChange('castingBrief', 'lifeHistory', value)} multiline />
+            <Field label={translations.lifeHistory} value={controller.form.castingBrief.lifeHistory} onChange={(value) => controller.onFieldChange('castingBrief', 'lifeHistory', value)} multiline disabled={castingCanonLocked} />
           </div>
           <div className="lg:col-span-2 rounded-xl border border-primary-500/20 bg-primary-500/[0.045] p-3">
             <span className="flex flex-wrap items-center justify-between gap-2">
@@ -131,6 +133,7 @@ export function CastingWorkspace({
               id="casting-director-prompt"
               rows={4}
               value={controller.form.castingBrief.directorPrompt ?? ''}
+              disabled={castingCanonLocked}
               onChange={(event) => controller.onFieldChange('castingBrief', 'directorPrompt', event.target.value)}
               placeholder={translations.directorPromptPlaceholder}
               className="mt-3 w-full resize-y rounded-xl border border-white/[0.09] bg-[#0a0a0d] px-3 py-3 text-xs leading-5 text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50"
@@ -256,6 +259,18 @@ export function CastingWorkspace({
           </div>
         )}
 
+        {controller.batch && (
+          <CastingScorecard
+            candidates={controller.batch.candidates}
+            serializedScorecard={controller.form.castingBrief.scorecard ?? ''}
+            canonRationale={controller.form.castingBrief.canonRationale ?? ''}
+            disabled={castingCanonLocked}
+            translations={translations.scorecard}
+            onScorecardChange={(value) => controller.onFieldChange('castingBrief', 'scorecard', value)}
+            onCanonRationaleChange={(value) => controller.onFieldChange('castingBrief', 'canonRationale', value)}
+          />
+        )}
+
         <div className="grid grid-cols-2 gap-px bg-white/[0.07] sm:grid-cols-4 2xl:grid-cols-5">
           {displayedCandidates.map((candidate) => (
             <article key={candidate.id} className="group bg-[#0b0b0d] p-2.5">
@@ -328,12 +343,12 @@ function toCssAspectRatio(value?: string): string {
     : '4 / 5'
 }
 
-function Field({ label, value, onChange, multiline = false, placeholder }: { label: string; value?: string; onChange: (value: string) => void; multiline?: boolean; placeholder?: string }) {
-  const className = 'w-full rounded-xl border border-white/[0.08] bg-[#0d0d10] px-3 py-2.5 text-xs text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50'
+function Field({ label, value, onChange, multiline = false, placeholder, disabled = false }: { label: string; value?: string; onChange: (value: string) => void; multiline?: boolean; placeholder?: string; disabled?: boolean }) {
+  const className = 'w-full rounded-xl border border-white/[0.08] bg-[#0d0d10] px-3 py-2.5 text-xs text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50 disabled:cursor-not-allowed disabled:opacity-45'
   return (
     <label className="block">
       <span className="mb-1.5 block font-mono text-[8px] tracking-[0.13em] text-text-tertiary">{label}</span>
-      {multiline ? <textarea rows={3} value={value ?? ''} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={`${className} resize-y`} /> : <input value={value ?? ''} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={className} />}
+      {multiline ? <textarea rows={3} value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={`${className} resize-y`} /> : <input value={value ?? ''} disabled={disabled} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} className={className} />}
     </label>
   )
 }

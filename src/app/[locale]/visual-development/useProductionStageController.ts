@@ -97,6 +97,7 @@ export function useProductionStageController(input: UseProductionStageController
   const form = forms[input.activeStageId] ?? initialForm(input.activeStageId, input.characterDna)
   const briefState = briefStates[input.activeStageId] ?? null
   const stageBrief = briefState?.brief ?? null
+  const stageLocked = Boolean(input.characterDna[`${stage.id}BatchId`])
 
   useEffect(() => {
     const identityKey = `${input.projectId}:${input.characterCode}`
@@ -183,7 +184,7 @@ export function useProductionStageController(input: UseProductionStageController
   }, [briefState?.task?.status, input.activeStageId, loadStageBrief])
 
   useEffect(() => {
-    if (!input.projectId || !input.characterCode || input.isLoading) return
+    if (!input.projectId || !input.characterCode || input.isLoading || stageLocked) return
     const signature = JSON.stringify(form)
     if (lastSavedDraftsRef.current[input.activeStageId] === signature) return
     const timer = window.setTimeout(() => {
@@ -204,7 +205,7 @@ export function useProductionStageController(input: UseProductionStageController
       }).catch((error) => window.alert(error instanceof Error ? error.message : String(error)))
     }, 900)
     return () => window.clearTimeout(timer)
-  }, [form, input.activeStageId, input.characterCode, input.isLoading, input.projectId, stage.id])
+  }, [form, input.activeStageId, input.characterCode, input.isLoading, input.projectId, stage.id, stageLocked])
 
   const models = useMemo(() => stage.mediaType === 'video'
     ? input.videoModels.filter((model) => model.capabilities?.video?.supportReferenceImage === true)

@@ -4,7 +4,7 @@ import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../h
 
 const prismaMock = vi.hoisted(() => ({
   visualDevelopmentWorkspace: { findUnique: vi.fn(), upsert: vi.fn() },
-  visualDevelopmentCharacter: { findUnique: vi.fn(), findFirst: vi.fn(), upsert: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+  visualDevelopmentCharacter: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), upsert: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   visualDevelopmentBatch: { create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
   visualDevelopmentCandidate: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   task: { findFirst: vi.fn(), findMany: vi.fn() },
@@ -40,6 +40,7 @@ describe('POST /api/visual-development/[projectId] Casting gate', () => {
     prismaMock.visualDevelopmentWorkspace.upsert.mockResolvedValue({ id: 'workspace-1', projectId: 'project-1' })
     prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue(null)
     prismaMock.visualDevelopmentCharacter.upsert.mockResolvedValue({ id: 'character-1', code: 'SINO' })
+    prismaMock.visualDevelopmentCharacter.create.mockResolvedValue({ id: 'character-1', code: 'SINO' })
     prismaMock.visualDevelopmentCharacter.updateMany.mockResolvedValue({ count: 1 })
     prismaMock.visualDevelopmentBatch.create.mockImplementation(async (args: { data: { candidates: { create: Array<Record<string, unknown>> } } }) => ({
       id: 'batch-1',
@@ -63,14 +64,181 @@ describe('POST /api/visual-development/[projectId] Casting gate', () => {
 
     expect(response.status).toBe(200)
     expect(prismaMock.visualDevelopmentWorkspace.upsert).toHaveBeenCalledWith(expect.objectContaining({ update: {} }))
-    expect(prismaMock.visualDevelopmentCharacter.upsert).toHaveBeenCalledWith(expect.objectContaining({
-      update: expect.objectContaining({ characterDna: { role: 'lead', aliases: ['Snow'], coreTraits: 'quietly resilient' } }),
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ characterDna: { role: 'lead', aliases: ['Snow'], coreTraits: 'quietly resilient' } }),
     }))
+  })
+
+  it('Casting Canon 鎖定後拒絕改寫角色身分與選角資料', async () => {
+    prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({
+      id: 'character-1',
+      name: '絲諾',
+      canonCandidateId: 'candidate-canon',
+      characterDna: { role: 'lead', coreTraits: 'quietly resilient' },
+      castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded' },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PUT',
+      body: {
+        characterCode: 'SINO',
+        characterName: '絲諾',
+        characterDna: { role: 'villain', coreTraits: 'quietly resilient' },
+        castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('CANON_FIELDS_IMMUTABLE')
+    expect(body.error.details.details.characterDna).toEqual(['role'])
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('Casting Canon 鎖定後仍允許 Face Bible 尚未鎖定的身分錨點草稿', async () => {
+    prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({
+      id: 'character-1',
+      name: '絲諾',
+      canonCandidateId: 'candidate-canon',
+      characterDna: { role: 'lead', coreTraits: 'quietly resilient' },
+      castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded' },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PUT',
+      body: {
+        characterCode: 'SINO',
+        characterName: '絲諾',
+        characterDna: {
+          role: 'lead',
+          coreTraits: 'quietly resilient',
+          identityAnchors: 'left eye sits slightly higher',
+        },
+        castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        characterDna: expect.objectContaining({ identityAnchors: 'left eye sits slightly higher' }),
+      }),
+    }))
+  })
+
+  it('舊 Casting Canon 缺少新評分欄位時仍可保存 Face 草稿', async () => {
+    prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({
+      id: 'character-1',
+      name: '絲諾',
+      canonCandidateId: 'candidate-canon',
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+      characterDna: { role: 'lead', coreTraits: 'quietly resilient' },
+      castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded' },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PUT',
+      body: {
+        characterCode: 'SINO',
+        characterName: '絲諾',
+        characterDna: {
+          role: 'lead',
+          coreTraits: 'quietly resilient',
+          identityAnchors: 'left eye sits slightly higher',
+        },
+        castingBrief: {
+          apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded',
+          scorecard: '', canonRationale: '', directorPrompt: '',
+        },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).toHaveBeenCalledTimes(1)
+  })
+
+  it('PUT 草稿與 Canon lock 競態時以 CAS 拒絕過期寫入', async () => {
+    prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({
+      id: 'character-1', name: '絲諾', canonCandidateId: null,
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+      characterDna: { role: 'lead' }, castingBrief: { performerAge: '21+' },
+    })
+    prismaMock.visualDevelopmentCharacter.updateMany.mockResolvedValueOnce({ count: 0 })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PUT',
+      body: {
+        characterCode: 'SINO', characterName: '絲諾',
+        characterDna: { role: 'lead' }, castingBrief: { performerAge: '21+' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('CHARACTER_DRAFT_STALE')
+  })
+
+  it('拒絕晚到且基於舊 revision 的 autosave', async () => {
+    prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({
+      id: 'character-1', name: '絲諾', canonCandidateId: null,
+      updatedAt: new Date('2026-07-31T00:00:02.000Z'),
+      characterDna: { role: 'lead' },
+      castingBrief: { performerAge: '21+', scorecard: '{"candidate-1":{"roleFit":5}}' },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PUT',
+      body: {
+        characterCode: 'SINO', characterName: '絲諾',
+        expectedUpdatedAt: '2026-07-31T00:00:01.000Z',
+        characterDna: { role: 'lead' },
+        castingBrief: { performerAge: '21+', scorecard: '{"candidate-1":{"roleFit":2}}' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('CHARACTER_DRAFT_STALE')
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('Face Canon 鎖定後拒絕再改寫身分錨點', async () => {
+    prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({
+      id: 'character-1',
+      name: '絲諾',
+      canonCandidateId: 'candidate-canon',
+      characterDna: {
+        role: 'lead',
+        coreTraits: 'quietly resilient',
+        identityAnchors: 'left eye sits slightly higher',
+        faceBibleBatchId: 'face-batch-canon',
+      },
+      castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded' },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PUT',
+      body: {
+        characterCode: 'SINO',
+        characterName: '絲諾',
+        characterDna: {
+          role: 'lead',
+          coreTraits: 'quietly resilient',
+          identityAnchors: 'redesigned face',
+        },
+        castingBrief: { apparentAge: '18', performerAge: '21+', emotionalRead: 'guarded' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('CANON_FIELDS_IMMUTABLE')
+    expect(body.error.details.details.characterDna).toEqual(['identityAnchors'])
   })
 
   it('merges downstream stage drafts into the active character record', async () => {
     prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({ id: 'character-1', code: 'SINO', characterDna: { role: 'lead', aliases: ['Snow'] } })
-    prismaMock.visualDevelopmentCharacter.update.mockResolvedValue({ id: 'character-1', code: 'SINO', updatedAt: new Date() })
+    prismaMock.visualDevelopmentCharacter.updateMany.mockResolvedValue({ count: 1 })
     const mod = await import('@/app/api/visual-development/[projectId]/route')
     const response = await mod.PATCH(buildMockRequest({
       path: '/api/visual-development/project-1', method: 'PATCH',
@@ -78,7 +246,7 @@ describe('POST /api/visual-development/[projectId] Casting gate', () => {
     }), { params: Promise.resolve({ projectId: 'project-1' }) })
 
     expect(response.status).toBe(200)
-    expect(prismaMock.visualDevelopmentCharacter.update).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: { characterDna: { role: 'lead', aliases: ['Snow'], hairSilhouette: 'sharp owl-wing contour' } },
     }))
   })
@@ -97,7 +265,44 @@ describe('POST /api/visual-development/[projectId] Casting gate', () => {
 
     expect(response.status).toBe(400)
     expect(body.error.details.code).toBe('IMMUTABLE_STAGE_BRIEF')
-    expect(prismaMock.visualDevelopmentCharacter.update).not.toHaveBeenCalled()
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('save-draft 不得繞過 Casting Canon 改寫角色 DNA', async () => {
+    prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({
+      id: 'character-1', code: 'SINO', canonCandidateId: 'candidate-canon',
+      updatedAt: new Date(), characterDna: { role: 'lead', identityAnchors: 'original face' },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PATCH',
+      body: {
+        action: 'save-draft', characterCode: 'SINO',
+        characterDnaPatch: { role: 'villain', identityAnchors: 'redesigned face' },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.details.code).toBe('STAGE_DRAFT_FIELD_INVALID')
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('Hair Canon 鎖定後拒絕改寫 Hair 草稿欄位', async () => {
+    prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({
+      id: 'character-1', code: 'SINO', updatedAt: new Date(),
+      characterDna: { hairBibleBatchId: 'hair-canon', hairSilhouette: 'locked contour' },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PATCH',
+      body: { action: 'save-draft', characterCode: 'SINO', characterDnaPatch: { hairSilhouette: 'changed contour' } },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('CANON_FIELDS_IMMUTABLE')
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).not.toHaveBeenCalled()
   })
 
   it('World Canon 尚未鎖定 -> 不得建立 Casting 或送出生圖任務', async () => {
@@ -236,6 +441,75 @@ describe('POST /api/visual-development/[projectId] Casting gate', () => {
     expect(prismaMock.visualDevelopmentBatch.update).toHaveBeenCalledWith({
       where: { id: 'batch-1' }, data: { status: 'canon_locked' },
     })
+  })
+
+  it('短名單操作會先在同一交易保存最新 scorecard', async () => {
+    prismaMock.visualDevelopmentCandidate.findUnique.mockResolvedValue({
+      id: 'candidate-1', batchId: 'batch-1', taskId: 'task-1',
+      batch: {
+        id: 'batch-1', status: 'queued', characterId: 'character-1',
+        character: {
+          id: 'character-1', name: '絲諾', canonCandidateId: null,
+          characterDna: { role: 'lead' }, castingBrief: { performerAge: '21+' },
+          workspace: { projectId: 'project-1' },
+        },
+      },
+    })
+    prismaMock.visualDevelopmentCandidate.update.mockResolvedValue({ id: 'candidate-1', shortlisted: true })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PATCH',
+      body: {
+        action: 'shortlist', candidateId: 'candidate-1', shortlisted: true,
+        characterDraft: {
+          characterName: '絲諾', characterDna: { role: 'lead' },
+          castingBrief: { performerAge: '21+', scorecard: '{"candidate-1":{"roleFit":5}}' },
+        },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ castingBrief: expect.objectContaining({ scorecard: '{"candidate-1":{"roleFit":5}}' }) }),
+    }))
+    expect(prismaMock.visualDevelopmentCandidate.update).toHaveBeenCalledWith({
+      where: { id: 'candidate-1' }, data: { shortlisted: true },
+    })
+  })
+
+  it('定角交易會一併保存最新 scorecard 與定角理由', async () => {
+    prismaMock.visualDevelopmentCandidate.findUnique.mockResolvedValue({
+      id: 'candidate-1', batchId: 'batch-1', taskId: 'task-1',
+      batch: {
+        id: 'batch-1', status: 'queued', characterId: 'character-1',
+        character: {
+          id: 'character-1', name: '絲諾', canonCandidateId: null,
+          characterDna: { role: 'lead' }, castingBrief: { performerAge: '21+' },
+          workspace: { projectId: 'project-1' },
+        },
+      },
+    })
+    prismaMock.task.findFirst.mockResolvedValue({ id: 'task-1' })
+    const mod = await import('@/app/api/visual-development/[projectId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1', method: 'PATCH',
+      body: {
+        action: 'canon-lock', candidateId: 'candidate-1',
+        characterDraft: {
+          characterName: '絲諾', characterDna: { role: 'lead' },
+          castingBrief: { performerAge: '21+', scorecard: '{"candidate-1":{"roleFit":5}}', canonRationale: '最符合角色' },
+        },
+      },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.visualDevelopmentCharacter.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        castingBrief: expect.objectContaining({
+          scorecard: '{"candidate-1":{"roleFit":5}}', canonRationale: '最符合角色',
+        }),
+      }),
+    }))
   })
 
   it('成年演員年齡低於 21 時提供明確錯誤，不送往模型', async () => {

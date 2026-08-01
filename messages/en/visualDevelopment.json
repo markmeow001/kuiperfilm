@@ -236,7 +236,26 @@
       "worldLocked": "World Canon loaded. Casting prompts inherit its story and emotional rules.",
       "completeWorld": "Complete Phase 00",
       "generateFailed": "Unable to create the casting batch",
-      "actionFailed": "Unable to update the candidate"
+      "actionFailed": "Unable to update the candidate",
+      "scorecard": {
+        "title": "CASTING SCORECARD",
+        "description": "Score candidates from 1–5, record Top 3 advancement or rejection reasons, and preserve the final casting rationale with this character.",
+        "candidate": "Candidate",
+        "average": "Average",
+        "rationale": "Advance / reject reason",
+        "rationalePlaceholder": "For example: memorable in close-up, but age drifts in profile",
+        "canonRationale": "FINAL CASTING RATIONALE",
+        "canonRationalePlaceholder": "Explain why this performer can carry the role contradiction, performance range, and long-form identity consistency.",
+        "metrics": {
+          "memorability": "Memorability",
+          "storyPresence": "Story",
+          "roleFit": "Role fit",
+          "performanceRange": "Performance",
+          "angleStability": "Angles",
+          "ageCredibility": "Age",
+          "photorealism": "Realism"
+        }
+      }
     },
     "face": {
       "canonSource": "IDENTITY REFERENCE · CANON",

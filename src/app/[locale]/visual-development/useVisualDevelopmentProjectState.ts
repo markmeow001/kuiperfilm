@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { CastingFormState, FaceBibleFormState, ProjectOption } from './visual-development-types'
 
 export function useVisualDevelopmentProjectSelection(createFailedMessage: string) {
@@ -46,17 +46,23 @@ export function useVisualDevelopmentProjectSelection(createFailedMessage: string
 
 export function useVisualDevelopmentCharacterAutosave(input: {
   projectId: string
+  characterCode: string
   form: CastingFormState
   faceForm: FaceBibleFormState
   isLoading: boolean
+  revisionRef: MutableRefObject<string>
 }) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const lastSavedDraftRef = useRef('')
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const activeScopeRef = useRef('')
+  const scopeKey = `${input.projectId}:${input.characterCode.trim().toUpperCase()}`
+  activeScopeRef.current = scopeKey
 
   useEffect(() => {
     lastSavedDraftRef.current = ''
     setSaveStatus('idle')
-  }, [input.projectId])
+  }, [scopeKey])
 
   useEffect(() => {
     const characterCode = input.form.characterCode.trim().toUpperCase()
@@ -76,17 +82,37 @@ export function useVisualDevelopmentCharacterAutosave(input: {
     const signature = JSON.stringify(draft)
     if (signature === lastSavedDraftRef.current) return
     const timer = window.setTimeout(() => {
-      setSaveStatus('saving')
-      void fetch(`/api/visual-development/${input.projectId}`, {
-        method: 'PUT', headers: { 'content-type': 'application/json' }, body: signature,
-      }).then(async (response) => {
-        if (!response.ok) throw new Error((await response.json() as { error?: { message?: string } }).error?.message ?? 'Autosave failed')
-        lastSavedDraftRef.current = signature
-        setSaveStatus('saved')
-      }).catch(() => setSaveStatus('error'))
+      const requestScope = scopeKey
+      const pending = saveQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (activeScopeRef.current !== requestScope) return
+          setSaveStatus('saving')
+          const response = await fetch(`/api/visual-development/${input.projectId}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              ...draft,
+              ...(input.revisionRef.current ? { expectedUpdatedAt: input.revisionRef.current } : {}),
+            }),
+          })
+          const payload = await response.json() as {
+            data?: { character?: { updatedAt?: string } | null }
+            error?: { message?: string }
+          }
+          if (!response.ok) throw new Error(payload.error?.message ?? 'Autosave failed')
+          if (activeScopeRef.current !== requestScope) return
+          if (payload.data?.character?.updatedAt) input.revisionRef.current = payload.data.character.updatedAt
+          lastSavedDraftRef.current = signature
+          setSaveStatus('saved')
+        })
+      saveQueueRef.current = pending
+      void pending.catch(() => {
+        if (activeScopeRef.current === requestScope) setSaveStatus('error')
+      })
     }, 900)
     return () => window.clearTimeout(timer)
-  }, [input.faceForm, input.form, input.isLoading, input.projectId])
+  }, [input.faceForm, input.form, input.isLoading, input.projectId, input.revisionRef, scopeKey])
 
   return saveStatus
 }

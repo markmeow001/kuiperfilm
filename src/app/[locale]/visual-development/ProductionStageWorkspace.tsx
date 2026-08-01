@@ -173,7 +173,7 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
             </div>
             <button
               type="button"
-              disabled={!controller.form.creativePrompt}
+              disabled={!controller.form.creativePrompt || isLocked}
               onClick={controller.onResetCreativePrompt}
               className="shrink-0 rounded-lg border border-white/[0.08] px-2.5 py-1.5 text-[9px] text-text-secondary disabled:opacity-30"
             >
@@ -183,7 +183,7 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
           <textarea
             value={controller.form.creativePrompt}
             onChange={(event) => controller.onCreativePromptChange(event.target.value)}
-            disabled={!controller.stageBrief}
+            disabled={!controller.stageBrief || isLocked}
             placeholder={controller.stageBrief ? translations.creativePromptPlaceholder : translations.briefRequired}
             rows={5}
             className="mt-3 w-full resize-y rounded-xl border border-white/[0.09] bg-black/20 px-3 py-2.5 font-serif-cn text-xs leading-5 text-white outline-none placeholder:text-text-tertiary focus:border-primary-500/50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -196,20 +196,20 @@ export function ProductionStageWorkspace({ controller, nextStage, onAdvance, tra
           <div className="min-w-0 flex-1">
             <div className="font-mono text-[9px] tracking-[0.18em] text-text-tertiary">{translations.modelBinding}</div>
             <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(220px,1fr)_110px_100px_100px]">
-              <select value={controller.form.modelKey} onChange={(event) => controller.onSettingChange('modelKey', event.target.value)} className="h-10 min-w-0 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.modelKey} disabled={isLocked} onChange={(event) => controller.onSettingChange('modelKey', event.target.value)} className="h-10 min-w-0 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{controller.stage.mediaType === 'video' ? translations.videoModelRequired : translations.imageModelRequired}</option>
                 {controller.models.map((model) => <option key={model.value} value={model.value}>{model.label} · {model.providerName ?? model.provider}</option>)}
               </select>
-              <select value={controller.form.resolution} onChange={(event) => controller.onSettingChange('resolution', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.resolution} disabled={isLocked} onChange={(event) => controller.onSettingChange('resolution', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.resolution}</option>
                 {resolutions.map((resolution) => <option key={resolution} value={resolution}>{resolution}</option>)}
               </select>
-              <select value={controller.form.aspectRatio} onChange={(event) => controller.onSettingChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+              <select value={controller.form.aspectRatio} disabled={isLocked} onChange={(event) => controller.onSettingChange('aspectRatio', event.target.value)} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                 <option value="">{translations.aspectRatio}</option>
                 {ratios.map((ratio) => <option key={ratio} value={ratio}>{ratio}</option>)}
               </select>
               {controller.stage.mediaType === 'video' ? (
-                <select value={controller.form.duration} onChange={(event) => controller.onSettingChange('duration', Number(event.target.value))} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50">
+                <select value={controller.form.duration} disabled={isLocked} onChange={(event) => controller.onSettingChange('duration', Number(event.target.value))} className="h-10 rounded-xl border border-white/[0.09] bg-[#0d0d10] px-3 text-xs text-white outline-none focus:border-primary-500/50 disabled:opacity-40">
                   {(durations.length ? durations : [5]).map((duration) => <option key={duration} value={duration}>{duration}s</option>)}
                 </select>
               ) : <div className="hidden sm:block" />}

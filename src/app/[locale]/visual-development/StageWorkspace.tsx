@@ -11,6 +11,7 @@ import { ProductionStageWorkspace, type ProductionStageTranslations } from './Pr
 import { ScriptImportWorkspace, type ScriptImportTranslations } from './ScriptImportWorkspace'
 import { ResearchWorkspace, type ResearchTranslations } from './ResearchWorkspace'
 import { CharacterRoster } from './CharacterRoster'
+import type { CastingScorecardTranslations } from './CastingScorecard'
 import type { CastingWorkspaceController, CharacterOption, FaceBibleWorkspaceController, HairDesignWorkspaceController, ProductionStageWorkspaceController, ResearchWorkspaceController, ScriptImportWorkspaceController, WorldBibleWorkspaceController } from './visual-development-types'
 
 export interface CastingTranslations {
@@ -58,6 +59,7 @@ export interface CastingTranslations {
   worldLocked: string
   completeWorld: string
   nextPhase: string
+  scorecard: CastingScorecardTranslations
 }
 
 export interface StageWorkspaceTranslations {

@@ -249,6 +249,9 @@ describe('visual development locked-stage navigation', () => {
   it('shows the immutable baseline separately from the editable director adjustment', () => {
     const controller = productionController('costume')
     controller.form.creativePrompt = '減少裝飾'
+    controller.batch = null
+    controller.batches = []
+    controller.characterStatus = 'hair_locked'
 
     render(
       <ProductionStageWorkspace
@@ -282,6 +285,7 @@ describe('visual development locked-stage navigation', () => {
 
     const next = screen.getByRole('button', { name: '進入下一階段 · 04 服裝' })
     expect(next).toBeEnabled()
+    expect(screen.getByLabelText('剪影')).toBeDisabled()
     fireEvent.click(next)
     expect(onAdvance).toHaveBeenCalledTimes(1)
   })
@@ -299,6 +303,7 @@ describe('visual development locked-stage navigation', () => {
 
     const next = screen.getByRole('button', { name: '進入下一階段 · 05 配件道具' })
     expect(next).toBeEnabled()
+    expect(screen.getByPlaceholderText('輸入調整')).toBeDisabled()
     fireEvent.click(next)
     expect(onAdvance).toHaveBeenCalledTimes(1)
   })

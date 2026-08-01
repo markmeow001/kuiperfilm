@@ -101,7 +101,7 @@ export function useHairDesignController(input: UseHairDesignInput): {
   ])
 
   useEffect(() => {
-    if (!input.projectId || !input.characterCode || input.isLoading) return
+    if (!input.projectId || !input.characterCode || input.isLoading || input.characterDna.hairBibleBatchId) return
     const signature = JSON.stringify(form)
     if (signature === lastSavedDraftRef.current) return
     const timer = window.setTimeout(() => {
@@ -125,7 +125,7 @@ export function useHairDesignController(input: UseHairDesignInput): {
       }).catch((error) => window.alert(error instanceof Error ? error.message : String(error)))
     }, 900)
     return () => window.clearTimeout(timer)
-  }, [form, input.characterCode, input.isLoading, input.projectId])
+  }, [form, input.characterCode, input.characterDna.hairBibleBatchId, input.isLoading, input.projectId])
 
   const imageModels = useMemo(
     () => input.imageModels.filter((model) => (
