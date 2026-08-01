@@ -163,7 +163,7 @@
       "save": "Save World Bible",
       "saving": "Saving…",
       "references": "REFERENCE EVIDENCE",
-      "referencesDescription": "Upload color, material, architecture, and lighting references. They are design evidence only; people, text, and logos are not copied.",
+      "referencesDescription": "Upload color, material, architecture, and lighting references for internal comparison. Phase 00 uploads are never sent to an external image model; use Phase -1 for rights review and explicit external-processing permission.",
       "addReferences": "Add references",
       "uploading": "Uploading…",
       "remove": "Remove",
@@ -188,7 +188,7 @@
       "version": "VERSION",
       "researchRequired": "Complete and lock Phase -1 Research Canon before generating Phase 00 world assets.",
       "researchLoaded": "Research Canon loaded. Approved evidence is inherited automatically by Phase 00.",
-      "referenceLimit": "Research evidence and Phase 00 additions are limited to 12 images in total. Remove unnecessary references before generation."
+      "referenceLimit": "Phase 00 internal comparison references are limited to 12 images. Remove unnecessary references first."
     },
     "casting": {
       "batch": "CASTING BATCH",

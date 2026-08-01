@@ -155,6 +155,10 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     include: { workspace: true },
   })
   if (!character) throw new ApiError('NOT_FOUND', { code: 'VISUAL_CHARACTER_NOT_FOUND' })
+  const characterStatus = character.status || 'face_locked'
+  if (characterStatus === 'hair_locked' || (characterStatus.endsWith('_locked') && characterStatus !== 'face_locked')) {
+    throw new ApiError('CONFLICT', { code: 'HAIR_CANON_LOCKED' })
+  }
   const faceAuthority = await resolveFaceAuthority(character.id, access.userId, projectId)
   const { selection, capabilities } = await resolveBoundModel(access.userId, modelKey)
   const aspectRatio = requiredString(body.aspectRatio, 'aspectRatio', 16)
@@ -354,6 +358,14 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     if (!candidate || candidate.batch.stage !== 'hair-exploration' || candidate.batch.character.workspace.projectId !== projectId) {
       throw new ApiError('NOT_FOUND')
     }
+    if (
+      candidate.batch.status === 'canon_locked'
+      || candidate.batch.status === 'superseded'
+      || candidate.batch.character.status === 'hair_locked'
+      || (candidate.batch.character.status.endsWith('_locked') && candidate.batch.character.status !== 'face_locked')
+    ) {
+      throw new ApiError('CONFLICT', { code: 'HAIR_CANON_LOCKED' })
+    }
     await resolveCompletedAsset({
       taskId: candidate.taskId,
       userId: access.userId,
@@ -386,6 +398,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     if (!candidate || candidate.batch.stage !== 'hair-validation' || candidate.batch.character.workspace.projectId !== projectId) {
       throw new ApiError('NOT_FOUND')
     }
+    if (candidate.batch.status === 'canon_locked' || candidate.batch.status === 'superseded') {
+      throw new ApiError('CONFLICT', { code: 'HAIR_BATCH_IMMUTABLE' })
+    }
     await resolveCompletedAsset({
       taskId: candidate.taskId,
       userId: access.userId,
@@ -412,6 +427,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   if (!batch || batch.stage !== 'hair-validation' || batch.character.workspace.projectId !== projectId) {
     throw new ApiError('NOT_FOUND')
   }
+  if (batch.status === 'canon_locked' || batch.status === 'superseded') {
+    throw new ApiError('CONFLICT', { code: 'HAIR_BATCH_IMMUTABLE' })
+  }
   if (batch.candidates.length !== HAIR_VALIDATION_VARIANTS.length || batch.candidates.some((candidate) => !candidate.shortlisted)) {
     throw new ApiError('CONFLICT', { code: 'HAIR_ALL_VALIDATION_ASSETS_MUST_BE_APPROVED' })
   }
@@ -427,6 +445,17 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   const hairCanonVersion = Number.isFinite(currentVersion) ? currentVersion + 1 : 1
   const promptStack = toRecord(batch.promptStack)
   const sourceHairCandidateId = requiredString(promptStack.sourceHairCandidateId, 'promptStack.sourceHairCandidateId', 191)
+  const currentHairDirection = await prisma.visualDevelopmentCandidate.findFirst({
+    where: {
+      id: sourceHairCandidateId,
+      isCanon: true,
+      batch: { characterId: batch.characterId, stage: 'hair-exploration' },
+    },
+    select: { id: true },
+  })
+  if (!currentHairDirection) {
+    throw new ApiError('CONFLICT', { code: 'HAIR_CANON_LINEAGE_CHANGED' })
+  }
   await prisma.$transaction([
     prisma.visualDevelopmentCharacter.update({
       where: { id: batch.characterId },

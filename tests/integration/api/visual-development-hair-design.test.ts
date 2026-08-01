@@ -61,6 +61,7 @@ function installFixtures() {
   prismaMock.visualDevelopmentCharacter.findFirst.mockResolvedValue({
     id: 'character-1',
     code: 'CHR-SNO',
+    status: 'face_locked',
     characterDna: { faceCanonId: 'FACE-CHR-SNO-v001' },
     castingBrief: { apparentAge: '24–28' },
     workspace: { id: 'workspace-1', projectId: 'project-1', worldBible: { premise: 'underground city' } },
@@ -170,5 +171,31 @@ describe('POST /api/visual-development/[projectId]/hair-design', () => {
     ])
     expect(first.payload.prompt).toContain('Reference image 1 is the exclusive identity authority')
     expect(first.payload.prompt).toContain('Reference image 2 is the exclusive hairstyle-construction authority')
+  })
+
+  it('rejects Hair Canon lock when the selected exploration asset changed after validation', async () => {
+    prismaMock.visualDevelopmentBatch.findUnique.mockResolvedValue({
+      id: 'hair-validation-batch-1', stage: 'hair-validation', status: 'queued', characterId: 'character-1',
+      promptStack: { sourceHairCandidateId: 'hair-choice-1' },
+      character: {
+        id: 'character-1', code: 'CHR-SNO', characterDna: {}, status: 'hair_validation_in_progress',
+        workspace: { projectId: 'project-1' },
+      },
+      candidates: Array.from({ length: 8 }, (_, index) => ({
+        id: `validation-${index}`, taskId: `task-${index}`, shortlisted: true,
+      })),
+    })
+    prismaMock.task.count.mockResolvedValue(8)
+    prismaMock.visualDevelopmentCandidate.findFirst.mockResolvedValue(null)
+    const mod = await import('@/app/api/visual-development/[projectId]/hair-design/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/hair-design', method: 'PATCH',
+      body: { action: 'hair-lock', batchId: 'hair-validation-batch-1' },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('HAIR_CANON_LINEAGE_CHANGED')
+    expect(prismaMock.visualDevelopmentBatch.update).not.toHaveBeenCalled()
   })
 })

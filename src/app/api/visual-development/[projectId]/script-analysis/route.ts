@@ -13,6 +13,7 @@ import {
   type ScriptSourceFormat,
 } from '@/lib/visual-development/script-analysis'
 import { parseWorldBible, toWorldBibleJson } from '@/lib/visual-development/world-bible'
+import { updateVisualDevelopmentWorkspaceAtRevision } from '@/lib/visual-development/workspace-concurrency'
 import { getSignedUrl } from '@/lib/cos'
 
 type RouteContext = { params: Promise<{ projectId: string }> }
@@ -211,13 +212,10 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     importedCharacterCodes: selected.map((character) => character.code),
   }
   await prisma.$transaction(async (tx) => {
-    await tx.visualDevelopmentWorkspace.update({
-      where: { id: workspace.id },
-      data: {
+    await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
         worldBible: toWorldBibleJson(worldBible),
         ...(applyWorldBible ? { status: 'world_draft', worldVersion: { increment: 1 } } : {}),
-      },
-    })
+      }, tx)
     for (const character of selected) {
       const existing = existingByCode.get(character.code)
       const existingDna = record(existing?.characterDna)

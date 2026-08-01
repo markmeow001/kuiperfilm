@@ -19,6 +19,7 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     update: vi.fn(async () => ({})),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
   },
   task: {
     findFirst: vi.fn(),
@@ -71,6 +72,8 @@ function installFixtures(status = 'hair_locked') {
   const characterDna = {
     role: 'protagonist',
     coreTraits: 'guarded and determined',
+    hairBibleBatchId: 'hair-validation-batch-1',
+    hairDirectionCandidateId: 'hair-1',
     stageBrief_costume: storedBrief('costume'),
     stageBrief_expression: storedBrief('expression'),
     stageBrief_turnaround: storedBrief('turnaround'),
@@ -85,6 +88,10 @@ function installFixtures(status = 'hair_locked') {
     workspace: { id: 'workspace-1', projectId: 'project-1', worldBible: { projectPremise: 'underground city', visualThesis: 'sacred order hides predation' } },
   })
   prismaMock.visualDevelopmentCharacter.findUnique.mockResolvedValue({ characterDna })
+  prismaMock.visualDevelopmentBatch.findFirst.mockResolvedValue({
+    id: 'hair-validation-batch-1',
+    promptStack: { sourceHairCandidateId: 'hair-1' },
+  })
   prismaMock.visualDevelopmentCandidate.findFirst.mockImplementation(async (args: { where: { batch: { stage: string } } }) => {
     const stage = args.where.batch.stage
     if (stage === 'face-lock') return { id: 'face-1', taskId: 'face-task-1', code: 'EXPR-RESTRAINED' }
@@ -144,6 +151,7 @@ describe('production stage API', () => {
     expect(first.payload.prompt).toContain('Reference image 2 is the locked Hair ID')
     expect(first.payload.prompt).toContain('Immutable screenplay-derived stage baseline')
     expect(first.payload.prompt).toContain('Reduce decorative clutter')
+    expect(first.payload.prompt).toContain('no separate negative-prompt channel')
     expect(prismaMock.visualDevelopmentBatch.create).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         promptStack: expect.objectContaining({
@@ -326,9 +334,19 @@ describe('production stage API', () => {
     prismaMock.visualDevelopmentBatch.findUnique.mockResolvedValue({
       id: 'costume-batch-1',
       stage: 'phase-04-costume',
+      status: 'queued',
       characterId: 'character-1',
-      promptStack: { stageRecord: { silhouetteSystem: 'tower', materialConstruction: 'wool', storyWear: 'soot' } },
-      character: { id: 'character-1', code: 'CHR-SNO', characterDna: {}, workspace: { projectId: 'project-1' } },
+      promptStack: {
+        stageRecord: { silhouetteSystem: 'tower', materialConstruction: 'wool', storyWear: 'soot' },
+        referenceCandidateIds: ['face-1', 'hair-1'],
+      },
+      character: {
+        id: 'character-1',
+        code: 'CHR-SNO',
+        status: 'hair_locked',
+        characterDna: { hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
+        workspace: { projectId: 'project-1' },
+      },
       candidates: Array.from({ length: 4 }, (_, index) => ({ id: `candidate-${index}`, taskId: `task-${index}`, shortlisted: true, isCanon: index === 0 })),
     })
     prismaMock.task.count.mockResolvedValue(4)
@@ -338,5 +356,55 @@ describe('production stage API', () => {
     expect(response.status).toBe(200)
     expect(prismaMock.visualDevelopmentCharacter.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: 'costume_locked' }) }))
     expect(prismaMock.visualDevelopmentBatch.update).toHaveBeenCalledWith({ where: { id: 'costume-batch-1' }, data: { status: 'canon_locked' } })
+  })
+
+  it('does not allow asset review to mutate a Canon-locked production batch', async () => {
+    prismaMock.visualDevelopmentCandidate.findUnique.mockResolvedValue({
+      id: 'candidate-1', taskId: 'task-1', batchId: 'costume-batch-1',
+      batch: {
+        id: 'costume-batch-1', stage: 'phase-04-costume', status: 'canon_locked',
+        character: { workspace: { projectId: 'project-1' } },
+      },
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/stages/costume',
+      method: 'PATCH',
+      body: { action: 'asset-review', candidateId: 'candidate-1', approved: true },
+    }), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('STAGE_BATCH_IMMUTABLE')
+    expect(prismaMock.visualDevelopmentCandidate.update).not.toHaveBeenCalled()
+  })
+
+  it('rejects an old production batch after its upstream Canon lineage changes', async () => {
+    prismaMock.visualDevelopmentBatch.findUnique.mockResolvedValue({
+      id: 'costume-batch-old', stage: 'phase-04-costume', status: 'queued', characterId: 'character-1',
+      promptStack: {
+        stageRecord: { silhouetteSystem: 'tower', materialConstruction: 'wool', storyWear: 'soot' },
+        referenceCandidateIds: ['old-face', 'old-hair'],
+      },
+      character: {
+        id: 'character-1', code: 'CHR-SNO', status: 'hair_locked',
+        characterDna: { hairBibleBatchId: 'hair-validation-batch-1', hairDirectionCandidateId: 'hair-1' },
+        workspace: { projectId: 'project-1' },
+      },
+      candidates: Array.from({ length: 4 }, (_, index) => ({
+        id: `candidate-${index}`, taskId: `task-${index}`, shortlisted: true, isCanon: index === 0,
+      })),
+    })
+    prismaMock.task.count.mockResolvedValue(4)
+    const mod = await import('@/app/api/visual-development/[projectId]/stages/[stageId]/route')
+    const response = await mod.PATCH(buildMockRequest({
+      path: '/api/visual-development/project-1/stages/costume', method: 'PATCH',
+      body: { action: 'canon-lock', batchId: 'costume-batch-old' },
+    }), { params: Promise.resolve({ projectId: 'project-1', stageId: 'costume' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('UPSTREAM_CANON_LINEAGE_CHANGED')
+    expect(prismaMock.visualDevelopmentBatch.update).not.toHaveBeenCalled()
   })
 })

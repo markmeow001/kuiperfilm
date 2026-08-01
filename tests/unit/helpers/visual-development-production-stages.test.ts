@@ -66,6 +66,35 @@ describe('visual development production stages', () => {
     expect(result.negativePrompt).not.toContain('changed locked costume')
   })
 
+  it('inlines exclusions when the selected image model has no negative-prompt channel', () => {
+    const stage = getProductionStage('expression')
+    const result = buildProductionStagePrompt({
+      stage,
+      variant: stage.variants[0]!,
+      characterCode: 'CHR-SNO',
+      worldBible: {},
+      characterDna: {},
+      stageRecord: Object.fromEntries(stage.fields.map((field) => [field, `locked ${field}`])),
+      stageBrief: {
+        version: 1,
+        stageId: stage.id,
+        characterCode: 'CHR-SNO',
+        modelKey: 'openrouter::gemini',
+        createdAt: '2026-07-30T00:00:00.000Z',
+        sourceAnalysisId: 'analysis-1',
+        summary: 'Restrained performance.',
+        fields: Object.fromEntries(stage.fields.map((field) => [field, `locked ${field}`])),
+        evidence: [],
+        constraints: [],
+      },
+      creativePrompt: '',
+      inlineNegativeConstraints: true,
+    })
+    expect(result.prompt).toContain('no separate negative-prompt channel')
+    expect(result.prompt).toContain('generic sad stare')
+    expect(result.prompt).toContain('Do not render any excluded item')
+  })
+
   it('assigns a phase-specific physical output contract to every production stage', () => {
     for (const stage of PRODUCTION_STAGE_DEFINITIONS) {
       expect(stage.referenceSources.length).toBeGreaterThan(0)

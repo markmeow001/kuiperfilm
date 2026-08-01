@@ -6,6 +6,7 @@ import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../h
 const prismaMock = vi.hoisted(() => ({
   visualDevelopmentWorkspace: {
     findUnique: vi.fn(),
+    updateMany: vi.fn(async (_args: { where: Record<string, unknown>; data: Record<string, unknown> }) => ({ count: 1 })),
     upsert: vi.fn(async (args: { create: Record<string, unknown>; update: Record<string, unknown> }) => ({
       id: 'workspace-1',
       worldVersion: 1,
@@ -138,6 +139,50 @@ describe('visual development World Bible API', () => {
     expect(submitterMock.submitTask).not.toHaveBeenCalled()
   })
 
+  it('World autosave 使用舊 revision -> 回報衝突且不覆蓋較新的 Research Canon', async () => {
+    prismaMock.visualDevelopmentWorkspace.updateMany.mockResolvedValueOnce({ count: 0 })
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.PUT(buildMockRequest({
+      path: '/api/visual-development/project-1/world-bible',
+      method: 'PUT',
+      body: { worldBible: { projectPremise: 'stale value' } },
+    }), { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.details.code).toBe('VISUAL_DEVELOPMENT_WRITE_CONFLICT')
+  })
+
+  it('Research Canon references exceed the selected model hard limit -> rejects before paid submission', async () => {
+    prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
+      id: 'workspace-1', projectId: 'project-1', worldVersion: 1, status: 'world_draft',
+      worldBible: {
+        ...completeWorld,
+        research: {
+          ...completeWorld.research,
+          references: Array.from({ length: 11 }, (_, index) => ({
+            ...completeWorld.research.references[index % completeWorld.research.references.length],
+            id: `approved-${index}`,
+            key: `images/approved-${index}.png`,
+          })),
+        },
+      },
+    })
+    apiConfigMock.resolveModelSelection.mockResolvedValue({
+      provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro',
+    })
+    const mod = await import('@/app/api/visual-development/[projectId]/world-bible/route')
+    const response = await mod.POST(generateRequest('atlascloud::flux-2-pro'), {
+      params: Promise.resolve({ projectId: 'project-1' }),
+    })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.details.code).toBe('MODEL_REFERENCE_IMAGE_LIMIT_EXCEEDED')
+    expect(body.error.details.details).toMatchObject({ got: 11, max: 10 })
+    expect(submitterMock.submitTask).not.toHaveBeenCalled()
+  })
+
   it('完整規則與多參考模型 -> 送出四張不同責任的世界觀資產', async () => {
     apiConfigMock.resolveModelSelection.mockResolvedValue({
       provider: 'atlascloud', modelId: 'flux-2-pro', modelKey: 'atlascloud::flux-2-pro',
@@ -157,8 +202,6 @@ describe('visual development World Bible API', () => {
       'images/research-costume.png',
       'images/research-film.png',
       'images/research-culture.png',
-      'images/ref-1.png',
-      'images/ref-2.png',
     ])
     const prompts = submissions.map((submission) => String(submission.payload.prompt))
     expect(prompts).toEqual(expect.arrayContaining([
@@ -174,8 +217,8 @@ describe('visual development World Bible API', () => {
     expect(prompts.every((prompt) => !prompt.includes('Faction Color System'))).toBe(true)
     expect(prompts.every((prompt) => !prompt.includes('Material & Aging Rules'))).toBe(true)
     expect(prompts.every((prompt) => !prompt.includes('Architecture, Symbols & Exclusions'))).toBe(true)
-    const update = prismaMock.visualDevelopmentWorkspace.upsert.mock.calls.at(-1)?.[0]
-    const savedWorldBible = update?.update.worldBible as { assets: unknown[] }
+    const update = prismaMock.visualDevelopmentWorkspace.updateMany.mock.calls.at(-1)?.[0]
+    const savedWorldBible = update?.data.worldBible as { assets: unknown[] }
     expect(savedWorldBible.assets).toHaveLength(4)
   })
 
@@ -247,7 +290,12 @@ describe('visual development World Bible API', () => {
         modelKey: 'atlascloud::flux-2-pro',
         modelId: 'flux-2-pro',
         aspectRatio: '16:9',
-        referenceImages: ['images/ref-1.png', 'images/ref-2.png'],
+        referenceImages: [
+          'images/research-face.png',
+          'images/research-costume.png',
+          'images/research-film.png',
+          'images/research-culture.png',
+        ],
         seed: 456,
         meta: { visualDevelopmentWorldAssetCode: 'WORLD-FORMULA' },
       },
@@ -273,11 +321,16 @@ describe('visual development World Bible API', () => {
       payload: expect.objectContaining({
         prompt: 'WORLD-FORMULA edited prompt',
         modelKey: 'atlascloud::flux-2-pro',
-        referenceImages: ['images/ref-1.png', 'images/ref-2.png'],
+        referenceImages: [
+          'images/research-face.png',
+          'images/research-costume.png',
+          'images/research-film.png',
+          'images/research-culture.png',
+        ],
         seed: 456,
       }),
     }))
-    const update = prismaMock.visualDevelopmentWorkspace.update.mock.calls.at(-1)?.[0]
+    const update = prismaMock.visualDevelopmentWorkspace.updateMany.mock.calls.at(-1)?.[0]
     const saved = update?.data.worldBible as { assets: Array<{ code: string; taskId: string; prompt: string; approved: boolean; history: Array<{ taskId: string; prompt: string }> }> }
     const regenerated = saved.assets.find((asset) => asset.code === 'WORLD-FORMULA')
     expect(regenerated).toMatchObject({
@@ -306,7 +359,7 @@ describe('visual development World Bible API', () => {
 
     expect(response.status).toBe(200)
     expect(body.data.canonId).toBe('WORLD-PROJECT--v003')
-    const update = prismaMock.visualDevelopmentWorkspace.update.mock.calls.at(-1)?.[0]
+    const update = prismaMock.visualDevelopmentWorkspace.updateMany.mock.calls.at(-1)?.[0]
     expect(update?.data.status).toBe('world_locked')
     expect((update?.data.worldBible as { canonId: string }).canonId).toBe('WORLD-PROJECT--v003')
   })
@@ -334,7 +387,7 @@ describe('visual development World Bible API', () => {
 
     expect(response.status).toBe(409)
     expect(body.error.details.code).toBe('RESEARCH_CANON_REQUIRED')
-    expect(prismaMock.visualDevelopmentWorkspace.update).not.toHaveBeenCalled()
+    expect(prismaMock.visualDevelopmentWorkspace.updateMany).not.toHaveBeenCalled()
   })
 
   it('有效 PNG 參考圖 -> 上傳並寫入專案 World Bible', async () => {
@@ -352,12 +405,12 @@ describe('visual development World Bible API', () => {
     expect(response.status).toBe(200)
     expect(cosMock.uploadToCOS).toHaveBeenCalledWith(expect.any(Buffer), 'images/visual-development/world/project-1/reference/ref.png')
     expect(body.data.reference.category).toBe('architecture')
-    const update = prismaMock.visualDevelopmentWorkspace.upsert.mock.calls.at(-1)?.[0]
-    const savedWorldBible = update?.update.worldBible as { references: unknown[] }
+    const update = prismaMock.visualDevelopmentWorkspace.updateMany.mock.calls.at(-1)?.[0]
+    const savedWorldBible = update?.data.worldBible as { references: unknown[] }
     expect(savedWorldBible.references).toHaveLength(1)
   })
 
-  it('Research Canon 已繼承十二張參考圖 -> 拒絕再加入 World Bible 參考圖', async () => {
+  it('Research Canon 已繼承十二張參考圖 -> 仍可加入不會送往外部的 Phase 00 站內參考圖', async () => {
     prismaMock.visualDevelopmentWorkspace.findUnique.mockResolvedValue({
       id: 'workspace-1',
       projectId: 'project-1',
@@ -383,9 +436,9 @@ describe('visual development World Bible API', () => {
     const response = await mod.POST(request, { params: Promise.resolve({ projectId: 'project-1' }) })
     const body = await response.json()
 
-    expect(response.status).toBe(409)
-    expect(body.error.details.code).toBe('WORLD_REFERENCE_LIMIT_REACHED')
-    expect(body.error.details.details).toEqual({ max: 12, inherited: 12 })
-    expect(cosMock.uploadToCOS).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(body.data.reference.externalProcessingAllowed).toBe(false)
+    expect(body.data.reference.reviewStatus).toBe('internal-only')
+    expect(cosMock.uploadToCOS).toHaveBeenCalled()
   })
 })

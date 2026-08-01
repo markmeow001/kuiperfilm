@@ -6,7 +6,8 @@ import { isErrorResponse, requireProjectAccess, requireUserAuth } from '@/lib/ap
 import { detectSupportedImageType } from '@/lib/playground/image-file-type'
 import { generateUniqueKey, getSignedUrl, uploadToCOS } from '@/lib/cos'
 import { EMPTY_WORLD_BIBLE, parseWorldBible, toWorldBibleJson } from '@/lib/visual-development/world-bible'
-import { MAX_WORLD_GENERATION_REFERENCES, approvedResearchReferenceKeys } from '@/lib/visual-development/research'
+import { MAX_WORLD_GENERATION_REFERENCES } from '@/lib/visual-development/research'
+import { updateVisualDevelopmentWorkspaceAtRevision } from '@/lib/visual-development/workspace-concurrency'
 
 type RouteContext = { params: Promise<{ projectId: string }> }
 
@@ -30,11 +31,10 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const workspace = await prisma.visualDevelopmentWorkspace.findUnique({ where: { projectId } })
   if (workspace?.status === 'world_locked') throw new ApiError('CONFLICT', { code: 'WORLD_BIBLE_LOCKED' })
   const document = workspace ? parseWorldBible(workspace.worldBible) : EMPTY_WORLD_BIBLE
-  const inheritedReferenceCount = approvedResearchReferenceKeys(document.research).length
-  if (document.references.length + inheritedReferenceCount >= MAX_WORLD_GENERATION_REFERENCES) {
+  if (document.references.length >= MAX_WORLD_GENERATION_REFERENCES) {
     throw new ApiError('CONFLICT', {
       code: 'WORLD_REFERENCE_LIMIT_REACHED',
-      details: { max: MAX_WORLD_GENERATION_REFERENCES, inherited: inheritedReferenceCount },
+      details: { max: MAX_WORLD_GENERATION_REFERENCES },
     })
   }
 
@@ -62,14 +62,21 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     name: file.name.slice(0, 255) || 'Reference',
     category: category || 'general',
     note,
+    externalProcessingAllowed: false as const,
+    reviewStatus: 'internal-only' as const,
     createdAt: new Date().toISOString(),
   }
   document.references = [...document.references, reference]
-  await prisma.visualDevelopmentWorkspace.upsert({
-    where: { projectId },
-    create: { projectId, worldBible: toWorldBibleJson(document), status: 'world_draft' },
-    update: { worldBible: toWorldBibleJson(document), status: 'world_draft' },
-  })
+  if (workspace) {
+    await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
+      worldBible: toWorldBibleJson(document),
+      status: 'world_draft',
+    })
+  } else {
+    await prisma.visualDevelopmentWorkspace.create({
+      data: { projectId, worldBible: toWorldBibleJson(document), status: 'world_draft' },
+    })
+  }
   return NextResponse.json({ success: true, data: { reference: { ...reference, previewUrl: getSignedUrl(key, 3600) } } })
 })
 
@@ -87,9 +94,6 @@ export const DELETE = apiHandler(async (request: NextRequest, context: RouteCont
   const nextReferences = document.references.filter((reference) => reference.id !== referenceId)
   if (nextReferences.length === document.references.length) throw new ApiError('NOT_FOUND')
   document.references = nextReferences
-  await prisma.visualDevelopmentWorkspace.update({
-    where: { id: workspace.id },
-    data: { worldBible: toWorldBibleJson(document) },
-  })
+  await updateVisualDevelopmentWorkspaceAtRevision(workspace, { worldBible: toWorldBibleJson(document) })
   return NextResponse.json({ success: true, data: { referenceId } })
 })

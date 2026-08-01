@@ -2,6 +2,12 @@ import type { Prisma } from '@prisma/client'
 import { ApiError } from '@/lib/api-errors'
 import { prisma } from '@/lib/prisma'
 
+interface WorkspaceUpdateManyClient {
+  visualDevelopmentWorkspace: {
+    updateMany(args: Prisma.VisualDevelopmentWorkspaceUpdateManyArgs): Promise<{ count: number }>
+  }
+}
+
 export interface VisualDevelopmentWorkspaceRevision {
   id: string
   updatedAt: Date
@@ -10,8 +16,9 @@ export interface VisualDevelopmentWorkspaceRevision {
 export async function updateVisualDevelopmentWorkspaceAtRevision(
   workspace: VisualDevelopmentWorkspaceRevision,
   data: Prisma.VisualDevelopmentWorkspaceUpdateManyMutationInput,
+  client: WorkspaceUpdateManyClient = prisma,
 ): Promise<void> {
-  const result = await prisma.visualDevelopmentWorkspace.updateMany({
+  const result = await client.visualDevelopmentWorkspace.updateMany({
     where: { id: workspace.id, updatedAt: workspace.updatedAt },
     data,
   })

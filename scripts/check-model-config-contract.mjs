@@ -20,6 +20,7 @@ const CAPABILITY_NAMESPACE_ALLOWED_FIELDS = {
     'supportNegativePrompt',
     'supportReferenceImage',
     'supportMultiReferenceImage',
+    'maxReferenceImages',
     'supportMaskEdit',
     'supportSeed',
     'fieldI18n',

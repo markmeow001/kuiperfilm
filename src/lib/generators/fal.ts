@@ -103,6 +103,9 @@ export class FalImageGenerator extends BaseImageGenerator {
 
         // 根据 modelId 和是否有参考图片选择端点
         const hasReferenceImages = referenceImages.length > 0
+        if (referenceImages.length > 14) {
+            throw new Error(`FAL_IMAGE_REFERENCE_LIMIT_EXCEEDED: ${referenceImages.length} > 14`)
+        }
         const endpointConfig = FAL_IMAGE_ENDPOINTS[optModelId] || FAL_IMAGE_ENDPOINTS['banana']
         const endpoint = hasReferenceImages ? endpointConfig.edit : endpointConfig.base
 

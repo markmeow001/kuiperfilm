@@ -59,6 +59,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   }
   const character = candidate.batch.character
   const consumesLockedAuthority = candidate.batch.status === 'canon_locked'
+    || candidate.batch.status === 'superseded'
     || character.canonCandidateId === candidate.id
     || (candidate.batch.stage === 'hair-exploration' && candidate.isCanon && character.status !== 'hair_exploration_in_progress')
   if (consumesLockedAuthority) {

@@ -12,6 +12,8 @@ export interface ProductionPromptInput {
   stageRecord: StringRecord
   stageBrief: ProductionStageBrief
   creativePrompt: string
+  /** Inline exclusions when the provider has no separate negative-prompt field. */
+  inlineNegativeConstraints?: boolean
 }
 
 function summarize(record: StringRecord, keys: readonly string[]): string {
@@ -43,6 +45,16 @@ export function buildProductionStagePrompt(input: ProductionPromptInput) {
     ...(input.stage.phase >= 6 ? ['missing locked prop', 'invented accessory'] : []),
   ]
 
+  const negativePrompt = [
+    'different person, identity drift, age change, ancestry change, face redesign',
+    ...continuityNegatives,
+    'continuity error',
+    'plastic skin, doll face, broken anatomy, extra fingers, fused hands, floating objects',
+    'anime, illustration, concept sketch, painterly rendering, CGI look, game UI',
+    'collage, split screen, contact sheet, labels, text, logo, watermark',
+    ...input.stage.negativeTerms,
+  ].join(', ')
+
   const prompt = [
     `CADS PHASE ${String(input.stage.phase).padStart(2, '0')} · ${input.stage.id.toUpperCase()} · ${input.characterCode} · ${input.variant.code}.`,
     referenceRule,
@@ -58,17 +70,10 @@ export function buildProductionStagePrompt(input: ProductionPromptInput) {
       : 'No user creative adjustment. Follow the immutable screenplay-derived baseline exactly.',
     input.stage.outputRule,
     'Preserve all upstream Canon decisions. Change only what this output instruction explicitly requires. No redesign, no identity drift, no unexplained material, prop, costume, hair, scale or story-state changes.',
+    input.inlineNegativeConstraints
+      ? `The selected model has no separate negative-prompt channel. Explicit exclusions: ${negativePrompt}. Do not render any excluded item.`
+      : '',
   ].filter(Boolean).join('\n\n')
-
-  const negativePrompt = [
-    'different person, identity drift, age change, ancestry change, face redesign',
-    ...continuityNegatives,
-    'continuity error',
-    'plastic skin, doll face, broken anatomy, extra fingers, fused hands, floating objects',
-    'anime, illustration, concept sketch, painterly rendering, CGI look, game UI',
-    'collage, split screen, contact sheet, labels, text, logo, watermark',
-    ...input.stage.negativeTerms,
-  ].join(', ')
 
   return {
     prompt,

@@ -24,7 +24,8 @@
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
-        "supportMultiReferenceImage": true
+        "supportMultiReferenceImage": true,
+        "maxReferenceImages": 14
       }
     }
   },
@@ -58,7 +59,8 @@
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
-        "supportMultiReferenceImage": true
+        "supportMultiReferenceImage": true,
+        "maxReferenceImages": 14
       }
     }
   },
@@ -1638,6 +1640,7 @@
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
         "supportMultiReferenceImage": true,
+        "maxReferenceImages": 4,
         "supportMaskEdit": true
       }
     }
@@ -1754,6 +1757,7 @@
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
         "supportMultiReferenceImage": true,
+        "maxReferenceImages": 10,
         "supportSeed": true
       }
     }
@@ -1778,6 +1782,7 @@
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
         "supportMultiReferenceImage": true,
+        "maxReferenceImages": 10,
         "supportSeed": true
       }
     }
@@ -1802,6 +1807,7 @@
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
         "supportMultiReferenceImage": true,
+        "maxReferenceImages": 10,
         "supportSeed": true
       }
     }
@@ -1891,7 +1897,8 @@
         ],
         "supportNegativePrompt": false,
         "supportReferenceImage": true,
-        "supportMultiReferenceImage": true
+        "supportMultiReferenceImage": true,
+        "maxReferenceImages": 10
       }
     }
   },

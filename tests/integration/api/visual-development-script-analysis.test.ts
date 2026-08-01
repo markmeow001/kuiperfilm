@@ -4,7 +4,11 @@ import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../h
 import { TASK_TYPE } from '@/lib/task/types'
 
 const prismaMock = vi.hoisted(() => ({
-  visualDevelopmentWorkspace: { findUnique: vi.fn(), update: vi.fn() },
+  visualDevelopmentWorkspace: {
+    findUnique: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(async (_args: { where: Record<string, unknown>; data: Record<string, unknown> }) => ({ count: 1 })),
+  },
   visualDevelopmentCharacter: { upsert: vi.fn() },
   task: { findMany: vi.fn() },
   $transaction: vi.fn(),
@@ -145,7 +149,7 @@ describe('visual development screenplay analysis API', () => {
     expect(prismaMock.visualDevelopmentCharacter.upsert).toHaveBeenCalledWith(expect.objectContaining({
       create: expect.objectContaining({ code: 'SINO', name: '絲諾' }),
     }))
-    const worldUpdate = prismaMock.visualDevelopmentWorkspace.update.mock.calls[0]?.[0]
+    const worldUpdate = prismaMock.visualDevelopmentWorkspace.updateMany.mock.calls[0]?.[0]
     expect(worldUpdate.data.status).toBe('world_draft')
     expect(worldUpdate.data.worldBible).toMatchObject({
       projectPremise: analysis.worldBible.projectPremise,

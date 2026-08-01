@@ -79,11 +79,15 @@ export function useWorldBibleController(input: UseWorldBibleControllerInput): Wo
   onWorldChangedRef.current = input.onWorldChanged
 
   const imageModels = useMemo(() => input.imageModels.filter((model) => {
-    const referenceCount = references.length + inheritedReferenceCount
+    // Phase 00 uploads are internal-only. Only reviewed Phase -1 references
+    // participate in provider capability filtering.
+    const referenceCount = inheritedReferenceCount
     if (referenceCount === 0) return true
     if (referenceCount === 1) return model.capabilities?.image?.supportReferenceImage === true
-    return model.capabilities?.image?.supportMultiReferenceImage === true
-  }), [inheritedReferenceCount, input.imageModels, references.length])
+    const capabilities = model.capabilities?.image
+    const limit = capabilities?.maxReferenceImages ?? (capabilities?.supportMultiReferenceImage === true ? 2 : 1)
+    return capabilities?.supportMultiReferenceImage === true && referenceCount <= limit
+  }), [inheritedReferenceCount, input.imageModels])
 
   const load = useCallback(async () => {
     if (!input.projectId) {

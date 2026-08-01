@@ -462,6 +462,12 @@ export class AtlasCloudImageGenerator extends BaseImageGenerator {
     const validRefs = referenceImages.filter(
       (u): u is string => typeof u === 'string' && u.trim().length > 0,
     )
+    const maxReferences = modelId === 'gpt-image-1'
+      ? 4
+      : modelId?.startsWith('flux-2-') || modelId === 'seedream-v5.0-lite' ? 10 : 1
+    if (validRefs.length > maxReferences) {
+      throw new Error(`ATLASCLOUD_REFERENCE_IMAGE_LIMIT_EXCEEDED: ${modelId ?? '未知模型'} 最多只接受 ${maxReferences} 张参考图；目前收到 ${validRefs.length} 张`)
+    }
     const useEdit = validRefs.length > 0
     // No-edit models: reject refs explicitly (不隐式回退) — the generic edit-map
     // fallback would silently reroute the request to another model's /edit.

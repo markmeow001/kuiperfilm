@@ -113,11 +113,31 @@ async function resolveCompletedCandidate(input: {
 async function resolveReferenceImages(input: {
   stage: ProductionStageDefinition
   characterId: string
+  characterDna: StringRecord
   userId: string
   projectId: string
 }) {
   return await Promise.all(input.stage.referenceSources.map(async (reference) => {
     const location = resolveReferenceLocation(reference)
+    if (reference.source === 'hair') {
+      const hairCandidateId = requiredString(input.characterDna.hairDirectionCandidateId, 'characterDna.hairDirectionCandidateId', 191)
+      const hairBibleBatchId = requiredString(input.characterDna.hairBibleBatchId, 'characterDna.hairBibleBatchId', 191)
+      const hairBible = await prisma.visualDevelopmentBatch.findFirst({
+        where: { id: hairBibleBatchId, characterId: input.characterId, stage: 'hair-validation', status: 'canon_locked' },
+        select: { promptStack: true },
+      })
+      if (toRecord(hairBible?.promptStack).sourceHairCandidateId !== hairCandidateId) {
+        throw new ApiError('CONFLICT', { code: 'HAIR_CANON_LINEAGE_INVALID' })
+      }
+      const resolved = await resolveCompletedCandidate({
+        candidateId: hairCandidateId,
+        characterId: input.characterId,
+        stage: location.stage,
+        userId: input.userId,
+        projectId: input.projectId,
+      })
+      return { candidateId: resolved.candidate.id, resultKey: resolved.resultKey }
+    }
     const resolved = await resolveCompletedCandidate({
       characterId: input.characterId,
       stage: location.stage,
@@ -125,7 +145,7 @@ async function resolveReferenceImages(input: {
       userId: input.userId,
       projectId: input.projectId,
     })
-    return resolved.resultKey
+    return { candidateId: resolved.candidate.id, resultKey: resolved.resultKey }
   }))
 }
 
@@ -209,10 +229,26 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const stageRecord = Object.fromEntries(stage.fields.map((field) => [field, stageBrief.fields[field] ?? '']))
   for (const field of stage.fields) requiredString(stageRecord[field], `stageBrief.fields.${field}`)
 
-  const referenceImages = await resolveReferenceImages({ stage, characterId: character.id, userId: access.userId, projectId })
+  const referenceAssets = await resolveReferenceImages({
+    stage,
+    characterId: character.id,
+    characterDna,
+    userId: access.userId,
+    projectId,
+  })
+  const referenceImages = referenceAssets.map((reference) => reference.resultKey)
   const { selection, capabilities } = await resolveBoundModel(access.userId, modelKey, stage)
   const imageCaps = capabilities?.image
   const videoCaps = capabilities?.video
+  if (stage.mediaType === 'image') {
+    const referenceLimit = imageCaps?.maxReferenceImages ?? (imageCaps?.supportMultiReferenceImage === true ? 2 : 1)
+    if (referenceImages.length > referenceLimit) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'MODEL_REFERENCE_IMAGE_LIMIT_EXCEEDED',
+        details: { got: referenceImages.length, max: referenceLimit, modelKey },
+      })
+    }
+  }
   const aspectRatio = typeof body.aspectRatio === 'string' && body.aspectRatio.trim()
     ? body.aspectRatio.trim()
     : stage.mediaType === 'video' ? '16:9' : '3:4'
@@ -250,6 +286,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
       stageRecord,
       stageBrief,
       creativePrompt,
+      inlineNegativeConstraints: stage.mediaType === 'image' && imageCaps?.supportNegativePrompt !== true,
     }),
   }))
   const seedSupported = stage.mediaType === 'image' && imageCaps?.supportSeed === true
@@ -285,6 +322,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
         },
         creativePrompt,
         referenceImages,
+        referenceCandidateIds: referenceAssets.map((reference) => reference.candidateId),
         referenceResponsibilities: stage.referenceSources.map((reference, index) => ({
           image: index + 1,
           source: reference.source,
@@ -407,6 +445,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     if (!candidate || candidate.batch.stage !== stage.dbStage || candidate.batch.character.workspace.projectId !== projectId) {
       throw new ApiError('NOT_FOUND')
     }
+    if (candidate.batch.status === 'canon_locked' || candidate.batch.status === 'superseded') {
+      throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
+    }
     if (!candidate.taskId) throw new ApiError('CONFLICT', { code: 'STAGE_ASSET_INCOMPLETE' })
     const task = await prisma.task.findFirst({
       where: { id: candidate.taskId, userId: access.userId, projectId, status: 'completed' },
@@ -436,6 +477,12 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     include: { character: { include: { workspace: true } }, candidates: true },
   })
   if (!batch || batch.stage !== stage.dbStage || batch.character.workspace.projectId !== projectId) throw new ApiError('NOT_FOUND')
+  if (batch.status === 'canon_locked' || batch.status === 'superseded') {
+    throw new ApiError('CONFLICT', { code: 'STAGE_BATCH_IMMUTABLE' })
+  }
+  if (!canEnterProductionStage(batch.character.status, stage.id)) {
+    throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LOCK_REQUIRED', details: { required: stage.prerequisiteStatus } })
+  }
   if (batch.candidates.length !== stage.variants.length || batch.candidates.some((candidate) => !candidate.shortlisted)) {
     throw new ApiError('CONFLICT', { code: 'STAGE_ALL_ASSETS_MUST_BE_APPROVED' })
   }
@@ -450,6 +497,23 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   const currentVersion = Number.parseInt(dna[versionKey] || '0', 10)
   const version = Number.isFinite(currentVersion) ? currentVersion + 1 : 1
   const promptStack = toRecord(batch.promptStack)
+  const storedReferenceCandidateIds = Array.isArray(promptStack.referenceCandidateIds)
+    ? promptStack.referenceCandidateIds.filter((value): value is string => typeof value === 'string')
+    : []
+  const currentReferenceAssets = await resolveReferenceImages({
+    stage,
+    characterId: batch.characterId,
+    characterDna: dna,
+    userId: access.userId,
+    projectId,
+  })
+  const currentReferenceCandidateIds = currentReferenceAssets.map((reference) => reference.candidateId)
+  if (
+    storedReferenceCandidateIds.length !== currentReferenceCandidateIds.length
+    || storedReferenceCandidateIds.some((candidateId, index) => candidateId !== currentReferenceCandidateIds[index])
+  ) {
+    throw new ApiError('CONFLICT', { code: 'UPSTREAM_CANON_LINEAGE_CHANGED' })
+  }
   const stageRecord = toStringRecord(promptStack.stageRecord)
   const prefixedRecord = Object.fromEntries(Object.entries(stageRecord).map(([key, value]) => [`${stage.id}_${key}`, value]))
   const nextDna: Prisma.InputJsonObject = {

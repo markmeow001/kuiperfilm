@@ -37,6 +37,9 @@ export interface WorldBibleReference {
   name: string
   category: string
   note: string
+  /** Phase 00 uploads are internal notes and never leave KuiperFilm. */
+  externalProcessingAllowed: false
+  reviewStatus: 'internal-only'
   createdAt: string
 }
 
@@ -143,6 +146,8 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
         name: typeof entry.name === 'string' ? entry.name : 'Reference',
         category: typeof entry.category === 'string' ? entry.category : 'general',
         note: typeof entry.note === 'string' ? entry.note : '',
+        externalProcessingAllowed: false as const,
+        reviewStatus: 'internal-only' as const,
         createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : '',
       }]
     })

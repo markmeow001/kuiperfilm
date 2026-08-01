@@ -163,7 +163,7 @@
       "save": "儲存 World Bible",
       "saving": "儲存中…",
       "references": "REFERENCE EVIDENCE",
-      "referencesDescription": "上傳色彩、材質、建築與光線參考；系統只將它們視為設計證據，不複製人物、文字或 Logo。",
+      "referencesDescription": "上傳色彩、材質、建築與光線作為站內對照。這些 Phase 00 圖片不會傳給外部生圖模型；若要讓模型參考，請先在 Phase -1 完成權利審核與外部處理授權。",
       "addReferences": "加入參考素材",
       "uploading": "上傳中…",
       "remove": "移除",
@@ -188,7 +188,7 @@
       "version": "VERSION",
       "researchRequired": "請先完成並鎖定 Phase -1 Research Canon，Phase 00 才能生成世界觀資產。",
       "researchLoaded": "Research Canon 已載入；通過的研究素材將自動作為 Phase 00 參考圖。",
-      "referenceLimit": "研究素材與本階段追加素材合計最多 12 張；請先移除不必要的素材再生成。"
+      "referenceLimit": "Phase 00 站內對照素材最多 12 張；請先移除不必要的素材。"
     },
     "casting": {
       "batch": "CASTING BATCH",

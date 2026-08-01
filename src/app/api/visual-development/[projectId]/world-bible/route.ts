@@ -12,6 +12,7 @@ import { projectCandidateTask, readResultKey } from '@/lib/visual-development/re
 import type { CandidateGenerationSnapshot } from '@/lib/visual-development/candidate-history'
 import { getSignedUrl } from '@/lib/cos'
 import { buildWorldBibleAssetPrompt } from '@/lib/visual-development/world-bible-prompt'
+import { updateVisualDevelopmentWorkspaceAtRevision } from '@/lib/visual-development/workspace-concurrency'
 import {
   MAX_WORLD_GENERATION_REFERENCES,
   approvedResearchReferenceKeys,
@@ -160,12 +161,17 @@ export const PUT = apiHandler(async (request: NextRequest, context: RouteContext
     workspace ? parseWorldBible(workspace.worldBible) : EMPTY_WORLD_BIBLE,
     body.worldBible,
   )
-  const saved = await prisma.visualDevelopmentWorkspace.upsert({
-    where: { projectId },
-    create: { projectId, worldBible: toWorldBibleJson(document), status: 'world_draft' },
-    update: { worldBible: toWorldBibleJson(document), status: 'world_draft' },
-  })
-  return NextResponse.json({ success: true, data: { status: saved.status, version: saved.worldVersion } })
+  if (workspace) {
+    await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
+      worldBible: toWorldBibleJson(document),
+      status: 'world_draft',
+    })
+  } else {
+    await prisma.visualDevelopmentWorkspace.create({
+      data: { projectId, worldBible: toWorldBibleJson(document), status: 'world_draft' },
+    })
+  }
+  return NextResponse.json({ success: true, data: { status: 'world_draft', version: workspace?.worldVersion ?? 1 } })
 })
 
 export const POST = apiHandler(async (request: NextRequest, context: RouteContext) => {
@@ -218,10 +224,9 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     })
   }
   const capabilities = findBuiltinCapabilities('image', selection.provider, selection.modelId)?.image
-  const referenceKeys = [...new Set([
-    ...approvedResearchReferenceKeys(document.research),
-    ...document.references.map((reference) => reference.key),
-  ])]
+  // Phase 00 uploads are internal visual notes. Only Phase -1 references with
+  // reviewed rights and explicit external-processing consent may leave KuiperFilm.
+  const referenceKeys = [...new Set(approvedResearchReferenceKeys(document.research))]
   if (referenceKeys.length > MAX_WORLD_GENERATION_REFERENCES) {
     throw new ApiError('INVALID_PARAMS', {
       code: 'REFERENCE_IMAGE_LIMIT_EXCEEDED',
@@ -234,6 +239,16 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   if (referenceKeys.length > 1 && capabilities?.supportMultiReferenceImage !== true) {
     throw new ApiError('INVALID_PARAMS', { code: 'MULTI_REFERENCE_IMAGE_UNSUPPORTED' })
   }
+  const modelReferenceLimit = capabilities?.maxReferenceImages
+    ?? (capabilities?.supportMultiReferenceImage === true
+      ? MAX_WORLD_GENERATION_REFERENCES
+      : capabilities?.supportReferenceImage === true ? 1 : 0)
+  if (referenceKeys.length > modelReferenceLimit) {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'MODEL_REFERENCE_IMAGE_LIMIT_EXCEEDED',
+      details: { got: referenceKeys.length, max: modelReferenceLimit, modelKey },
+    })
+  }
   if (!capabilities?.aspectRatioOptions?.includes(document.aspectRatio)) {
     throw new ApiError('INVALID_PARAMS', { code: 'ASPECT_RATIO_UNSUPPORTED', field: 'aspectRatio' })
   }
@@ -245,6 +260,9 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   const runId = randomUUID()
   const submissions = await Promise.allSettled(WORLD_ASSET_DEFINITIONS.map(async (definition) => {
     const prompt = buildWorldBibleAssetPrompt(document, definition.code)
+    const effectivePrompt = capabilities?.supportNegativePrompt === true
+      ? prompt.prompt
+      : `${prompt.prompt}\n\nThe selected model has no separate negative-prompt channel. Explicit exclusions: ${prompt.negativePrompt}. Do not render any excluded item.`
     const requestedSeed = seedSupported ? randomInt(1, 2_147_483_647) : null
     const submitted = await submitTask({
       userId: access.userId,
@@ -257,7 +275,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
       dedupeMode: 'idempotent',
       skipRateLimit: true,
       payload: {
-        prompt: prompt.prompt,
+        prompt: effectivePrompt,
         modelKey: selection.modelKey,
         modelId: selection.modelId,
         aspectRatio: document.aspectRatio,
@@ -267,7 +285,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
         ...(requestedSeed !== null ? { seed: requestedSeed } : {}),
         generationCount: 1,
         meta: {
-          originPrompt: prompt.prompt,
+          originPrompt: effectivePrompt,
           originModelKey: selection.modelKey,
           visualDevelopmentWorldRunId: runId,
           visualDevelopmentWorldAssetCode: definition.code,
@@ -277,13 +295,13 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
     return {
       code: definition.code,
       taskId: submitted.taskId,
-      prompt: prompt.prompt,
+      prompt: effectivePrompt,
       negativePrompt: prompt.negativePrompt,
       requestedSeed,
       seedStatus: requestedSeed === null ? 'unsupported' as const : 'applied' as const,
       approved: false,
       rejectionNote: null,
-      originPrompt: prompt.prompt,
+      originPrompt: effectivePrompt,
       history: [],
     }
   }))
@@ -292,17 +310,10 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
   document.canonId = null
   document.lockedAt = null
   const failed = submissions.length - assets.length
-  await prisma.visualDevelopmentWorkspace.upsert({
-    where: { projectId },
-    create: {
-      projectId,
-      worldBible: toWorldBibleJson(document),
-      status: failed === 0 ? 'world_generating' : failed === submissions.length ? 'world_failed' : 'world_partial_failed',
-    },
-    update: {
-      worldBible: toWorldBibleJson(document),
-      status: failed === 0 ? 'world_generating' : failed === submissions.length ? 'world_failed' : 'world_partial_failed',
-    },
+  if (!workspace) throw new ApiError('CONFLICT', { code: 'RESEARCH_CANON_REQUIRED' })
+  await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
+    worldBible: toWorldBibleJson(document),
+    status: failed === 0 ? 'world_generating' : failed === submissions.length ? 'world_failed' : 'world_partial_failed',
   })
   return NextResponse.json({
     success: failed === 0,
@@ -341,6 +352,18 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     }
     const previousPayload = record(previousTask.payload)
     const previousMeta = record(previousPayload.meta)
+    const regenerationReferenceKeys = [...new Set(approvedResearchReferenceKeys(document.research))]
+    const previousModelKey = typeof previousPayload.modelKey === 'string' ? previousPayload.modelKey : document.modelKey
+    const previousSelection = await resolveModelSelection(access.userId, previousModelKey, 'image')
+    const previousCapabilities = findBuiltinCapabilities('image', previousSelection.provider, previousSelection.modelId)?.image
+    const previousReferenceLimit = previousCapabilities?.maxReferenceImages
+      ?? (previousCapabilities?.supportMultiReferenceImage === true ? 2 : previousCapabilities?.supportReferenceImage === true ? 1 : 0)
+    if (regenerationReferenceKeys.length > previousReferenceLimit) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'MODEL_REFERENCE_IMAGE_LIMIT_EXCEEDED',
+        details: { got: regenerationReferenceKeys.length, max: previousReferenceLimit, modelKey: previousModelKey },
+      })
+    }
     const seedSupported = asset.seedStatus === 'applied'
     const requestedSeed = seedSupported
       ? seedMode === 'reuse' && asset.requestedSeed !== null
@@ -350,6 +373,7 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     const payload: Record<string, unknown> = {
       ...previousPayload,
       prompt,
+      ...(regenerationReferenceKeys.length > 0 ? { referenceImages: regenerationReferenceKeys } : {}),
       ...(seedSupported && requestedSeed !== null ? { seed: requestedSeed } : {}),
       meta: {
         ...previousMeta,
@@ -359,6 +383,7 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
         regenerationSeedMode: seedMode,
       },
     }
+    if (regenerationReferenceKeys.length === 0) delete payload.referenceImages
     if (!seedSupported) delete payload.seed
     const snapshot: CandidateGenerationSnapshot = {
       taskId: previousTask.id,
@@ -403,9 +428,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     asset.rejectionNote = null
     document.canonId = null
     document.lockedAt = null
-    await prisma.visualDevelopmentWorkspace.update({
-      where: { id: workspace.id },
-      data: { worldBible: toWorldBibleJson(document), status: 'world_generating' },
+    await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
+      worldBible: toWorldBibleJson(document),
+      status: 'world_generating',
     })
     return NextResponse.json({
       success: true,
@@ -425,9 +450,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
     if (!task) throw new ApiError('CONFLICT', { code: 'WORLD_ASSET_NOT_COMPLETED' })
     asset.approved = body.approved === true
     asset.rejectionNote = asset.approved ? null : requiredString(body.rejectionNote, 'rejectionNote', 2000)
-    await prisma.visualDevelopmentWorkspace.update({
-      where: { id: workspace.id },
-      data: { worldBible: toWorldBibleJson(document), status: 'world_review' },
+    await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
+      worldBible: toWorldBibleJson(document),
+      status: 'world_review',
     })
     return NextResponse.json({ success: true, data: { code: asset.code, approved: asset.approved } })
   }
@@ -453,9 +478,9 @@ export const PATCH = apiHandler(async (request: NextRequest, context: RouteConte
   const lockedAt = new Date()
   document.lockedAt = lockedAt.toISOString()
   document.canonId = `WORLD-${projectId.slice(0, 8).toUpperCase()}-v${String(workspace.worldVersion).padStart(3, '0')}`
-  await prisma.visualDevelopmentWorkspace.update({
-    where: { id: workspace.id },
-    data: { worldBible: toWorldBibleJson(document), status: 'world_locked' },
+  await updateVisualDevelopmentWorkspaceAtRevision(workspace, {
+    worldBible: toWorldBibleJson(document),
+    status: 'world_locked',
   })
   return NextResponse.json({ success: true, data: { canonId: document.canonId, lockedAt: document.lockedAt } })
 })

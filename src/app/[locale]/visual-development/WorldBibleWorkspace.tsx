@@ -78,9 +78,9 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
   const generationActive = controller.assets.some((asset) => asset.taskStatus === 'queued' || asset.taskStatus === 'processing')
   const isLocked = controller.status === 'world_locked'
   const researchReady = controller.researchStatus === 'locked'
-  const totalReferenceCount = controller.inheritedReferenceCount + controller.references.length
-  const referenceLimitExceeded = totalReferenceCount > 12
-  const referenceLimitReached = totalReferenceCount >= 12
+  const internalReferenceCount = controller.references.length
+  const referenceLimitExceeded = internalReferenceCount > 12
+  const referenceLimitReached = internalReferenceCount >= 12
 
   return (
     <div className="space-y-4">
@@ -126,7 +126,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
         {referenceLimitReached && (
           <div className={`mx-5 mb-5 flex items-center gap-2 rounded-xl border px-3 py-2 text-[10px] ${referenceLimitExceeded ? 'border-red-400/20 bg-red-400/[0.05] text-red-200' : 'border-amber-300/20 bg-amber-300/[0.05] text-amber-100/70'}`}>
             <AppIcon name="alert" className="h-3.5 w-3.5 shrink-0" />
-            {translations.referenceLimit} ({totalReferenceCount}/12)
+            {translations.referenceLimit} ({internalReferenceCount}/12)
           </div>
         )}
         <div className="flex justify-end border-t border-white/[0.07] px-5 py-3">
@@ -190,7 +190,7 @@ export function WorldBibleWorkspace({ controller, translations }: WorldBibleWork
               </select>
             </div>
           </div>
-          <button type="button" disabled={isLocked || !researchReady || referenceLimitExceeded || !fieldsComplete || !controller.form.modelKey || !controller.form.aspectRatio || controller.isGenerating || generationActive} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
+          <button type="button" disabled={isLocked || !researchReady || referenceLimitExceeded || !fieldsComplete || !controller.form.modelKey || !selectedModel || !controller.form.aspectRatio || controller.isGenerating || generationActive} onClick={controller.onGenerate} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-500 px-4 text-[10px] font-semibold text-black disabled:cursor-not-allowed disabled:opacity-35">
             <AppIcon name="sparklesAlt" className="h-3.5 w-3.5" />
             {controller.isGenerating || generationActive ? translations.generating : translations.generate}
           </button>
