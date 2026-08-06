@@ -5,7 +5,7 @@ export const SCRIPT_ANALYSIS_MAX_CHARS = 120_000
 export const SCRIPT_ANALYSIS_MAX_CHARACTERS = 120
 export const SCRIPT_ANALYSIS_PIPELINE_VERSION = 2
 
-export type ScriptSourceFormat = 'pasted' | 'docx' | 'txt' | 'md'
+export type ScriptSourceFormat = 'pasted' | 'docx' | 'pdf' | 'txt' | 'md'
 
 export interface ScriptAnalysisWorldDraft {
   projectPremise: string
@@ -265,7 +265,7 @@ export function parseStoredScriptAnalysis(value: unknown): ScriptAnalysisDocumen
 }
 
 function parseStoredSourceFormat(value: unknown): ScriptSourceFormat {
-  if (value === 'pasted' || value === 'docx' || value === 'txt' || value === 'md') return value
+  if (value === 'pasted' || value === 'docx' || value === 'pdf' || value === 'txt' || value === 'md') return value
   throw new Error('SCRIPT_ANALYSIS_INVALID: sourceFormat is invalid')
 }
 

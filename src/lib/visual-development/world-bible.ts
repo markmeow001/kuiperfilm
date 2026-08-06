@@ -49,7 +49,7 @@ export interface ScreenplaySourceVersion {
   originalKey: string | null
   name: string
   sourceTitle: string
-  sourceFormat: 'pasted' | 'docx' | 'txt' | 'md'
+  sourceFormat: 'pasted' | 'docx' | 'pdf' | 'txt' | 'md'
   mimeType: string
   sha256: string
   sizeBytes: number
@@ -197,7 +197,7 @@ export function parseWorldBible(value: Prisma.JsonValue | unknown): WorldBibleDo
         typeof entry.id !== 'string'
         || typeof entry.key !== 'string'
         || typeof entry.sha256 !== 'string'
-        || (sourceFormat !== 'pasted' && sourceFormat !== 'docx' && sourceFormat !== 'txt' && sourceFormat !== 'md')
+        || (sourceFormat !== 'pasted' && sourceFormat !== 'docx' && sourceFormat !== 'pdf' && sourceFormat !== 'txt' && sourceFormat !== 'md')
       ) return []
       return [{
         id: entry.id,

@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildMockRequest } from '../../helpers/request'
 import { installAuthMocks, mockAuthenticated, resetAuthMockState } from '../../helpers/auth'
@@ -45,6 +46,46 @@ describe('visual development screenplay source API', () => {
     expect(cosMock.uploadToCOS).toHaveBeenCalledTimes(1)
     const saved = prismaMock.visualDevelopmentWorkspace.upsert.mock.calls[0]?.[0].create.worldBible
     expect(saved.sources).toHaveLength(1)
+  })
+
+  it('persists an uploaded PDF screenplay with the extracted text', async () => {
+    const scriptText = '劇本內容。'.repeat(160)
+    const pdfBytes = new TextEncoder().encode(`%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n`)
+    const form = new FormData()
+    form.append('file', new File([pdfBytes], '序列三.pdf', { type: 'application/pdf' }))
+    form.append('scriptText', scriptText)
+    form.append('sourceTitle', '序列三')
+    const request = new NextRequest('http://localhost/api/visual-development/project-1/script-source', { method: 'POST', body: form })
+    const mod = await import('@/app/api/visual-development/[projectId]/script-source/route')
+    const response = await mod.POST(request, { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(body.data.source).toMatchObject({
+      version: 1,
+      sourceTitle: '序列三',
+      sourceFormat: 'pdf',
+      mimeType: 'application/pdf',
+      name: '序列三.pdf',
+    })
+    // Normalized text + original PDF are both persisted.
+    expect(cosMock.uploadToCOS).toHaveBeenCalledTimes(2)
+    expect(body.data.source.originalKey).toBe('documents/source.pdf')
+  })
+
+  it('rejects a file with .pdf extension but non-PDF content', async () => {
+    const form = new FormData()
+    form.append('file', new File([new TextEncoder().encode('not a pdf at all')], 'fake.pdf', { type: 'application/pdf' }))
+    form.append('scriptText', '劇本內容。'.repeat(160))
+    form.append('sourceTitle', 'Fake')
+    const request = new NextRequest('http://localhost/api/visual-development/project-1/script-source', { method: 'POST', body: form })
+    const mod = await import('@/app/api/visual-development/[projectId]/script-source/route')
+    const response = await mod.POST(request, { params: Promise.resolve({ projectId: 'project-1' }) })
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.details.code).toBe('PDF_CONTENT_INVALID')
+    expect(cosMock.uploadToCOS).not.toHaveBeenCalled()
   })
 
   it('restores normalized text from a saved source version', async () => {

@@ -153,7 +153,7 @@ export function useScriptImportController(input: {
       detachFromSavedSource()
       setScriptText(payload.rawText)
       setSourceFormat(payload.meta?.sourceFormat ?? 'txt')
-      const nextTitle = file.name.replace(/\.(docx|txt|md|markdown)$/i, '')
+      const nextTitle = file.name.replace(/\.(docx|pdf|txt|md|markdown)$/i, '')
       setSourceTitle(nextTitle)
       if (!input.projectId) {
         setErrorMessage('Select or create a project before importing a screenplay')

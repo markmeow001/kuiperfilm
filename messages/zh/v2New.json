@@ -31,7 +31,7 @@
   },
   "upload": {
     "label": "剧本档案 · SCRIPT FILE（选填）",
-    "cta": "上传 .docx / .txt / .md 自动拆集",
+    "cta": "上传 .docx / .pdf / .txt / .md 自动拆集",
     "removeAria": "移除档案",
     "extracting": "抽取中…",
     "detected": "✓ 侦测到 {count} 集",

@@ -76,7 +76,7 @@ export function ScriptImportWorkspace({
             <input
               type="file"
               className="sr-only"
-              accept=".docx,.txt,.md,.markdown"
+              accept=".docx,.pdf,.txt,.md,.markdown"
               disabled={controller.isUploading}
               onChange={(event) => {
                 const file = event.target.files?.[0]

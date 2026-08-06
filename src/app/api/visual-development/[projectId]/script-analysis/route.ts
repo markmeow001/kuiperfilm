@@ -31,7 +31,7 @@ function requiredString(value: unknown, field: string, max: number): string {
 }
 
 function parseSourceFormat(value: unknown): ScriptSourceFormat {
-  if (value === 'pasted' || value === 'docx' || value === 'txt' || value === 'md') return value
+  if (value === 'pasted' || value === 'docx' || value === 'pdf' || value === 'txt' || value === 'md') return value
   throw new ApiError('INVALID_PARAMS', { code: 'SCRIPT_SOURCE_FORMAT_INVALID', field: 'sourceFormat' })
 }
 

@@ -176,7 +176,7 @@ export function BulkEpisodeUploadButton({ projectId, hasExistingEpisodes, canEdi
       <input
         ref={fileInputRef}
         type="file"
-        accept=".docx,.txt,.md,.markdown"
+        accept=".docx,.pdf,.txt,.md,.markdown"
         onChange={handleFileChange}
         className="hidden"
       />

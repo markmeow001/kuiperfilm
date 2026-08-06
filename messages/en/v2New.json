@@ -31,7 +31,7 @@
   },
   "upload": {
     "label": "Script file · SCRIPT FILE (optional)",
-    "cta": "Upload .docx / .txt / .md to auto-split episodes",
+    "cta": "Upload .docx / .pdf / .txt / .md to auto-split episodes",
     "removeAria": "Remove file",
     "extracting": "Extracting…",
     "detected": "✓ Detected {count} episodes",

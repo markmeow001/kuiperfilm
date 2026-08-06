@@ -140,7 +140,8 @@
     "react-dom": "19.1.0",
     "remotion": "^4.0.405",
     "tencentcloud-sdk-nodejs-vod": "^4.1.224",
-    "three": "^0.185.0"
+    "three": "^0.185.0",
+    "unpdf": "^1.8.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

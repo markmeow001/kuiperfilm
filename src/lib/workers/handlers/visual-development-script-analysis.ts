@@ -23,7 +23,7 @@ function requiredText(payload: Record<string, unknown>, key: string, max: number
 }
 
 function sourceFormat(value: unknown): ScriptSourceFormat {
-  if (value === 'pasted' || value === 'docx' || value === 'txt' || value === 'md') return value
+  if (value === 'pasted' || value === 'docx' || value === 'pdf' || value === 'txt' || value === 'md') return value
   throw new Error('VISUAL_DEVELOPMENT_SCRIPT_ANALYSIS: sourceFormat is invalid')
 }
 

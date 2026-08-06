@@ -32,6 +32,7 @@ async function requireAccess(projectId: string, action: 'read' | 'write' = 'writ
 function sourceExtension(name: string): { format: Exclude<ScriptSourceFormat, 'pasted'>; extension: string; mimeType: string } | null {
   const extension = name.toLowerCase().split('.').pop()
   if (extension === 'docx') return { format: 'docx', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+  if (extension === 'pdf') return { format: 'pdf', extension: 'pdf', mimeType: 'application/pdf' }
   if (extension === 'txt') return { format: 'txt', extension: 'txt', mimeType: 'text/plain; charset=utf-8' }
   if (extension === 'md' || extension === 'markdown') return { format: 'md', extension: 'md', mimeType: 'text/markdown; charset=utf-8' }
   return null
@@ -41,6 +42,12 @@ function validateBuffer(buffer: Buffer, format: ScriptSourceFormat) {
   if (format === 'docx') {
     if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
       throw new ApiError('INVALID_PARAMS', { code: 'DOCX_CONTENT_INVALID' })
+    }
+    return
+  }
+  if (format === 'pdf') {
+    if (buffer.length < 4 || buffer.toString('latin1', 0, 4) !== '%PDF') {
+      throw new ApiError('INVALID_PARAMS', { code: 'PDF_CONTENT_INVALID' })
     }
     return
   }
@@ -141,7 +148,7 @@ export const POST = apiHandler(async (request: NextRequest, context: RouteContex
       throw new ApiError('INVALID_PARAMS', { code: 'SCRIPT_TEXT_INVALID', details: { max: SCRIPT_ANALYSIS_MAX_CHARS } })
     }
     name = file.name.slice(0, 255)
-    sourceTitle = title(formData.get('sourceTitle'), name.replace(/\.(docx|txt|md|markdown)$/i, ''))
+    sourceTitle = title(formData.get('sourceTitle'), name.replace(/\.(docx|pdf|txt|md|markdown)$/i, ''))
     sourceFormat = fileType.format
     mimeType = fileType.mimeType
     extension = fileType.extension

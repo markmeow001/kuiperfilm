@@ -1,7 +1,7 @@
 /**
  * Episode extraction from uploaded file.
  *
- * Accepts .docx / .txt / .md. Tries detection in this order:
+ * Accepts .docx / .pdf / .txt / .md. Tries detection in this order:
  *
  *   1. `ep`      — EP01 / EP02 / EP 03 — TITLE markers. Industry-standard
  *                  for mixed-language pro scripts (a leading 三幕大綱
@@ -24,11 +24,15 @@
  *   - 10 MB file size cap (enforced BEFORE buffering in memory).
  *   - .docm rejected (macro-enabled — VBA payload surface).
  *   - mammoth's xmldom does not resolve external entities (no XXE).
+ *   - PDF is text-layer extraction only (unpdf/pdf.js, no JS execution,
+ *     no external resource fetch). Scanned/image-only PDFs are rejected
+ *     with PDF_NO_TEXT_LAYER instead of silently returning nothing.
  *   - Filename is never echoed into the response or downstream prompt.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import mammoth from 'mammoth'
+import { extractText, getDocumentProxy } from 'unpdf'
 import * as cheerio from 'cheerio'
 import { requireUserAuth, isErrorResponse } from '@/lib/api-auth'
 import { apiHandler, ApiError } from '@/lib/api-errors'
@@ -210,9 +214,11 @@ export const POST = apiHandler(async (request: NextRequest) => {
     throw new ApiError('INVALID_PARAMS', { code: 'MACRO_DOCX_REJECTED' })
   }
 
-  let sourceFormat: 'docx' | 'txt' | 'md'
+  let sourceFormat: 'docx' | 'pdf' | 'txt' | 'md'
   if (lowerName.endsWith('.docx')) {
     sourceFormat = 'docx'
+  } else if (lowerName.endsWith('.pdf')) {
+    sourceFormat = 'pdf'
   } else if (lowerName.endsWith('.txt')) {
     sourceFormat = 'txt'
   } else if (lowerName.endsWith('.md') || lowerName.endsWith('.markdown')) {
@@ -220,7 +226,7 @@ export const POST = apiHandler(async (request: NextRequest) => {
   } else {
     throw new ApiError('INVALID_PARAMS', {
       code: 'FILE_TYPE_UNSUPPORTED',
-      details: { supported: ['.docx', '.txt', '.md'] },
+      details: { supported: ['.docx', '.pdf', '.txt', '.md'] },
     })
   }
 
@@ -236,6 +242,36 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ])
     docxHtml = htmlResult.value
     plainText = rawTextResult.value
+  } else if (sourceFormat === 'pdf') {
+    // PDF magic bytes — the extension alone is caller-controlled.
+    if (buffer.length < 4 || buffer.toString('latin1', 0, 4) !== '%PDF') {
+      throw new ApiError('INVALID_PARAMS', { code: 'PDF_CONTENT_INVALID' })
+    }
+    let pdfText: string
+    try {
+      const pdf = await getDocumentProxy(new Uint8Array(buffer))
+      const extracted = await extractText(pdf, { mergePages: true })
+      pdfText = extracted.text
+    } catch (error) {
+      // Encrypted / malformed PDFs land here. Surface a stable code so
+      // the UI can tell the user instead of a generic 500.
+      logger.warn({
+        action: 'extract_episodes.pdf_parse_failed',
+        message: 'pdf text extraction failed',
+        details: { reason: error instanceof Error ? error.message : String(error) },
+      })
+      throw new ApiError('INVALID_PARAMS', { code: 'PDF_PARSE_FAILED' })
+    }
+    // Scanned/image-only PDFs extract to (near-)empty text. Reject with a
+    // dedicated code — the generic FILE_EMPTY_OR_TOO_SHORT below would
+    // mislead users whose file visibly has many pages of content.
+    if (pdfText.trim().length < 50) {
+      throw new ApiError('INVALID_PARAMS', {
+        code: 'PDF_NO_TEXT_LAYER',
+        details: { plainTextChars: pdfText.trim().length },
+      })
+    }
+    plainText = pdfText
   } else {
     // txt / md — straight UTF-8 decode. Strip BOM if present.
     plainText = buffer.toString('utf-8').replace(/^﻿/, '')
