@@ -52,7 +52,7 @@
       "pastePlaceholder": "Paste the screenplay here, or upload DOCX, TXT, or Markdown above…",
       "upload": "Upload screenplay",
       "uploading": "Reading…",
-      "supportedFiles": "DOCX / TXT / MD supported; 120,000 characters maximum",
+      "supportedFiles": "DOCX / PDF / TXT / MD supported; 120,000 characters maximum",
       "model": "Analysis model",
       "modelPlaceholder": "Select an LLM",
       "modelHint": "Models come from the platform's currently enabled text-model pool. The exact model and analysis time are recorded.",

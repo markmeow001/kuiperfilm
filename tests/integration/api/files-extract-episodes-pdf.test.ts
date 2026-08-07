@@ -31,12 +31,18 @@ function buildPdf(lines: string[]): Buffer {
   return Buffer.from(body, 'latin1')
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(copy).set(bytes)
+  return copy
+}
+
 async function postFile(bytes: Uint8Array, filename: string) {
   const form = new FormData()
-  form.append('file', new File([bytes], filename, { type: 'application/pdf' }))
+  form.append('file', new File([toArrayBuffer(bytes)], filename, { type: 'application/pdf' }))
   const request = new NextRequest('http://localhost/api/files/extract-episodes', { method: 'POST', body: form })
   const mod = await import('@/app/api/files/extract-episodes/route')
-  return mod.POST(request)
+  return mod.POST(request, undefined as never)
 }
 
 describe('extract-episodes PDF support', () => {

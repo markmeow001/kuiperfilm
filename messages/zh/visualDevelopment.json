@@ -52,7 +52,7 @@
       "pastePlaceholder": "在這裡貼上劇本，或從右上方上傳 DOCX、TXT、Markdown…",
       "upload": "上傳劇本",
       "uploading": "讀取中…",
-      "supportedFiles": "支援 DOCX / TXT / MD；單次最多 120,000 字元",
+      "supportedFiles": "支援 DOCX / PDF / TXT / MD；單次最多 120,000 字元",
       "model": "劇本分析模型",
       "modelPlaceholder": "選擇 LLM 模型",
       "modelHint": "模型來自平台目前已啟用的文字模型；每次分析都會保存實際模型與時間。",

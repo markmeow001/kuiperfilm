@@ -100,14 +100,25 @@ function optionalText(source: Record<string, unknown>, key: string, max = 8_000)
   return value
 }
 
+/**
+ * Lenient parsing for LLM free-form string lists (aliases, themes, notes).
+ * Models occasionally emit null / numbers / empty strings inside these
+ * lists; the data is auxiliary, so junk items are dropped instead of
+ * failing the whole analysis. A bare string is treated as a single-item
+ * list. Structural violations (any other non-array value) still throw so
+ * prompt regressions stay visible.
+ */
 function textArray(value: unknown, field: string, maxItems = 50): string[] {
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : []
   if (!Array.isArray(value)) throw new Error(`SCRIPT_ANALYSIS_INVALID: ${field} must be an array`)
-  return value.slice(0, maxItems).map((item, index) => {
-    if (typeof item !== 'string' || !item.trim()) {
-      throw new Error(`SCRIPT_ANALYSIS_INVALID: ${field}[${index}] must be text`)
-    }
-    return item.trim()
-  })
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item.trim()
+      if (typeof item === 'number' && Number.isFinite(item)) return String(item)
+      return ''
+    })
+    .filter((item) => item.length > 0)
+    .slice(0, maxItems)
 }
 
 function parseEntityType(value: unknown, missingFields: string[], field: string): ScriptAnalysisCharacter['entityType'] {
