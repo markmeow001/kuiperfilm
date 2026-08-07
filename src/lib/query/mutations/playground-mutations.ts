@@ -127,7 +127,14 @@ export interface PlaygroundRunSubmission {
   modelKey: string
   resolution?: string
   aspectRatio?: string
+  /** -1 = provider-side auto duration（seedance-2.5「Auto」）。 */
   durationSec?: number
+  /** seedance-2.5：輸出容器格式 mp4/mov。 */
+  outputFormat?: string
+  /** seedance-2.5：provider 端浮水印開關。 */
+  watermark?: boolean
+  /** seedance-2.5：回傳最後一幀圖（供續鏡）。 */
+  returnLastFrame?: boolean
   workspaceId?: string | null
 }
 

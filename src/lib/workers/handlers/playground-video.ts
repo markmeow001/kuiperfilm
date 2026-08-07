@@ -609,6 +609,12 @@ export async function handlePlaygroundVideoTask(
       ...(duration ? { duration } : {}),
       ...(aspectRatio ? { aspectRatio } : {}),
       ...(resolution ? { resolution } : {}),
+      // seedance-2.5 extras — non-supporting generators ignore the keys.
+      ...(payload.outputFormat === 'mp4' || payload.outputFormat === 'mov'
+        ? { outputFormat: payload.outputFormat }
+        : {}),
+      ...(typeof payload.watermark === 'boolean' ? { watermark: payload.watermark } : {}),
+      ...(typeof payload.returnLastFrame === 'boolean' ? { returnLastFrame: payload.returnLastFrame } : {}),
       // New depth-rebuild runs use one explicit sourceAudioMode. Legacy
       // Playground runs omit it and retain the prior generateAudio behavior.
       ...(sourceAudioMode !== null

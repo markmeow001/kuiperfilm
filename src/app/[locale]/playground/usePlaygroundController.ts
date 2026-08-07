@@ -109,6 +109,11 @@ export function usePlaygroundController(workspaceId: string | null = null) {
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [durationSec, setDurationSec] = useState<number>(5)
   const [resolution, setResolution] = useState<string>('720p')
+  // seedance-2.5 extras (2026-08-07) — rendered only when the selected
+  // model's capability catalog exposes the field.
+  const [outputFormat, setOutputFormat] = useState<string>('mp4')
+  const [watermarkOn, setWatermarkOn] = useState(false)
+  const [returnLastFrameOn, setReturnLastFrameOn] = useState(false)
 
   // Output / view state
   const [latestRun, setLatestRun] = useState<PlaygroundRunRow | null>(null)
@@ -193,6 +198,43 @@ export function usePlaygroundController(workspaceId: string | null = null) {
       setResolution(resolutionOptions.includes('720p') ? '720p' : resolutionOptions[0])
     }
   }, [resolutionOptions, resolution])
+
+  // Capability-driven video options (2026-08-07, seedance-2.5). Models
+  // without catalog data keep the legacy hardcoded UI ranges.
+  const videoCaps = outputType === 'video' ? selectedVideoModel?.capabilities?.video : undefined
+  // -1 = provider-side auto duration ("Auto" chip).
+  const durationOptions = useMemo<number[]>(
+    () => (Array.isArray(videoCaps?.durationOptions) ? videoCaps.durationOptions : []),
+    [videoCaps],
+  )
+  useEffect(() => {
+    if (durationOptions.length > 0 && !durationOptions.includes(durationSec)) {
+      setDurationSec(durationOptions.includes(5) ? 5 : (durationOptions.find((sec) => sec > 0) ?? durationOptions[0]))
+    }
+  }, [durationOptions, durationSec])
+  // Model-specific aspect list (may include 21:9 / adaptive). Empty = legacy list.
+  const modelAspectOptions = useMemo<string[]>(
+    () => (Array.isArray(videoCaps?.aspectRatioOptions) ? videoCaps.aspectRatioOptions : []),
+    [videoCaps],
+  )
+  useEffect(() => {
+    if (modelAspectOptions.length > 0 && !modelAspectOptions.includes(aspectRatio)) {
+      setAspectRatio(
+        modelAspectOptions.includes('9:16') ? '9:16' : modelAspectOptions[0],
+      )
+    }
+  }, [modelAspectOptions, aspectRatio])
+  const outputFormatOptions = useMemo<string[]>(
+    () => (Array.isArray(videoCaps?.outputFormatOptions) ? videoCaps.outputFormatOptions : []),
+    [videoCaps],
+  )
+  useEffect(() => {
+    if (outputFormatOptions.length > 0 && !outputFormatOptions.includes(outputFormat)) {
+      setOutputFormat(outputFormatOptions[0])
+    }
+  }, [outputFormatOptions, outputFormat])
+  const showWatermarkToggle = videoCaps?.supportWatermark === true
+  const showReturnLastFrameToggle = videoCaps?.supportReturnLastFrame === true
 
   // Promote worker status changes into the tracked run (poll every 3s while
   // pending/running rows exist). Keeps the in-progress placeholder + video
@@ -440,6 +482,9 @@ export function usePlaygroundController(workspaceId: string | null = null) {
         workspaceId,
         aspectRatio,
         ...(outputType === 'video' ? { durationSec, generateAudio: soundOn } : {}),
+        ...(outputType === 'video' && outputFormatOptions.length > 0 ? { outputFormat } : {}),
+        ...(outputType === 'video' && showWatermarkToggle ? { watermark: watermarkOn } : {}),
+        ...(outputType === 'video' && showReturnLastFrameToggle ? { returnLastFrame: returnLastFrameOn } : {}),
         ...(outputType === 'video' && runOverrides?.preserveSourceAudio
           ? { preserveSourceAudio: true }
           : {}),
@@ -557,6 +602,11 @@ export function usePlaygroundController(workspaceId: string | null = null) {
     aspectRatio, setAspectRatio,
     durationSec, setDurationSec,
     resolution, setResolution,
+    outputFormat, setOutputFormat,
+    watermarkOn, setWatermarkOn,
+    returnLastFrameOn, setReturnLastFrameOn,
+    durationOptions, modelAspectOptions, outputFormatOptions,
+    showWatermarkToggle, showReturnLastFrameToggle,
     videoRefMode, setVideoRefMode,
     // view state
     latestRun,

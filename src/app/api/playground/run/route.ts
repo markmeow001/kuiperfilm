@@ -131,6 +131,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceImageNames: rawRefImageNames,
     generateAudio: rawGenerateAudio,
     maskImage: rawMaskImage,
+    outputFormat: rawOutputFormat,
+    watermark: rawWatermark,
+    returnLastFrame: rawReturnLastFrame,
   } = body as {
     prompt?: unknown
     referenceImages?: unknown
@@ -157,6 +160,22 @@ export const POST = apiHandler(async (request: NextRequest) => {
     referenceImageNames?: unknown
     generateAudio?: unknown
     maskImage?: unknown
+    outputFormat?: unknown
+    watermark?: unknown
+    returnLastFrame?: unknown
+  }
+
+  if (rawOutputFormat !== undefined && rawOutputFormat !== 'mp4' && rawOutputFormat !== 'mov') {
+    throw new ApiError('INVALID_PARAMS', {
+      code: 'OUTPUT_FORMAT_INVALID',
+      message: '輸出格式無效（mp4/mov）',
+    })
+  }
+  if (rawWatermark !== undefined && typeof rawWatermark !== 'boolean') {
+    throw new ApiError('INVALID_PARAMS', { code: 'WATERMARK_INVALID', message: '水印設定無效' })
+  }
+  if (rawReturnLastFrame !== undefined && typeof rawReturnLastFrame !== 'boolean') {
+    throw new ApiError('INVALID_PARAMS', { code: 'RETURN_LAST_FRAME_INVALID', message: '返回尾幀設定無效' })
   }
 
   // Validate. Every reject carries a human-readable `message` — ApiError falls
@@ -868,6 +887,9 @@ export const POST = apiHandler(async (request: NextRequest) => {
     ...(normalizedResolution ? { resolution: normalizedResolution } : {}),
     ...(typeof aspectRatio === 'string' ? { aspectRatio } : {}),
     ...(normalizedDuration ? { duration: normalizedDuration } : {}),
+    ...(rawOutputFormat !== undefined ? { outputFormat: rawOutputFormat } : {}),
+    ...(typeof rawWatermark === 'boolean' ? { watermark: rawWatermark } : {}),
+    ...(typeof rawReturnLastFrame === 'boolean' ? { returnLastFrame: rawReturnLastFrame } : {}),
     generationCount: 1,
     // meta.* 是 payload 里唯一在 worker 进度更新时会被合并保留的命名空间
     //(tryUpdateTaskProgress → mergePayloadMetaWithExisting;顶层字段会被

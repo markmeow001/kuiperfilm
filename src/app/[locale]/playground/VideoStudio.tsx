@@ -30,9 +30,31 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
     modelKey, setModelKey, activeModels, aspectRatio, setAspectRatio,
     durationSec, setDurationSec, resolution, setResolution, resolutionOptions, showResolutionPicker,
     soundOn, setSoundOn,
+    outputFormat, setOutputFormat, outputFormatOptions,
+    watermarkOn, setWatermarkOn, showWatermarkToggle,
+    returnLastFrameOn, setReturnLastFrameOn, showReturnLastFrameToggle,
+    durationOptions, modelAspectOptions,
     isBusy, isGenerating, compressing, submit, costEstimate,
     videoRuns, latestRun, stageRun, setStageRun, handleRun, resetForm,
   } = ctrl
+
+  // Capability-driven duration list (seedance-2.5: -1 = Auto, 4-30s);
+  // legacy models without catalog data keep the original 5-15s range.
+  const durationChoices = durationOptions.length > 0
+    ? durationOptions
+    : Array.from({ length: 11 }, (_, i) => 5 + i)
+  // Capability-driven aspect list. Values missing from the shared constant
+  // (21:9 / adaptive) get local labels.
+  const aspectChoices: Array<{ value: string; label: string }> = modelAspectOptions.length > 0
+    ? modelAspectOptions.map((value) => ({
+      value,
+      label: ASPECT_RATIO_OPTIONS.find((opt) => opt.value === value)?.label
+        ?? (value === 'adaptive' ? 'Auto 自適應' : value === '21:9' ? '21:9 超寬' : value),
+    }))
+    : (ctrl.isKlingO3Model
+      ? ASPECT_RATIO_OPTIONS.filter((opt) => (KLING_O3_ASPECT_RATIO_VALUES as readonly string[]).includes(opt.value))
+      : ASPECT_RATIO_OPTIONS
+    ).map((opt) => ({ value: opt.value, label: opt.value }))
 
   // Bound subject names in BINDING ORDER — Kling: 主體 cards first, then
   // NAMED reference images (mirrors mergeNamedRefImagesIntoElements);
@@ -136,23 +158,21 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
             value={durationSec}
             onChange={(e) => setDurationSec(Number.parseInt(e.target.value, 10) || 5)}
             disabled={isBusy}
-            title="時長"
+            title="時長（Auto = 模型自動決定長度）"
             className="rounded-xl border border-white/[0.09] bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] text-text-secondary outline-none hover:border-white/[0.16] focus:border-primary-500/40"
           >
-            {Array.from({ length: 11 }, (_, i) => 5 + i).map((sec) => (<option key={sec} value={sec}>{sec}s</option>))}
+            {durationChoices.map((sec) => (
+              <option key={sec} value={sec}>{sec === -1 ? 'Auto' : `${sec}s`}</option>
+            ))}
           </select>
           <select
             value={aspectRatio}
             onChange={(e) => setAspectRatio(e.target.value)}
-            disabled={isBusy}
-            title="比例"
-            className="rounded-xl border border-white/[0.09] bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] text-text-secondary outline-none hover:border-white/[0.16] focus:border-primary-500/40"
+            disabled={isBusy || aspectChoices.length <= 1}
+            title={aspectChoices.length <= 1 ? '比例（此模型由輸入圖自動決定）' : '比例'}
+            className="rounded-xl border border-white/[0.09] bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] text-text-secondary outline-none hover:border-white/[0.16] focus:border-primary-500/40 disabled:opacity-60"
           >
-            {/* Kling O3 schema enum is 16:9/9:16/1:1 only (2026-07-10 HIGH-2) */}
-            {(ctrl.isKlingO3Model
-              ? ASPECT_RATIO_OPTIONS.filter((opt) => (KLING_O3_ASPECT_RATIO_VALUES as readonly string[]).includes(opt.value))
-              : ASPECT_RATIO_OPTIONS
-            ).map((opt) => (<option key={opt.value} value={opt.value}>{opt.value}</option>))}
+            {aspectChoices.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
           </select>
           {showResolutionPicker ? (
             <select
@@ -178,6 +198,47 @@ export function VideoStudio({ ctrl }: VideoStudioProps) {
           >
             🔊 {soundOn ? 'On' : 'Off'}
           </button>
+          {outputFormatOptions.length > 1 ? (
+            <select
+              value={outputFormat}
+              onChange={(e) => setOutputFormat(e.target.value)}
+              disabled={isBusy}
+              title="輸出格式"
+              className="rounded-xl border border-white/[0.09] bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] text-text-secondary outline-none hover:border-white/[0.16] focus:border-primary-500/40"
+            >
+              {outputFormatOptions.map((fmt) => (<option key={fmt} value={fmt}>{fmt}</option>))}
+            </select>
+          ) : null}
+          {showWatermarkToggle ? (
+            <button
+              type="button"
+              onClick={() => setWatermarkOn(!watermarkOn)}
+              disabled={isBusy}
+              title={watermarkOn ? '水印：開（點擊關閉）' : '水印：關（點擊開啟）'}
+              className={`rounded-md border px-2 py-1.5 font-mono text-[11px] transition-colors ${
+                watermarkOn
+                  ? 'border-primary-500/50 bg-primary-500/10 text-primary-300'
+                  : 'border-white/[0.09] text-text-tertiary hover:text-text-primary'
+              }`}
+            >
+              水印 {watermarkOn ? 'On' : 'Off'}
+            </button>
+          ) : null}
+          {showReturnLastFrameToggle ? (
+            <button
+              type="button"
+              onClick={() => setReturnLastFrameOn(!returnLastFrameOn)}
+              disabled={isBusy}
+              title={returnLastFrameOn ? '返回尾幀：開（生成後回傳最後一幀圖）' : '返回尾幀：關'}
+              className={`rounded-md border px-2 py-1.5 font-mono text-[11px] transition-colors ${
+                returnLastFrameOn
+                  ? 'border-primary-500/50 bg-primary-500/10 text-primary-300'
+                  : 'border-white/[0.09] text-text-tertiary hover:text-text-primary'
+              }`}
+            >
+              尾幀 {returnLastFrameOn ? 'On' : 'Off'}
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-auto space-y-2 pt-3">

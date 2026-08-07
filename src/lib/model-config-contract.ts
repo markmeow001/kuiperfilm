@@ -49,6 +49,7 @@ export interface ImageCapabilities {
 export interface VideoCapabilities {
   generationModeOptions?: string[]
   generateAudioOptions?: boolean[]
+  /** May include -1 = provider-side auto duration (model decides the length). */
   durationOptions?: number[]
   fpsOptions?: number[]
   resolutionOptions?: string[]
@@ -57,6 +58,12 @@ export interface VideoCapabilities {
   supportGenerateAudio?: boolean
   supportNegativePrompt?: boolean
   supportReferenceImage?: boolean
+  /** Container formats the provider can emit (e.g. ["mp4","mov"]). Absent = provider default only. */
+  outputFormatOptions?: string[]
+  /** Provider exposes a watermark on/off switch. */
+  supportWatermark?: boolean
+  /** Provider can return the generated clip's last frame as an image. */
+  supportReturnLastFrame?: boolean
   fieldI18n?: CapabilityFieldI18nMap
 }
 
@@ -121,6 +128,9 @@ const VIDEO_ALLOWED_FIELDS = new Set<keyof VideoCapabilities>([
   'supportGenerateAudio',
   'supportNegativePrompt',
   'supportReferenceImage',
+  'outputFormatOptions',
+  'supportWatermark',
+  'supportReturnLastFrame',
   'fieldI18n',
 ])
 
@@ -423,6 +433,31 @@ function validateVideoCapabilities(issues: CapabilityValidationIssue[], raw: unk
       code: 'CAPABILITY_FIELD_INVALID',
       field: 'capabilities.video.aspectRatioOptions',
       message: 'aspectRatioOptions must be a non-empty string array',
+    })
+  }
+
+  const outputFormatOptions = raw.outputFormatOptions
+  if (outputFormatOptions !== undefined && !isStringArray(outputFormatOptions)) {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.video.outputFormatOptions',
+      message: 'outputFormatOptions must be a non-empty string array',
+    })
+  }
+
+  if (raw.supportWatermark !== undefined && typeof raw.supportWatermark !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.video.supportWatermark',
+      message: 'supportWatermark must be boolean',
+    })
+  }
+
+  if (raw.supportReturnLastFrame !== undefined && typeof raw.supportReturnLastFrame !== 'boolean') {
+    issues.push({
+      code: 'CAPABILITY_FIELD_INVALID',
+      field: 'capabilities.video.supportReturnLastFrame',
+      message: 'supportReturnLastFrame must be boolean',
     })
   }
 

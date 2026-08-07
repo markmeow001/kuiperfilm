@@ -6430,6 +6430,33 @@
     }
   },
   {
+    "apiType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.5-t2v",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.67
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.5-i2v",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.67
+    }
+  },
+  {
+    "apiType": "video",
+    "provider": "atlascloud",
+    "modelId": "seedance-2.5-r2v",
+    "pricing": {
+      "mode": "flat",
+      "flatAmount": 0.67
+    }
+  },
+  {
     "apiType": "image",
     "provider": "tencent-vod",
     "modelId": "GEM-3.1",

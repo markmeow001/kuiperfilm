@@ -196,6 +196,9 @@ export const PRESET_MODELS: PresetModel[] = [
     // 2026-07-10 — Kling Video O3 reference-to-video（具名主体绑定 ≤6 ×
     // 1-4 图 + 文字生片，prompt 打名字自动换 <<<element_N>>> token）。
     // 付费 slug（不带 -test），走用户 AtlasCloud key，per-run 计费。
+    { modelId: 'seedance-2.5-t2v', name: 'Seedance 2.5 T2V (AtlasCloud · audio · 4-30s)', type: 'video', provider: 'atlascloud' },
+    { modelId: 'seedance-2.5-i2v', name: 'Seedance 2.5 I2V (AtlasCloud · 首尾帧 · 4-30s)', type: 'video', provider: 'atlascloud' },
+    { modelId: 'seedance-2.5-r2v', name: 'Seedance 2.5 R2V (AtlasCloud · 30-ref · 4-30s)', type: 'video', provider: 'atlascloud' },
     { modelId: 'kling-o3-std-r2v', name: 'Kling O3 Std R2V (AtlasCloud · 主体绑定)', type: 'video', provider: 'atlascloud' },
     { modelId: 'kling-o3-pro-r2v', name: 'Kling O3 Pro R2V (AtlasCloud · 主体绑定)', type: 'video', provider: 'atlascloud' },
 

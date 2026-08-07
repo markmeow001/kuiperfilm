@@ -26,6 +26,17 @@
  *   - seedance-2.0-fast-i2v   → bytedance/seedance-2.0-fast/image-to-video
  *   - seedance-2.0-r2v        → bytedance/seedance-2.0/reference-to-video
  *   - seedance-2.0-fast-r2v   → bytedance/seedance-2.0-fast/reference-to-video
+ *   - seedance-2.5-t2v        → bytedance/seedance-2.5/text-to-video
+ *   - seedance-2.5-i2v        → bytedance/seedance-2.5/image-to-video
+ *   - seedance-2.5-r2v        → bytedance/seedance-2.5/reference-to-video
+ *
+ * seedance-2.5 (schema verified 2026-08-07 from the CDN):
+ *   - same v2 field family (ratio / watermark / return_last_frame), PLUS
+ *     `output_format` ("mp4" | "mov", default mp4) which 2.0 does not have
+ *   - duration enum: -1 (auto — model decides) or 4..30 integer seconds
+ *   - ratio enum: t2v/r2v take 16:9/4:3/1:1/3:4/9:16/21:9/adaptive;
+ *     i2v accepts ONLY "adaptive" (ratio follows the input image)
+ *   - no fast variant; resolution still 480p | 720p
  *
  * r2v takes `reference_images[]` (1-9 URLs), optionally `reference_videos[]`
  * (1-3, total ≤15s), and `reference_audios[]` (1-3, requires ≥1 image/video).
@@ -57,6 +68,8 @@ interface AtlasCloudOptions {
     lastFrameImageUrl?: string
     watermark?: boolean
     returnLastFrame?: boolean
+    /** seedance-2.5 only — container format ("mp4" | "mov", default mp4). */
+    outputFormat?: string
     /** r2v only — reference image URLs (1-9). Falls back to imageUrl if empty. */
     referenceImages?: string[]
     /** r2v only — reference video URLs (1-3, total ≤15s). */
@@ -80,6 +93,9 @@ const ATLASCLOUD_MODEL_MAP: Record<string, string> = {
     'seedance-2.0-fast-i2v': 'bytedance/seedance-2.0-fast/image-to-video',
     'seedance-2.0-r2v': 'bytedance/seedance-2.0/reference-to-video',
     'seedance-2.0-fast-r2v': 'bytedance/seedance-2.0-fast/reference-to-video',
+    'seedance-2.5-t2v': 'bytedance/seedance-2.5/text-to-video',
+    'seedance-2.5-i2v': 'bytedance/seedance-2.5/image-to-video',
+    'seedance-2.5-r2v': 'bytedance/seedance-2.5/reference-to-video',
     // 2026-07-10 — Kling Video O3 reference-to-video (named-subject binding
     // + text-to-video). PAID slugs from the model detail page — the schema
     // CDN default carries a "-test" suffix which is AtlasCloud's sandbox
@@ -90,8 +106,16 @@ const ATLASCLOUD_MODEL_MAP: Record<string, string> = {
 }
 
 function isSeedance2Slug(slug: string): boolean {
-    return slug.startsWith('bytedance/seedance-2.0')
+    // v2 schema family (ratio / watermark / return_last_frame): 2.0 and 2.5.
+    return slug.startsWith('bytedance/seedance-2.')
 }
+
+function isSeedance25Slug(slug: string): boolean {
+    return slug.startsWith('bytedance/seedance-2.5')
+}
+
+const SEEDANCE_25_RATIOS = new Set(['16:9', '4:3', '1:1', '3:4', '9:16', '21:9', 'adaptive'])
+const SEEDANCE_25_OUTPUT_FORMATS = new Set(['mp4', 'mov'])
 
 function isKlingO3Slug(slug: string): boolean {
     return slug.startsWith('kwaivgi/kling-video-o3')
@@ -221,6 +245,7 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
             lastFrameImageUrl,
             watermark = false,
             returnLastFrame = false,
+            outputFormat,
             referenceImages,
             referenceVideos,
             referenceAudios,
@@ -266,13 +291,40 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
             generate_audio: generateAudio,
         }
 
-        // Seedance 2.0 vs legacy schema split
+        // Seedance 2.0/2.5 vs legacy schema split
         if (isV2) {
-            // Seedance 2.0: `ratio` (not `aspect_ratio`), + watermark + return_last_frame,
+            // Seedance 2.x: `ratio` (not `aspect_ratio`), + watermark + return_last_frame,
             // no camera_fixed, no seed
             body.ratio = aspectRatio
             body.watermark = watermark
             body.return_last_frame = returnLastFrame
+            if (isSeedance25Slug(atlasModel)) {
+                // 2.5 extras — mirror the schema enums exactly, never stricter.
+                // duration: -1 (auto) or 4..30 integer seconds.
+                if (duration !== -1 && (!Number.isInteger(duration) || duration < 4 || duration > 30)) {
+                    throw new Error(
+                        `AtlasCloud ${atlasModel} duration 需為 -1 (auto) 或 4-30 整數秒，收到 ${duration}`,
+                    )
+                }
+                // i2v ratio enum is exactly ["adaptive"] — ratio follows the
+                // input image, so adaptive is the only valid value; anything
+                // else 400s at the gateway.
+                if (!t2vMode && !r2vMode) {
+                    body.ratio = 'adaptive'
+                } else if (!SEEDANCE_25_RATIOS.has(aspectRatio)) {
+                    throw new Error(
+                        `AtlasCloud ${atlasModel} 比例僅支援 ${[...SEEDANCE_25_RATIOS].join(' / ')}，收到 ${aspectRatio}`,
+                    )
+                }
+                if (outputFormat !== undefined) {
+                    if (!SEEDANCE_25_OUTPUT_FORMATS.has(outputFormat)) {
+                        throw new Error(
+                            `AtlasCloud ${atlasModel} output_format 僅支援 mp4 / mov，收到 ${outputFormat}`,
+                        )
+                    }
+                    body.output_format = outputFormat
+                }
+            }
         } else {
             // Legacy v1.5-pro / wan-2.6: `aspect_ratio`, `camera_fixed`, `seed`
             body.aspect_ratio = aspectRatio
@@ -295,16 +347,21 @@ export class AtlasCloudSeedanceVideoGenerator extends BaseVideoGenerator {
             const refImages = referenceImages?.length
                 ? referenceImages
                 : (imageUrl ? [imageUrl] : [])
-            if (refImages.length > 9) {
+            // Schema maxItems: 2.0 → 9 images / 3 videos / 3 audios;
+            // 2.5 → 30 images / 10 videos / 10 audios (verified 2026-08-07).
+            const [maxImages, maxVideos, maxAudios] = isSeedance25Slug(atlasModel)
+                ? [30, 10, 10]
+                : [9, 3, 3]
+            if (refImages.length > maxImages) {
                 throw new Error(
-                    `AtlasCloud ${atlasModel} reference_images 最多 9 張，收到 ${refImages.length}`,
+                    `AtlasCloud ${atlasModel} reference_images 最多 ${maxImages} 張，收到 ${refImages.length}`,
                 )
             }
-            if (referenceVideos && referenceVideos.length > 3) {
-                throw new Error(`AtlasCloud reference_videos 最多 3 個`)
+            if (referenceVideos && referenceVideos.length > maxVideos) {
+                throw new Error(`AtlasCloud ${atlasModel} reference_videos 最多 ${maxVideos} 個`)
             }
-            if (referenceAudios && referenceAudios.length > 3) {
-                throw new Error(`AtlasCloud reference_audios 最多 3 個`)
+            if (referenceAudios && referenceAudios.length > maxAudios) {
+                throw new Error(`AtlasCloud ${atlasModel} reference_audios 最多 ${maxAudios} 個`)
             }
             if (refImages.length === 0 && !referenceVideos?.length) {
                 throw new Error(
