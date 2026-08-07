@@ -74,7 +74,11 @@ export const GET = apiHandler(async (request: NextRequest) => {
   try {
     const amountUsd = outputType === 'video'
       ? calcVideo(parsed.modelId, resolution || '720p', count, {
-        ...(typeof durationSec === 'number' && durationSec > 0 ? { duration: durationSec } : {}),
+        // -1 (auto duration) must reach calcVideo so the estimate matches the
+        // freeze: applyVideoDurationScaling maps it to the max duration.
+        ...(typeof durationSec === 'number' && (durationSec > 0 || durationSec === -1)
+          ? { duration: durationSec }
+          : {}),
         ...(generationMode ? { generationMode } : {}),
       })
       : calcImage(parsed.modelId, count, resolution ? { resolution } : undefined)

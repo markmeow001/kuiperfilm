@@ -6434,8 +6434,21 @@
     "provider": "atlascloud",
     "modelId": "seedance-2.5-t2v",
     "pricing": {
-      "mode": "flat",
-      "flatAmount": 0.67
+      "mode": "capability",
+      "tiers": [
+        {
+          "when": {
+            "resolution": "480p"
+          },
+          "amount": 0.704375
+        },
+        {
+          "when": {
+            "resolution": "720p"
+          },
+          "amount": 1.514799
+        }
+      ]
     }
   },
   {
@@ -6443,8 +6456,21 @@
     "provider": "atlascloud",
     "modelId": "seedance-2.5-i2v",
     "pricing": {
-      "mode": "flat",
-      "flatAmount": 0.67
+      "mode": "capability",
+      "tiers": [
+        {
+          "when": {
+            "resolution": "480p"
+          },
+          "amount": 0.704375
+        },
+        {
+          "when": {
+            "resolution": "720p"
+          },
+          "amount": 1.514799
+        }
+      ]
     }
   },
   {
@@ -6452,8 +6478,21 @@
     "provider": "atlascloud",
     "modelId": "seedance-2.5-r2v",
     "pricing": {
-      "mode": "flat",
-      "flatAmount": 0.67
+      "mode": "capability",
+      "tiers": [
+        {
+          "when": {
+            "resolution": "480p"
+          },
+          "amount": 0.704375
+        },
+        {
+          "when": {
+            "resolution": "720p"
+          },
+          "amount": 1.514799
+        }
+      ]
     }
   },
   {

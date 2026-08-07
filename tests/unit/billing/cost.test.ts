@@ -204,4 +204,21 @@ describe('billing/cost', () => {
   it('calculates voice costs from quantities', () => {
     expect(calcVoice(30)).toBeGreaterThan(0)
   })
+
+  // AtlasCloud seedance-2.5 — per-resolution tiers sampled from the vendor
+  // playground 2026-08-07 (5s: 480p $0.704375 / 720p $1.514799), linearly
+  // scaled 4-30s by applyVideoDurationScaling.
+  it('prices seedance-2.5 by resolution tier and scales by duration', () => {
+    expect(calcVideo('seedance-2.5-t2v', '480p', 1, { duration: 5 })).toBeCloseTo(0.704375, 6)
+    expect(calcVideo('seedance-2.5-t2v', '720p', 1, { duration: 5 })).toBeCloseTo(1.514799, 6)
+    expect(calcVideo('seedance-2.5-r2v', '720p', 1, { duration: 30 })).toBeCloseTo(9.088794, 6)
+    expect(calcVideo('seedance-2.5-i2v', '480p', 1, { duration: 4 })).toBeCloseTo(0.5635, 6)
+  })
+
+  it('freezes seedance-2.5 auto duration (-1) at the max-duration price', () => {
+    // Vendor quotes auto at the 30s worst case; freeze has no reconciliation,
+    // so -1 must not slip through as the 5s base amount.
+    expect(calcVideo('seedance-2.5-t2v', '480p', 1, { duration: -1 })).toBeCloseTo(4.22625, 6)
+    expect(calcVideo('seedance-2.5-t2v', '720p', 1, { duration: -1 })).toBeCloseTo(9.088794, 6)
+  })
 })

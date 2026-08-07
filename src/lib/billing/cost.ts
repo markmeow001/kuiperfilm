@@ -269,12 +269,22 @@ function applyVideoDurationScaling(input: {
   hasDurationTier: boolean
 }): number {
   if (input.hasDurationTier) return input.amount
-  const selectedDuration = input.selections.duration
-  if (typeof selectedDuration !== 'number' || !Number.isFinite(selectedDuration) || selectedDuration <= 0) {
+  let selectedDuration = input.selections.duration
+  if (typeof selectedDuration !== 'number' || !Number.isFinite(selectedDuration)) {
     return input.amount
   }
 
   const durationRange = resolveVideoDurationRangeFromCapabilities(input.model)
+
+  // duration -1 = provider-side auto (model decides the length; seedance-2.5).
+  // AtlasCloud's own playground quotes auto at the MAX-duration price, and our
+  // freeze has no post-hoc reconciliation — so auto freezes worst-case too.
+  // Any other non-positive duration keeps the legacy base-amount behavior.
+  if (selectedDuration === -1 && durationRange && durationRange.max > 0) {
+    selectedDuration = durationRange.max
+  }
+  if (selectedDuration <= 0) return input.amount
+
   if (!durationRange) return input.amount
 
   const baseDuration = durationRange.min <= 5 && durationRange.max >= 5
